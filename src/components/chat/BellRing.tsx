@@ -11,14 +11,6 @@
 // - Missed on open: unread 'reminder' rows created after this device's last
 //   seen moment (localStorage, try/catch) give one chime and the toast
 //   "You missed N reminders"; tapping it opens the bell.
-// - Task due times (task-ring.ts), alongside: ONE more timeout for the next
-//   open item's due time, re-armed on the same poll tick, on the tab turning
-//   visible and when this device records a due change (TASK_DUE_CHANGED_EVENT).
-//   On time it re-reads that one item (a changed due or a closed item never
-//   rings), then the same chime and "Due now: <n> <title>" (tap opens the chat
-//   on that item). Each task and due time rings once per session. Missed on
-//   open: unread 'task_due' rows after this device's own last-seen mark give
-//   "You missed N due times" (tap opens the bell), never merged with reminders.
 // - The AudioContext is created on the first pointerdown or keydown, never
 //   before (iPhone plays on the first tap after open).
 // Every timer, listener and the AudioContext are released on unmount.
@@ -43,7 +35,6 @@ import {
   armRing,
   missedCopy,
   missedCount,
-  RING_GRACE_MS,
   readLastSeen,
   readPendingReminders,
   readRung,
@@ -51,23 +42,7 @@ import {
   writeRung,
   type ReminderRow,
 } from '@/lib/chat/reminders';
-import {
-  armTaskRing,
-  dueNowTitle,
-  missedDueCount,
-  missedDueCopy,
-  readTaskDueCheck,
-  readTaskDueLastSeen,
-  readUnreadTaskDuesSince,
-  readUpcomingTaskDues,
-  sessionRungKeys,
-  stillDue,
-  taskRungKey,
-  TASK_DUE_CHANGED_EVENT,
-  writeTaskDueLastSeen,
-  type TaskDueRow,
-} from '@/lib/chat/task-ring';
-import { BELL_OPEN_HREF, chatMessageHref, chatTaskHref } from '@/lib/inbox/bell-types';
+import { BELL_OPEN_HREF, chatMessageHref } from '@/lib/inbox/bell-types';
 import { useToast } from '@/components/ui/toast';
 import { IconAlarmClock } from '@/components/ui/icons';
 
@@ -110,10 +85,6 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
     let messages = new Map<string, BellMessage>();
     let names = new Map<string, string>();
     let cancelTimer: () => void = () => {};
-    const dueRung = sessionRungKeys();
-    let dues: TaskDueRow[] = [];
-    let cancelDueTimer: () => void = () => {};
-    let dueSeq = 0;
     let stopWatch: () => void = () => {};
     let loadSeq = 0;
 
@@ -246,148 +217,31 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
       requestBellRefresh();
     };
 
-    const armDue = (): void => {
-      cancelDueTimer();
-      cancelDueTimer = armTaskRing({
-        rows: dues,
-        now: () => Date.now(),
-        rung: dueRung,
-        onRing: (row) => void ringDue(row),
-        onRearm: armDue,
-      });
-    };
-
-    const ringDue = async (row: TaskDueRow): Promise<void> => {
-      const key = taskRungKey(row.id, row.due_at);
-      if (disposed || key === null || dueRung.has(key)) return;
-      // Claimed before the read: a re-arm meanwhile never rings it twice.
-      dueRung.add(key);
-      armDue();
-      const current = await readTaskDueCheck(supabase, row.id);
-      if (disposed) return;
-      if (!current.ok) {
-        logger.warn('bell ring: task re-read failed', { error: current.error.message });
-        return;
-      }
-      if (!stillDue(row, current.data)) return;
-      const title = dueNowTitle(row);
-      chime.play();
-      watchDismiss(title);
-      toastRef.current.show({
-        title,
-        description: RING_TOAST_ACTION,
-        icon: <IconAlarmClock size={18} className="text-accent" />,
-        durationMs: RING_TOAST_MS,
-        onPress: () => {
-          chime.stop();
-          stopWatch();
-          navigateRef.current(chatTaskHref(row.channel_id, row.id));
-        },
-      });
-      requestBellRefresh();
-    };
-
-    const loadDues = async (): Promise<void> => {
-      dueSeq += 1;
-      const seq = dueSeq;
-      const res = await readUpcomingTaskDues(supabase, { workspaceId, nowMs: Date.now() });
-      if (disposed || seq !== dueSeq) return;
-      if (!res.ok) {
-        logger.warn('bell ring: task dues read failed', { error: res.error.message });
-        return;
-      }
-      // Rows due within the grace that the read no longer returns (gt now) stay
-      // armed until they ring; everything else follows the read.
-      const now = Date.now();
-      const fresh = new Set(res.data.map((r) => r.id));
-      const keep = dues.filter((r) => {
-        const key = taskRungKey(r.id, r.due_at);
-        const at = Date.parse(r.due_at ?? '');
-        return (
-          !fresh.has(r.id) &&
-          key !== null &&
-          !dueRung.has(key) &&
-          at <= now &&
-          at >= now - RING_GRACE_MS
-        );
-      });
-      dues = [...res.data, ...keep];
-      armDue();
-    };
-
-    const checkMissedDues = async (): Promise<void> => {
-      const lastSeen = readTaskDueLastSeen(userId);
-      writeTaskDueLastSeen(userId, Date.now());
-      if (lastSeen === null) return;
-      const res = await readUnreadTaskDuesSince(supabase, {
-        workspaceId,
-        userId,
-        sinceIso: new Date(lastSeen).toISOString(),
-      });
-      if (disposed) return;
-      if (!res.ok) {
-        logger.warn('bell ring: missed dues read failed', { error: res.error.message });
-        return;
-      }
-      const count = missedDueCount(res.data, lastSeen, dueRung);
-      for (const e of res.data) {
-        const key = e.taskId !== null ? taskRungKey(e.taskId, e.dueAt) : null;
-        if (key !== null) dueRung.add(key);
-      }
-      if (count === 0) return;
-      const title = missedDueCopy(count);
-      chime.play(1);
-      watchDismiss(title);
-      toastRef.current.show({
-        title,
-        description: RING_TOAST_ACTION,
-        icon: <IconAlarmClock size={18} className="text-accent" />,
-        durationMs: RING_TOAST_MS,
-        onPress: () => {
-          chime.stop();
-          stopWatch();
-          navigateRef.current(BELL_OPEN_HREF);
-        },
-      });
-      requestBellRefresh();
-    };
-
     const markSeen = (): void => {
       const now = Date.now();
       writeLastSeen(userId, now);
-      writeTaskDueLastSeen(userId, now);
     };
     const onVisibility = (): void => {
       if (document.visibilityState === 'visible') {
         void checkMissed();
-        void checkMissedDues();
         void load();
-        void loadDues();
       } else {
         markSeen();
       }
     };
     const onPageHide = (): void => markSeen();
-    const onReload = (): void => {
-      void load();
-      void loadDues();
-    };
+    const onReload = (): void => void load();
     const onRemindersChanged = (): void => void load();
-    const onDueChanged = (): void => void loadDues();
 
     void checkMissed();
-    void checkMissedDues();
     void load();
-    void loadDues();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
     window.addEventListener(REMINDERS_CHANGED_EVENT, onRemindersChanged);
     window.addEventListener(BELL_REFRESH_EVENT, onReload);
-    window.addEventListener(TASK_DUE_CHANGED_EVENT, onDueChanged);
     return () => {
       disposed = true;
       cancelTimer();
-      cancelDueTimer();
       stopWatch();
       chime.dispose();
       markSeen();
@@ -395,7 +249,6 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener(REMINDERS_CHANGED_EVENT, onRemindersChanged);
       window.removeEventListener(BELL_REFRESH_EVENT, onReload);
-      window.removeEventListener(TASK_DUE_CHANGED_EVENT, onDueChanged);
     };
   }, [workspaceId, userId]);
 

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // X4 (FT49): TaskSheet under a real useHistoryStep('chatTasks') parent, the
-// way MessageThread mounts it. With drafts or a dirty row edit, system Back
-// shows "Discard these tasks?" (the Sheet's own guard), the parent's close
-// callback never runs, Keep editing keeps the work, and Discard closes with
-// no stray history entry.
+// way MessageThread mounts it. With unsaved changes, system Back shows
+// "Discard unsaved changes?" (Discard / Save, in the page), the parent's close
+// callback never runs, Esc keeps the work, and Discard closes with no stray
+// history entry.
 import { act, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,7 +16,7 @@ vi.mock('@/components/ui/SearchHighlight', async (importOriginal) => ({
   glowTarget: () => () => {},
 }));
 
-import { DISCARD_TASKS_TITLE, TaskSheet } from '@/components/chat/tasks/TaskSheet';
+import { DISCARD_TITLE, TaskSheet } from '@/components/chat/tasks/TaskSheet';
 import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
 import { resetHistorySteps, useHistoryStep } from '@/lib/chat/use-history-step';
 import { DUR_BASE_MS } from '@/lib/motion';
@@ -42,7 +42,9 @@ function Parent(props: { tasks: UseChatTasks; onParentBack: () => void }): React
       open={open}
       onClose={() => setOpen(false)}
       tasks={props.tasks}
-      timeZone="UTC"
+      currentUserId="me"
+      side="agency"
+      seenMs={null}
       focusTaskId={null}
     />
   );
@@ -72,10 +74,10 @@ async function pressBack(): Promise<void> {
 }
 
 async function addDraft(title: string): Promise<void> {
-  const input = q('[data-task-add="agency"] input') as HTMLInputElement;
+  const input = q('[data-task-add] input') as HTMLInputElement;
   act(() => input.focus());
   act(() => x4Type(input, title));
-  act(() => q('[data-task-add="agency"] [data-task-add-submit]')?.click());
+  act(() => q('[data-task-add] [data-task-add-submit]')?.click());
   // The Sheet's guard places its step after the commit (a microtask).
   await settle();
 }
@@ -93,35 +95,36 @@ afterEach(async () => {
 });
 
 describe('X4 TaskSheet and system Back', () => {
-  it('with drafts: Back asks, the parent close never runs, Keep editing keeps them', async () => {
+  it('with new tasks: Back asks, the parent close never runs, Esc keeps them', async () => {
     const { onParentBack } = await mount(x4FakeTasks([]));
     await addDraft('Hook');
     await addDraft('Grid');
     await pressBack();
-    expect(confirmDialog()?.getAttribute('aria-label')).toBe(DISCARD_TASKS_TITLE);
+    expect(confirmDialog()?.getAttribute('aria-label')).toBe(DISCARD_TITLE);
     expect(onParentBack).not.toHaveBeenCalled();
     expect(sheetOpen()).toBe(true);
     await act(async () => {
-      button('Keep editing')?.click();
-      await wait(DUR_BASE_MS + 40);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await wait(40);
     });
     expect(confirmDialog()).toBeNull();
-    expect(document.querySelectorAll('[data-task-draft]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-task-list] [data-task-marked]')).toHaveLength(2);
     // Back again asks again: the guard's entry came back.
     await pressBack();
     expect(confirmDialog()).not.toBeNull();
     expect(onParentBack).not.toHaveBeenCalled();
   });
 
-  it('with a dirty row edit: Back asks the same and the parent close never runs', async () => {
+  it('with a ticked row: Back asks the same and the parent close never runs', async () => {
     const { onParentBack } = await mount(x4FakeTasks([x4Task({})]));
-    act(() => q('[data-task-row-id="t1"] button[aria-expanded]')?.click());
-    act(() => q('[data-task-row-id="t1"] [data-task-opt="p0"]')?.click());
+    act(() => q('[data-task-row-id="t1"] [data-task-tick]')?.click());
     await settle();
     await pressBack();
-    expect(confirmDialog()?.getAttribute('aria-label')).toBe(DISCARD_TASKS_TITLE);
+    expect(confirmDialog()?.getAttribute('aria-label')).toBe(DISCARD_TITLE);
     expect(onParentBack).not.toHaveBeenCalled();
-    expect(q('[data-task-row-id="t1"]')?.hasAttribute('data-task-expanded')).toBe(true);
+    expect(q('[data-task-row-id="t1"] [data-task-tick]')?.getAttribute('aria-checked')).toBe(
+      'true',
+    );
   });
 
   it('Discard closes the sheet and pops both entries (guard, then the sheet step)', async () => {

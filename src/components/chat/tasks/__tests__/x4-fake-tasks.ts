@@ -1,23 +1,18 @@
-// X4 test helpers: a task and a fake UseChatTasks the sheet can render.
+// Test helpers: a task and a fake UseChatTasks the sheet can render.
 import { vi } from 'vitest';
 import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
 import type { ChatTask } from '@/lib/chat/tasks';
 
 export function x4Task(over: Partial<ChatTask>): ChatTask {
-  const now = new Date().toISOString();
+  const now = '2026-10-19T09:00:00.000Z';
   return {
     id: 't1',
     channelId: 'c1',
     number: 3,
     title: 'Reel cut',
-    note: null,
     side: 'agency',
     status: 'todo',
     priority: 2,
-    dueAt: null,
-    dueSetBy: null,
-    dueSetAt: null,
-    duePassedAt: null,
     createdBy: 'u1',
     createdAt: now,
     updatedAt: now,
@@ -35,20 +30,17 @@ export function x4FakeTasks(list: ChatTask[], over: Partial<UseChatTasks> = {}):
     loadState: 'ready',
     retrying: false,
     covers: () => true,
-    pending: [],
-    failed: new Map(),
-    hiddenIds: new Set(),
-    nameOf: () => 'You',
+    nameOf: (id) => (id === 'me' ? 'You' : id === 'u2' ? 'Leo' : 'Member'),
     refetch: vi.fn(),
     ensureEventsSince: vi.fn(),
-    create: vi.fn(),
-    createMany: vi.fn(async () => true),
-    save: vi.fn(),
-    retryField: vi.fn(),
-    remove: vi.fn(),
-    loadTask: vi.fn(),
-    retryCreate: vi.fn(),
-    removeCreate: vi.fn(),
+    saveBatch: vi.fn(async () => ({
+      ok: true as const,
+      createdIds: [],
+      conflicts: [],
+      batchId: 'b1',
+    })),
+    editors: [],
+    setEditing: vi.fn(),
     ...over,
   };
 }

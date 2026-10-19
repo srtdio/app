@@ -85,17 +85,21 @@ export interface BellEntry {
   task?: BellTaskFields;
 }
 
-/** A task row's payload (task_changed, task_due), mapped. */
+/** A task row's payload (task_changed; task_due on older rows), mapped. */
 export interface BellTaskFields {
   taskId: string | null;
   number: number | null;
   title: string | null;
-  /** The change kind (created, status, ..., due_passed; created_many for a batch add). */
+  /** The change kind: 'batch' for one Save (chat_task_save_batch); older rows: created_many, edited, .... */
   kind: string | null;
   old: string | null;
   new: string | null;
   /** created_many only: how many tasks the one Save added (absent on other rows). */
   count?: number;
+  /** batch only: the Save's batch id, how many it added and changed. */
+  batchId?: string;
+  created?: number;
+  changed?: number;
 }
 
 /** A plan row's payload, mapped (plan_opened .. plan_comment). */
@@ -177,6 +181,9 @@ export function taskFieldsOf(row: Pick<InboxEntryRow, 'payload'>): BellTaskField
       : undefined;
   const number = field('number');
   const count = field('count');
+  const created = field('created');
+  const changed = field('changed');
+  const batchId = str(payload, 'batch_id');
   return {
     taskId: str(payload, 'task_id'),
     number: typeof number === 'number' && Number.isFinite(number) ? number : null,
@@ -185,6 +192,9 @@ export function taskFieldsOf(row: Pick<InboxEntryRow, 'payload'>): BellTaskField
     old: str(payload, 'old'),
     new: str(payload, 'new'),
     ...(typeof count === 'number' && Number.isFinite(count) ? { count } : {}),
+    ...(batchId !== null ? { batchId } : {}),
+    ...(typeof created === 'number' && Number.isFinite(created) ? { created } : {}),
+    ...(typeof changed === 'number' && Number.isFinite(changed) ? { changed } : {}),
   };
 }
 

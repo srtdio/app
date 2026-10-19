@@ -1,53 +1,37 @@
-// One task row and its in-place editor. Collapsed: glyph, number, title (and
-// note), P tag and due label. Tapping it expands it in place (height and
-// opacity only, Y axis; nothing moves sideways) in edit mode: the commitment
-// line, title and note inputs, the status grid, priority and side, the due
-// picker, then Delete, Cancel and Save. Every edit is local (a draft) until
-// Save, which sends only the changed fields in one write. Picking a day
-// without a time sets 9 pm ("Due 9 pm", the hour strip edits it); tapping the
-// day already picked keeps it, and "Clear date" removes the due. After 9 pm
-// workspace time Today is disabled, as in the add row. A refused
-// Save reverts the row and shows "Not saved · Retry" on it only.
+// One task row of the shared list, and the priority chip with its menu.
+// Row: tick box (to do / done), number, title (tap to edit in place: Enter or
+// blur keeps, Esc cancels, empty keeps the old title), priority chip, and a
+// delete x. Every change is local to the sheet's draft until Save. A row may
+// carry an accent dot (changed by someone else since you looked, or your own
+// unsaved change), its changed chip ringed, and sub-lines: what it was ("was
+// <s>old</s>", "priority was <s>P2</s>", "marked done", "reopened", "New
+// task"), or a both-edited notice with Keep mine / Keep theirs (or "deleted
+// this" with Restore mine / OK). 44px targets everywhere.
+//
+// The chip's menu (P0 Urgent, P1 High, P2 Normal, current ticked) renders in a
+// portal layer above the sheet, never clipped by the scrolling list: below the
+// chip, flipped above when space below is short, clamped on screen. A scroll
+// of the list, a tap outside or Esc closes it. Motion: fade only.
 
-import { useEffect, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
-import { IconAlarmClock, IconCalendar, IconX } from '@/components/ui/icons';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ReactElement, ReactNode, RefObject } from 'react';
+import { createPortal } from 'react-dom';
+import { IconCheck, IconChevronDown, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
-import { TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
+import { STATUS_LABEL, TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import { Highlight } from '@/components/ui/SearchHighlight';
 import { cn } from '@/lib/cn';
-import { DUR_BASE_MS } from '@/lib/motion';
-import { civilDay } from '@/lib/chat/time-format';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import {
-  addCivilDays,
-  civilHourToUtcIso,
-  commitmentLine,
-  dateStripDays,
-  DEFAULT_DUE_HOUR,
-  diffDraft,
-  draftOf,
-  dueForDay,
-  dueHourLine,
-  dueLabel,
-  DUE_HOURS,
-  dueSelection,
-  hasChanges,
-  hourLabel,
-  isPastHour,
-  isOpenStatus,
-  STATUS_LABEL,
-  TASK_NOTE_MAX,
+  PRIORITY_LABEL,
   TASK_PRIORITIES,
-  TASK_STATUSES,
   TASK_TITLE_MAX,
-  type ChatTask,
-  type TaskChanges,
-  type TaskDraft,
+  markText,
+  type TaskMark,
   type TaskPriority,
 } from '@/lib/chat/tasks';
 
 export const NOT_SAVED = 'Not saved';
-export const CLEAR_DATE = 'Clear date';
 
 const P_TAG: Record<TaskPriority, string> = {
   0: 'bg-bad-soft text-bad',
@@ -55,25 +39,179 @@ const P_TAG: Record<TaskPriority, string> = {
   2: 'bg-panel-3 text-fg-2',
 };
 
-export function PriorityTag(props: { priority: TaskPriority }): ReactElement {
-  return (
+/** The menu's width (px) and one item's height, for placing it before it paints. */
+const MENU_W = 168;
+const MENU_ITEM_H = 44;
+const MENU_PAD = 4;
+const EDGE = 8;
+
+/** Where the menu goes for a chip at `rect` in a viewport of `vw` x `vh`. Pure. */
+export function placeMenu(
+  rect: { top: number; bottom: number; left: number; right: number },
+  vw: number,
+  vh: number,
+): { top: number; left: number; above: boolean } {
+  const height = TASK_PRIORITIES.length * MENU_ITEM_H + MENU_PAD * 2;
+  const below = vh - rect.bottom - EDGE;
+  const above = below < height + 4 && rect.top - EDGE > below;
+  const top = above
+    ? Math.max(EDGE, rect.top - 4 - height)
+    : Math.min(rect.bottom + 4, Math.max(EDGE, vh - EDGE - height));
+  const left = Math.min(Math.max(EDGE, rect.right - MENU_W), Math.max(EDGE, vw - EDGE - MENU_W));
+  return { top, left, above };
+}
+
+/** The P0..P2 chip; with onPick it opens the priority menu. */
+export function PriorityChip(props: {
+  priority: TaskPriority;
+  /** Ringed: someone changed it, or it is your unsaved change. */
+  ringed?: boolean;
+  onPick?: (p: TaskPriority) => void;
+  label?: string;
+  disabled?: boolean;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  const chipRef = useRef<HTMLButtonElement>(null);
+  const pick = props.onPick;
+  const chip = (
     <span
       data-task-p={props.priority}
       className={cn(
-        'shrink-0 rounded-[4px] px-1.5 font-mono text-[11.5px] leading-[18px]',
+        'inline-flex h-[22px] items-center gap-0.5 rounded-[5px] px-1.5 font-mono text-xs leading-[22px]',
         P_TAG[props.priority],
+        props.ringed === true && 'ring-2 ring-accent ring-offset-1 ring-offset-panel',
       )}
     >
       P{props.priority}
+      {pick !== undefined ? <IconChevronDown size={12} /> : null}
     </span>
+  );
+  if (pick === undefined) return chip;
+  return (
+    <>
+      <button
+        ref={chipRef}
+        type="button"
+        data-task-chip=""
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={props.label ?? `Priority P${props.priority} ${PRIORITY_LABEL[props.priority]}`}
+        disabled={props.disabled}
+        onClick={() => setOpen((v) => !v)}
+        onContextMenu={(e) => e.preventDefault()}
+        className={cn(
+          'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          NO_TOUCH_SELECT,
+        )}
+      >
+        {chip}
+      </button>
+      {open ? (
+        <PriorityMenu
+          anchor={chipRef}
+          current={props.priority}
+          onPick={(p) => {
+            setOpen(false);
+            pick(p);
+          }}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }
 
-/** The inline failure line: "Not saved · Retry" (44px Retry), and a 44px x when it can be dropped. */
-export function NotSaved(props: { onRetry: () => void; onRemove?: () => void }): ReactElement {
+function PriorityMenu(props: {
+  anchor: RefObject<HTMLButtonElement | null>;
+  current: TaskPriority;
+  onPick: (p: TaskPriority) => void;
+  onClose: () => void;
+}): ReactElement | null {
+  const { anchor, onClose } = props;
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [shown, setShown] = useState(false);
+  useLayoutEffect(() => {
+    const el = anchor.current;
+    if (el === null) return;
+    const r = el.getBoundingClientRect();
+    setPos(placeMenu(r, window.innerWidth, window.innerHeight));
+  }, [anchor]);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  useEscapeLayer(true, onClose);
+  // A scroll anywhere under the sheet (the list) or a resize closes it; a tap outside too.
+  useEffect(() => {
+    const onScroll = (e: Event): void => {
+      if (
+        menuRef.current !== null &&
+        e.target instanceof Node &&
+        menuRef.current.contains(e.target)
+      ) {
+        return;
+      }
+      onClose();
+    };
+    const onDown = (e: PointerEvent): void => {
+      const t = e.target;
+      if (!(t instanceof Node)) return;
+      if (menuRef.current?.contains(t) === true || anchor.current?.contains(t) === true) return;
+      onClose();
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onClose);
+    document.addEventListener('pointerdown', onDown, true);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onClose);
+      document.removeEventListener('pointerdown', onDown, true);
+    };
+  }, [anchor, onClose]);
+  if (pos === null) return null;
+  return createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      data-task-menu=""
+      style={{ top: pos.top, left: pos.left, width: MENU_W }}
+      className={cn(
+        'fixed z-[60] rounded-[10px] border border-border-strong bg-panel p-1 shadow-lg transition-opacity duration-fast motion-reduce:transition-none',
+        shown ? 'opacity-100' : 'opacity-0',
+      )}
+    >
+      {TASK_PRIORITIES.map((p) => (
+        <button
+          key={p}
+          type="button"
+          role="menuitemradio"
+          aria-checked={p === props.current}
+          data-task-menu-p={p}
+          onClick={() => props.onPick(p)}
+          onContextMenu={(e) => e.preventDefault()}
+          className={cn(
+            'flex h-11 w-full items-center gap-2 rounded-[7px] px-2.5 text-left text-[14px] text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+            NO_TOUCH_SELECT,
+          )}
+        >
+          <span className={cn('rounded-[5px] px-1.5 font-mono text-xs leading-[22px]', P_TAG[p])}>
+            P{p}
+          </span>
+          <span className="flex-1">{PRIORITY_LABEL[p]}</span>
+          {p === props.current ? <IconCheck size={16} className="text-accent" /> : null}
+        </button>
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
+/** The inline failure line: "Not saved · Retry" (44px Retry). */
+export function NotSaved(props: { onRetry: () => void; message?: string }): ReactElement {
   return (
-    <div data-task-not-saved="" className="flex items-center gap-1 pl-[42px] pr-3 text-[13px]">
-      <span className="text-bad">{NOT_SAVED} ·</span>
+    <div data-task-not-saved="" className="flex items-center gap-1 pl-[60px] pr-3 text-[13px]">
+      <span className="text-bad">{props.message ?? NOT_SAVED} ·</span>
       <button
         type="button"
         onClick={props.onRetry}
@@ -82,515 +220,248 @@ export function NotSaved(props: { onRetry: () => void; onRemove?: () => void }):
       >
         Retry
       </button>
-      {props.onRemove !== undefined ? (
-        <button
-          type="button"
-          aria-label="Remove"
-          data-task-remove=""
-          onClick={props.onRemove}
-          onContextMenu={(e) => e.preventDefault()}
-          className={cn(
-            'ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-2 hover:bg-panel-2',
-            NO_TOUCH_SELECT,
-          )}
-        >
-          <IconX size={16} />
-        </button>
-      ) : null}
     </div>
   );
 }
 
-export function DueCell(props: {
-  task: Pick<ChatTask, 'dueAt' | 'duePassedAt'>;
-  nowMs: number;
-  timeZone: string;
+/** A title that turns into an input in the tap (so iOS opens the keyboard), cursor at the end. */
+function TitleCell(props: {
+  title: string;
+  done: boolean;
+  onCommit: (title: string) => void;
 }): ReactElement {
-  const label = dueLabel(props.task, props.nowMs, props.timeZone);
-  if (label.tone === 'none') {
-    return <span className="shrink-0 font-mono text-[12.5px] text-fg-3">{label.text}</span>;
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(props.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cancelled = useRef(false);
+  const begin = (): void => {
+    cancelled.current = false;
+    setValue(props.title);
+    setEditing(true);
+  };
+  // Focus inside the same tap: the input mounts synchronously on this render.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!editing || el === null) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+  }, [editing]);
+  const commit = (): void => {
+    setEditing(false);
+    if (cancelled.current) return;
+    const next = value.trim();
+    if (next !== '' && next !== props.title) props.onCommit(next);
+  };
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        aria-label="Task title"
+        data-task-title-input=""
+        value={value}
+        maxLength={TASK_TITLE_MAX}
+        enterKeyHint="done"
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            inputRef.current?.blur();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            cancelled.current = true;
+            inputRef.current?.blur();
+          }
+        }}
+        className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] font-medium text-fg focus:outline-none"
+      />
+    );
   }
-  return (
-    <span
-      data-task-due={label.tone}
-      className={cn(
-        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-[12.5px]',
-        label.tone === 'missed'
-          ? 'font-semibold text-bad'
-          : label.tone === 'today'
-            ? 'text-bad'
-            : 'text-fg-2',
-      )}
-    >
-      {label.tone === 'missed' ? <IconAlarmClock size={13} /> : null}
-      {label.text}
-    </span>
-  );
-}
-
-const SEG = cn(
-  'flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[8px] border text-[13px] transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-  NO_TOUCH_SELECT,
-);
-const SEG_ON = 'border-accent bg-accent-soft text-accent';
-const SEG_OFF = 'border-border bg-panel text-fg-2 hover:bg-panel-2';
-
-export function Segment(props: {
-  selected: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  className?: string;
-  label?: string;
-  data?: string;
-  disabled?: boolean;
-}): ReactElement {
   return (
     <button
       type="button"
-      aria-pressed={props.selected}
-      {...(props.label !== undefined ? { 'aria-label': props.label } : {})}
-      {...(props.data !== undefined ? { 'data-task-opt': props.data } : {})}
-      {...(props.disabled === true ? { 'aria-disabled': true } : {})}
-      onClick={() => {
-        if (props.disabled !== true) props.onClick();
-      }}
-      onMouseDown={(e) => e.preventDefault()}
+      data-task-title=""
+      onClick={begin}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        SEG,
-        props.selected ? SEG_ON : SEG_OFF,
-        props.disabled === true && 'cursor-default text-fg-3',
-        props.className,
+        'min-h-[44px] min-w-0 flex-1 py-[11px] text-left text-[16px] font-medium leading-[22px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        props.done ? 'text-fg-3 line-through' : 'text-fg',
       )}
     >
-      {props.children}
+      <Highlight text={props.title} />
     </button>
   );
 }
 
-/** A bare text input bound to the draft. */
-function DraftInput(props: {
-  value: string;
-  placeholder?: string;
-  maxLength: number;
-  className: string;
-  label: string;
-  onChange: (value: string) => void;
-}): ReactElement {
-  return (
-    <input
-      type="text"
-      aria-label={props.label}
-      value={props.value}
-      maxLength={props.maxLength}
-      placeholder={props.placeholder}
-      onChange={(e) => props.onChange(e.target.value)}
-      className={cn(
-        'w-full min-h-[44px] bg-transparent text-fg placeholder:text-fg-3 focus:outline-none',
-        props.className,
-      )}
-    />
-  );
+/** A both-edited notice and its two answers. */
+export interface RowNotice {
+  text: string;
+  deleted: boolean;
+  onMine: () => void;
+  onTheirs: () => void;
 }
 
-/**
- * The due picker over a draft value. A day without a time gets 9 pm (or the
- * hour already set); the day already picked stays picked; Clear date clears.
- */
-export function DuePicker(props: {
-  value: string | null;
-  nowMs: number;
-  timeZone: string;
-  onChange: (value: string | null) => void;
-}): ReactElement {
-  const { value, nowMs, timeZone } = props;
-  const today = civilDay(nowMs, timeZone);
-  const tomorrow = addCivilDays(today, 1);
-  const set = dueSelection(value, nowMs, timeZone);
-  const day = set?.civil ?? null;
-  const [strip, setStrip] = useState(set !== null && set.which === 'other');
-  const pick = (civil: string): void => {
-    // The day already picked: nothing changes (Clear date clears).
-    if (day === civil) return;
-    props.onChange(dueForDay(civil, value, nowMs, timeZone));
-  };
-  const days = dateStripDays(nowMs, timeZone);
-  // After 9 pm workspace time today is over: Today is shown, not tappable
-  // (the add row's rule).
-  const todayOver = isPastHour(today, DEFAULT_DUE_HOUR, nowMs, timeZone);
-  const which =
-    day === null ? null : day === today ? 'today' : day === tomorrow ? 'tomorrow' : 'date';
-  return (
-    <div className="flex flex-col gap-2" data-task-due-picker="">
-      <div className="flex gap-2">
-        <Segment
-          selected={which === 'today'}
-          data="today"
-          disabled={todayOver}
-          onClick={() => {
-            setStrip(false);
-            pick(today);
-          }}
-        >
-          Today
-        </Segment>
-        <Segment
-          selected={which === 'tomorrow'}
-          data="tomorrow"
-          onClick={() => {
-            setStrip(false);
-            pick(tomorrow);
-          }}
-        >
-          Tomorrow
-        </Segment>
-        <Segment
-          selected={which === 'date' || strip}
-          data="date"
-          onClick={() => setStrip((v) => !v)}
-        >
-          <IconCalendar size={16} />
-          Date
-        </Segment>
-      </div>
-      {strip ? (
-        <div
-          data-task-date-strip=""
-          className={cn('-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1', NO_TOUCH_SELECT)}
-        >
-          {days.map((d) => {
-            const on = day === d.civil;
-            return (
-              <button
-                key={d.civil}
-                type="button"
-                aria-pressed={on}
-                data-task-day={d.civil}
-                onClick={() => pick(d.civil)}
-                onContextMenu={(e) => e.preventDefault()}
-                className={cn(
-                  'flex h-[60px] w-11 shrink-0 flex-col items-center justify-center rounded-[8px] border',
-                  on ? 'border-accent bg-accent text-accent-fg' : 'border-border bg-panel text-fg',
-                )}
-              >
-                <span
-                  data-task-month={d.month ?? undefined}
-                  className={cn(
-                    'h-[13px] text-[10px] font-semibold uppercase leading-[13px]',
-                    on ? 'text-accent-fg' : 'text-accent',
-                  )}
-                >
-                  {d.month ?? ''}
-                </span>
-                <span className={cn('text-[11px]', on ? 'text-accent-fg' : 'text-fg-2')}>
-                  {d.weekday}
-                </span>
-                <span className="font-mono text-[15px]">{d.day}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-      {set !== null && day !== null ? (
-        <>
-          <div className="flex items-center justify-between gap-2">
-            <p data-task-due-line="" className="text-[13px] text-fg-2">
-              {dueHourLine(set.hour)}
-            </p>
-            <button
-              type="button"
-              data-task-clear-date=""
-              onClick={() => {
-                setStrip(false);
-                props.onChange(null);
-              }}
-              onMouseDown={(e) => e.preventDefault()}
-              onContextMenu={(e) => e.preventDefault()}
-              className={cn(
-                'h-11 min-w-11 shrink-0 rounded-[8px] px-3 text-[13px] text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                NO_TOUCH_SELECT,
-              )}
-            >
-              {CLEAR_DATE}
-            </button>
-          </div>
-          <div
-            data-task-time-strip=""
-            className={cn('-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1', NO_TOUCH_SELECT)}
-          >
-            {DUE_HOURS.map((hour) => {
-              const on = set.hour === hour;
-              // Today's hours up to the current one are over: shown, not tappable.
-              const past = !on && isPastHour(day, hour, nowMs, timeZone);
-              return (
-                <button
-                  key={hour}
-                  type="button"
-                  aria-pressed={on}
-                  aria-disabled={past || undefined}
-                  data-task-hour={hour}
-                  onClick={() => {
-                    if (!past && !on) props.onChange(civilHourToUtcIso(day, hour, timeZone));
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className={cn(
-                    'h-11 min-w-[56px] shrink-0 rounded-[8px] border px-2 font-mono text-[13px]',
-                    on
-                      ? 'border-accent bg-accent text-accent-fg'
-                      : past
-                        ? 'cursor-default border-border bg-panel text-fg-3'
-                        : 'border-border bg-panel text-fg',
-                  )}
-                >
-                  {hourLabel(hour)}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
+export interface TaskRowProps {
+  id: string;
+  number: number | null;
+  title: string;
+  done: boolean;
+  priority: TaskPriority;
+  /** The accent dot: changed by someone else since you looked, or your own unsaved change. */
+  dot: boolean;
+  /** What changed (someone else's Save); empty for none. */
+  marks: readonly TaskMark[];
+  /** Queued for delete by this Save: struck, with Undo. */
+  queuedDelete: boolean;
+  /** A new task not saved yet has no tick (it is created to do). */
+  canTick?: boolean;
+  notice: RowNotice | null;
+  failed?: ReactNode;
+  onToggle: () => void;
+  onTitle: (title: string) => void;
+  onPriority: (p: TaskPriority) => void;
+  onDelete: () => void;
+  onUndoDelete: () => void;
 }
 
 const ACTION = cn(
-  'h-11 min-w-11 shrink-0 rounded-[8px] px-4 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'h-11 min-w-11 shrink-0 rounded-[8px] px-3 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
   NO_TOUCH_SELECT,
 );
 
-export interface TaskRowProps {
-  task: ChatTask;
-  expanded: boolean;
-  dimmed: boolean;
-  nowMs: number;
-  timeZone: string;
-  nameOf: (userId: string) => string;
-  failed: boolean;
-  /** The row's header was tapped (expand, or collapse when expanded). */
-  onToggle: () => void;
-  /** Cancel was tapped; the sheet asks first when the draft has changes. */
-  onCancel: () => void;
-  /** Save: only the changed fields. */
-  onSave: (changes: TaskChanges) => void;
-  onDelete: () => void;
-  onRetry: () => void;
-  /** Whether the draft differs from the task (the sheet guards a collapse on it). */
-  onDirtyChange?: (dirty: boolean) => void;
+function MarkLine(props: { mark: TaskMark }): ReactElement {
+  const { mark } = props;
+  if (mark.kind === 'renamed') {
+    return (
+      <span>
+        was <s>{mark.was}</s>
+      </span>
+    );
+  }
+  if (mark.kind === 'priority') {
+    return (
+      <span>
+        priority was <s className="font-mono">P{mark.was}</s>
+      </span>
+    );
+  }
+  return <span>{markText(mark)}</span>;
 }
 
 export function TaskRow(props: TaskRowProps): ReactElement {
-  const { task, expanded, nowMs, timeZone } = props;
-  const closed = !isOpenStatus(task.status);
-  const commitment = commitmentLine(task, props.nameOf, nowMs, timeZone);
-  // The editor stays mounted through its collapse so it closes, not snaps.
-  const [mounted, setMounted] = useState(expanded);
-  useEffect(() => {
-    if (expanded) {
-      setMounted(true);
-      return;
-    }
-    const timer = setTimeout(() => setMounted(false), DUR_BASE_MS);
-    return () => clearTimeout(timer);
-  }, [expanded]);
-  // Edits stay local until Save; each expand starts from the stored task.
-  const [draft, setDraft] = useState<TaskDraft>(() => draftOf(task));
-  useEffect(() => {
-    if (expanded) setDraft(draftOf(task));
-    // Only an expand starts a new draft (a live change never wipes one).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded]);
-  const changes = diffDraft(task, draft);
-  const dirty = expanded && hasChanges(changes);
-  const onDirtyChange = props.onDirtyChange;
-  const dirtyRef = useRef(false);
-  useEffect(() => {
-    if (dirtyRef.current === dirty) return;
-    dirtyRef.current = dirty;
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
-  const edit = (change: Partial<TaskDraft>): void => setDraft((prev) => ({ ...prev, ...change }));
+  const priorityMarked = props.marks.some((m) => m.kind === 'priority');
   return (
     <li
-      data-task-row-id={task.id}
-      data-task-number={task.number}
-      {...(expanded ? { 'data-task-expanded': '' } : {})}
-      className={cn(
-        'transition-opacity duration-base ease-enter motion-reduce:transition-none',
-        expanded && 'bg-accent-soft',
-        props.dimmed ? 'opacity-45' : 'opacity-100',
-      )}
+      data-task-row-id={props.id}
+      data-task-number={props.number ?? ''}
+      {...(props.dot ? { 'data-task-marked': '' } : {})}
+      {...(props.queuedDelete ? { 'data-task-deleting': '' } : {})}
+      className={cn('flex flex-col', props.dot && 'bg-accent-soft')}
     >
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={props.onToggle}
-        onContextMenu={(e) => e.preventDefault()}
-        className={cn(
-          'flex min-h-[44px] w-full items-start gap-[10px] px-4 py-[11px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-          NO_TOUCH_SELECT,
-        )}
-      >
-        <span className="flex h-[21px] items-center">
-          <TaskGlyph status={task.status} />
+      <div className="flex min-h-[44px] items-start gap-1 pl-1 pr-1">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={props.done}
+          aria-label={`${props.done ? STATUS_LABEL.done : STATUS_LABEL.todo}: ${props.title}`}
+          data-task-tick=""
+          disabled={props.queuedDelete || props.canTick === false}
+          onClick={props.onToggle}
+          onContextMenu={(e) => e.preventDefault()}
+          className={cn(
+            'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            NO_TOUCH_SELECT,
+          )}
+        >
+          <TaskGlyph status={props.done ? 'done' : 'todo'} />
+        </button>
+        <span className="flex h-11 w-6 shrink-0 items-center font-mono text-[12.5px] text-fg-2">
+          {props.dot ? (
+            <span
+              aria-hidden="true"
+              data-task-dot=""
+              className="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+            />
+          ) : null}
+          {props.number ?? ''}
         </span>
-        <span className="w-5 shrink-0 pt-[2px] font-mono text-[12.5px] leading-[19px] text-fg-2">
-          {task.number}
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span
-            data-task-title=""
-            className={cn(
-              'text-[16px] font-medium leading-[21px]',
-              closed ? 'text-fg-2' : 'text-fg',
-              task.status === 'rejected' && 'line-through',
-            )}
-          >
-            <Highlight text={task.title} />
+        {props.queuedDelete ? (
+          <span className="min-h-[44px] min-w-0 flex-1 py-[11px] text-[16px] leading-[22px] text-fg-3 line-through">
+            {props.title}
           </span>
-          {task.note !== null && task.note !== '' ? (
-            <span className="text-[13px] leading-[17px] text-fg-2">{task.note}</span>
-          ) : null}
-        </span>
-        <span className="flex h-[21px] items-center gap-2">
-          <PriorityTag priority={task.priority} />
-          {closed ? null : <DueCell task={task} nowMs={nowMs} timeZone={timeZone} />}
-        </span>
-      </button>
-      {props.failed ? <NotSaved onRetry={props.onRetry} /> : null}
-      <div
-        data-task-editor=""
-        aria-hidden={!expanded}
-        className={cn(
-          'grid transition-[grid-template-rows,opacity] duration-base motion-reduce:transition-none',
-          expanded
-            ? 'grid-rows-[1fr] opacity-100 ease-enter'
-            : 'grid-rows-[0fr] opacity-0 ease-exit',
+        ) : (
+          <TitleCell title={props.title} done={props.done} onCommit={props.onTitle} />
         )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          {expanded || mounted ? (
-            <div className="flex flex-col gap-2 pb-3 pl-[42px] pr-3">
-              <p
-                data-task-commitment=""
-                className={cn('text-[12.5px]', commitment.missed ? 'text-bad' : 'text-fg-2')}
-              >
-                {commitment.text}
-              </p>
-              <DraftInput
-                label="Title"
-                value={draft.title}
-                maxLength={TASK_TITLE_MAX}
-                className="text-[16px]"
-                onChange={(title) => edit({ title })}
-              />
-              <DraftInput
-                label="Note"
-                value={draft.note}
-                placeholder="Add a note"
-                maxLength={TASK_NOTE_MAX}
-                className="text-[13px] text-fg-2"
-                onChange={(note) => edit({ note })}
-              />
-              <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="Status">
-                {TASK_STATUSES.map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    aria-pressed={draft.status === status}
-                    data-task-status={status}
-                    onClick={() => edit({ status })}
-                    onContextMenu={(e) => e.preventDefault()}
-                    className={cn(
-                      'flex h-11 flex-col items-center justify-center gap-0.5 rounded-[8px] border text-[11.5px] leading-[14px]',
-                      NO_TOUCH_SELECT,
-                      draft.status === status
-                        ? 'border-accent bg-accent-soft text-fg'
-                        : 'border-border bg-panel text-fg-2',
-                    )}
-                  >
-                    <TaskGlyph status={status} size={14} labelled />
-                    {STATUS_LABEL[status]}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <div className="flex flex-1 gap-1.5" role="group" aria-label="Priority">
-                  {TASK_PRIORITIES.map((p) => (
-                    <Segment
-                      key={p}
-                      selected={draft.priority === p}
-                      data={`p${p}`}
-                      className="font-mono"
-                      onClick={() => edit({ priority: p })}
-                    >
-                      P{p}
-                    </Segment>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  data-task-move=""
-                  aria-pressed={draft.side !== task.side}
-                  onClick={() => edit({ side: draft.side === 'agency' ? 'client' : 'agency' })}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className={cn(
-                    'h-11 shrink-0 rounded-[8px] border px-3 text-[13px] text-accent hover:bg-panel-2',
-                    draft.side !== task.side
-                      ? 'border-accent bg-accent-soft'
-                      : 'border-border bg-panel',
-                    NO_TOUCH_SELECT,
-                  )}
-                >
-                  {draft.side === 'agency' ? 'Move to Approvers →' : 'Move to Creators →'}
-                </button>
-              </div>
-              <DuePicker
-                key={expanded ? 'open' : 'closed'}
-                value={draft.dueAt}
-                nowMs={nowMs}
-                timeZone={timeZone}
-                onChange={(dueAt) => edit({ dueAt })}
-              />
-              <div data-task-actions="" className="flex items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  data-task-delete=""
-                  onClick={props.onDelete}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className={cn(ACTION, 'text-bad hover:bg-bad-soft')}
-                >
-                  Delete
-                </button>
-                <span className="flex-1" />
-                <button
-                  type="button"
-                  data-task-cancel=""
-                  onClick={props.onCancel}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className={cn(ACTION, 'border border-border bg-panel text-fg hover:bg-panel-2')}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-task-save=""
-                  disabled={!dirty}
-                  onClick={() => {
-                    if (dirty) props.onSave(changes);
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className={cn(
-                    ACTION,
-                    'bg-accent text-accent-fg disabled:cursor-default disabled:bg-panel-3 disabled:text-fg-3',
-                  )}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
+        {props.queuedDelete ? (
+          <button
+            type="button"
+            data-task-undo-delete=""
+            onClick={props.onUndoDelete}
+            onContextMenu={(e) => e.preventDefault()}
+            className={cn(ACTION, 'text-accent hover:bg-panel-2')}
+          >
+            Undo
+          </button>
+        ) : (
+          <>
+            <PriorityChip
+              priority={props.priority}
+              ringed={priorityMarked}
+              onPick={props.onPriority}
+            />
+            <button
+              type="button"
+              aria-label={`Delete ${props.title}`}
+              data-task-delete=""
+              onClick={props.onDelete}
+              onContextMenu={(e) => e.preventDefault()}
+              className={cn(
+                'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 hover:bg-panel-2 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                NO_TOUCH_SELECT,
+              )}
+            >
+              <IconX size={16} />
+            </button>
+          </>
+        )}
       </div>
+      {props.marks.length > 0 ? (
+        <p
+          data-task-mark=""
+          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-[80px] pr-3 text-[12.5px] text-fg-2"
+        >
+          {props.marks.map((m, k) => (
+            <MarkLine key={k} mark={m} />
+          ))}
+        </p>
+      ) : null}
+      {props.notice !== null ? (
+        <div data-task-conflict="" className="-mt-1 flex flex-col gap-1 pb-2 pl-[80px] pr-3">
+          <p className="text-[12.5px] text-stage-review">{props.notice.text}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              data-task-keep-mine=""
+              onClick={props.notice.onMine}
+              className={cn(ACTION, 'border border-border bg-panel text-fg hover:bg-panel-2')}
+            >
+              {props.notice.deleted ? 'Restore mine' : 'Keep mine'}
+            </button>
+            <button
+              type="button"
+              data-task-keep-theirs=""
+              onClick={props.notice.onTheirs}
+              className={cn(ACTION, 'border border-border bg-panel text-fg hover:bg-panel-2')}
+            >
+              {props.notice.deleted ? 'OK' : 'Keep theirs'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {props.failed}
     </li>
   );
 }
