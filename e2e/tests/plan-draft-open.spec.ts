@@ -84,7 +84,14 @@ async function dragToDay(page: Page, plan: Locator, id: string, day: string): Pr
   // Any sheet that just closed has finished sliding away.
   await page.waitForTimeout(500);
   const wrap = plan.locator(`[data-plan-row-wrap="${id}"]`);
-  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  // The source row sits near the top of the list (every move here goes to a
+  // later day), clear of the auto-scroll edge band, so the target day is on
+  // screen below it.
+  await wrap.evaluate((el) => {
+    el.scrollIntoView({ block: 'start' });
+    el.closest<HTMLElement>('.overflow-y-auto')?.scrollBy(0, -90);
+  });
+  await page.waitForTimeout(100);
   const grip = await wrap.locator('[data-plan-grip]').boundingBox();
   if (grip === null) throw new Error('grip box');
   const x = grip.x + grip.width / 2;
@@ -94,11 +101,29 @@ async function dragToDay(page: Page, plan: Locator, id: string, day: string): Pr
   await page.mouse.move(x, y0 + 6);
   await expect(page.locator('[data-plan-drag-card]')).toBeVisible();
   // Re-aim until the target day is the hovered drop (the slot shifts rows).
+  // The pointer stays out of the list's auto-scroll bands (56px at each
+  // edge): a target beyond them is brought into reach by scrolling the list.
   const over = plan.locator(`[data-plan-day="${day}"][data-plan-drop-over]`);
-  for (let k = 0; k < 6 && (await over.count()) === 0; k += 1) {
+  const list = plan.locator('[data-plan-list]');
+  for (let k = 0; k < 10 && (await over.count()) === 0; k += 1) {
     const target = await dayBlock(plan, day).boundingBox();
     if (target === null) throw new Error('target');
-    await page.mouse.move(x, target.y + Math.min(30, target.height / 2), { steps: 4 });
+    const band = await list.evaluate((el) => {
+      const box = el.closest<HTMLElement>('.overflow-y-auto')?.getBoundingClientRect();
+      if (box === undefined) throw new Error('list body');
+      return { top: box.top + 72, bottom: box.bottom - 72 };
+    });
+    const y = target.y + Math.min(30, target.height / 2);
+    if (y > band.bottom || y < band.top) {
+      const delta = y > band.bottom ? y - band.bottom : y - band.top;
+      await list.evaluate(
+        (el, d) => el.closest<HTMLElement>('.overflow-y-auto')?.scrollBy(0, d),
+        delta,
+      );
+      await page.waitForTimeout(120);
+      continue;
+    }
+    await page.mouse.move(x, y, { steps: 4 });
     await page.waitForTimeout(150);
   }
   await expect(over).toHaveCount(1);
