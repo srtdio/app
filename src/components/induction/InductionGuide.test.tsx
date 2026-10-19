@@ -425,6 +425,25 @@ describe('the guard', () => {
     expect(q('[data-induction-label]').getAttribute('data-guide-nudge')).toBe('on');
   });
 
+  it('keeps swallowing taps away while the control is still moving (a sheet opening)', async () => {
+    const c = control('pipeline-approved-chip', CHIP);
+    const other = document.createElement('button');
+    const pressed = vi.fn();
+    other.addEventListener('click', pressed);
+    document.body.appendChild(other);
+    await mount({ step: 'c_approved_chip' });
+    // The control moves again (an animation resuming): the box lifts until it settles.
+    c.move({ ...CHIP, top: 60 });
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    await act(async () => {
+      other.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+      other.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(pressed).not.toHaveBeenCalled();
+  });
+
   it('lets the control do the real thing, then moves on after its own handler', async () => {
     const c = control('pipeline-approved-chip', CHIP);
     control('pipeline-create', { top: 120, left: 320, width: 44, height: 44 });

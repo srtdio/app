@@ -425,9 +425,14 @@ function StepLayer({
       if (to !== index) quietMove(to);
     },
   );
-  const nudge = useTapGuard(boxed, {
+  // The guard holds whenever the screen is dimmed: while the control is still
+  // moving (a sheet opening, an animation that paused and resumed) the box is
+  // lifted but the dim stays, so a tap away is still swallowed rather than
+  // reaching what is under it (a sheet's backdrop would close the sheet).
+  const guarded = boxed ?? (el !== undefined && moving && !waiting ? el : undefined);
+  const nudge = useTapGuard(guarded, {
     next: field !== undefined ? nextEl : undefined,
-    form: boxed !== undefined ? formOf(boxed, step.kind === 'gate') : undefined,
+    form: guarded !== undefined ? formOf(guarded, step.kind === 'gate') : undefined,
   });
 
   const control = boxed !== undefined ? rectOf(boxed) : undefined;
