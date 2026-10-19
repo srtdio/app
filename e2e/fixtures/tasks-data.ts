@@ -296,6 +296,9 @@ export function seedTasks(world: ChatWorld, now: number = Date.now()): void {
     due_set_by: null,
     due_set_at: null,
     due_passed_at: null,
+    // Explicit, as the table has it: a test that polls deleted_at "not null"
+    // must not pass on a missing key before the Save has even run.
+    deleted_at: null,
     created_by: COLLEAGUE_A,
     created_at: iso(base),
     updated_at: iso(base),
