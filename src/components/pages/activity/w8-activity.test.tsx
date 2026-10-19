@@ -127,18 +127,19 @@ describe('W8 fix 5: Mark all read applies to the active chip only', () => {
     expect(markAllTargets(items, 'all', NOW).map((i) => i.id)).toEqual(['m', 'c']);
   });
 
-  it('labels the confirmation toast "Marked as read"', () => {
+  it('keeps the "Marked as read" label for the failure copy', () => {
     expect(MARKED_READ_LABEL).toBe('Marked as read');
   });
 
-  it('shows no Undo: Mark all read writes at once with a plain toast', () => {
+  it('shows no Undo and no success toast: Mark all read just clears unread', () => {
     const src = readFileSync(
       fileURLToPath(new URL('../ActivityPage.tsx', import.meta.url)),
       'utf8',
     );
     expect(src).not.toContain('useUndoableAction');
     expect(src).not.toContain('runUndoable');
-    expect(src).toContain('toast?.show({ title: MARKED_READ_LABEL })');
+    expect(src).not.toContain('toast?.show({ title: MARKED_READ_LABEL })');
+    expect(src).toContain('toast?.show({ title: MARK_READ_FAILED })');
     expect(src).not.toMatch(/action:\s*\{/);
   });
 });
