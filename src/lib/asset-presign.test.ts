@@ -138,6 +138,11 @@ describe('requestThumbnailUrl and the thumbnail cache', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer token');
   });
 
+  it('204 (no small copy) is null', async () => {
+    const fetcher = async (): Promise<Response> => new Response(null, { status: 204 });
+    expect(await requestThumbnailUrl(baseDeps({ fetcher }), 'v1')).toBe(null);
+  });
+
   it('404 no_rendition is null; any other failure throws', async () => {
     expect(await requestThumbnailUrl(baseDeps({ fetcher: async () => noRendition() }), 'v1')).toBe(
       null,

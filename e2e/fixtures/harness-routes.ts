@@ -1300,18 +1300,19 @@ export async function installHarnessNetwork(
           const meta = m.attachment_meta as Record<string, { thumb_w?: number }> | null;
           return typeof meta?.[id]?.thumb_w === 'number';
         });
-        await route.fulfill({
-          status: has ? 200 : 404,
-          headers: { ...CORS, 'content-type': 'application/json' },
-          body: JSON.stringify(
-            has
-              ? {
+        // No small copy: 204 with no body, as the worker answers.
+        await route.fulfill(
+          has
+            ? {
+                status: 200,
+                headers: { ...CORS, 'content-type': 'application/json' },
+                body: JSON.stringify({
                   url: `https://${ASSET_READ_HOST}/blob/image/${id}`,
                   expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-                }
-              : { error: 'no_rendition' },
-          ),
-        });
+                }),
+              }
+            : { status: 204, headers: CORS, body: '' },
+        );
         return;
       }
       const isAudio = Object.values(world.tables.chat_messages ?? []).some((m) => {

@@ -21,7 +21,7 @@
 //
 // Two additive modes, each authorized exactly as above on the PARENT version:
 //   { asset_version_id, rendition: 'thumbnail' } -> the version's thumbnail
-//     rendition presigned inline (repeats per 6 h window, valid 12 h), or 404 { error: 'no_rendition' };
+//     rendition presigned inline (repeats per 6 h window, valid 12 h), or 204 (none);
 //   { asset_version_id, stream: true } -> a PDF, Word (docx) or Excel (xlsx)
 //     version's bytes piped through this Worker (never buffered), Range/206
 //     passed through, so the in-app viewer never depends on per-bucket
@@ -354,7 +354,7 @@ export interface RenditionReader {
  * The thumbnail mode: authorize the PARENT version exactly as a plain read,
  * then presign its thumbnail rendition inline, as of its window's start (see
  * THUMBNAIL_WINDOW_SECONDS). A version without
- * one is the 'no_rendition' miss (404).
+ * one is the 'no_rendition' miss (answered 204).
  */
 export async function authorizeAndSignRendition(
   deps: AuthorizeDeps & { renditions: RenditionReader },
@@ -546,6 +546,14 @@ function json(status: number, body: unknown, traceId: string, acao: string | nul
   headers.set(TRACE_ID_HEADER, traceId);
   applyCors(headers, acao);
   return new Response(JSON.stringify(body), { status, headers });
+}
+
+/** The thumbnail mode's "this version has no small copy" answer: 204, no body. */
+function noRendition(traceId: string, acao: string | null): Response {
+  const headers = new Headers();
+  headers.set(TRACE_ID_HEADER, traceId);
+  applyCors(headers, acao);
+  return new Response(null, { status: 204, headers });
 }
 
 function fail(error: ReadError, traceId: string, acao: string | null): Response {
@@ -740,9 +748,9 @@ async function handlePost(
       target,
     );
     if (!result.ok) {
-      return result.error === 'no_rendition'
-        ? json(404, { error: 'no_rendition' }, traceId, acao)
-        : denied(result.error);
+      // No small copy is an ordinary answer, not an error: 204 (no body), so
+      // the browser logs nothing for the many images listed before one exists.
+      return result.error === 'no_rendition' ? noRendition(traceId, acao) : denied(result.error);
     }
     return json(200, result.value, traceId, acao);
   }
