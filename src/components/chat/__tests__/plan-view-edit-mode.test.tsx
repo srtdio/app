@@ -163,7 +163,7 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
       <PlanEditHeader draft={draft} problem={null} saving={false} error={null} onChange={() => undefined} onRetry={() => undefined} />,
     );
     expect(html).toContain('data-plan-edit-title=""');
-    expect(html).toContain('enterkeyhint="done"');
+    expect(html).toContain('enterKeyHint="done"');
     expect(html).toContain('data-plan-edit-date="startsOn"');
     expect(html).toContain('data-plan-edit-date="endsOn"');
     expect(html).toContain('value="2026-10-18"');

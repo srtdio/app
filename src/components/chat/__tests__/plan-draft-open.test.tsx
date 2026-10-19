@@ -220,7 +220,8 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
 
   it('a client gets a plain title (no menu button)', () => {
     const src = read('PlanScreen.tsx');
-    expect(src).toMatch(/\{\.\.\.\(agency\s*\?\s*\{\s*titleSlot:/);
+    // Edit mode takes the header first; otherwise the agency gets the menu title.
+    expect(src).toMatch(/:\s*agency\s*\?\s*\{\s*titleSlot:/);
   });
 });
 
@@ -377,7 +378,7 @@ describe('item 5: one view of ticks', () => {
       'const slot = shownBundle !== null ? slotSide(side, shownBundle.plan.audience) : null;',
     );
     expect(src).toMatch(
-      /Read-only boxes \(the agency on an Open plan\) never write\.\s*if \(bundle === null \|\| slot === null\) return;/,
+      /Read-only boxes \(the agency on an Open plan\) never write[^\n]*\n\s*if \(bundle === null \|\| slot === null \|\| editMode\) return;/,
     );
   });
 });
