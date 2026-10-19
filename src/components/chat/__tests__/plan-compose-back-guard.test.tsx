@@ -33,7 +33,7 @@ import {
   stepMarkerOf,
   useHistoryStep,
 } from '@/lib/chat/use-history-step';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { DUR_BASE_MS, DUR_SLOW_MS } from '@/lib/motion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -171,7 +171,8 @@ describe('New plan: system Back under a real planCompose step', () => {
     await type('Diwali week');
     await pressBack();
     await act(async () => button('Discard')?.click());
-    await settle();
+    // The page slides out for DUR_SLOW_MS before it leaves the DOM.
+    await act(async () => wait(DUR_SLOW_MS + 60));
     await settle();
     // The guard's own entry was popped before the close; the screen is gone
     // and the chat's step callback never ran (the close came from onClose).
