@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appPresignCache } from '@/lib/shared-presign';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -99,7 +100,7 @@ import { logger } from '@/lib/logger';
 import { listBuckets, type BucketOption } from '@/lib/buckets';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
-import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
+import type { PresignDeps } from '@/lib/asset-presign';
 import { displayLabel, fetchMemberRole, listAssets } from '@/lib/assets';
 import { uploadAssetFile, type UploadOutcome } from '@/lib/asset-upload';
 import { useNewTrace } from '@/lib/trace-context';
@@ -714,7 +715,7 @@ export function PostDetailPage({
     }),
     [],
   );
-  const cache = useMemo(() => new PresignCache(deps), [deps]);
+  const cache = appPresignCache();
 
   // `silent` skips the full-page loading flip so a post-transition refetch
   // updates the badge and buttons in place rather than blanking the screen.

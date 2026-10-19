@@ -8,12 +8,21 @@ import type { PresignCache } from '@/lib/asset-presign';
 // lazy/off-screen state. The presign gate is asserted via the spy counts on the
 // injected cache (peek is the synchronous initializer path).
 
-function makeCache(peekUrl: string | null) {
+function makeCache(peekUrl: string | null, smallUrl: string | null = null) {
   const peek = vi.fn(() =>
     peekUrl !== null ? { url: peekUrl, expiresAt: Date.now() + 3_600_000 } : null,
   );
   const resolve = vi.fn(async () => ({ url: 'resolved', expiresAt: Date.now() + 3_600_000 }));
-  return { cache: { peek, resolve } as unknown as PresignCache, peek, resolve };
+  const peekThumbnail = vi.fn(() =>
+    smallUrl !== null ? { url: smallUrl, expiresAt: Date.now() + 3_600_000 } : null,
+  );
+  const thumbnail = vi.fn(async () => null);
+  return {
+    cache: { peek, resolve, peekThumbnail, thumbnail } as unknown as PresignCache,
+    peek,
+    resolve,
+    peekThumbnail,
+  };
 }
 
 function render(props: {
@@ -136,5 +145,27 @@ describe('Thumbnail', () => {
     });
     expect(wide).toContain('aspect-[4/3]');
     expect(wide).not.toContain('aspect-square');
+  });
+
+  it('(h) paints a known small copy on the first frame, never waiting for the original', () => {
+    const { cache, peekThumbnail, resolve } = makeCache(null, 'https://cdn.example/small.jpg');
+    const out = render({
+      assetVersionId: 'av1',
+      cache,
+      presignEnabled: true,
+      fallback: { kind: 'glyph' },
+    });
+    expect(out).toContain('https://cdn.example/small.jpg');
+    expect(out).toContain('data-thumb-small');
+    expect(out).not.toContain('animate-pulse');
+    expect(peekThumbnail).toHaveBeenCalledWith('av1');
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it('(i) never peeks a small copy when presign is off or there is no version', () => {
+    const { cache, peekThumbnail } = makeCache(null, 'https://cdn.example/small.jpg');
+    render({ assetVersionId: null, cache, presignEnabled: true, fallback: { kind: 'glyph' } });
+    render({ assetVersionId: 'av1', cache, presignEnabled: false, fallback: { kind: 'glyph' } });
+    expect(peekThumbnail).not.toHaveBeenCalled();
   });
 });

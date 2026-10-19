@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appPresignCache } from '@/lib/shared-presign';
+import type { PresignCache } from '@/lib/asset-presign';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -13,8 +15,6 @@ import { CreateBriefSheet, type BriefCreated } from '@/components/pages/CreateBr
 import { dispatchSorted } from '@/lib/events';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { env } from '@/lib/env';
-import { fetchWithTrace } from '@/lib/fetch';
-import { PresignCache } from '@/lib/asset-presign';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
@@ -256,16 +256,7 @@ export function BriefsPage() {
   // BriefDetailPage builds it, and shared across every card so they share one
   // concurrency cap and warm-URL cache; cards lazy-resolve via useInView.
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
-  const cache = useMemo(
-    () =>
-      new PresignCache({
-        endpoint: env.VITE_ASSET_READ_URL ?? null,
-        getAccessToken: async () =>
-          (await supabase.auth.getSession()).data.session?.access_token ?? null,
-        fetcher: (input, init) => fetchWithTrace(input, init),
-      }),
-    [],
-  );
+  const cache = appPresignCache();
 
   // The active workspace's briefs, read on the server by workspace_id page by
   // page, then grouped and filtered in memory. A failure shows LoadError (never

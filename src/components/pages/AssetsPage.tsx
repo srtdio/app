@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appPresignCache } from '@/lib/shared-presign';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -52,7 +53,6 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSession } from '@/lib/session-context';
 import { useSort } from '@/lib/use-sort';
-import { PresignCache } from '@/lib/asset-presign';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { logger } from '@/lib/logger';
 import {
@@ -194,16 +194,7 @@ export function AssetsPage() {
   // the viewer never re-fetches a still-valid link. Rebuilt only if the endpoint
   // changes (effectively never within a session).
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
-  const cache = useMemo(
-    () =>
-      new PresignCache({
-        endpoint: env.VITE_ASSET_READ_URL ?? null,
-        getAccessToken: async () =>
-          (await supabase.auth.getSession()).data.session?.access_token ?? null,
-        fetcher: (input, init) => fetchWithTrace(input, init),
-      }),
-    [],
-  );
+  const cache = appPresignCache();
 
   const loadAssets = useCallback(async () => {
     if (workspaceId === null) return;

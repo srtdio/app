@@ -76,7 +76,7 @@ async function readPresigned(response: Response): Promise<PresignedUrl> {
 
 /**
  * The version's stored thumbnail, presigned; null when the version has none
- * (404 'no_rendition'). Throws PresignError for every other failure.
+ * (204, or the older 404 'no_rendition'). Throws PresignError for every other failure.
  */
 export async function requestThumbnailUrl(
   deps: PresignDeps,
@@ -86,6 +86,7 @@ export async function requestThumbnailUrl(
     asset_version_id: assetVersionId,
     rendition: 'thumbnail',
   });
+  if (response.status === 204) return null;
   if (response.status === 404) {
     const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
     if (body?.error === 'no_rendition') return null;

@@ -47,8 +47,8 @@ import {
   PlatformFrame,
 } from '@/components/media/PlatformFrame';
 import { frameFor, type Frame } from '@/lib/platform-specs';
-import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
-import { localThumbnailUrlStore } from '@/lib/local-cache';
+import type { PresignCache } from '@/lib/asset-presign';
+import { appPresignCache, appPresignDeps } from '@/lib/shared-presign';
 import { READ_TIMEOUT_MS, readProfiles } from '@/lib/chat-reads';
 import { readBriefsByIds, type BriefCardFields } from '@/lib/chat/briefs';
 import {
@@ -68,7 +68,6 @@ import {
 } from '@/components/chat/chat-type';
 import { formatEntityRef } from '@/lib/entityRef';
 import { env } from '@/lib/env';
-import { fetchWithTrace } from '@/lib/fetch';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -463,23 +462,9 @@ function useSettledViewerSide(workspaceId: string | null): {
 // One presign cache for every shared card in the session: it bounds concurrency
 // and keeps URLs warm across messages. Created on first use, never per card. The
 // post sheet shares it, and its deps mint the viewer's download URL.
-const cardPresignDeps: PresignDeps = {
-  endpoint: env.VITE_ASSET_READ_URL ?? null,
-  getAccessToken: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null,
-  fetcher: (input, init) => fetchWithTrace(input, init),
-};
-let cardPresignCache: PresignCache | null = null;
+/** The app-wide presign cache (one for every screen; see shared-presign). */
 export function sharedCardPresignCache(): PresignCache {
-  if (cardPresignCache === null) {
-    // Small-picture URLs persist on the device, so a reopened app paints at once.
-    cardPresignCache = new PresignCache(
-      cardPresignDeps,
-      undefined,
-      undefined,
-      localThumbnailUrlStore,
-    );
-  }
-  return cardPresignCache;
+  return appPresignCache();
 }
 export const PRESIGN_ENABLED =
   env.VITE_ASSET_READ_URL !== undefined && env.VITE_ASSET_READ_URL !== '';
@@ -939,7 +924,7 @@ export function PostCardItem(
             workspaceKey={workspaceKey}
             timeZone={timeZone}
             cache={sharedCardPresignCache()}
-            deps={cardPresignDeps}
+            deps={appPresignDeps}
             presignEnabled={PRESIGN_ENABLED}
             {...(onTalkAbout !== undefined
               ? { onTalkAbout: talkAboutThenFocus(onTalkAbout, props.onTalkAboutFocus) }

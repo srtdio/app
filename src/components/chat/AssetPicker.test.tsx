@@ -13,6 +13,8 @@ vi.mock('@/components/chat/PostCard', () => ({
   sharedCardPresignCache: () => ({
     peek: () => null,
     resolve: () => new Promise(() => undefined),
+    peekThumbnail: () => null,
+    thumbnail: () => new Promise(() => undefined),
   }),
 }));
 

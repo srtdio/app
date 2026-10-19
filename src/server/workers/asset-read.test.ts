@@ -997,11 +997,11 @@ describe('worker.fetch thumbnail and stream modes', () => {
     expect(second.url).toBe(first.url);
   });
 
-  it("rendition 'thumbnail' answers 404 no_rendition when there is none", async () => {
+  it("rendition 'thumbnail' answers 204 with no body when there is none", async () => {
     db.renditions = new Map();
     const res = await post({ asset_version_id: VERSION_ID, rendition: 'thumbnail' });
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: 'no_rendition' });
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
     expect(presign).not.toHaveBeenCalled();
   });
 

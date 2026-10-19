@@ -1,6 +1,7 @@
-// One-time, idempotent backfill of small list copies for post images uploaded
-// before images got one at upload. For every live post attachment whose image
-// version (raster, never SVG) has no 'thumbnail' rendition yet, it reads the
+// One-time, idempotent backfill of small list copies for images uploaded before
+// images got one at upload. For every live asset's image version (raster, never
+// SVG; post media, Assets library and chat photos) with no 'thumbnail'
+// rendition yet, it reads the
 // original from R2, writes a 320px-wide JPEG (fit inside 320 x 1160, never
 // upscaled, EXIF orientation applied, metadata dropped) at the same key the
 // upload path uses ({kindFolder}/{asset_id}/v{n}-thumb.jpg), then inserts the
@@ -76,17 +77,19 @@ export interface ImageVersionToThumb {
   asset_bucket: string;
 }
 
-// Every image version a live post attachment pins that has no thumbnail yet.
-// Keyset-paged on version id so a run is bounded per round trip.
+// Every raster image version of a live asset (post media, the Assets library,
+// chat photos) that has no thumbnail yet. Built-in sample files are skipped:
+// they ship their own small copies. Keyset-paged on version id so a run is
+// bounded per round trip.
 const PAGE_SQL = `
-  select distinct v.id as version_id, v.asset_id, v.workspace_id, v.version_number,
+  select v.id as version_id, v.asset_id, v.workspace_id, v.version_number,
          v.r2_key, w.asset_bucket
-  from asset_attachments a
-  join asset_versions v on v.id = a.asset_version_id
+  from asset_versions v
+  join assets a on a.id = v.asset_id
   join workspaces w on w.id = v.workspace_id
-  where a.entity_type = 'post'
-    and a.deleted_at is null
+  where a.deleted_at is null
     and v.r2_key is not null
+    and v.r2_key not like 'induction-sample/%'
     and w.asset_bucket is not null
     and v.mime_type like 'image/%'
     and v.mime_type <> 'image/svg+xml'

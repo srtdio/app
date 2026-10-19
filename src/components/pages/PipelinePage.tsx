@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appPresignCache } from '@/lib/shared-presign';
+import type { PresignCache } from '@/lib/asset-presign';
 import type { ReactElement, ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -55,8 +57,6 @@ import {
 import { groupByStage, stageColumns } from '@/lib/post-board';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts';
-import { PresignCache } from '@/lib/asset-presign';
-import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 
 // The board columns are the workflow stages, in transition-map order. Stage
@@ -665,16 +665,7 @@ export function PipelinePage() {
   // URLs so every card shares a single cap, mirroring AssetsPage. Cards
   // lazy-resolve their own thumbnail via useInView; the page adds no fetches.
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
-  const cache = useMemo(
-    () =>
-      new PresignCache({
-        endpoint: env.VITE_ASSET_READ_URL ?? null,
-        getAccessToken: async () =>
-          (await supabase.auth.getSession()).data.session?.access_token ?? null,
-        fetcher: (input, init) => fetchWithTrace(input, init),
-      }),
-    [],
-  );
+  const cache = appPresignCache();
 
   // One fetch for the whole board (no N+1): listPosts once, grouped in memory.
   const loadPosts = useCallback(async () => {

@@ -1,10 +1,19 @@
-import { useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { cn } from '@/lib/cn';
 import { IconFile, IconLink } from '@/components/ui/icons';
 import { formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
 import { imageTileState } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
 import { useThumbnail } from './use-thumbnail';
+import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
+import { IMAGE_THUMBNAIL_MAX_WIDTH } from '@/lib/files/thumbnail';
 
 /**
  * What the non-image tile should be. Unifies AssetCard's link/file Fallback with
@@ -109,6 +118,13 @@ function FallbackTile({ fallback }: { fallback: ThumbnailFallback }) {
  * (image=bg-panel-2, fallback=bg-panel-3) on a SINGLE tile, never per-fallback. It
  * adds no inner rounding or outer padding: the caller's card supplies overflow-hidden
  * and the radius, so the tile is edge-to-edge and never looks inset or floated.
+ *
+ * Fast first paint: the version's small stored copy (a few KB, and its URL kept
+ * on the device) paints first, on the first frame when it is already known. A
+ * tile wider than the small copy can fill sharply also loads the original and
+ * fades it in over the small copy once it has loaded (opacity only, no
+ * movement), so the picture appears at once and then sharpens. A version with
+ * no small copy loads the original as before.
  */
 export function Thumbnail({
   assetVersionId,
@@ -119,25 +135,44 @@ export function Thumbnail({
   alt,
   children,
 }: ThumbnailProps) {
-  const { ref, url, failed, onError } = useThumbnail<HTMLDivElement>({
-    assetVersionId,
+  const active = presignEnabled && assetVersionId !== null;
+  const versionId = assetVersionId ?? '';
+  const boxRef = useRef<HTMLDivElement>(null);
+  const near = useNearViewport(boxRef);
+  // A small copy already known (this session or kept on the device) paints at once.
+  const knownSmall = active ? (cache.peekThumbnail(versionId)?.url ?? null) : null;
+  const stored = useStoredThumbnail(versionId, cache, active && near);
+  const [smallFailed, setSmallFailed] = useState<string | null>(null);
+  const smallUrl = smallFailed === versionId ? null : (stored.url ?? knownSmall);
+  const sharpNeeded = useNeedsSharp(boxRef, active);
+  // An original already signed this session is used too: it is the sharpest
+  // picture and most likely already in the browser's cache.
+  const knownOriginal = active && cache.peek(versionId) !== null;
+  const wantOriginal =
+    active && (sharpNeeded || knownOriginal || stored.missing || smallFailed === versionId);
+  const original = useThumbnail<HTMLSpanElement>({
+    assetVersionId: wantOriginal ? assetVersionId : null,
     cache,
     enabled: presignEnabled,
   });
+  const originalUrl = wantOriginal && !original.failed ? original.url : null;
   const state = imageTileState({
     enabled: presignEnabled,
     hasVersion: assetVersionId !== null,
-    url,
-    failed,
+    url: smallUrl ?? originalUrl,
+    failed: smallUrl === null && original.failed,
   });
   // Which url has painted: the onboarding guide waits for on-screen photos
   // (data-thumb-loading) before it points at anything.
   const [painted, setPainted] = useState<string | null>(null);
-  const loading = state === 'shimmer' || (state === 'image' && url !== null && painted !== url);
+  const [sharp, setSharp] = useState<string | null>(null);
+  const loading =
+    state === 'shimmer' || (state === 'image' && painted !== smallUrl && painted !== originalUrl);
+  const originalShown = originalUrl !== null && (smallUrl === null || sharp === originalUrl);
 
   return (
     <div
-      ref={ref}
+      ref={boxRef}
       {...(loading ? { 'data-thumb-loading': '' } : {})}
       className={cn(
         'relative flex w-full items-center justify-center overflow-hidden',
@@ -145,21 +180,68 @@ export function Thumbnail({
         state === 'image' ? 'bg-panel-2' : 'bg-panel-3',
       )}
     >
+      <span
+        ref={original.ref}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+      />
       {state === 'shimmer' ? (
         <div className="h-full w-full animate-pulse bg-panel-2" />
-      ) : state === 'image' && url !== null ? (
-        <img
-          src={url}
-          alt={alt}
-          loading="lazy"
-          onLoad={() => setPainted(url)}
-          onError={onError}
-          className="h-full w-full object-cover"
-        />
+      ) : state === 'image' ? (
+        <>
+          {smallUrl !== null ? (
+            <img
+              src={smallUrl}
+              alt={originalShown ? '' : alt}
+              decoding="async"
+              data-thumb-small=""
+              onLoad={() => setPainted((now) => now ?? smallUrl)}
+              onError={() => setSmallFailed(versionId)}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : null}
+          {originalUrl !== null ? (
+            <img
+              src={originalUrl}
+              alt={originalShown ? alt : ''}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => {
+                setSharp(originalUrl);
+                setPainted(originalUrl);
+              }}
+              onError={original.onError}
+              className={cn(
+                'absolute inset-0 h-full w-full object-cover transition-opacity duration-150 motion-reduce:transition-none',
+                originalShown ? 'opacity-100' : 'opacity-0',
+              )}
+            />
+          ) : null}
+        </>
       ) : (
         <FallbackTile fallback={fallback} />
       )}
       {children}
     </div>
   );
+}
+
+/**
+ * True when the tile is wider (in device pixels) than the small copy can fill
+ * sharply, so the original should load over it. Measured once before paint.
+ */
+// A layout effect in the browser (measured before paint), a plain effect in SSR
+// and static renders, where it never runs either way.
+const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+function useNeedsSharp(ref: RefObject<HTMLElement>, active: boolean): boolean {
+  const [needs, setNeeds] = useState(false);
+  useBeforePaint(() => {
+    if (!active) return;
+    const el = ref.current;
+    if (el === null || typeof window === 'undefined') return;
+    const ratio = window.devicePixelRatio || 1;
+    setNeeds(el.getBoundingClientRect().width * ratio > IMAGE_THUMBNAIL_MAX_WIDTH);
+  }, [ref, active]);
+  return needs;
 }

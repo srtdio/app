@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { appPresignCache } from '@/lib/shared-presign';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -37,8 +38,6 @@ import { useSession } from '@/lib/session-context';
 import { useCurrentProfile } from '@/lib/use-current-profile';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
-import { PresignCache } from '@/lib/asset-presign';
-import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
@@ -100,16 +99,7 @@ export function ActivityPage() {
   // so every card thumbnail shares a single cap, mirroring PipelinePage. Cards
   // lazy-resolve their own thumbnail via useInView; the page adds no fetches.
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
-  const cache = useMemo(
-    () =>
-      new PresignCache({
-        endpoint: env.VITE_ASSET_READ_URL ?? null,
-        getAccessToken: async () =>
-          (await supabase.auth.getSession()).data.session?.access_token ?? null,
-        fetcher: (input, init) => fetchWithTrace(input, init),
-      }),
-    [],
-  );
+  const cache = appPresignCache();
 
   // Load page one for the active chip. Every chip filters server-side (All has
   // no filter), so older matches are never hidden behind the newest-page cap.

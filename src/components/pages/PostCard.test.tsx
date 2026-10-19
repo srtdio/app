@@ -46,7 +46,16 @@ function makeCache(peekUrl: string | null) {
     peekUrl !== null ? { url: peekUrl, expiresAt: Date.now() + 3_600_000 } : null,
   );
   const resolve = vi.fn(async () => ({ url: 'resolved', expiresAt: Date.now() + 3_600_000 }));
-  return { cache: { peek, resolve } as unknown as PresignCache, peek, resolve };
+  return {
+    cache: {
+      peek,
+      resolve,
+      peekThumbnail: () => null,
+      thumbnail: async () => null,
+    } as unknown as PresignCache,
+    peek,
+    resolve,
+  };
 }
 
 function render(props: Pick<PostCardProps, 'post' | 'cache' | 'presignEnabled'>): string {

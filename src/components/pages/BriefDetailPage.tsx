@@ -1,4 +1,5 @@
 import { FORMER_MEMBER } from '@/lib/people-names';
+import { appPresignCache } from '@/lib/shared-presign';
 import { useSearchJump } from '@/lib/search/jump';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,7 +27,7 @@ import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
-import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
+import type { PresignDeps } from '@/lib/asset-presign';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { civilDate } from '@/lib/list-sort';
@@ -281,7 +282,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     }),
     [],
   );
-  const cache = useMemo(() => new PresignCache(deps), [deps]);
+  const cache = appPresignCache();
 
   // `silent` skips the full-page loading flip so the post-close refetch updates
   // the badge in place rather than blanking the screen. A failed read is a load
