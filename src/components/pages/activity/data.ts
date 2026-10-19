@@ -745,7 +745,7 @@ export function filterByState(
   }
 }
 
-/** The Undo toast after "Mark all read". */
+/** The "Mark all read" action label; its failure toast derives from it. No success toast. */
 export const MARKED_READ_LABEL = 'Marked as read';
 
 /** The load error: plain copy, never the raw error. */

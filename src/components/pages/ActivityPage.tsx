@@ -245,8 +245,8 @@ export function ActivityPage() {
   );
 
   // The active chip only: mark its unread, non-snoozed rows read at once and
-  // write immediately; no Undo. A plain "Marked as read" toast confirms; on
-  // failure the rows go back to unread with a fixed error toast.
+  // write immediately; no Undo and no confirmation toast (the unread state just
+  // clears). On failure the rows go back to unread with a fixed error toast.
   // The All chip uses the workspace-wide proc (matches inbox_mark_all_read).
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
@@ -256,7 +256,6 @@ export function ActivityPage() {
     const stamp = new Date().toISOString();
     const chip = state;
     setItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
-    toast?.show({ title: MARKED_READ_LABEL });
     const traceId = newTrace();
     void (async () => {
       const results =
