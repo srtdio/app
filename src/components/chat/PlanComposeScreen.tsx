@@ -12,8 +12,13 @@
 // the Pipeline dates together, or nothing (the form is never locked; a failure
 // says what to do and nothing is half built). While an item needs a day the
 // server is never called. On success the screen closes and the new plan's Plan
-// screen opens. No card is ever sent to chat. Tokens only; translateY motion
-// for sheets, a short translateX shake on the first flagged row.
+// screen opens. No card is ever sent to chat. Every close path (X, Escape,
+// system or browser Back) asks "Discard this plan?" while the plan holds
+// anything: useBackGuard holds the Back above the chat's own step, so the
+// half-built plan stays on Keep editing; Discard releases the guard, then
+// closes. The phone page is a modal dialog (focus moves in and returns, see
+// PlanPage). Tokens only; translateY motion for sheets, a short translateX
+// shake on the first flagged row.
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -44,12 +49,14 @@ import {
   PLAN_CREATE_ERROR_COPY,
   PLAN_CREATE_FAILED_COPY,
   PLAN_TITLE_MAX,
+  composeTitlePlaceholder,
   defaultPlanRange,
   draftProblem,
   planWriteErrorCopy,
   stageLabel,
 } from '@/components/chat/plan-card';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { useBackGuard } from '@/lib/back-guard';
 import { newMessageId } from '@/lib/chat/message-id';
 import {
   COMPOSE_EMPTY,
@@ -256,13 +263,19 @@ export function PlanComposeScreen(props: {
   }, [open, timeZone]);
 
   // Every close (X, back, Escape) asks first while the plan holds anything.
+  const hasContent = composeHasContent({ title, items, conceptDraft: conceptForm });
   const requestClose = (): void => {
-    if (composeHasContent({ title, items, conceptDraft: conceptForm })) {
+    if (hasContent) {
       setCloseConfirm(true);
       return;
     }
     props.onClose();
   };
+  // System or browser Back with content asks the same confirm (FB4): the
+  // guard's step sits above the chat's planCompose step, so Back never
+  // reaches the chat's own close while anything is typed. Released before a
+  // confirmed Discard and before Create's own close.
+  const guard = useBackGuard({ active: props.open && hasContent, onBack: requestClose });
 
   const problem = draftProblem({ title, startsOn: range.startsOn, endsOn: range.endsOn });
   const today = civilToday(new Date(), timeZone);
@@ -341,6 +354,8 @@ export function PlanComposeScreen(props: {
     }
     toast.show({ title: composeCreatedToast(items.length, composePipelineUpdates(items)) });
     const planId = result.data;
+    // The guard goes before the parent's close pops the screen's own step.
+    guard.release();
     props.onCreated(planId, false);
   };
 
@@ -483,7 +498,8 @@ export function PlanComposeScreen(props: {
               value={title}
               maxLength={PLAN_TITLE_MAX}
               autoComplete="off"
-              placeholder="Week of 12 Oct"
+              enterKeyHint="done"
+              placeholder={composeTitlePlaceholder(range)}
               onChange={(e) => setTitle(e.target.value)}
               className={cn(FIELD, 'font-semibold')}
             />
@@ -631,6 +647,8 @@ export function PlanComposeScreen(props: {
           destructive
           onConfirm={() => {
             setCloseConfirm(false);
+            // Release first: the guard's entry pops before the screen's own.
+            guard.release();
             props.onClose();
           }}
           onCancel={() => setCloseConfirm(false)}

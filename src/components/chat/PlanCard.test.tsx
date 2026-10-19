@@ -132,12 +132,12 @@ describe('PlanCardBody', () => {
     expect(html).toContain('Forward');
   });
 
-  it('a Draft plan shows the warn "Draft" chip and "Team X of N" (tokens only); Forward for the agency only', () => {
+  it('a Draft plan shows the warn "Draft" chip and "Creators X of N" (tokens only); Forward for the agency only', () => {
     const html = render({ kind: 'plan', bundle: bundle('team') }, 'agency');
     const chip = /<span[^>]*data-plan-chip="warn"[^>]*>[^<]*<\/span>/.exec(html)?.[0] ?? '';
     expect(chip).toContain('Draft');
     expect(html).not.toContain('Creators only');
-    expect(html).toContain('Team 0 of 2');
+    expect(html).toContain('Creators 0 of 2');
     expect(html).toContain('data-plan-card-bar="team"');
     expect(html).toContain('data-plan-forward');
     expect(chip).toContain('bg-warn-soft');

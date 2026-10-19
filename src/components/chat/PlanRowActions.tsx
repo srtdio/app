@@ -1,8 +1,10 @@
-// The Plan list's laptop row pieces (md and up, agency only): the grip handle
+// The Plan list's edit mode row pieces (agency, every width): the grip handle
 // on a row's left (a mouse or a finger lifts the row after 4px of travel, no
-// long-press), the calendar and dustbin buttons right of the text, the 3px
-// drop line with its dot, the "Drop here" target of an empty day and the slim
-// keyboard hint line. Tokens only; the lifted card moves on translateY only.
+// long-press), the day chip (opens the day picker) and the remove icon (bad
+// colour, 44px) right of the text, the 3px drop line with its dot, the "Drop
+// here" target of an empty day and the slim laptop keyboard hint line. View
+// mode shows none of these. Tokens only; the lifted card moves on translateY
+// only.
 
 import { useEffect, useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
@@ -21,10 +23,8 @@ import { cn } from '@/lib/cn';
 export const GRIP_LIFT_PX = 4;
 
 /**
- * The 28x44 drag handle. Shown on row hover and on keyboard focus within the
- * row (the row wrapper is the `group`); where nothing hovers (a touch laptop,
- * an iPad in landscape) it always shows, muted. Always laid out, so nothing
- * shifts.
+ * The 28x44 drag handle (edit mode). Always shown, muted; a mouse or a finger
+ * lifts the row after 4px of travel. Always laid out, so nothing shifts.
  * Not a tab stop: the keyboard moves a row with Space on the row itself.
  */
 export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactElement {
@@ -65,7 +65,7 @@ export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactEle
       onPointerDown={onPointerDown}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'flex h-11 w-7 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-md text-fg-3 opacity-0 transition-opacity duration-fast hover:bg-panel-2 group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-60',
+        'flex h-11 w-7 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-md text-fg-3 hover:bg-panel-2',
         NO_TOUCH_SELECT,
       )}
     >
@@ -79,41 +79,42 @@ export function PlanGripSpacer(): ReactElement {
   return <span aria-hidden="true" className="h-11 w-7 shrink-0" />;
 }
 
-const ACTION_BUTTON =
-  'flex h-11 w-9 shrink-0 items-center justify-center self-start rounded-md text-fg-3 hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
-
 /**
- * The always-visible calendar (opens the day popover) and dustbin (removes
- * with Undo) buttons: 36x44 each, side by side, muted.
+ * The edit row's day chip ("Wed 14", "No date") and remove icon: the chip
+ * opens the day picker, 44px tall; the remove is a 44x44 target in the bad
+ * colour. Nothing is written until Save changes.
  */
-export function PlanRowButtons(props: {
+export function PlanRowEditButtons(props: {
   title: string;
-  /** The day popover is open for this row. */
-  calendarOpen: boolean;
-  onCalendar: (anchor: HTMLElement) => void;
+  /** The chip's text ("Wed 14" or "No date"). */
+  dayLabel: string;
+  /** The day picker is open for this row. */
+  dayOpen: boolean;
+  onDay: (anchor: HTMLElement) => void;
   onRemove: () => void;
 }): ReactElement {
   return (
-    <span className={cn('flex shrink-0 items-start', NO_TOUCH_SELECT)}>
+    <span className={cn('flex shrink-0 items-start gap-0.5', NO_TOUCH_SELECT)}>
       <button
         type="button"
         aria-label={`${CHANGE_DAY_LABEL}: ${props.title}`}
-        aria-haspopup="menu"
-        aria-expanded={props.calendarOpen}
+        aria-haspopup="dialog"
+        aria-expanded={props.dayOpen}
         title={CHANGE_DAY_LABEL}
-        data-plan-row-calendar=""
-        onClick={(event) => props.onCalendar(event.currentTarget)}
-        className={ACTION_BUTTON}
+        data-plan-row-day-chip=""
+        onClick={(event) => props.onDay(event.currentTarget)}
+        className="flex min-h-[44px] shrink-0 items-center gap-1 self-start rounded-md px-1.5 text-[13px] font-semibold text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconCalendar size={18} />
+        <IconCalendar size={16} />
+        <span className="font-mono tabular-nums">{props.dayLabel}</span>
       </button>
       <button
         type="button"
         aria-label={`${REMOVE_LABEL}: ${props.title}`}
         title={REMOVE_LABEL}
-        data-plan-row-bin=""
+        data-plan-row-remove-edit=""
         onClick={props.onRemove}
-        className={ACTION_BUTTON}
+        className="flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-md text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <IconTrash size={18} />
       </button>
@@ -154,7 +155,7 @@ export function PlanDropHere(props: { over: boolean }): ReactElement {
   );
 }
 
-/** The slim hint line in the laptop footer (agency only). */
+/** The slim hint line in the laptop footer (agency, edit mode only). */
 export function PlanKeyHints(): ReactElement {
   return (
     <p data-plan-key-hints="" className="text-xs leading-4 text-fg-3">

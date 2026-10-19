@@ -8,11 +8,17 @@
 // comments with a composer. On a Draft plan the agency marks agency approval
 // (confirmed) or asks changes; a client approves or asks changes on an Open
 // plan's concept (team reviews are never shown or written on an Open plan).
+// "Ask changes" opens the comment composer first (a note for the creators);
+// Send records the note, then the changes review. Approve keeps its confirm.
 // The agency side gets a red "Remove from plan" at the bottom (the Remove
-// confirm, then plan_item_remove). Comments: the agency sees all
-// and picks Everyone or Agency only; a client sees Everyone ones (RLS). A
-// comment appends at once and keeps its text on failure. One read per table per
-// open, bounded at 5s; the body paints once it settles. Tokens only.
+// confirm, then plan_item_remove) and Move to another day: a move that resets
+// nothing waits behind a 7s Undo toast with a countdown (useUndoableAction;
+// the write goes when the toast ends, never after Undo). Comments: the agency
+// sees all and picks Everyone or Agency only; a client sees Everyone ones
+// (RLS). A comment appends at once and keeps its text on failure. One read
+// per table per open, bounded at 5s; the body paints once it settles. The
+// phone page is a modal dialog: focus moves in and returns on close
+// (PlanPage). Tokens only.
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement, RefObject } from 'react';
@@ -26,7 +32,7 @@ import {
 } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/toast';
-import { IconArrowUp, IconLock, IconMore } from '@/components/ui/icons';
+import { IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
@@ -51,8 +57,6 @@ import {
   MOVE_FAILED,
   REMOVED_TOAST,
   REMOVE_FAILED,
-  SLOT_UNDO,
-  SLOT_UNDO_MS,
   STATUS_LABELS,
   TEAM_STATUS_LABELS,
   TEAM_APPROVE_CONFIRM,
@@ -105,6 +109,7 @@ import { logger } from '@/lib/logger';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
+import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspace } from '@/lib/workspace-context';
 import { mentionIds, resolvePersonMentionText } from '@/lib/chat/mentions';
 import { resolvePeople } from '@/lib/people-names';
@@ -166,6 +171,22 @@ export function actionLabels(actions: ItemActions): string[] {
 
 /** The agency's status row label (the review side stays 'team'). */
 export const AGENCY_ROW = 'Creators';
+
+/** "Ask changes" (FT55): the composer opens first; its hint and placeholder. */
+export const ASK_CHANGES_HINT = 'Add a note on what should change, then send.';
+export const ASK_CHANGES_PLACEHOLDER = 'What should change?';
+export const ASK_CHANGES_SEND = 'Send and ask changes';
+
+/**
+ * What a Send does while "Ask changes" is open: the note (when typed) then the
+ * changes review; with no note, the review alone. Never nothing. Pure.
+ */
+export function askChangesSteps(body: string, asking: boolean): Array<'comment' | 'changes'> {
+  const steps: Array<'comment' | 'changes'> = [];
+  if (body.trim() !== '') steps.push('comment');
+  if (asking) steps.push('changes');
+  return steps;
+}
 
 /** The status box rows: Pipeline (post), Agency (Draft plan only), Client. Pure. */
 export function statusRows(
@@ -307,7 +328,11 @@ export function PlanItemScreen(props: {
   const [pending, setPending] = useState<ShownComment[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  // "Ask changes" opened the composer: Send records the note, then the review.
+  const [askingChanges, setAskingChanges] = useState(false);
+  const commentRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  const undoable = useUndoableAction();
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<ConceptForm>(EMPTY_CONCEPT);
   // The concept's files when the sheet opened; null when not read yet.
@@ -336,6 +361,7 @@ export function PlanItemScreen(props: {
     setVisibility('everyone');
     setPending([]);
     setSendError(null);
+    setAskingChanges(false);
     setEditOpen(false);
     setConceptMenuOpen(false);
     setMoveOpen(false);
@@ -353,6 +379,7 @@ export function PlanItemScreen(props: {
     setText('');
     setPending([]);
     setSendError(null);
+    setAskingChanges(false);
     setActionError(null);
     setConfirmOpen(false);
     setOverrides({});
@@ -364,8 +391,9 @@ export function PlanItemScreen(props: {
   const title = rowTitle(bundle, item);
   const description = item.kind === 'concept' ? (item.description ?? '') : '';
 
-  const review = async (status: ReviewStatus): Promise<void> => {
-    if (actions.kind !== 'review' || busy) return;
+  /** One review write; true when it landed on this item. */
+  const review = async (status: ReviewStatus): Promise<boolean> => {
+    if (actions.kind !== 'review' || busy) return false;
     const forItem = item.id;
     setBusy(true);
     setActionError(null);
@@ -379,7 +407,7 @@ export function PlanItemScreen(props: {
     setBusy(false);
     if (!stillOn(forItem)) {
       if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
-      return;
+      return false;
     }
     if (!result.ok) {
       logger.warn('chat: plan item review failed', {
@@ -388,11 +416,19 @@ export function PlanItemScreen(props: {
         error: result.error.message,
       });
       setActionError("Couldn't save. Try again.");
-      return;
+      return false;
     }
     setConfirmOpen(false);
     setOverrides((prev) => ({ ...prev, [actions.side]: status }));
     dispatchPlanChanged(window, bundle.plan.id);
+    return true;
+  };
+  // "Ask changes": the composer first. The field takes focus (its keyboard
+  // opens on a phone); Send records the note, then the changes review.
+  const askChanges = (): void => {
+    setActionError(null);
+    setAskingChanges(true);
+    commentRef.current?.focus();
   };
 
   // Edit concept: one sheet (the Add concept one) for every field; the Date
@@ -467,10 +503,8 @@ export function PlanItemScreen(props: {
     return [...recorded, ...pending.filter((p) => !ids.has(p.id))];
   }, [read, pending, me]);
 
-  const send = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    const body = text.trim();
-    if (body === '' || sending) return;
+  /** One comment write; true when it landed on this item. */
+  const sendComment = async (body: string): Promise<boolean> => {
     const vis: CommentVisibility = side === 'agency' ? visibility : 'everyone';
     const localId = `local-${Date.now()}`;
     const forItem = item.id;
@@ -497,7 +531,7 @@ export function PlanItemScreen(props: {
     setSending(false);
     if (!stillOn(forItem)) {
       if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
-      return;
+      return false;
     }
     if (!result.ok) {
       logger.warn('chat: plan comment failed', {
@@ -507,7 +541,7 @@ export function PlanItemScreen(props: {
       });
       setPending((prev) => prev.filter((p) => p.id !== localId));
       setSendError(COMMENT_FAILED);
-      return;
+      return false;
     }
     setText('');
     setPending((prev) =>
@@ -515,6 +549,18 @@ export function PlanItemScreen(props: {
     );
     reload();
     dispatchPlanChanged(window, bundle.plan.id);
+    return true;
+  };
+  const send = async (event: FormEvent): Promise<void> => {
+    event.preventDefault();
+    if (sending || busy) return;
+    const body = text.trim();
+    const steps = askChangesSteps(body, askingChanges);
+    if (steps.length === 0) return;
+    if (steps.includes('comment') && !(await sendComment(body))) return;
+    if (steps.includes('changes')) {
+      if (await review('changes')) setAskingChanges(false);
+    }
   };
 
   // Agency plan actions. Move: to the end of the picked day (one 5-arg
@@ -540,17 +586,8 @@ export function PlanItemScreen(props: {
     }
     void moveItemTo(day, false);
   };
-  const moveItemTo = async (
-    day: string | null,
-    keep: boolean,
-    /** An Undo's move back: this order, and no toast of its own. */
-    back?: string[],
-  ): Promise<void> => {
-    if (!planActions || planBusy) return;
-    const before = flattenOrder(planDayIds(groups));
-    const from = currentDay ?? null;
-    const order = back ?? flattenOrder(moveToEnd(planDayIds(groups), item.id, day));
-    const hadTicks = hasTicks(bundle, item.id);
+  // The one plan_item_move. True when it landed; a failure toasts its copy.
+  const writeMove = async (day: string | null, keep: boolean, order: string[]): Promise<boolean> => {
     setPlanBusy(true);
     const traceId = generateTraceId();
     const result = await planItemMove(supabase, {
@@ -568,28 +605,31 @@ export function PlanItemScreen(props: {
         error: result.error.message,
       });
       toast.show({ title: planWriteErrorCopy(result.error.message, MOVE_FAILED) });
+      return false;
+    }
+    dispatchPlanChanged(window, bundle.plan.id);
+    return true;
+  };
+  const moveItemTo = async (day: string | null, keep: boolean): Promise<void> => {
+    if (!planActions || planBusy) return;
+    const order = flattenOrder(moveToEnd(planDayIds(groups), item.id, day));
+    const hadTicks = hasTicks(bundle, item.id);
+    const spec = dayMoveToast(dayHeaderOf(day), item.kind === 'post', !keep && hadTicks);
+    setMoveOpen(false);
+    if (spec.undo) {
+      // Nothing is reset: the write waits behind the Undo toast (7s, countdown);
+      // Undo means it never goes.
+      undoable.run({
+        label: spec.title,
+        commit: async () => {
+          await writeMove(day, keep, order);
+        },
+      });
       return;
     }
-    setMoveOpen(false);
-    dispatchPlanChanged(window, bundle.plan.id);
-    if (back !== undefined) return;
-    // Undo only when nothing was reset (a client's tick cannot be put back).
-    const spec = dayMoveToast(dayHeaderOf(day), item.kind === 'post', !keep && hadTicks);
-    toast.show({
-      title: spec.title,
-      ...(spec.undo
-        ? {
-            durationMs: SLOT_UNDO_MS,
-            action: {
-              label: SLOT_UNDO,
-              onPress: () => void moveBack.current(from, keep, before),
-            },
-          }
-        : {}),
-    });
+    // A tick is reset: the agency cannot put a client's tick back, so no Undo.
+    if (await writeMove(day, keep, order)) toast.show({ title: spec.title });
   };
-  const moveBack = useRef(moveItemTo);
-  moveBack.current = moveItemTo;
   const removeFromPlan = async (): Promise<void> => {
     if (!planActions || planBusy) return;
     setPlanBusy(true);
@@ -722,28 +762,59 @@ export function PlanItemScreen(props: {
                   ))}
                 </div>
               ) : null}
+              {askingChanges ? (
+                <div
+                  data-plan-ask-hint=""
+                  className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-[13px] leading-[18px] text-fg-2"
+                >
+                  <p className="min-w-0 flex-1 py-2">{ASK_CHANGES_HINT}</p>
+                  <button
+                    type="button"
+                    aria-label="Cancel ask changes"
+                    data-plan-ask-cancel=""
+                    onClick={() => setAskingChanges(false)}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-2 hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <IconX size={16} />
+                  </button>
+                </div>
+              ) : null}
               {sendError !== null ? (
                 <p role="alert" className="text-[13px] text-bad">
                   {sendError}
                 </p>
               ) : null}
+              {actionError !== null && askingChanges ? (
+                <p role="alert" className="text-[13px] text-bad">
+                  {actionError}
+                </p>
+              ) : null}
               <div className="flex items-center gap-1.5">
                 <input
+                  ref={commentRef}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   aria-label="Comment"
                   autoComplete="off"
+                  enterKeyHint="send"
                   maxLength={5000}
-                  placeholder={teamNote ? 'Note for creators only' : 'Comment for everyone'}
+                  placeholder={
+                    askingChanges
+                      ? ASK_CHANGES_PLACEHOLDER
+                      : teamNote
+                        ? 'Note for creators only'
+                        : 'Comment for everyone'
+                  }
                   className={cn(
                     'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    teamNote ? 'border-warn' : 'border-border',
+                    teamNote ? 'border-warn' : askingChanges ? 'border-accent' : 'border-border',
                   )}
                 />
                 <button
                   type="submit"
-                  aria-label="Send comment"
-                  disabled={text.trim() === '' || sending}
+                  aria-label={askingChanges ? ASK_CHANGES_SEND : 'Send comment'}
+                  data-plan-comment-send={askingChanges ? 'changes' : 'comment'}
+                  disabled={(text.trim() === '' && !askingChanges) || sending || busy}
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg disabled:opacity-50"
                 >
                   <IconArrowUp size={20} />
@@ -852,8 +923,9 @@ export function PlanItemScreen(props: {
                   <Button
                     size="lg"
                     data-plan-ask=""
+                    aria-pressed={askingChanges}
                     disabled={busy}
-                    onClick={() => void review('changes')}
+                    onClick={askChanges}
                   >
                     Ask changes
                   </Button>
@@ -870,7 +942,7 @@ export function PlanItemScreen(props: {
                     {actions.approveLabel}
                   </Button>
                 </div>
-                {actionError !== null && !confirmOpen ? (
+                {actionError !== null && !confirmOpen && !askingChanges ? (
                   <p role="alert" className="text-[13px] text-bad">
                     {actionError}
                   </p>

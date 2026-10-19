@@ -10,8 +10,10 @@
 // from plan_draft_rows (one call per 100 plan ids) and is merged in as a post
 // item at stage draft, name only. A post slot's day is its post's
 // posts.target_date read in the workspace zone (a draft row's too); a concept's
-// is plan_items.target_date. Framework-free: the create steps and the readers
-// are injected, so the contract is unit-tested directly.
+// is plan_items.target_date. The Plan screen's row tiles (post images and
+// concept photos) come from one asset_attachments read. Framework-free: the
+// create steps and the readers are injected, so the contract is unit-tested
+// directly.
 
 import type {
   Client,
@@ -1119,60 +1121,96 @@ export interface PlanScreenData {
   commentCounts: Record<string, number>;
   /** Each post's first image (asset version id), for the row thumbnails. */
   thumbs: Record<string, string>;
+  /** Each concept's tile: its first image, or a file tile when it holds only documents. */
+  conceptThumbs?: Record<string, ConceptThumb>;
   /** Approvers' display names by user id (the Approved by lines; one batched read). */
   names?: Record<string, string>;
   /** Other live plans (titles) each post sits in, by post id (the Also in pill). */
   alsoIn?: Record<string, string[]>;
 }
 
-interface ThumbRow {
+/** A concept row's tile: its first image file, or "has files, none an image". */
+export type ConceptThumb = { kind: 'image'; versionId: string } | { kind: 'file' };
+
+/** One asset_attachments row as the thumbs read selects it. */
+export interface ThumbRow {
   entity_id: string;
+  entity_type: string;
   asset_version_id: string;
   asset_versions: { mime_type: string | null } | Array<{ mime_type: string | null }> | null;
 }
 
+/** What the plan's rows need from asset_attachments: post images and concept tiles. */
+export interface PlanThumbs {
+  posts: Record<string, string>;
+  concepts: Record<string, ConceptThumb>;
+}
+
+/** The thumbs of a list of attachment rows (lowest position first per entity). Pure. */
+export function thumbsOfRows(rows: readonly ThumbRow[]): PlanThumbs {
+  const posts: Record<string, string> = {};
+  const concepts: Record<string, ConceptThumb> = {};
+  for (const row of rows) {
+    const version = Array.isArray(row.asset_versions) ? row.asset_versions[0] : row.asset_versions;
+    const image = version?.mime_type?.startsWith('image/') === true;
+    if (row.entity_type === 'post') {
+      if (posts[row.entity_id] === undefined && image) posts[row.entity_id] = row.asset_version_id;
+      continue;
+    }
+    if (row.entity_type !== 'plan_item') continue;
+    const have = concepts[row.entity_id];
+    if (have?.kind === 'image') continue;
+    concepts[row.entity_id] = image
+      ? { kind: 'image', versionId: row.asset_version_id }
+      : { kind: 'file' };
+  }
+  return { posts, concepts };
+}
+
 /**
- * Each post's first image (the live image attachment with the lowest
- * position, then the earliest attached): one asset_attachments select per
- * chunk of 100 post ids with the version mime embedded (no read per post).
- * Posts with no image are absent. Never throws.
+ * The rows' tiles in ONE asset_attachments read (per chunk of 100 ids, the
+ * version mime embedded; never a read per row): each post's first image (the
+ * live image attachment with the lowest position, then the earliest attached)
+ * and each concept's first image, or a file tile when its files are all
+ * documents. Entities with no file are absent. Never throws.
  */
-export async function readPostThumbs(
+export async function readPlanThumbs(
   client: Client,
   postIds: readonly string[],
+  conceptIds: readonly string[],
   signal?: AbortSignal,
-): Promise<Result<Record<string, string>>> {
+): Promise<Result<PlanThumbs>> {
   try {
     const rows = await selectIn<ThumbRow>(
       client,
       'asset_attachments',
-      'entity_id, asset_version_id, asset_versions!inner(mime_type)',
+      'entity_id, entity_type, asset_version_id, asset_versions!inner(mime_type)',
       'entity_id',
-      postIds,
+      [...postIds, ...conceptIds],
       signal,
       (q) =>
         q
-          .eq('entity_type', 'post')
+          .in('entity_type', ['post', 'plan_item'])
           .is('deleted_at', null)
           .order('entity_id', { ascending: true })
           .order('position', { ascending: true })
           .order('attached_at', { ascending: true }),
     );
     if (!rows.ok) return rows;
-    const out: Record<string, string> = {};
-    for (const row of rows.data) {
-      if (out[row.entity_id] !== undefined) continue;
-      const version = Array.isArray(row.asset_versions)
-        ? row.asset_versions[0]
-        : row.asset_versions;
-      if (version?.mime_type?.startsWith('image/') === true) {
-        out[row.entity_id] = row.asset_version_id;
-      }
-    }
-    return { ok: true, data: out };
+    return { ok: true, data: thumbsOfRows(rows.data) };
   } catch (error) {
     return fail(String(error));
   }
+}
+
+/** Each post's first image (asset version id). Posts with no image are absent. Never throws. */
+export async function readPostThumbs(
+  client: Client,
+  postIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<Result<Record<string, string>>> {
+  const thumbs = await readPlanThumbs(client, postIds, [], signal);
+  return thumbs.ok ? { ok: true, data: thumbs.data.posts } : thumbs;
 }
 
 interface AlsoInRow {
@@ -1254,6 +1292,7 @@ export async function readPlanScreen(
   const bundle = bundles.data.get(planId) ?? null;
   if (bundle === null) return { ok: true, data: { bundle, commentCounts: {}, thumbs: {} } };
   const postIds = bundle.items.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
+  const conceptIds = bundle.items.flatMap((i) => (i.kind === 'concept' ? [i.id] : []));
   const approvers = opts.approvers?.(bundle) ?? [];
   const readNames = opts.readNames;
   const [counts, thumbs, alsoIn, names] = await Promise.all([
@@ -1262,7 +1301,7 @@ export async function readPlanScreen(
       bundle.items.map((i) => i.id),
       signal,
     ),
-    readPostThumbs(client, postIds, signal),
+    readPlanThumbs(client, postIds, conceptIds, signal),
     readAlsoIn(client, planId, postIds, signal),
     approvers.length > 0 && readNames !== undefined
       ? readNames(approvers, signal)
@@ -1278,7 +1317,8 @@ export async function readPlanScreen(
     data: {
       bundle,
       commentCounts: counts.data,
-      thumbs: thumbs.ok ? thumbs.data : {},
+      thumbs: thumbs.ok ? thumbs.data.posts : {},
+      conceptThumbs: thumbs.ok ? thumbs.data.concepts : {},
       names: nameMap,
       alsoIn: alsoIn.ok ? alsoIn.data : {},
     },

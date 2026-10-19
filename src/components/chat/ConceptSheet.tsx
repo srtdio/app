@@ -7,12 +7,16 @@
 // failed, so nothing saves partially. Closing aborts uploads in flight (files
 // already uploaded stay in storage, unlinked). Edit: until the concept's files
 // are known the files section shows a skeleton (or a Retry) and Add / Upload
-// stay hidden. Tokens only; the Sheet's translateY motion only.
+// stay hidden. Closing with unsaved input asks "Discard this concept?" on
+// every path: the Sheet's X, backdrop, Escape and Back through its dirty
+// guard, and the footer's own Cancel through the same confirm (FN25). Tokens
+// only; the Sheet's translateY motion only.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -263,6 +267,19 @@ export function ConceptSheet(props: {
     uploads: uploads.length,
   });
   const discardCopy = conceptDiscardCopy(props.mode);
+  // The footer's Cancel goes through the guard too: dirty asks, clean closes.
+  const [cancelAsk, setCancelAsk] = useState(false);
+  useEffect(() => {
+    if (!props.open) setCancelAsk(false);
+  }, [props.open]);
+  const onCancel = (): void => {
+    if (busy) return;
+    if (dirty) {
+      setCancelAsk(true);
+      return;
+    }
+    props.onClose();
+  };
   const room = conceptFilesRoom(form.files.length, uploads.length);
   const atLimit = room === 0;
   const canUpload = props.uploadFile !== undefined;
@@ -296,7 +313,13 @@ export function ConceptSheet(props: {
               </p>
             ) : null}
             <div className="grid w-full grid-cols-2 gap-2">
-              <Button size="lg" variant="ghost" disabled={busy} onClick={props.onClose}>
+              <Button
+                size="lg"
+                variant="ghost"
+                data-plan-concept-cancel=""
+                disabled={busy}
+                onClick={onCancel}
+              >
                 Cancel
               </Button>
               <Button
@@ -321,6 +344,7 @@ export function ConceptSheet(props: {
               value={form.title}
               maxLength={PLAN_TITLE_MAX}
               autoComplete="off"
+              enterKeyHint="done"
               disabled={busy}
               onChange={(e) => {
                 const title = e.target.value;
@@ -518,6 +542,21 @@ export function ConceptSheet(props: {
           ) : null}
         </div>
       </Sheet>
+
+      {props.open && cancelAsk ? (
+        <ConfirmDialog
+          title={discardCopy.title}
+          message={discardCopy.message}
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={() => {
+            setCancelAsk(false);
+            props.onClose();
+          }}
+          onCancel={() => setCancelAsk(false)}
+        />
+      ) : null}
 
       <AssetPicker
         open={props.open && assetsOpen}

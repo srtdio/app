@@ -39,6 +39,7 @@ import {
   keepApprovalTitle,
   moveAsksKeep,
   movedKeptToast,
+  planPrimaryAction,
   planSendAction,
   renameTitle,
 } from '@/components/chat/plan-card';
@@ -252,36 +253,51 @@ describe('item 4: footer', () => {
     expect(SEND_NEEDS_OPEN).toBe('Open the plan for approvers to send it here.');
   });
 
-  it('renders Open for approvers, Send in and the hint; Go to card; 44px+', () => {
-    const html = renderToStaticMarkup(
+  it('one primary button (X3): Open for approvers outside a chat, Send to approvers / Send in from one; 48px', () => {
+    const open = renderToStaticMarkup(
       <PlanFooter
-        showOpen
-        send={{ kind: 'send', label: 'Send in Priya', disabled: true, hint: SEND_NEEDS_OPEN }}
-        sending={false}
+        action={planPrimaryAction({ side: 'agency', audience: 'team', chat: null })}
+        busy={false}
         error={null}
-        onOpenForClient={noop}
-        onSend={noop}
-        onGoToCard={noop}
+        onPress={noop}
       />,
     );
-    expect(html).toContain('Open for approvers');
-    expect(html).toMatch(/data-plan-send-here=""[^>]*disabled=""/);
-    expect(html).toContain('Send in Priya');
-    expect(html).toContain(SEND_NEEDS_OPEN);
-    expect(html.match(/min-h-\[48px\]/g)?.length).toBe(2);
-    const go = renderToStaticMarkup(
+    expect(open).toContain('Open for approvers');
+    expect(open).toContain('data-plan-primary="open"');
+    expect(open.match(/min-h-\[48px\]/g)?.length).toBe(1);
+    expect(open.match(/<button/g)?.length).toBe(1);
+    const toApprovers = renderToStaticMarkup(
       <PlanFooter
-        showOpen={false}
-        send={{ kind: 'go' }}
-        sending={false}
+        action={planPrimaryAction({ side: 'agency', audience: 'team', chat: { name: 'Priya' } })}
+        busy={false}
         error={null}
-        onOpenForClient={noop}
-        onSend={noop}
-        onGoToCard={noop}
+        onPress={noop}
       />,
     );
-    expect(go).toContain('Go to card');
-    expect(go).not.toContain('Open for approvers');
+    expect(toApprovers).toContain('Send to approvers in Priya');
+    expect(toApprovers).not.toContain('Open for approvers');
+    expect(toApprovers).not.toContain(SEND_NEEDS_OPEN);
+    const send = renderToStaticMarkup(
+      <PlanFooter
+        action={planPrimaryAction({ side: 'agency', audience: 'client', chat: { name: 'Priya' } })}
+        busy={false}
+        error={null}
+        onPress={noop}
+      />,
+    );
+    expect(send).toContain('Send in Priya');
+    expect(send).not.toContain('Go to card');
+    // Not from a chat and Open: no button at all.
+    expect(
+      renderToStaticMarkup(
+        <PlanFooter
+          action={planPrimaryAction({ side: 'agency', audience: 'client', chat: null })}
+          busy={false}
+          error={null}
+          onPress={noop}
+        />,
+      ),
+    ).toBe('');
   });
 
   it('Open for approvers confirm copy and write; the old banner is gone', () => {
@@ -352,7 +368,7 @@ describe('item 5: one view of ticks', () => {
   it('Draft: the team side for the agency, writable', () => {
     const html = paint('agency', 'team');
     expect(html).toMatch(/data-plan-slot="team"[^>]*data-plan-slot-state="approved"/);
-    expect(html).toContain('Team 1 of 2');
+    expect(html).toContain('Creators 1 of 2');
   });
 
   it('the screen never writes the team side on an Open plan', () => {
@@ -473,14 +489,17 @@ describe('item 7: moves keep or reset the approval', () => {
     expect(src).toContain('<Sheet open={props.open} onClose={props.onCancel} title={props.title}>');
   });
 
-  it('every move calls the 5-arg proc; only "Yes, keep it" sends true', () => {
-    for (const name of ['PlanScreen.tsx', 'PlanItemScreen.tsx']) {
-      const src = read(name);
-      expect(src).toMatch(/planItemMove\(supabase, \{[\s\S]*?p_keep_reviews: keep,/);
-      expect(src).toMatch(/moveAsksKeep\(/);
-    }
-    expect(read('PlanScreen.tsx')).toContain('void commitMove(moved, toDay, toIndex, false);');
-    expect(read('PlanItemScreen.tsx')).toContain('void moveItemTo(day, false);');
+  it('every move carries keep_reviews; only "Yes, keep it" sends true', () => {
+    // The item screen writes the 5-arg proc; the Plan screen queues a 'move'
+    // op with the same fields for plan_save (X3).
+    const item = read('PlanItemScreen.tsx');
+    expect(item).toMatch(/planItemMove\(supabase, \{[\s\S]*?p_keep_reviews: keep,/);
+    expect(item).toMatch(/moveAsksKeep\(/);
+    expect(item).toContain('void moveItemTo(day, false);');
+    const screen = read('PlanScreen.tsx');
+    expect(screen).toMatch(/op: 'move',[\s\S]*?keep_reviews: keep,/);
+    expect(screen).toMatch(/moveAsksKeep\(/);
+    expect(screen).toContain('commitMove(moved, toDay, toIndex, false);');
   });
 
   it('the optimistic paint keeps the reviews when kept, drops them when reset', () => {

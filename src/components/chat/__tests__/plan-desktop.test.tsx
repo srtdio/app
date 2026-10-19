@@ -1,5 +1,5 @@
-// Plan on a laptop (md and up): the docked panel's frame, the agency's grip,
-// row buttons and keyboard wiring, the client's untouched rows, and the
+// Plan on a laptop (md and up): the docked panel's frame, edit mode's grip,
+// day chip, remove and keyboard wiring, view mode's plain rows, and the
 // Sheet's additive fixed-height box. Gestures, drag and keys run end to end
 // in e2e/tests/plan-desktop.spec.ts.
 
@@ -19,7 +19,7 @@ import {
   PlanBody,
   isTextField,
   planListGroups,
-  type PlanRowDesk,
+  type PlanRowEdit,
 } from '@/components/chat/PlanScreen';
 import { outOfView, placePopover } from '@/components/chat/PlanDayPopover';
 import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
@@ -63,20 +63,19 @@ function bundle(): PlanBundle {
   } as unknown as PlanBundle;
 }
 
-const desk = (over: Partial<PlanRowDesk> = {}): PlanRowDesk => ({
-  collapsing: new Set(),
+const edit = (over: Partial<PlanRowEdit> = {}): PlanRowEdit => ({
   pickedId: null,
-  popoverId: null,
+  dayOpenId: null,
   dragging: false,
-  onCalendar: () => undefined,
-  onMenu: () => undefined,
+  onDay: () => undefined,
   onRemove: () => undefined,
+  onMenu: () => undefined,
   onKeyDown: () => undefined,
   onKeyUp: () => undefined,
   ...over,
 });
 
-const paint = (side: 'agency' | 'client', rowDesk?: PlanRowDesk): string =>
+const paint = (side: 'agency' | 'client', rowEdit?: PlanRowEdit): string =>
   renderToStaticMarkup(
     <MemoryRouter>
       <PlanBody
@@ -88,43 +87,43 @@ const paint = (side: 'agency' | 'client', rowDesk?: PlanRowDesk): string =>
         drag={null}
         onOpenItem={() => undefined}
         onToggleSlot={() => undefined}
-        {...(side === 'agency' ? { onDragStart: () => undefined, onAdd: () => undefined } : {})}
-        {...(rowDesk !== undefined ? { desk: rowDesk } : {})}
+        {...(rowEdit !== undefined ? { onDragStart: () => undefined, edit: rowEdit } : {})}
+        {...(side === 'agency' && rowEdit === undefined ? { onAdd: () => undefined } : {})}
       />
     </MemoryRouter>,
   );
 
-describe('laptop rows (agency)', () => {
-  it('grip on droppable rows, calendar then dustbin left of the tick, no swipe', () => {
-    const html = paint('agency', desk());
+describe('edit mode rows (agency, laptop and phone alike)', () => {
+  it('grip on droppable rows, the day chip then the remove icon; no tick, no swipe', () => {
+    const html = paint('agency', edit());
     // c1 is inside the plan (grip); c2 is dated outside it (a spacer keeps the column).
     expect(html.match(/data-plan-grip=""/g)).toHaveLength(1);
-    expect(html.match(/data-plan-row-calendar=""/g)).toHaveLength(2);
-    expect(html.match(/data-plan-row-bin=""/g)).toHaveLength(2);
+    expect(html.match(/data-plan-row-day-chip=""/g)).toHaveLength(2);
+    expect(html.match(/data-plan-row-remove-edit=""/g)).toHaveLength(2);
     expect(html).not.toContain('data-plan-row-swipe');
-    expect(html).not.toContain('data-plan-row-remove');
+    expect(html).not.toContain('data-plan-row-remove="');
+    expect(html).not.toContain('data-plan-slot=');
+    expect(html).not.toContain('data-plan-add=');
+    expect(html).toContain('data-plan-list-mode="edit"');
     const row = html.slice(html.indexOf('data-plan-row-wrap="c1"'));
     const order = [
       'data-plan-grip',
       'data-plan-row="c1"',
-      'data-plan-row-calendar',
-      'data-plan-row-bin',
-      'data-plan-slot',
+      'data-plan-row-day-chip',
+      'data-plan-row-remove-edit',
     ].map((k) => row.indexOf(k));
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  it('grip 28x44 shown on hover or focus within; buttons 36x44, muted, hover panel-2', () => {
-    const html = paint('agency', desk());
-    expect(html).toMatch(
-      /data-plan-grip=""[^>]*class="[^"]*h-11 w-7[^"]*cursor-grab[^"]*touch-none[^"]*opacity-0[^"]*group-focus-within:opacity-100[^"]*group-hover:opacity-100/,
-    );
-    expect(html).toMatch(
-      /data-plan-row-calendar=""[^>]*class="[^"]*h-11 w-9[^"]*text-fg-3[^"]*hover:bg-panel-2/,
-    );
+  it('grip 28x44, always shown, muted; the chip names the day; the remove is bad colour, 44px', () => {
+    const html = paint('agency', edit());
+    expect(html).toMatch(/data-plan-grip=""[^>]*class="[^"]*h-11 w-7[^"]*cursor-grab[^"]*touch-none/);
+    expect(html).not.toMatch(/data-plan-grip=""[^>]*opacity-0/);
+    expect(html).toMatch(/data-plan-row-day-chip=""[^>]*class="[^"]*min-h-\[44px\]/);
+    expect(html).toContain('>Tue 13<');
+    expect(html).toContain('>Tue 20<');
+    expect(html).toMatch(/data-plan-row-remove-edit=""[^>]*class="[^"]*h-11 w-11[^"]*text-bad/);
     expect(html).toContain('select-none');
-    // No hover (touch laptop, iPad landscape): always shown, muted.
-    expect(html).toMatch(/data-plan-grip=""[^>]*class="[^"]*\[@media\(hover:none\)\]:opacity-60/);
   });
 
   it('a touch long-press never opens the day menu; nor does a running drag', () => {
@@ -132,30 +131,38 @@ describe('laptop rows (agency)', () => {
     expect(src).toContain(
       "if (native.pointerType === 'touch' || lastPointer.current === 'touch') return;",
     );
-    expect(src).toContain('if (desk.dragging || wrapRef.current === null) return;');
+    expect(src).toContain(
+      'if (edit.onMenu === undefined || edit.dragging || wrapRef.current === null) return;',
+    );
   });
 
   it('a picked-up row carries the accent outline and its marker', () => {
-    const html = paint('agency', desk({ pickedId: 'c1' }));
+    const html = paint('agency', edit({ pickedId: 'c1' }));
     expect(html).toMatch(/data-plan-row="c1"[^>]*data-plan-row-picked=""[^>]*ring-accent/);
   });
 
-  it('the list takes the keys (rows are the targets)', () => {
+  it('the list takes the keys (rows are the targets) in edit mode only', () => {
     const src = read('PlanScreen.tsx');
-    expect(src).toContain('onKeyDown: desk.onKeyDown, onKeyUp: desk.onKeyUp');
+    expect(src).toContain('{ onKeyDown: edit.onKeyDown, onKeyUp: edit.onKeyUp }');
+    expect(src).toContain("if (!deskEditing || !(event.target instanceof HTMLElement)) return;");
   });
 });
 
-describe('laptop client view', () => {
-  it('no grip, calendar, dustbin or menu; ticks as today', () => {
-    const html = paint('client');
-    for (const k of ['data-plan-grip', 'data-plan-row-calendar', 'data-plan-row-bin']) {
-      expect(html).not.toContain(k);
+describe('view mode (laptop and phone)', () => {
+  it('no grip, chip, remove or menu for anyone; ticks as today', () => {
+    for (const side of ['agency', 'client'] as const) {
+      const html = paint(side);
+      for (const k of ['data-plan-grip', 'data-plan-row-day-chip', 'data-plan-row-remove-edit']) {
+        expect(html).not.toContain(k);
+      }
+      expect(html).toContain('data-plan-slot="client"');
     }
-    expect(html).toContain('data-plan-slot="client"');
     const src = read('PlanScreen.tsx');
     expect(src).toContain('const deskAgency = desktop && agency;');
-    expect(src).toMatch(/\{deskAgency \? <PlanKeyHints \/> : null\}/);
+    expect(src).toContain('const deskEditing = deskAgency && editMode;');
+    // The keyboard hint line sits in the edit header, never in the footer.
+    expect(src).toContain('keyHints={deskEditing}');
+    expect(src).not.toMatch(/\{deskAgency \? <PlanKeyHints \/> : null\}/);
   });
 });
 

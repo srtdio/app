@@ -87,8 +87,12 @@ describe('header, progress and status (A1)', () => {
     );
   });
 
-  it('progress: Draft "Team X of N" (accent bar), Open "Approved X of N" (good bar) (item 5)', () => {
-    expect(planProgressView(BUNDLE)).toEqual({ lead: 'Team 0 of 3', percent: 0, tone: 'accent' });
+  it('progress: Draft "Creators X of N" (accent bar), Open "Approved X of N" (good bar) (item 5)', () => {
+    expect(planProgressView(BUNDLE)).toEqual({
+      lead: 'Creators 0 of 3',
+      percent: 0,
+      tone: 'accent',
+    });
     const open = { ...BUNDLE, plan: { ...BUNDLE.plan, audience: 'client' as const } };
     expect(planProgressView(open)).toEqual({ lead: 'Approved 0 of 3', percent: 0, tone: 'good' });
     const src = read('PlanScreen.tsx');
@@ -169,28 +173,24 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     expect(src).toContain('...(day !== null ? { p_target_date: day } : {}),');
     expect(src).toContain('onClick={() => openAdd(null)}');
     expect(src).toContain('excludePostIds={inPlan}');
-    // One plan_item_move per drop, with the full order; reverted on failure.
-    expect(src).toContain('p_item_ids: order,');
-    expect(src).toContain('setMoveOverlay(null);');
-    expect(src.match(/planItemMove\(supabase/g)).toHaveLength(1);
+    // A drop queues one 'move' op with the full order; plan_save writes it.
+    expect(src).toContain('item_ids: order,');
+    expect(src).not.toContain('planItemMove(');
+    expect(src.match(/planSave\(supabase/g)).toHaveLength(1);
     // Every write carries a trace id.
-    for (const call of ['planItemMove(', 'planPostsAdd(', 'planConceptAdd(']) {
+    for (const call of ['planSave(', 'planPostsAdd(', 'planConceptAdd(']) {
       expect(src).toContain(call);
     }
     expect(src.match(/p_trace_id: traceId/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('agency only: Add rows, "+", drag; Move and Remove rows', () => {
+  it('agency only: Add rows and "+" in view mode; grip, chip and remove in edit mode', () => {
     const src = read('PlanScreen.tsx');
-    expect(src).toMatch(
-      /:\s*agency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*swipe:/,
-    );
-    // Laptop agency: the same Add and drag, the desk controls instead of swipe.
-    expect(src).toMatch(
-      /\{\.\.\.\(deskAgency\s*\?\s*\{\s*onAdd: openAdd,\s*onDragStart: startDrag,\s*desk:/,
-    );
+    expect(src).toMatch(/:\s*agency\s*\?\s*\{\s*onAdd: openAdd\s*\}/);
+    expect(src).toMatch(/\{\.\.\.\(editing\s*\?\s*\{\s*onDragStart:/);
     expect(src).toContain('const deskAgency = desktop && agency;');
     expect(src).toContain("const agency = side === 'agency' && bundle !== null;");
+    expect(src).toContain('const editing = agency && editMode;');
     expect(src).toMatch(/\{agency \? \(\s*<>\s*<PlanConfirmSheet[\s\S]*<PlanAddSheet/);
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain("const planActions = side === 'agency';");
@@ -204,7 +204,7 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     expect(item).not.toMatch(/onRemove: \(\) => setRemoveOpen/);
   });
 
-  it('drag cleans up every listener, frame and timer; Escape and pointercancel cancel with no write', () => {
+  it('drag cleans up every listener, frame and timer; Escape and pointercancel cancel with no change', () => {
     const src = read('PlanScreen.tsx');
     const hook = src.slice(src.indexOf('function usePlanDrag('), src.indexOf('function DragCard('));
     for (const ev of ['pointermove', 'pointerup', 'pointercancel', 'keydown', 'touchmove']) {
