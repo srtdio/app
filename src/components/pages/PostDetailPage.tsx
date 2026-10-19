@@ -237,8 +237,7 @@ export function StageButtons(props: {
  * callback ref keeps PcsApproveConfirm hookless.
  */
 function markApproveConfirm(el: HTMLParagraphElement | null): void {
-  el
-    ?.closest('[role="dialog"]')
+  el?.closest('[role="dialog"]')
     ?.querySelector('[data-approve-confirm-button]')
     ?.setAttribute('data-induction', INDUCTION_KEYS.postApproveConfirm);
 }
