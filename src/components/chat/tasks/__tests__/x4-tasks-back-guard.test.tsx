@@ -18,7 +18,7 @@ vi.mock('@/components/ui/SearchHighlight', async (importOriginal) => ({
 
 import { DISCARD_TASKS_TITLE, TaskSheet } from '@/components/chat/tasks/TaskSheet';
 import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
-import { isStepEntry, resetHistorySteps, useHistoryStep } from '@/lib/chat/use-history-step';
+import { resetHistorySteps, useHistoryStep } from '@/lib/chat/use-history-step';
 import { DUR_BASE_MS } from '@/lib/motion';
 import { x4FakeTasks, x4Task, x4Type } from './x4-fake-tasks';
 
@@ -124,16 +124,22 @@ describe('X4 TaskSheet and system Back', () => {
     expect(q('[data-task-row-id="t1"]')?.hasAttribute('data-task-expanded')).toBe(true);
   });
 
-  it('Discard closes the sheet and leaves no stray history entry', async () => {
+  it('Discard closes the sheet and pops both entries (guard, then the sheet step)', async () => {
     const { onParentBack } = await mount(x4FakeTasks([]));
     await addDraft('Hook');
     await pressBack();
+    // jsdom resolves two back() calls queued in one task to the same entry
+    // (both read the index before either lands); browsers, and X1's own
+    // queued-window tests, apply them in turn. So the test counts the pops:
+    // the guard's entry and the 'chatTasks' entry each go, none is left.
+    const back = vi.spyOn(window.history, 'back');
     await act(async () => button('Discard')?.click());
     await settle();
     await act(async () => wait(DUR_BASE_MS + 40));
     expect(sheetOpen()).toBe(false);
     expect(onParentBack).not.toHaveBeenCalled();
-    expect(isStepEntry(window.history.state)).toBe(false);
+    expect(back).toHaveBeenCalledTimes(2);
+    back.mockRestore();
   });
 
   it('a clean sheet: Back closes through the parent step as before', async () => {

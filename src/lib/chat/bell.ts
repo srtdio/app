@@ -94,8 +94,8 @@ export interface BellTaskFields {
   kind: string | null;
   old: string | null;
   new: string | null;
-  /** created_many: how many tasks the one Save added. */
-  count: number | null;
+  /** created_many only: how many tasks the one Save added (absent on other rows). */
+  count?: number;
 }
 
 /** A plan row's payload, mapped (plan_opened .. plan_comment). */
@@ -184,7 +184,7 @@ export function taskFieldsOf(row: Pick<InboxEntryRow, 'payload'>): BellTaskField
     kind: str(payload, 'kind'),
     old: str(payload, 'old'),
     new: str(payload, 'new'),
-    count: typeof count === 'number' && Number.isFinite(count) ? count : null,
+    ...(typeof count === 'number' && Number.isFinite(count) ? { count } : {}),
   };
 }
 
