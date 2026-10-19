@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Link } from 'react-router-dom';
+import { IconBriefs } from '@/components/ui/icons';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
-import { Thumbnail, type ThumbnailFallback } from '@/components/media';
+import { Thumbnail } from '@/components/media';
+import { formatCivilDay } from '@/lib/brief-groups';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
@@ -16,37 +17,6 @@ export function isBriefClosed(brief: Brief): boolean {
   return brief.status === BRIEF_STATUS.closed;
 }
 
-/** Render an ISO date as date only (no time), matching the Briefs reference. */
-function formatTargetDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-/** The objective (or title) text used for the text-fallback caption, trimmed. */
-function objectiveCaption(brief: Brief): string | null {
-  const objective = brief.objective.trim();
-  if (objective !== '') return objective;
-  const title = brief.title.trim();
-  if (title !== '') return title;
-  return null;
-}
-
-/**
- * The non-image tile for a brief, mirroring PostCard.postFallback. Used only when the
- * brief has no thumbnail image (or presign is disabled/fails). The tile no longer
- * carries the link case: a reference link is now a real, tappable link card in the
- * card body rather than a dead domain label painted inside the thumbnail. Selection
- * order: objective/title text -> a caption snippet; else a plain glyph. The image
- * path itself is owned by Thumbnail (it shows this fallback whenever
- * thumbnailAssetVersionId is null).
- */
-function briefFallback(brief: BriefWithThumbnail): ThumbnailFallback {
-  const caption = objectiveCaption(brief);
-  if (caption !== null) return { kind: 'text', caption };
-  return { kind: 'glyph' };
-}
-
 /**
  * The one external link a card may show, or null for none. An image brief keeps the
  * card exactly as it was: the thumbnail already carries the visual, so no button is
@@ -58,57 +28,37 @@ export function briefCardLink(brief: BriefWithThumbnail): ExternalLink | null {
   return toExternalLinks(brief.reference_links)[0] ?? null;
 }
 
+/** The card's due line: "Due Oct 8", read off the date-only string itself. */
+export function briefDueLabel(targetDate: string): string {
+  return `Due ${formatCivilDay(targetDate)}`;
+}
+
 interface BriefCardProps {
   brief: BriefWithThumbnail;
   /** The page-owned presign cache, shared across every card; the tile never makes its own. */
   cache: PresignCache;
   /** False when presigning is unconfigured: the leading tile shows a fallback. */
   presignEnabled: boolean;
-  /** Live linked-post count when the read path supplies one; omitted otherwise. */
-  linkedCount?: number;
-  /** True while this brief's close call is in flight. */
-  closing: boolean;
-  /** Inline error from a failed close of this brief, if any. */
-  closeError: string | null;
-  /** Confirmed request to close this open brief. */
-  onConfirmClose: () => void;
-  /** Open this brief's detail view; the whole card is the tap target. */
-  onOpen: () => void;
+  /** Where the title link goes (the pretty /b/KEY-N path, or /briefs/:id). */
+  href: string;
 }
 
 /**
- * A brief card on the PR A primitives: a leading square thumbnail (the shared
- * Thumbnail tile, same one Pipeline and Assets use), then title, truncated
- * objective, a status indicator, optional target date and linked-post count, a
- * subtle Closed marker, and an inline-confirmed Close action offered only while the
- * brief is open. The thumbnail is additive: existing fields are unchanged.
+ * A brief card: a leading square tile (the first image attachment, else a brief
+ * icon), then title, truncated objective, status, and the due date. The title
+ * is the one real link; its ::after overlay stretches over the card so the whole
+ * card still opens the brief, and nothing interactive is nested inside a link.
+ * The optional reference link sits above that overlay. Closing a brief lives in
+ * the detail page's menu, never on the card.
  */
-export function BriefCard({
-  brief,
-  cache,
-  presignEnabled,
-  linkedCount,
-  closing,
-  closeError,
-  onConfirmClose,
-  onOpen,
-}: BriefCardProps) {
-  const [confirming, setConfirming] = useState(false);
+export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps) {
   const closed = isBriefClosed(brief);
   const link = briefCardLink(brief);
 
   return (
     <div
-      role="link"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
-      className={`text-left cursor-pointer rounded-xl border border-border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      data-brief-card=""
+      className={`relative rounded-xl border border-border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] transition-colors duration-fast hover:bg-panel-2 focus-within:ring-2 focus-within:ring-accent ${
         closed ? 'opacity-70' : ''
       }`}
     >
@@ -116,19 +66,33 @@ export function BriefCard({
           the shared tile (which adds none of its own) clips edge-to-edge. 64px keeps
           it comfortably above the 44px touch floor without crowding a ~360px card. */}
       <div className="w-16 shrink-0 overflow-hidden rounded-lg">
-        <Thumbnail
-          assetVersionId={brief.thumbnailAssetVersionId}
-          cache={cache}
-          presignEnabled={presignEnabled}
-          aspect="square"
-          fallback={briefFallback(brief)}
-          alt={brief.title}
-        />
+        {brief.thumbnailAssetVersionId !== null ? (
+          <Thumbnail
+            assetVersionId={brief.thumbnailAssetVersionId}
+            cache={cache}
+            presignEnabled={presignEnabled}
+            aspect="square"
+            fallback={{ kind: 'glyph' }}
+            alt={brief.title}
+          />
+        ) : (
+          <div
+            data-brief-tile="icon"
+            className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
+          >
+            <IconBriefs size={22} />
+          </div>
+        )}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-2.5">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="text-sm font-medium leading-snug line-clamp-2 flex-1">{brief.title}</div>
+          <Link
+            to={href}
+            className="flex-1 text-sm font-medium leading-snug line-clamp-2 text-fg focus:outline-none after:absolute after:inset-0 after:content-['']"
+          >
+            {brief.title}
+          </Link>
           <span className="flex items-center gap-1.5 shrink-0 text-xs text-fg-3">
             <span
               className={`h-2 w-2 rounded-full ${closed ? 'bg-fg-3' : 'bg-good'}`}
@@ -140,62 +104,17 @@ export function BriefCard({
 
         <p className="text-sm text-fg-3 line-clamp-2">{brief.objective}</p>
 
-        {/* The card itself is the tap target for opening the brief, so the link
-            stops propagation exactly as the Close action below does: tapping the
-            button follows the link instead of also opening the detail view. */}
+        {/* Above the title's stretched overlay, so a tap follows this link only. */}
         {link !== null ? (
-          <div
-            className="flex min-w-0"
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-            role="presentation"
-          >
+          <div className="relative z-10 flex min-w-0">
             {/* Compact: the list card has no room for a picture. */}
             <LinkPreviewCard url={link.href} size="compact" className="w-full max-w-[320px]" />
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-3">
-          {brief.target_date !== null ? (
-            <span className="tabular-nums">{formatTargetDate(brief.target_date)}</span>
-          ) : null}
-          {linkedCount !== undefined ? (
-            <span className="tabular-nums">
-              {linkedCount} linked {linkedCount === 1 ? 'post' : 'posts'}
-            </span>
-          ) : null}
-        </div>
-
-        {closeError !== null ? (
-          <div role="alert" className="rounded-md border border-bad px-3 py-2 text-xs text-bad">
-            {closeError}
-          </div>
-        ) : null}
-
-        {!closed ? (
-          <div
-            className="flex min-w-0 flex-wrap items-center gap-2 pt-0.5"
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-            role="presentation"
-          >
-            {confirming ? (
-              <>
-                <span className="text-xs text-fg-3 mr-auto">Close this brief?</span>
-                <Button size="lg" onClick={() => setConfirming(false)} disabled={closing}>
-                  Cancel
-                </Button>
-                <Button variant="primary" size="lg" onClick={onConfirmClose} disabled={closing}>
-                  {closing ? 'Closing' : 'Close'}
-                </Button>
-              </>
-            ) : (
-              <span className="ml-auto">
-                <Button size="lg" onClick={() => setConfirming(true)}>
-                  Close
-                </Button>
-              </span>
-            )}
+        {brief.target_date !== null ? (
+          <div className="text-xs text-fg-3">
+            <span className="tabular-nums">{briefDueLabel(brief.target_date)}</span>
           </div>
         ) : null}
       </div>
