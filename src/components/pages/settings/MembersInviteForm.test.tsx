@@ -78,7 +78,8 @@ describe('MembersInviteForm render', () => {
     mockInvoke.mockReset();
     const out = renderToStaticMarkup(<MembersInviteForm />);
     expect(out).toContain('Invite member');
-    expect(out).toContain('>Approver<');
+    // No default role: the trigger asks for one (T86).
+    expect(out).toContain('Choose a role');
     expect(out).not.toContain('Client (reviewer)');
     expect(out).toContain('type="email"');
     expect(out).toContain('Send invite');
@@ -93,7 +94,7 @@ describe('MembersInviteForm render', () => {
     const individualInviteIndex = out.indexOf('Invite member');
     const groupInviteIndex = out.indexOf('Invite group members');
     expect(individualInviteIndex).toBeLessThan(groupInviteIndex);
-    expect(out.indexOf('>Approver<')).toBeLessThan(groupInviteIndex);
+    expect(out.indexOf('Choose a role')).toBeLessThan(groupInviteIndex);
   });
 
   it('restricts client invite forms to the client role', () => {
@@ -255,11 +256,11 @@ describe('sendInvite error mapping', () => {
     expect(onError.mock.calls[0]![1]).toBe('client_domain_mismatch');
   });
 
-  it('keeps the detail line for other failures', async () => {
+  it('words other failures as the plain line, never the code', async () => {
     const { result } = await send({ error: 'forbidden_role', error_detail: 'forbidden_role' });
     expect(result).toEqual({
       ok: false,
-      message: 'Invite failed: forbidden_role',
+      message: INVITE_ERROR_MESSAGE,
       code: null,
     });
   });

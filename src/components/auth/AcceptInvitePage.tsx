@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import type { EmailOtpType } from '@supabase/supabase-js';
+import { ExpiredLinkView } from '@/components/auth/AuthCallbackPage';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { withNext } from '@/components/auth/SignInPage';
 import { Button } from '@/components/ui/Button';
+import { dispatchSorted, SIGNOUT_EVENT } from '@/lib/events';
 import { RECOVERY_COPY } from '@/lib/induction-copy';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
@@ -44,6 +47,23 @@ export function classifyAcceptError(error: unknown): AcceptFailure {
   return 'generic';
 }
 
+/**
+ * The verifyOtp type for the invite email's token hash. invite-send mints it
+ * with generateLink({ type: 'magiclink' }); supabase-js 2.105 still lists
+ * 'magiclink' in EmailOtpType, but Auth treats it as the deprecated alias of
+ * 'email', which is what a magic-link token hash verifies as today.
+ */
+export const INVITE_OTP_TYPE: EmailOtpType = 'email';
+
+/** True when the URL hash carries an Auth error (a consumed or expired verify link). */
+export function hasAuthErrorHash(hash: string): boolean {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  return params.has('error_code') || params.has('error');
+}
+
+/** Router state that tells RequireGuest not to bounce an account switch back here. */
+export const SWITCH_ACCOUNT_STATE = { switchAccount: true } as const;
+
 /** The sign-in path that returns to this invitation afterwards. */
 export function inviteSignInPath(inviteId: string): string {
   return withNext('/signin', `/invite/accept/${encodeURIComponent(inviteId)}`);
@@ -52,7 +72,8 @@ export function inviteSignInPath(inviteId: string): string {
 /**
  * Wrong account: sign the current user out, then go to sign in with the
  * invitation as the destination. A failed sign-out is logged and the user is
- * still sent to sign in, so they are never stuck on this screen.
+ * still sent to sign in, so they are never stuck on this screen. The page
+ * signs out with the shell's sorted:signout event (signOutViaEvent).
  */
 export async function switchAccount(deps: {
   inviteId: string;
@@ -68,6 +89,46 @@ export async function switchAccount(deps: {
     logger.warn('invite_switch_account_signout_failed', { invite_id: deps.inviteId });
   }
   deps.navigate(inviteSignInPath(deps.inviteId));
+}
+
+/** Sign out the existing way: the SessionProvider listens for sorted:signout. */
+export async function signOutViaEvent(): Promise<{ error: unknown }> {
+  dispatchSorted(SIGNOUT_EVENT);
+  return { error: null };
+}
+
+/**
+ * The Join tap. A signed-in user goes straight to accept (a wrong account gets
+ * the 403 view); a signed-out user verifies the email's token hash first, and a
+ * failed verify (consumed or expired) is the expired view. Nothing here runs
+ * until the tap, so a mail scanner opening the link signs nobody in.
+ */
+export async function joinWithTokenHash(deps: {
+  tokenHash: string;
+  hasSession: () => Promise<boolean>;
+  verifyOtp: (params: { token_hash: string; type: EmailOtpType }) => Promise<{ error: unknown }>;
+  accept: () => Promise<void>;
+  onExpired: () => void;
+}): Promise<void> {
+  if (!(await deps.hasSession())) {
+    let failed = false;
+    try {
+      const { error } = await deps.verifyOtp({ token_hash: deps.tokenHash, type: INVITE_OTP_TYPE });
+      failed = error !== null && error !== undefined;
+    } catch {
+      failed = true;
+    }
+    if (failed) {
+      deps.onExpired();
+      return;
+    }
+  }
+  await deps.accept();
+}
+
+/** "Join {workspace}" for the button; a link without the name reads "Join workspace". */
+export function joinLabel(workspace: string): string {
+  return workspace === '' ? 'Join workspace' : `Join ${workspace}`;
 }
 
 // Minimal structural shape of the invite-accept invoke. Kept narrow so the pure
@@ -153,21 +214,30 @@ export function AcceptFailureView(props: {
 
 export function AcceptInvitePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   // Path id is the canonical form (/invite/accept/:inviteId); the ?invite=
   // query is kept only for backward compatibility with older links.
   const { inviteId: paramId } = useParams();
   const [searchParams] = useSearchParams();
   const queryId = searchParams.get('invite');
   const inviteId = (paramId ?? queryId ?? '').trim();
-  // Auto-accept starts immediately on mount, so the in-flight state is the
-  // initial render for a valid id (no extra click).
-  const [submitting, setSubmitting] = useState(true);
+  // The invite email's token hash, plus the names it carries for the Join card
+  // (the page cannot read the workspace before the invitee is signed in).
+  const tokenHash = (searchParams.get('th') ?? '').trim();
+  const workspaceName = (searchParams.get('ws') ?? '').trim();
+  const inviterName = (searchParams.get('by') ?? '').trim();
+  const tapToJoin = tokenHash !== '';
+  const hashExpired = hasAuthErrorHash(location.hash);
+  // Auto-accept starts immediately on mount for a plain link, so the in-flight
+  // state is the initial render for a valid id. A token-hash link waits for Join.
+  const [submitting, setSubmitting] = useState(!tapToJoin && !hashExpired);
   const [failure, setFailure] = useState<AcceptFailure | 'none'>('none');
+  const [expired, setExpired] = useState(hashExpired);
   // One-shot guard: React strict mode double-invokes effects in dev, so the ref
   // keeps the accept from firing twice for a single mount.
   const startedRef = useRef(false);
 
-  // Deliberate run, reused by both the mount auto-accept and the retry button.
+  // Deliberate run, reused by the mount auto-accept, Join, and the retry button.
   async function handleAccept(): Promise<void> {
     setFailure('none');
     setSubmitting(true);
@@ -183,9 +253,35 @@ export function AcceptInvitePage() {
     });
   }
 
-  // Auto-accept once the page mounts with a usable id.
+  async function handleJoin(): Promise<void> {
+    setFailure('none');
+    setSubmitting(true);
+    await joinWithTokenHash({
+      tokenHash,
+      hasSession: async () => {
+        const { data } = await supabase.auth.getSession();
+        return data.session !== null;
+      },
+      verifyOtp: (params) => supabase.auth.verifyOtp(params),
+      accept: handleAccept,
+      onExpired: () => {
+        logger.warn('invite_verify_failed', { invite_id: inviteId });
+        setExpired(true);
+        setSubmitting(false);
+      },
+    });
+  }
+
+  const differentAccount = (): void =>
+    void switchAccount({
+      inviteId,
+      signOut: signOutViaEvent,
+      navigate: (path) => navigate(path, { replace: true, state: SWITCH_ACCOUNT_STATE }),
+    });
+
+  // Auto-accept once the page mounts with a usable id and no token hash.
   useEffect(() => {
-    if (inviteId === '' || startedRef.current) return;
+    if (inviteId === '' || tapToJoin || hashExpired || startedRef.current) return;
     startedRef.current = true;
     void handleAccept();
     // handleAccept is intentionally not a dependency; the ref guard makes this
@@ -210,41 +306,74 @@ export function AcceptInvitePage() {
     );
   }
 
+  // Consumed or expired link (#error_code=otp_expired, or a failed verify).
+  if (expired) {
+    return (
+      <ExpiredLinkView
+        next={`/invite/accept/${encodeURIComponent(inviteId)}`}
+        inviter={inviterName}
+        footer={null}
+      />
+    );
+  }
+
+  const footer =
+    // The wrong-account body already offers the switch; no second link.
+    failure === 'wrong-account' ? null : (
+      <button
+        type="button"
+        onClick={differentAccount}
+        className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline"
+      >
+        Use a different account
+      </button>
+    );
+
+  const failureView =
+    failure !== 'none' ? (
+      <AcceptFailureView
+        failure={failure}
+        submitting={submitting}
+        actions={{
+          retry: () => void (tapToJoin ? handleJoin() : handleAccept()),
+          goToWorkspace: () => navigate(INVITE_DESTINATION),
+          switchAccount: differentAccount,
+        }}
+      />
+    ) : null;
+
+  if (tapToJoin) {
+    const subtitle =
+      inviterName !== '' && workspaceName !== ''
+        ? `${inviterName} invited you to ${workspaceName} on Sorted.`
+        : "You've been invited to collaborate on Sorted.";
+    return (
+      <AuthShell title={joinLabel(workspaceName)} subtitle={subtitle} footer={footer}>
+        <div className="flex flex-col gap-4">
+          {failureView ?? (
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
+              onClick={() => void handleJoin()}
+              disabled={submitting}
+            >
+              {submitting ? 'Joining' : joinLabel(workspaceName)}
+            </Button>
+          )}
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
     <AuthShell
       title="Join a workspace on Sorted"
       subtitle="You've been invited to collaborate. Hang tight while we add you."
-      footer={
-        // The wrong-account body already offers the switch; no second link.
-        failure === 'wrong-account' ? null : (
-          <Link
-            to="/signin"
-            className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline"
-          >
-            Use a different account
-          </Link>
-        )
-      }
+      footer={footer}
     >
       <div className="flex flex-col gap-4">
-        {failure !== 'none' ? (
-          <AcceptFailureView
-            failure={failure}
-            submitting={submitting}
-            actions={{
-              retry: () => void handleAccept(),
-              goToWorkspace: () => navigate(INVITE_DESTINATION),
-              switchAccount: () =>
-                void switchAccount({
-                  inviteId,
-                  signOut: () => supabase.auth.signOut(),
-                  navigate: (path) => navigate(path, { replace: true }),
-                }),
-            }}
-          />
-        ) : (
-          <p className="text-sm text-fg-2">Joining your workspace…</p>
-        )}
+        {failureView ?? <p className="text-sm text-fg-2">Joining your workspace…</p>}
       </div>
     </AuthShell>
   );

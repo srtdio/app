@@ -15,16 +15,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { handleInviteSend } from './handler.ts';
 
-// The email goes out after the response (EdgeRuntime.waitUntil), so the inviter
-// never waits on Resend.
-declare const EdgeRuntime: { waitUntil: (work: Promise<unknown>) => void } | undefined;
-
+// The email is sent before the response (no EdgeRuntime.waitUntil), so the
+// answer's emailed / error_detail tell the inviter whether it went out.
 Deno.serve((req: Request) =>
   handleInviteSend(req, {
     env: (name) => Deno.env.get(name),
     createClient,
-    ...(typeof EdgeRuntime !== 'undefined'
-      ? { waitUntil: (work: Promise<unknown>) => EdgeRuntime?.waitUntil(work) }
-      : {}),
   }),
 );

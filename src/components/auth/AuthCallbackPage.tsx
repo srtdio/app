@@ -97,15 +97,28 @@ export function isInviteDestination(next: string): boolean {
 const PRIMARY_LINK_CLASS =
   'inline-flex min-h-[44px] w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover';
 
+/** "This invite link has expired. Ask {inviter} to resend it."; a blank name asks the inviter. */
+export function inviteExpiredCopy(inviter: string): string {
+  const who = inviter.trim() === '' ? 'the person who invited you' : inviter.trim();
+  return `This invite link has expired. Ask ${who} to resend it.`;
+}
+
 /**
  * The expired-link screen. An invitation destination explains the invite has
  * expired and offers sign-in that returns to the invitation; any other link
  * keeps the plain expired message.
  */
-export function ExpiredLinkView(props: { next: string; footer: ReactNode }): ReactElement {
+export function ExpiredLinkView(props: {
+  next: string;
+  footer: ReactNode;
+  /** The inviter's name, when the invite page knows it: the copy then names who to ask. */
+  inviter?: string;
+}): ReactElement {
   if (isInviteDestination(props.next)) {
+    const subtitle =
+      props.inviter === undefined ? RECOVERY_COPY.expired : inviteExpiredCopy(props.inviter);
     return (
-      <AuthShell title="Sign in to Sorted" subtitle={RECOVERY_COPY.expired} footer={props.footer}>
+      <AuthShell title="Sign in to Sorted" subtitle={subtitle} footer={props.footer}>
         <Link to={withNext('/signin', props.next)} className={PRIMARY_LINK_CLASS}>
           {RECOVERY_COPY.signIn}
         </Link>
