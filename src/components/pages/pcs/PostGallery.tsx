@@ -845,7 +845,7 @@ export function galleryView({
                     onOpen(index);
                   }}
                   className={cn(
-                    'group relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    'group relative flex shrink-0 snap-start items-center justify-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     SLIDE_PRESS_CLASS,
                     pinArmedIndex === index && 'cursor-crosshair',
                   )}
