@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import type { SelectOption } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
@@ -24,8 +26,11 @@ export type InviteRole = 'admin' | 'agency' | 'client';
 
 // Friendly, code-free copy: the form never parses server error codes; the
 // edge function is the authoritative check on email / role / membership.
-export const INVITE_ERROR_MESSAGE =
-  "Couldn't send the invitation. Check the email and that you have permission to invite, then try again.";
+export const INVITE_ERROR_MESSAGE = "Couldn't send the invite. Try again.";
+/** The invite row exists but the email did not go out; the inviter sends the link. */
+export const INVITE_NOT_SENT_MESSAGE =
+  "Invite created, but the email didn't send. Copy the link and send it yourself.";
+export const INVITE_PICK_ROLE_MESSAGE = 'Pick a role';
 export const INVITE_INVALID_EMAIL_MESSAGE = 'Enter a valid email address.';
 const INVITE_DUPLICATE_EMAIL_MESSAGE = 'That email is already on the invite list.';
 
@@ -77,6 +82,7 @@ export function parseInviteEmails(value: string): {
 // Minimal structural shape of the invite-send invoke. Kept narrow so the pure
 // helper unit-tests with a plain mock; supabase.functions.invoke is assignable.
 interface InvokeResult {
+  data?: unknown;
   error: unknown;
 }
 type InvokeInviteSend = (
@@ -144,16 +150,77 @@ async function readInviteError(
   const code = inviteErrorCode(readString(record, 'error'));
   if (code === 'free_mail_client') return { code, message: FREE_MAIL_APPROVER_MESSAGE };
   if (code === 'unconfirmed_account') return { code, message: UNCONFIRMED_ACCOUNT_MESSAGE };
-  const detail = readString(record, 'error_detail');
-  if (detail === undefined) return { code, message: null };
-  const traceId = readString(record, 'trace_id');
+  // Every other code (provisioning_failed, membership_lookup_failed,
+  // delivery_record_failed, unknowns) reads as the one plain line; the code and
+  // trace id go to the logs only, never on screen.
+  logger.warn('invite_send_failed', {
+    error: readString(record, 'error') ?? null,
+    error_detail: readString(record, 'error_detail') ?? null,
+    trace_id: readString(record, 'trace_id') ?? null,
+  });
+  return { code, message: code === null ? INVITE_ERROR_MESSAGE : null };
+}
+
+/** What a 200 from invite-send says about the email. */
+export interface InviteOutcome {
+  emailed: boolean;
+  errorDetail: string | null;
+  acceptUrl: string | null;
+}
+
+/** Read emailed / error_detail / accept_url off the 200 body; a missing body reads as not emailed. */
+export function readInviteOutcome(data: unknown): InviteOutcome {
+  if (typeof data !== 'object' || data === null) {
+    return { emailed: false, errorDetail: null, acceptUrl: null };
+  }
+  const record = data as Record<string, unknown>;
   return {
-    code,
-    message:
-      traceId !== undefined
-        ? `Invite failed: ${detail} (trace ${traceId})`
-        : `Invite failed: ${detail}`,
+    emailed: record.emailed === true,
+    errorDetail: readString(record, 'error_detail') ?? null,
+    acceptUrl: readString(record, 'accept_url') ?? null,
   };
+}
+
+/**
+ * The form's sent line: "sent" only when the email went out. A test-site
+ * address is never emailed on purpose and keeps the test-site path; any other
+ * emailed:false (resend_not_configured, a send or link failure) is "not sent".
+ */
+export function inviteStatus(outcome: InviteOutcome): 'sent' | 'test' | 'not-sent' {
+  if (outcome.emailed) return 'sent';
+  if (outcome.errorDetail === 'test_address_not_emailed') return 'test';
+  return 'not-sent';
+}
+
+/** The not-sent notice: the plain line plus Copy link for the invite's accept_url. */
+export function InviteNotSent(props: { email: string; acceptUrl: string | null }) {
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-warn bg-warn-soft p-3">
+      <p role="status" className="text-sm text-fg">
+        <span className="font-medium">{props.email}: </span>
+        {INVITE_NOT_SENT_MESSAGE}
+      </p>
+      {props.acceptUrl !== null ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="default"
+            size="lg"
+            type="button"
+            onClick={() => {
+              const url = props.acceptUrl;
+              if (url === null) return;
+              void copyText(url).then((ok) => setCopied(ok ? 'copied' : 'failed'));
+            }}
+          >
+            Copy link
+          </Button>
+          {copied === 'copied' ? <span className="text-sm text-good">Link copied</span> : null}
+          {copied === 'failed' ? <span className="text-sm text-bad">{COPY_FAILED}</span> : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /**
@@ -167,17 +234,21 @@ export async function sendInvite(deps: {
   role: InviteRole;
   traceId: string;
   invoke: InvokeInviteSend;
-  onSuccess: () => void;
+  onSuccess: (outcome: InviteOutcome) => void;
   onError: (detail: string | null, code: InviteErrorCode | null) => void;
-}): Promise<{ ok: true } | { ok: false; message: string; code: InviteErrorCode | null }> {
+}): Promise<
+  | { ok: true; outcome: InviteOutcome }
+  | { ok: false; message: string; code: InviteErrorCode | null }
+> {
   if (!isValidInviteEmail(deps.email)) {
     deps.onError(INVITE_INVALID_EMAIL_MESSAGE, null);
     return { ok: false, message: INVITE_INVALID_EMAIL_MESSAGE, code: null };
   }
 
   const email = deps.email.trim();
+  let outcome: InviteOutcome;
   try {
-    const { error } = await deps.invoke('invite-send', {
+    const { data, error } = await deps.invoke('invite-send', {
       body: { workspace_id: deps.workspaceId, email, role: deps.role },
       headers: { 'x-trace-id': deps.traceId },
     });
@@ -186,12 +257,13 @@ export async function sendInvite(deps: {
       deps.onError(failure.message, failure.code);
       return { ok: false, message: failure.message ?? INVITE_ERROR_MESSAGE, code: failure.code };
     }
+    outcome = readInviteOutcome(data);
   } catch {
     deps.onError(null, null);
     return { ok: false, message: INVITE_ERROR_MESSAGE, code: null };
   }
-  deps.onSuccess();
-  return { ok: true };
+  deps.onSuccess(outcome);
+  return { ok: true, outcome };
 }
 
 // The role value stays `client`; people read it as the approver.
@@ -209,6 +281,9 @@ const ROLE_OPTIONS: SelectOption[] = [
 export function getInviteRoleOptions(clientOnly: boolean): readonly SelectOption[] {
   return clientOnly ? [APPROVER_ROLE_OPTION] : ROLE_OPTIONS;
 }
+
+/** No role picked yet: the inviter must choose Creator or Approver. */
+type RoleChoice = InviteRole | '';
 
 function isInviteRole(value: string): value is InviteRole {
   return value === 'admin' || value === 'agency' || value === 'client';
@@ -228,13 +303,21 @@ export function MembersInviteForm({
   const newTrace = useNewTrace();
   const roleOptions = getInviteRoleOptions(clientOnly);
   const [singleEmail, setSingleEmail] = useState('');
-  const [singleRole, setSingleRole] = useState<InviteRole>('client');
+  const [singleRole, setSingleRole] = useState<RoleChoice>('');
+  const [singleRoleMissing, setSingleRoleMissing] = useState(false);
   const [singleSubmitting, setSingleSubmitting] = useState(false);
   const [singleSentTo, setSingleSentTo] = useState<string | null>(null);
+  const [singleNotSent, setSingleNotSent] = useState<{
+    email: string;
+    acceptUrl: string | null;
+  } | null>(null);
   const [singleError, setSingleError] = useState<string | null>(null);
   const [singleEmailTouched, setSingleEmailTouched] = useState(false);
   const [emailInput, setEmailInput] = useState('');
-  const [invitees, setInvitees] = useState<Array<{ email: string; role: InviteRole }>>([]);
+  const [invitees, setInvitees] = useState<Array<{ email: string; role: RoleChoice }>>([]);
+  const [groupNotSent, setGroupNotSent] = useState<
+    Array<{ email: string; acceptUrl: string | null }>
+  >([]);
   const [groupSubmitting, setGroupSubmitting] = useState(false);
   const [entryError, setEntryError] = useState<string | null>(null);
   const [inviteErrors, setInviteErrors] = useState<Record<string, string>>({});
@@ -256,20 +339,30 @@ export function MembersInviteForm({
     event.preventDefault();
     setSingleEmailTouched(true);
     if (singleSubmitting || !singleEmailValid) return;
+    const role: RoleChoice = clientOnly ? 'client' : singleRole;
+    if (role === '') {
+      setSingleRoleMissing(true);
+      return;
+    }
 
     const target = trimmedSingleEmail;
     setSingleSubmitting(true);
     setSingleSentTo(null);
+    setSingleNotSent(null);
     setSingleError(null);
     await sendInvite({
       workspaceId: activeWorkspaceId,
       email: target,
-      role: clientOnly ? 'client' : singleRole,
+      role,
       traceId: newTrace(),
       invoke: (name, options) => supabase.functions.invoke(name, options),
-      onSuccess: () => {
+      onSuccess: (outcome) => {
         setSingleEmail('');
-        setSingleSentTo(target);
+        if (inviteStatus(outcome) === 'not-sent') {
+          setSingleNotSent({ email: target, acceptUrl: outcome.acceptUrl });
+        } else {
+          setSingleSentTo(target);
+        }
         if (isTestEmail(target)) rememberTestInvitee(target);
         setSingleSubmitting(false);
         onInvited?.();
@@ -304,7 +397,7 @@ export function MembersInviteForm({
     if (added.length > 0) {
       setInvitees((current) => [
         ...current,
-        ...added.map((email) => ({ email, role: 'client' as const })),
+        ...added.map((email) => ({ email, role: '' as const })),
       ]);
       setSentCount(null);
     }
@@ -329,17 +422,28 @@ export function MembersInviteForm({
     event.preventDefault();
     if (groupSubmitting || invitees.length === 0) return;
 
+    // Every row needs a role before anything is sent.
+    const unpicked = clientOnly ? [] : invitees.filter((invitee) => invitee.role === '');
+    if (unpicked.length > 0) {
+      setInviteErrors(
+        Object.fromEntries(unpicked.map(({ email }) => [email, INVITE_PICK_ROLE_MESSAGE])),
+      );
+      return;
+    }
+
     const batch = invitees;
     setGroupSubmitting(true);
     setSentCount(null);
+    setGroupNotSent([]);
     setInviteErrors({});
 
     const results = await Promise.all(
       batch.map(async (invitee) => {
+        const role: InviteRole = clientOnly || invitee.role === '' ? 'client' : invitee.role;
         const result = await sendInvite({
           workspaceId: activeWorkspaceId,
           email: invitee.email,
-          role: clientOnly ? 'client' : invitee.role,
+          role,
           traceId: newTrace(),
           invoke: (name, options) => supabase.functions.invoke(name, options),
           onSuccess: () => {},
@@ -358,9 +462,16 @@ export function MembersInviteForm({
       else errors[invitee.email] = result.message;
     }
     if (mismatch) onClientDomainMismatch?.();
+    const notSent: Array<{ email: string; acceptUrl: string | null }> = [];
+    for (const { invitee, result } of results) {
+      if (result.ok && inviteStatus(result.outcome) === 'not-sent') {
+        notSent.push({ email: invitee.email, acceptUrl: result.outcome.acceptUrl });
+      }
+    }
+    setGroupNotSent(notSent);
     setInviteErrors(errors);
     setInvitees(failed.map(({ invitee }) => invitee));
-    setSentCount(results.length - failed.length);
+    setSentCount(results.length - failed.length - notSent.length);
     setGroupSubmitting(false);
     if (failed.length < results.length) {
       onInvited?.();
@@ -394,7 +505,7 @@ export function MembersInviteForm({
                 type="button"
                 className="mt-1.5 inline-flex min-h-[44px] items-center text-sm font-medium text-accent hover:underline"
                 onClick={() => {
-                  const role = clientOnly ? 'client' : singleRole;
+                  const role: RoleChoice = clientOnly ? 'client' : singleRole;
                   setSingleEmail(testAddress(role === 'client' ? 'approver' : 'creator'));
                   setSingleError(null);
                 }}
@@ -413,11 +524,20 @@ export function MembersInviteForm({
               label="Role"
               value={clientOnly ? 'client' : singleRole}
               options={roleOptions}
+              placeholder="Choose a role"
               disabled={singleSubmitting}
               onChange={(value) => {
-                if (!clientOnly && isInviteRole(value)) setSingleRole(value);
+                if (!clientOnly && isInviteRole(value)) {
+                  setSingleRole(value);
+                  setSingleRoleMissing(false);
+                }
               }}
             />
+            {singleRoleMissing ? (
+              <p role="alert" className="mt-1.5 text-xs text-bad">
+                {INVITE_PICK_ROLE_MESSAGE}
+              </p>
+            ) : null}
           </Field>
           <div>
             <Button
@@ -432,6 +552,9 @@ export function MembersInviteForm({
           </div>
           {singleSentTo !== null ? (
             <p className="text-sm text-good">Invitation sent to {singleSentTo}.</p>
+          ) : null}
+          {singleNotSent !== null ? (
+            <InviteNotSent email={singleNotSent.email} acceptUrl={singleNotSent.acceptUrl} />
           ) : null}
           {testSite && singleSentTo !== null && isTestEmail(singleSentTo) ? (
             <p className="text-sm text-fg-2">
@@ -511,6 +634,7 @@ export function MembersInviteForm({
                       label={`Role for ${invitee.email}`}
                       value={clientOnly ? 'client' : invitee.role}
                       options={roleOptions}
+                      placeholder="Choose a role"
                       disabled={groupSubmitting}
                       onChange={(value) => {
                         if (!clientOnly && isInviteRole(value)) {
@@ -519,6 +643,11 @@ export function MembersInviteForm({
                               item.email === invitee.email ? { ...item, role: value } : item,
                             ),
                           );
+                          setInviteErrors((current) => {
+                            const next = { ...current };
+                            delete next[invitee.email];
+                            return next;
+                          });
                         }
                       }}
                     />
@@ -572,6 +701,9 @@ export function MembersInviteForm({
               {invitees.length > 0 ? ` ${invitees.length} failed; review and retry.` : ''}
             </p>
           ) : null}
+          {groupNotSent.map((item) => (
+            <InviteNotSent key={item.email} email={item.email} acceptUrl={item.acceptUrl} />
+          ))}
         </form>
       </section>
     </div>
