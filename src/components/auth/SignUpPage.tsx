@@ -54,13 +54,13 @@ export const POLICY_CONSENT_MESSAGE = 'Tick the box to agree to the Terms and Pr
 export const RATE_LIMIT_MESSAGE = CHECK_EMAIL_COPY.rateLimited;
 
 /** Supabase answers 429 (or 403 on some limits) when links are asked for too often. */
-export function isRateLimitError(error: { message: string; status?: number }): boolean {
+export function isRateLimitError(error: { message: string; status?: number | undefined }): boolean {
   if (error.status === 429 || error.status === 403) return true;
   return /rate limit|security purposes/i.test(error.message);
 }
 
 /** A link request's refusal in plain words: never the provider's raw text. */
-export function linkErrorMessage(error: { message: string; status?: number }): string {
+export function linkErrorMessage(error: { message: string; status?: number | undefined }): string {
   return isRateLimitError(error) ? RATE_LIMIT_MESSAGE : CHECK_EMAIL_COPY.genericError;
 }
 

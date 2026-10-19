@@ -119,7 +119,7 @@ export interface SignInAuthClient {
 export type SendLinkResult =
   | { status: 'sent' }
   | { status: 'no-account' }
-  | { status: 'error'; message: string; httpStatus?: number };
+  | { status: 'error'; message: string; httpStatus?: number | undefined };
 
 /** Supabase answers this when an email link is asked for an email with no account. */
 function isNoAccountError(message: string): boolean {
@@ -152,7 +152,10 @@ export async function sendSignInLink(
 const client = supabase as unknown as SignInAuthClient;
 
 /** What the sign-in screen shows for a refused link: plain copy, never the raw text. */
-export function signInErrorMessage(result: { message: string; httpStatus?: number }): string {
+export function signInErrorMessage(result: {
+  message: string;
+  httpStatus?: number | undefined;
+}): string {
   return linkErrorMessage({ message: result.message, status: result.httpStatus });
 }
 
