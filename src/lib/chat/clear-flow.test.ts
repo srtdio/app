@@ -13,7 +13,7 @@ describe('delete chat copy', () => {
   });
 
   it('names the failed chat and says it is for the caller only', () => {
-    expect(deleteChatFailedMessage('Design')).toBe('Could not delete Design.');
+    expect(deleteChatFailedMessage('Design')).toBe("Couldn't hide Design.");
     expect(DELETE_CHATS_BODY).toContain('for you only');
   });
 });

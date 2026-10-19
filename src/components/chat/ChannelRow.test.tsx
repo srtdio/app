@@ -318,7 +318,7 @@ describe('G1: one layout listener per ChannelList, not one per tile', () => {
     );
     expect(card).not.toContain('useChatLayout(');
     expect(card).not.toContain('useMediaQuery(');
-    expect(card).toContain('aria-label={`Open ${channel.title}`}');
+    expect(card).toContain('aria-label={channelTileLabel({');
     // The list reads them once.
     const list = source.slice(source.indexOf('export function ChannelList('));
     expect(list).toContain('useChannelListInput()');

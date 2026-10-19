@@ -48,7 +48,9 @@ describe('group info permission (mirrors group_rename)', () => {
   });
 
   it("maps 'group_manage_denied' to the WhatsApp line; never the raw code", () => {
-    expect(GROUP_INFO_ADMIN_ONLY).toBe("Only admins can edit this group's info");
+    expect(GROUP_INFO_ADMIN_ONLY).toBe(
+      "Only the group's creator or an admin can edit this group's info",
+    );
     expect(groupActionMessage({ code: 'unknown', message: 'group_manage_denied' })).toBe(
       GROUP_INFO_ADMIN_ONLY,
     );
@@ -64,7 +66,7 @@ describe('F1: every group failure is a readable sentence', () => {
     ['group_name_invalid', 'Enter a valid group name'],
     ['group_not_found', 'This group no longer exists'],
     ['member_not_in_workspace', "This person isn't in the workspace"],
-    ['group_manage_denied', "Only admins can edit this group's info"],
+    ['group_manage_denied', "Only the group's creator or an admin can edit this group's info"],
   ];
 
   it.each(known)('%s reads "%s", by code or as a bare message', (code, sentence) => {

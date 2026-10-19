@@ -145,6 +145,7 @@ import type {
   OutboxEvent,
   OutboxStorage,
 } from '@/lib/chat/chat-store';
+import { clearVoiceDrafts, isVoiceDraftEntryId } from '@/lib/chat/voice-draft';
 
 /** The store plus the actions the chat UI uses to keep it in step. */
 export interface ChatStoreContextValue {
@@ -847,7 +848,16 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
         }
       },
       retry: (channelId, id) => senderRef.current?.retry(channelId, id),
-      settle: (channelId, id) => senderRef.current?.settle(channelId, id),
+      settle: (channelId, id) => {
+        const entry = senderRef.current?.entries(channelId).find((e) => e.id === id);
+        senderRef.current?.settle(channelId, id);
+        // A failed send deleted from its bubble (FB5): its stored files go
+        // (after a save still in flight lands) and its previews' object URLs
+        // are freed. A catch-up settle keeps the recorded bubble's previews.
+        if (entry?.state === 'failed') {
+          void releaseCancelled(filesRef.current, entry, savesRef.current.get(id));
+        }
+      },
       cancel: (channelId, id) => senderRef.current?.cancel(channelId, id) ?? false,
       subscribe: (listener) => {
         const listeners = outboxListenersRef.current;
@@ -1195,7 +1205,11 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     // Blobs of sends neither persisted (any scope) nor queued since are orphans.
     const keepIds = store.persistedOutboxIds(storage);
     if (keepIds !== null) {
-      void pruneOutboxFiles(files, (id) => keepIds.has(id) || heldIds.has(id));
+      // Voice note drafts (voice-draft.ts) share the store and are kept.
+      void pruneOutboxFiles(
+        files,
+        (id) => keepIds.has(id) || heldIds.has(id) || isVoiceDraftEntryId(id),
+      );
     }
     const sender = createOutboxSender(
       {
@@ -1347,6 +1361,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       sender.dispose();
       store.clearPersistedOutbox(storage);
       void clearOutboxFiles(files);
+      clearVoiceDrafts();
     };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('online', kick);

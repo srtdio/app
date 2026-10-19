@@ -9,6 +9,15 @@
 // stream source or analyser is attached while it records, because on WebKit
 // that changes the recorder's output. The waveform is read from the finished
 // blob instead (voice-peaks.ts).
+//
+// A recording that is still running when the composer unmounts (Back, a chat
+// switch, a tab change, sign-out) is not dropped (FT42): the recorder is
+// stopped, the chunks it delivers are built into a RecordingResult and handed
+// to `onUnmountRecording` (the composer keeps it as a voice draft). While
+// recording, a pagehide or a visibilitychange to hidden asks the recorder for
+// its data so far and hands that snapshot to `onBackground`; it keeps
+// recording. Both are best effort: MediaRecorder may not deliver its last
+// chunks during pagehide, and the OS can end the recording on its own.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -64,14 +73,48 @@ export interface RecordingResult {
 export interface AudioRecorder {
   recording: boolean;
   seconds: number;
+  /** The running recording's id ('' when idle): a snapshot names it so it can be dropped later. */
+  recordingId: string;
   start: () => Promise<boolean>;
   stop: () => Promise<RecordingResult | null>;
   cancel: () => void;
 }
 
-export function useAudioRecorder(): AudioRecorder {
+export interface AudioRecorderOptions {
+  /** The composer unmounted mid-recording: the finished recording (FT42). */
+  onUnmountRecording?: (rec: RecordingResult, recordingId: string) => void;
+  /** The page hid mid-recording: what has been recorded so far (still recording). */
+  onBackground?: (rec: RecordingResult, recordingId: string) => void;
+}
+
+/** How long a pending final chunk is waited for before the stream is let go. */
+export const FINALIZE_WAIT_MS = 1500;
+
+/** Build a result from collected chunks; null when there are none. Pure. */
+export function resultFromChunks(
+  chunks: readonly Blob[],
+  recorderMime: string,
+  durationMs: number,
+): RecordingResult | null {
+  if (chunks.length === 0) return null;
+  const mime = baseMime(recorderMime) || 'audio/webm';
+  return {
+    blob: new Blob([...chunks], { type: mime }),
+    mime,
+    recorderMime,
+    durationMs: Math.max(0, Math.round(durationMs)),
+  };
+}
+
+let recordingSeq = 0;
+
+export function useAudioRecorder(options: AudioRecorderOptions = {}): AudioRecorder {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  const [recordingId, setRecordingId] = useState('');
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+  const recordingIdRef = useRef('');
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -111,6 +154,10 @@ export function useAudioRecorder(): AudioRecorder {
     recorderRef.current = recorder;
     recorder.start();
     startedAtRef.current = performance.now();
+    recordingSeq += 1;
+    const id = `rec-${Date.now()}-${recordingSeq}`;
+    recordingIdRef.current = id;
+    setRecordingId(id);
     setRecording(true);
     setSeconds(0);
     clearTimer();
@@ -163,12 +210,73 @@ export function useAudioRecorder(): AudioRecorder {
     setRecording(false);
   }, [stopTracks, clearTimer]);
 
+  // The page hides mid-recording: ask for the data so far and hand it on as a
+  // snapshot; the recording goes on (it may end on its own if the OS stops it).
+  useEffect(() => {
+    if (!recording) return;
+    const snapshot = (): void => {
+      const recorder = recorderRef.current;
+      const onBackground = optionsRef.current.onBackground;
+      if (recorder === null || onBackground === undefined || recorder.state === 'inactive') return;
+      const id = recordingIdRef.current;
+      const hand = (): void => {
+        const rec = resultFromChunks(
+          chunksRef.current,
+          recorder.mimeType,
+          performance.now() - startedAtRef.current,
+        );
+        if (rec !== null) onBackground(rec, id);
+      };
+      try {
+        recorder.addEventListener('dataavailable', hand, { once: true });
+        recorder.requestData();
+      } catch {
+        hand();
+      }
+    };
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') snapshot();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', snapshot);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', snapshot);
+    };
+  }, [recording]);
+
   useEffect(() => {
     return () => {
-      stopTracks();
       clearTimer();
+      const recorder = recorderRef.current;
+      const onUnmount = optionsRef.current.onUnmountRecording;
+      recorderRef.current = null;
+      if (recorder === null || recorder.state === 'inactive' || onUnmount === undefined) {
+        stopTracks();
+        return;
+      }
+      // Finalize: stop the recorder, keep the stream until its last chunk
+      // lands (or FINALIZE_WAIT_MS), then hand the recording on.
+      const id = recordingIdRef.current;
+      const durationMs = performance.now() - startedAtRef.current;
+      const chunks = chunksRef.current;
+      let done = false;
+      const finish = (): void => {
+        if (done) return;
+        done = true;
+        stopTracks();
+        const rec = resultFromChunks(chunks, recorder.mimeType, durationMs);
+        if (rec !== null) onUnmount(rec, id);
+      };
+      recorder.addEventListener('stop', finish, { once: true });
+      setTimeout(finish, FINALIZE_WAIT_MS);
+      try {
+        recorder.stop();
+      } catch {
+        finish();
+      }
     };
   }, [stopTracks, clearTimer]);
 
-  return { recording, seconds, start, stop, cancel };
+  return { recording, seconds, recordingId, start, stop, cancel };
 }

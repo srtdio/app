@@ -27,6 +27,7 @@ import {
   type MessageReaction,
   type ThreadMessage,
 } from '@/lib/chat/thread';
+import { setOlderPageFailed, threadOlderKey } from '@/lib/chat/older-page-status';
 
 /** The reads the view makes; injected in tests. */
 export interface ThreadViewReads {
@@ -170,6 +171,7 @@ export function useThreadView(params: {
     if (cursor === undefined) return;
     olderRef.current = true;
     setLoadingOlder(true);
+    setOlderPageFailed(threadOlderKey(current.rootId), false);
     const attempt = attemptRef.current;
     void (async (): Promise<void> => {
       const page = await reads.loadPage(channelId, current.rootId, cursor);
@@ -184,6 +186,8 @@ export function useThreadView(params: {
       setLoadingOlder(false);
       if (!page.ok) {
         logger.warn('chat: thread older page failed', { error: page.error.message });
+        // FT41: the thread view shows "Couldn't load earlier messages." + Retry.
+        setOlderPageFailed(threadOlderKey(current.rootId), true);
         return;
       }
       setView((prev) =>

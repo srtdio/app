@@ -40,9 +40,27 @@ import {
 import { useWorkspaceMembers } from '@/components/chat/use-workspace-members';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { SHEET_NOTICE_TYPE } from '@/components/chat/chat-type';
+import { ModalPanel } from '@/components/chat/ModalPanel';
+import { listSkeleton } from '@/components/chat/ListSkeleton';
 
-/** The inline line a member who cannot rename the group sees (WhatsApp's wording). */
-export const GROUP_INFO_ADMIN_ONLY = "Only admins can edit this group's info";
+/**
+ * The inline line a member who cannot rename the group sees. It names the
+ * real rule (canEditGroupInfo): the group's creator, or a workspace owner or
+ * admin (FT43).
+ */
+export const GROUP_INFO_ADMIN_ONLY =
+  "Only the group's creator or an admin can edit this group's info";
+
+/** Group photo failures in plain words (FN23); the raw upload error goes to the logger. */
+export const GROUP_PHOTO_UNAVAILABLE = "Photos can't be added right now. Try again later.";
+export const GROUP_PHOTO_UNREADABLE = "That photo couldn't be opened. Choose another one.";
+export const GROUP_PHOTO_UPLOAD_FAILED =
+  "The photo didn't upload. Check your connection and try again.";
+
+/** FN24: the member list's loading state, three row skeletons (tokens only). */
+export function membersSkeleton(): ReactElement {
+  return listSkeleton('Loading members');
+}
 
 /** Any failure without a sentence of its own. */
 export const GROUP_ACTION_FALLBACK = 'Something went wrong. Try again.';
@@ -396,12 +414,10 @@ export function groupInfoPage(props: {
   nodes: Readonly<Record<GroupInfoSection, ReactNode>>;
 }): ReactElement {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <ModalPanel
       aria-label={GROUP_INFO_HEADING}
       data-group-page=""
-      className="fixed inset-0 z-50 flex flex-col bg-bg"
+      className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel px-2 md:px-4">
         <IconButton label="Close group info" onClick={props.onClose}>
@@ -430,7 +446,7 @@ export function groupInfoPage(props: {
           ))}
         </div>
       </div>
-    </div>
+    </ModalPanel>
   );
 }
 
@@ -580,7 +596,12 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
   }
 
   async function submitRename(): Promise<void> {
-    if (!nameChanged || busy) return;
+    if (busy) return;
+    if (name.trim() === '') {
+      setError(GROUP_ACTION_MESSAGES.group_name_invalid ?? GROUP_ACTION_FALLBACK);
+      return;
+    }
+    if (!nameChanged) return;
     setError(null);
     const outcome = await withGroupBusy<RenameOutcome>({
       setBusy,
@@ -609,9 +630,9 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
       setBusy,
       run: async () => {
         const endpoint = env.VITE_AVATAR_UPLOAD_URL;
-        if (endpoint === undefined) return 'Photo upload is not configured';
+        if (endpoint === undefined) return GROUP_PHOTO_UNAVAILABLE;
         const png = await groupAvatarPng(file);
-        if (png === null) return 'Could not read the photo. Choose it again';
+        if (png === null) return GROUP_PHOTO_UNREADABLE;
         const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
         const up = await uploadAvatarFile(png, {
           endpoint,
@@ -619,7 +640,10 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
           fetcher: (input, init) => fetchWithTrace(input, init, traceId),
           target: { kind: 'group', id: props.groupId, apiKey: env.VITE_SUPABASE_PUBLISHABLE_KEY },
         });
-        if (!up.ok) return up.error.message;
+        if (!up.ok) {
+          logger.warn('chat: group photo upload failed', { error: up.error.message });
+          return GROUP_PHOTO_UPLOAD_FAILED;
+        }
         const set = await setGroupAvatar(
           supabase,
           { groupId: props.groupId, avatarUrl: up.data.avatarUrl, traceId },
@@ -737,22 +761,36 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
           value={name}
           enterKeyHint="done"
           onChange={(event) => setName(event.target.value)}
-          onBlur={() => void submitRename()}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              event.currentTarget.blur();
+              void submitRename();
+            } else if (event.key === 'Escape' && name !== props.groupName) {
+              event.preventDefault();
+              event.stopPropagation();
+              setName(props.groupName);
             }
           }}
           aria-label="Group name"
         />
+        {/* FN23: an explicit Save / Cancel; leaving the field never saves. */}
+        {name !== props.groupName ? (
+          <div data-group-rename-actions="" className="mt-2 flex justify-end gap-2">
+            <Button size="lg" disabled={busy} onClick={() => setName(props.groupName)}>
+              Cancel
+            </Button>
+            <Button size="lg" variant="primary" disabled={busy} onClick={() => void submitRename()}>
+              {busy ? 'Saving' : 'Save'}
+            </Button>
+          </div>
+        ) : null}
       </>
     ),
     members: (
       <>
         <SectionLabel>Members</SectionLabel>
         {members.loading ? (
-          <p className="px-1 py-2 text-sm text-fg-3">Loading members</p>
+          membersSkeleton()
         ) : members.error !== null ? (
           <div
             role="alert"

@@ -211,10 +211,10 @@ describe('fix 4: personal notes', () => {
 });
 
 describe('fix 5: the group info header icon', () => {
-  it('uses the info icon, not the gear', () => {
+  it('FT46: no header Info icon (the identity tap opens Group info), never the gear', () => {
     expect(renderToStaticMarkup(<InfoGlyph />)).toContain('data-info-glyph');
     const thread = source('../MessageThread.tsx');
     expect(thread).not.toContain('IconSettings');
-    expect(thread).toMatch(/label="Group info" onClick=\{props\.onOpenInfo\}>\s*<InfoGlyph/);
+    expect(thread).not.toMatch(/label="Group info" onClick=\{props\.onOpenInfo\}>/);
   });
 });

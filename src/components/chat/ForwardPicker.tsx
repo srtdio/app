@@ -25,6 +25,8 @@ import {
   toggleForwardTarget,
 } from '@/lib/chat/forward';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
+import { useHistoryStep } from '@/lib/chat/use-history-step';
+import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
 export type ForwardSendResult = { ok: true } | { ok: false; failed: ChannelSummary | null };
 
@@ -68,6 +70,8 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // System Back closes only the picker; the chat (or task sheet) under it stays.
+  useHistoryStep(props.open, SHEET_STEP_KEYS.forward, props.onClose);
 
   useEffect(() => {
     if (!props.open) return;

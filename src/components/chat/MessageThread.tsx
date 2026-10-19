@@ -14,6 +14,14 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { useUndoableAction } from '@/lib/use-undoable-action';
+import {
+  OLDER_LOAD_FAILED,
+  channelOlderKey,
+  threadOlderKey,
+  useOlderPageFailed,
+} from '@/lib/chat/older-page-status';
+import { ThreadHoldTip } from '@/components/chat/ThreadHoldTip';
 import { flushSync } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { isNearBottom } from '@/lib/chat/scroll';
@@ -379,6 +387,8 @@ interface MessageThreadProps {
   /** Delete own messages for everyone; absent hides "Select". */
   onDeleteMessages?: (
     messageIds: readonly string[],
+    /** The chat the ids belong to (a delete committed after its Undo window). */
+    channelId?: string,
   ) => Promise<{ ok: true; toast?: string } | { ok: false; message: string }>;
   /**
    * Edit the body of an own message; absent hides "Edit". Resolves ok, or the
@@ -1433,18 +1443,24 @@ export function FailedLine({ status }: { status: 'failed' | 'files-missing' }): 
 }
 
 /**
- * A failed own text send (never recorded, nothing uploaded): "Not sent" with
- * Retry and Delete beside it, and Delete in its menu. Pure.
+ * Any failed own send (never recorded), with or without files (FB5): "Not
+ * sent" with Delete beside it (and Retry unless it was refused for good), and
+ * Delete in its menu. Delete drops the bubble, its outbox entry and its local
+ * files. A send whose files were lost to a reload keeps its own Remove. Pure.
  */
 export function canDiscardFailed(
-  message: Pick<ThreadMessage, 'mine' | 'state' | 'filesMissing' | 'attachments'>,
+  message: Pick<ThreadMessage, 'mine' | 'state' | 'filesMissing'>,
 ): boolean {
-  return (
-    message.mine &&
-    message.state === 'failed' &&
-    message.filesMissing !== true &&
-    message.attachments.length === 0
-  );
+  return message.mine && message.state === 'failed' && message.filesMissing !== true;
+}
+
+/**
+ * Whether a failed own send offers Retry: not when the server or the upload
+ * Worker refused it for good (a permanent class: too large, unsupported type,
+ * contents mismatch, virus, other non-retryable 4xx). Pure.
+ */
+export function canRetryFailed(message: Pick<ThreadMessage, 'refusal'>): boolean {
+  return message.refusal === undefined;
 }
 
 /** The failed line's text actions: 44px tall, the bad token for Delete. */
@@ -1458,11 +1474,19 @@ const FAILED_ACTION_CLASS =
 export function FailedActions(props: {
   onRetry?: () => void;
   onDelete?: () => void;
+  /** A permanent refusal's reason in plain words: shown, and Retry is never offered. */
+  refusal?: string;
 }): ReactElement {
+  const refused = props.refusal !== undefined;
   return (
-    <div data-failed-actions="" className="flex items-center gap-1">
+    <div data-failed-actions="" className="flex flex-wrap items-center justify-end gap-1">
       <FailedLine status="failed" />
-      {props.onRetry !== undefined ? (
+      {refused ? (
+        <span data-failed-reason="" className={cn('text-fg-2', BUBBLE_META_TYPE)}>
+          {props.refusal}
+        </span>
+      ) : null}
+      {props.onRetry !== undefined && !refused ? (
         <button
           type="button"
           data-failed-line-retry=""
@@ -2438,7 +2462,7 @@ export function MessageBubble(props: {
                 className={placement === 'row' && album ? 'px-1.5 pb-0.5' : undefined}
               />
             )}
-            {failed && mine && message.filesMissing !== true ? (
+            {failed && mine && message.filesMissing !== true && canRetryFailed(message) ? (
               <button
                 type="button"
                 data-failed-retry=""
@@ -2488,6 +2512,7 @@ export function MessageBubble(props: {
               <button
                 type="button"
                 data-reaction-badge=""
+                aria-label={reactionBadgeLabel(message.reactions)}
                 onClick={onBadgeClick}
                 className={REACTION_BADGE_CLASS}
               >
@@ -2507,6 +2532,7 @@ export function MessageBubble(props: {
         )}
         {meta.status === 'failed' && mine && canDiscardFailed(message) ? (
           <FailedActions
+            {...(message.refusal !== undefined ? { refusal: message.refusal } : {})}
             {...(props.onRetry !== undefined ? { onRetry: () => props.onRetry?.(message.id) } : {})}
             {...(props.onDiscard !== undefined
               ? { onDelete: () => props.onDiscard?.(message.id) }
@@ -2548,6 +2574,17 @@ export function MessageBubble(props: {
       ) : null}
     </li>
   );
+}
+
+/**
+ * The reaction badge's accessible name (FT44): each emoji with its count and
+ * the total, then what a tap does. "Reactions: 👍 2, ❤️ 1. 3 in total. Show
+ * who reacted". Pure.
+ */
+export function reactionBadgeLabel(reactions: readonly { emoji: string; count: number }[]): string {
+  const total = reactions.reduce((sum, r) => sum + r.count, 0);
+  const each = reactions.map((r) => `${r.emoji} ${r.count}`).join(', ');
+  return `Reactions: ${each}. ${total} in total. Show who reacted`;
 }
 
 /** The info glyph (a circled "i") for the group info button, drawn like the icon set. */
@@ -2742,11 +2779,15 @@ export function threadListItems(
   coarse = false,
   /** Task change lines; absent: none are drawn. */
   renderTask?: (row: Extract<ThreadRow, { kind: 'task' }>) => ReactElement,
+  /** The last older page failed (FT41): its Retry; the row replaces Load older. */
+  retryOlder?: () => void,
 ): ReactElement[] {
   const items: ReactElement[] = [
     <li key="thread-spacer" aria-hidden="true" data-thread-spacer="" className="mt-auto" />,
   ];
-  if (loadOlder !== undefined && !loadingOlder) {
+  if (retryOlder !== undefined && !loadingOlder) {
+    items.push(olderLoadErrorRow(retryOlder));
+  } else if (loadOlder !== undefined && !loadingOlder) {
     items.push(
       <li key="load-older" className="flex justify-center px-4">
         <button
@@ -2766,8 +2807,14 @@ export function threadListItems(
   }
   if (loadingOlder) {
     items.push(
-      <li key="loading-older" className="px-4 py-2 text-center text-xs text-fg-3">
-        Loading earlier messages
+      // FN24: a skeleton bubble, not a plain line; the words stay for screen readers.
+      <li key="loading-older" aria-busy="true" className="flex flex-col gap-2 px-4 py-2">
+        <span className="sr-only">Loading earlier messages</span>
+        <span aria-hidden="true" className="h-9 w-48 animate-pulse rounded-2xl bg-panel-2" />
+        <span
+          aria-hidden="true"
+          className="h-9 w-36 self-end animate-pulse rounded-2xl bg-panel-2"
+        />
       </li>,
     );
   }
@@ -3329,6 +3376,8 @@ function ThreadBody(
     onOpenThread?: (messageId: string) => void;
     /** The thread view: a "Load older" row at the top instead of scroll-to-top paging. */
     loadOlderRow?: boolean;
+    /** Which list's older-page outcome to read (older-page-status.ts); absent: never failed. */
+    olderKey?: string;
     /** Card threads: the rail, chips and "N replies"; absent draws none. */
     threads?: ThreadBodyThreads;
     /** Menu "Transcribe" picked on a voice note; absent hides the row. */
@@ -3408,6 +3457,13 @@ function ThreadBody(
   // The open menu's star reads the one star store.
   const menuStarred = useIsStarred(menu?.message.id ?? '');
   const listRef = useRef<HTMLUListElement>(null);
+  // FT41: the last older page failed; Retry keeps the reader where they were.
+  const olderFailed = useOlderPageFailed(props.olderKey ?? null);
+  const retryOlder = (): void => {
+    const el = listRef.current;
+    if (el !== null && anchorHeightRef.current === null) anchorHeightRef.current = el.scrollHeight;
+    props.onLoadOlder?.();
+  };
   /** The selecting bubble's body element, read from the list. */
   const selectingBody = useCallback((id: string): Element | null => {
     return (
@@ -3896,11 +3952,19 @@ function ThreadBody(
   if (props.messages.length === 0) {
     return (
       <div className="flex flex-1 flex-col justify-center">
-        <EmptyState
-          icon={<IconChat size={22} />}
-          title="No messages yet"
-          description="Say hello."
-        />
+        {props.notes === true ? (
+          <EmptyState
+            icon={<IconChat size={22} />}
+            title={NOTES_EMPTY_TITLE}
+            description={NOTES_EMPTY_LINE}
+          />
+        ) : (
+          <EmptyState
+            icon={<IconChat size={22} />}
+            title="No messages yet"
+            description="Say hello."
+          />
+        )}
       </div>
     );
   }
@@ -3980,6 +4044,8 @@ function ThreadBody(
               el.scrollTop <= LOAD_OLDER_THRESHOLD_PX &&
               props.hasMore === true &&
               props.loadingOlder !== true &&
+              // A failed page waits for its Retry: scrolling never re-fires it.
+              !olderFailed &&
               anchorHeightRef.current === null
             ) {
               anchorHeightRef.current = el.scrollHeight;
@@ -4164,6 +4230,7 @@ function ThreadBody(
             taskCtx !== undefined
               ? (row) => <TaskEventLine key={row.key} line={row.line} ctx={taskCtx} />
               : undefined,
+            olderFailed && props.loadingOlder !== true ? retryOlder : undefined,
           )}
         </ul>
         {unread !== undefined && unread !== null && pill !== 'unknown' ? (
@@ -4350,6 +4417,30 @@ export function threadLoadErrorRow(onRetry: (() => void) | undefined): ReactElem
           Retry
         </Button>
       ) : null}
+    </li>
+  );
+}
+
+/** FN22: the empty Personal notes chat. */
+export const NOTES_EMPTY_TITLE = 'Your private notes live here.';
+export const NOTES_EMPTY_LINE = 'Only you can see them.';
+
+/**
+ * FT41: an older page that failed to load. The line and a 44px Retry sit at
+ * the top of the list in place of Load older; the loaded rows stay below.
+ */
+export function olderLoadErrorRow(onRetry: () => void): ReactElement {
+  return (
+    <li
+      key="older-load-failed"
+      role="alert"
+      data-older-load-error=""
+      className="flex items-center justify-center gap-3 px-4 py-2 text-sm text-fg-2"
+    >
+      <span>{OLDER_LOAD_FAILED}</span>
+      <Button size="lg" variant="default" className="min-w-[44px]" onClick={onRetry}>
+        Retry
+      </Button>
     </li>
   );
 }
@@ -4684,9 +4775,47 @@ export function withoutDiscarded(
   return messages.filter((m) => !discarded.has(m.id));
 }
 
+/**
+ * Whether a menu Delete goes behind a 7s Undo (FT39) instead of the confirm:
+ * a single message with no files (text, links, shared cards). A message with
+ * files keeps the confirm. Pure.
+ */
+export function deleteHasUndo(message: Pick<ThreadMessage, 'attachments' | 'state'>): boolean {
+  return message.state === 'sent' && message.attachments.length === 0;
+}
+
+/** The Undo toast's title for a deleted message. */
+export const MESSAGE_DELETED_UNDO = 'Message deleted';
+
+/** Lay local tombstones (a delete inside its Undo window) over the list. Pure. */
+export function withUndoTombstones(
+  messages: ThreadMessage[],
+  tombstoned: ReadonlySet<string>,
+): ThreadMessage[] {
+  if (tombstoned.size === 0) return messages;
+  return markMessagesDeleted(messages, [...tombstoned]);
+}
+
+/** The view's extra seam: tombstone a row locally (on) or bring it back (off). */
+type MessageThreadViewProps = MessageThreadProps & {
+  tombstone?: (messageId: string, on: boolean) => void;
+};
+
 export function MessageThread(props: MessageThreadProps): ReactElement {
   const settle = useOutboxSettle();
   const [discarded, setDiscarded] = useState<ReadonlySet<string>>(() => new Set());
+  // Deletes waiting out their Undo window (and kept once committed, until the
+  // list itself carries the tombstone).
+  const [tombstoned, setTombstoned] = useState<ReadonlySet<string>>(() => new Set());
+  const tombstone = useCallback((messageId: string, on: boolean) => {
+    setTombstoned((prev) => {
+      if (prev.has(messageId) === on) return prev;
+      const next = new Set(prev);
+      if (on) next.add(messageId);
+      else next.delete(messageId);
+      return next;
+    });
+  }, []);
   const channelId = props.channelId;
   const propDiscard = props.onDiscard;
   const onDiscard = useMemo<((messageId: string) => void) | undefined>(() => {
@@ -4698,19 +4827,20 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
     };
   }, [propDiscard, settle, channelId]);
   const messages = useMemo(
-    () => withoutDiscarded(props.messages, discarded),
-    [props.messages, discarded],
+    () => withUndoTombstones(withoutDiscarded(props.messages, discarded), tombstoned),
+    [props.messages, discarded, tombstoned],
   );
   return (
     <MessageThreadView
       {...props}
       messages={messages}
+      tombstone={tombstone}
       {...(onDiscard !== undefined ? { onDiscard } : {})}
     />
   );
 }
 
-function MessageThreadView(props: MessageThreadProps): ReactElement {
+function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const { canAttach, presignEnabled, presignCache, uploadFile, transcribe, canTranscribe } =
     useChatAttachments();
   // Transcribe on tap: this device only. The Worker fetches the audio from the
@@ -5060,6 +5190,41 @@ function MessageThreadView(props: MessageThreadProps): ReactElement {
     threadView.update((rows) => markMessagesDeleted(rows, ids));
     if (result.toast !== undefined) toast.show({ title: result.toast });
   };
+  // FT39: a text-only message deletes behind a 7s Undo. It reads as a
+  // tombstone here at once; the delete for everyone runs through the same
+  // path as the confirm once the window ends (or the chat is left). Undo, or a
+  // refused delete, brings the row back.
+  const undoable = useUndoableAction();
+  const tombstone = props.tombstone;
+  const deleteWithUndo = (message: ThreadMessage): void => {
+    if (onDeleteMessages === undefined) return;
+    const id = message.id;
+    const original = message;
+    // Bound now: the commit may run after the chat was left (unmount flush).
+    const forChannel = props.channelId;
+    tombstone?.(id, true);
+    threadView.update((rows) => markMessagesDeleted(rows, [id]));
+    const revert = (): void => {
+      tombstone?.(id, false);
+      threadView.update((rows) => rows.map((r) => (r.id === id ? original : r)));
+    };
+    undoable.run({
+      label: MESSAGE_DELETED_UNDO,
+      commit: async () => {
+        const result =
+          forChannel !== undefined
+            ? await onDeleteMessages([id], forChannel)
+            : await onDeleteMessages([id]);
+        if (!result.ok) {
+          revert();
+          toast.show({ title: result.message });
+          return;
+        }
+        if (result.toast !== undefined) toast.show({ title: result.toast });
+      },
+      revert,
+    });
+  };
   // Escape leaves selection mode (the laptop's Cancel).
   useEffect(() => {
     if (!selecting) return;
@@ -5108,6 +5273,8 @@ function MessageThreadView(props: MessageThreadProps): ReactElement {
     workspaceName: props.subtitle,
   });
   const canOpenContact = !notes && props.isGroup !== true && props.channelId !== undefined;
+  // A group whose identity tap opens Group info: Starred is a tab there (FT46).
+  const groupInfoInHeader = props.isGroup === true && props.onOpenInfo !== undefined;
   // The Contact sheet's role line is the header's resting line: never typing,
   // so it reads "role · workspace" from the same source.
   const contactRoleLine = dmHeaderLine({
@@ -5900,7 +6067,12 @@ function MessageThreadView(props: MessageThreadProps): ReactElement {
         }
       : {}),
     ...(onDeleteMessages !== undefined && !selecting
-      ? { onDeleteMessage: (message: ThreadMessage) => setDeleteOneFor(message) }
+      ? {
+          onDeleteMessage: (message: ThreadMessage) => {
+            if (deleteHasUndo(message)) deleteWithUndo(message);
+            else setDeleteOneFor(message);
+          },
+        }
       : {}),
     ...(onEditMessage !== undefined && !selecting ? { onEditMessage: startEdit } : {}),
     ...(canForwardHere && !selecting
@@ -5998,7 +6170,8 @@ function MessageThreadView(props: MessageThreadProps): ReactElement {
                   ? { onOpenContact: props.onOpenInfo }
                   : {})}
             />
-            {channelId !== undefined && starStore !== null ? (
+            {/* FT46: a group's Starred lives in Group info (its Starred tab). */}
+            {channelId !== undefined && starStore !== null && !groupInfoInHeader ? (
               <IconButton label={STARRED_HEADER_LABEL} onClick={() => setStarredOpen(true)}>
                 <IconStar size={20} />
               </IconButton>
@@ -6011,11 +6184,7 @@ function MessageThreadView(props: MessageThreadProps): ReactElement {
                 <IconSearch size={20} />
               </IconButton>
             ) : null}
-            {props.onOpenInfo !== undefined ? (
-              <IconButton label="Group info" onClick={props.onOpenInfo}>
-                <InfoGlyph size={20} />
-              </IconButton>
-            ) : null}
+            {/* FT46: no Info icon; the identity tap opens Group info. */}
           </>
         )}
       </div>
@@ -6083,6 +6252,7 @@ function MessageThreadView(props: MessageThreadProps): ReactElement {
           onOpenThread={openThread}
           threads={mainThreads}
           loading={bodyLoading}
+          {...(channelId !== undefined ? { olderKey: channelOlderKey(channelId) } : {})}
           {...(props.loadFailed !== undefined ? { loadFailed: props.loadFailed } : {})}
           {...(props.onRetryLoad !== undefined ? { onRetryLoad: props.onRetryLoad } : {})}
           onReply={handleReply}
@@ -6131,6 +6301,9 @@ function MessageThreadView(props: MessageThreadProps): ReactElement {
         />
       ) : null}
       <TypingIndicator ids={props.typingUserIds} profiles={props.profiles} />
+      {view === null && selectionBar === null && (props.currentUserId ?? '') !== '' ? (
+        <ThreadHoldTip userId={props.currentUserId ?? ''} />
+      ) : null}
       {view === null && selectionBar !== null ? (
         selectionBar
       ) : (
@@ -6348,6 +6521,7 @@ function MessageThreadView(props: MessageThreadProps): ReactElement {
             loadingOlder={threadView.loadingOlder}
             hasMore={view.hasMore}
             onLoadOlder={threadView.loadOlder}
+            olderKey={threadOlderKey(view.rootId)}
             loadOlderRow
           />
           {selectionBar ?? (
