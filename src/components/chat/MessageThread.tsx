@@ -6428,6 +6428,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         : null}
       {onForward !== undefined && forwardChannels !== undefined ? (
         <ForwardPicker
+          historyStep
           open={forwardFor !== null && forwardFor.length > 0}
           onClose={() => setForwardFor(null)}
           channels={forwardChannels}

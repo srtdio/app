@@ -98,8 +98,10 @@ describe('X7 FT40: system Back closes only the sheet', () => {
 
   it('Forward, Schedule, Who reacted and Reminder push their own step; Message info has one', () => {
     expect(source('../ForwardPicker.tsx')).toContain(
-      'useHistoryStep(props.open, SHEET_STEP_KEYS.forward, props.onClose)',
+      'useHistoryStep(props.open && props.historyStep === true, SHEET_STEP_KEYS.forward, props.onClose)',
     );
+    // The chat's own picker opts in; the Tasks sheet's nested one (X4) does not.
+    expect(source('../MessageThread.tsx')).toMatch(/<ForwardPicker\s+historyStep\s/);
     expect(source('../ScheduleSheet.tsx')).toContain(
       'useHistoryStep(props.open, SHEET_STEP_KEYS.schedule, props.onClose)',
     );
