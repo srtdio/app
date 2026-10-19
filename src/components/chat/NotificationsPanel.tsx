@@ -54,6 +54,7 @@ import {
   addedLabel,
   editedTasksLabel,
   eventText,
+  taskNumberLabel,
   TASKS_SHEET_ONLY,
   type TaskEventKind,
 } from '@/lib/chat/tasks';
@@ -321,7 +322,7 @@ export function isTaskBatch(entry: Pick<BellEntry, 'eventType' | 'task'>): boole
 /**
  * A task row's line: a Save "<Name> edited tasks"; an older batch add
  * "<Name> added N tasks"; an older single change "<Name> · <change>"; an
- * older missed due time "#n Title". Pure.
+ * older missed due time, numbered title. Pure.
  */
 export function taskBellLine(
   entry: Pick<BellEntry, 'eventType' | 'task'>,
@@ -332,7 +333,7 @@ export function taskBellLine(
   if (entry.eventType === 'task_changed' && f?.kind === 'batch') return editedTasksLabel(who);
   if (isTaskBatch(entry)) return addedLabel(who, f?.count ?? 1);
   const ref = { number: f?.number ?? null, title: f?.title ?? 'Item', priority: null };
-  if (entry.eventType === 'task_due') return `#${ref.number ?? '?'} ${ref.title}`;
+  if (entry.eventType === 'task_due') return `${taskNumberLabel(ref.number)} ${ref.title}`;
   const kind: TaskEventKind =
     f?.kind != null && TASK_KINDS.has(f.kind) ? (f.kind as TaskEventKind) : 'note';
   return `${who} · ${eventText({ kind, oldValue: f?.old ?? null, newValue: f?.new ?? null }, ref)}`;

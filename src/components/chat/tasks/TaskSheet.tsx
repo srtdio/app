@@ -559,7 +559,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           <div className="flex min-w-0 flex-1 flex-col">
             <h2 className="text-[15px] font-semibold text-fg">{TASK_SHEET_TITLE}</h2>
             {editingLine !== null ? (
-              <p data-task-editing="" className="truncate text-[12px] text-fg-2">
+              <p data-task-editing="" className="truncate text-xs text-fg-2">
                 {editingLine}
               </p>
             ) : null}

@@ -77,7 +77,7 @@ export function PriorityChip(props: {
     <span
       data-task-p={props.priority}
       className={cn(
-        'inline-flex h-[22px] items-center gap-0.5 rounded-[5px] px-1.5 font-mono text-[12px] leading-[22px]',
+        'inline-flex h-[22px] items-center gap-0.5 rounded-[5px] px-1.5 font-mono text-xs leading-[22px]',
         P_TAG[props.priority],
         props.ringed === true && 'ring-2 ring-accent ring-offset-1 ring-offset-panel',
       )}
@@ -195,9 +195,7 @@ function PriorityMenu(props: {
             NO_TOUCH_SELECT,
           )}
         >
-          <span
-            className={cn('rounded-[5px] px-1.5 font-mono text-[12px] leading-[22px]', P_TAG[p])}
-          >
+          <span className={cn('rounded-[5px] px-1.5 font-mono text-xs leading-[22px]', P_TAG[p])}>
             P{p}
           </span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>

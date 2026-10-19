@@ -613,9 +613,14 @@ export function batchRows(event: TaskEvent, ref: TaskRef): BatchRow[] {
   }
 }
 
+/** A task's number as shown in lines and the bell: "#12", or "#?" when unknown. Pure. */
+export function taskNumberLabel(n: number | null): string {
+  return `#${n ?? '?'}`;
+}
+
 /** A batch row as plain text (tests, the bell, screen readers). Pure. */
 export function batchRowText(row: BatchRow): string {
-  const n = `#${row.number ?? '?'}`;
+  const n = taskNumberLabel(row.number);
   switch (row.kind) {
     case 'added':
       return `Added ${n} ${row.title}${row.priority !== null ? ` · P${row.priority}` : ''}`;
@@ -637,7 +642,7 @@ export function eventText(
   event: Pick<TaskEvent, 'kind' | 'oldValue' | 'newValue'>,
   ref: TaskRef,
 ): string {
-  const n = `#${ref.number ?? '?'}`;
+  const n = taskNumberLabel(ref.number);
   switch (event.kind) {
     case 'created':
       return `added ${n} ${event.newValue ?? ref.title}`;

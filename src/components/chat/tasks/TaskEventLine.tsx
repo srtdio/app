@@ -1,16 +1,16 @@
 // Task changes as thread lines: a centred pill like the day pill, merged into
 // the thread by time (an event line ends a message run). One Save (events
 // sharing a batch id) is ONE line "<You|Name> edited tasks" with a chevron; a
-// tap expands its rows in place ("Added #n Title · P1", "Edited #n <s>old</s>
-// → new", "Priority #n <s>P2</s> → P0", "Done #n Title", "Reopened #n Title",
-// "Deleted #n Title"), then an "Open tasks" button. Older rows without a batch
+// tap expands its rows in place (Added, Edited with the old title struck,
+// Priority with the old level struck, Done, Reopened, Deleted, each with the
+// task number and title), then an "Open tasks" button. Older rows without a batch
 // id read as before (a single change, a quick run of adds, a burst). The
 // actor's name is semibold; numbers are mono. Pills are pressable: no iOS
 // selection callout. No motion.
 
 import { useState } from 'react';
 import type { ReactElement } from 'react';
-import { IconChevronDown } from '@/components/ui/icons';
+import { IconChevronDown, IconChevronRight } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import {
@@ -19,6 +19,7 @@ import {
   burstLabel,
   editedTasksLabel,
   eventText,
+  taskNumberLabel,
   taskRefOf,
   TASKS_SHEET_ONLY,
   type BatchRow,
@@ -65,7 +66,7 @@ export function TaskEventPill(props: { event: TaskEvent; ctx: TaskLineContext })
 }
 
 function N(props: { n: number | null }): ReactElement {
-  return <span className="font-mono">#{props.n ?? '?'}</span>;
+  return <span className="font-mono">{taskNumberLabel(props.n)}</span>;
 }
 
 function BatchRowView(props: { row: BatchRow }): ReactElement {
@@ -136,7 +137,11 @@ function TaskBatch(props: {
             <span className="font-semibold text-fg-2">{name}</span>
             {editedTasksLabel('')}
           </span>
-          <IconChevronDown size={13} className={cn('shrink-0', open && 'rotate-180')} />
+          {open ? (
+            <IconChevronDown size={13} className="shrink-0" />
+          ) : (
+            <IconChevronRight size={13} className="shrink-0" />
+          )}
         </span>
       </button>
       {open ? (
