@@ -245,7 +245,12 @@ function onPopstate(): void {
     top.onExit();
     return;
   }
+  // The same entry adopted by more than one layer (two bell providers landing
+  // on one kept entry) is one step: every adopter closes with it.
+  const id = idOf(top);
+  const peers = openSteps.filter((s) => s !== top && s.active && s.pushed && idOf(s) === id);
   finish(top, !top.guard);
+  for (const peer of peers) if (peer.active) finish(peer, true);
 }
 
 /**

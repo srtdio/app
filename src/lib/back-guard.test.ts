@@ -221,6 +221,30 @@ describe('a guard over a chat history step keeps the chat layer', () => {
   });
 });
 
+describe('one kept entry adopted by two layers (the two bell providers)', () => {
+  it('Back closes both adopters, so the layer that shows the sheet closes too', () => {
+    const win = queuedWindow([PIPELINE, LIST]);
+    const kept = enterHistoryStep(win, HISTORY_STEP_KEYS.bell, vi.fn());
+    kept.detach();
+    win.write(CHAT_A);
+    back(win);
+    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.bell)).not.toBeNull();
+    const primaryExit = vi.fn();
+    const chatExit = vi.fn();
+    enterHistoryStep(win, HISTORY_STEP_KEYS.bell, primaryExit, { adopt: true });
+    enterHistoryStep(win, HISTORY_STEP_KEYS.bell, chatExit, { adopt: true });
+    expect(win.index()).toBe(2);
+    back(win);
+    expect(primaryExit).toHaveBeenCalledOnce();
+    expect(chatExit).toHaveBeenCalledOnce();
+    expect(win.url()).toBe(LIST);
+    expect(win.index()).toBe(1);
+    expect(win.listeners()).toBe(0);
+    back(win);
+    expect(win.url()).toBe(PIPELINE);
+  });
+});
+
 describe('a guard on a non-chat page (no step under it)', () => {
   it('blocks Back off the route and asks; release lets the next Back leave', () => {
     const win = queuedWindow([LIST, PIPELINE]);
