@@ -20,14 +20,13 @@ import {
 } from '../fixtures/assets-recently-deleted';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
-// Recently deleted: a delete refused with asset_in_use explains where the file
-// is used; a delete moves the file to Recently deleted (31 days); the profile
+// Recently deleted: a delete hides the file behind an Undo toast and commits
+// when the toast ends; a delete refused with asset_in_use explains where the
+// file is used; a delete moves the file to Recently deleted (31 days); the profile
 // menu opens the list; the owner restores, deletes one now or empties it all
 // through the asset-upload Worker's /purge; a member can only restore.
 // Every test is tagged @theme so it runs in light and dark.
 
-const DELETE_CONFIRM =
-  'It moves to Recently deleted and is gone for good after 31 days. It keeps using storage until then, unless the owner empties it earlier.';
 const HINT =
   'Files stay here 31 days, then are deleted for good. They still count toward storage until then.';
 const DELETE_NOW_CONFIRM = "Gone for good. Nothing is saved, and this can't be undone.";
@@ -75,15 +74,23 @@ async function expectTranslateYOnly(el: Locator): Promise<void> {
     .toMatch(/^(none|matrix\(1, 0, 0, 1, 0, -?[\d.]+\))$/);
 }
 
-/** Open a library image in the viewer, then its Info and the Delete confirm. */
-async function openDeleteConfirm(page: Page, name: string): Promise<Locator> {
+/** Open a library image in the viewer and press the bottom bar's Delete. */
+async function deleteFromViewer(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: `View ${name}`, exact: true }).click();
-  await page.getByRole('button', { name: 'Info', exact: true }).click();
-  const details = page.getByLabel(`Details for ${name}`);
-  await details.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(details.getByText(`Delete ${name}?`, { exact: true })).toBeVisible();
-  await expect(details.getByText(DELETE_CONFIRM, { exact: true })).toBeVisible();
-  return details;
+  const viewer = page.getByLabel(`Viewing ${name}`);
+  const del = viewer.getByRole('button', { name: 'Delete', exact: true });
+  expectMinTouchTarget(await del.boundingBox());
+  await del.click();
+  await expect(viewer).toHaveCount(0);
+}
+
+/** The shell's Undo toast for a one-file delete. */
+const undoToast = (page: Page): Locator =>
+  page.locator('[role="status"][aria-live="polite"] > div').filter({ hasText: 'File deleted' });
+
+/** End the Undo window early: the toast's X accepts, so the delete commits. */
+async function commitDelete(page: Page): Promise<void> {
+  await undoToast(page).getByRole('button', { name: 'Dismiss notification' }).click();
 }
 
 const deletedRow = (page: Page, name: string): Locator =>
@@ -94,8 +101,8 @@ test('a delete refused with asset_in_use opens Used in a post with Open post @th
 }) => {
   const s = await setup(page);
   await page.goto('/assets');
-  const details = await openDeleteConfirm(page, IN_USE_NAME);
-  await details.getByRole('button', { name: 'Delete', exact: true }).click();
+  await deleteFromViewer(page, IN_USE_NAME);
+  await commitDelete(page);
 
   const sheet = page.getByRole('dialog', { name: 'Used in a post' });
   await expect(sheet).toBeVisible();
@@ -124,32 +131,39 @@ test('a delete refused with asset_in_use opens Used in a post with Open post @th
   // OK closes; a second refusal's Open post opens the parent post.
   await ok.click();
   await expect(sheet).toBeHidden();
-  const again = await openDeleteConfirm(page, IN_USE_NAME);
-  await again.getByRole('button', { name: 'Delete', exact: true }).click();
+  await deleteFromViewer(page, IN_USE_NAME);
+  await commitDelete(page);
   await sheet.getByRole('button', { name: 'Open post', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/posts/${inUsePostId(s.network)}$`));
   finish(s, [/status of 400/]);
 });
 
-test('Delete confirms, moves the file to Recently deleted and the profile menu opens it @theme', async ({
+test('Delete hides the file with Undo, then moves it to Recently deleted and the profile menu opens it @theme', async ({
   page,
 }) => {
   const s = await setup(page);
   await page.goto('/assets');
   // No Recently deleted row under the library any more; it lives in the profile menu.
   await expect(page.getByRole('button', { name: /^Recently deleted/ })).toHaveCount(0);
+  const card = page.getByRole('button', { name: `View ${FREE_NAME}`, exact: true });
 
-  const details = await openDeleteConfirm(page, FREE_NAME);
-  // Soft: the viewer's confirm buttons pass className h-11 next to Button's
-  // default h-9 (cn does not merge), so they render 36px. Product bug, reported.
-  for (const label of ['Cancel', 'Delete']) {
-    const box = await details.getByRole('button', { name: label, exact: true }).boundingBox();
-    expect(box?.height ?? 0, `${label} touch target height`).toBeGreaterThanOrEqual(43.99);
-  }
-  await details.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(toast(page, 'Moved to Recently deleted')).toBeVisible();
-  await expect(page.getByLabel(`Viewing ${FREE_NAME}`)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: `View ${FREE_NAME}`, exact: true })).toHaveCount(0);
+  // Delete hides the file at once; Undo brings it back and nothing is sent.
+  await deleteFromViewer(page, FREE_NAME);
+  await expect(card).toHaveCount(0);
+  const undo = undoToast(page).locator('[data-toast-action]');
+  await expect(undo).toHaveText('Undo');
+  expectMinTouchTarget(await undo.boundingBox());
+  await undo.click();
+  await expect(card).toBeVisible();
+  expect(s.calls.rpc).toEqual([]);
+
+  // Delete again and let the window end: the soft-delete commits once.
+  await deleteFromViewer(page, FREE_NAME);
+  await expect(card).toHaveCount(0);
+  await commitDelete(page);
+  await expect(undoToast(page)).toHaveCount(0);
+  await expect(card).toHaveCount(0);
+  await expect.poll(() => s.calls.rpc.length).toBe(1);
   expect(s.calls.rpc).toEqual([
     { name: 'asset_delete', args: { p_asset_id: FREE_ID, p_trace_id: expect.any(String) } },
   ]);

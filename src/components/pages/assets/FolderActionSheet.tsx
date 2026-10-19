@@ -1,11 +1,17 @@
 import { useState } from 'react';
-import { IconFolder, IconTrash } from '@/components/ui/icons';
+import { IconCopy, IconEdit, IconFolder, IconTrash } from '@/components/ui/icons';
 import type { FolderDeleteOutcome } from '@/lib/asset-upload';
 
 interface FolderActionSheetProps {
   /** The folder this sheet acts on; shown in the header and the confirm copy. */
   name: string;
   onClose: () => void;
+  /** Open this folder (the page closes the sheet first). */
+  onOpen?: (() => void) | undefined;
+  /** Copy the folder's in-app link (/assets?folder=<id>). */
+  onCopyLink?: (() => void) | undefined;
+  /** Rename and Delete are owner/admin/agency only; everyone gets Open and Copy link. */
+  canManage?: boolean;
   /** Open the rename sheet for this folder (the page closes the action sheet first). */
   onRename: () => void;
   /** Commit: POST to the worker's /folders/delete route, reporting the outcome. */
@@ -41,6 +47,17 @@ function Row({
   );
 }
 
+/** One row of the folder menu, in display order. */
+export type FolderMenuRow = 'open' | 'copy' | 'rename' | 'delete';
+
+/**
+ * The folder menu's rows in order, matching the file menu: Open, Copy link,
+ * Rename, and a destructive Delete last (the last two for managers only). Pure.
+ */
+export function folderMenuRows(canManage: boolean): FolderMenuRow[] {
+  return canManage ? ['open', 'copy', 'rename', 'delete'] : ['open', 'copy'];
+}
+
 /**
  * Run the delete-confirm flow: call onConfirmDelete and, on success, toast and
  * close; on failure surface the mapped message and leave the sheet open. Pure
@@ -62,9 +79,9 @@ export async function confirmDeleteFolder(args: {
 }
 
 /**
- * Bottom action sheet opened by a long-press on a folder card (owner/admin/
- * agency only; the affordance is hidden for everyone else). The default view
- * offers Rename and a destructive Delete; Delete swaps to an in-sheet confirm
+ * Bottom action sheet opened by a folder card's ⋯ or a long-press. The default
+ * view offers Open and Copy link, plus Rename and a destructive Delete for
+ * owner/admin/agency; Delete swaps to an in-sheet confirm
  * that detaches the folder's contents to the root on commit. Mirrors
  * AssetActionSheet's container and Row. Theme tokens only so light and dark
  * match; rows are >=44px (h-12).
@@ -72,6 +89,9 @@ export async function confirmDeleteFolder(args: {
 export function FolderActionSheet({
   name,
   onClose,
+  onOpen,
+  onCopyLink,
+  canManage = true,
   onRename,
   onConfirmDelete,
   onToast,
@@ -125,13 +145,42 @@ export function FolderActionSheet({
           </div>
         ) : (
           <>
-            <Row icon={<IconFolder size={18} />} label="Rename" onClick={onRename} />
-            <Row
-              icon={<IconTrash size={18} />}
-              label="Delete folder"
-              onClick={() => setConfirming(true)}
-              destructive
-            />
+            {folderMenuRows(canManage).map((row) => {
+              switch (row) {
+                case 'open':
+                  return onOpen !== undefined ? (
+                    <Row key={row} icon={<IconFolder size={18} />} label="Open" onClick={onOpen} />
+                  ) : null;
+                case 'copy':
+                  return onCopyLink !== undefined ? (
+                    <Row
+                      key={row}
+                      icon={<IconCopy size={18} />}
+                      label="Copy link"
+                      onClick={onCopyLink}
+                    />
+                  ) : null;
+                case 'rename':
+                  return (
+                    <Row
+                      key={row}
+                      icon={<IconEdit size={18} />}
+                      label="Rename"
+                      onClick={onRename}
+                    />
+                  );
+                case 'delete':
+                  return (
+                    <Row
+                      key={row}
+                      icon={<IconTrash size={18} />}
+                      label="Delete folder"
+                      onClick={() => setConfirming(true)}
+                      destructive
+                    />
+                  );
+              }
+            })}
           </>
         )}
       </div>

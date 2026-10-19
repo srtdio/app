@@ -102,7 +102,7 @@ export function AssetAddMenu({
             <span className="shrink-0 text-fg-3">
               <IconCheck size={18} />
             </span>
-            <span>Select files to move</span>
+            <span>Select</span>
           </button>
         ) : null}
       </MenuPopover>
