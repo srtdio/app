@@ -12,8 +12,9 @@ import {
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // The Plan panel on a laptop (stories A to F, the panel widths by window
-// width, Escape ownership both ways, pick-up cancel, removal focus, the toast
-// rules, Activity kept mounted) and the phone (story E: a full page whose Edit
+// width, Escape ownership both ways, Edit mode's grip drag, day chip, right
+// click menu and keyboard move with every change queued until Save changes
+// (X3), pick-up cancel, removal focus, Activity kept mounted) and the phone (story E: a full page whose Edit
 // mode shows the grip, day chip and remove per row; nothing written until Save).
 // @desktop tests run on desktop-webkit (1280x800, others set their own size)
 // and skip below md; the untagged phone test runs on the iPhone projects. Fixture names are
@@ -113,14 +114,6 @@ async function openPanel(page: Page): Promise<{ panel: Locator; boxes: string[] 
   return { panel, boxes };
 }
 
-/** The toast that says `text`, and its Undo. */
-const toastOf = (page: Page, text: string): Locator =>
-  page
-    .getByText(text, { exact: true })
-    .locator('xpath=ancestor::div[.//button[@aria-label="Dismiss notification"]][1]');
-const undoOf = (page: Page, text: string): Locator =>
-  toastOf(page, text).locator('[data-toast-action]');
-
 /** The scroll box of the panel's list. */
 const listBody = (panel: Locator): Locator => panel.locator('[data-plan-list]').locator('xpath=..');
 
@@ -168,7 +161,26 @@ async function gripDrag(page: Page, panel: Locator, id: string, target: () => Pr
   await expect(page.locator('[data-plan-drag-card]')).toHaveCount(0);
 }
 
-test('A: the panel docks at full size, opens on today, chat scrolls beside it; a mouse drag moves a post Tue to Thu, and Pipeline shows Thu @desktop', async ({
+/** Edit mode (X3): the header's Edit button, then the edit header with its fields. */
+async function enterEdit(panel: Locator): Promise<void> {
+  await panel.locator('[data-plan-edit]').click();
+  await expect(panel.locator('[data-plan-edit-header]')).toBeVisible();
+}
+
+/** Save changes: the toast, then view mode again. */
+async function saveChanges(page: Page, panel: Locator): Promise<void> {
+  await panel.locator('[data-plan-save]').click();
+  await expect(page.getByText('Plan saved', { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-plan-edit-header]')).toHaveCount(0);
+}
+
+const saves = (network: HarnessNetwork) => network.rpcCalls.filter((c) => c.name === 'plan_save');
+const opsOf = (call: { args: Record<string, unknown> } | undefined) =>
+  (call?.args.p_ops ?? []) as Array<Record<string, unknown>>;
+const removes = (network: HarnessNetwork) =>
+  network.rpcCalls.filter((c) => c.name === 'plan_item_remove');
+
+test('A: the panel docks at full size, opens on today, chat scrolls beside it; in Edit a mouse drag moves a post Tue to Thu, Save writes it, and Pipeline shows Thu @desktop', async ({
   page,
 }) => {
   laptopOnly(page);
@@ -220,9 +232,12 @@ test('A: the panel docks at full size, opens on today, chat scrolls beside it; a
   await page.mouse.wheel(0, -400);
   await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).not.toBe(before);
 
-  // Drag "Thank you note" (a post) from Tue 13 to Thu 15 by its grip.
+  // Edit, then drag "Thank you note" (a post) from Tue 13 to Thu 15 by its
+  // grip: painted at once, queued; nothing is written until Save changes.
   const post = dated('Thank you note');
   expect(await titlesOn(panel, '2026-10-13')).toContain('Thank you note');
+  await expect(panel.locator('[data-plan-grip]')).toHaveCount(0);
+  await enterEdit(panel);
   await gripDrag(page, panel, post.id, async () => {
     const first = await dayBlock(panel, '2026-10-15')
       .locator('[data-plan-row-wrap]')
@@ -231,10 +246,15 @@ test('A: the panel docks at full size, opens on today, chat scrolls beside it; a
     if (first === null) throw new Error('target');
     return first.y + 4;
   });
-  // D2: a post names the Pipeline date; nothing was reset, so Undo.
-  await expect(undoOf(page, 'Moved to Thu 15 Oct. Pipeline date updated.')).toHaveText('Undo');
   await expect.poll(() => titlesOn(panel, '2026-10-15')).toContain('Thank you note');
-  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toHaveLength(1);
+  expect(saves(network)).toEqual([]);
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toEqual([]);
+  await saveChanges(page, panel);
+  expect(saves(network)).toHaveLength(1);
+  expect(opsOf(saves(network)[0])).toEqual([
+    expect.objectContaining({ op: 'move', item_id: post.id, target_date: '2026-10-15' }),
+  ]);
+  await expect.poll(() => titlesOn(panel, '2026-10-15')).toContain('Thank you note');
 
   // F15: closing hands focus back to the card's Open plan.
   await panel.locator('[data-plan-close]').click();
@@ -249,7 +269,7 @@ test('A: the panel docks at full size, opens on today, chat scrolls beside it; a
   expectClean(network);
 });
 
-test('B: reorder inside Wed by mouse, the calendar moves one to Fri, the dustbin removes one and Undo restores it @desktop', async ({
+test('B: Edit: reorder inside Wed by the grip, the day chip moves one to Fri, remove hides one; Discard restores it all; Save writes the queue once @desktop', async ({
   page,
 }) => {
   laptopOnly(page);
@@ -260,109 +280,122 @@ test('B: reorder inside Wed by mouse, the calendar moves one to Fri, the dustbin
   await openChat(page);
   const { panel } = await openPanel(page);
   expect(await titlesOn(panel, '2026-10-14')).toEqual(['Lantern workshop', 'Morning prayers']);
+  const lantern = dated('Lantern workshop');
+  const prayers = dated('Morning prayers');
+  const lanternRow = panel.locator(`[data-plan-row="${lantern.id}"]`);
+  const prayersRow = panel.locator(`[data-plan-row="${prayers.id}"]`);
+  await enterEdit(panel);
 
-  await gripDrag(page, panel, dated('Morning prayers').id, async () => {
-    const first = await dayBlock(panel, '2026-10-14')
-      .locator('[data-plan-row-wrap]')
-      .first()
-      .boundingBox();
-    if (first === null) throw new Error('target');
-    return first.y + 4;
-  });
-  await expect
-    .poll(() => titlesOn(panel, '2026-10-14'))
-    .toEqual(['Morning prayers', 'Lantern workshop']);
+  const reorder = async (): Promise<void> => {
+    await gripDrag(page, panel, prayers.id, async () => {
+      const first = await dayBlock(panel, '2026-10-14')
+        .locator('[data-plan-row-wrap]')
+        .first()
+        .boundingBox();
+      if (first === null) throw new Error('target');
+      return first.y + 4;
+    });
+    await expect
+      .poll(() => titlesOn(panel, '2026-10-14'))
+      .toEqual(['Morning prayers', 'Lantern workshop']);
+  };
+  await reorder();
 
-  // Calendar: an anchored popover (not a sheet) of the plan's days, counts, current marked.
-  const lantern = panel.locator(`[data-plan-row-wrap="${dated('Lantern workshop').id}"]`);
-  const calendar = lantern.locator('[data-plan-row-calendar]');
-  const bin = lantern.locator('[data-plan-row-bin]');
-  for (const b of [calendar, bin]) {
-    const r = await b.boundingBox();
-    expect(r?.width).toBe(36);
-    expect(r?.height).toBe(44);
-  }
-  await calendar.click();
-  const pop = page.locator('[data-plan-day-popover="days"]');
-  await expect(pop).toBeVisible();
-  await expect(page.locator('[role="dialog"][aria-modal="true"]')).toHaveCount(0);
-  await expect(pop.locator('[data-plan-popover-day="2026-10-14"]')).toHaveAttribute(
+  // The day chip (44px) and the remove (44x44) sit right of the text; the chip
+  // opens the day picker with the plan's days, their counts and the current
+  // day marked. Picking Fri moves the row at once (queued).
+  const lanternWrap = panel.locator(`[data-plan-row-wrap="${lantern.id}"]`);
+  const chip = lanternWrap.locator('[data-plan-row-day-chip]');
+  const remove = lanternWrap.locator('[data-plan-row-remove-edit]');
+  expectMinTouchTarget(await chip.boundingBox());
+  const removeBox = await remove.boundingBox();
+  expect(removeBox?.width).toBe(44);
+  expect(removeBox?.height).toBe(44);
+  await expect(chip).toHaveText(/Wed 14/);
+  const moveToFri = async (): Promise<void> => {
+    await chip.click();
+    const picker = page.locator('[data-plan-day-picker]');
+    await expect(picker).toBeVisible();
+    await expect(picker.locator('[data-plan-day-tile="2026-10-14"]')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(picker.locator('[data-plan-day-tile="2026-10-14"]')).toContainText('2 items');
+    await picker.locator('[data-plan-day-tile="2026-10-16"]').click();
+    await expect(picker).toBeHidden();
+    await expect
+      .poll(() => titlesOn(panel, '2026-10-16'))
+      .toEqual(['Rangoli timelapse', 'Lantern workshop']);
+    await expect(chip).toHaveText(/Fri 16/);
+  };
+  await moveToFri();
+  expect(saves(network)).toEqual([]);
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toEqual([]);
+
+  // Remove: hidden at once, nothing sent; F8: focus moves to a row, never the page.
+  const pw = panel.locator(`[data-plan-row-wrap="${prayers.id}"]`);
+  await pw.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await pw.locator('[data-plan-row-remove-edit]').click();
+  await expect(prayersRow).toHaveCount(0);
+  await expect(page.getByText('Removed from plan')).toHaveCount(0);
+  await expect.poll(() => focusedIs(page, 'button[data-plan-row]')).toBe(true);
+  expect(removes(network)).toEqual([]);
+
+  // Right-click: the same days plus Remove from plan (danger); Esc closes
+  // only the menu; its Remove queues too.
+  await lanternRow.click({ button: 'right' });
+  const menu = page.locator('[data-plan-day-popover="menu"]');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('[data-plan-popover-day="2026-10-16"]')).toHaveAttribute(
     'aria-current',
     'true',
   );
-  await expect(pop.locator('[data-plan-popover-day="2026-10-14"]')).toContainText('2');
-  await expect(pop.locator('[data-plan-popover-remove]')).toHaveCount(0);
-  // F9: it follows its row on scroll (it stays against its button, below or above).
-  const adjacent = async (): Promise<boolean> => {
-    const c = await calendar.boundingBox();
-    const p = await pop.boundingBox();
-    if (c === null || p === null) return false;
-    const below = Math.abs(p.y - (c.y + c.height + 4)) <= 1;
-    const above = Math.abs(p.y + p.height - (c.y - 4)) <= 1;
-    // Capped at the viewport's 8px edge above it: still clear of its button.
-    const capped = Math.abs(p.y - 8) <= 1 && p.y + p.height <= c.y - 3;
-    return below || above || capped;
-  };
-  expect(await adjacent()).toBe(true);
-  await listBody(panel).evaluate((el) => {
-    el.scrollTop += 40;
-  });
-  await expect.poll(adjacent).toBe(true);
-  await pop.locator('[data-plan-popover-day="2026-10-16"]').click();
-  await expect(pop).toHaveCount(0);
-  // D2: a concept, no Pipeline mention, Undo.
-  await expect(undoOf(page, 'Moved to Fri 16 Oct.')).toHaveText('Undo');
-  await expect
-    .poll(() => titlesOn(panel, '2026-10-16'))
-    .toEqual(['Rangoli timelapse', 'Lantern workshop']);
-
-  // Popover closes when its row scrolls out of the list's view.
-  await calendar.click();
-  await expect(pop).toBeVisible();
-  await listBody(panel).evaluate((el) => {
-    el.scrollTop = 0;
-  });
-  await listBody(panel).evaluate((el) => {
-    el.scrollTop = el.scrollHeight;
-  });
-  await expect(pop).toHaveCount(0);
-
-  // Dustbin: hidden at once, the write waits for the toast; focus moves on; Undo puts it back.
-  const prayers = dated('Morning prayers');
-  const pw = panel.locator(`[data-plan-row-wrap="${prayers.id}"]`);
-  await pw.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await pw.locator('[data-plan-row-bin]').click();
-  await expect(page.getByText('Removed from plan')).toBeVisible();
-  await expect(panel.locator(`[data-plan-row="${prayers.id}"]`)).toHaveCount(0);
-  // F8: Wed is now empty: focus is on Wed's Add.
-  await expect
-    .poll(() => focusedIs(page, '[data-plan-day="2026-10-14"] [data-plan-add]'))
-    .toBe(true);
-  await undoOf(page, 'Removed from plan').click();
-  await expect(panel.locator(`[data-plan-row="${prayers.id}"]`)).toHaveCount(1);
-  // F8: on Undo focus returns to the restored row.
-  await expect.poll(() => focusedIs(page, `button[data-plan-row="${prayers.id}"]`)).toBe(true);
-  await page.waitForTimeout(400);
-  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_remove')).toEqual([]);
-
-  // Right-click: the same days plus Remove from plan (danger); Esc closes only the menu.
-  await panel.locator(`[data-plan-row="${prayers.id}"]`).click({ button: 'right' });
-  const menu = page.locator('[data-plan-day-popover="menu"]');
   await expect(menu.locator('[data-plan-popover-remove]')).toHaveText('Remove from plan');
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
   await expect(panel).toBeVisible();
-  // Menu Remove: focus goes to the next row (Wed is empty after it: its Add).
-  await panel.locator(`[data-plan-row="${prayers.id}"]`).click({ button: 'right' });
+  await expect(panel.locator('[data-plan-edit-header]')).toBeVisible();
+  await lanternRow.click({ button: 'right' });
   await menu.locator('[data-plan-popover-remove]').click();
-  await expect
-    .poll(() => focusedIs(page, '[data-plan-day="2026-10-14"] [data-plan-add]'))
-    .toBe(true);
+  await expect(lanternRow).toHaveCount(0);
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
+
+  // Cancel asks; Discard puts everything back as it was; nothing was sent.
+  await panel.locator('[data-plan-back-text]').click();
+  const discard = page.getByRole('alertdialog', { name: 'Discard changes?' });
+  await expect(discard).toBeVisible();
+  await discard.getByRole('button', { name: 'Discard' }).click();
+  await expect(discard).toBeHidden();
+  await expect(panel.locator('[data-plan-edit-header]')).toHaveCount(0);
+  expect(await titlesOn(panel, '2026-10-14')).toEqual(['Lantern workshop', 'Morning prayers']);
+  expect(await titlesOn(panel, '2026-10-16')).toEqual(['Rangoli timelapse']);
+  await page.waitForTimeout(400);
+  expect(saves(network)).toEqual([]);
+  expect(removes(network)).toEqual([]);
+
+  // The same three edits, then Save: one plan_save with the ops in order.
+  await enterEdit(panel);
+  await reorder();
+  await moveToFri();
+  await pw.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await pw.locator('[data-plan-row-remove-edit]').click();
+  await expect(prayersRow).toHaveCount(0);
+  await saveChanges(page, panel);
+  expect(saves(network)).toHaveLength(1);
+  const ops = opsOf(saves(network)[0]);
+  expect(ops.map((op) => op.op)).toEqual(['move', 'move', 'remove']);
+  expect(ops[0]).toMatchObject({ item_id: prayers.id, target_date: '2026-10-14' });
+  expect(ops[1]).toMatchObject({ item_id: lantern.id, target_date: '2026-10-16' });
+  expect(ops[2]).toMatchObject({ item_id: prayers.id });
+  await expect
+    .poll(() => titlesOn(panel, '2026-10-16'))
+    .toEqual(['Rangoli timelapse', 'Lantern workshop']);
+  expect(await titlesOn(panel, '2026-10-14')).toEqual([]);
+  expect(removes(network)).toEqual([]);
   expectClean(network);
 });
 
-test('C: keyboard only: Space picks up, Down x3 crosses into the next day, Space drops; Delete then Undo @desktop', async ({
+test('C: keyboard only (Edit): Space picks up, Down x3 crosses into the next day, Space drops; Delete hides; Save writes both @desktop', async ({
   page,
 }) => {
   laptopOnly(page);
@@ -373,18 +406,19 @@ test('C: keyboard only: Space picks up, Down x3 crosses into the next day, Space
   const { panel } = await openPanel(page);
   const lantern = dated('Lantern workshop');
   const live = panel.locator('[data-plan-live]');
+  // The keyboard move is Edit mode's: no hints and no pick-up in view mode.
+  await expect(panel.locator('[data-plan-key-hints]')).toHaveCount(0);
+  await enterEdit(panel);
+  await expect(panel.locator('[data-plan-key-hints]')).toHaveText(
+    'Drag handle to move · Space pick up, arrows move, Space drop · Del remove',
+  );
 
-  // Tab from Tue's Add to Wed's row (the grip is no tab stop).
-  await panel.locator('[data-plan-add="2026-10-13"]').focus();
-  await page.keyboard.press('Tab');
   const row = panel.locator(`button[data-plan-row="${lantern.id}"]`);
+  await row.focus();
   await expect(row).toBeFocused();
   await expect(panel.locator(`[data-plan-row-wrap="${lantern.id}"] [data-plan-grip]`)).toHaveCSS(
     'opacity',
     '1',
-  );
-  await expect(panel.locator('[data-plan-key-hints]')).toHaveText(
-    'Drag handle to move · Space pick up, arrows move, Space drop · Del remove',
   );
 
   await page.keyboard.press('Space');
@@ -397,46 +431,59 @@ test('C: keyboard only: Space picks up, Down x3 crosses into the next day, Space
   await expect(live).toHaveText('Thu 15 Oct, position 2');
   await page.keyboard.press('ArrowDown');
   await expect(live).toHaveText('Thu 15 Oct, position 3');
-  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toEqual([]);
+  expect(saves(network)).toEqual([]);
   await page.keyboard.press('Space');
   await expect(live).toHaveText('Dropped');
   await expect
     .poll(() => titlesOn(panel, '2026-10-15'))
     .toEqual(['Sweets flatlay', 'Morning prayers', 'Lantern workshop']);
-  await expect(undoOf(page, 'Moved to Thu 15 Oct.')).toHaveText('Undo');
-  await expect
-    .poll(() => network.rpcCalls.filter((c) => c.name === 'plan_item_move').length)
-    .toBe(1);
+  // Queued, not written: no toast, no request.
+  await expect(page.getByText(/^Moved to/)).toHaveCount(0);
+  expect(saves(network)).toEqual([]);
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toEqual([]);
   await expect(row).toBeFocused();
 
-  // Escape mid pick-up restores, no write, and the panel stays.
+  // Escape mid pick-up restores, and the panel stays in Edit.
   await page.keyboard.press('Space');
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('Escape');
   await expect(live).toHaveText('Move cancelled');
   await expect(panel).toBeVisible();
+  await expect(panel.locator('[data-plan-edit-header]')).toBeVisible();
   expect(await titlesOn(panel, '2026-10-15')).toEqual([
     'Sweets flatlay',
     'Morning prayers',
     'Lantern workshop',
   ]);
 
-  // Delete on another row: focus moves to the next row; Undo restores it, nothing sent.
+  // Delete on another row: hidden at once, focus moves to the next row; nothing sent.
   const sweets = dated('Sweets flatlay');
   const prayers = dated('Morning prayers');
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowUp');
   await expect(panel.locator(`button[data-plan-row="${sweets.id}"]`)).toBeFocused();
   await page.keyboard.press('Delete');
-  await expect(page.getByText('Removed from plan')).toBeVisible();
   await expect(panel.locator(`[data-plan-row="${sweets.id}"]`)).toHaveCount(0);
+  await expect(page.getByText('Removed from plan')).toHaveCount(0);
   await expect(panel.locator(`button[data-plan-row="${prayers.id}"]`)).toBeFocused();
-  await undoOf(page, 'Removed from plan').click();
-  await expect(panel.locator(`[data-plan-row="${sweets.id}"]`)).toHaveCount(1);
-  await expect(panel.locator(`button[data-plan-row="${sweets.id}"]`)).toBeFocused();
-  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_remove')).toEqual([]);
+  expect(removes(network)).toEqual([]);
 
-  // Enter opens the focused row's item in the same panel; Escape steps back to the list.
+  // Save: one plan_save with the move and the remove, in order.
+  await saveChanges(page, panel);
+  expect(saves(network)).toHaveLength(1);
+  const ops = opsOf(saves(network)[0]);
+  expect(ops.map((op) => op.op)).toEqual(['move', 'remove']);
+  expect(ops[0]).toMatchObject({ item_id: lantern.id, target_date: '2026-10-15' });
+  expect(ops[1]).toMatchObject({ item_id: sweets.id });
+  expect(removes(network)).toEqual([]);
+  await expect
+    .poll(() => titlesOn(panel, '2026-10-15'))
+    .toEqual(['Morning prayers', 'Lantern workshop']);
+
+  // View mode again: Enter opens the focused row's item in the same panel;
+  // Escape steps back to the list with its scroll and focus kept.
+  const prayersRow = panel.locator(`button[data-plan-row="${prayers.id}"]`);
+  await prayersRow.focus();
   const scroll = listBody(panel);
   const at = await scroll.evaluate((el) => el.scrollTop);
   await page.keyboard.press('Enter');
@@ -447,8 +494,7 @@ test('C: keyboard only: Space picks up, Down x3 crosses into the next day, Space
   await expect(item).toHaveCount(0);
   await expect(panel).toBeVisible();
   expect(Math.abs((await scroll.evaluate((el) => el.scrollTop)) - at)).toBeLessThanOrEqual(1);
-  // Focus is back on the row that opened it.
-  await expect(panel.locator(`button[data-plan-row="${sweets.id}"]`)).toBeFocused();
+  await expect(prayersRow).toBeFocused();
   expectClean(network);
 });
 
@@ -461,6 +507,7 @@ test('F3: a pick-up cancels when focus leaves its row (Tab, a click in the chat,
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
   await openChat(page);
   const { panel } = await openPanel(page);
+  await enterEdit(panel);
   const live = panel.locator('[data-plan-live]');
   const lantern = panel.locator(`button[data-plan-row="${dated('Lantern workshop').id}"]`);
   const thu = () => titlesOn(panel, '2026-10-15');
@@ -504,23 +551,45 @@ test('F3: a pick-up cancels when focus leaves its row (Tab, a click in the chat,
   await expect(panel.locator('[data-plan-row-picked]')).toHaveCount(0);
   expect(await thu()).toEqual(before);
   expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toEqual([]);
+  expect(saves(network)).toEqual([]);
   expectClean(network);
 });
 
-test('F4: a move that resets ticks says so and has no Undo @desktop', async ({ page }) => {
+test('F4: a move that resets ticks is queued by the day chip and written by Save; the ticks reset then @desktop', async ({
+  page,
+}) => {
   laptopOnly(page);
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
   await openChat(page);
   const { panel } = await openPanel(page);
-  // Sweets flatlay (a post) carries a team tick: moving it resets it.
+  // Sweets flatlay (a post) carries a team tick: moving it resets it on Save.
   const sweets = dated('Sweets flatlay');
-  await panel.locator(`[data-plan-row-wrap="${sweets.id}"] [data-plan-row-calendar]`).click();
-  await page.locator('[data-plan-popover-day="2026-10-16"]').click();
-  const text = 'Moved to Fri 16 Oct. Pipeline date updated. Its ticks were reset.';
-  await expect(toastOf(page, text)).toBeVisible();
-  await expect(undoOf(page, text)).toHaveCount(0);
+  const reviews = () =>
+    (network.world.tables.plan_item_reviews ?? []).filter((r) => r.item_id === sweets.id);
+  expect(reviews().some((r) => r.status === 'approved')).toBe(true);
+  await enterEdit(panel);
+  await panel.locator(`[data-plan-row-wrap="${sweets.id}"] [data-plan-row-day-chip]`).click();
+  const picker = page.locator('[data-plan-day-picker]');
+  await expect(picker).toBeVisible();
+  await picker.locator('[data-plan-day-tile="2026-10-16"]').click();
+  await expect(picker).toBeHidden();
+  await expect.poll(() => titlesOn(panel, '2026-10-16')).toContain('Sweets flatlay');
+  // Nothing written, no toast, the tick still stored.
+  await expect(page.getByText(/^Moved to/)).toHaveCount(0);
+  expect(saves(network)).toEqual([]);
+  expect(reviews().some((r) => r.status === 'approved')).toBe(true);
+  await saveChanges(page, panel);
+  expect(opsOf(saves(network)[0])).toEqual([
+    expect.objectContaining({
+      op: 'move',
+      item_id: sweets.id,
+      target_date: '2026-10-16',
+      keep_reviews: false,
+    }),
+  ]);
+  expect(reviews().every((r) => r.status === 'waiting')).toBe(true);
   expectClean(network);
 });
 
@@ -576,14 +645,21 @@ test('F2: Escape inside the panel never reaches the chat (status drawer stays op
   await expect(panel.locator('[data-plan-rename-input]')).toHaveCount(0);
   await expect(panel).toBeVisible();
   await expect(bar).toHaveAttribute('aria-expanded', 'true');
-  // A row's popover: Escape closes it only.
-  await panel.locator('[data-plan-row-calendar]').first().click();
-  await expect(page.locator('[data-plan-day-popover]')).toBeVisible();
+  // Edit mode: a row's day picker: Escape closes it only; the next Escape
+  // is Cancel (nothing changed: straight back to view mode), the panel stays.
+  await enterEdit(panel);
+  await panel.locator('[data-plan-row-day-chip]').first().click();
+  await expect(page.locator('[data-plan-day-picker]')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('[data-plan-day-popover]')).toHaveCount(0);
+  await expect(page.locator('[data-plan-day-picker]')).toHaveCount(0);
   await expect(panel).toBeVisible();
   await expect(bar).toHaveAttribute('aria-expanded', 'true');
-  // A row: Escape closes the panel, and still not the drawer.
+  await panel.locator('button[data-plan-row]').first().focus();
+  await page.keyboard.press('Escape');
+  await expect(panel.locator('[data-plan-edit-header]')).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  await expect(bar).toHaveAttribute('aria-expanded', 'true');
+  // A row in view mode: Escape closes the panel, and still not the drawer.
   await panel.locator('button[data-plan-row]').first().focus();
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
@@ -591,7 +667,7 @@ test('F2: Escape inside the panel never reaches the chat (status drawer stays op
   expectClean(network);
 });
 
-test('D: a client at 1280 sees no grip, calendar, dustbin, menu or hints; a tick shows its toast @desktop', async ({
+test('D: a client at 1280 sees no Edit, grip, day chip, remove, menu or hints; a tick shows its toast @desktop', async ({
   page,
 }) => {
   laptopOnly(page);
@@ -603,7 +679,7 @@ test('D: a client at 1280 sees no grip, calendar, dustbin, menu or hints; a tick
   const { panel } = await openPanel(page);
   await expect(
     panel.locator(
-      '[data-plan-grip], [data-plan-row-calendar], [data-plan-row-bin], [data-plan-key-hints], [data-plan-add], [data-plan-add-header]',
+      '[data-plan-grip], [data-plan-edit], [data-plan-row-day-chip], [data-plan-row-remove-edit], [data-plan-key-hints], [data-plan-add], [data-plan-add-header]',
     ),
   ).toHaveCount(0);
   const concept = dated('Rangoli timelapse');
@@ -661,18 +737,28 @@ for (const size of [
       // The thread stays beside the panel.
       await expect(page.locator('[data-msg-id]').first()).toBeAttached();
     }
-    // Rows, row actions and hints fit: actions keep 36x44 inside the panel; the title truncates.
+    // Rows fit: the tick inside the panel in view mode; in Edit the day chip
+    // and the 44x44 remove fit beside the title, the hints line never
+    // scrolls, and the title truncates.
     const wrap = panel.locator('[data-plan-row-wrap]').first();
-    const bin = await wrap.locator('[data-plan-row-bin]').boundingBox();
     const tick = await wrap.locator('[data-plan-slot]').boundingBox();
-    expect(bin?.width).toBe(36);
-    expect(bin?.height).toBe(44);
     expect((tick?.x ?? 0) + (tick?.width ?? 0)).toBeLessThanOrEqual(size.width);
+    await enterEdit(panel);
+    const remove = await wrap.locator('[data-plan-row-remove-edit]').boundingBox();
+    expect(remove?.width).toBe(44);
+    expect(remove?.height).toBe(44);
+    expect(remove?.x).toBeGreaterThanOrEqual(size.width - size.panel);
+    expect((remove?.x ?? 0) + (remove?.width ?? 0)).toBeLessThanOrEqual(size.width);
+    const chip = await wrap.locator('[data-plan-row-day-chip]').boundingBox();
+    expect(chip?.x).toBeGreaterThanOrEqual(size.width - size.panel);
     const hints = panel.locator('[data-plan-key-hints]');
     expect(await hints.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     for (const t of await panel.locator('[data-plan-row-title]').all()) {
       expect(await t.evaluate((el) => getComputedStyle(el).textOverflow)).toBe('ellipsis');
     }
+    // Cancel with nothing changed: straight back to view mode.
+    await panel.locator('[data-plan-back-text]').click();
+    await expect(panel.locator('[data-plan-edit-header]')).toHaveCount(0);
     // Close: the list returns with its scroll.
     await panel.locator('[data-plan-close]').click();
     await expect(panel).toHaveCount(0);
