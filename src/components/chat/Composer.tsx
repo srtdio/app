@@ -17,7 +17,6 @@ import {
   IconChevronDown,
   IconFile,
   IconMic,
-  IconPipeline,
   IconSend,
   IconTrash,
   IconX,
@@ -123,6 +122,8 @@ import {
   useChatLayout,
 } from '@/components/chat/chat-type';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { PostCoverContent, coverOf } from '@/components/chat/PostCover';
+import { useChipBatch } from '@/components/chat/PostRefChip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useBackGuard } from '@/lib/back-guard';
 import {
@@ -1096,6 +1097,9 @@ export function Composer(props: ComposerProps): ReactElement {
   const [held, setHeld] = useState(restored.held);
   const [pending, setPending] = useState<Pending[]>(initial.pendingFiles);
   const [sharedPosts, setSharedPosts] = useState<PostCardFields[]>(initial.sharedPosts);
+  // The shared posts' covers for their chips: one batched read per new set.
+  const chipPostIds = useMemo(() => sharedPosts.map((post) => post.id), [sharedPosts]);
+  const sharedPostCovers = useChipBatch(chipPostIds);
   const [sharedBriefs, setSharedBriefs] = useState<BriefCardFields[]>(initial.sharedBriefs);
   // Which picker a tray tile opened (the share picker in a mode, or Assets).
   const [picker, setPicker] = useState<TrayPicker | null>(null);
@@ -2047,7 +2051,7 @@ export function Composer(props: ComposerProps): ReactElement {
             {sharedPosts.map((post) => (
               <PendingChip
                 key={post.id}
-                thumb={<IconPipeline size={16} />}
+                thumb={<PostCoverContent cover={coverOf(sharedPostCovers.postRef(post.id))} />}
                 title={post.title}
                 meta={stageLabel(post.stage)}
                 onRemove={() => toggleSharedPost(post)}

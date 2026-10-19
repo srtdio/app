@@ -16,6 +16,7 @@ import {
   IconCheck,
   IconChevronRight,
   IconEye,
+  IconFile,
   IconHourglass,
   IconPlan,
   IconSignpost,
@@ -63,7 +64,14 @@ import {
   priorityLabel,
   type ChatMark,
 } from '@/lib/chat/marks';
-import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
+import {
+  readPlanThumbs,
+  type ConceptThumb,
+  type PlanBundle,
+  type PlanItemRow,
+} from '@/lib/chat/plans';
+import { POST_COVER_BOX, PostCover, coverOf } from '@/components/chat/PostCover';
+import { useChipBatch, type PostRefLookup } from '@/components/chat/PostRefChip';
 import type { WriteResult } from '@/lib/chat/record';
 import {
   SECTION_MARK_TYPE,
@@ -210,6 +218,78 @@ function itemTitle(bundle: PlanBundle, item: PlanItemRow): string {
   return item.title !== null && item.title.trim() !== '' ? item.title : 'Concept';
 }
 
+/**
+ * A plan row's 48px picture: a post's cover (first photo or video), and a
+ * concept's first image file, a file tile when it holds only documents, or the
+ * dashed outline when it has no files (the Plan screen's tile language).
+ */
+function PlanItemTile(props: {
+  item: PlanItemRow;
+  cover: PostRefLookup | undefined;
+  concepts: Record<string, ConceptThumb> | null;
+}): ReactElement {
+  const { item } = props;
+  if (item.kind !== 'concept') {
+    const cover =
+      item.post_id === null || props.cover === undefined
+        ? null
+        : coverOf(props.cover(item.post_id));
+    return <PostCover cover={cover} />;
+  }
+  if (props.concepts === null) {
+    return <span aria-hidden="true" data-plan-tile="pending" className={POST_COVER_BOX} />;
+  }
+  const concept = props.concepts[item.id] ?? null;
+  if (concept?.kind === 'image') {
+    return (
+      <PostCover
+        cover={{ assetVersionId: concept.versionId, kind: 'image', width: null, height: null }}
+      />
+    );
+  }
+  if (concept?.kind === 'file') {
+    return (
+      <span aria-hidden="true" data-plan-tile="file" className={POST_COVER_BOX}>
+        <IconFile size={18} />
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      data-plan-tile="concept"
+      className="h-12 w-12 shrink-0 rounded-lg border-[1.5px] border-dashed border-border-strong"
+    />
+  );
+}
+
+/**
+ * The concept tiles for a plan's shown rows: one readPlanThumbs call per set of
+ * concept ids (never one per row); null until it lands, and a failed read
+ * leaves every concept on the dashed outline.
+ */
+function useConceptTiles(rows: readonly PlanItemRow[]): Record<string, ConceptThumb> | null {
+  const key = rows
+    .filter((item) => item.kind === 'concept')
+    .map((item) => item.id)
+    .join(',');
+  const [tiles, setTiles] = useState<{ key: string; data: Record<string, ConceptThumb> } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (key === '') return;
+    let live = true;
+    void readPlanThumbs(supabase, [], key.split(',')).then((result) => {
+      if (live) setTiles({ key, data: result.ok ? result.data.concepts : {} });
+    });
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  if (key === '') return {};
+  return tiles !== null && tiles.key === key ? tiles.data : null;
+}
+
 /** One open plan: its title row, segmented bar, progress line and first items. */
 export function PlanBlock(props: {
   bundle: PlanBundle;
@@ -217,10 +297,13 @@ export function PlanBlock(props: {
   first: boolean;
   onOpen: () => void;
   onOpenItem: (itemId: string) => void;
+  /** Each post row's post with its cover; absent, post rows show the glyph. */
+  cover?: PostRefLookup | undefined;
 }): ReactElement {
   const { bundle, side } = props;
   const progress = planProgress(bundle);
   const { rows, seeAll } = sectionRows(bundle.items);
+  const concepts = useConceptTiles(rows);
   return (
     <div
       data-plan-block={bundle.plan.id}
@@ -262,6 +345,7 @@ export function PlanBlock(props: {
             className={ROW}
           >
             <span className={cn(DATE_COL, !date.dated && 'italic')}>{date.label}</span>
+            <PlanItemTile item={item} cover={props.cover} concepts={concepts} />
             <span className="min-w-0 flex-1">
               <span className={ROW_TITLE}>{itemTitle(bundle, item)}</span>
               <span className={ROW_SUB}>{item.kind === 'post' ? 'Post' : 'Concept'}</span>
@@ -429,6 +513,22 @@ export function StatusDrawerList(
   const firstPlan = props.plans[0];
   const firstProgress = firstPlan !== undefined ? planProgress(firstPlan) : null;
 
+  // Covers for every post row the drawer shows (plan rows and posts in review)
+  // in one batched read per new set of ids, never one per row.
+  const shownPosts = props.postsExpanded ? props.posts.rows : props.posts.rows.slice(0, 5);
+  const coverIds = useMemo(
+    () => [
+      ...props.plans.flatMap((bundle) =>
+        sectionRows(bundle.items).rows.flatMap((item) =>
+          item.post_id !== null ? [item.post_id] : [],
+        ),
+      ),
+      ...shownPosts.map((post) => post.id),
+    ],
+    [props.plans, shownPosts],
+  );
+  const covers = useChipBatch(coverIds);
+
   const section = (key: StatusKey, count: string, body: ReactNode): ReactElement => (
     <section
       key={key}
@@ -462,13 +562,13 @@ export function StatusDrawerList(
                 first={i === 0}
                 onOpen={() => props.onOpenPlan(bundle.plan.id)}
                 onOpenItem={(itemId) => props.onOpenPlanItem(bundle.plan.id, itemId)}
+                cover={covers.postRef}
               />
             )),
           );
         }
         if (key === 'posts') {
-          const list = props.posts.rows;
-          const shown = props.postsExpanded ? list : list.slice(0, 5);
+          const shown = shownPosts;
           const seeAll = !props.postsExpanded && props.posts.count > 5 ? props.posts.count : null;
           return section(
             key,
@@ -488,6 +588,7 @@ export function StatusDrawerList(
                     className={cn(ROW, busy && 'bg-panel-2')}
                   >
                     <span className={DATE_COL}>{drawerDay(post.target_date, props.timeZone)}</span>
+                    <PostCover cover={coverOf(covers.postRef(post.id))} />
                     <span className="min-w-0 flex-1">
                       <span className={ROW_TITLE}>{lines.title}</span>
                       <span className={ROW_SUB}>{formatLabel(post.format)}</span>

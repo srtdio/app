@@ -1,5 +1,5 @@
 // One removable chip in the composer tray: a picked file (with its upload
-// status), a shared post or a shared brief all use this one look. A 36px thumb,
+// status), a shared post or a shared brief all use this one look. A 48px thumb,
 // title over one meta line, and a 44px remove control. Tokens only.
 
 import type { ReactElement, ReactNode } from 'react';
@@ -23,7 +23,7 @@ export function PendingChip(props: {
         error ? 'border-bad' : 'border-border',
       )}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-panel-3 text-fg-3">
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3">
         {props.thumb}
       </span>
       <span className="flex min-w-0 max-w-[180px] flex-col">

@@ -48,6 +48,8 @@ import { logger } from '@/lib/logger';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
+import { PostCover, coverOf } from '@/components/chat/PostCover';
+import { useChipBatch, type PostRefLookup } from '@/components/chat/PostRefChip';
 import type { Client } from '@srtdio/rpc';
 import type { PostCardFields } from '@srtdio/posts';
 import {
@@ -281,11 +283,16 @@ interface SearchState {
 }
 
 /** Full-width row: hairline divider, 44px minimum, no rounded card. */
+const ROW_BASE =
+  'flex w-full gap-3 border-b border-border px-4 py-3 min-h-[44px] text-left transition-colors';
+
 function rowClass(active: boolean): string {
-  return cn(
-    'flex w-full items-start gap-3 border-b border-border px-4 py-3 min-h-[44px] text-left transition-colors',
-    active ? 'bg-accent-soft' : 'hover:bg-panel-2',
-  );
+  return cn(ROW_BASE, 'items-start', active ? 'bg-accent-soft' : 'hover:bg-panel-2');
+}
+
+/** A post row: the 48px cover sets the height, so the text centres beside it. */
+function postRowClass(active: boolean): string {
+  return cn(ROW_BASE, 'items-center', active ? 'bg-accent-soft' : 'hover:bg-panel-2');
 }
 
 export function PostPicker(props: PostPickerProps): ReactElement {
@@ -485,6 +492,18 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       : search.rows.filter((r) => !exclude.has(r.id));
   const searchCount = search === null ? 0 : search.count - (search.rows.length - searchRows.length);
 
+  // Every listed post's cover in one batched read per new set of ids (two
+  // queries, never one per row); rows paint their picture once it is in.
+  const coverIds = useMemo(
+    () =>
+      trimmed === ''
+        ? (shownSections?.sections.flatMap((s) => s.rows.map((r) => r.id)) ?? [])
+        : searchRows.map((r) => r.id),
+    [trimmed, shownSections, searchRows],
+  );
+  const covers = useChipBatch(coverIds);
+  const listProps: PostRowContext = { ...rowProps, cover: covers.postRef };
+
   let postBody: ReactElement;
   if (postError !== null) {
     postBody = <PickerError message={postError} />;
@@ -493,7 +512,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       shownSections === null ? (
         <PickerSkeleton />
       ) : (
-        <PostSectionsView data={shownSections} mode={mode} {...rowProps} />
+        <PostSectionsView data={shownSections} mode={mode} {...listProps} />
       );
   } else if (search === null || search.text !== trimmed) {
     postBody = <PickerSkeleton />;
@@ -504,7 +523,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
         count={searchCount}
         loadingMore={search.loadingMore}
         onLoadMore={loadMore}
-        {...rowProps}
+        {...listProps}
       />
     );
   }
@@ -604,6 +623,8 @@ export interface PostRowContext {
   sharedPostIds?: ReadonlySet<string> | undefined;
   /** Post ids whose rows are not rendered (already in the plan being added to). */
   excludePostIds?: ReadonlySet<string> | undefined;
+  /** Each row's post with its cover; absent, rows show the neutral glyph. */
+  cover?: PostRefLookup | undefined;
 }
 
 const LIST_CLASS =
@@ -619,7 +640,7 @@ export function PickerSkeleton(): ReactElement {
           data-skeleton-row=""
           className="flex min-h-[44px] items-center gap-3 border-b border-border px-4 py-3"
         >
-          <span className="h-9 w-9 shrink-0 rounded-md bg-panel-3" />
+          <span className="h-12 w-12 shrink-0 rounded-lg bg-panel-3" />
           <span className="flex min-w-0 flex-1 flex-col gap-1.5">
             <span className="h-3.5 w-2/3 rounded bg-panel-3" />
             <span className="h-3 w-1/3 rounded bg-panel-2" />
@@ -730,7 +751,7 @@ export function SearchResultsView(
   );
 }
 
-/** One post row: placeholder thumb, KEY · title, format · date, stage or "in this chat". */
+/** One post row: 48px cover, KEY · title, format · date, stage or "in this chat". */
 export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): ReactElement | null {
   const { post } = props;
   if (props.excludePostIds?.has(post.id) === true) return null;
@@ -748,11 +769,9 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
         type="button"
         aria-pressed={active}
         onClick={() => props.onToggle(post)}
-        className={rowClass(active)}
+        className={postRowClass(active)}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3 text-fg-3">
-          <IconPipeline size={18} />
-        </span>
+        <PostCover cover={props.cover !== undefined ? coverOf(props.cover(post.id)) : null} />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 items-baseline gap-1.5">
             {props.workspaceKey !== null ? (
@@ -769,7 +788,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
           </span>
           <span className="truncate text-xs text-fg-2">{meta}</span>
         </span>
-        <span className="flex shrink-0 items-center gap-2 pt-0.5">
+        <span className="flex shrink-0 items-center gap-2">
           {inChat ? (
             <span className="text-xs text-fg-3">in this chat</span>
           ) : isTagDot(post.stage) ? (
