@@ -1,5 +1,5 @@
 // The chat's Tasks: per-chat numbered items (public.chat_tasks), their change
-// log (public.chat_task_events) and the writes (chat_task_create, chat_task_save,
+// log (public.chat_task_events) and the writes (chat_task_create, chat_task_create_many, chat_task_save,
 // chat_task_delete, and the older one-field chat_task_set). The pure rules (sort, groups, due labels on the workspace
 // clock, event text, thread-line collapse, the share snapshot, the civil
 // date + hour to UTC conversion) are framework-free and unit-tested; the reads
@@ -783,15 +783,43 @@ export const COLLAPSE_WINDOW_MS = 2 * 60 * 1000;
 /** ...when there are at least this many of them. */
 export const COLLAPSE_MIN = 4;
 
-/** One thread line: a single change, or one person's burst of changes. */
+/**
+ * The focus id that opens the Tasks sheet with no row expanded (a batch line,
+ * a batch bell alert). It rides the same paths as a task id (onOpenTask, the
+ * bell's ?task= link); the sheet reads it as "no focus".
+ */
+export const TASKS_SHEET_ONLY = 'list';
+
+/** Consecutive adds by one person this close to the first are one batch line. */
+export const ADD_BATCH_WINDOW_MS = 10_000;
+
+/** One thread line: a single change, a batch of adds, or one person's burst of changes. */
 export type TaskLine =
   | { kind: 'one'; event: TaskEvent }
+  | { kind: 'added'; actorId: string; events: TaskEvent[] }
   | { kind: 'many'; actorId: string; events: TaskEvent[] };
 
+/** How many consecutive 'created' events by `first`'s actor sit within the batch window. Pure. */
+function addBatchLength(events: readonly TaskEvent[], from: number): number {
+  const first = events[from];
+  if (first === undefined || first.kind !== 'created' || first.actorId === null) return 0;
+  const start = epoch(first.createdAt);
+  let n = 1;
+  while (from + n < events.length) {
+    const next = events[from + n];
+    if (next === undefined || next.kind !== 'created' || next.actorId !== first.actorId) break;
+    if (epoch(next.createdAt) - start > ADD_BATCH_WINDOW_MS) break;
+    n += 1;
+  }
+  return n;
+}
+
 /**
- * Collapse a run of consecutive events (no message between them): 4+ by one
- * actor within 2 minutes of the first become one line. The due timer's events
- * (no actor) never collapse. Pure.
+ * Collapse a run of consecutive events (no message between them): 2+ adds by
+ * one actor within 10 seconds of the first are one "added N tasks" line
+ * (whatever COLLAPSE_MIN says); otherwise 4+ by one actor within 2 minutes of
+ * the first become one line. The due timer's events (no actor) never
+ * collapse. Pure.
  */
 export function collapseTaskRun(events: readonly TaskEvent[]): TaskLine[] {
   const lines: TaskLine[] = [];
@@ -800,6 +828,12 @@ export function collapseTaskRun(events: readonly TaskEvent[]): TaskLine[] {
     const first = events[i];
     if (first === undefined) break;
     const actor = first.actorId;
+    const batch = addBatchLength(events, i);
+    if (actor !== null && batch >= 2) {
+      lines.push({ kind: 'added', actorId: actor, events: events.slice(i, i + batch) });
+      i += batch;
+      continue;
+    }
     let j = i;
     if (actor !== null) {
       const start = epoch(first.createdAt);
@@ -819,6 +853,11 @@ export function collapseTaskRun(events: readonly TaskEvent[]): TaskLine[] {
     }
   }
   return lines;
+}
+
+/** "Name added 5 tasks" (a batch of adds). Pure. */
+export function addedLabel(name: string, count: number): string {
+  return `${name} added ${count} ${count === 1 ? 'task' : 'tasks'}`;
 }
 
 /** "Name made 5 task changes". Pure. */
@@ -1101,6 +1140,57 @@ export async function createTask(params: {
     return typeof data === 'string' && data !== ''
       ? { ok: true, data }
       : { ok: false, message: 'chat_task_create returned no id' };
+  } catch (error) {
+    return { ok: false, message: String(error) };
+  }
+}
+
+/** One task of a batch add: what the add row set. */
+export interface NewTask {
+  title: string;
+  side: TaskSide;
+  priority?: TaskPriority;
+  note?: string | null;
+  dueAt?: string | null;
+}
+
+/** Most tasks one chat_task_create_many call takes. */
+export const TASK_BATCH_MAX = 50;
+
+/**
+ * Add several tasks in one call (chat_task_create_many): one 'created' event
+ * each, and ONE bell alert per other member for the whole batch. Returns the
+ * new ids in order. 1 to 50 tasks.
+ */
+export async function createTasks(params: {
+  client: Client;
+  channelId: string;
+  tasks: readonly NewTask[];
+  traceId: string;
+}): Promise<TaskWriteResult<string[]>> {
+  const items = params.tasks
+    .map((t) => ({
+      title: t.title.trim(),
+      ...(t.note != null && t.note.trim() !== '' ? { note: t.note.trim() } : {}),
+      side: t.side,
+      priority: t.priority ?? 2,
+      ...(t.dueAt != null ? { due_at: t.dueAt } : {}),
+    }))
+    .filter((t) => t.title !== '');
+  if (items.length === 0 || items.length > TASK_BATCH_MAX) {
+    return { ok: false, message: 'invalid_payload' };
+  }
+  const args: Functions['chat_task_create_many']['Args'] = {
+    p_channel_id: params.channelId,
+    p_tasks: items,
+    p_trace_id: params.traceId,
+  };
+  try {
+    const { data, error } = await params.client.rpc('chat_task_create_many', args);
+    if (error) return { ok: false, message: error.message };
+    return Array.isArray(data) && data.every((id) => typeof id === 'string')
+      ? { ok: true, data: data as string[] }
+      : { ok: false, message: 'chat_task_create_many returned no ids' };
   } catch (error) {
     return { ok: false, message: String(error) };
   }

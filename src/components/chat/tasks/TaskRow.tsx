@@ -5,7 +5,8 @@
 // picker, then Delete, Cancel and Save. Every edit is local (a draft) until
 // Save, which sends only the changed fields in one write. Picking a day
 // without a time sets 9 pm ("Due 9 pm", the hour strip edits it); tapping the
-// day already picked keeps it, and "Clear date" removes the due. A refused
+// day already picked keeps it, and "Clear date" removes the due. After 9 pm
+// workspace time Today is disabled, as in the add row. A refused
 // Save reverts the row and shows "Not saved · Retry" on it only.
 
 import { useEffect, useRef, useState } from 'react';
@@ -22,6 +23,7 @@ import {
   civilHourToUtcIso,
   commitmentLine,
   dateStripDays,
+  DEFAULT_DUE_HOUR,
   diffDraft,
   draftOf,
   dueForDay,
@@ -213,6 +215,9 @@ export function DuePicker(props: {
     props.onChange(dueForDay(civil, value, nowMs, timeZone));
   };
   const days = dateStripDays(nowMs, timeZone);
+  // After 9 pm workspace time today is over: Today is shown, not tappable
+  // (the add row's rule).
+  const todayOver = isPastHour(today, DEFAULT_DUE_HOUR, nowMs, timeZone);
   const which =
     day === null ? null : day === today ? 'today' : day === tomorrow ? 'tomorrow' : 'date';
   return (
@@ -221,6 +226,7 @@ export function DuePicker(props: {
         <Segment
           selected={which === 'today'}
           data="today"
+          disabled={todayOver}
           onClick={() => {
             setStrip(false);
             pick(today);

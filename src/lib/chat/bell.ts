@@ -90,10 +90,12 @@ export interface BellTaskFields {
   taskId: string | null;
   number: number | null;
   title: string | null;
-  /** The change kind (created, status, ..., due_passed). */
+  /** The change kind (created, status, ..., due_passed; created_many for a batch add). */
   kind: string | null;
   old: string | null;
   new: string | null;
+  /** created_many only: how many tasks the one Save added (absent on other rows). */
+  count?: number;
 }
 
 /** A plan row's payload, mapped (plan_opened .. plan_comment). */
@@ -169,10 +171,12 @@ export function planFieldsOf(
 /** A task row's fields from its payload. Pure. */
 export function taskFieldsOf(row: Pick<InboxEntryRow, 'payload'>): BellTaskFields {
   const payload: unknown = row.payload as Json;
-  const number =
+  const field = (key: string): unknown =>
     typeof payload === 'object' && payload !== null
-      ? (payload as Record<string, unknown>).number
+      ? (payload as Record<string, unknown>)[key]
       : undefined;
+  const number = field('number');
+  const count = field('count');
   return {
     taskId: str(payload, 'task_id'),
     number: typeof number === 'number' && Number.isFinite(number) ? number : null,
@@ -180,6 +184,7 @@ export function taskFieldsOf(row: Pick<InboxEntryRow, 'payload'>): BellTaskField
     kind: str(payload, 'kind'),
     old: str(payload, 'old'),
     new: str(payload, 'new'),
+    ...(typeof count === 'number' && Number.isFinite(count) ? { count } : {}),
   };
 }
 

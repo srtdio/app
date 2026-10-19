@@ -61,6 +61,8 @@ function fakeTasks(list: ChatTask[], over: Partial<UseChatTasks> = {}): UseChatT
     events: [],
     lineTasks: new Map(list.map((t) => [t.id, t] as const)),
     loaded: true,
+    loadState: 'ready',
+    retrying: false,
     covers: () => true,
     pending: [],
     failed: new Map(),
@@ -69,6 +71,7 @@ function fakeTasks(list: ChatTask[], over: Partial<UseChatTasks> = {}): UseChatT
     refetch: vi.fn(),
     ensureEventsSince: vi.fn(),
     create: vi.fn(),
+    createMany: vi.fn(async () => true),
     save: vi.fn(),
     retryField: vi.fn(),
     remove: vi.fn(),
@@ -192,7 +195,7 @@ describe('TaskSheet (W9)', () => {
     expect(q('[data-task-add="client"] [data-task-preview]')).toBeNull();
   });
 
-  it('fix 2: the add row sends title, priority and due in one create', () => {
+  it('fix 2 (X4): the add row keeps title, priority and due on a draft; Save sends them', async () => {
     const tasks = fakeTasks([]);
     render(tasks);
     const input = q('[data-task-add="agency"] input') as HTMLInputElement;
@@ -205,10 +208,16 @@ describe('TaskSheet (W9)', () => {
     click('[data-task-add="agency"] [data-task-opt="add-p0"]');
     click('[data-task-add="agency"] [data-task-opt="add-tomorrow"]');
     click('[data-task-add="agency"] button[type="submit"]');
-    expect(tasks.create).toHaveBeenCalledTimes(1);
-    const [side, title, , options] = (tasks.create as ReturnType<typeof vi.fn>).mock.calls[0] ?? [];
-    expect([side, title]).toEqual(['agency', 'Hook']);
-    expect(options.priority).toBe(0);
-    expect(String(options.dueAt)).toMatch(/T21:00:00\.000Z$/);
+    // Enter adds a draft: nothing is written until Save.
+    expect(tasks.create).not.toHaveBeenCalled();
+    expect(tasks.createMany).not.toHaveBeenCalled();
+    expect(q('[data-task-draft]')).not.toBeNull();
+    await act(async () => q('[data-task-save-all]')?.click());
+    expect(tasks.createMany).toHaveBeenCalledTimes(1);
+    const [items] = (tasks.createMany as ReturnType<typeof vi.fn>).mock.calls[0] ?? [];
+    const [first] = items as { side: string; title: string; priority: number; dueAt: string }[];
+    expect([first?.side, first?.title]).toEqual(['agency', 'Hook']);
+    expect(first?.priority).toBe(0);
+    expect(String(first?.dueAt)).toMatch(/T21:00:00\.000Z$/);
   });
 });

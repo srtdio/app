@@ -1,4 +1,4 @@
-// The chat Tasks in the harness: the procs (chat_task_create, chat_task_set,
+// The chat Tasks in the harness: the procs (chat_task_create, chat_task_create_many, chat_task_set,
 // chat_task_save, chat_task_delete) over the chat_tasks / chat_task_events fixture tables, and a
 // seed with a few items, their change lines and a missed-due bell row. The
 // procs mirror the SQL (next number per chat, an event per change, the due
@@ -70,6 +70,21 @@ export const TASK_RPC: Record<string, RpcHandler> = {
     rows.push(task);
     event(tables, task, 'created', null, String(task.title), ME, now);
     return task.id;
+  },
+  chat_task_create_many: (args, tables) => {
+    // One call, one 'created' event per task (the fixture's chat_task_create per item).
+    const items = Array.isArray(args.p_tasks) ? (args.p_tasks as Record<string, unknown>[]) : [];
+    return items.map((item) =>
+      TASK_RPC.chat_task_create?.(
+        {
+          p_channel_id: args.p_channel_id,
+          p_title: item.title,
+          p_side: item.side,
+          p_priority: item.priority,
+        },
+        tables,
+      ),
+    );
   },
   chat_task_set: (args, tables) => {
     const task = (tables.chat_tasks ?? []).find((t) => t.id === args.p_task_id);
