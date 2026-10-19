@@ -57,6 +57,9 @@ declare global {
 
 async function record(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    // The sign-out scenario finds the dev server's module URLs in the resource
+    // entries; the chat loads more modules than the default 250-entry buffer.
+    performance.setResourceTimingBufferSize(100_000);
     const log: Log = { taps: [], frames: [], scrollJumps: [], shift: 0, paintedSkeleton: [] };
     window.__remember = log;
     document.addEventListener('pointerdown', () => log.taps.push(performance.now()), true);
