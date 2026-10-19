@@ -187,20 +187,22 @@ describe('6. delete hides now and commits after the Undo window', () => {
 });
 
 describe('7. select mode', () => {
-  it('is labelled Select with Select all, a count, and Move, Delete, Done', () => {
+  it('starts from the card box, with Cancel, a count and Select all up top and Move, Delete below', () => {
     expect(selectedLabel(2)).toBe('2 selected');
     expect(selectAllIds([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 2)).toEqual(['a', 'b']);
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
-    expect(menu).toContain('<span>Select</span>');
-    expect(menu).not.toContain('Select files to move');
-    for (const label of ['Select all', 'Move', 'Delete', 'Done']) {
+    expect(menu).not.toContain('<span>Select</span>');
+    expect(pageSource).toContain('onStartSelect={startSelectWith}');
+    for (const label of ['Cancel', 'Select all', 'Move', 'Delete']) {
       expect(pageSource).toContain(label);
     }
+    expect(pageSource).toContain('data-select-actions');
+    expect(pageSource).not.toContain('Done\n');
   });
 });
 
 describe('7b. no New folder in the add menu', () => {
-  it('offers upload, link and select only; the page mounts no New folder sheet', () => {
+  it('offers upload and link only; the page mounts no New folder sheet', () => {
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
     expect(menu).not.toContain('New folder');
     expect(menu).toContain('<span>Upload files</span>');

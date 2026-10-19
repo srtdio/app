@@ -391,13 +391,6 @@ export function AssetsPage() {
     [liveItems, folderId],
   );
 
-  // How many assets sit directly in the open folder. The "Select" option only
-  // appears when this is > 0 (there is nothing to select otherwise).
-  const currentFolderAssetCount = useMemo(
-    () => liveItems.filter((item) => item.folderId === folderId).length,
-    [liveItems, folderId],
-  );
-
   // Toggle one asset's selection, capping the set at 200 (the move batch limit);
   // adding past the cap is ignored with a toast rather than silently dropped.
   const toggleSelect = useCallback(
@@ -853,6 +846,17 @@ export function AssetsPage() {
     setSelected(new Set());
   };
 
+  // The round box on a card: one tap starts selecting with that file ticked.
+  const startSelectWith = (item: AssetListItem): void => {
+    setSelected(new Set([item.id]));
+    setSelectMode(true);
+  };
+
+  const moveSelected = (): void => {
+    setMoveFrom(searching ? undefined : folderId);
+    setMoveIds(Array.from(selected));
+  };
+
   return (
     <>
       {/* Breadcrumb only inside a folder; the root needs no lone "/" crumb. */}
@@ -893,33 +897,25 @@ export function AssetsPage() {
             <AssetAddMenu
               onUploadFiles={() => setUploadOpen(true)}
               onAddLink={() => setAddLinkOpen(true)}
-              onSelect={
-                currentFolderAssetCount > 0 && !loadFailed
-                  ? () => {
-                      // Select spans every file here: a type tab scope would hide
-                      // files from Select all, so it clears to All.
-                      setTab(ASSET_TAB_DEFAULT);
-                      setSelected(new Set());
-                      setSelectMode(true);
-                    }
-                  : undefined
-              }
             />
           ),
         }}
         stickyChildren={selectMode}
       >
         {selectMode ? (
-          <div data-select-bar="" className="flex w-full flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-fg">Select</span>
-            <span className="text-sm text-fg-2" aria-live="polite">
-              {selectedLabel(selected.size)}
-            </span>
-            {selected.size > BULK_DELETE_MAX ? (
-              <span className="text-xs text-fg-3">Select 200 or fewer to delete at once.</span>
-            ) : null}
-            <span className="ml-auto flex flex-wrap gap-2">
+          <div data-select-bar="" className="flex w-full flex-col gap-1">
+            <div className="flex w-full items-center gap-2">
+              <Button size="lg" variant="ghost" onClick={exitSelectMode}>
+                Cancel
+              </Button>
+              <span
+                className="min-w-0 flex-1 truncate text-center text-sm font-semibold text-fg"
+                aria-live="polite"
+              >
+                {selectedLabel(selected.size)}
+              </span>
               <Button
+                size="lg"
                 variant="ghost"
                 disabled={visible.length === 0}
                 onClick={() => {
@@ -929,27 +925,31 @@ export function AssetsPage() {
               >
                 Select all
               </Button>
-              <Button
-                variant="primary"
-                disabled={selected.size === 0}
-                onClick={() => {
-                  setMoveFrom(searching ? undefined : folderId);
-                  setMoveIds(Array.from(selected));
-                }}
-              >
-                Move
-              </Button>
-              <Button
-                variant="danger"
-                disabled={!canBulkDelete(selected.size)}
-                onClick={deleteSelected}
-              >
-                Delete
-              </Button>
-              <Button variant="ghost" onClick={exitSelectMode}>
-                Done
-              </Button>
-            </span>
+              {/* Desktop keeps Move and Delete up here; phones get the bottom bar. */}
+              <span className="hidden gap-2 md:flex">
+                <Button
+                  size="lg"
+                  variant="primary"
+                  disabled={selected.size === 0}
+                  onClick={moveSelected}
+                >
+                  Move
+                </Button>
+                <Button
+                  size="lg"
+                  variant="danger"
+                  disabled={!canBulkDelete(selected.size)}
+                  onClick={deleteSelected}
+                >
+                  Delete
+                </Button>
+              </span>
+            </div>
+            {selected.size > BULK_DELETE_MAX ? (
+              <span className="text-center text-xs text-fg-3">
+                Select 200 or fewer to delete at once.
+              </span>
+            ) : null}
           </div>
         ) : loadFailed ? null : (
           <AssetTabs value={tab} counts={counts} onChange={setTab} />
@@ -1042,6 +1042,7 @@ export function AssetsPage() {
               selectMode={selectMode}
               selectedIds={selected}
               onToggleSelect={toggleSelect}
+              onStartSelect={startSelectWith}
             />
           </div>
         )}
@@ -1059,6 +1060,39 @@ export function AssetsPage() {
             {RECENTLY_DELETED_LABEL}
           </button>
         </div>
+      ) : null}
+
+      {/* Phones: Move and Delete pinned at the bottom while selecting, in thumb
+          reach above the tab bar; the spacer keeps the last row uncovered. */}
+      {selectMode ? (
+        <>
+          <div aria-hidden="true" className="h-[76px] md:hidden" />
+          <div
+            data-select-actions=""
+            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
+          >
+            <div className="flex items-center gap-2">
+              <Button
+                size="lg"
+                variant="primary"
+                className="min-w-[44px] flex-1"
+                disabled={selected.size === 0}
+                onClick={moveSelected}
+              >
+                Move
+              </Button>
+              <Button
+                size="lg"
+                variant="danger"
+                className="min-w-[44px] flex-1"
+                disabled={!canBulkDelete(selected.size)}
+                onClick={deleteSelected}
+              >
+                {selected.size > 0 ? `Delete ${selected.size}` : 'Delete'}
+              </Button>
+            </div>
+          </div>
+        </>
       ) : null}
 
       {viewer !== null && viewerItem !== undefined ? (

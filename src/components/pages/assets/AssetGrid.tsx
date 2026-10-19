@@ -14,6 +14,8 @@ interface AssetGridProps {
   selectedIds?: ReadonlySet<string>;
   /** Toggle one item's selection (select mode only). */
   onToggleSelect?: (item: AssetListItem) => void;
+  /** Tap a card's round box: start selecting with that item ticked. */
+  onStartSelect?: ((item: AssetListItem) => void) | undefined;
 }
 
 /** Responsive asset grid: two columns on mobile, ~158px auto-fill on desktop. */
@@ -26,6 +28,7 @@ export function AssetGrid({
   selectMode = false,
   selectedIds,
   onToggleSelect,
+  onStartSelect,
 }: AssetGridProps) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
@@ -40,6 +43,7 @@ export function AssetGrid({
           selectMode={selectMode}
           selected={selectedIds?.has(item.id) ?? false}
           onToggleSelect={() => onToggleSelect?.(item)}
+          onStartSelect={onStartSelect === undefined ? undefined : () => onStartSelect(item)}
         />
       ))}
     </div>

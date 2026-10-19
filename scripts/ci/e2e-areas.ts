@@ -164,6 +164,7 @@ export const AREAS: Area[] = [
     specs: [
       'assets-type-tabs',
       'assets-recently-deleted',
+      'assets-select-box',
       'files-open-in-viewer',
       'onboarding-creator',
       'onboarding-invited',
