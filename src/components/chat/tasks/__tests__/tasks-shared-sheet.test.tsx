@@ -189,7 +189,8 @@ describe('shared Tasks sheet', () => {
         kind: 'edited',
         oldValue: '{"title":"Old hook"}',
         newValue: '{"title":"Hook"}',
-        createdAt: '2026-10-19T10:00:00.000Z',
+        // Saved before the sheet opened (a minute ago), so the strip counts it.
+        createdAt: new Date(Date.now() - 60_000).toISOString(),
         batchId: 'B',
       },
     ];
