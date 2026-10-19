@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { openParentLabel, type AssetParent } from '@/lib/assets';
 
-/** What the sheet shows: the body line and, when found, the parent to open. */
+/** What the sheet shows: the title and body for where the file is used, and the parent to open. */
 export interface AssetInUseState {
+  title: string;
   message: string;
   parent: AssetParent | null;
 }
@@ -17,7 +18,8 @@ interface AssetInUseSheetProps {
 
 /**
  * Shown when a delete is refused because a live post, brief or comment still
- * uses the file. Offers the parent (when the lookup found one) and OK. Both
+ * uses the file. The title and body name which one (never "delete the brief":
+ * briefs are read-only). Offers the parent (when the lookup found one) and OK. Both
  * actions are 44px (Button size lg); colours are tokens via Button and Sheet.
  */
 export function AssetInUseSheet({ state, onOpenParent, onClose }: AssetInUseSheetProps) {
@@ -29,7 +31,7 @@ export function AssetInUseSheet({ state, onOpenParent, onClose }: AssetInUseShee
     <Sheet
       open={state !== null}
       onClose={onClose}
-      title="Used in a post"
+      title={shown.current?.title ?? 'File in use'}
       footer={
         <div className="flex w-full justify-end gap-2">
           <Button size="lg" onClick={onClose}>

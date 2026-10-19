@@ -85,9 +85,45 @@ export function folderLink(origin: string, folderId: string): string {
   return joinOrigin(origin, `/assets?${FOLDER_PARAM}=${encodeURIComponent(folderId)}`);
 }
 
-/** The Undo toast title for a delete of `count` files. */
+/** Where deleted files wait 31 days before they are gone for good. */
+export const RECENTLY_DELETED_PATH = '/deleted';
+
+/** The Recently deleted link and toast action label. */
+export const RECENTLY_DELETED_LABEL = 'Recently deleted';
+
+/** The toast when ?asset= names a file that is deleted or not in this library. */
+export const ASSET_GONE_TOAST = 'This file was deleted.';
+
+/** The Undo toast title for a folder delete. */
+export const FOLDER_DELETED_LABEL = 'Folder deleted';
+
+/** The Undo toast title for a delete of `count` files: Undo now, or restore later. */
 export function deleteToastLabel(count: number): string {
-  return count === 1 ? 'File deleted' : `${count} files deleted`;
+  return count === 1
+    ? 'File deleted. Undo or find it in Recently deleted.'
+    : `${count} files deleted. Undo or find them in Recently deleted.`;
+}
+
+/** The toast when a selection reaches the batch cap. Pure. */
+export function selectCapLabel(cap: number): string {
+  return `You can select up to ${cap} files at once.`;
+}
+
+/** The toast when Select all stops at the batch cap. Pure. */
+export function selectAllCapLabel(cap: number): string {
+  return `Selected the first ${cap}. You can select up to ${cap} files at once.`;
+}
+
+/**
+ * Whether ?asset= should report the file as gone: the library has loaded (an
+ * empty library counts) and no row has that id. Pure.
+ */
+export function assetParamIsGone(
+  loaded: boolean,
+  items: readonly { id: string }[],
+  assetId: string,
+): boolean {
+  return loaded && !items.some((item) => item.id === assetId);
 }
 
 /** The failure toast when a delete could not be saved; the files are back. */

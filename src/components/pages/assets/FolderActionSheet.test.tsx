@@ -31,7 +31,7 @@ describe('FolderActionSheet menu', () => {
 });
 
 describe('confirmDeleteFolder', () => {
-  it('toasts and closes after a successful delete', async () => {
+  it('closes after a successful delete; the page Undo toast carries the copy', async () => {
     const onConfirmDelete = vi.fn(async (): Promise<FolderDeleteOutcome> => ({ ok: true }));
     const onToast = vi.fn();
     const onClose = vi.fn();
@@ -39,7 +39,7 @@ describe('confirmDeleteFolder', () => {
     await confirmDeleteFolder({ onConfirmDelete, onToast, onClose });
 
     expect(onConfirmDelete).toHaveBeenCalledOnce();
-    expect(onToast).toHaveBeenCalledWith('Folder deleted');
+    expect(onToast).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -47,7 +47,7 @@ describe('confirmDeleteFolder', () => {
     const onConfirmDelete = vi.fn(
       async (): Promise<FolderDeleteOutcome> => ({
         ok: false,
-        message: 'Only creators can delete folders',
+        message: 'Only creators and admins can delete folders.',
       }),
     );
     const onToast = vi.fn();
@@ -55,7 +55,7 @@ describe('confirmDeleteFolder', () => {
 
     await confirmDeleteFolder({ onConfirmDelete, onToast, onClose });
 
-    expect(onToast).toHaveBeenCalledWith('Only creators can delete folders');
+    expect(onToast).toHaveBeenCalledWith('Only creators and admins can delete folders.');
     expect(onClose).not.toHaveBeenCalled();
   });
 });

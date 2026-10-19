@@ -17,6 +17,12 @@ interface NewFolderSheetProps {
   onCreated: () => void;
 }
 
+/** The Sheet's discard confirm for a typed folder name. */
+export const NEW_FOLDER_DISCARD = {
+  title: 'Discard this folder?',
+  message: 'The name you typed will be lost.',
+};
+
 /**
  * Validate a typed folder name. Returns the inline error to show, or null when
  * the trimmed name is a usable length (1..80). Pure, so the gate is unit-tested
@@ -81,6 +87,8 @@ export function NewFolderSheet({
   const error = folderNameError(name);
   const canSubmit = error === null && !submitting;
   const showError = touched && error !== null;
+  // A typed name is unsaved work: X, Escape, the backdrop and system Back ask first.
+  const dirty = name !== '';
 
   async function submit(): Promise<void> {
     if (error !== null) {
@@ -106,7 +114,16 @@ export function NewFolderSheet({
   );
 
   return (
-    <Sheet open={open} onClose={onClose} title="New folder" footer={footer}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="New folder"
+      footer={footer}
+      dirty={dirty}
+      discard={NEW_FOLDER_DISCARD}
+      busy={submitting}
+      busyLabel="Creating…"
+    >
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-medium text-fg-2">Name</span>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
@@ -18,6 +18,12 @@ interface FolderRenameSheetProps {
   /** Called once after a successful rename, to refresh the folder list. */
   onRenamed: () => void;
 }
+
+/** The Sheet's discard confirm for an edited folder name. */
+export const FOLDER_RENAME_DISCARD = {
+  title: 'Discard the new name?',
+  message: 'The folder keeps its current name.',
+};
 
 /**
  * Whether the Save action is enabled: the trimmed name must be a usable length
@@ -78,17 +84,19 @@ export function FolderRenameSheet({
   const [takenError, setTakenError] = useState<string | null>(null);
 
   // Prefill with the current name whenever the sheet opens; clear all state when
-  // it closes so it never reopens dirty.
-  useEffect(() => {
-    if (open) {
-      setName(initialName);
-      setTakenError(null);
-    } else {
-      setName('');
-      setTakenError(null);
-      setSubmitting(false);
-    }
-  }, [open, initialName]);
+  // it closes so it never reopens dirty. Done while rendering (not in an
+  // effect) so the open frame never reads as dirty and places a Back guard.
+  const seedKey = open ? initialName : null;
+  const [seeded, setSeeded] = useState<string | null>(seedKey);
+  if (seeded !== seedKey) {
+    setSeeded(seedKey);
+    setName(open ? initialName : '');
+    setTakenError(null);
+    if (!open) setSubmitting(false);
+  }
+
+  // A changed name is unsaved work: X, Escape, the backdrop and system Back ask first.
+  const dirty = open && name !== initialName;
 
   const canSubmit = canSaveFolderName(name, initialName) && !submitting;
 
@@ -113,7 +121,15 @@ export function FolderRenameSheet({
   );
 
   return (
-    <Sheet open={open} onClose={onClose} title="Rename folder" footer={footer}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Rename folder"
+      footer={footer}
+      dirty={dirty}
+      discard={FOLDER_RENAME_DISCARD}
+      busy={submitting}
+    >
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-medium text-fg-2">Name</span>

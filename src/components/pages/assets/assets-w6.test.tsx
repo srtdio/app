@@ -160,8 +160,8 @@ describe('5. menu rows in order, Delete last', () => {
 
 describe('6. delete hides now and commits after the Undo window', () => {
   it('uses useUndoableAction with the File deleted copy', () => {
-    expect(deleteToastLabel(1)).toBe('File deleted');
-    expect(deleteToastLabel(3)).toBe('3 files deleted');
+    expect(deleteToastLabel(1)).toBe('File deleted. Undo or find it in Recently deleted.');
+    expect(deleteToastLabel(3)).toBe('3 files deleted. Undo or find them in Recently deleted.');
     expect(pageSource).toContain('useUndoableAction');
     expect(pageSource).not.toContain('ConfirmDialog');
   });
