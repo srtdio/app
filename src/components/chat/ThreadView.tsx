@@ -11,6 +11,8 @@ import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { COARSE_POINTER_QUERY, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { useModalFocus } from '@/lib/modal-focus';
+import { IconChevronLeft } from '@/components/ui/icons';
 
 /** The view's fade, in and out (opacity only). */
 const THREAD_VIEW_FADE_MS = 150;
@@ -52,6 +54,11 @@ export function ThreadViewFrame(props: {
   const [shown, setShown] = useState(reduced);
   const [closing, setClosing] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // FB2: focus moves in (Close), Tab stays inside the view, and returns to
+  // the opener when it goes. No aria-modal: the view's own Escape reads
+  // aria-modal as "another overlay is up".
+  useModalFocus(rootRef, true, { initial: () => closeRef.current });
   const onClosedRef = useRef(props.onClosed);
   onClosedRef.current = props.onClosed;
   // Fade in from the first frame; focus lands on Close so Escape reaches the view.
@@ -90,6 +97,7 @@ export function ThreadViewFrame(props: {
   };
   return (
     <div
+      ref={rootRef}
       role="dialog"
       aria-label={props.title}
       data-thread-view=""
@@ -113,13 +121,15 @@ export function ThreadViewFrame(props: {
           ref={closeRef}
           type="button"
           data-thread-view-close=""
+          aria-label="Close thread"
           onClick={close}
           className={cn(
-            'flex min-h-[44px] min-w-[44px] items-center justify-self-start rounded-md px-4 text-sm font-medium text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            // FN23: the dismiss is a chevron, like every other chat layer's back.
+            'ml-1 flex h-11 w-11 items-center justify-center justify-self-start rounded-md text-fg-2 hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             NO_TOUCH_SELECT,
           )}
         >
-          Close
+          <IconChevronLeft size={20} />
         </button>
         <span
           data-thread-view-title=""

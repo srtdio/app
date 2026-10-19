@@ -3,6 +3,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { cn } from '@/lib/cn';
 import type { MemberOption } from '@/components/chat/member-picker';
+import { listSkeleton } from '@/components/chat/ListSkeleton';
 
 interface MemberPickerProps {
   options: MemberOption[];
@@ -21,7 +22,7 @@ interface MemberPickerProps {
  */
 export function MemberPicker(props: MemberPickerProps): ReactElement {
   if (props.loading) {
-    return <p className="px-1 py-3 text-sm text-fg-3">Loading members</p>;
+    return listSkeleton('Loading members');
   }
   if (props.error !== null) {
     return (

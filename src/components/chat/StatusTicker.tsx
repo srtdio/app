@@ -44,6 +44,7 @@ import {
   type StatusTone,
 } from '@/lib/chat/status-bar';
 import { paintLog, paintLogOn } from '@/components/chat/PaintLog';
+import { useModalFocus } from '@/lib/modal-focus';
 
 /** Snap open past this share of the panel's height. */
 export const SNAP_SHARE = 0.4;
@@ -101,8 +102,8 @@ function TickerItem(props: {
       ) : null}
     </>
   );
-  const box = 'flex h-9 shrink-0 items-center gap-1 whitespace-nowrap text-xs leading-4 text-fg-2';
-  if (props.measure === true) return <span className={box}>{parts}</span>;
+  const box = 'flex shrink-0 items-center gap-1 whitespace-nowrap text-xs leading-4 text-fg-2';
+  if (props.measure === true) return <span className={cn(box, 'h-9')}>{parts}</span>;
   return (
     <button
       type="button"
@@ -110,8 +111,10 @@ function TickerItem(props: {
       aria-label={item.aria}
       className={cn(
         box,
-        // The 44px tap target: 4px above and below, half the gap each side.
-        "relative before:absolute before:-inset-y-1 before:content-['']",
+        // FT45: the button itself is 44px tall (h-11, pulled back into the 36px
+        // bar by -my-1), so the hit area never depends on the pseudo element;
+        // the pseudo element still widens it by half the gap each side.
+        "relative -my-1 h-11 before:absolute before:-inset-y-1 before:content-['']",
         compact ? 'before:-inset-x-1' : 'before:-inset-x-1.5',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
@@ -254,7 +257,7 @@ export function StatusTickerBar(props: {
         data-status-chevron=""
         aria-label={open ? 'Hide open items' : 'Show open items'}
         aria-expanded={open}
-        className="relative flex h-9 w-4 shrink-0 items-center justify-center text-fg-3 before:absolute before:-inset-x-3.5 before:-inset-y-1 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="relative -my-1 flex h-11 w-4 shrink-0 items-center justify-center text-fg-3 before:absolute before:-inset-x-3.5 before:-inset-y-1 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span
           data-status-chevron-icon={open ? 'up' : 'down'}
@@ -472,6 +475,10 @@ export function ChatStatus(props: {
   });
   const barEl = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  // FB2: the open drawer owns focus (in on open, Tab inside, back on close).
+  // No aria-modal here: the ticker's own Escape reads aria-modal as "another
+  // overlay is up".
+  useModalFocus(panelRef, shown && target === 'open' && interactive);
   const listRef = useRef<HTMLDivElement | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const suppressClick = useRef(false);

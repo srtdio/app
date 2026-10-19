@@ -1,10 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type {
-  KeyboardEvent as ReactKeyboardEvent,
-  ReactElement,
-  ReactNode,
-  RefObject,
-} from 'react';
+import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
   IconAlarmClock,
@@ -36,6 +31,8 @@ import type { ThreadMessage } from '@/lib/chat/thread';
 import { formatClock, formatSendLabel } from '@/lib/chat/scheduled';
 import { cn } from '@/lib/cn';
 import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
+import { useModalFocus } from '@/lib/modal-focus';
+import { moveMenuFocus } from '@/lib/chat/menu-keys';
 
 /** Quick-react row offered when a message's action menu is opened; "+" opens the picker after it. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🆗', '🙏'] as const;
@@ -942,9 +939,6 @@ export function returnPickerFocus(plus: (Focusable & { isConnected: boolean }) |
   return true;
 }
 
-const PICKER_FOCUSABLE =
-  'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 /** The picker body's load failure line (never the raw error). */
 export const EMOJI_LOAD_FAILED = "Couldn't load emoji";
 
@@ -1071,18 +1065,12 @@ export function EmojiPickerShell(props: {
     }
     pickerInitialFocus(layout, dialog).focus({ preventScroll: true });
   }, [open, ready, failed, layout]);
+  // FB2: the picker is a modal layer in X1's focus stack: Tab stays inside
+  // (only the top layer traps). Its own effect above already placed focus
+  // inside and returnPickerFocus hands it back to "+".
+  useModalFocus(dialogRef, open);
 
   if (!open) return null;
-
-  const trapTab = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.key !== 'Tab') return;
-    const dialog = dialogRef.current;
-    if (dialog === null) return;
-    event.preventDefault();
-    const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(PICKER_FOCUSABLE));
-    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    nextTrapFocus(focusables, active, event.shiftKey)?.focus();
-  };
 
   const close = (
     <IconButton
@@ -1122,7 +1110,6 @@ export function EmojiPickerShell(props: {
     'aria-modal': true,
     'aria-busy': pickerBodyState(module, failed) === 'loading',
     tabIndex: -1,
-    onKeyDown: trapTab,
   } as const;
 
   if (layout === 'laptop') {
@@ -1495,6 +1482,10 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           role="menu"
           aria-label="Message actions"
           data-menu-items=""
+          onKeyDown={(event) => {
+            // FB2: a popover menu (no aria-modal): arrow keys move between items.
+            if (moveMenuFocus(containerRef.current, event.key)) event.preventDefault();
+          }}
           className={cn(
             'fixed z-50 max-w-[calc(100vw-16px)]',
             MENU_PANEL,

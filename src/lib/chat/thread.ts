@@ -239,6 +239,12 @@ export interface ThreadMessage {
    * "Photos not sent" and offers Remove only. Absent is the same as false.
    */
   filesMissing?: boolean;
+  /**
+   * An own failed send the server or upload Worker refused for good: the
+   * reason in plain words ("Files up to 100MB only"). It shows with Delete
+   * only, never Retry. Absent on a failure that may go through on Retry.
+   */
+  refusal?: string;
   /** Server edited_at when the body was edited; absent is the same as null. */
   editedAt?: string | null;
   /**
@@ -1067,8 +1073,15 @@ export function setMessageState(
   messages: ThreadMessage[],
   id: string,
   state: MessageState,
+  refusal?: string,
 ): ThreadMessage[] {
-  return messages.map((m) => (m.id === id ? { ...m, state } : m));
+  return messages.map((m) => {
+    if (m.id !== id) return m;
+    const next: ThreadMessage = { ...m, state };
+    if (refusal !== undefined) next.refusal = refusal;
+    else delete next.refusal;
+    return next;
+  });
 }
 
 /** Replace one message's attachments (upload progress, a returned version id). */
@@ -1129,6 +1142,7 @@ export interface UnrecordedSend {
   /** Estimated server time of the Send tap; absent on a send persisted before it was kept. */
   createdMs?: number;
   filesMissing?: true;
+  refusal?: string;
 }
 
 /**
@@ -1162,6 +1176,9 @@ export function withOutboxBubbles(
       ...bubble,
       state: entry.state,
       ...(entry.filesMissing === true ? { filesMissing: true } : {}),
+      ...(entry.state === 'failed' && entry.refusal !== undefined
+        ? { refusal: entry.refusal }
+        : {}),
     });
   }
   return list.sort(compareMessages);

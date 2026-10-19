@@ -282,9 +282,10 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   expect(copy[0]?.args.p_forwarded_from_message_id).toBe(own[0]?.args.p_id);
 
   // The list: the DM's preview is the snapshot's first line.
-  await page.getByRole('button', { name: /back/i }).first().click();
+  // Exact: chat tiles now name their preview (X7 FT44), which may say "back".
+  await page.getByRole('button', { name: 'Back to conversations' }).first().click();
   const firstLine = body.split('\n')[0] ?? '';
-  const dmRow = page.getByRole('button', { name: new RegExp(PEER_NAME) }).first();
+  const dmRow = page.getByRole('button', { name: new RegExp(`^Open ${PEER_NAME}`) }).first();
   await expect(dmRow).toContainText(firstLine);
   await dmRow.click();
   const there = page.locator('[data-bubble]', { hasText: firstLine });

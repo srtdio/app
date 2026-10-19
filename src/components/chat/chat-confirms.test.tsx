@@ -49,7 +49,7 @@ describe('delete chats confirm', () => {
     ).toBeNull();
   });
 
-  it('is a destructive ConfirmDialog that runs the delete on confirm and closes on cancel', () => {
+  it('is a non-destructive ConfirmDialog (X7 FT43) that hides on confirm and closes on cancel', () => {
     const onConfirm = vi.fn();
     const onCancel = vi.fn();
     const one = dialog(
@@ -59,9 +59,10 @@ describe('delete chats confirm', () => {
       title: 'Hide this chat?',
       message: DELETE_CHATS_MESSAGE,
       confirmLabel: 'Hide',
-      destructive: true,
       busy: false,
     });
+    // Hide is reversible (a new message brings the chat back): never the bad token.
+    expect(one.destructive).not.toBe(true);
     expect(DELETE_CHATS_MESSAGE).toBe(
       'Hidden for you only. It comes back if someone sends a new message.',
     );

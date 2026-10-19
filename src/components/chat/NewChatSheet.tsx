@@ -34,6 +34,36 @@ type Mode = 'choose' | 'dm' | 'group';
 export const NEW_DM_FAILED = "Couldn't start the chat, try again";
 export const NEW_GROUP_FAILED = "Couldn't create the group, try again";
 
+/** Discard confirm while a group name is typed or anyone is picked (FB3). */
+export const NEW_CHAT_DISCARD = {
+  title: 'Discard this chat?',
+  message: 'Your group name and picked people will be lost.',
+};
+
+/** Inline reasons a tap on Start chat / Create group cannot go yet (FT47). */
+export const PICK_SOMEONE = 'Pick at least one person';
+export const NAME_THE_GROUP = 'Name the group';
+
+/** Whether the sheet holds input worth a discard confirm. Pure. */
+export function newChatDirty(state: {
+  name: string;
+  selectedIds: readonly string[];
+  peerId: string | null;
+}): boolean {
+  return state.name.trim() !== '' || state.selectedIds.length > 0 || state.peerId !== null;
+}
+
+/** Why the primary action cannot run yet, or null when it can. Pure. */
+export function newChatMissing(
+  mode: 'dm' | 'group',
+  state: { name: string; selectedIds: readonly string[]; peerId: string | null },
+): string | null {
+  if (mode === 'dm') return state.peerId === null ? PICK_SOMEONE : null;
+  if (state.name.trim() === '') return NAME_THE_GROUP;
+  if (state.selectedIds.length === 0) return PICK_SOMEONE;
+  return null;
+}
+
 /** Log a failed DM ensure or group create and return its fixed copy. */
 export function newChatFailureCopy(kind: 'dm' | 'group', failure: DomainError): string {
   logger.warn(kind === 'dm' ? 'chat: dm start failed' : 'chat: group create failed', {
@@ -59,6 +89,8 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The reason a tap on the primary action could not go (cleared on any edit).
+  const [missing, setMissing] = useState<string | null>(null);
 
   // Reset to a clean state every time the sheet opens.
   useEffect(() => {
@@ -69,8 +101,13 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
       setSelectedIds([]);
       setBusy(false);
       setError(null);
+      setMissing(null);
     }
   }, [props.open]);
+
+  // Any edit clears the inline reason; the next tap re-checks.
+  useEffect(() => setMissing(null), [name, selectedIds, peerId, mode]);
+  const dirty = newChatDirty({ name, selectedIds, peerId });
 
   // The current user can never be their own DM peer or a group co-member of self.
   const options = excludeMembers(members.options, [props.currentUserId]);
@@ -82,7 +119,12 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
   }
 
   async function submitDm(): Promise<void> {
-    if (peerId === null || busy) return;
+    if (busy) return;
+    const reason = newChatMissing('dm', { name, selectedIds, peerId });
+    if (reason !== null || peerId === null) {
+      setMissing(reason ?? PICK_SOMEONE);
+      return;
+    }
     setBusy(true);
     setError(null);
     const failure = await startDmChannel(
@@ -96,7 +138,12 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
 
   async function submitGroup(): Promise<void> {
     const trimmed = name.trim();
-    if (trimmed.length === 0 || selectedIds.length === 0 || busy) return;
+    if (busy) return;
+    const reason = newChatMissing('group', { name, selectedIds, peerId });
+    if (reason !== null) {
+      setMissing(reason);
+      return;
+    }
     setBusy(true);
     setError(null);
     const failure = await createGroupChannel(
@@ -125,7 +172,16 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     ) : null;
 
   return (
-    <Sheet open={props.open} onClose={props.onClose} title={title} footer={footer()}>
+    <Sheet
+      open={props.open}
+      onClose={props.onClose}
+      title={title}
+      footer={footer()}
+      dirty={dirty}
+      discard={NEW_CHAT_DISCARD}
+      busy={busy}
+      busyLabel={mode === 'dm' ? 'Starting…' : 'Creating…'}
+    >
       {errorBanner}
       {body()}
     </Sheet>
@@ -139,11 +195,12 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
           <Button size="lg" disabled={busy} onClick={() => setMode('choose')}>
             Back
           </Button>
+          {missingLine()}
           <Button
             size="lg"
             variant="primary"
-            className="ml-auto"
-            disabled={peerId === null || busy}
+            className={missing === null ? 'ml-auto' : undefined}
+            disabled={busy}
             onClick={() => void submitDm()}
           >
             {busy ? 'Starting' : 'Start chat'}
@@ -156,16 +213,26 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
         <Button size="lg" disabled={busy} onClick={() => setMode('choose')}>
           Back
         </Button>
+        {missingLine()}
         <Button
           size="lg"
           variant="primary"
-          className="ml-auto"
-          disabled={name.trim().length === 0 || selectedIds.length === 0 || busy}
+          className={missing === null ? 'ml-auto' : undefined}
+          disabled={busy}
           onClick={() => void submitGroup()}
         >
           {busy ? 'Creating' : 'Create group'}
         </Button>
       </>
+    );
+  }
+
+  function missingLine(): ReactElement | null {
+    if (missing === null) return null;
+    return (
+      <p data-new-chat-missing="" role="alert" className="ml-auto text-right text-sm text-bad">
+        {missing}
+      </p>
     );
   }
 

@@ -141,6 +141,7 @@ import {
   type ReplyQuote,
 } from '@/lib/chat/attachments';
 import type { ChatConnection, ChatStatus } from '@/lib/chat/types';
+import { channelOlderKey, setOlderPageFailed } from '@/lib/chat/older-page-status';
 
 /**
  * The channel's read cursors for the reading layer: every member's position
@@ -268,6 +269,11 @@ export interface UseChatThread {
    */
   deleteMessages: (
     messageIds: readonly string[],
+    /**
+     * The chat the ids belong to; absent: the open chat. A delete committed
+     * after its Undo window may land once the chat was left (FT39).
+     */
+    channelId?: string,
   ) => Promise<
     { ok: true; toast?: string } | { ok: false; message: string; deleted: readonly string[] }
   >;
@@ -1449,6 +1455,7 @@ export function useChatThread(params: {
     if (forChannel === null || cursor === undefined || loadingOlderRef.current) return;
     loadingOlderRef.current = true;
     setLoadingOlder(true);
+    setOlderPageFailed(channelOlderKey(forChannel), false);
     void (async (): Promise<void> => {
       const page = await loadOlderMessages(db, forChannel, cursor);
       loadingOlderRef.current = false;
@@ -1459,6 +1466,8 @@ export function useChatThread(params: {
           channel_id: forChannel,
           error: page.error.message,
         });
+        // FT41: the list shows "Couldn't load earlier messages." + Retry.
+        setOlderPageFailed(channelOlderKey(forChannel), true);
         return;
       }
       const fetched = page.data.rows.map((row) => rowToThreadMessage(row, currentUserId));
@@ -1549,7 +1558,7 @@ export function useChatThread(params: {
             ? prev.map((m) =>
                 m.id === event.id ? { ...m, state: event.state, filesMissing: true } : m,
               )
-            : setMessageState(prev, event.id, event.state),
+            : setMessageState(prev, event.id, event.state, event.refusal),
         );
       }),
     [outbox, currentUserId],
@@ -1810,12 +1819,15 @@ export function useChatThread(params: {
   );
 
   const deleteMessages = useCallback<UseChatThread['deleteMessages']>(
-    async (messageIds) => {
-      const forChannel = channelRef.current;
+    async (messageIds, channelId) => {
+      const forChannel = channelId ?? channelRef.current;
       if (forChannel === null || messageIds.length === 0) return { ok: true };
       const traceId = generateTraceId();
-      const connection = clientRef.current;
-      const liveTarget = targetRef.current;
+      // The live signal goes to the open chat's target only; a delete for a
+      // chat already left skips it (peers read the tombstone from Postgres).
+      const open = channelRef.current === forChannel;
+      const connection = open ? clientRef.current : null;
+      const liveTarget = open ? targetRef.current : null;
       const result = await runDelete(
         {
           client: db,

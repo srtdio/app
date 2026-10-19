@@ -25,6 +25,8 @@ import {
   toggleForwardTarget,
 } from '@/lib/chat/forward';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
+import { useHistoryStep } from '@/lib/chat/use-history-step';
+import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
 export type ForwardSendResult = { ok: true } | { ok: false; failed: ChannelSummary | null };
 
@@ -36,6 +38,13 @@ interface ForwardPickerProps {
   onSend: (targets: ChannelSummary[]) => Promise<ForwardSendResult>;
   /** Called after every chat received every message. */
   onSent: () => void;
+  /**
+   * Push its own history step so system Back closes only the picker (FT40).
+   * Off by default: the Tasks sheet's nested picker (X4) closes together with
+   * its sheet on send, and two steps popping in one tick leave WebKit's
+   * history one entry off, so Back no longer returns to the chat list.
+   */
+  historyStep?: boolean;
 }
 
 /**
@@ -68,6 +77,8 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // System Back closes only the picker; the chat (or task sheet) under it stays.
+  useHistoryStep(props.open && props.historyStep === true, SHEET_STEP_KEYS.forward, props.onClose);
 
   useEffect(() => {
     if (!props.open) return;

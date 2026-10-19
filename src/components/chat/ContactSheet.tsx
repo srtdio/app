@@ -30,6 +30,7 @@ export {
   type ContactTab,
   type Feed,
 } from '@/components/chat/ChatInfoTabs';
+import { ModalPanel } from '@/components/chat/ModalPanel';
 
 /** The page title when no `heading` is given. */
 export const CONTACT_HEADING = 'Contact info';
@@ -64,12 +65,10 @@ function contactPage(props: {
   tabs: ReactElement;
 }): ReactElement {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <ModalPanel
       aria-label={props.heading}
       data-contact-page=""
-      className="fixed inset-0 z-50 flex flex-col bg-bg"
+      className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel px-2 md:px-4">
         <IconButton label={`Close ${props.heading.toLowerCase()}`} onClick={props.onClose}>
@@ -93,7 +92,7 @@ function contactPage(props: {
           {props.tabs}
         </div>
       </div>
-    </div>
+    </ModalPanel>
   );
 }
 

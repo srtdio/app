@@ -77,6 +77,22 @@ export function classifyUploadFailure(message: string, status?: number | null): 
   return 'transient';
 }
 
+/** Plain words for a message the server refused for good (not a file refusal). */
+export const RECORD_REFUSED = "This message can't be sent.";
+/** Plain words for a file the upload Worker refused without a known reason. */
+export const UPLOAD_REFUSED = "This file can't be sent.";
+
+/**
+ * The reason a permanently refused send shows under its bubble, in plain
+ * words: an upload refusal's own copy when it names the file's problem
+ * (size, type, contents, virus and the other safety refusals), else a
+ * generic line for the stage that refused it. Pure.
+ */
+export function refusalReason(stage: 'upload' | 'record', error: string): string {
+  if (stage === 'upload') return UPLOAD_CODE_BY_MESSAGE.has(error) ? error : UPLOAD_REFUSED;
+  return RECORD_REFUSED;
+}
+
 /** The HTTP status a failed chat upload carries (use-chat-attachments adds it), if any. */
 export function uploadFailureStatus(result: { ok: false; message: string }): number | undefined {
   const status = (result as { status?: unknown }).status;
