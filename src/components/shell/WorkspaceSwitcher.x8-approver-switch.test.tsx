@@ -49,7 +49,7 @@ import { stepsFor } from '@/lib/onboarding';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let root: Root | null = null;
-const setStep = vi.fn(async (_step: string) => true);
+const setStep = vi.fn<(step: string) => Promise<boolean>>(async () => true);
 
 async function mount(withSwitch: boolean): Promise<void> {
   const host = document.createElement('div');
