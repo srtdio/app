@@ -93,6 +93,9 @@ vi.mock('@supabase/supabase-js', () => {
 import worker, {
   authorizeAndSign,
   authorizeAndSignRendition,
+  thumbnailWindowStart,
+  THUMBNAIL_TTL_SECONDS,
+  THUMBNAIL_WINDOW_SECONDS,
   authorizeAndStream,
   authorizeVersion,
   getSupabaseJwks,
@@ -583,8 +586,29 @@ describe('authorizeVersion', () => {
   });
 });
 
+/** The signer call a thumbnail makes: windowed, long-lived, cacheable, inline. */
+function thumbCall(key: string): Record<string, unknown> {
+  return {
+    bucket: BUCKET,
+    key,
+    expiresInSeconds: THUMBNAIL_TTL_SECONDS,
+    signedAt: thumbnailWindowStart(Date.now()),
+    cacheControl: `private, max-age=${THUMBNAIL_WINDOW_SECONDS}`,
+  };
+}
+
+describe('thumbnailWindowStart', () => {
+  it('gives every instant in a window the same start, the next window a new one', () => {
+    const start = Date.UTC(2026, 9, 19, 6, 0, 0);
+    const w = THUMBNAIL_WINDOW_SECONDS * 1000;
+    expect(thumbnailWindowStart(start).getTime()).toBe(start);
+    expect(thumbnailWindowStart(start + w - 1).getTime()).toBe(start);
+    expect(thumbnailWindowStart(start + w).getTime()).toBe(start + w);
+  });
+});
+
 describe('authorizeAndSignRendition', () => {
-  it('signs the rendition key inline for 900 s for a readable version', async () => {
+  it('signs the rendition key inline as of its window, so the URL repeats and caches', async () => {
     const signer = new RecordingSigner();
     const renditions = new FakeRenditions(thumbRendition);
     const before = Date.now();
@@ -595,11 +619,16 @@ describe('authorizeAndSignRendition', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.url).toBe(`https://signed.example/${THUMB_KEY}?sig=abc`);
-    const expiresIn = Date.parse(result.value.expires_at) - before;
-    expect(expiresIn).toBeGreaterThanOrEqual(899_000);
-    expect(expiresIn).toBeLessThanOrEqual(901_000);
-    // Exactly bucket, rendition key, and TTL: no downloadFilename, so inline.
-    expect(signer.calls).toEqual([{ bucket: BUCKET, key: THUMB_KEY, expiresInSeconds: 900 }]);
+    const signedAt = thumbnailWindowStart(before);
+    expect(Date.parse(result.value.expires_at)).toBe(
+      signedAt.getTime() + THUMBNAIL_TTL_SECONDS * 1000,
+    );
+    // Still valid for at least the rest of the window: never handed out nearly expired.
+    expect(Date.parse(result.value.expires_at) - before).toBeGreaterThanOrEqual(
+      (THUMBNAIL_TTL_SECONDS - THUMBNAIL_WINDOW_SECONDS) * 1000,
+    );
+    // Inline (no downloadFilename), signed as of the window start, cacheable.
+    expect(signer.calls).toEqual([thumbCall(THUMB_KEY)]);
     expect(renditions.finds).toEqual([{ assetVersionId: VERSION_ID, role: 'thumbnail' }]);
   });
 
@@ -644,7 +673,7 @@ describe('authorizeAndSignRendition', () => {
       { userId: USER, assetVersionId: VERSION_ID },
     );
     expect(result.ok).toBe(true);
-    expect(signer.calls).toEqual([{ bucket: BUCKET, key: THUMB_KEY, expiresInSeconds: 900 }]);
+    expect(signer.calls).toEqual([thumbCall(THUMB_KEY)]);
   });
 
   it("returns 'no_rendition' when the version has no thumbnail", async () => {
@@ -951,7 +980,21 @@ describe('worker.fetch thumbnail and stream modes', () => {
     expect(Object.keys(body).sort()).toEqual(['expires_at', 'url']);
     expect(String(body.url)).toContain(`/${BUCKET}/pdf/aaaa/v1-thumb.jpg?`);
     expect(String(body.url)).not.toContain('response-content-disposition');
-    expect(presign).toHaveBeenCalledWith({ bucket: BUCKET, key: THUMB_KEY, expiresInSeconds: 900 });
+    expect(presign).toHaveBeenCalledWith(thumbCall(THUMB_KEY));
+  });
+
+  it("rendition 'thumbnail' repeats the same cacheable URL within a window", async () => {
+    const first = (await (
+      await post({ asset_version_id: VERSION_ID, rendition: 'thumbnail' })
+    ).json()) as { url: string };
+    const second = (await (
+      await post({ asset_version_id: VERSION_ID, rendition: 'thumbnail' })
+    ).json()) as { url: string };
+    expect(first.url).toContain('response-cache-control=private%2C%20max-age%3D21600');
+    expect(first.url.indexOf('response-cache-control')).toBeLessThan(
+      first.url.indexOf('X-Amz-Signature'),
+    );
+    expect(second.url).toBe(first.url);
   });
 
   it("rendition 'thumbnail' answers 404 no_rendition when there is none", async () => {

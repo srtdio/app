@@ -11,6 +11,12 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { Client } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
+import {
+  POST_COVERS_KEY,
+  clearLocalCachesOnSignOut,
+  readEntries,
+  writeEntries,
+} from '@/lib/local-cache';
 import { readPostCovers, type CardFirstMedia } from '../../../packages/posts/src/reads';
 
 /** A post's cover: its first photo or video, null for none, undefined while unknown. */
@@ -24,6 +30,33 @@ export interface CoverEntry {
 }
 
 const entries = new Map<string, CoverEntry>();
+let loaded = false;
+
+function isCover(value: unknown): value is CardFirstMedia | null {
+  if (value === null) return true;
+  if (typeof value !== 'object') return false;
+  const v = value as Partial<CardFirstMedia>;
+  return typeof v.assetVersionId === 'string' && (v.kind === 'image' || v.kind === 'video');
+}
+
+function isCoverEntry(value: unknown): value is CoverEntry {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as { cover?: unknown; at?: unknown };
+  return typeof v.at === 'number' && isCover(v.cover ?? null) && 'cover' in v;
+}
+
+/**
+ * Covers kept on this device from earlier sessions paint at once (they are
+ * read again in the background when older than COVER_TTL_MS). Loaded once.
+ */
+function loadPersisted(): void {
+  if (loaded) return;
+  loaded = true;
+  clearLocalCachesOnSignOut();
+  for (const [key, entry] of readEntries(POST_COVERS_KEY, isCoverEntry)) {
+    if (!entries.has(key)) entries.set(key, entry);
+  }
+}
 const inflight = new Set<string>();
 const listeners = new Set<() => void>();
 let version = 0;
@@ -50,6 +83,7 @@ function snapshot(): number {
 
 /** The stored cover for a post (stale or not), undefined when never read. */
 export function coverFor(workspaceId: string, postId: string): CardFirstMedia | null | undefined {
+  loadPersisted();
   return entries.get(keyOf(workspaceId, postId))?.cover;
 }
 
@@ -76,6 +110,7 @@ export async function requestPostCovers(
   workspaceId: string,
   ids: readonly string[],
 ): Promise<void> {
+  loadPersisted();
   const need = idsToRead(
     ids,
     (id) => entries.get(keyOf(workspaceId, id)),
@@ -88,7 +123,13 @@ export async function requestPostCovers(
     const result = await readPostCovers(client, need);
     if (!result.ok) return;
     const at = Date.now();
-    for (const [id, cover] of result.data) entries.set(keyOf(workspaceId, id), { cover, at });
+    for (const [id, cover] of result.data) {
+      const key = keyOf(workspaceId, id);
+      // Re-insert so the newest covers are the last kept when the cap trims.
+      entries.delete(key);
+      entries.set(key, { cover, at });
+    }
+    writeEntries(POST_COVERS_KEY, [...entries]);
     notify();
   } catch {
     // A transport failure leaves the ids unknown; the next request retries.

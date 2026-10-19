@@ -175,6 +175,16 @@ const DEFAULT_REFRESH_SKEW_MS = 60_000;
 /** A static file does not expire; a week out keeps refresh timers in setTimeout's range. */
 const STATIC_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Where thumbnail URLs outlive the page: the cache loads the still-valid ones
+ * when it is made and saves after each new one, so a reopened app paints its
+ * small pictures from the browser's own cache with no presign round trip.
+ */
+export interface ThumbnailUrlStore {
+  load(): ReadonlyArray<readonly [string, PresignedUrl]>;
+  save(entries: ReadonlyArray<readonly [string, PresignedUrl]>): void;
+}
+
 export class PresignCache {
   private readonly cache = new Map<string, PresignedUrl>();
   private readonly inflight = new Map<string, Promise<PresignedUrl>>();
@@ -189,7 +199,14 @@ export class PresignCache {
     private readonly deps: PresignDeps,
     private readonly concurrency = DEFAULT_CONCURRENCY,
     private readonly refreshSkewMs = DEFAULT_REFRESH_SKEW_MS,
-  ) {}
+    private readonly thumbStore: ThumbnailUrlStore | null = null,
+  ) {
+    if (thumbStore === null) return;
+    const now = Date.now();
+    for (const [versionId, url] of thumbStore.load()) {
+      if (now < url.expiresAt - refreshSkewMs) this.thumbCache.set(versionId, url);
+    }
+  }
 
   /** A cached, still-valid URL for synchronous render, or null. */
   peek(assetVersionId: string): PresignedUrl | null {
@@ -218,7 +235,10 @@ export class PresignCache {
     const promise = this.withSlot(() => requestThumbnailUrl(this.deps, assetVersionId))
       .then((url) => {
         if (url === null) this.noThumbnail.add(assetVersionId);
-        else this.thumbCache.set(assetVersionId, url);
+        else {
+          this.thumbCache.set(assetVersionId, url);
+          this.thumbStore?.save([...this.thumbCache]);
+        }
         return url;
       })
       .finally(() => {

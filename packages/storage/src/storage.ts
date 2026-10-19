@@ -626,8 +626,16 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
      * before, so image/video rendering is unaffected.
      */
     downloadFilename?: string;
+    /**
+     * Sign as of this instant instead of now. A caller that floors it to a
+     * window gets the same URL for every request in that window, so the
+     * browser's HTTP cache can serve the object again (expiry counts from it).
+     */
+    signedAt?: Date;
+    /** When set, the signed URL carries response-cache-control with this value. */
+    cacheControl?: string;
   }): Promise<string> {
-    const now = new Date();
+    const now = input.signedAt ?? new Date();
     const { full, short } = amzDate(now);
     const canonicalUri = `/${encodeSegment(input.bucket)}/${input.key
       .split('/')
@@ -647,6 +655,10 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
       ['X-Amz-Expires', String(input.expiresInSeconds)],
       ['X-Amz-SignedHeaders', 'host'],
     ];
+    // response-cache-control sorts before response-content-disposition ('a' < 'o').
+    if (input.cacheControl !== undefined) {
+      query.push(['response-cache-control', input.cacheControl]);
+    }
     if (input.downloadFilename !== undefined) {
       query.push(['response-content-disposition', attachmentDisposition(input.downloadFilename)]);
     }

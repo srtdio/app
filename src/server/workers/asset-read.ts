@@ -21,7 +21,7 @@
 //
 // Two additive modes, each authorized exactly as above on the PARENT version:
 //   { asset_version_id, rendition: 'thumbnail' } -> the version's thumbnail
-//     rendition presigned inline (900 s), or 404 { error: 'no_rendition' };
+//     rendition presigned inline (repeats per 6 h window, valid 12 h), or 404 { error: 'no_rendition' };
 //   { asset_version_id, stream: true } -> a PDF, Word (docx) or Excel (xlsx)
 //     version's bytes piped through this Worker (never buffered), Range/206
 //     passed through, so the in-app viewer never depends on per-bucket
@@ -173,7 +173,29 @@ export interface PresignedUrlSigner {
     expiresInSeconds: number;
     /** When set, the URL forces a Content-Disposition: attachment download. */
     downloadFilename?: string;
+    /** Sign as of this instant (a window start) so the URL repeats within the window. */
+    signedAt?: Date;
+    /** When set, the response carries this Cache-Control. */
+    cacheControl?: string;
   }): Promise<string>;
+}
+
+/**
+ * Thumbnail URLs repeat within a THUMBNAIL_WINDOW_SECONDS window (signed as of
+ * the window's start) and stay valid THUMBNAIL_TTL_SECONDS from it, so every
+ * request in a window gets the same URL and the browser serves the small copy
+ * from its own cache, across app restarts, with no download. Thumbnails are
+ * small copies of immutable versions, and the parent is still authorized on
+ * every request; only the URL's lifetime is longer than a full file's.
+ */
+export const THUMBNAIL_WINDOW_SECONDS = 6 * 60 * 60;
+export const THUMBNAIL_TTL_SECONDS = 12 * 60 * 60;
+const THUMBNAIL_CACHE_CONTROL = `private, max-age=${THUMBNAIL_WINDOW_SECONDS}`;
+
+/** The start of the thumbnail signing window holding `nowMs`. Pure. */
+export function thumbnailWindowStart(nowMs: number): Date {
+  const windowMs = THUMBNAIL_WINDOW_SECONDS * 1000;
+  return new Date(Math.floor(nowMs / windowMs) * windowMs);
 }
 
 /** Requested disposition for the signed URL. Defaults to inline. */
@@ -330,7 +352,8 @@ export interface RenditionReader {
 
 /**
  * The thumbnail mode: authorize the PARENT version exactly as a plain read,
- * then presign its thumbnail rendition inline for 900 s. A version without
+ * then presign its thumbnail rendition inline, as of its window's start (see
+ * THUMBNAIL_WINDOW_SECONDS). A version without
  * one is the 'no_rendition' miss (404).
  */
 export async function authorizeAndSignRendition(
@@ -349,12 +372,15 @@ export async function authorizeAndSignRendition(
   if (rendition === null) {
     return err('no_rendition');
   }
+  const signedAt = thumbnailWindowStart(Date.now());
   const url = await deps.signer.presignGetUrl({
     bucket: readable.value.bucket,
     key: rendition.r2Key,
-    expiresInSeconds: URL_TTL_SECONDS,
+    expiresInSeconds: THUMBNAIL_TTL_SECONDS,
+    signedAt,
+    cacheControl: THUMBNAIL_CACHE_CONTROL,
   });
-  const expires_at = new Date(Date.now() + URL_TTL_SECONDS * 1000).toISOString();
+  const expires_at = new Date(signedAt.getTime() + THUMBNAIL_TTL_SECONDS * 1000).toISOString();
   return ok({ url, expires_at });
 }
 
