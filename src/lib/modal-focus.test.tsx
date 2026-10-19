@@ -195,7 +195,8 @@ describe('initialFocusTarget (touch rule)', () => {
     const field = document.createElement('input');
     field.type = 'text';
     const button = document.createElement('button');
-    root.append(field, button);
+    root.appendChild(field);
+    root.appendChild(button);
     document.body.appendChild(root);
     return { root, field, button };
   }
