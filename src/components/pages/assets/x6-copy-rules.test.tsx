@@ -105,7 +105,7 @@ describe('X6 role and Recently deleted copy', () => {
     expect(renameErrorMessage(403)).toBe('Only creators and admins can rename files.');
   });
 
-  it('tells a member who can restore and who can delete early (asset_purge_request is owner only)', () => {
+  it('tells a member that only the owner deletes early (asset_purge_request is owner only)', () => {
     const out = renderToStaticMarkup(
       <RecentlyDeletedView
         items={[
@@ -128,7 +128,7 @@ describe('X6 role and Recently deleted copy', () => {
       />,
     );
     expect(out).toContain(MEMBER_PURGE_NOTE);
-    expect(MEMBER_PURGE_NOTE).toContain('Anyone in this workspace can restore');
+    expect(MEMBER_PURGE_NOTE).toBe('Only the workspace owner can delete files early.');
   });
 });
 

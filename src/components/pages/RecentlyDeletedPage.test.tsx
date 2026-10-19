@@ -59,9 +59,7 @@ describe('RecentlyDeletedView', () => {
     expect(out).toContain('Restore');
     expect(out).not.toContain('Delete now');
     expect(out).not.toContain('Empty now');
-    expect(out).toContain(
-      'Only the workspace owner can delete files for good before the 31 days are up.',
-    );
+    expect(out).toContain('Only the workspace owner can delete files early.');
   });
 
   it('gives the owner Delete now in the bad token and Empty now with the freed size', () => {

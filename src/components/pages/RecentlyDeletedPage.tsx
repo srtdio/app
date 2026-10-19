@@ -26,12 +26,11 @@ import {
 const RETRY = 'Something went wrong. Try again.';
 
 /**
- * What a member who is not the owner reads under the list. The rule is
- * asset_purge_request's: only the workspace owner (workspaces.owner_user_id)
- * deletes for good early; any member restores.
+ * What a member who is not the owner reads under the list. It matches
+ * asset_purge_request: only the workspace owner (workspaces.owner_user_id)
+ * deletes for good early; any member restores (the Restore button says so).
  */
-export const MEMBER_PURGE_NOTE =
-  'Anyone in this workspace can restore a file. Only the workspace owner can delete files for good before the 31 days are up.';
+export const MEMBER_PURGE_NOTE = 'Only the workspace owner can delete files early.';
 
 // Delete now: a ghost button in the `bad` token, 44px like the rest.
 const DELETE_NOW_CLASS =
