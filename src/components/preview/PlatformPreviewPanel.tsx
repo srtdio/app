@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PlatformSize } from '@/lib/platform-specs';
@@ -91,35 +92,29 @@ interface PlatformPreviewPanelProps extends PreviewBodyProps {
   onClose: () => void;
 }
 
-const FOCUSABLE =
-  'a[href],button:not([disabled]),input:not([disabled]),select,textarea,video[controls],[tabindex]:not([tabindex="-1"])';
-
 export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactElement | null {
   const { open, onClose } = props;
   const [rendered, setRendered] = useState(open);
   const [entered, setEntered] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLDivElement>(null);
-  const returnFocus = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (open) {
-      returnFocus.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setRendered(true);
       const raf = requestAnimationFrame(() => setEntered(true));
       return () => cancelAnimationFrame(raf);
     }
     setEntered(false);
     const timer = setTimeout(() => setRendered(false), DUR_BASE_MS);
-    returnFocus.current?.focus();
     return () => clearTimeout(timer);
   }, [open]);
 
-  // Focus the close button once the panel is on screen.
-  useEffect(() => {
-    if (entered) closeRef.current?.querySelector('button')?.focus();
-  }, [entered]);
+  // Focus lands on Close once the panel is in the DOM, Tab stays inside, and
+  // the chip that opened it gets focus back on close (shared modal focus).
+  useModalFocus(panelRef, open && rendered, {
+    initial: () => closeRef.current?.querySelector('button'),
+  });
 
   if (!rendered) return null;
 
@@ -127,19 +122,6 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
     if (event.key === 'Escape') {
       event.stopPropagation();
       onClose();
-      return;
-    }
-    if (event.key !== 'Tab' || panelRef.current === null) return;
-    const nodes = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE));
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    if (first === undefined || last === undefined) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
     }
   }
 

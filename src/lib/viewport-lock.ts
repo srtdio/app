@@ -1,22 +1,13 @@
-// Locks the app to vertical scrolling on iOS by preventing the Safari-only
-// multi-touch zoom/rotate gestures ('gesturestart'/'gesturechange'/'gestureend').
-// iOS Safari ignores the viewport user-scalable/maximum-scale flags in-browser,
-// so this is what actually stops pinch-zoom and two-finger rotate. Single-finger
-// vertical scrolling and the horizontal chip rows are untouched because only the
-// multi-touch gesture events are prevented (single-touch pan never fires them).
+// Pinch zoom is allowed. This module used to cancel Safari's multi-touch
+// gesture events ('gesturestart'/'gesturechange'/'gestureend') to lock the
+// page at 1x; that also took away the accessibility zoom people rely on, so
+// it no longer does. iOS zoom-on-focus is prevented at the source instead:
+// every text field is 16px below md (Input, Textarea, the Select trigger), and
+// the viewport meta no longer sets maximum-scale or user-scalable.
+//
+// Kept as the app-lifetime init main.tsx calls (mirroring initSentry /
+// initTheme) so the boot sequence is unchanged; it registers nothing.
 
-// These gesture events are Safari-only and absent from the DOM lib types, so we
-// register them via the string-typed addEventListener overload with an
-// (e: Event) => void handler to stay strict-clean (no `any`, no @ts-ignore).
-function preventGesture(event: Event): void {
-  event.preventDefault();
-}
-
-// App-lifetime listeners set once (mirroring initSentry/initTheme in main.tsx),
-// so there is no teardown. { passive: false } is required for preventDefault to
-// take effect on these gesture events.
 export function initViewportLock(): void {
-  document.addEventListener('gesturestart', preventGesture, { passive: false });
-  document.addEventListener('gesturechange', preventGesture, { passive: false });
-  document.addEventListener('gestureend', preventGesture, { passive: false });
+  // Intentionally empty: no gesture is prevented, pinch zoom works.
 }

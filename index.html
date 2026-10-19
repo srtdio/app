@@ -98,15 +98,17 @@
         /* storage blocked: stay light */
       }
     </script>
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
-    />
+    <!-- Pinch zoom stays available (no maximum-scale, no user-scalable=no);
+         iOS zoom-on-focus is prevented by 16px text fields instead. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <!-- Tint the Safari toolbar to match the canvas so a collapsing toolbar never
-         exposes a mismatched band. Hex mirrors --bg in src/index.css; manual theme
-         toggles override this via src/lib/theme.ts. -->
-    <meta name="theme-color" content="#f7f8f9" />
-    <!-- content = --bg light, src/index.css :root; a dark choice is synced by src/lib/theme.ts -->
+         exposes a mismatched band: one meta per colour scheme, each the --bg value
+         src/index.css paints (light :root, dark .dark). Everyone starts light; a
+         dark choice (localStorage sorted-theme) overrides both via
+         src/lib/theme.ts, which copies the painted canvas colour onto every
+         theme-color meta. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f8f9" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c0d10" />
     <title>Sorted</title>
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

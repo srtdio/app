@@ -4,8 +4,10 @@ import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconX } from '@/components/ui/icons';
+import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
 
 interface SheetProps {
@@ -96,6 +98,22 @@ export function Sheet({
   // Select or DatePicker inside it closes just that.
   useEscapeLayer(open, requestClose);
 
+  // Focus moves into the panel on open, Tab stays inside, and the opener gets
+  // it back on close. `rendered` lags `open` by one render on a reopen.
+  useModalFocus(panelRef, open && rendered);
+
+  // System or browser Back while there is something to lose: dirty asks (the
+  // same discard confirm as the X), busy keeps the sheet as it is. The guard
+  // is released right before a confirmed Discard, so that close pops cleanly;
+  // an unmount while guarded releases it in the hook's own cleanup.
+  const guard = useBackGuard({
+    active: open && (dirty || busy),
+    onBack: () => {
+      if (busy) return;
+      setConfirming(true);
+    },
+  });
+
   if (!rendered) {
     return null;
   }
@@ -123,7 +141,9 @@ export function Sheet({
         className={cn(
           // Axis: translateY only. Mobile slides from 100%; desktop rises 8px
           // and crossfades. No X, no rotate.
-          'flex w-full max-h-[90vh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          // Phone height caps at 90dvh (the visible viewport under Safari's
+          // bars); 90vh stays as the fallback where dvh is unknown.
+          'flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           fixedHeight === true && 'sm:h-[min(640px,84vh)]',
           wide === true && 'lg:w-[960px]',
           entered
@@ -152,13 +172,16 @@ export function Sheet({
         <div
           className={cn(
             'px-[18px] py-4 overflow-y-auto',
+            // No footer: the body is the bottom edge, so it clears the home bar.
+            footer === undefined && 'pb-[max(16px,env(safe-area-inset-bottom))]',
             fixedHeight === true && 'sm:flex sm:min-h-0 sm:flex-1 sm:flex-col',
           )}
         >
           {children}
         </div>
         {footer !== undefined ? (
-          <div className="flex items-center gap-2.5 px-[18px] py-3 border-t border-border">
+          // The footer's bottom padding clears the iPhone home bar.
+          <div className="flex items-center gap-2.5 px-[18px] pt-3 pb-[max(12px,env(safe-area-inset-bottom))] border-t border-border">
             {footer}
           </div>
         ) : null}
@@ -172,6 +195,8 @@ export function Sheet({
           destructive
           onConfirm={() => {
             setConfirming(false);
+            // Release first: the guard's entry pops before the layer's own.
+            guard.release();
             onClose();
           }}
           onCancel={() => {

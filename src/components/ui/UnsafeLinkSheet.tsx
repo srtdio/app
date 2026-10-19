@@ -13,6 +13,7 @@ import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react
 import { createPortal } from 'react-dom';
 import { IconAlertTriangle } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
 
 export interface UnsafeLinkSheetProps {
@@ -25,8 +26,6 @@ export interface UnsafeLinkSheetProps {
 /** Drag distance (px) past which a released swipe closes the sheet. */
 export const SWIPE_CLOSE_PX = 80;
 
-const FOCUSABLE = 'a[href], button:not([disabled])';
-
 export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | null {
   const { open, url, reasons, onClose } = props;
   const [rendered, setRendered] = useState(open);
@@ -35,11 +34,9 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
   const panelRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const dragStart = useRef<number | null>(null);
-  const returnFocus = useRef<Element | null>(null);
 
   useEffect(() => {
     if (open) {
-      returnFocus.current = typeof document !== 'undefined' ? document.activeElement : null;
       setRendered(true);
       setDrag(0);
       const raf = requestAnimationFrame(() => setEntered(true));
@@ -50,18 +47,9 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
     return () => clearTimeout(timer);
   }, [open]);
 
-  // "Don't open" takes focus as soon as the sheet is on screen.
-  useEffect(() => {
-    if (open && rendered) primaryRef.current?.focus();
-  }, [open, rendered]);
-
-  // Hand focus back to whatever opened the sheet.
-  useEffect(() => {
-    if (open || rendered) return;
-    const target = returnFocus.current;
-    returnFocus.current = null;
-    if (target instanceof HTMLElement) target.focus();
-  }, [open, rendered]);
+  // "Don't open" takes focus as soon as the sheet is on screen; Tab stays
+  // inside; whatever opened the sheet gets focus back on close.
+  useModalFocus(panelRef, open && rendered, { initial: () => primaryRef.current });
 
   if (!rendered) return null;
 
@@ -70,23 +58,10 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    // Keys stay in the sheet (a chat bubble's own shortcuts never see them);
+    // Tab is trapped by the shared modal focus, which listens in capture.
     event.stopPropagation();
-    if (event.key === 'Escape') {
-      onClose();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const nodes = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    if (first === undefined || last === undefined) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    if (event.key === 'Escape') onClose();
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>): void {
