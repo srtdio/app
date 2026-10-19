@@ -16,8 +16,8 @@ import {
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Chat delete with a file purges it for good (chat_message_delete, then the
-// asset-upload Worker's POST /purge-chat), a text-only delete keeps the old
-// confirm, and Settings > Workspace lets the owner delete the workspace after
+// asset-upload Worker's POST /purge-chat), a text-only delete goes behind a
+// 7s Undo (X7 FT39), and Settings > Workspace lets the owner delete the workspace after
 // typing its name. Tagged @theme: runs light and dark. Linux WebKit
 // approximates iOS WebKit; it is not iOS.
 
@@ -132,7 +132,7 @@ test.describe('chat delete with a file', () => {
     expectClean(network, errors);
   });
 
-  test('a text-only message takes the single-message confirm and never purges', async ({
+  test('a text-only message deletes behind a 7s Undo (no confirm) and never purges', async ({
     page,
   }) => {
     const { network, recorder, errors } = await setup(page, ({ world }) => {
@@ -141,15 +141,25 @@ test.describe('chat delete with a file', () => {
     });
     await openDm(page);
 
+    // FT39: no confirm; the row is a tombstone at once with Undo in the toast.
     await deleteFromMenu(page, TEXT_MESSAGE_BODY);
-    const confirm = page.getByRole('alertdialog');
-    await expect(confirm).toHaveAttribute('aria-label', 'Delete message?');
-    await expect(confirm).toContainText('It is removed for everyone in this chat.');
-    await expect(confirm).not.toContainText('permanently deleted');
-    await confirm.getByRole('button', { name: 'Delete for everyone', exact: true }).click();
-
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(page.locator('[data-bubble]', { hasText: TEXT_MESSAGE_BODY })).toHaveCount(0);
-    await expect.poll(() => recorder.order).toEqual(['rpc:chat_message_delete']);
+    const undo = page.getByRole('button', { name: 'Undo', exact: true });
+    await expect(undo).toBeVisible();
+    expect(recorder.order).toEqual([]);
+
+    // Undo brings the message back and nothing is written.
+    await undo.click();
+    await expect(page.locator('[data-bubble]', { hasText: TEXT_MESSAGE_BODY })).toHaveCount(1);
+    expect(recorder.order).toEqual([]);
+
+    // Delete again and let the window run out: one delete for everyone, no purge.
+    await deleteFromMenu(page, TEXT_MESSAGE_BODY);
+    await expect(page.locator('[data-bubble]', { hasText: TEXT_MESSAGE_BODY })).toHaveCount(0);
+    await expect
+      .poll(() => recorder.order, { timeout: 15_000 })
+      .toEqual(['rpc:chat_message_delete']);
     await expect(page.getByText('Deleted. File removed for good.')).toHaveCount(0);
     expect(recorder.purgeBodies).toEqual([]);
     expectClean(network, errors);

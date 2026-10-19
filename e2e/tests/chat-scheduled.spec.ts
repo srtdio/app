@@ -247,17 +247,17 @@ test.describe('phone', () => {
     await expect(page.locator('[data-msg-id]', { hasText: 'Reminder: brief due' })).toBeVisible();
     await expect(strip).toHaveCount(0);
 
-    // Group: two rows, soonest first; Cancel asks first.
+    // Group: two rows, soonest first; Don't send asks first.
     await page.goBack().catch(() => undefined);
     await openChat(page, GROUP_NAME);
     await expect(strip).toContainText('2 scheduled messages');
     await strip.click();
     await expect(list.locator('[data-scheduled-card]')).toHaveCount(2);
     await expect(list.locator('[data-scheduled-preview]').first()).toHaveText('Kickoff notes');
-    await list.getByRole('button', { name: 'Cancel' }).first().click();
-    const confirm = page.getByRole('dialog', { name: 'Cancel this scheduled message?' });
+    await list.getByRole('button', { name: "Don't send" }).first().click();
+    const confirm = page.getByRole('dialog', { name: "Don't send this message?" });
     await expect(confirm.getByRole('button', { name: 'Keep' })).toBeVisible();
-    await confirm.getByRole('button', { name: 'Cancel message' }).click();
+    await confirm.getByRole('button', { name: "Don't send" }).click();
     await expect(strip).toContainText('1 scheduled message');
     expectClean(network);
   });
@@ -290,10 +290,10 @@ test.describe('phone: photos and files (UI-3)', () => {
     await expect(sheet).toBeVisible();
     await expect(sheet.locator('[data-schedule-preview]')).toHaveText(`To ${PEER_NAME}: 1 photo`);
 
-    // S2: the upload runs first; the composer locks and Send reads "Scheduling...".
+    // S2: the upload runs first; the composer locks and Send reads "Scheduling…".
     const gate = network.holdUploads();
     await sheet.locator('[data-schedule-row="tomorrow"]').click();
-    await expect(page.locator('[data-scheduling]')).toHaveText('Scheduling...');
+    await expect(page.locator('[data-scheduling]')).toHaveText('Scheduling…');
     await expect(composer(page).locator('[data-schedule-upload-bar]')).toBeVisible();
     gate.release();
 

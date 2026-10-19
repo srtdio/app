@@ -280,7 +280,9 @@ test.describe('iPhone', () => {
     );
   });
 
-  test('Delete opens the single-message confirm, no multi-select', async ({ page }) => {
+  test('Delete on a text message goes behind Undo (no confirm), no multi-select', async ({
+    page,
+  }) => {
     await openDm(page);
     const line = 'Fresh line to delete';
     await page.locator('form textarea').first().fill(line);
@@ -289,9 +291,9 @@ test.describe('iPhone', () => {
     await expect(row).toBeVisible();
     await hold(page, bubbleWith(page, line));
     await menu(page).locator('[data-menu-item="delete"]').click();
-    const confirm = page.getByRole('alertdialog', { name: 'Delete message?' });
-    await expect(confirm).toBeVisible();
-    await expect(confirm.getByRole('button', { name: 'Delete for everyone' })).toBeVisible();
+    // X7 FT39: a text message deletes behind a 7s Undo instead of the confirm.
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
     await expect(page.locator('[data-selection-bar]')).toHaveCount(0);
     await expect(page.locator('[data-msg-id][data-checked]')).toHaveCount(0);
   });
