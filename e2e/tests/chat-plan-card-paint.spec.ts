@@ -154,7 +154,8 @@ const SCENARIOS: Scenario[] = [
     planId: TEAM_PLAN_ID,
     seed: (network) => seedTeamAndHiddenPlans(network.world, { channelId: DM_CHANNEL, sender: ME }),
     chips: ['1 concept', '0 posts', 'Draft'],
-    progress: 'Team 0 of 1',
+    // X3 / FT56: a Draft plan's progress names the creators.
+    progress: 'Creators 0 of 1',
     forward: true,
   },
   {

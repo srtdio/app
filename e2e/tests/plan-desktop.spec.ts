@@ -13,7 +13,8 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // The Plan panel on a laptop (stories A to F, the panel widths by window
 // width, Escape ownership both ways, pick-up cancel, removal focus, the toast
-// rules, Activity kept mounted) and the phone kept as it was (story E).
+// rules, Activity kept mounted) and the phone (story E: a full page whose Edit
+// mode shows the grip, day chip and remove per row; nothing written until Save).
 // @desktop tests run on desktop-webkit (1280x800, others set their own size)
 // and skip below md; the untagged phone test runs on the iPhone projects. Fixture names are
 // fictional. The fixture session is minted on the real clock, so "today" is
@@ -767,12 +768,12 @@ test('F7: Activity stays mounted while a plan opens and closes beside it @deskto
   expectClean(network);
 });
 
-test('E: phone (iPhone 13) is unchanged: full page, the one-time peek, a real swipe-left Remove, long-press drag', async ({
+test('E: phone (iPhone 13): full page; view mode has no edit controls; Edit shows the grip, day chip and remove per row; a grip drag lifts and Escape puts it back; a remove is discarded with no write', async ({
   page,
 }) => {
   test.skip((page.viewportSize()?.width ?? 0) >= 768, 'phone only');
   test.setTimeout(120_000);
-  const network = await installHarnessNetwork(page, { planSwipePeek: true });
+  const network = await installHarnessNetwork(page);
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
   await openChat(page);
   const card = page.locator(`[data-plan-card="${DATED_PLAN_ID}"]`);
@@ -786,50 +787,56 @@ test('E: phone (iPhone 13) is unchanged: full page, the one-time peek, a real sw
   const box = await plan.boundingBox();
   expect(box?.width).toBe(vp?.width);
   expect(box?.height).toBe(vp?.height);
+  // View mode (X3): no grip, no day chip, no remove, no swipe; no laptop hints or close.
   await expect(
     plan.locator(
-      '[data-plan-grip], [data-plan-row-calendar], [data-plan-row-bin], [data-plan-key-hints], [data-plan-close]',
+      '[data-plan-grip], [data-plan-row-day-chip], [data-plan-row-remove-edit], [data-plan-row-swipe], [data-plan-key-hints], [data-plan-close]',
     ),
   ).toHaveCount(0);
 
-  // The one-time peek on the first open: a row slides left, then back; seen once.
-  const peeking = plan.locator('[data-plan-row-swipe][style*="translateX(-72px)"]');
-  await expect(peeking).toHaveCount(1, { timeout: 3_000 });
-  await expect(peeking).toHaveCount(0, { timeout: 3_000 });
-  expect(
-    await page.evaluate(() => window.localStorage.getItem('sorted:plan-swipe-peek-seen')),
-  ).toBe('1');
-
-  // A real swipe left reveals Remove.
+  // Edit: every row gets its grip, day chip and remove; still no laptop extras.
+  await plan.locator('[data-plan-edit]').click();
+  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+  await expect(plan.locator('[data-plan-key-hints], [data-plan-close]')).toHaveCount(0);
   const offer = dated('Opening offer');
-  const swipeRow = plan.locator(`[data-plan-row-swipe="${offer.id}"]`);
-  await swipeRow.scrollIntoViewIfNeeded();
-  const sb = await swipeRow.boundingBox();
-  if (sb === null) throw new Error('row box');
-  const y = sb.y + sb.height / 2;
-  await page.mouse.move(sb.x + sb.width - 30, y);
-  await page.mouse.down();
-  await page.mouse.move(sb.x + sb.width - 80, y, { steps: 4 });
-  await page.mouse.move(sb.x + sb.width - 160, y, { steps: 6 });
-  await page.mouse.up();
-  await expect(swipeRow).toHaveAttribute('data-plan-row-open', '');
-  await expect(plan.locator(`[data-plan-row-remove="${offer.id}"]`)).toBeVisible();
-  // A tap elsewhere closes it again.
-  await plan.locator('[data-plan-progress-block]').click();
-  await expect(swipeRow).not.toHaveAttribute('data-plan-row-open', '');
+  const wrap = plan.locator(`[data-plan-row-wrap="${offer.id}"]`);
+  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await expect(wrap.locator('[data-plan-grip]')).toBeVisible();
+  await expect(wrap.locator('[data-plan-row-day-chip]')).toHaveText(/Mon 12/);
+  await expect(wrap.locator('[data-plan-row-remove-edit]')).toBeVisible();
 
-  // Long-press lifts a row; Escape puts it back.
-  await page.waitForTimeout(400);
-  const row = plan.locator(`[data-plan-row="${dated('Countdown story').id}"]`);
-  await row.scrollIntoViewIfNeeded();
-  const rb = await row.boundingBox();
-  if (rb === null) throw new Error('row box');
-  await page.mouse.move(rb.x + 80, rb.y + rb.height / 2);
+  // The grip lifts the row after 4px of travel; Escape puts it back; nothing written.
+  const grip = await wrap.locator('[data-plan-grip]').boundingBox();
+  if (grip === null) throw new Error('grip box');
+  const gx = grip.x + grip.width / 2;
+  const gy = grip.y + grip.height / 2;
+  await page.mouse.move(gx, gy);
   await page.mouse.down();
-  await page.waitForTimeout(600);
+  await page.mouse.move(gx, gy + 6);
   await expect(page.locator('[data-plan-drag-card]')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.mouse.up();
   await expect(page.locator('[data-plan-drag-card]')).toHaveCount(0);
+  await expect(dayBlock(plan, '2026-10-12').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
+    1,
+  );
+
+  // Remove hides the row at once; Cancel asks; Discard puts it back; no request.
+  await wrap.locator('[data-plan-row-remove-edit]').click();
+  await expect(wrap).toHaveCount(0);
+  await plan.locator('[data-plan-back-text]').click();
+  const discard = page.getByRole('alertdialog', { name: 'Discard changes?' });
+  await expect(discard).toBeVisible();
+  await discard.getByRole('button', { name: 'Discard' }).click();
+  await expect(discard).toBeHidden();
+  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
+  await expect(dayBlock(plan, '2026-10-12').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
+    1,
+  );
+  expect(
+    network.rpcCalls.filter((c) =>
+      ['plan_save', 'plan_item_remove', 'plan_item_move'].includes(c.name),
+    ),
+  ).toEqual([]);
   expectClean(network);
 });

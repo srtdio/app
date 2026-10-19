@@ -1336,6 +1336,8 @@ export function PlanScreen(props: {
     };
     undoable.run({
       label: slotApprovedToast(dayHeader),
+      // L5: the approval toast is success-tinted.
+      tone: 'success',
       revert,
       commit: async () => {
         const traceId = generateTraceId();

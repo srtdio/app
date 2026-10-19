@@ -17,8 +17,10 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 // Draft / Open wave, screens: the Plan screen's title menu (Rename inline,
 // Delete plan for its creator or an owner/admin), the deleted card, "Approved
 // by" under a client-approved row, the "Also in" pill, the keep-approval sheet
-// on a move, and the plan alerts as chat bell rows, on the iPhone viewport.
-// The 120+ character titles test is the plan family's @theme test (light too).
+// on a move (Edit mode, X3: moves and removes are queued and written by Save
+// changes as one plan_save), and the plan alerts as chat bell rows, on the
+// iPhone viewport. The 120+ character titles test is the plan family's @theme
+// test (light too).
 
 async function openChat(page: Page, name: string): Promise<void> {
   await page.goto('/chat');
@@ -51,17 +53,45 @@ const dated = (title: string) => {
 
 const dayBlock = (plan: Locator, day: string): Locator => plan.locator(`[data-plan-day="${day}"]`);
 
-/** Long-press a row and let go over the first row of `day`. */
-async function dragToDay(page: Page, plan: Locator, row: Locator, day: string): Promise<void> {
+/** Edit mode: the header's Edit button, then the edit header with its fields. */
+async function enterEdit(plan: Locator): Promise<void> {
+  await plan.locator('[data-plan-edit]').click();
+  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+}
+
+/** Save changes: the toast, then view mode again. */
+async function saveChanges(page: Page, plan: Locator): Promise<void> {
+  await plan.locator('[data-plan-save]').click();
+  await expect(page.getByText('Plan saved', { exact: true })).toBeVisible();
+  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
+}
+
+/** Cancel (the edit header's back) with queued changes: the Discard confirm. */
+async function cancelEdit(page: Page, plan: Locator): Promise<Locator> {
+  await plan.locator('[data-plan-back-text]').click();
+  const discard = page.getByRole('alertdialog', { name: 'Discard changes?' });
+  await expect(discard).toBeVisible();
+  await expect(discard).toContainText('Your edits to this plan will be lost.');
+  return discard;
+}
+
+const saves = (network: HarnessNetwork) => network.rpcCalls.filter((c) => c.name === 'plan_save');
+const opsOf = (call: { args: Record<string, unknown> } | undefined) =>
+  (call?.args.p_ops ?? []) as Array<Record<string, unknown>>;
+
+/** Edit mode: lift a row by its grip (4px, no long-press) and let go over `day`. */
+async function dragToDay(page: Page, plan: Locator, id: string, day: string): Promise<void> {
   // Any sheet that just closed has finished sliding away.
   await page.waitForTimeout(500);
-  await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  const box = await row.boundingBox();
-  if (box === null) throw new Error('row box');
-  const x = box.x + 80;
-  await page.mouse.move(x, box.y + box.height / 2);
+  const wrap = plan.locator(`[data-plan-row-wrap="${id}"]`);
+  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  const grip = await wrap.locator('[data-plan-grip]').boundingBox();
+  if (grip === null) throw new Error('grip box');
+  const x = grip.x + grip.width / 2;
+  const y0 = grip.y + grip.height / 2;
+  await page.mouse.move(x, y0);
   await page.mouse.down();
-  await page.waitForTimeout(600);
+  await page.mouse.move(x, y0 + 6);
   await expect(page.locator('[data-plan-drag-card]')).toBeVisible();
   // Re-aim until the target day is the hovered drop (the slot shifts rows).
   const over = plan.locator(`[data-plan-day="${day}"][data-plan-drop-over]`);
@@ -209,10 +239,14 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
   await expect(wrap.locator('[data-plan-slot="client"]')).toHaveAttribute('aria-checked', 'true');
   await expect(wrap.locator('[data-plan-slot="client"]')).toBeDisabled();
 
-  // Moving the approved slot to another day asks first; cancelling cancels.
+  // Moving the approved slot to another day (Edit mode) asks first; cancelling
+  // cancels. Nothing is written until Save changes.
   const row = plan.locator(`[data-plan-row="${offer.id}"]`);
   const moves = () => network.rpcCalls.filter((c) => c.name === 'plan_item_move');
-  await dragToDay(page, plan, row, '2026-10-14');
+  await enterEdit(plan);
+  // The Approved by line stays on the edit row.
+  await expect(wrap.locator('[data-plan-row-approved-by]')).toBeVisible();
+  await dragToDay(page, plan, offer.id, '2026-10-14');
   const keep = page.getByRole('dialog', { name: `Slot approved by ${PEER_NAME}` });
   await expect(keep).toBeVisible();
   await expect(keep).toContainText('Moving it to Wed 14 Oct. Keep the approval?');
@@ -221,50 +255,60 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
   }
   await page.keyboard.press('Escape');
   await expect(keep).toBeHidden();
+  expect(saves(network)).toEqual([]);
   expect(moves()).toEqual([]);
   await expect(dayBlock(plan, '2026-10-12').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
     1,
   );
 
-  // Yes, keep it: p_keep_reviews true, the approval stays.
-  await dragToDay(page, plan, row, '2026-10-14');
+  // Yes, keep it: the move is queued with keep_reviews true and painted; Save
+  // writes it as one plan_save; the approval stays.
+  await dragToDay(page, plan, offer.id, '2026-10-14');
   await expect(keep).toBeVisible();
   await keep.locator('[data-plan-keep-yes]').click();
-  // Kept: nothing reset, so the toast offers Undo (a post names the Pipeline date).
-  const kept = page.getByText('Moved to Wed 14 Oct. Pipeline date updated.', { exact: true });
-  await expect(kept).toBeVisible();
-  await expect(
-    kept
-      .locator('xpath=ancestor::div[.//button[@aria-label="Dismiss notification"]][1]')
-      .locator('[data-toast-action]'),
-  ).toHaveText('Undo');
-  expect(moves().map((c) => c.args.p_keep_reviews)).toEqual([true]);
+  await expect(keep).toBeHidden();
   await expect(dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
     1,
   );
-  await expect(
-    plan.locator(`[data-plan-row-wrap="${offer.id}"] [data-plan-slot="client"]`),
-  ).toHaveAttribute('aria-checked', 'true');
+  expect(saves(network)).toEqual([]);
+  await saveChanges(page, plan);
+  expect(saves(network)).toHaveLength(1);
+  expect(opsOf(saves(network)[0])).toEqual([
+    expect.objectContaining({
+      op: 'move',
+      item_id: offer.id,
+      target_date: '2026-10-14',
+      keep_reviews: true,
+    }),
+  ]);
+  expect(moves()).toEqual([]);
+  await expect(dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
+    1,
+  );
+  await expect(wrap.locator('[data-plan-slot="client"]')).toHaveAttribute('aria-checked', 'true');
+  await expect(wrap.locator('[data-plan-row-approved-by]')).toBeVisible();
 
-  // No, ask again: p_keep_reviews false, the approval resets.
-  await dragToDay(page, plan, row, '2026-10-15');
+  // No, ask again: keep_reviews false; after Save the approval resets.
+  await enterEdit(plan);
+  await dragToDay(page, plan, offer.id, '2026-10-15');
   await expect(keep).toBeVisible();
   await keep.locator('[data-plan-keep-no]').click();
-  // Reset: the toast says so and has no Undo (a client's tick cannot be put back).
-  const reset = page.getByText(
-    'Moved to Thu 15 Oct. Pipeline date updated. Its ticks were reset.',
-    { exact: true },
+  await expect(keep).toBeHidden();
+  await saveChanges(page, plan);
+  expect(saves(network)).toHaveLength(2);
+  expect(opsOf(saves(network)[1])).toEqual([
+    expect.objectContaining({
+      op: 'move',
+      item_id: offer.id,
+      target_date: '2026-10-15',
+      keep_reviews: false,
+    }),
+  ]);
+  await expect(dayBlock(plan, '2026-10-15').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
+    1,
   );
-  await expect(reset).toBeVisible();
-  await expect(
-    reset
-      .locator('xpath=ancestor::div[.//button[@aria-label="Dismiss notification"]][1]')
-      .locator('[data-toast-action]'),
-  ).toHaveCount(0);
-  expect(moves().map((c) => c.args.p_keep_reviews)).toEqual([true, false]);
-  await expect(
-    plan.locator(`[data-plan-row-wrap="${offer.id}"] [data-plan-slot="client"]`),
-  ).toHaveAttribute('aria-checked', 'false');
+  await expect(wrap.locator('[data-plan-slot="client"]')).toHaveAttribute('aria-checked', 'false');
+  await expect(wrap.locator('[data-plan-row-approved-by]')).toHaveCount(0);
   expectClean(network);
 });
 
@@ -345,29 +389,15 @@ test('the chat bell: plan alerts as bell rows; a deleted plan only toasts; a tap
 });
 
 // ---------------------------------------------------------------------------
-// Plan list: swipe left to remove (agency), the one-time peek, open at today
+// Plan list: Edit mode remove (agency), queued until Save changes; open at today
 // ---------------------------------------------------------------------------
 
 const PEEK_KEY = 'sorted:plan-swipe-peek-seen';
 
-/** Drag a row's content left (or right) with the pointer, no long-press. */
-async function swipeRow(page: Page, row: Locator, dx: number, dy = 0): Promise<void> {
-  await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  const box = await row.boundingBox();
-  if (box === null) throw new Error('row box');
-  const x = dx < 0 ? box.x + box.width - 60 : box.x + 120;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + dx, y + dy, { steps: 8 });
-  await page.mouse.up();
-  await page.waitForTimeout(300);
-}
-
 const removes = (network: HarnessNetwork) =>
   network.rpcCalls.filter((c) => c.name === 'plan_item_remove');
 
-test('agency: swipe left to Remove, Undo restores with no request, expiry sends once; drag still reorders', async ({
+test('agency: Edit mode remove hides the row at once, Discard restores it with no request, Save sends it once; a grip drag still reorders', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -377,82 +407,88 @@ test('agency: swipe left to Remove, Undo restores with no request, expiry sends 
   const plan = await openPlan(page, DATED_PLAN_ID);
   const lantern = dated('Lantern workshop');
   const portraits = dated('Family portraits');
-  const row = plan.locator(`[data-plan-row-swipe="${lantern.id}"]`);
-  const action = plan.locator(`[data-plan-row-remove="${lantern.id}"]`);
+  const wrap = plan.locator(`[data-plan-row-wrap="${lantern.id}"]`);
 
-  // A vertical drag never opens the row.
-  await swipeRow(page, row, -12, 60);
-  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
-  // A short swipe springs back.
-  await swipeRow(page, row, -30);
-  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
+  // View mode: no remove control, no grip, no swipe.
+  await expect(
+    plan.locator('[data-plan-row-remove-edit], [data-plan-grip], [data-plan-row-swipe]'),
+  ).toHaveCount(0);
+  await enterEdit(plan);
 
-  // Past half the action: it stays open, 88px wide, full row height, red.
-  await swipeRow(page, row, -70);
-  await expect(row).toHaveAttribute('data-plan-row-open', '');
-  await expect(action).toBeVisible();
-  const actionBox = await action.boundingBox();
-  const rowBox = await row.boundingBox();
-  if (actionBox === null || rowBox === null) throw new Error('boxes');
-  expect(Math.round(actionBox.width)).toBe(88);
-  expect(Math.abs(actionBox.height - rowBox.height)).toBeLessThan(1);
-  expectMinTouchTarget(actionBox);
-  await expect(action).toHaveClass(/bg-bad/);
-  await expect(action).toHaveText('Remove');
-
-  // Opening another row closes the first: one open row at a time.
-  const other = plan.locator(`[data-plan-row-swipe="${portraits.id}"]`);
-  await swipeRow(page, other, -70);
-  await expect(other).toHaveAttribute('data-plan-row-open', '');
-  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(1);
-  // A swipe right closes it; a tap elsewhere closes; a tap on the open row opens nothing.
-  await swipeRow(page, other, 70);
-  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
-  await swipeRow(page, row, -70);
-  await plan.locator('[data-plan-progress-block]').click({ force: true });
-  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
-  await swipeRow(page, row, -70);
-  await row.locator(`[data-plan-row="${lantern.id}"]`).click();
-  await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
+  // The remove icon: a 44x44 target in the bad colour, right of the text; a
+  // tap on the row itself opens nothing while editing.
+  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  const remove = wrap.locator('[data-plan-row-remove-edit]');
+  await expect(remove).toBeVisible();
+  const removeBox = await remove.boundingBox();
+  const rowBox = await wrap.locator(`[data-plan-row="${lantern.id}"]`).boundingBox();
+  if (removeBox === null || rowBox === null) throw new Error('boxes');
+  expectMinTouchTarget(removeBox);
+  expect(removeBox.x).toBeGreaterThanOrEqual(rowBox.x + rowBox.width - 1);
+  await expect(remove).toHaveClass(/text-bad/);
+  await expect(remove).toHaveAttribute('aria-label', 'Remove from plan: Lantern workshop');
+  await wrap.locator(`[data-plan-row="${lantern.id}"]`).click();
   await expect(page.locator('[data-plan-page="item"]')).toHaveCount(0);
 
-  // Remove: the row collapses and is hidden at once; nothing is sent yet.
-  await swipeRow(page, row, -70);
-  await action.click();
-  await expect(plan.locator(`[data-plan-row-wrap="${lantern.id}"]`)).toHaveCount(0);
-  const toast = page.getByText('Removed from plan', { exact: true });
-  await expect(toast).toBeVisible();
+  // Remove: the row is hidden at once; nothing is sent.
+  await remove.click();
+  await expect(wrap).toHaveCount(0);
+  expect(saves(network)).toEqual([]);
   expect(removes(network)).toEqual([]);
-  // Undo: the row is back in place, no request ever.
-  await page.getByRole('button', { name: 'Undo' }).click();
+
+  // Cancel asks; Keep editing keeps the queued removal.
+  let discard = await cancelEdit(page, plan);
+  await discard.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(discard).toBeHidden();
+  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+  await expect(wrap).toHaveCount(0);
+
+  // Discard: the row is back in place, no request ever.
+  discard = await cancelEdit(page, plan);
+  await discard.getByRole('button', { name: 'Discard' }).click();
+  await expect(discard).toBeHidden();
+  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
   await expect(dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${lantern.id}"]`)).toHaveCount(
     1,
   );
-  await page.waitForTimeout(5_500);
+  await page.waitForTimeout(500);
+  expect(saves(network)).toEqual([]);
   expect(removes(network)).toEqual([]);
 
-  // Remove again and let the toast expire: exactly one plan_item_remove.
-  await swipeRow(page, row, -70);
-  await action.click();
-  await expect(plan.locator(`[data-plan-row-wrap="${lantern.id}"]`)).toHaveCount(0);
-  await expect.poll(() => removes(network).length, { timeout: 8_000 }).toBe(1);
-  expect(removes(network)[0]?.args).toMatchObject({ p_item_id: lantern.id });
-  expect(typeof removes(network)[0]?.args.p_trace_id).toBe('string');
+  // Remove again and Save: exactly one plan_save with the one remove op; the
+  // row never comes back after the re-read; no direct plan_item_remove.
+  await enterEdit(plan);
+  await wrap.locator('[data-plan-row-remove-edit]').click();
+  await expect(wrap).toHaveCount(0);
+  await saveChanges(page, plan);
+  expect(saves(network)).toHaveLength(1);
+  expect(saves(network)[0]?.args).toMatchObject({
+    p_plan_id: DATED_PLAN_ID,
+    p_ops: [{ op: 'remove', item_id: lantern.id }],
+  });
+  expect(typeof saves(network)[0]?.args.p_trace_id).toBe('string');
   await page.waitForTimeout(1_000);
-  // Never reappears after the re-read; never sent twice.
-  await expect(plan.locator(`[data-plan-row-wrap="${lantern.id}"]`)).toHaveCount(0);
-  expect(removes(network)).toHaveLength(1);
+  await expect(wrap).toHaveCount(0);
+  expect(saves(network)).toHaveLength(1);
+  expect(removes(network)).toEqual([]);
+  expect((network.world.tables.plan_items ?? []).some((i) => i.id === lantern.id)).toBe(false);
 
-  // The long-press drag still reorders, with the full order minus the removed row.
-  const moves = () => network.rpcCalls.filter((c) => c.name === 'plan_item_move');
-  await dragToDay(page, plan, plan.locator(`[data-plan-row="${portraits.id}"]`), '2026-10-16');
+  // The grip drag still moves a row: one move op with the full order minus the removed row.
+  await enterEdit(plan);
+  await dragToDay(page, plan, portraits.id, '2026-10-16');
   await expect(
     dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${portraits.id}"]`),
   ).toHaveCount(1);
-  expect(moves()).toHaveLength(1);
-  const order = moves()[0]?.args.p_item_ids as string[];
+  await saveChanges(page, plan);
+  expect(saves(network)).toHaveLength(2);
+  const move = opsOf(saves(network)[1])[0];
+  expect(move).toMatchObject({ op: 'move', item_id: portraits.id, target_date: '2026-10-16' });
+  const order = move?.item_ids as string[];
   expect(order).toHaveLength(DATED_PLAN_ITEMS.length - 1);
   expect(order).not.toContain(lantern.id);
+  await expect(
+    dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${portraits.id}"]`),
+  ).toHaveCount(1);
   expectClean(network);
 });
 
@@ -490,7 +526,7 @@ async function planLayout(page: Page) {
 }
 
 test(
-  'agency, 120+ character titles: no sideways page, titles truncate, ticks on screen, swipe still works',
+  'agency, 120+ character titles: no sideways page, titles truncate, ticks on screen; the edit controls fit too',
   {
     tag: '@theme',
   },
@@ -506,8 +542,10 @@ test(
         /.{120,}/,
       );
     }
+    const vw = page.viewportSize()?.width ?? 0;
 
-    const expectAtRest = async (): Promise<void> => {
+    /** Both modes: nothing sideways, every row and title inside the column. */
+    const expectInside = async (): Promise<void> => {
       const layout = await planLayout(page);
       // The page never scrolls sideways: the document and the plan body fit the viewport.
       expect(layout.rootScroll).toBeLessThanOrEqual(0);
@@ -529,21 +567,17 @@ test(
           true,
         );
       }
-      // No red action shows at rest.
-      for (const action of await plan.locator('[data-plan-row-remove]').all()) {
-        await expect(action).toBeHidden();
-      }
+    };
+    /** View mode at rest: the layout, every row with its tick, no edit control. */
+    const expectAtRest = async (): Promise<void> => {
+      await expectInside();
+      await expect(
+        plan.locator('[data-plan-row-remove-edit], [data-plan-row-day-chip], [data-plan-grip]'),
+      ).toHaveCount(0);
+      expect((await planLayout(page)).rows.every((r) => r.tick !== null)).toBe(true);
     };
     await expectAtRest();
 
-    // A vertical drag on a long row moves no row sideways; the list scrolls on Y only.
-    const row = plan.locator(`[data-plan-row-swipe="${long.concept}"]`);
-    await expect(row).toHaveCSS('touch-action', 'pan-y');
-    await swipeRow(page, row, -6, 80);
-    await expect(plan.locator('[data-plan-row-open]')).toHaveCount(0);
-    await expect(plan.locator('[data-plan-row-swipe]:not([style*="translateX(0px)"])')).toHaveCount(
-      0,
-    );
     // The list scrolls on Y; neither it nor the page can be moved on X (WebKit has
     // no touch scroll in Playwright, so the scroller is driven directly).
     const scrolled = await plan.locator('[data-plan-list]').evaluate((el) => {
@@ -561,42 +595,64 @@ test(
     expect(scrolled.rootX).toBe(0);
     await expectAtRest();
 
-    // A leftward swipe opens the long row to exactly 88px; the action sits inside the viewport.
-    await swipeRow(page, row, -70);
-    await expect(row).toHaveAttribute('data-plan-row-open', '');
-    await expect(row).toHaveAttribute('style', /translateX\(-88px\)/);
-    const action = plan.locator(`[data-plan-row-remove="${long.concept}"]`);
-    await expect(action).toBeVisible();
-    const actionBox = await action.boundingBox();
-    const vw = page.viewportSize()?.width ?? 0;
-    if (actionBox === null) throw new Error('action box');
-    expect(Math.round(actionBox.width)).toBe(88);
-    expect(actionBox.x + actionBox.width).toBeLessThanOrEqual(vw + 0.5);
-    expect((await planLayout(page)).rootScroll).toBeLessThanOrEqual(0);
+    // Edit mode: the grip, the day chip and the 44px remove fit beside a long
+    // title; nothing sideways.
+    await enterEdit(plan);
+    await expectInside();
+    for (const id of [long.concept, long.post]) {
+      const wrap = plan.locator(`[data-plan-row-wrap="${id}"]`);
+      await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await expect(wrap.locator('[data-plan-grip]')).toBeVisible();
+      await expect(wrap.locator('[data-plan-row-day-chip]')).toBeVisible();
+      const removeBox = await wrap.locator('[data-plan-row-remove-edit]').boundingBox();
+      if (removeBox === null) throw new Error('remove box');
+      expectMinTouchTarget(removeBox);
+      expect(removeBox.x).toBeGreaterThanOrEqual(0);
+      expect(removeBox.x + removeBox.width).toBeLessThanOrEqual(vw + 0.5);
+    }
 
-    // Remove, then Undo: the row is back, nothing sent.
-    await action.click();
+    // Remove the long concept, then Discard: the row is back, nothing sent.
+    await plan
+      .locator(`[data-plan-row-wrap="${long.concept}"] [data-plan-row-remove-edit]`)
+      .click();
     await expect(plan.locator(`[data-plan-row-wrap="${long.concept}"]`)).toHaveCount(0);
-    await page.getByRole('button', { name: 'Undo' }).click();
+    const discard = await cancelEdit(page, plan);
+    await discard.getByRole('button', { name: 'Discard' }).click();
+    await expect(discard).toBeHidden();
     await expect(
       dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${long.concept}"]`),
     ).toHaveCount(1);
+    expect(saves(network)).toEqual([]);
     expect(removes(network)).toEqual([]);
     await page.waitForTimeout(400);
     await expectAtRest();
 
-    // The long-press drag still reorders a long row.
-    await dragToDay(page, plan, plan.locator(`[data-plan-row="${long.post}"]`), '2026-10-16');
+    // The grip drag still moves a long row (a client-approved slot: keep its
+    // approval); Save writes one plan_save.
+    await enterEdit(plan);
+    await dragToDay(page, plan, long.post, '2026-10-16');
+    const keep = page.getByRole('dialog', { name: `Slot approved by ${PEER_NAME}` });
+    await expect(keep).toBeVisible();
+    await keep.locator('[data-plan-keep-yes]').click();
+    await expect(keep).toBeHidden();
     await expect(
       dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${long.post}"]`),
     ).toHaveCount(1);
-    expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toHaveLength(1);
+    await expectInside();
+    await saveChanges(page, plan);
+    expect(saves(network)).toHaveLength(1);
+    expect(opsOf(saves(network)[0])).toEqual([
+      expect.objectContaining({ op: 'move', item_id: long.post, target_date: '2026-10-16' }),
+    ]);
+    await expect(
+      dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${long.post}"]`),
+    ).toHaveCount(1);
     await expectAtRest();
     expectClean(network);
   },
 );
 
-test('agency: a removal waiting on Undo is sent at once when the screen closes', async ({
+test('agency: a queued removal is never sent on close: Cancel and system Back ask, Keep editing holds it, Save sends it once', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -605,17 +661,46 @@ test('agency: a removal waiting on Undo is sent at once when the screen closes',
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, DATED_PLAN_ID);
   const lantern = dated('Lantern workshop');
-  await swipeRow(page, plan.locator(`[data-plan-row-swipe="${lantern.id}"]`), -70);
-  await plan.locator(`[data-plan-row-remove="${lantern.id}"]`).click();
+  const wrap = plan.locator(`[data-plan-row-wrap="${lantern.id}"]`);
+  await enterEdit(plan);
+  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await wrap.locator('[data-plan-row-remove-edit]').click();
+  await expect(wrap).toHaveCount(0);
+  expect(saves(network)).toEqual([]);
   expect(removes(network)).toEqual([]);
+
+  // Cancel asks; Keep editing keeps the queued removal and the screen.
+  const discard = await cancelEdit(page, plan);
+  await discard.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(discard).toBeHidden();
+  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+  await expect(wrap).toHaveCount(0);
+
+  // System Back asks the same (the Back guard); Keep editing stays.
+  await page.goBack();
+  await expect(discard).toBeVisible();
+  await discard.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(discard).toBeHidden();
+  await expect(plan).toBeVisible();
+  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+  await expect(wrap).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(saves(network)).toEqual([]);
+  expect(removes(network)).toEqual([]);
+
+  // Save: one plan_save; then Back closes the screen with nothing more sent.
+  await saveChanges(page, plan);
+  expect(saves(network)).toHaveLength(1);
+  expect(opsOf(saves(network)[0])).toEqual([{ op: 'remove', item_id: lantern.id }]);
   await plan.getByRole('button', { name: 'Back' }).first().click();
-  await expect.poll(() => removes(network).length).toBe(1);
-  await page.waitForTimeout(6_000);
-  expect(removes(network)).toHaveLength(1);
+  await expect(plan).toBeHidden();
+  await page.waitForTimeout(1_500);
+  expect(saves(network)).toHaveLength(1);
+  expect(removes(network)).toEqual([]);
   expectClean(network);
 });
 
-test('client: no swipe, no Remove on plan rows', async ({ page }) => {
+test('client: no swipe, no Edit, no Remove on plan rows', async ({ page }) => {
   test.setTimeout(90_000);
   const network = await installHarnessNetwork(page, { planSwipePeek: true });
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: PEER });
@@ -626,14 +711,15 @@ test('client: no swipe, no Remove on plan rows', async ({ page }) => {
   const plan = await openPlan(page, DATED_PLAN_ID);
   await expect(plan.locator('[data-plan-row]').first()).toBeVisible();
   await expect(plan.locator('[data-plan-row-swipe]')).toHaveCount(0);
-  await expect(plan.locator('[data-plan-row-remove]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-row-remove], [data-plan-row-remove-edit]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-edit], [data-plan-grip]')).toHaveCount(0);
   // No peek for clients either: the device stays unmarked.
   await page.waitForTimeout(2_000);
   expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBeNull();
   expectClean(network);
 });
 
-test('agency: the one-time peek slides the first visible row, once per device', async ({
+test('agency: view mode has no edit controls and no peek; Edit shows the fields and a chip and remove per row; Cancel with nothing changed leaves at once', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -641,39 +727,46 @@ test('agency: the one-time peek slides the first visible row, once per device', 
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, DATED_PLAN_ID);
-  const peeking = plan.locator('[data-plan-row-swipe][style*="translateX(-72px)"]');
-  await expect(peeking).toHaveCount(1, { timeout: 3_000 });
-  // Back at rest, and the device is marked.
-  await expect(peeking).toHaveCount(0, { timeout: 3_000 });
+  // No peek, no tip toast, no swipe row, and the device is never marked.
+  await page.waitForTimeout(1_500);
   await expect(
-    plan.locator('[data-plan-row-swipe][style*="translateX(0px)"]').first(),
-  ).toBeVisible();
-  expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBe('1');
-  // Close and reopen: never again.
-  await plan.getByRole('button', { name: 'Back' }).first().click();
-  await expect(plan).toBeHidden();
-  await openPlan(page, DATED_PLAN_ID);
-  await page.waitForTimeout(2_000);
-  await expect(plan.locator('[data-plan-row-swipe]:not([style*="translateX(0px)"])')).toHaveCount(
-    0,
-  );
-  expectClean(network);
-});
+    plan.locator(
+      '[data-plan-row-swipe], [data-plan-grip], [data-plan-row-day-chip], [data-plan-row-remove-edit]',
+    ),
+  ).toHaveCount(0);
+  await expect(page.getByText('Tip: swipe left on a slot to remove it')).toHaveCount(0);
+  expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBeNull();
 
-test('agency, reduced motion: the tip toast instead of the peek, once', async ({ page }) => {
-  test.setTimeout(90_000);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  const network = await installHarnessNetwork(page, { planSwipePeek: true });
-  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
-  await openChat(page, PEER_NAME);
-  const plan = await openPlan(page, DATED_PLAN_ID);
-  await expect(page.getByText('Tip: swipe left on a slot to remove it')).toBeVisible({
-    timeout: 3_000,
-  });
-  await expect(plan.locator('[data-plan-row-swipe]:not([style*="translateX(0px)"])')).toHaveCount(
-    0,
-  );
-  expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBe('1');
+  // Edit: a 44px text button; the header turns into Cancel / Editing plan / Save changes.
+  const edit = plan.locator('[data-plan-edit]');
+  await expect(edit).toHaveText('Edit');
+  expectMinTouchTarget(await edit.boundingBox());
+  await edit.click();
+  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+  await expect(plan.locator('[data-plan-editing-title]')).toHaveText('Editing plan');
+  await expect(plan.locator('[data-plan-back-text]')).toHaveText('Cancel');
+  await expect(plan.locator('[data-plan-save]')).toHaveText('Save changes');
+  for (const sel of ['[data-plan-back-text]', '[data-plan-save]']) {
+    expectMinTouchTarget(await plan.locator(sel).boundingBox());
+  }
+  await expect(plan.locator('[data-plan-edit-title]')).toHaveValue(DATED_PLAN_TITLE);
+  await expect(plan.locator('[data-plan-edit-date="startsOn"]')).toHaveValue('2026-10-12');
+  await expect(plan.locator('[data-plan-edit-date="endsOn"]')).toHaveValue('2026-10-18');
+  // Every row: a day chip and a remove; no ticks and no footer while editing.
+  const rows = plan.locator('[data-plan-row-wrap]');
+  const count = await rows.count();
+  expect(count).toBeGreaterThan(0);
+  await expect(plan.locator('[data-plan-row-wrap] [data-plan-row-day-chip]')).toHaveCount(count);
+  await expect(plan.locator('[data-plan-row-wrap] [data-plan-row-remove-edit]')).toHaveCount(count);
+  expect(await plan.locator('[data-plan-grip]').count()).toBeGreaterThan(0);
+  await expect(plan.locator('[data-plan-slot], [data-plan-footer]')).toHaveCount(0);
+
+  // Cancel with nothing changed: straight back to view mode, no dialog, nothing written.
+  await plan.locator('[data-plan-back-text]').click();
+  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-slot]').first()).toBeVisible();
+  expect(saves(network)).toEqual([]);
   expectClean(network);
 });
 

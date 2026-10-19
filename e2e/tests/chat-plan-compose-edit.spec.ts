@@ -84,7 +84,9 @@ test('tap a concept to edit it; Save replaces it in place; Create plan carries i
   expectMinTouchTarget(await rows.first().locator('[data-plan-compose-remove]').boundingBox());
   expectMinTouchTarget(await rows.first().locator('[data-plan-day-button]').boundingBox());
 
-  // Cancel leaves it unchanged.
+  // Cancel leaves it unchanged. With an edit typed, Cancel asks first (X3 /
+  // FN25): Keep editing keeps the sheet and the typed title; Discard closes it
+  // and the row is as it was.
   await edit.click();
   const sheet = page.getByRole('dialog', { name: 'Edit concept' });
   await expect(sheet).toBeVisible();
@@ -94,9 +96,25 @@ test('tap a concept to edit it; Save replaces it in place; Create plan carries i
   await expect(sheet.locator('[data-plan-concept-save]')).toHaveText('Save');
   await expect(sheet.locator('[data-plan-concept-reset]')).toHaveCount(0);
   await sheet.locator('[data-plan-concept-title]').fill('Thrown away');
-  await sheet.getByRole('button', { name: 'Cancel' }).click();
+  await sheet.locator('[data-plan-concept-cancel]').click();
+  const discard = page.getByRole('alertdialog', { name: 'Discard this concept?' });
+  await expect(discard).toBeVisible();
+  await expect(discard).toContainText('Your changes will be lost.');
+  await discard.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(discard).toBeHidden();
+  await expect(sheet).toBeVisible();
+  await expect(sheet.locator('[data-plan-concept-title]')).toHaveValue('Thrown away');
+  await sheet.locator('[data-plan-concept-cancel]').click();
+  await expect(discard).toBeVisible();
+  await discard.getByRole('button', { name: 'Discard' }).click();
   await expect(sheet).toBeHidden();
   expect(await titles()).toEqual(['Opening reel', 'Story']);
+  // A clean Cancel closes at once.
+  await edit.click();
+  await expect(sheet).toBeVisible();
+  await sheet.locator('[data-plan-concept-cancel]').click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
 
   // Edit: title and day change (tile 2), same position, file kept.
   await edit.click();
