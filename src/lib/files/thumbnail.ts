@@ -456,3 +456,70 @@ export function sharedThumbnail(file: File): Promise<ThumbnailResult> {
   shared.set(file, promise);
   return promise;
 }
+
+// ---------------------------------------------------------------------------
+// Image list copy: a small JPEG made on the sender's device at upload, so lists
+// (the chat post picker, status drop-down, composer chips) load a few KB per
+// picture instead of the original. Separate from thumbnailKind on purpose:
+// tiles and the viewer keep using the original for images.
+// ---------------------------------------------------------------------------
+
+/** Longest edge budget for an image's list copy: sharp at 48px on a 3x screen. */
+export const IMAGE_THUMBNAIL_MAX_WIDTH = 320;
+
+/** Raster images get a list copy at upload; SVG never does. Pure. */
+export function isListCopyImage(mime: string): boolean {
+  const m = mime.toLowerCase();
+  return m.startsWith('image/') && m !== 'image/svg+xml';
+}
+
+/**
+ * The list copy's size for a `width` x `height` image: scaled to fit
+ * IMAGE_THUMBNAIL_MAX_WIDTH wide and THUMBNAIL_MAX_HEIGHT tall, never up. Pure.
+ */
+export function imageThumbnailBox(
+  width: number,
+  height: number,
+): { width: number; height: number } {
+  const scale = Math.min(1, IMAGE_THUMBNAIL_MAX_WIDTH / width, THUMBNAIL_MAX_HEIGHT / height);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+/**
+ * Make an image's list copy. Never throws: anything that cannot be decoded (a
+ * format this browser cannot read, no DOM) is NoThumbnail, and the upload goes
+ * on with the original only. The bitmap and canvas are freed in a finally.
+ */
+export async function makeImageThumbnail(file: File): Promise<ThumbnailResult> {
+  if (!isListCopyImage(file.type)) return { ok: false, reason: 'unsupported' };
+  if (file.size > THUMBNAIL_SOURCE_MAX_BYTES) return { ok: false, reason: 'too_large' };
+  if (typeof document === 'undefined' || typeof createImageBitmap !== 'function') {
+    return { ok: false, reason: 'unsupported' };
+  }
+  let bitmap: ImageBitmap | null = null;
+  let canvas: HTMLCanvasElement | null = null;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const box = imageThumbnailBox(bitmap.width, bitmap.height);
+    canvas = createBrowserCanvas();
+    canvas.width = box.width;
+    canvas.height = box.height;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) return { ok: false, reason: 'failed' };
+    // A transparent PNG would turn black in a JPEG: paint white under it.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, box.width, box.height);
+    ctx.drawImage(bitmap, 0, 0, box.width, box.height);
+    const blob = await encodeWithinCap(browserThumbnailDeps, canvas);
+    if (blob === null) return { ok: false, reason: 'oversize_output' };
+    return { ok: true, blob, width: box.width, height: box.height };
+  } catch {
+    return { ok: false, reason: 'failed' };
+  } finally {
+    bitmap?.close();
+    releaseCanvas(canvas);
+  }
+}

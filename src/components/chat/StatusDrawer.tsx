@@ -70,8 +70,8 @@ import {
   type PlanBundle,
   type PlanItemRow,
 } from '@/lib/chat/plans';
-import { POST_COVER_BOX, PostCover, coverOf } from '@/components/chat/PostCover';
-import { useChipBatch, type PostRefLookup } from '@/components/chat/PostRefChip';
+import { POST_COVER_BOX, PostCover } from '@/components/chat/PostCover';
+import { usePostCovers, type CoverLookup } from '@/lib/chat/post-covers';
 import type { WriteResult } from '@/lib/chat/record';
 import {
   SECTION_MARK_TYPE,
@@ -225,15 +225,13 @@ function itemTitle(bundle: PlanBundle, item: PlanItemRow): string {
  */
 function PlanItemTile(props: {
   item: PlanItemRow;
-  cover: PostRefLookup | undefined;
+  cover: CoverLookup | undefined;
   concepts: Record<string, ConceptThumb> | null;
 }): ReactElement {
   const { item } = props;
   if (item.kind !== 'concept') {
     const cover =
-      item.post_id === null || props.cover === undefined
-        ? null
-        : coverOf(props.cover(item.post_id));
+      item.post_id === null || props.cover === undefined ? null : props.cover(item.post_id);
     return <PostCover cover={cover} />;
   }
   if (props.concepts === null) {
@@ -298,7 +296,7 @@ export function PlanBlock(props: {
   onOpen: () => void;
   onOpenItem: (itemId: string) => void;
   /** Each post row's post with its cover; absent, post rows show the glyph. */
-  cover?: PostRefLookup | undefined;
+  cover?: CoverLookup | undefined;
 }): ReactElement {
   const { bundle, side } = props;
   const progress = planProgress(bundle);
@@ -527,7 +525,7 @@ export function StatusDrawerList(
     ],
     [props.plans, shownPosts],
   );
-  const covers = useChipBatch(coverIds);
+  const covers = usePostCovers(coverIds);
 
   const section = (key: StatusKey, count: string, body: ReactNode): ReactElement => (
     <section
@@ -562,7 +560,7 @@ export function StatusDrawerList(
                 first={i === 0}
                 onOpen={() => props.onOpenPlan(bundle.plan.id)}
                 onOpenItem={(itemId) => props.onOpenPlanItem(bundle.plan.id, itemId)}
-                cover={covers.postRef}
+                cover={covers}
               />
             )),
           );
@@ -588,7 +586,7 @@ export function StatusDrawerList(
                     className={cn(ROW, busy && 'bg-panel-2')}
                   >
                     <span className={DATE_COL}>{drawerDay(post.target_date, props.timeZone)}</span>
-                    <PostCover cover={coverOf(covers.postRef(post.id))} />
+                    <PostCover cover={covers(post.id)} />
                     <span className="min-w-0 flex-1">
                       <span className={ROW_TITLE}>{lines.title}</span>
                       <span className={ROW_SUB}>{formatLabel(post.format)}</span>

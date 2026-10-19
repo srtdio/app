@@ -509,6 +509,35 @@ export async function readPostCards(
 }
 
 /**
+ * Each post's cover (its first photo or video in display order) for the chat
+ * post lists, in ONE asset_attachments read over every id (never one per
+ * post). Unlike {@link readPostCards} it does not re-read the posts: the
+ * caller already has them, so the cover read starts the moment the list lands.
+ * Every requested id comes back: a post with no photo or video (or one RLS
+ * hides) maps to null. Returns an empty map without a round trip for no ids.
+ */
+export async function readPostCovers(
+  client: Client,
+  postIds: readonly string[],
+): Promise<Result<Map<string, CardFirstMedia | null>>> {
+  if (postIds.length === 0) return { ok: true, data: new Map() };
+  const { data, error } = await client
+    .from('asset_attachments')
+    .select('entity_id, asset_version_id, asset_versions!inner(mime_type, width, height)')
+    .eq('entity_type', 'post')
+    .in('entity_id', [...postIds])
+    .is('deleted_at', null)
+    .order('entity_id', { ascending: true })
+    .order('position', { ascending: true })
+    .order('attached_at', { ascending: true });
+  if (error) return { ok: false, error: transportError(error.message) };
+  const byPost = mediaSummaryByPost((data ?? []) as unknown as CardMediaRow[]);
+  const covers = new Map<string, CardFirstMedia | null>();
+  for (const id of postIds) covers.set(id, byPost.get(id)?.firstMedia ?? null);
+  return { ok: true, data: covers };
+}
+
+/**
  * List live posts in a workspace, newest first. Soft-deleted rows are excluded.
  * A single posts query: stage and the `before` cursor are applied as filters, the
  * page size is capped, and ordering matches the composite index
