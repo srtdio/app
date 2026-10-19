@@ -1247,9 +1247,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           onDownload={onDownload}
           closeRef={closeRef}
           actions={actions}
-          line={
-            actions !== undefined ? viewerBarLine(kind === 'pdf' ? pages : null, subtitle) : null
-          }
+          line={actions !== undefined ? viewerBarLine(null, subtitle) : null}
         />
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
           <Renderer
@@ -1263,7 +1261,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
             onFailed={onFailed}
           />
         </div>
-        {pages !== null && kind === 'pdf' && actions === undefined ? (
+        {pages !== null && kind === 'pdf' ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] flex justify-center">
             <span
               data-page-counter=""
