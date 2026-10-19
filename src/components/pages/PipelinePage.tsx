@@ -285,7 +285,9 @@ export function postsSkeleton(isDesktop: boolean): ReactElement {
 
 /**
  * The pipeline with no posts at all (not a filter): a headline, and for people
- * with post.create a "Create post" button that opens the create sheet.
+ * with post.create a button that opens the create sheet. Its name is "Create
+ * your first post", not "Create post": the header's "+" (the induction's
+ * pipeline-create anchor) keeps that exact name, so each control has one.
  */
 export function emptyPipeline(canCreate: boolean): ReactElement {
   return (
@@ -306,7 +308,7 @@ export function emptyPipeline(canCreate: boolean): ReactElement {
                   size="lg"
                   onClick={() => dispatchSorted('sorted:create-post')}
                 >
-                  Create post
+                  Create your first post
                 </Button>
               ),
             }

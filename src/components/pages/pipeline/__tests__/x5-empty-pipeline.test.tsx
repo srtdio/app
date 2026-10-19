@@ -13,16 +13,18 @@ const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 const cache = { peek: vi.fn(() => null), resolve: vi.fn() } as unknown as PresignCache;
 
 describe('X5 empty pipeline', () => {
-  it('people with post.create get a headline and a Create post button', () => {
+  it('people with post.create get a headline and a create button', () => {
     const out = renderToStaticMarkup(emptyPipeline(true));
     expect(out).toContain('No posts yet');
-    expect(out).toContain('Create post');
+    expect(out).toContain('Create your first post');
+    // The header "+" owns the exact "Create post" name; no second control shares it.
+    expect(out.toLowerCase()).not.toContain('create post');
   });
 
   it('people without post.create get the headline only', () => {
     const out = renderToStaticMarkup(emptyPipeline(false));
     expect(out).toContain('No posts yet');
-    expect(out).not.toContain('Create post');
+    expect(out).not.toContain('Create your first post');
   });
 
   it('every empty board column names its stage instead of "Empty"', () => {
