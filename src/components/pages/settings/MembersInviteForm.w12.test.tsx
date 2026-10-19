@@ -6,10 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // W12: honest sent status (NEW9), plain errors (FT63), no default role (T86).
-const { mockInvoke, tourStep } = vi.hoisted(() => ({ mockInvoke: vi.fn(), tourStep: { id: '' } }));
-vi.mock('@/components/induction/InductionProvider', () => ({
-  useInductionStepId: () => tourStep.id,
-}));
+const { mockInvoke } = vi.hoisted(() => ({ mockInvoke: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ supabase: { functions: { invoke: mockInvoke } } }));
 vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceId: 'ws-1' }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't-1' }));
@@ -32,7 +29,6 @@ let host: HTMLDivElement | null = null;
 
 beforeEach(() => {
   mockInvoke.mockReset();
-  tourStep.id = '';
   host = document.createElement('div');
   document.body.appendChild(host);
 });
@@ -176,7 +172,9 @@ describe('W12 role has no default (T86)', () => {
   });
 
   it("the tour's approver-invite step names the role, so Send goes out as Approver", async () => {
-    tourStep.id = 'c_approver_invite';
+    const guide = document.createElement('div');
+    guide.setAttribute('data-induction-step', 'c_approver_invite');
+    document.body.appendChild(guide);
     mockInvoke.mockResolvedValue({ data: { emailed: true }, error: null });
     mount(<MembersInviteForm />);
     typeEmail('riya@kitebrand.in');

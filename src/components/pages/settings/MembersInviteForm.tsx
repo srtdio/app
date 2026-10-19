@@ -13,7 +13,6 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
 import { FREE_MAIL_APPROVER_MESSAGE, UNCONFIRMED_ACCOUNT_MESSAGE } from './members-data';
-import { useInductionStepId } from '@/components/induction/InductionProvider';
 import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import {
   isTestEmail,
@@ -283,6 +282,17 @@ export function getInviteRoleOptions(clientOnly: boolean): readonly SelectOption
   return clientOnly ? [APPROVER_ROLE_OPTION] : ROLE_OPTIONS;
 }
 
+/**
+ * True while the tour's approver-invite step is up. Read from the guide's
+ * data-induction-step attribute at submit time, so the form needs no tour
+ * context (and its importers no tour mocks).
+ */
+export function isGuidedApproverInvite(): boolean {
+  if (typeof document === 'undefined') return false;
+  const step = document.querySelector('[data-induction-step]')?.getAttribute('data-induction-step');
+  return typeof step === 'string' && step.endsWith('approver_invite');
+}
+
 /** No role picked yet: the inviter must choose Creator or Approver. */
 type RoleChoice = InviteRole | '';
 
@@ -305,9 +315,6 @@ export function MembersInviteForm({
   const roleOptions = getInviteRoleOptions(clientOnly);
   const [singleEmail, setSingleEmail] = useState('');
   const [singleRole, setSingleRole] = useState<RoleChoice>('');
-  // The tour's approver-invite step asks for the approver, so the step itself
-  // names the role; everywhere else the inviter picks one (no default).
-  const guidedApprover = useInductionStepId().endsWith('approver_invite');
   const [singleRoleMissing, setSingleRoleMissing] = useState(false);
   const [singleSubmitting, setSingleSubmitting] = useState(false);
   const [singleSentTo, setSingleSentTo] = useState<string | null>(null);
@@ -335,13 +342,7 @@ export function MembersInviteForm({
   const activeWorkspaceId = workspaceId;
   const testSite = isTestSite();
 
-  const singleRoleChoice: RoleChoice = clientOnly
-    ? 'client'
-    : singleRole !== ''
-      ? singleRole
-      : guidedApprover
-        ? 'client'
-        : '';
+  const singleRoleChoice: RoleChoice = clientOnly ? 'client' : singleRole;
   const trimmedSingleEmail = singleEmail.trim();
   const singleEmailValid = isValidInviteEmail(trimmedSingleEmail);
   const singleEmailError = singleEmailTouched && trimmedSingleEmail.length > 0 && !singleEmailValid;
@@ -350,7 +351,10 @@ export function MembersInviteForm({
     event.preventDefault();
     setSingleEmailTouched(true);
     if (singleSubmitting || !singleEmailValid) return;
-    const role = singleRoleChoice;
+    // The tour's approver-invite step asks for the approver, so the step itself
+    // names the role; everywhere else the inviter picks one (no default).
+    const role: RoleChoice =
+      singleRoleChoice === '' && isGuidedApproverInvite() ? 'client' : singleRoleChoice;
     if (role === '') {
       setSingleRoleMissing(true);
       return;
