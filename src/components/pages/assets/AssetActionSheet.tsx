@@ -12,6 +12,7 @@ import { displayLabel, linkDomain, type AssetListItem } from '@/lib/assets';
 import { downloadFile, openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { assetLink } from '@/components/pages/assets/assets-nav';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import { useEscapeLayer } from '@/lib/escape-stack';
 
 const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 
@@ -106,6 +107,8 @@ export function AssetActionSheet({
   onToast,
 }: AssetActionSheetProps) {
   const [busy, setBusy] = useState(false);
+  // Escape closes the menu while it is the top layer.
+  useEscapeLayer(true, onClose);
   const isLink = item.kind === 'link';
   const name = displayLabel(item);
   const canDownload = isLink

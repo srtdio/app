@@ -19,6 +19,9 @@ import {
 } from '@/components/ui/FileViewer';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import { cn } from '@/lib/cn';
+import { useEscapeLayer } from '@/lib/escape-stack';
+import { useModalFocus } from '@/lib/modal-focus';
 
 // The file card's action: a 44px target, colour change only on press (the
 // shared Button's height and press scale do not fit this rule).
@@ -32,6 +35,55 @@ const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLa
 
 const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 const SWIPE_THRESHOLD = 48;
+
+// The top bar's 44px icon buttons on the overlay (light and dark share it).
+const BAR_BUTTON =
+  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
+  'transition-colors duration-fast hover:bg-overlay-surface disabled:opacity-40 ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg';
+
+/** Delete keeps the bar button's shape in the bad colour. */
+const BAD = '!text-bad';
+
+/**
+ * A swipe's step: next (1) or previous (-1) for a horizontal swipe past the
+ * threshold, else 0. Axis lock: the move must be mostly sideways (1.5x the
+ * vertical), so a scroll or a pull down never changes the file. Pure.
+ */
+export function swipeStep(dx: number, dy: number): -1 | 0 | 1 {
+  if (Math.abs(dx) <= SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy) * 1.5) return 0;
+  return dx < 0 ? 1 : -1;
+}
+
+/** The type word under the name: "Image", "Video", "PDF". Pure. */
+function typeWord(label: string): string {
+  return label === 'PDF' ? label : `${label.slice(0, 1)}${label.slice(1).toLowerCase()}`;
+}
+
+/** The line under the name in the top bar: type, size and "2 of 5". Pure. */
+export function lightboxSubtitle(
+  label: string,
+  sizeBytes: number | null,
+  index: number,
+  total: number,
+): string {
+  const parts = [typeWord(label), humanizeSize(sizeBytes)];
+  if (total > 1) parts.push(`${index + 1} of ${total}`);
+  return parts.filter((part) => part !== '').join(' · ');
+}
+
+/**
+ * The Escape step for the lightbox, top layer first: an open rename closes,
+ * then an open Info sheet, then the lightbox. Pure.
+ */
+export function lightboxEscapeStep(state: {
+  editingName: boolean;
+  infoOpen: boolean;
+}): 'rename' | 'info' | 'close' {
+  if (state.editingName) return 'rename';
+  if (state.infoOpen) return 'info';
+  return 'close';
+}
 
 interface AssetLightboxProps {
   /** The navigable list: the currently filtered/searched assets, links excluded. */
@@ -121,7 +173,7 @@ function Field({ label, value }: { label: string; value: string }) {
 
 function Spinner() {
   return (
-    <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+    <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
   );
 }
 
@@ -155,7 +207,10 @@ export function AssetLightbox({
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
-  const touchStartX = useRef<number | null>(null);
+  // The swipe in progress; null when none (two fingers, or it began on a video).
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   // The file open in the FileViewer. Reached from the long-press sheet's Info,
   // the lightbox opens on the details instead.
   // Opened right after this lightbox has locked the page (see below), never in
@@ -263,20 +318,33 @@ export function AssetLightbox({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Esc closes; arrows navigate.
+  // Focus moves in (to Close), Tab stays inside, and it goes back on close.
+  useModalFocus(dialogRef, true, { initial: () => closeRef.current });
+
+  // Escape reaches the lightbox only as the top layer (a menu or confirm above
+  // it takes its own; the FileViewer stops it before the stack sees it). Inside,
+  // it backs out of an open rename, then the Info sheet, then closes.
+  useEscapeLayer(true, () => {
+    if (viewingRef.current || savingName) return;
+    const step = lightboxEscapeStep({ editingName, infoOpen });
+    if (step === 'rename') setEditingName(false);
+    else if (step === 'info') setInfoOpen(false);
+    else onClose();
+  });
+
+  // Arrows navigate, never while typing a name or reading Info.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       // The FileViewer owns the keys while it is open.
-      if (viewingRef.current) return;
-      if (event.key === 'Escape') onClose();
-      else if (event.key === 'ArrowLeft') go(-1);
+      if (viewingRef.current || infoOpen) return;
+      if (event.key === 'ArrowLeft') go(-1);
       else if (event.key === 'ArrowRight') go(1);
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [go, onClose]);
+  }, [go, infoOpen]);
 
   if (item === undefined) return null;
   const asset: AssetListItem = item;
@@ -309,6 +377,48 @@ export function AssetLightbox({
 
   const handleDelete = (): void => onDelete(asset);
 
+  // Download, Copy link, Info and Delete: the same four on the lightbox bar and
+  // on the FileViewer's bar for a PDF or Office file, so they are always on top.
+  const renderActions = (barClass: string, onInfo: () => void) => (
+    <>
+      <button
+        type="button"
+        aria-label="Download"
+        onClick={handleDownload}
+        disabled={busy}
+        className={barClass}
+      >
+        <IconDownload size={20} />
+      </button>
+      <button
+        type="button"
+        aria-label="Copy link"
+        onClick={handleCopy}
+        disabled={busy}
+        className={barClass}
+      >
+        <IconCopy size={20} />
+      </button>
+      <button type="button" aria-label="Info" onClick={onInfo} className={barClass}>
+        <IconInfo size={20} />
+      </button>
+      <button
+        type="button"
+        aria-label="Delete"
+        onClick={handleDelete}
+        className={cn(barClass, BAD)}
+      >
+        <IconTrash size={20} />
+      </button>
+    </>
+  );
+  // From the FileViewer, Info closes the viewer onto the lightbox's details.
+  const viewerActions = (barClass: string) =>
+    renderActions(barClass, () => {
+      setViewing(null);
+      setInfoOpen(true);
+    });
+
   // Commit an inline rename. Save is gated to a non-empty, changed name; on
   // success the parent updates the shared list, so the new name flows back into
   // both this title and the grid card, and the input collapses.
@@ -327,40 +437,63 @@ export function AssetLightbox({
     }
   }
 
+  // One-finger horizontal swipe; a touch that starts on a video (its scrubber
+  // and controls) never swipes.
   const onTouchStart = (event: React.TouchEvent): void => {
-    touchStartX.current = event.touches[0]?.clientX ?? null;
+    const touch = event.touches[0];
+    if (event.touches.length !== 1 || touch === undefined) {
+      touchStart.current = null;
+      return;
+    }
+    if (event.target instanceof HTMLVideoElement) {
+      touchStart.current = null;
+      return;
+    }
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
   };
   const onTouchEnd = (event: React.TouchEvent): void => {
-    const start = touchStartX.current;
-    touchStartX.current = null;
+    const start = touchStart.current;
+    touchStart.current = null;
     if (start === null) return;
-    const delta = (event.changedTouches[0]?.clientX ?? start) - start;
-    if (Math.abs(delta) > SWIPE_THRESHOLD) go(delta < 0 ? 1 : -1);
+    const end = event.changedTouches[0];
+    if (end === undefined) return;
+    const step = swipeStep(end.clientX - start.x, end.clientY - start.y);
+    if (step !== 0) go(step);
   };
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`Viewing ${name}`}
-      className="fixed inset-0 z-50 flex flex-col bg-black/90"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex flex-col bg-overlay focus:outline-none"
     >
-      {/* Top bar: name, counter, close. */}
-      <div className="flex h-14 shrink-0 items-center gap-3 px-3 text-white">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          <Highlight text={name} />
-        </span>
-        <span className="shrink-0 text-xs tabular-nums text-white/70">
-          {index + 1} / {items.length}
-        </span>
+      {/* One top bar: close on the left, the name and its type line in the
+          centre, then Download, Copy link, Info and Delete. It clears the notch. */}
+      <div
+        data-lightbox-bar=""
+        className="flex shrink-0 items-center gap-1 px-1 pb-1 pt-[max(env(safe-area-inset-top),4px)] text-overlay-fg"
+      >
         <button
+          ref={closeRef}
           type="button"
           aria-label="Close viewer"
           onClick={onClose}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-md text-white/90 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className={BAR_BUTTON}
         >
-          <IconX size={20} />
+          <IconX size={22} />
         </button>
+        <div className="min-w-0 flex-1 px-1 text-center">
+          <p className="truncate text-sm font-medium">
+            <Highlight text={name} />
+          </p>
+          <p className="truncate text-xs tabular-nums text-overlay-fg-dim">
+            {lightboxSubtitle(typeLabel(kind), item.sizeBytes, index, items.length)}
+          </p>
+        </div>
+        {renderActions(BAR_BUTTON, () => setInfoOpen(true))}
       </div>
 
       {/* Media stage. A tap on the empty scrim (not the media) closes. */}
@@ -378,7 +511,7 @@ export function AssetLightbox({
               type="button"
               aria-label="Previous asset"
               onClick={() => go(-1)}
-              className="absolute left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 md:inline-flex"
+              className="absolute left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-surface text-overlay-fg hover:bg-overlay-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg md:inline-flex"
             >
               <IconChevronLeft size={22} />
             </button>
@@ -386,7 +519,7 @@ export function AssetLightbox({
               type="button"
               aria-label="Next asset"
               onClick={() => go(1)}
-              className="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 md:inline-flex"
+              className="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-surface text-overlay-fg hover:bg-overlay-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg md:inline-flex"
             >
               <IconChevronRight size={22} />
             </button>
@@ -440,24 +573,6 @@ export function AssetLightbox({
         )}
       </div>
 
-      {/* Bottom frosted action bar. */}
-      <div className="flex shrink-0 items-center justify-center gap-2 border-t border-white/10 bg-black/40 px-3 py-2 backdrop-blur">
-        <BarButton
-          icon={<IconDownload size={18} />}
-          label="Download"
-          onClick={handleDownload}
-          disabled={busy}
-        />
-        <BarButton
-          icon={<IconCopy size={18} />}
-          label="Copy link"
-          onClick={handleCopy}
-          disabled={busy}
-        />
-        <BarButton icon={<IconInfo size={18} />} label="Info" onClick={() => setInfoOpen(true)} />
-        <BarButton icon={<IconTrash size={18} />} label="Delete" onClick={handleDelete} />
-      </div>
-
       {/* Info: bottom sheet sliding up inside the lightbox. */}
       {infoOpen ? (
         <div className="absolute inset-0 z-10 flex items-end">
@@ -465,7 +580,7 @@ export function AssetLightbox({
             type="button"
             aria-label="Close details"
             onClick={() => setInfoOpen(false)}
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-scrim"
           />
           <div
             role="dialog"
@@ -562,33 +677,15 @@ export function AssetLightbox({
           source={viewing.source}
           onClose={closeViewer}
           onLoadError={onViewerError}
+          actions={viewerActions}
+          subtitle={lightboxSubtitle(
+            typeLabel(mediaKind(viewing.asset)),
+            viewing.asset.sizeBytes,
+            0,
+            1,
+          )}
         />
       ) : null}
     </div>
-  );
-}
-
-function BarButton({
-  icon,
-  label,
-  onClick,
-  disabled,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className="inline-flex h-11 min-w-[44px] items-center justify-center gap-2 rounded-lg px-3 text-sm text-white/90 hover:bg-white/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-    >
-      {icon}
-      <span className="hidden md:inline">{label}</span>
-    </button>
   );
 }

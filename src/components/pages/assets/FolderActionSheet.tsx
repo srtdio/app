@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import { IconCopy, IconEdit, IconFolder, IconTrash } from '@/components/ui/icons';
 import type { FolderDeleteOutcome } from '@/lib/asset-upload';
 
@@ -14,7 +15,10 @@ interface FolderActionSheetProps {
   canManage?: boolean;
   /** Open the rename sheet for this folder (the page closes the action sheet first). */
   onRename: () => void;
-  /** Commit: POST to the worker's /folders/delete route, reporting the outcome. */
+  /**
+   * Confirmed: the page hides the folder and shows the 7s Undo toast; the
+   * worker delete runs when the window ends. A refusal is reported here.
+   */
   onConfirmDelete: () => Promise<FolderDeleteOutcome>;
   onToast: (message: string) => void;
 }
@@ -59,10 +63,10 @@ export function folderMenuRows(canManage: boolean): FolderMenuRow[] {
 }
 
 /**
- * Run the delete-confirm flow: call onConfirmDelete and, on success, toast and
- * close; on failure surface the mapped message and leave the sheet open. Pure
- * orchestration, so it is unit-tested directly (the sheet body has no DOM in the
- * node test environment). No em-dashes in any string (CLAUDE.md).
+ * Run the delete-confirm flow: call onConfirmDelete and, on success, close (the
+ * page's Undo toast says "Folder deleted"); on failure surface the mapped
+ * message and leave the sheet open. Pure orchestration, so it is unit-tested
+ * directly (the sheet body has no DOM in the node test environment).
  */
 export async function confirmDeleteFolder(args: {
   onConfirmDelete: () => Promise<FolderDeleteOutcome>;
@@ -71,7 +75,6 @@ export async function confirmDeleteFolder(args: {
 }): Promise<void> {
   const outcome = await args.onConfirmDelete();
   if (outcome.ok) {
-    args.onToast('Folder deleted');
     args.onClose();
   } else {
     args.onToast(outcome.message);
@@ -98,6 +101,14 @@ export function FolderActionSheet({
 }: FolderActionSheetProps) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Escape goes to the top layer only: it backs out of the confirm first, then
+  // closes the menu.
+  useEscapeLayer(true, () => {
+    if (busy) return;
+    if (confirming) setConfirming(false);
+    else onClose();
+  });
 
   const handleDelete = (): void => {
     if (busy) return;

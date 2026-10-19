@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
@@ -6,6 +6,12 @@ import type { RenameOutcome } from '@/lib/asset-upload';
 
 /** display_name ceiling (mirrors the worker's validName). */
 const MAX_ASSET_NAME = 500;
+
+/** The Sheet's discard confirm for an edited file name. */
+export const ASSET_RENAME_DISCARD = {
+  title: 'Discard the new name?',
+  message: 'The file keeps its current name.',
+};
 
 /** Save is enabled for a non-empty, changed name within the ceiling. Pure. */
 export function canSaveAssetName(name: string, initialName: string): boolean {
@@ -37,10 +43,18 @@ export function AssetRenameSheet({
   const [name, setName] = useState(initialName);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  // Seed while rendering (not in an effect) so the open frame never reads as
+  // dirty and places a Back guard for a name nobody typed.
+  const seedKey = open ? initialName : null;
+  const [seeded, setSeeded] = useState<string | null>(seedKey);
+  if (seeded !== seedKey) {
+    setSeeded(seedKey);
     setName(open ? initialName : '');
     if (!open) setSaving(false);
-  }, [open, initialName]);
+  }
+
+  // A changed name is unsaved work: X, Escape, the backdrop and system Back ask first.
+  const dirty = open && name !== initialName;
 
   const canSave = canSaveAssetName(name, initialName) && !saving;
 
@@ -69,7 +83,15 @@ export function AssetRenameSheet({
   );
 
   return (
-    <Sheet open={open} onClose={onClose} title="Rename file" footer={footer} busy={saving}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Rename file"
+      footer={footer}
+      busy={saving}
+      dirty={dirty}
+      discard={ASSET_RENAME_DISCARD}
+    >
       <label className="flex flex-col gap-1.5">
         <span className="text-[13px] font-medium text-fg-2">Name</span>
         <Input

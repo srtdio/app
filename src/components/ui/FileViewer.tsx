@@ -33,11 +33,12 @@ import {
   useState,
   type SyntheticEvent,
 } from 'react';
-import type { MutableRefObject, ReactElement, RefObject } from 'react';
+import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { IconDownload, IconFileText, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { useModalFocus } from '@/lib/modal-focus';
 import { humanizeSize } from '@/lib/assets';
 import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
@@ -72,6 +73,8 @@ export type ViewerKind = 'pdf' | 'video' | 'office' | 'file';
 
 /** The viewer's error line: never connection wording. */
 export const VIEWER_ERROR = "Couldn't open. Try again.";
+/** Shown when Download could not save the file (the file itself may be fine). */
+export const DOWNLOAD_ERROR = "Couldn't download. Try again.";
 export const PREVIEW_UNAVAILABLE = 'Preview not available yet';
 
 /** Pages rendered on each side of the current one; the rest hold no canvas. */
@@ -357,14 +360,6 @@ export function viewerTone(kind: ViewerKind): ViewerTone {
 const OVERLAY = TONES.overlay;
 /** No selection or iOS callout on the viewer's controls. */
 const NO_SELECT = 'select-none [-webkit-touch-callout:none] [-webkit-user-select:none]';
-
-function focusable(root: HTMLElement): HTMLElement[] {
-  return Array.from(
-    root.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), a[href], video[controls], [data-pdf-scroller], [data-sheet-scroller], iframe',
-    ),
-  );
-}
 
 /** The centred message with Retry and Download: a failed load is never blank. */
 function ViewerError(props: {
@@ -1003,6 +998,23 @@ export interface FileViewerProps {
   onClose: () => void;
   /** Called when the file could not be opened (the sheet shows its error card). */
   onLoadError?: (() => void) | undefined;
+  /**
+   * The caller's own top-bar actions in place of the default Download (Assets
+   * passes Download, Copy link, Info and Delete). Called with the bar's 44px
+   * button class for this kind's tone. Omitted: Download, as before.
+   */
+  actions?: ((barClass: string) => ReactNode) | undefined;
+  /** A line under the name in the top bar, used when `actions` is set and there is no page count. */
+  subtitle?: string | undefined;
+}
+
+/** The top bar's line under the name with caller actions: "Page 3 of 12" for a PDF. Pure. */
+export function viewerBarLine(
+  pages: { page: number; total: number } | null,
+  subtitle: string | undefined,
+): string | null {
+  if (pages !== null) return `Page ${pages.page} of ${pages.total}`;
+  return subtitle !== undefined && subtitle !== '' ? subtitle : null;
 }
 
 /** Body scroll lock while the sheet is open, restoring the prior value. */
@@ -1023,6 +1035,8 @@ function TopBar(props: {
   onClose: () => void;
   onDownload: () => void;
   closeRef: RefObject<HTMLButtonElement>;
+  actions?: ((barClass: string) => ReactNode) | undefined;
+  line?: string | null;
 }): ReactElement {
   const { tone } = props;
   return (
@@ -1042,21 +1056,38 @@ function TopBar(props: {
       >
         <IconX size={22} />
       </button>
-      <p
-        title={props.name}
-        className={cn('min-w-0 flex-1 truncate text-center text-sm font-medium', tone.fg)}
-      >
-        {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
-      </p>
-      <button type="button" aria-label="Download" onClick={props.onDownload} className={tone.bar}>
-        <IconDownload size={20} />
-      </button>
+      {props.actions !== undefined ? (
+        <div className="min-w-0 flex-1 px-1 text-center">
+          <p title={props.name} className={cn('truncate text-sm font-medium', tone.fg)}>
+            {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
+          </p>
+          {props.line != null ? (
+            <p data-viewer-bar-line="" className={cn('truncate text-xs', tone.fgDim)}>
+              {props.line}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p
+          title={props.name}
+          className={cn('min-w-0 flex-1 truncate text-center text-sm font-medium', tone.fg)}
+        >
+          {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
+        </p>
+      )}
+      {props.actions !== undefined ? (
+        props.actions(tone.bar)
+      ) : (
+        <button type="button" aria-label="Download" onClick={props.onDownload} className={tone.bar}>
+          <IconDownload size={20} />
+        </button>
+      )}
     </div>
   );
 }
 
 export function FileViewerSheet(props: FileViewerProps): ReactElement {
-  const { name, kind, size, source, onLoadError } = props;
+  const { name, kind, size, source, onLoadError, actions, subtitle } = props;
   // Callers pass a fresh onClose each render: keep the latest in a ref so the
   // key and swipe listeners are not re-attached (and a drag not dropped).
   const onCloseRef = useRef(props.onClose);
@@ -1080,40 +1111,19 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
     });
   }, [source, name]);
 
-  // Focus the close button on open; give focus back to the opener on close.
-  useEffect(() => {
-    const opener = document.activeElement;
-    closeRef.current?.focus();
-    return () => {
-      if (opener instanceof HTMLElement) opener.focus();
-    };
-  }, []);
+  // Focus moves in (to Close), Tab stays inside, and the opener gets it back
+  // on close. The shared modal-focus stack, so a layer opened over the viewer
+  // traps for itself and the layer under it never fights the viewer for Tab.
+  useModalFocus(dialogRef, true, { initial: () => closeRef.current });
 
-  // Esc closes (laptop); Tab cycles inside the sheet.
+  // Esc closes (laptop).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        // The sheet owns Esc while open: the thread underneath never sees it.
-        event.preventDefault();
-        event.stopPropagation();
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const root = dialogRef.current;
-      if (root === null) return;
-      const controls = focusable(root);
-      const first = controls[0];
-      const last = controls[controls.length - 1];
-      if (first === undefined || last === undefined) return;
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || !root.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || !root.contains(active))) {
-        event.preventDefault();
-        first.focus();
-      }
+      if (event.key !== 'Escape') return;
+      // The sheet owns Esc while open: the thread underneath never sees it.
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -1236,6 +1246,10 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           onClose={onClose}
           onDownload={onDownload}
           closeRef={closeRef}
+          actions={actions}
+          line={
+            actions !== undefined ? viewerBarLine(kind === 'pdf' ? pages : null, subtitle) : null
+          }
         />
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
           <Renderer
@@ -1249,7 +1263,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
             onFailed={onFailed}
           />
         </div>
-        {pages !== null && kind === 'pdf' ? (
+        {pages !== null && kind === 'pdf' && actions === undefined ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] flex justify-center">
             <span
               data-page-counter=""
@@ -1264,7 +1278,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
             role="status"
             className={cn('absolute inset-x-0 bottom-14 text-center text-sm', tone.fg)}
           >
-            {VIEWER_ERROR}
+            {DOWNLOAD_ERROR}
           </p>
         ) : null}
       </div>
