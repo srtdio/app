@@ -48,6 +48,7 @@ import {
 } from '@/components/media/PlatformFrame';
 import { frameFor, type Frame } from '@/lib/platform-specs';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
+import { localThumbnailUrlStore } from '@/lib/local-cache';
 import { READ_TIMEOUT_MS, readProfiles } from '@/lib/chat-reads';
 import { readBriefsByIds, type BriefCardFields } from '@/lib/chat/briefs';
 import {
@@ -469,7 +470,15 @@ const cardPresignDeps: PresignDeps = {
 };
 let cardPresignCache: PresignCache | null = null;
 export function sharedCardPresignCache(): PresignCache {
-  if (cardPresignCache === null) cardPresignCache = new PresignCache(cardPresignDeps);
+  if (cardPresignCache === null) {
+    // Small-picture URLs persist on the device, so a reopened app paints at once.
+    cardPresignCache = new PresignCache(
+      cardPresignDeps,
+      undefined,
+      undefined,
+      localThumbnailUrlStore,
+    );
+  }
   return cardPresignCache;
 }
 export const PRESIGN_ENABLED =
