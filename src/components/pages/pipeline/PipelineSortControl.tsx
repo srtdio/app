@@ -61,12 +61,12 @@ function formatRangeDay(iso: string): string {
   return `${day} ${MONTHS_SHORT[month - 1]}`;
 }
 
-/** The Custom row label: "24 Jun – 27 Jun", "24 Jun" for one day, or "Custom…". */
+/** The Custom row label: "24 Jun to 27 Jun", "24 Jun" for one day, or "Custom…". */
 export function customRangeLabel(range: DateRange | null): string {
   if (range === null) return 'Custom…';
   const start = formatRangeDay(range.start);
   if (range.start === range.end) return start;
-  return `${start} – ${formatRangeDay(range.end)}`;
+  return `${start} to ${formatRangeDay(range.end)}`;
 }
 
 /** A single radio row, sharing SortMenu's row markup (44px, check + label). */
@@ -121,8 +121,10 @@ export function sortControlBody(props: {
   customRange: DateRange | null;
   onCustomOpen: () => void;
 }): ReactElement {
+  // role=menu so the body matches the trigger's aria-haspopup="menu": its
+  // groups hold menuitemradio rows.
   return (
-    <div className="flex flex-col gap-3">
+    <div role="menu" aria-label="Sort" className="flex flex-col gap-3">
       <div role="group" aria-label="Order" className="flex flex-col">
         {groupLabel('Order')}
         {POST_SORT_OPTIONS.map((option) =>

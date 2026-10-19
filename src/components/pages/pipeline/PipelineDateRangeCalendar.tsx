@@ -6,11 +6,13 @@
 // them; a single tap is a one-day range; tapping again when both are set
 // restarts. Self-contained date math with native Date, ISO 'YYYY-MM-DD' only.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
+import { useEscapeLayer } from '@/lib/escape-stack';
+import { useModalFocus } from '@/lib/modal-focus';
 
 interface DateRange {
   start: string;
@@ -76,6 +78,20 @@ function shiftMonth(
 }
 
 /**
+ * The full spoken date for a day cell: "Monday, 19 October 2026" (locale
+ * ordered). Built at UTC from the civil parts so no zone can shift the day.
+ */
+export function dayAriaLabel(year: number, monthIndex: number, day: number): string {
+  return new Date(Date.UTC(year, monthIndex, day)).toLocaleDateString(undefined, {
+    timeZone: 'UTC',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+/**
  * Leading-null-padded day cells for a month grid, with the leading offset keyed
  * to weekStartDay (0=Sun..6=Sat). Pure so the grid shape is predictable.
  */
@@ -126,16 +142,13 @@ export function PipelineDateRangeCalendar({
     setShown(true);
   }, [open, initialRange?.start, initialRange?.end]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent): void {
-      if (event.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, onClose]);
+  // Escape through the shared stack: the calendar is the top layer over the
+  // sort sheet, so Escape closes the calendar only and leaves the sheet open.
+  useEscapeLayer(open, onClose);
+  // aria-modal: focus moves in, Tab wraps inside, and returns to the Custom row
+  // on close.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useModalFocus(panelRef, open);
 
   if (!open) return null;
 
@@ -171,18 +184,19 @@ export function PipelineDateRangeCalendar({
     >
       <div
         className={cn(
-          'absolute inset-0 bg-black/45 transition-opacity duration-150',
+          'absolute inset-0 bg-scrim transition-opacity duration-base ease-enter',
           shown ? 'opacity-100' : 'opacity-0',
         )}
         aria-hidden="true"
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Select a date range"
         onClick={(event) => event.stopPropagation()}
         className={cn(
-          'relative w-[320px] max-w-full rounded-2xl border border-border-strong bg-panel p-3 shadow-2xl transition-all duration-150',
+          'relative w-[320px] max-w-full rounded-2xl border border-border-strong bg-panel p-3 shadow-2xl transition-all duration-base ease-enter',
           shown ? 'scale-100 opacity-100' : 'scale-95 opacity-0',
         )}
       >
@@ -230,6 +244,7 @@ export function PipelineDateRangeCalendar({
               <button
                 key={iso}
                 type="button"
+                aria-label={dayAriaLabel(view.year, view.monthIndex, day)}
                 aria-pressed={isEndpoint || single}
                 onClick={() => pick(iso)}
                 className={cn(

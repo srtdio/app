@@ -402,17 +402,17 @@ describe('W4 fix 9: MoveSheet blocked reasons and title', () => {
 
   it('a blocked row names the reason from the stage map, not a bare "Blocked"', () => {
     const r = reasons(sheet('draft'));
-    expect(r.Approved).toBe('Needs Review first');
-    expect(r.Rejected).toBe('Needs Review first');
+    expect(r.Approved).toBe('Not allowed from Draft');
+    expect(r.Rejected).toBe('Not allowed from Draft');
     expect(Object.values(r)).not.toContain('Blocked');
     // Legal targets carry no reason.
     expect(r.Review).toBeUndefined();
     expect(r.Parked).toBeUndefined();
   });
 
-  it('a row blocked from Parked also names the stage it must pass first', () => {
+  it('a row blocked from Parked names the stage it is blocked from', () => {
     const r = reasons(sheet('parked'));
-    expect(r.Approved).toBe('Needs Review first');
+    expect(r.Approved).toBe('Not allowed from Parked');
   });
 
   it('the title wraps to two lines instead of truncating', () => {
