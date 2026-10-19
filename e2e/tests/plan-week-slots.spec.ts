@@ -136,12 +136,19 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await expect(undo).toHaveText('Undo');
   // The fixture's post item has no plan day, so the toast names none.
   await expect(page.getByText(/^Slot approved( · \w{3} \d{1,2} \w{3})?$/)).toBeVisible();
-  // L5: the success-tinted toast with Undo at its right end.
+  // L5: the success-tinted toast with Undo at its right end (the 7s countdown
+  // bar under the card is the only thing after it).
   const success = page.locator('[data-toast-tone="success"]');
   await expect(success).toBeVisible();
   await expect(success.locator('[data-toast-action]')).toHaveText('Undo');
+  await expect(success.locator('[data-toast-countdown]')).toHaveCount(1);
   expect(
-    await success.evaluate((el) => el.lastElementChild?.hasAttribute('data-toast-action')),
+    await success.evaluate((el) =>
+      [...el.children]
+        .filter((c) => !c.hasAttribute('data-toast-countdown'))
+        .at(-1)
+        ?.hasAttribute('data-toast-action'),
+    ),
   ).toBe(true);
   expectMinTouchTarget(await undo.boundingBox());
   expect(reviews()).toEqual([]);

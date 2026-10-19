@@ -626,14 +626,11 @@ test(
     await page.waitForTimeout(400);
     await expectAtRest();
 
-    // The grip drag still moves a long row (a client-approved slot: keep its
-    // approval); Save writes one plan_save.
+    // The grip drag still moves a long row (the post's approval is its stage,
+    // not a client review row, so nothing asks); Save writes one plan_save.
     await enterEdit(plan);
     await dragToDay(page, plan, long.post, '2026-10-16');
-    const keep = page.getByRole('dialog', { name: `Slot approved by ${PEER_NAME}` });
-    await expect(keep).toBeVisible();
-    await keep.locator('[data-plan-keep-yes]').click();
-    await expect(keep).toBeHidden();
+    await expect(page.getByRole('dialog', { name: /^Slot approved by/ })).toHaveCount(0);
     await expect(
       dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${long.post}"]`),
     ).toHaveCount(1);
