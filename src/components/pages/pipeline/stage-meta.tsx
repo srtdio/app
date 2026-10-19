@@ -5,7 +5,7 @@
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { roleMayTarget } from '@/components/pages/pcs/stage-actions';
-import { STAGE_TRANSITIONS, canTransition } from '@srtdio/posts';
+import { canTransition } from '@srtdio/posts';
 import type { Stage } from '@srtdio/posts';
 
 /** Cards shown before the Show more control (mobile feed) and per kanban column. */
@@ -44,16 +44,22 @@ export function emptyStageMessage(stage: Stage): string {
   return `Nothing in ${stageLabel(stage)}. Posts land here when moved.`;
 }
 
+/** The stage-matrix line for a row the transition map blocks: "Not allowed from Review". */
+export function notAllowedFrom(from: Stage): string {
+  return `Not allowed from ${stageLabel(from)}`;
+}
+
+/** The role line for a row the stage map allows but this role may not trigger. */
+export const ROLE_BLOCKED_REASON = 'Not available for your role';
+
 /**
- * Why a move from `from` to `to` is blocked for this role, read off the stage
- * map: a target the role may never trigger, else the stage the post has to pass
- * through first ("Needs Review first"), else a plain not-from-here line. Null
- * when the move is allowed.
+ * Why a move from `from` to `to` is blocked for this role. The stage map is
+ * read first: a target the map does not allow from here says "Not allowed from
+ * {stage}" whatever the role; a legal target this role may not trigger keeps
+ * the role reason. Null when the move is allowed.
  */
 export function moveBlockedReason(role: string | null, from: Stage, to: Stage): string | null {
-  if (!roleMayTarget(role, to)) return 'Not available for your role';
-  if (canTransition(from, to)) return null;
-  const via = (STAGE_TRANSITIONS[from] as readonly Stage[]).find((mid) => canTransition(mid, to));
-  if (via !== undefined) return `Needs ${stageLabel(via)} first`;
-  return `Not from ${stageLabel(from)}`;
+  if (!canTransition(from, to)) return notAllowedFrom(from);
+  if (!roleMayTarget(role, to)) return ROLE_BLOCKED_REASON;
+  return null;
 }
