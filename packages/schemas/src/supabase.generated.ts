@@ -4785,6 +4785,7 @@ export type Database = {
       chat_task_events: {
         Row: {
           actor_user_id: string | null
+          batch_id: string | null
           channel_id: string
           created_at: string
           id: string
@@ -4796,6 +4797,7 @@ export type Database = {
         }
         Insert: {
           actor_user_id?: string | null
+          batch_id?: string | null
           channel_id: string
           created_at?: string
           id?: string
@@ -4807,6 +4809,7 @@ export type Database = {
         }
         Update: {
           actor_user_id?: string | null
+          batch_id?: string | null
           channel_id?: string
           created_at?: string
           id?: string
@@ -9480,6 +9483,10 @@ export type Database = {
       chat_task_save: {
         Args: { p_changes: Json; p_task_id: string; p_trace_id: string }
         Returns: undefined
+      }
+      chat_task_save_batch: {
+        Args: { p_batch: Json; p_channel_id: string; p_trace_id: string }
+        Returns: Json
       }
       chat_task_set: {
         Args: {
