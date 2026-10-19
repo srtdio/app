@@ -9458,6 +9458,10 @@ export type Database = {
         }
         Returns: string
       }
+      chat_task_create_many: {
+        Args: { p_channel_id: string; p_tasks: Json; p_trace_id: string }
+        Returns: string[]
+      }
       chat_task_delete: {
         Args: { p_task_id: string; p_trace_id: string }
         Returns: undefined
@@ -9855,6 +9859,10 @@ export type Database = {
           p_trace_id: string
         }
         Returns: number
+      }
+      plan_save: {
+        Args: { p_ops: Json; p_plan_id: string; p_trace_id: string }
+        Returns: undefined
       }
       plan_share_with_client: {
         Args: { p_plan_id: string; p_trace_id: string }
