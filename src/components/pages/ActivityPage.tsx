@@ -42,7 +42,11 @@ import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
-import { useUndoableAction } from '@/lib/use-undoable-action';
+import { useOptionalToast } from '@/components/ui/toast';
+import { undoFailureTitle } from '@/lib/use-undoable-action';
+
+/** Fixed failure copy for Mark all read: "Couldn't mark as read. Try again." */
+const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
 
 const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest' },
@@ -90,7 +94,7 @@ export function ActivityPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [mentionCount, setMentionCount] = useState(0);
   const { toasts, push, dismiss } = useToasts();
-  const { run: runUndoable } = useUndoableAction();
+  const toast = useOptionalToast();
 
   // One presign cache for the whole feed: it bounds concurrency and caches URLs
   // so every card thumbnail shares a single cap, mirroring PipelinePage. Cards
@@ -240,8 +244,9 @@ export function ActivityPage() {
     [workspaceId, newTrace, markReadLocal, push, loadActivity, loadMentionCount],
   );
 
-  // The active chip only: mark its unread, non-snoozed rows read at once, behind
-  // an Undo toast. The writes run when the window closes; Undo puts them back.
+  // The active chip only: mark its unread, non-snoozed rows read at once and
+  // write immediately; no Undo. A plain "Marked as read" toast confirms; on
+  // failure the rows go back to unread with a fixed error toast.
   // The All chip uses the workspace-wide proc (matches inbox_mark_all_read).
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
@@ -251,29 +256,28 @@ export function ActivityPage() {
     const stamp = new Date().toISOString();
     const chip = state;
     setItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
-    runUndoable({
-      label: MARKED_READ_LABEL,
-      commit: async () => {
-        const traceId = newTrace();
-        const results =
-          chip === 'all'
-            ? [await markAllEntriesRead(supabase, workspaceId, traceId)]
-            : await Promise.all(
-                targets.map((item) => markEntryRead(supabase, item, workspaceId, traceId)),
-              );
-        if (results.some((result) => !result.ok)) throw new Error('mark all read failed');
-        void loadMentionCount();
-        window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
-      },
-      revert: () => {
+    toast?.show({ title: MARKED_READ_LABEL });
+    const traceId = newTrace();
+    void (async () => {
+      const results =
+        chip === 'all'
+          ? [await markAllEntriesRead(supabase, workspaceId, traceId)]
+          : await Promise.all(
+              targets.map((item) => markEntryRead(supabase, item, workspaceId, traceId)),
+            );
+      if (results.some((result) => !result.ok)) {
         setItems((prev) =>
           prev.map((item) =>
             ids.has(item.id) && item.readAt === stamp ? { ...item, readAt: null } : item,
           ),
         );
-      },
-    });
-  }, [workspaceId, items, state, nowMs, newTrace, runUndoable, loadMentionCount]);
+        toast?.show({ title: MARK_READ_FAILED });
+        return;
+      }
+      void loadMentionCount();
+      window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
+    })();
+  }, [workspaceId, items, state, nowMs, newTrace, toast, loadMentionCount]);
 
   const chipUnread = useMemo(
     () => markAllTargets(items, state, nowMs).length,

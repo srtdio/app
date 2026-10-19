@@ -1,7 +1,9 @@
 // W8 regressions for Activity: the card's ⋯ menu, group read state, Mark all
-// read on the active chip only behind Undo, the plain load error and the shared
+// read on the active chip only (no Undo), the plain load error and the shared
 // snooze labels.
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
@@ -125,8 +127,19 @@ describe('W8 fix 5: Mark all read applies to the active chip only', () => {
     expect(markAllTargets(items, 'all', NOW).map((i) => i.id)).toEqual(['m', 'c']);
   });
 
-  it('labels the Undo toast "Marked as read"', () => {
+  it('labels the confirmation toast "Marked as read"', () => {
     expect(MARKED_READ_LABEL).toBe('Marked as read');
+  });
+
+  it('shows no Undo: Mark all read writes at once with a plain toast', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../ActivityPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).not.toContain('useUndoableAction');
+    expect(src).not.toContain('runUndoable');
+    expect(src).toContain('toast?.show({ title: MARKED_READ_LABEL })');
+    expect(src).not.toMatch(/action:\s*\{/);
   });
 });
 
