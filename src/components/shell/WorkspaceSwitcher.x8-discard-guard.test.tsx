@@ -25,6 +25,10 @@ vi.mock('@/lib/back-guard', () => ({
     return { release: mockRelease };
   },
 }));
+// The support sheets are Sheets with their own Back guard: stubbed so every
+// recorded guard call is the dialog's.
+vi.mock('@/components/support/ContactSheet', () => ({ ContactSheet: () => null }));
+vi.mock('@/components/support/BookCallSheet', () => ({ BookCallSheet: () => null }));
 vi.mock('@/lib/workspace-context', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/workspace-context')>();
   return {
