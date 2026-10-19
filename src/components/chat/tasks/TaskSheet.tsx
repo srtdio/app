@@ -231,7 +231,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const [entered, setEntered] = useState(false);
   // What the marks are measured from (frozen at open) and the latest other Save then.
   const [openedSeen, setOpenedSeen] = useState<number | null>(props.seenMs);
-  const [openedBatch, setOpenedBatch] = useState<string | null>(null);
+  const [openedAt, setOpenedAt] = useState<number>(() => Date.now());
   const panelRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const taskShare = useTaskShare(props.share ?? null);
@@ -249,7 +249,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
       setSaveFailed(false);
       setConfirming(false);
       setOpenedSeen(props.seenMs);
-      setOpenedBatch(latestOtherBatch(tasks.events, currentUserId)?.batchId ?? null);
+      setOpenedAt(Date.now());
       const raf = requestAnimationFrame(() => setEntered(true));
       return () => cancelAnimationFrame(raf);
     }
@@ -299,7 +299,10 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   );
   const latest = latestOtherBatch(tasks.events, currentUserId);
   const justSaved =
-    props.open && latest !== null && latest.batchId !== openedBatch && latest.actorId !== null
+    props.open &&
+    latest !== null &&
+    latest.actorId !== null &&
+    Date.parse(latest.createdAt) > openedAt
       ? justSavedLabel(tasks.nameOf(latest.actorId))
       : null;
   const markedCount = [...marks.byTask.keys()].filter((id) => byId.has(id)).length;
