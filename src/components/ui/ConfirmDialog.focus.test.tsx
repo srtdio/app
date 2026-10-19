@@ -9,8 +9,10 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 let root: Root | null = null;
 
 async function mount() {
+  // Outside the React tree, so it survives the unmount; its label never
+  // collides with the dialog's own buttons (button() looks up by text).
   const opener = document.createElement('button');
-  opener.textContent = 'Delete';
+  opener.textContent = 'Open confirm';
   document.body.appendChild(opener);
   opener.focus();
   const onConfirm = vi.fn();
