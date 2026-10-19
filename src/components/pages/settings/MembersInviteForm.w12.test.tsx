@@ -6,7 +6,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // W12: honest sent status (NEW9), plain errors (FT63), no default role (T86).
-const { mockInvoke } = vi.hoisted(() => ({ mockInvoke: vi.fn() }));
+const { mockInvoke, tourStep } = vi.hoisted(() => ({ mockInvoke: vi.fn(), tourStep: { id: '' } }));
+vi.mock('@/components/induction/InductionProvider', () => ({
+  useInductionStepId: () => tourStep.id,
+}));
 vi.mock('@/lib/supabase', () => ({ supabase: { functions: { invoke: mockInvoke } } }));
 vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceId: 'ws-1' }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't-1' }));
@@ -29,6 +32,7 @@ let host: HTMLDivElement | null = null;
 
 beforeEach(() => {
   mockInvoke.mockReset();
+  tourStep.id = '';
   host = document.createElement('div');
   document.body.appendChild(host);
 });
@@ -169,5 +173,18 @@ describe('W12 role has no default (T86)', () => {
     expect(document.body.textContent).toContain(INVITE_PICK_ROLE_MESSAGE);
     expect(INVITE_PICK_ROLE_MESSAGE).toBe('Pick a role');
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("the tour's approver-invite step names the role, so Send goes out as Approver", async () => {
+    tourStep.id = 'c_approver_invite';
+    mockInvoke.mockResolvedValue({ data: { emailed: true }, error: null });
+    mount(<MembersInviteForm />);
+    typeEmail('riya@kitebrand.in');
+    await submitSingle();
+    expect(document.body.textContent).not.toContain(INVITE_PICK_ROLE_MESSAGE);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'invite-send',
+      expect.objectContaining({ body: expect.objectContaining({ role: 'client' }) }),
+    );
   });
 });

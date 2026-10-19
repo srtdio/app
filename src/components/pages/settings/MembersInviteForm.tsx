@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
 import { FREE_MAIL_APPROVER_MESSAGE, UNCONFIRMED_ACCOUNT_MESSAGE } from './members-data';
+import { useInductionStepId } from '@/components/induction/InductionProvider';
 import { dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import {
   isTestEmail,
@@ -304,6 +305,9 @@ export function MembersInviteForm({
   const roleOptions = getInviteRoleOptions(clientOnly);
   const [singleEmail, setSingleEmail] = useState('');
   const [singleRole, setSingleRole] = useState<RoleChoice>('');
+  // The tour's approver-invite step asks for the approver, so the step itself
+  // names the role; everywhere else the inviter picks one (no default).
+  const guidedApprover = useInductionStepId().endsWith('approver_invite');
   const [singleRoleMissing, setSingleRoleMissing] = useState(false);
   const [singleSubmitting, setSingleSubmitting] = useState(false);
   const [singleSentTo, setSingleSentTo] = useState<string | null>(null);
@@ -331,6 +335,13 @@ export function MembersInviteForm({
   const activeWorkspaceId = workspaceId;
   const testSite = isTestSite();
 
+  const singleRoleChoice: RoleChoice = clientOnly
+    ? 'client'
+    : singleRole !== ''
+      ? singleRole
+      : guidedApprover
+        ? 'client'
+        : '';
   const trimmedSingleEmail = singleEmail.trim();
   const singleEmailValid = isValidInviteEmail(trimmedSingleEmail);
   const singleEmailError = singleEmailTouched && trimmedSingleEmail.length > 0 && !singleEmailValid;
@@ -339,7 +350,7 @@ export function MembersInviteForm({
     event.preventDefault();
     setSingleEmailTouched(true);
     if (singleSubmitting || !singleEmailValid) return;
-    const role: RoleChoice = clientOnly ? 'client' : singleRole;
+    const role = singleRoleChoice;
     if (role === '') {
       setSingleRoleMissing(true);
       return;
@@ -505,7 +516,7 @@ export function MembersInviteForm({
                 type="button"
                 className="mt-1.5 inline-flex min-h-[44px] items-center text-sm font-medium text-accent hover:underline"
                 onClick={() => {
-                  const role: RoleChoice = clientOnly ? 'client' : singleRole;
+                  const role = singleRoleChoice;
                   setSingleEmail(testAddress(role === 'client' ? 'approver' : 'creator'));
                   setSingleError(null);
                 }}
@@ -522,7 +533,7 @@ export function MembersInviteForm({
           <Field label="Role" htmlFor="invite-role">
             <Select
               label="Role"
-              value={clientOnly ? 'client' : singleRole}
+              value={singleRoleChoice}
               options={roleOptions}
               placeholder="Choose a role"
               disabled={singleSubmitting}
