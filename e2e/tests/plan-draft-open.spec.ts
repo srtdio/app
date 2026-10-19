@@ -241,7 +241,6 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
 
   // Moving the approved slot to another day (Edit mode) asks first; cancelling
   // cancels. Nothing is written until Save changes.
-  const row = plan.locator(`[data-plan-row="${offer.id}"]`);
   const moves = () => network.rpcCalls.filter((c) => c.name === 'plan_item_move');
   await enterEdit(plan);
   // The Approved by line stays on the edit row.

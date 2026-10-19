@@ -277,7 +277,7 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(plan.locator('[data-plan-go-card]')).toHaveCount(0);
 
   // Close the screen: the card is in the chat with its counts and no Draft chip.
-  await closePlan(page, plan);
+  await closePlan(plan);
   const card = page.locator(`[data-plan-card="${planId}"]`);
   await card.scrollIntoViewIfNeeded();
   await expect(card).toBeVisible();
@@ -547,7 +547,7 @@ async function teamAndHidden(page: Page): Promise<void> {
 }
 
 /** Close the Plan screen: the phone's Back, or the laptop panel's Close. */
-async function closePlan(page: Page, plan: Locator): Promise<void> {
+async function closePlan(plan: Locator): Promise<void> {
   const close = plan.locator('[data-plan-close]');
   if ((await close.count()) > 0) await close.click();
   else await plan.getByRole('button', { name: 'Back' }).first().click();
