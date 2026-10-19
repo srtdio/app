@@ -392,6 +392,13 @@ test('B: Edit: reorder inside Wed by the grip, the day chip moves one to Fri, re
     .toEqual(['Rangoli timelapse', 'Lantern workshop']);
   expect(await titlesOn(panel, '2026-10-14')).toEqual([]);
   expect(removes(network)).toEqual([]);
+  // Persisted: the same list after a reload.
+  await page.reload();
+  await openChat(page);
+  const { panel: reopened } = await openPanel(page);
+  expect(await titlesOn(reopened, '2026-10-16')).toEqual(['Rangoli timelapse', 'Lantern workshop']);
+  expect(await titlesOn(reopened, '2026-10-14')).toEqual([]);
+  expect(saves(network)).toHaveLength(1);
   expectClean(network);
 });
 
@@ -495,6 +502,13 @@ test('C: keyboard only (Edit): Space picks up, Down x3 crosses into the next day
   await expect(panel).toBeVisible();
   expect(Math.abs((await scroll.evaluate((el) => el.scrollTop)) - at)).toBeLessThanOrEqual(1);
   await expect(prayersRow).toBeFocused();
+  // Persisted: the same list after a reload.
+  await page.reload();
+  await openChat(page);
+  const { panel: reopened } = await openPanel(page);
+  expect(await titlesOn(reopened, '2026-10-15')).toEqual(['Morning prayers', 'Lantern workshop']);
+  await expect(reopened.locator(`[data-plan-row="${sweets.id}"]`)).toHaveCount(0);
+  expect(saves(network)).toHaveLength(1);
   expectClean(network);
 });
 
