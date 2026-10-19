@@ -173,7 +173,11 @@ describe('Briefs list filter and search', () => {
     });
     await mount('/briefs?status=closed&q=zzz');
     expect(text()).toContain('No matches');
-    await act(async () => button('Clear search')?.click());
+    // The empty state's text button, not the search field's own X (aria-label "Clear search").
+    const clear = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'Clear search',
+    );
+    await act(async () => clear?.click());
     expect(location).toBe('/briefs?status=all');
     expect(text()).toContain('Launch reel');
     expect(text()).toContain('2 briefs');
