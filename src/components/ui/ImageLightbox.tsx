@@ -21,6 +21,7 @@ import { createPortal } from 'react-dom';
 import { IconChevronLeft, IconChevronRight, IconDownload, IconX } from '@/components/ui/icons';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
+import { useModalFocus } from '@/lib/modal-focus';
 import type { PresignCache } from '@/lib/asset-presign';
 import { VIEWER_ERROR } from '@/components/ui/FileViewer';
 import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
@@ -277,11 +278,6 @@ export interface LightboxDetails {
   time: string;
 }
 
-/** Every enabled (non-disabled) control inside the dialog, in DOM order. */
-function focusableControls(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]'));
-}
-
 /** The current image's display URL: its local preview, else the shared presign. */
 function useImageUrl(
   image: LightboxImage,
@@ -424,7 +420,6 @@ export function ImageLightbox({
 }: ImageLightboxProps): ReactElement | null {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const openerRef = useRef<Element | null>(null);
   // Bumped by Try again; part of the media key so a retry remounts and re-resolves.
   const [attempt, setAttempt] = useState(0);
   // Zoom: scale plus pan on the current image only.
@@ -454,14 +449,9 @@ export function ImageLightbox({
     return () => bodyScrollLock.release();
   }, []);
 
-  // Save the opener, focus the first control on open, restore focus on close.
-  useEffect(() => {
-    openerRef.current = document.activeElement;
-    closeRef.current?.focus();
-    return () => {
-      if (openerRef.current instanceof HTMLElement) openerRef.current.focus();
-    };
-  }, []);
+  // Focus lands on Close, Tab cycles inside the dialog, and the opener gets
+  // focus back on close (the shared modal focus; only the top layer traps).
+  useModalFocus(dialogRef, true, { initial: () => closeRef.current });
 
   // A new image resets the retry counter and the zoom so its state is fresh.
   useEffect(() => {
@@ -470,8 +460,7 @@ export function ImageLightbox({
     setDragY(0);
   }, [index]);
 
-  // Escape closes; Arrow keys navigate (wrapping; the new image starts at 1x);
-  // Tab is trapped and cycles.
+  // Escape closes; Arrow keys navigate (wrapping; the new image starts at 1x).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -484,23 +473,6 @@ export function ImageLightbox({
       }
       if (event.key === 'ArrowRight' && multiple) {
         onIndexChange(wrapIndex(index, 1, count));
-        return;
-      }
-      if (event.key === 'Tab') {
-        const root = dialogRef.current;
-        if (root === null) return;
-        const controls = focusableControls(root);
-        const first = controls[0];
-        const last = controls[controls.length - 1];
-        if (first === undefined || last === undefined) return;
-        const active = document.activeElement;
-        if (event.shiftKey && active === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && active === last) {
-          event.preventDefault();
-          first.focus();
-        }
       }
     };
     window.addEventListener('keydown', onKey);

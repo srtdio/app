@@ -5,8 +5,8 @@
 // presentational, controlled: no data fetching lives here. The placement
 // decision and the option rows are pure helpers so they unit-test without a DOM.
 
-import { useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { IconCheck, IconChevronDown } from '@/components/ui/icons';
@@ -77,6 +77,41 @@ interface SelectMenuProps {
   placement: MenuPlacement;
   onChange: (value: string) => void;
   onClose: () => void;
+  /** The listbox element (the parent focuses the selected option on open). */
+  listRef?: RefObject<HTMLDivElement>;
+}
+
+/** The keys the open listbox handles itself (the rest reach the page). */
+const LISTBOX_KEYS = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' ']);
+
+/**
+ * Keyboard inside the open listbox: ArrowUp/Down move between options (no
+ * wrap), Home/End jump to the ends, Enter or Space picks the focused option.
+ * Escape is the parent's (the escape stack) and the panel's own handler.
+ * Reads the options from the event's listbox, so it stays hook-free.
+ */
+export function onListboxKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+  if (!LISTBOX_KEYS.has(event.key) || typeof document === 'undefined') return;
+  const list: HTMLDivElement | undefined = event.currentTarget;
+  if (list === undefined) return;
+  const rows = Array.from(list.querySelectorAll<HTMLElement>('[role="option"]'));
+  if (rows.length === 0) return;
+  const at = rows.findIndex((row) => row === document.activeElement);
+  const last = rows.length - 1;
+  let next: number | null = null;
+  if (event.key === 'ArrowDown') next = Math.min(at + 1, last);
+  else if (event.key === 'ArrowUp') next = at < 0 ? last : Math.max(at - 1, 0);
+  else if (event.key === 'Home') next = 0;
+  else if (event.key === 'End') next = last;
+  else if (at >= 0) {
+    // Enter / Space: pick the focused option (one click, never the browser's own too).
+    event.preventDefault();
+    rows[at]?.click();
+    return;
+  }
+  if (next === null) return;
+  event.preventDefault();
+  rows[next]?.focus();
 }
 
 /**
@@ -90,14 +125,20 @@ export function SelectMenu({
   placement,
   onChange,
   onClose,
+  listRef,
 }: SelectMenuProps): ReactElement {
   return (
     <>
       <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} />
       <div
+        ref={listRef}
         role="listbox"
         onKeyDown={(event) => {
-          if (event.key === 'Escape') onClose();
+          if (event.key === 'Escape') {
+            onClose();
+            return;
+          }
+          onListboxKeyDown(event);
         }}
         className={cn(
           'absolute left-0 z-50 max-h-60 w-full min-w-0 overflow-y-auto rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl',
@@ -137,11 +178,26 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<MenuPlacement>('down');
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const selected = options.find((option) => option.value === value);
 
   // Escape closes only this popover while it is the top layer, never the sheet under it.
   useEscapeLayer(open, () => setOpen(false));
+
+  // Open: focus the selected option (else the first) so the arrow keys work at
+  // once. Close (a pick, Escape, outside tap): the trigger gets focus back.
+  useEffect(() => {
+    if (!open) return;
+    const list = listRef.current;
+    const trigger = buttonRef.current;
+    const target =
+      list?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ??
+      list?.querySelector<HTMLElement>('[role="option"]') ??
+      null;
+    target?.focus({ preventScroll: true });
+    return () => trigger?.focus({ preventScroll: true });
+  }, [open]);
 
   function toggle(): void {
     if (disabled) return;
@@ -166,7 +222,8 @@ export function Select({
         {...(label !== undefined ? { 'aria-label': label } : {})}
         disabled={disabled}
         onClick={toggle}
-        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-panel-2 px-3 text-sm transition-colors hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
+        // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
+        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-panel-2 px-3 text-base md:text-sm transition-colors hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
       >
         {selected?.renderLeft !== undefined ? (
           <span className="flex shrink-0 items-center">{selected.renderLeft}</span>
@@ -188,6 +245,7 @@ export function Select({
           placement={placement}
           onChange={onChange}
           onClose={() => setOpen(false)}
+          listRef={listRef}
         />
       ) : null}
     </div>

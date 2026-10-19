@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useModalFocus } from '@/lib/modal-focus';
 import { DEMO_HREF } from './config';
 import { FEATURES, featureId, showFeature, type FeatureKey } from './features';
 import { Wordmark } from './Wordmark';
@@ -66,11 +67,15 @@ function Menu({
   onClose: () => void;
   onFeature: (key: FeatureKey) => void;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  // Focus lands on Close while open, Tab stays inside the menu, and the menu
+  // button gets focus back on close (shared modal focus).
+  useModalFocus(panelRef, open, { initial: () => closeRef.current });
 
   useEffect(() => {
     if (!open) return undefined;
-    closeRef.current?.focus();
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
     };
@@ -91,6 +96,7 @@ function Menu({
 
   return (
     <div
+      ref={panelRef}
       className={open ? 'menu open' : 'menu'}
       id="home-menu"
       role="dialog"

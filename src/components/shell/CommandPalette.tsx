@@ -11,6 +11,7 @@ import { IconSearch, IconX } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
+import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
@@ -468,6 +469,7 @@ export function CommandPalette({
   const ownInputRef = useRef<HTMLInputElement>(null);
   const inputRef = givenInputRef ?? ownInputRef;
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [expanded, setExpanded] = useState<ReadonlySet<ResultGroup>>(new Set());
@@ -573,6 +575,11 @@ export function CommandPalette({
     if (open && document.activeElement !== inputRef.current) inputRef.current?.focus();
   }, [open, inputRef]);
 
+  // Tab stays inside the palette while open; the field already holds focus by
+  // the time this runs (the opener's tap or the effect above), so the shared
+  // modal focus leaves it there and only traps.
+  useModalFocus(panelRef, open);
+
   useEffect(() => {
     setActive(0);
     setExpanded(new Set());
@@ -654,6 +661,7 @@ export function CommandPalette({
       onClick={onOverlayClick}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
