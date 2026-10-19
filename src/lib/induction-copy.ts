@@ -8,14 +8,32 @@ import type { CopyContext } from './induction-model';
 
 /** Sign-up card and the check-your-email state (self sign-up). */
 export const CHECK_EMAIL_COPY = {
-  signUpSubtitle: 'No card needed.',
+  signUpSubtitle: "We'll email you a sign-in link. No password.",
   title: 'Check your email',
   body: 'We sent a link to {email}. Open it on this device to finish signing up.',
   resend: 'Resend link',
   differentEmail: 'Use a different email',
   createAccount: 'Create account',
   sending: 'Sending link',
-  rateLimited: 'Too many links asked for. Wait a few minutes, then try again.',
+  rateLimited: 'Too many tries. Wait a minute and try again.',
+  /** Shown under the email field when it loses focus with a malformed address. */
+  invalidEmail: 'Enter a valid email, like name@company.com',
+  /** Any other refusal from the link request: never the raw provider text. */
+  genericError: 'Something went wrong. Try again.',
+} as const;
+
+/** The pre-app screens (OnboardingFlow): only the lines that changed in W11. */
+export const ONBOARDING_COPY = {
+  sideTitle: "How you'll use Sorted",
+  addPhoto: 'Add a photo (optional)',
+  changePhoto: 'Change photo',
+  photoHint: 'People see it next to your comments.',
+  photoUploadFailed: "Couldn't upload your photo. You can add it later in settings.",
+  jobTitleLabel: 'Job title (optional)',
+  changeRole: 'Wrong role? Change it',
+  makePostsAfterAll: 'I make the posts after all',
+  differentEmail: 'Use a different email',
+  signOut: 'Sign out',
 } as const;
 
 /** The email link's landing page when the link confirms a new account (type signup or email). */

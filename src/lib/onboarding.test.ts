@@ -10,6 +10,8 @@ import {
   normalizeUsernameInput,
   notYouPath,
   progressSteps,
+  setupCounter,
+  CROPPER_HINT,
   sideForMemberRole,
   stepsFor,
   suggestUsername,
@@ -209,5 +211,19 @@ describe('entryHandTarget', () => {
     expect(entryHandTarget({ ...creator, step: 'role', creatorRoute: false })).toBeNull();
     expect(entryHandTarget({ ...creator, step: 'welcome' })).toBeNull();
     expect(entryHandTarget({ ...creator, step: 'brand' })).toBeNull();
+  });
+});
+
+describe('W11 copy rules', () => {
+  // Fix 8: the pre-app counter is worded apart from the guide's "Step N".
+  it('counts setup screens as Setup N of M', () => {
+    expect(setupCounter(1, 3)).toBe('Setup 1 of 3');
+    expect(setupCounter(1, 3)).not.toContain('Step');
+  });
+
+  // Fix 7: the cropper hint in plain words.
+  it('words the cropper hint plainly', () => {
+    expect(CROPPER_HINT).toBe('Drag to move. Pinch or use the slider to zoom.');
+    expect(CROPPER_HINT).not.toMatch(/[/\u2013\u2014]/);
   });
 });

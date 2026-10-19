@@ -1,11 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { installHarnessNetwork, solidPng, type HarnessNetwork } from '../fixtures/harness-routes';
+import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { ME } from '../fixtures/chat-data';
 import { startInduction } from '../fixtures/induction-rpc';
 
 // The pre-app screens: a person with an unfinished profile gets one question
 // per screen before the shell. A Creator who signs up picks a side, names
-// themselves with a required photo and picks a role (no age range since v13),
+// themselves (the photo is optional since W11, so this walk skips it) and picks
+// an optional job title (no age range since v13),
 // then lands in the real shell to make the workspace. The guide's hand shows
 // up on the name screen's Continue the moment it is enabled (never on the side
 // screen, never before), stays on the role screen's Continue, and the shell's
@@ -41,14 +42,14 @@ function newPerson(network: HarnessNetwork, opts: { workspace: boolean }): void 
   }
 }
 
-test('a Creator walks side, name with photo and role, then makes the workspace in the shell @theme', async ({
+test('a Creator walks side, name without a photo and role, then makes the workspace in the shell @theme', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
   newPerson(network, { workspace: false });
   await page.goto('/chat');
 
-  await expect(page.getByRole('heading', { name: 'Your role' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: "How you'll use Sorted" })).toBeVisible({
     timeout: 15_000,
   });
   // The shell's first reads can still be landing when the screen paints; a late
@@ -75,23 +76,18 @@ test('a Creator walks side, name with photo and role, then makes the workspace i
   await page.getByLabel('Full name').fill('Meera Shah');
   await expect(page.getByLabel('Username')).toHaveValue('meera.shah');
   await expect(page.getByText('@meera.shah is yours.')).toBeVisible();
-  // The photo is required. No hand while Continue is disabled.
-  await expect(cont).toBeDisabled();
-  await page.waitForTimeout(300);
-  await expect(page.locator('[data-induction-hand]')).toHaveCount(0);
+  // The photo is optional: no "Needed to continue", and the setup counter is
+  // worded apart from the guide's steps.
+  await expect(page.getByRole('button', { name: 'Add a photo (optional)' })).toBeVisible();
+  await expect(page.getByText('Needed to continue')).toHaveCount(0);
+  await expect(page.getByText('Setup 2 of 3')).toBeVisible();
   // The username stays on screen with the photo row (no scrolling to reach it).
   const usernameBox = await page.getByLabel('Username').boundingBox();
   expect((usernameBox?.y ?? 9999) + (usernameBox?.height ?? 0)).toBeLessThan(
     page.viewportSize()?.height ?? 0,
   );
-  await page.getByLabel('Choose a photo').setInputFiles({
-    name: 'me.png',
-    mimeType: 'image/png',
-    buffer: solidPng(64, 64, [200, 120, 80]),
-  });
-  await page.getByRole('button', { name: 'Use this photo' }).click();
   await expect(cont).toBeEnabled();
-  // Photo, name and username filled: the hand shows on Continue.
+  // Name and username filled, no photo: the hand shows on Continue.
   await expect(page.locator(NAME_CONTINUE)).toHaveCount(1);
   await expectHandOn(page, '[data-induction="onboarding-name-continue"]');
   await cont.click();
@@ -144,5 +140,6 @@ test('a Creator walks side, name with photo and role, then makes the workspace i
   const payload = save?.args.p_payload as Record<string, unknown>;
   expect(payload.designation).toBe('Community lead');
   expect('age_range' in payload).toBe(false);
+  expect('avatar_url' in payload).toBe(false);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });

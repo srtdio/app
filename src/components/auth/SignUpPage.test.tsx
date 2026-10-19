@@ -14,6 +14,7 @@ import {
   RATE_LIMIT_MESSAGE,
   RESEND_COOLDOWN_SECONDS,
   SignUpPage,
+  linkErrorMessage,
   performSignUp,
   testSignUpMessage,
   type SignUpAuthClient,
@@ -75,14 +76,21 @@ describe('performSignUp', () => {
     expect(RATE_LIMIT_MESSAGE).toBe(CHECK_EMAIL_COPY.rateLimited);
   });
 
-  it('passes any other provider message through', async () => {
+  // W11 fix 5: never the raw provider text.
+  it('maps any other provider refusal to plain copy', async () => {
     signInWithOtp.mockResolvedValue({ error: { message: 'Invalid email', status: 400 } });
     const result = await performSignUp(authClient(), {
       email: 'x',
       timezone: 'UTC',
       policyConsent: true,
     });
-    expect(result).toEqual({ status: 'error', message: 'Invalid email' });
+    expect(result).toEqual({ status: 'error', message: 'Something went wrong. Try again.' });
+  });
+
+  it('words the rate limit as Too many tries', () => {
+    expect(linkErrorMessage({ message: 'email rate limit exceeded', status: 429 })).toBe(
+      'Too many tries. Wait a minute and try again.',
+    );
   });
 });
 
@@ -145,8 +153,34 @@ describe('SignUpPage', () => {
   it('renders no password field, and the short subtitle', async () => {
     await render();
     expect(document.querySelector('input[type="password"]')).toBeNull();
-    expect(document.body.textContent).not.toContain('Password');
-    expect(document.body.textContent).toContain('No card needed.');
+    expect(document.body.textContent).toContain("We'll email you a sign-in link. No password.");
+  });
+
+  // W11 fix 5: Create is never disabled for the consent box.
+  it('keeps Create enabled unticked, and says why on tap', async () => {
+    await render();
+    const create = button(CHECK_EMAIL_COPY.createAccount);
+    expect(create.disabled).toBe(false);
+    await click(create);
+    expect(signInWithOtp).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(POLICY_CONSENT_MESSAGE);
+  });
+
+  // W11 fix 5: the email format is checked when the field loses focus.
+  it('flags a malformed email on blur, inline', async () => {
+    await render();
+    const input = document.querySelector<HTMLInputElement>('#signup-email')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => {
+      setter?.call(input, 'dana@kite');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      input.focus();
+      input.blur();
+    });
+    expect(document.body.textContent).toContain('Enter a valid email, like name@company.com');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
   });
 
   it('shows Check your email with the address after sending', async () => {

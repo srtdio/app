@@ -6,6 +6,7 @@ import { isTestSite, startTestSession } from '@/lib/test-site';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
+import { isValidInviteEmail } from '@/components/pages/settings/MembersInviteForm';
 import { CHECK_EMAIL_COPY, fillCopy } from '@/lib/induction-copy';
 import { entryCopyContext } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
@@ -53,9 +54,21 @@ export const POLICY_CONSENT_MESSAGE = 'Tick the box to agree to the Terms and Pr
 export const RATE_LIMIT_MESSAGE = CHECK_EMAIL_COPY.rateLimited;
 
 /** Supabase answers 429 (or 403 on some limits) when links are asked for too often. */
-export function isRateLimitError(error: { message: string; status?: number }): boolean {
+export function isRateLimitError(error: { message: string; status?: number | undefined }): boolean {
   if (error.status === 429 || error.status === 403) return true;
   return /rate limit|security purposes/i.test(error.message);
+}
+
+/** A link request's refusal in plain words: never the provider's raw text. */
+export function linkErrorMessage(error: { message: string; status?: number | undefined }): string {
+  return isRateLimitError(error) ? RATE_LIMIT_MESSAGE : CHECK_EMAIL_COPY.genericError;
+}
+
+/** The inline line for an email field that lost focus: null while empty or well formed. */
+export function emailFieldError(email: string): string | null {
+  const trimmed = email.trim();
+  if (trimmed === '' || isValidInviteEmail(trimmed)) return null;
+  return CHECK_EMAIL_COPY.invalidEmail;
 }
 
 /**
@@ -80,10 +93,7 @@ export async function performSignUp(
     },
   });
   if (error) {
-    return {
-      status: 'error',
-      message: isRateLimitError(error) ? RATE_LIMIT_MESSAGE : error.message,
-    };
+    return { status: 'error', message: linkErrorMessage(error) };
   }
   return { status: 'sent' };
 }
@@ -118,11 +128,14 @@ export function SignUpPage(): ReactElement {
   const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
   const [policyConsent, setPolicyConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Checked when the field loses focus, and again on Create.
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
   const [cooldown, startCooldown] = useCooldown();
 
-  const canSubmit = email.trim().length > 0 && policyConsent && !submitting;
+  // Never disabled for the consent box: an unticked tap says why instead.
+  const canSubmit = email.trim().length > 0 && !submitting;
 
   /** One request per call; the caller decides when (a tap), never a retry loop. */
   async function sendLink(): Promise<boolean> {
@@ -143,6 +156,13 @@ export function SignUpPage(): ReactElement {
   }
 
   async function handleSignUp(): Promise<void> {
+    const badEmail = emailFieldError(email);
+    setEmailError(badEmail);
+    if (badEmail !== null) return;
+    if (!policyConsent) {
+      setError(POLICY_CONSENT_MESSAGE);
+      return;
+    }
     if (isTestSite()) {
       await testSignUp();
       return;
@@ -245,8 +265,19 @@ export function SignUpPage(): ReactElement {
             autoComplete="email"
             placeholder="you@company.com"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            aria-invalid={emailError !== null}
+            aria-describedby={emailError !== null ? 'signup-email-error' : undefined}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setEmailError(null);
+            }}
+            onBlur={() => setEmailError(emailFieldError(email))}
           />
+          {emailError !== null ? (
+            <p id="signup-email-error" role="alert" className="mt-1.5 text-sm text-bad">
+              {emailError}
+            </p>
+          ) : null}
         </Field>
 
         <div className="flex flex-wrap items-center gap-x-1 text-sm text-fg-2">
@@ -258,7 +289,10 @@ export function SignUpPage(): ReactElement {
               id="signup-policy-consent"
               type="checkbox"
               checked={policyConsent}
-              onChange={(event) => setPolicyConsent(event.target.checked)}
+              onChange={(event) => {
+                setPolicyConsent(event.target.checked);
+                if (event.target.checked && error === POLICY_CONSENT_MESSAGE) setError(null);
+              }}
               aria-label="Agree to the Terms and Privacy Policy"
               className="h-4 w-4 shrink-0 accent-accent"
             />

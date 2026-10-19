@@ -5,6 +5,8 @@ import { TestSiteStart } from '@/components/test-site/TestSiteStart';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
+import { emailFieldError, linkErrorMessage } from '@/components/auth/SignUpPage';
+import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
 import { supabase } from '@/lib/supabase';
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -110,14 +112,14 @@ export interface SignInAuthClient {
     signInWithOtp(params: {
       email: string;
       options?: { shouldCreateUser?: boolean; emailRedirectTo?: string };
-    }): Promise<{ error: { message: string } | null }>;
+    }): Promise<{ error: { message: string; status?: number } | null }>;
   };
 }
 
 export type SendLinkResult =
   | { status: 'sent' }
   | { status: 'no-account' }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; httpStatus?: number | undefined };
 
 /** Supabase answers this when an email link is asked for an email with no account. */
 function isNoAccountError(message: string): boolean {
@@ -142,12 +144,20 @@ export async function sendSignInLink(
   if (error) {
     return isNoAccountError(error.message)
       ? { status: 'no-account' }
-      : { status: 'error', message: error.message };
+      : { status: 'error', message: error.message, httpStatus: error.status };
   }
   return { status: 'sent' };
 }
 
 const client = supabase as unknown as SignInAuthClient;
+
+/** What the sign-in screen shows for a refused link: plain copy, never the raw text. */
+export function signInErrorMessage(result: {
+  message: string;
+  httpStatus?: number | undefined;
+}): string {
+  return linkErrorMessage({ message: result.message, status: result.httpStatus });
+}
 
 export function SignInPage() {
   const location = useLocation();
@@ -156,6 +166,7 @@ export function SignInPage() {
   const [sent, setSent] = useState(false);
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [noAccount, setNoAccount] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -173,6 +184,9 @@ export function SignInPage() {
 
   async function handleSend(): Promise<void> {
     reset();
+    const badEmail = emailFieldError(email);
+    setEmailError(badEmail);
+    if (badEmail !== null) return;
     setSubmitting(true);
     rememberNext(next);
     const result = await sendSignInLink(client, email);
@@ -182,7 +196,7 @@ export function SignInPage() {
       return;
     }
     if (result.status === 'error') {
-      setError(result.message);
+      setError(signInErrorMessage(result));
       return;
     }
     setSent(true);
@@ -195,10 +209,16 @@ export function SignInPage() {
     rememberNext(next);
     const result = await sendSignInLink(client, email);
     if (result.status === 'error') {
-      setError(result.message);
+      setError(signInErrorMessage(result));
       return;
     }
     setCooldown(RESEND_COOLDOWN_SECONDS);
+  }
+
+  /** Back to the form with the email kept, to fix a typo. */
+  function startOverWithNewEmail(): void {
+    setError(null);
+    setSent(false);
   }
 
   const footer = (
@@ -221,7 +241,11 @@ export function SignInPage() {
         footer={footer}
       >
         <div className="flex flex-col gap-4">
-          {error !== null ? <p className="text-sm text-bad">{error}</p> : null}
+          {error !== null ? (
+            <p role="alert" className="text-sm text-bad">
+              {error}
+            </p>
+          ) : null}
           <Button
             variant="default"
             size="lg"
@@ -231,6 +255,13 @@ export function SignInPage() {
           >
             {cooldown > 0 ? `Send again in ${cooldown}s` : 'Send again'}
           </Button>
+          <button
+            type="button"
+            onClick={startOverWithNewEmail}
+            className="inline-flex min-h-[44px] w-full items-center justify-center text-sm font-medium text-accent hover:underline"
+          >
+            {CHECK_EMAIL_COPY.differentEmail}
+          </button>
         </div>
       </AuthShell>
     );
@@ -258,11 +289,20 @@ export function SignInPage() {
             type="email"
             autoComplete="email"
             value={email}
+            aria-invalid={emailError !== null}
+            aria-describedby={emailError !== null ? 'signin-email-error' : undefined}
             onChange={(event) => {
               setEmail(event.target.value);
+              setEmailError(null);
               reset();
             }}
+            onBlur={() => setEmailError(emailFieldError(email))}
           />
+          {emailError !== null ? (
+            <p id="signin-email-error" role="alert" className="mt-1.5 text-sm text-bad">
+              {emailError}
+            </p>
+          ) : null}
         </Field>
 
         {noAccount ? (
@@ -280,7 +320,11 @@ export function SignInPage() {
           </div>
         ) : null}
 
-        {error !== null ? <p className="text-sm text-bad">{error}</p> : null}
+        {error !== null ? (
+          <p role="alert" className="text-sm text-bad">
+            {error}
+          </p>
+        ) : null}
 
         <Button
           variant="primary"
