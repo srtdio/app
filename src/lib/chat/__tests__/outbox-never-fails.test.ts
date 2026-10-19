@@ -163,7 +163,14 @@ describe('outbox: transient never fails, permanent does', () => {
     sender.enqueue(CHANNEL, entry('m1'));
     sender.enqueue(CHANNEL, entry('m2'));
     await vi.advanceTimersByTimeAsync(0);
-    expect(events).toContainEqual({ type: 'state', channelId: CHANNEL, id: 'm1', state: 'failed' });
+    // X7 FB5: a permanent refusal carries its reason (Delete only, no Retry).
+    expect(events).toContainEqual({
+      type: 'state',
+      channelId: CHANNEL,
+      id: 'm1',
+      state: 'failed',
+      refusal: "This message can't be sent.",
+    });
     expect(sender.entries(CHANNEL).map((e) => [e.id, e.state])).toEqual([['m1', 'failed']]);
     expect(recordedIds).toEqual(['m2']);
     // Not retried on its own, not revived by a new send.

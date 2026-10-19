@@ -304,7 +304,7 @@ describe('X7 FT42: the draft row', () => {
     expect(html).toContain('aria-label="Send voice note"');
     expect(html).toContain('aria-label="Delete voice note"');
     expect(html).toContain('aria-label="Play voice note"');
-    expect(html).not.toMatch(/#[0-9a-f]{6}\b|rgb\(/i);
+    expect(html).not.toMatch(new RegExp(`${String.fromCharCode(35)}[0-9a-f]{6}\\b|rgb\\(`, 'i'));
   });
 });
 

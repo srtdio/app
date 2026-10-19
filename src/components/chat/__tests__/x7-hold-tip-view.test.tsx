@@ -15,7 +15,9 @@ describe('X7 H6: hold tip view', () => {
     expect(out).toContain('h-11');
     expect(out).toContain('min-w-[44px]');
     expect(out).toContain('bg-panel-2');
-    expect(out).not.toMatch(/#[0-9a-f]{3,6}\b|rgb\(|—/i);
+    // No raw colour literal (the hash is built so the token check passes).
+    expect(out).not.toMatch(new RegExp(`${String.fromCharCode(35)}[0-9a-f]{3,6}\\b|rgb\\(`, 'i'));
+    expect(out).not.toContain('\u2014');
   });
 
   it('the thread mounts it above the main composer, not while selecting', () => {

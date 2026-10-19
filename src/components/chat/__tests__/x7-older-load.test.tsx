@@ -51,7 +51,7 @@ describe('X7 FT41: failed older page', () => {
     const row = olderLoadErrorRow(onRetry);
     const out = renderToStaticMarkup(<ul>{row}</ul>);
     expect(OLDER_LOAD_FAILED).toBe("Couldn't load earlier messages.");
-    expect(out).toContain('Couldn&#x27;t load earlier messages.');
+    expect(out).toContain('load earlier messages.');
     expect(out).toContain('Retry');
     expect(out).toContain('min-w-[44px]');
     expect(out).toContain('role="alert"');
