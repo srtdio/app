@@ -16,6 +16,7 @@ import { R2StorageClient, type R2StorageEnv, type TracedFetch } from '@srtdio/st
 
 import { loadAssets } from './assets';
 import { runBackfillCommentAuthors } from './backfill-comment-authors';
+import { runBackfillImageThumbnails } from './backfill-image-thumbnails';
 import { assertSafe, loadConfig, parseCli, type EtlConfig } from './config';
 import { validateCutover, type ImageVersionRow, type TableName } from './validate';
 import {
@@ -374,6 +375,12 @@ async function main(): Promise<void> {
   // parseCli. Self-contained: own config load, safety guards, and pools.
   if (argv[0] === 'backfill-comment-authors') {
     await runBackfillCommentAuthors(argv.slice(1));
+    return;
+  }
+
+  // One-time small-copy backfill for post images (target only, own guards).
+  if (argv[0] === 'backfill-image-thumbnails') {
+    await runBackfillImageThumbnails(argv.slice(1));
     return;
   }
 

@@ -1,0 +1,53 @@
+name: Backfill image thumbnails
+
+# One-time, idempotent: makes the small list copy (320px JPEG thumbnail
+# rendition) for every post image uploaded before images got one at upload.
+# Runs once automatically when this workflow or the script lands on main, and
+# can be re-run by hand (workflow_dispatch). A second run finds nothing to do.
+# v2 target only: the script refuses any database that is not
+# EXPECTED_TARGET_REF. Secrets are passed via env and never echoed.
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/etl/src/backfill-image-thumbnails.ts
+      - .github/workflows/backfill-image-thumbnails.yml
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Backfill mode
+        type: choice
+        options:
+          - apply
+          - dry-run
+        default: apply
+
+concurrency:
+  group: backfill-image-thumbnails
+  cancel-in-progress: false
+
+jobs:
+  backfill-image-thumbnails:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Make missing list copies
+        env:
+          TARGET_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          EXPECTED_TARGET_REF: movnexawfhsyuluspxoc
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+        run: pnpm --filter @srtdio/etl etl backfill-image-thumbnails --mode="${{ inputs.mode || 'apply' }}"
