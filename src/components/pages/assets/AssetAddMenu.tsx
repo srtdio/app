@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
-import { IconCheck, IconFolder, IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
+import { IconCheck, IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 interface AssetAddMenuProps {
-  /** Open the New folder sheet (the "New folder" option). */
-  onNewFolder: () => void;
   /** Open the upload sheet (the "Upload files" option). */
   onUploadFiles: () => void;
   /** Open the Add link sheet (the "Add link" option). */
@@ -16,17 +14,13 @@ interface AssetAddMenuProps {
 
 /**
  * The Assets toolbar add control: a 44x44 accent trigger that opens a small
- * menu anchored beneath it. "New folder" creates a folder; "Upload files" opens
- * the upload sheet; "Add link" opens the link sheet. Outside tap and Esc dismiss
+ * menu anchored beneath it. "Upload files" opens the upload sheet; "Add link"
+ * opens the link sheet. Folder creation is not offered here (existing folders
+ * still open, rename, move and delete). Outside tap and Esc dismiss
  * via MenuPopover. Themed with tokens so light and dark match; no hover-only
  * behaviour (tap toggles the menu).
  */
-export function AssetAddMenu({
-  onNewFolder,
-  onUploadFiles,
-  onAddLink,
-  onSelect,
-}: AssetAddMenuProps) {
+export function AssetAddMenu({ onUploadFiles, onAddLink, onSelect }: AssetAddMenuProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -44,21 +38,6 @@ export function AssetAddMenu({
       </button>
 
       <MenuPopover open={open} onClose={() => setOpen(false)} align="right">
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => {
-            setOpen(false);
-            onNewFolder();
-          }}
-          className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
-        >
-          <span className="shrink-0 text-fg-3">
-            <IconFolder size={18} />
-          </span>
-          <span>New folder</span>
-        </button>
-
         <button
           type="button"
           role="menuitem"

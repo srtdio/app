@@ -199,6 +199,16 @@ describe('7. select mode', () => {
   });
 });
 
+describe('7b. no New folder in the add menu', () => {
+  it('offers upload, link and select only; the page mounts no New folder sheet', () => {
+    const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
+    expect(menu).not.toContain('New folder');
+    expect(menu).toContain('<span>Upload files</span>');
+    expect(menu).toContain('<span>Add link</span>');
+    expect(pageSource).not.toContain('NewFolderSheet');
+  });
+});
+
 describe('8. one upload summary toast; failures stay', () => {
   it('summarises the run and keeps a failure sticky', () => {
     expect(uploadSummary({ uploaded: 5, reused: 0, failed: 0 })).toEqual({

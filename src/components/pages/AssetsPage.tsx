@@ -18,7 +18,6 @@ import { ASSET_TABPANEL_ID, AssetTabs, assetTabId } from '@/components/pages/ass
 import { FolderCard } from '@/components/pages/assets/FolderCard';
 import { FolderActionSheet } from '@/components/pages/assets/FolderActionSheet';
 import { FolderRenameSheet } from '@/components/pages/assets/FolderRenameSheet';
-import { NewFolderSheet } from '@/components/pages/assets/NewFolderSheet';
 import { MoveToFolderSheet } from '@/components/pages/assets/MoveToFolderSheet';
 import { AssetRenameSheet } from '@/components/pages/assets/AssetRenameSheet';
 import {
@@ -59,13 +58,11 @@ import { logger } from '@/lib/logger';
 import {
   addAssetLink,
   canRenameAssets,
-  createFolderRequest,
   deleteFolderRequest,
   moveAssetsRequest,
   renameAsset,
   renameFolderRequest,
   uploadAssetFile,
-  type FolderCreateOutcome,
   type FolderDeleteOutcome,
   type FolderRenameOutcome,
   type LinkOutcome,
@@ -137,7 +134,6 @@ export function AssetsPage() {
   const [actionItem, setActionItem] = useState<AssetListItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
-  const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [folderAction, setFolderAction] = useState<FolderItem | null>(null);
   const [renameTarget, setRenameTarget] = useState<FolderItem | null>(null);
   const [selectMode, setSelectMode] = useState(false);
@@ -280,7 +276,6 @@ export function AssetsPage() {
     setActionItem(null);
     setUploadOpen(false);
     setAddLinkOpen(false);
-    setNewFolderOpen(false);
     setFolderAction(null);
     setRenameTarget(null);
     setSelectMode(false);
@@ -719,40 +714,9 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace],
   );
 
-  // Create a folder under the current level: POST {workspace_id, name, parent_id}
-  // to the worker's /folders route. The folder list is refreshed by the sheet
-  // (onCreated) so the new folder shows immediately. Allowed for every active
-  // member (no role gate on New folder).
-  const handleCreateFolder = useCallback(
-    async (name: string): Promise<FolderCreateOutcome> => {
-      if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return {
-          ok: false,
-          message: "Couldn't create the folder. Try again.",
-        };
-      }
-      if (workspaceId === null) {
-        return { ok: false, message: 'No workspace selected.' };
-      }
-      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
-      if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
-      }
-      return createFolderRequest({
-        endpoint: uploadEndpoint,
-        token,
-        workspaceId,
-        name,
-        parentId: folderId,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
-      });
-    },
-    [uploadEndpoint, workspaceId, folderId, newTrace],
-  );
-
   // Move the current selection into a destination folder (or back to the root,
-  // target null) via the worker's /folders/move route. Guards mirror
-  // handleCreateFolder; the sheet refreshes the lists and exits select mode on a
+  // target null) via the worker's /folders/move route. Guards mirror the
+  // other worker calls; the sheet refreshes the lists and exits select mode on a
   // successful move. Allowed for every active member (no role gate).
   const handleMoveAssets = useCallback(
     async (targetFolderId: string | null): Promise<MoveAssetsOutcome> => {
@@ -927,7 +891,6 @@ export function AssetsPage() {
         primaryAction={{
           node: (
             <AssetAddMenu
-              onNewFolder={() => setNewFolderOpen(true)}
               onUploadFiles={() => setUploadOpen(true)}
               onAddLink={() => setAddLinkOpen(true)}
               onSelect={
@@ -1187,14 +1150,6 @@ export function AssetsPage() {
         onSubmit={handleAddLink}
         onToast={push}
         onAdded={() => void loadAssets()}
-      />
-
-      <NewFolderSheet
-        open={newFolderOpen}
-        onClose={() => setNewFolderOpen(false)}
-        onSubmit={handleCreateFolder}
-        onToast={push}
-        onCreated={() => void loadFolders()}
       />
 
       <MoveToFolderSheet
