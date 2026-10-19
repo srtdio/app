@@ -6,6 +6,17 @@ import { fileURLToPath, URL } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+// The chat modules' import graph pulls the agora-chat browser SDK; mock it.
+vi.mock('agora-chat', () => ({
+  default: { connection: vi.fn(), message: { create: vi.fn() } },
+}));
+vi.mock('@/lib/workspace-context', () => ({
+  useWorkspace: () => ({ workspaceId: 'w1', workspaceKey: 'w1', workspaces: [] }),
+}));
+vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
+vi.mock('@/lib/session-context', () => ({
+  useSession: () => ({ session: { user: { id: 'me' } }, loading: false }),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
