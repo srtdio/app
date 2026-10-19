@@ -27,6 +27,8 @@ export interface PipelineFeedProps {
    * Back to the same filters restores the same depth. Absent: not remembered.
    */
   shownKey?: string;
+  /** The workspace zone each card reads its target day in. Default UTC. */
+  timeZone?: string;
 }
 
 /**
@@ -78,6 +80,7 @@ function cardGrid(
   onLongPressPost: (post: PipelinePost) => void,
   workspaceKey: string | null,
   showStage: boolean,
+  timeZone: string,
 ): ReactElement {
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -90,6 +93,7 @@ function cardGrid(
             workspaceKey={workspaceKey}
             onMove={onLongPressPost}
             showStage={showStage}
+            timeZone={timeZone}
           />
         </FeedCard>
       ))}
@@ -113,6 +117,7 @@ export function PipelineFeed({
   workspaceKey = null,
   onLongPressPost,
   shownKey,
+  timeZone = 'UTC',
 }: PipelineFeedProps): ReactElement {
   const depthKey = shownKey ?? null;
   const [shown, setShown] = useState(() =>
@@ -147,6 +152,7 @@ export function PipelineFeed({
             onLongPressPost,
             workspaceKey,
             activeStage === 'all',
+            timeZone,
           )}
           {list.length > shown ? (
             <div className="mt-4 flex justify-center">

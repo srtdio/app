@@ -36,6 +36,24 @@ export const ONBOARDING_COPY = {
   signOut: 'Sign out',
 } as const;
 
+/**
+ * The make-a-workspace dialog (WorkspaceSwitcher): a self-signed-up Creator who
+ * approves posts after all, and the discard ask for a half-filled form.
+ */
+export const WORKSPACE_CREATE_COPY = {
+  approveInstead: 'I approve posts instead',
+  switchTitle: 'Switch to Approver?',
+  switchMessage: "You'll tell us your brand and invite the team that makes your posts.",
+  keepCreator: 'Keep as Creator',
+  switchConfirm: 'Switch',
+  switching: 'Switching',
+  switchFailed: "We couldn't switch that. Try again.",
+  discardTitle: 'Discard this workspace?',
+  discardMessage: 'The brand name and platform you picked will be lost.',
+  discardConfirm: 'Discard',
+  keepEditing: 'Keep editing',
+} as const;
+
 /** The email link's landing page when the link confirms a new account (type signup or email). */
 export const SIGNUP_CALLBACK_COPY = {
   title: 'Confirm your email',

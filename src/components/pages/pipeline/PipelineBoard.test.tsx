@@ -305,7 +305,7 @@ describe('PipelineBoard single-stage grid', () => {
     expect(findAll(tree, (el) => attr(el, 'draggable') === true)).toHaveLength(0);
   });
 
-  it('an empty single-stage view keeps the Empty state', () => {
+  it('an empty single-stage view names the stage with emptyStageMessage', () => {
     const tree = PipelineBoardView({
       stages: ['parked'],
       grouped: groupByStage([], STAGES),
@@ -317,7 +317,7 @@ describe('PipelineBoard single-stage grid', () => {
       role: 'agency',
     });
     const markup = renderToStaticMarkup(tree);
-    expect(markup).toContain('Empty');
+    expect(markup).toContain('Nothing in Parked. Posts land here when moved.');
     expect(markup).toContain('data-board-grid');
   });
 
@@ -498,7 +498,7 @@ describe('W4 board fixes', () => {
     };
     drop('approved', 'draft:p1');
     expect(onMovePost).not.toHaveBeenCalled();
-    expect(onBlockedMove).toHaveBeenCalledWith('Needs Review first');
+    expect(onBlockedMove).toHaveBeenCalledWith('Not allowed from Draft');
     // A drop back onto its own column is silent.
     onBlockedMove.mockClear();
     drop('draft', 'draft:p1');

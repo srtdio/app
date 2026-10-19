@@ -248,7 +248,7 @@ describe('blank brand fallbacks', () => {
 describe('invite email copy', () => {
   const URL_ = 'https://app.test/accept?x=1&y=2';
   const NOTE =
-    "This link signs you in and accepts the invite automatically. If you weren't expecting it, you can ignore this email.";
+    "Tap Join on the page that opens. If you weren't expecting it, you can ignore this email.";
   const email = (role: string, platform: string | null = 'instagram') => {
     const displayName = workspaceDisplayName('Acme', platform);
     return {
@@ -338,7 +338,7 @@ describe('invite-send email delivery', () => {
       };
     });
     s.admin.auth.admin.generateLink.mockResolvedValue({
-      data: { properties: { action_link: 'https://db.test/verify?t=1' } },
+      data: { properties: { action_link: 'https://db.test/verify?t=1', hashed_token: 'th-1' } },
       error: null,
     });
     const caller = s.deps.createClient('x', 'anon-key') as unknown as {
