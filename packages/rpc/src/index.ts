@@ -482,6 +482,42 @@ export function planItemRemove(
   return callProc(client, 'plan_item_remove', args);
 }
 
+/**
+ * plan_save: the Plan screen's "Save changes". One call carries the queued
+ * edit ops in order (1 to 200): update (title and dates), remove, move (the
+ * 5-arg plan_item_move's fields) and reorder. The server runs the existing
+ * procs in one transaction, all or nothing; their errors pass through
+ * (forbidden_role, invalid_payload, date_outside_plan). The ops are typed
+ * here; the generated type only knows Json.
+ */
+export type PlanSaveOp =
+  | { op: 'update'; title: string; starts_on: string; ends_on: string }
+  | { op: 'remove'; item_id: string }
+  | {
+      op: 'move';
+      item_id: string;
+      target_date: string | null;
+      /** The full order of the target day. */
+      item_ids: string[];
+      keep_reviews: boolean;
+    }
+  | { op: 'reorder'; item_ids: string[] };
+export interface PlanSaveArgs {
+  p_plan_id: string;
+  p_ops: PlanSaveOp[];
+  p_trace_id: string;
+}
+export function planSave(
+  client: Client,
+  args: PlanSaveArgs,
+): Promise<Result<ProcReturns<'plan_save'>>> {
+  return callProc(client, 'plan_save', {
+    p_plan_id: args.p_plan_id,
+    p_ops: args.p_ops as unknown as Json,
+    p_trace_id: args.p_trace_id,
+  });
+}
+
 export type PlanItemsReorderArgs = ProcArgs<'plan_items_reorder'>;
 export function planItemsReorder(
   client: Client,

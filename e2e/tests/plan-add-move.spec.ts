@@ -18,12 +18,13 @@ import {
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Plan list: aligned layout, add to any day, drag and move. The agency adds a
-// concept or a post to a day (a post's day is its post's target_date),
-// long-press drags a row to another day (ticks reset) or within a day (the
-// order persists), moves an item from its screen's overflow and removes it
-// with the screen's red "Remove from plan"; a client sees the list and ticks
-// only. Runs in both colour schemes (the dark and light projects)
-// on the iPhone viewport.
+// concept or a post to a day (a post's day is its post's target_date), and in
+// Edit mode (X3) drags a row by its grip to another day (ticks reset on Save)
+// or within a day (the order persists after Save changes: one plan_save with
+// the queued ops; nothing is written before), moves an item from its screen's
+// overflow and removes it with the screen's red "Remove from plan"; a client
+// sees the list and ticks only. Runs in both colour schemes (the dark and
+// light projects) on the iPhone viewport.
 
 const FILE_VERSION = '0190e100-0000-7000-8000-0000000000c1';
 
@@ -69,20 +70,44 @@ const dated = (title: string) => {
   return it;
 };
 
+/** Edit mode: the header's Edit button, then the edit header with its fields. */
+async function enterEdit(plan: Locator): Promise<void> {
+  await plan.locator('[data-plan-edit]').click();
+  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+}
+
+/** Save changes: the toast, then view mode again. */
+async function saveChanges(page: Page, plan: Locator): Promise<void> {
+  await plan.locator('[data-plan-save]').click();
+  await expect(page.getByText('Plan saved', { exact: true })).toBeVisible();
+  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
+}
+
+const saves = (network: HarnessNetwork) => network.rpcCalls.filter((c) => c.name === 'plan_save');
+const opsOf = (call: { args: Record<string, unknown> } | undefined) =>
+  (call?.args.p_ops ?? []) as Array<Record<string, unknown>>;
+
 /**
- * Long-press a row, carry it to `y` (a viewport y inside the target day),
- * and let go.
+ * Edit mode: press the row's grip, lift it after 4px of travel (no
+ * long-press), carry it to `y` (a viewport y inside the target day), and let go.
  */
-async function dragTo(page: Page, row: Locator, target: () => Promise<number>): Promise<void> {
+async function gripDrag(
+  page: Page,
+  plan: Locator,
+  id: string,
+  target: () => Promise<number>,
+): Promise<void> {
+  const wrap = plan.locator(`[data-plan-row-wrap="${id}"]`);
   // Keep the row mid-screen so the pointer never rests in an auto-scroll edge.
-  await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  const box = await row.boundingBox();
-  if (box === null) throw new Error('row box');
-  const x = box.x + 80;
+  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  const grip = wrap.locator('[data-plan-grip]');
+  const box = await grip.boundingBox();
+  if (box === null) throw new Error('grip box');
+  const x = box.x + box.width / 2;
   const y0 = box.y + box.height / 2;
   await page.mouse.move(x, y0);
   await page.mouse.down();
-  await page.waitForTimeout(600);
+  await page.mouse.move(x, y0 + 6);
   await expect(page.locator('[data-plan-drag-card]')).toBeVisible();
   const y1 = await target();
   await page.mouse.move(x, (y0 + y1) / 2, { steps: 6 });
@@ -175,19 +200,23 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   expectClean(network);
 });
 
-test('agency: long-press drag moves a Thu item to Wed and resets its ticks', async ({ page }) => {
+test('agency: in Edit, a grip drag moves a Thu item to Wed; Save changes writes it once and resets its ticks', async ({
+  page,
+}) => {
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
   const moved = dated('Sweets flatlay');
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, DATED_PLAN_ID);
-  const row = plan.locator(`[data-plan-row="${moved.id}"]`);
   await expect(dayBlock(plan, '2026-10-15').locator(`[data-plan-row="${moved.id}"]`)).toHaveCount(
     1,
   );
+  // View mode has no grip: nothing drags until Edit.
+  await expect(plan.locator('[data-plan-grip]')).toHaveCount(0);
+  await enterEdit(plan);
 
-  await dragTo(page, row, async () => {
+  await gripDrag(page, plan, moved.id, async () => {
     const first = await dayBlock(plan, '2026-10-14')
       .locator('[data-plan-row-wrap]')
       .first()
@@ -195,31 +224,41 @@ test('agency: long-press drag moves a Thu item to Wed and resets its ticks', asy
     if (first === null) throw new Error('target');
     return first.y + 4;
   });
-  const reset = page.getByText(
-    'Moved to Wed 14 Oct. Pipeline date updated. Its ticks were reset.',
-    { exact: true },
-  );
-  await expect(reset).toBeVisible();
-  // A reset has no Undo.
-  await expect(
-    reset
-      .locator('xpath=ancestor::div[.//button[@aria-label="Dismiss notification"]][1]')
-      .locator('[data-toast-action]'),
-  ).toHaveCount(0);
+  // Painted at once; nothing written until Save changes.
   await expect
     .poll(() => titlesOn(plan, '2026-10-14'))
     .toEqual(['Sweets flatlay', 'Lantern workshop']);
+  expect(saves(network)).toEqual([]);
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_move')).toEqual([]);
+  const before = (network.world.tables.plan_items ?? []).find((i) => i.id === moved.id);
+  const postBefore = (network.world.tables.posts ?? []).find((p) => p.id === before?.post_id);
+  expect(postBefore?.target_date).toBe('2026-10-15T09:00:00Z');
+
+  // Save: one plan_save carrying the one move op (a day change resets the ticks).
+  await saveChanges(page, plan);
+  expect(saves(network)).toHaveLength(1);
+  const ops = opsOf(saves(network)[0]);
+  expect(ops).toHaveLength(1);
+  expect(ops[0]).toMatchObject({
+    op: 'move',
+    item_id: moved.id,
+    target_date: '2026-10-14',
+    keep_reviews: false,
+  });
+  expect(saves(network)[0]?.args.p_plan_id).toBe(DATED_PLAN_ID);
+  expect(typeof saves(network)[0]?.args.p_trace_id).toBe('string');
   // A post slot moves by its post's date (12:00 in the workspace zone).
   const stored = (network.world.tables.plan_items ?? []).find((i) => i.id === moved.id);
   const movedPost = (network.world.tables.posts ?? []).find((p) => p.id === stored?.post_id);
   expect(movedPost?.target_date).toBe('2026-10-14T12:00:00Z');
-  expect(
-    network.rpcCalls.filter((c) => c.name === 'plan_item_move').map((c) => c.args.p_keep_reviews),
-  ).toEqual([false]);
   const reviews = (network.world.tables.plan_item_reviews ?? []).filter(
     (r) => r.item_id === moved.id,
   );
   expect(reviews.every((r) => r.status === 'waiting')).toBe(true);
+  // The re-read keeps the order; the tick reads waiting.
+  await expect
+    .poll(() => titlesOn(plan, '2026-10-14'))
+    .toEqual(['Sweets flatlay', 'Lantern workshop']);
   await expect(plan.locator(`[data-plan-row-wrap="${moved.id}"] [data-plan-slot]`)).toHaveAttribute(
     'aria-checked',
     'false',
@@ -227,7 +266,7 @@ test('agency: long-press drag moves a Thu item to Wed and resets its ticks', asy
   expectClean(network);
 });
 
-test('agency: a reorder within a day persists after reload; Escape cancels with no write', async ({
+test('agency: Escape mid-drag puts the row back with no write; a reorder within a day is saved once and persists after reload', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -236,30 +275,30 @@ test('agency: a reorder within a day persists after reload; Escape cancels with 
   await openChat(page, PEER_NAME);
   let plan = await openPlan(page, DATED_PLAN_ID);
   expect(await titlesOn(plan, '2026-10-12')).toEqual(['Countdown story', 'Opening offer']);
+  await enterEdit(plan);
 
-  // Escape mid-drag: nothing written, nothing moved.
-  const calls: string[] = [];
-  page.on('request', (r) => {
-    if (r.url().includes('/rpc/plan_item_move')) calls.push(r.url());
-  });
-  const offer = plan.locator(`[data-plan-row="${dated('Opening offer').id}"]`);
-  await offer.scrollIntoViewIfNeeded();
-  const box = await offer.boundingBox();
-  if (box === null) throw new Error('row box');
-  await page.mouse.move(box.x + 80, box.y + box.height / 2);
+  // Escape mid-drag: the row goes back, nothing moved, nothing written.
+  const offerId = dated('Opening offer').id;
+  const wrap = plan.locator(`[data-plan-row-wrap="${offerId}"]`);
+  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  const grip = await wrap.locator('[data-plan-grip]').boundingBox();
+  if (grip === null) throw new Error('grip box');
+  const gx = grip.x + grip.width / 2;
+  const gy = grip.y + grip.height / 2;
+  await page.mouse.move(gx, gy);
   await page.mouse.down();
-  await page.waitForTimeout(600);
+  await page.mouse.move(gx, gy + 6);
   await expect(page.locator('[data-plan-drag-card]')).toBeVisible();
-  await page.mouse.move(box.x + 80, box.y - 30, { steps: 4 });
+  await page.mouse.move(gx, gy - 30, { steps: 4 });
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-plan-drag-card]')).toHaveCount(0);
   await page.mouse.up();
   await page.waitForTimeout(400);
-  expect(calls).toEqual([]);
+  expect(saves(network)).toEqual([]);
   expect(await titlesOn(plan, '2026-10-12')).toEqual(['Countdown story', 'Opening offer']);
 
-  // Drag Opening offer above Countdown story.
-  await dragTo(page, offer, async () => {
+  // Drag Opening offer above Countdown story: painted, queued, not written.
+  await gripDrag(page, plan, offerId, async () => {
     const first = await dayBlock(plan, '2026-10-12')
       .locator('[data-plan-row-wrap]')
       .first()
@@ -270,12 +309,21 @@ test('agency: a reorder within a day persists after reload; Escape cancels with 
   await expect
     .poll(() => titlesOn(plan, '2026-10-12'))
     .toEqual(['Opening offer', 'Countdown story']);
-  expect(calls).toHaveLength(1);
+  expect(saves(network)).toEqual([]);
+
+  // Save changes: one plan_save with the one move op (same day: a reorder).
+  await saveChanges(page, plan);
+  expect(saves(network)).toHaveLength(1);
+  const ops = opsOf(saves(network)[0]);
+  expect(ops).toHaveLength(1);
+  expect(ops[0]).toMatchObject({ op: 'move', item_id: offerId, target_date: '2026-10-12' });
+  expect((ops[0]?.item_ids as string[])[0]).toBe(offerId);
 
   await page.reload();
   await openChat(page, PEER_NAME);
   plan = await openPlan(page, DATED_PLAN_ID);
   expect(await titlesOn(plan, '2026-10-12')).toEqual(['Opening offer', 'Countdown story']);
+  expect(saves(network)).toHaveLength(1);
   expectClean(network);
 });
 
@@ -340,7 +388,7 @@ test('agency: Move to another day from the item overflow; Remove from plan is th
   expectClean(network);
 });
 
-test('client: same list, no Add or +, long-press does nothing, no Move or Remove', async ({
+test('client: same list, no Add, + or Edit, a long press does nothing, no Move or Remove', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -350,6 +398,7 @@ test('client: same list, no Add or +, long-press does nothing, no Move or Remove
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, DATED_PLAN_ID);
   await expect(plan.locator('[data-plan-add], [data-plan-add-header]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-edit], [data-plan-grip]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row-status]')).toHaveCount(0);
 
   const concept = dated('Rangoli timelapse');

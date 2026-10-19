@@ -21,7 +21,8 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Plan week list and slot approval: one list grouped by day (empty days read
 // "Nothing planned"), a slot checkbox per row (client side for a client, team
-// side for the agency), an optimistic tick with Undo on its toast, a draft
+// side for the agency), an optimistic tick behind a 7s Undo toast (X3 / FT52:
+// the write goes when the toast ends or is closed, never after Undo), a draft
 // row without a checkbox for a client, the post item's "Slot approved" header
 // and its overflow (the post view's own sheet), the delete confirm naming the
 // plan, and the withdrawal in Activity. Runs in both colour schemes (the dark
@@ -124,7 +125,10 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await expectRowLayout(page, PLAN_POST_ITEM);
   await box.scrollIntoViewIfNeeded();
 
-  // Tick: optimistic, the count moves, the toast offers Undo.
+  // Tick: optimistic, the count moves, the toast offers Undo for 7s. Nothing
+  // is written while it counts down (X3 / FT52).
+  const reviews = () => network.world.tables.plan_item_reviews ?? [];
+  const reviewCalls = () => network.rpcCalls.filter((c) => c.name === 'plan_item_review');
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'true');
   await expect(progress).toHaveText('Approved 1 of 2');
@@ -132,38 +136,54 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await expect(undo).toHaveText('Undo');
   // The fixture's post item has no plan day, so the toast names none.
   await expect(page.getByText(/^Slot approved( · \w{3} \d{1,2} \w{3})?$/)).toBeVisible();
-  // L5: the success-tinted toast with Undo at its right end.
+  // L5: the success-tinted toast with Undo at its right end (the 7s countdown
+  // bar under the card is the only thing after it).
   const success = page.locator('[data-toast-tone="success"]');
   await expect(success).toBeVisible();
   await expect(success.locator('[data-toast-action]')).toHaveText('Undo');
+  await expect(success.locator('[data-toast-countdown]')).toHaveCount(1);
   expect(
-    await success.evaluate((el) => el.lastElementChild?.hasAttribute('data-toast-action')),
+    await success.evaluate((el) =>
+      [...el.children]
+        .filter((c) => !c.hasAttribute('data-toast-countdown'))
+        .at(-1)
+        ?.hasAttribute('data-toast-action'),
+    ),
   ).toBe(true);
   expectMinTouchTarget(await undo.boundingBox());
-  expect(network.world.tables.plan_item_reviews).toEqual([
-    expect.objectContaining({ item_id: PLAN_POST_ITEM, side: 'client', status: 'approved' }),
-  ]);
+  expect(reviews()).toEqual([]);
+  expect(reviewCalls()).toEqual([]);
   // A slot never moves the post's stage.
   const post = (network.world.tables.posts ?? []).find((p) => p.id === POST_IDS[0]);
   const stage = post?.stage;
   expect(stage).not.toBe('approved');
 
-  // Undo: back to waiting, the count back, a withdrawal registered.
+  // Undo: back to waiting, the count back; the write never goes, so nothing
+  // to withdraw either.
   await undo.click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
   await expect(progress).toHaveText('Approved 0 of 2');
-  await expect
-    .poll(() => (network.world.tables.plan_item_reviews ?? [])[0]?.status)
-    .toBe('waiting');
-  const withdrawals = (network.world.tables.inbox_entries ?? []).filter(
-    (r) => (r.payload as Record<string, unknown> | null)?.withdrawn === true,
-  );
-  expect(withdrawals.length).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+  expect(reviews()).toEqual([]);
+  expect(reviewCalls()).toEqual([]);
+  expect(
+    (network.world.tables.inbox_entries ?? []).filter(
+      (r) => (r.payload as Record<string, unknown> | null)?.withdrawn === true,
+    ),
+  ).toEqual([]);
   expect(post?.stage).toBe(stage);
 
-  // Tick again, then the post item's header reads "Slot approved".
+  // Tick again and close the toast: closing commits at once (one write), then
+  // the post item's header reads "Slot approved".
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('button', { name: 'Dismiss notification' }).first().click();
+  await expect.poll(() => reviews()[0]?.status).toBe('approved');
+  expect(reviews()).toEqual([
+    expect.objectContaining({ item_id: PLAN_POST_ITEM, side: 'client', status: 'approved' }),
+  ]);
+  expect(reviewCalls()).toHaveLength(1);
+  expect(post?.stage).toBe(stage);
   await plan.locator(`[data-plan-row="${PLAN_POST_ITEM}"]`).click();
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
@@ -181,13 +201,20 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
-  // Untick from the list: removed (no Undo); the withdrawal is the newest entry.
+  // Untick from the list: written at once, removed (no Undo); the withdrawal
+  // is the newest entry.
   await page.goBack();
   await expect(item).toBeHidden();
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByText('Slot approval removed')).toBeVisible();
   await expect(progress).toHaveText('Approved 0 of 2');
+  await expect.poll(() => reviews()[0]?.status).toBe('waiting');
+  expect(
+    (network.world.tables.inbox_entries ?? []).filter(
+      (r) => (r.payload as Record<string, unknown> | null)?.withdrawn === true,
+    ).length,
+  ).toBeGreaterThan(0);
   expectClean(network);
 
   // The withdrawal row goes to the other members (never the actor): a plan
@@ -281,7 +308,7 @@ test('client: a long plan shows week headers, 44px empty days, and a draft with 
   expectClean(network);
 });
 
-test('client: Undo after ticking a concept with changes asked restores changes', async ({
+test('client: Undo after ticking a concept with changes asked keeps changes: the write never goes', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -302,10 +329,13 @@ test('client: Undo after ticking a concept with changes asked restores changes',
   expect(status()).toBe('changes');
   await box.click();
   await expect(box).toHaveAttribute('aria-checked', 'true');
-  await expect.poll(status).toBe('approved');
+  // The tick waits behind the 7s Undo toast: the review is still "changes".
+  expect(status()).toBe('changes');
   await page.locator('[data-toast-action]').click();
   await expect(box).toHaveAttribute('aria-checked', 'false');
-  await expect.poll(status).toBe('changes');
+  await page.waitForTimeout(500);
+  expect(status()).toBe('changes');
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_item_review')).toEqual([]);
   // A client's row carries the tick only: no status line.
   await expect(plan.locator(`[data-plan-row="${concept.id}"] [data-plan-row-status]`)).toHaveCount(
     0,

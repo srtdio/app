@@ -216,14 +216,14 @@ describe('optimistic counts and toasts (W4, W6)', () => {
     expect(SLOT_FAILED).toBe("Couldn't update this slot. Try again.");
   });
 
-  it('the screen wires the write through runSlotWrite, dispatches on success, Undo restores', () => {
+  it('the screen: an untick writes through runSlotWrite; a tick waits behind the Undo toast (X3)', () => {
     const src = read('PlanScreen.tsx');
     expect(src).toContain('await runSlotWrite({');
     expect(src).toContain('p_trace_id: traceId');
     expect(src).toContain('dispatchPlanChanged(window, planId);');
-    expect(src).toMatch(
-      /void writeSlot\(\s*item,\s*reviewSide,\s*slotUndoStatus\(previous\),\s*'approved',\s*'undo',/,
-    );
+    // Undo means the write never goes (useUndoableAction), so no write-back.
+    expect(src).toContain('undoable.run({');
+    expect(src).not.toContain('slotUndoStatus(');
     // A slot write never touches posts.stage (no stage transition on this screen).
     expect(src).not.toContain('stageTransition');
     expect(src).not.toContain('data-plan-tab');
@@ -432,12 +432,12 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toContain('data-plan-day="none"');
   });
 
-  it('agency on a Draft plan: writable team checkboxes and "Team X of N"', () => {
+  it('agency on a Draft plan: writable team checkboxes and "Creators X of N"', () => {
     const html = paint('agency', 'team');
     expect(html).toContain('data-plan-slot="team"');
     expect(html).not.toContain('data-plan-slot="client"');
     expect(html).not.toContain('data-plan-slot-readonly');
-    expect(html).toContain('Team 1 of 4');
+    expect(html).toContain('Creators 1 of 4');
     expect(html).toContain('data-plan-progress-bar="accent"');
   });
 

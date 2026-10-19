@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useOptionalToast } from '@/components/ui/toast';
-import type { ToastApi } from '@/components/ui/toast/types';
+import type { ToastApi, ToastOptions } from '@/components/ui/toast/types';
 import { logger } from '@/lib/logger';
 
 /** How long an Undo toast stays up before the action commits. The single source. */
@@ -15,6 +15,8 @@ export interface UndoableAction {
   commit: () => Promise<void> | void;
   /** Put the optimistic UI back. Runs on Undo and when commit fails. */
   revert?: () => void;
+  /** The toast's tone (a success-tinted toast for an approval tick). */
+  tone?: ToastOptions['tone'];
 }
 
 interface Pending {
@@ -127,6 +129,7 @@ export function useUndoableAction(): {
       pendingRef.current.add(entry);
       entry.toastId = api.show({
         title: action.label,
+        ...(action.tone !== undefined ? { tone: action.tone } : {}),
         action: { label: 'Undo', onPress: () => undo(entry) },
         durationMs: UNDO_WINDOW_MS,
         countdown: true,

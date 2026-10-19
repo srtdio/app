@@ -21,12 +21,13 @@ import {
 
 // Plan in chat: the tray's Plan tile ("Plans", then New plan), the New plan
 // screen's Create plan (a Draft plan, no card sent, its Plan screen opens),
-// the Draft footer (Open for client, Send in the chat, Go to card), the plan
-// card (Draft, Open, Plan deleted), the Plan and Item screens with agency and
-// client approval and Agency only comments, Forward (a Draft into a chat with
-// a client is refused), and back closing one layer at a time. Runs in
-// both colour schemes (the dark and light projects), on the iPhone viewport and
-// on a laptop. Linux WebKit approximates iOS WebKit.
+// the one footer button (X3: a Draft from a chat "Send to approvers in {chat}"
+// opens the plan and posts the card once; an Open plan "Send in {chat}"; a
+// client has none), the plan card (Draft, Open, Plan deleted), the Plan and
+// Item screens with agency and client approval and Agency only comments,
+// Forward (a Draft into a chat with a client is refused), and back closing one
+// layer at a time. Runs in both colour schemes (the dark and light projects),
+// on the iPhone viewport and on a laptop. Linux WebKit approximates iOS WebKit.
 
 const LIB_IMAGE = '0190e000-0000-7000-8000-0000000000b1';
 const LIB_IMAGE_VERSION = '0190e100-0000-7000-8000-0000000000b1';
@@ -171,20 +172,21 @@ async function agencyFlow(page: Page): Promise<void> {
     (tables.asset_attachments ?? []).filter((a) => a.entity_type === 'plan_item'),
   ).toHaveLength(1);
   expect(network.rpcCalls.filter((c) => c.name === 'chat_plan_share')).toEqual([]);
-  // The header: the range, then Draft; progress the team side.
+  // The header: the range, then Draft; progress the creators' side (FT56).
   await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Draft$/);
-  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Team 0 of 2');
-  // The Draft footer: Open for client, and Send in this chat held back (it has a client).
-  const openClient = plan.locator('[data-plan-open-client]');
-  const send = plan.locator('[data-plan-send-here]');
-  await expect(openClient).toHaveText('Open for approvers');
-  await expect(send).toHaveText(`Send in ${PEER_NAME}`);
-  await expect(send).toBeDisabled();
-  await expect(plan.locator('[data-plan-send-hint]')).toHaveText(
-    'Open the plan for approvers to send it here.',
-  );
+  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Creators 0 of 2');
+  // The Draft footer from a chat: one primary button, "Send to approvers in
+  // {chat}"; no second button, no hint, no Go to card.
+  const primary = plan.locator('[data-plan-primary]');
+  await expect(primary).toHaveAttribute('data-plan-primary', 'send-approvers');
+  await expect(primary).toHaveText(`Send to approvers in ${PEER_NAME}`);
+  await expect(
+    plan.locator(
+      '[data-plan-open-client], [data-plan-send-here], [data-plan-go-card], [data-plan-send-hint]',
+    ),
+  ).toHaveCount(0);
   await expect(plan.getByText("Agency only. The client can't see it yet.")).toHaveCount(0);
-  for (const target of [openClient, send]) expectMinTouchTarget(await target.boundingBox());
+  expectMinTouchTarget(await primary.boundingBox());
   // One list by day (no Concepts/Posts tabs): each row tagged with its kind.
   await expect(plan.locator('[data-plan-tab]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row]')).toHaveCount(2);
@@ -233,10 +235,17 @@ async function agencyFlow(page: Page): Promise<void> {
     'aria-checked',
     'true',
   );
-  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Team 1 of 2');
+  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Creators 1 of 2');
 
-  // Open for client: the confirm, then the client side for everyone.
-  await openClient.click();
+  // Send to approvers: the confirm (opening is one-way), then the client side
+  // for everyone and the card in the chat: plan_share_with_client, then
+  // chat_plan_share, once each.
+  const shared = () =>
+    (tables.chat_messages ?? [])
+      .filter((m) => m.channel_id === DM_CHANNEL && Array.isArray(m.shared_plan_ids))
+      .map((m) => m.shared_plan_ids);
+  const from = network.rpcCalls.length;
+  await primary.click();
   const openConfirm = page.getByRole('dialog', { name: 'Open this plan for approvers?' });
   await expect(openConfirm).toBeVisible();
   await expect(openConfirm).toContainText(
@@ -244,10 +253,16 @@ async function agencyFlow(page: Page): Promise<void> {
   );
   await openConfirm.locator('[data-plan-confirm]').click();
   await expect(openConfirm).toBeHidden();
-  await expect(page.getByText('Open for approvers', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Approvers can now review this plan')).toBeVisible();
   expect(tables.plans?.[0]?.audience).toBe('client');
+  await expect.poll(shared).toEqual([[planId]]);
+  expect(
+    network.rpcCalls
+      .slice(from)
+      .map((c) => c.name)
+      .filter((n) => n === 'plan_share_with_client' || n === 'chat_plan_share'),
+  ).toEqual(['plan_share_with_client', 'chat_plan_share']);
   await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
-  await expect(plan.locator('[data-plan-open-client]')).toHaveCount(0);
   // Team ticks are never shown on an Open plan: read-only client boxes.
   await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
   await expect(conceptWrap().locator('[data-plan-slot="client"]')).toBeDisabled();
@@ -256,33 +271,27 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(conceptRow().locator('[data-plan-row-status]')).toHaveText(
     'Waiting for approval · 1 comment',
   );
+  // An Open plan from a chat: the one button now reads "Send in {chat}"; no Go to card.
+  await expect(primary).toHaveAttribute('data-plan-primary', 'send');
+  await expect(primary).toHaveText(`Send in ${PEER_NAME}`);
+  await expect(plan.locator('[data-plan-go-card]')).toHaveCount(0);
 
-  // Send in this chat: the card lands; the button becomes Go to card.
-  await expect(send).toBeEnabled();
-  await send.click();
-  await expect(plan.locator('[data-plan-go-card]')).toHaveText('Go to card');
-  expect(
-    (tables.chat_messages ?? [])
-      .filter((m) => m.channel_id === DM_CHANNEL && Array.isArray(m.shared_plan_ids))
-      .map((m) => m.shared_plan_ids),
-  ).toEqual([[planId]]);
-
-  // Go to card: the screen closes, the card scrolls into view and is highlighted.
-  await plan.locator('[data-plan-go-card]').click();
-  await expect(plan).toBeHidden();
+  // Close the screen: the card is in the chat with its counts and no Draft chip.
+  await closePlan(plan);
   const card = page.locator(`[data-plan-card="${planId}"]`);
-  await expect(card).toBeInViewport();
-  await expect(page.locator('[data-msg-id][data-jump-glow]').filter({ has: card })).toHaveCount(1);
+  await card.scrollIntoViewIfNeeded();
+  await expect(card).toBeVisible();
   await expect(card.getByText('1 concept')).toBeVisible();
   await expect(card.getByText('1 post')).toBeVisible();
   await expect(card.locator('[data-plan-progress]')).toHaveText('Approved 0 of 2');
   await expect(card.locator('[data-plan-chip="warn"]')).toHaveCount(0);
   await expect(card.locator('[data-plan-forward]')).toBeVisible();
+  expect(shared()).toEqual([[planId]]);
 
-  // D4 again from the card.
+  // D4 again from the card: the same one button.
   await card.locator('[data-plan-open]').click();
   await expect(plan).toBeVisible();
-  await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
+  await expect(primary).toHaveText(`Send in ${PEER_NAME}`);
 
   // A post item for the agency: the pipeline post view embedded, no plan
   // review buttons, and the header overflow opens the post view's own sheet.
@@ -383,10 +392,15 @@ async function clientFlow(page: Page): Promise<void> {
   await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
   await expect(plan.locator('[data-plan-title-menu]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row-status]')).toHaveCount(0);
-  // A client gets Go to card only (the card is in this chat).
-  await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
-  await expect(plan.locator('[data-plan-send-here], [data-plan-open-client]')).toHaveCount(0);
-  await expect(plan.locator('[data-plan-add], [data-plan-add-header]')).toHaveCount(0);
+  // A client gets no footer button at all, and no Edit.
+  await expect(
+    plan.locator(
+      '[data-plan-footer], [data-plan-primary], [data-plan-go-card], [data-plan-send-here], [data-plan-open-client]',
+    ),
+  ).toHaveCount(0);
+  await expect(
+    plan.locator('[data-plan-add], [data-plan-add-header], [data-plan-edit]'),
+  ).toHaveCount(0);
   // The concept's Everyone comment shows as the row's third line.
   await expect(
     plan
@@ -485,7 +499,8 @@ async function teamAndHidden(page: Page): Promise<void> {
   await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
-  // An agency-only group: Create plan, then Send in the group (no client here).
+  // An agency-only group: Create plan, then the one footer button, "Send to
+  // approvers in {group}": confirmed, it opens the plan and posts the card once.
   await openTray(page);
   await newPlanFromTile(page);
   const compose = page_(page, 'compose');
@@ -501,13 +516,42 @@ async function teamAndHidden(page: Page): Promise<void> {
   await compose.locator('[data-plan-create]').click();
   const plan = page_(page, 'plan');
   await expect(plan).toBeVisible();
-  const send = plan.locator('[data-plan-send-here]');
-  await expect(send).toHaveText(`Send in ${GROUP_NAME}`);
-  await expect(send).toBeEnabled();
-  await expect(plan.locator('[data-plan-send-hint]')).toHaveCount(0);
-  await send.click();
-  await expect(plan.locator('[data-plan-go-card]')).toBeVisible();
+  const primary = plan.locator('[data-plan-primary]');
+  await expect(primary).toHaveAttribute('data-plan-primary', 'send-approvers');
+  await expect(primary).toHaveText(`Send to approvers in ${GROUP_NAME}`);
+  await expect(
+    plan.locator('[data-plan-send-hint], [data-plan-send-here], [data-plan-open-client]'),
+  ).toHaveCount(0);
+  const planId = String(
+    (network.world.tables.plans ?? []).find((p) => p.title === 'Internal week')?.id,
+  );
+  const sharedHere = () =>
+    (network.world.tables.chat_messages ?? []).filter(
+      (m) =>
+        m.channel_id === GROUP_CHANNEL &&
+        Array.isArray(m.shared_plan_ids) &&
+        m.shared_plan_ids.includes(planId),
+    ).length;
+  await primary.click();
+  const confirm = page.getByRole('dialog', { name: 'Open this plan for approvers?' });
+  await expect(confirm).toBeVisible();
+  await confirm.locator('[data-plan-confirm]').click();
+  await expect(confirm).toBeHidden();
+  await expect(page.getByText('Approvers can now review this plan')).toBeVisible();
+  await expect.poll(sharedHere).toBe(1);
+  expect((network.world.tables.plans ?? []).find((p) => p.id === planId)?.audience).toBe('client');
+  await expect(primary).toHaveText(`Send in ${GROUP_NAME}`);
+  await page.waitForTimeout(400);
+  expect(sharedHere()).toBe(1);
   expectClean(network);
+}
+
+/** Close the Plan screen: the phone's Back, or the laptop panel's Close. */
+async function closePlan(plan: Locator): Promise<void> {
+  const close = plan.locator('[data-plan-close]');
+  if ((await close.count()) > 0) await close.click();
+  else await plan.getByRole('button', { name: 'Back' }).first().click();
+  await expect(plan).toBeHidden();
 }
 
 test.describe('phone', () => {

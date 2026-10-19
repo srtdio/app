@@ -1,7 +1,7 @@
-// The Plan list's day popover (laptop, agency): the calendar button's
-// "Move to" list (each plan day and No date with its item count, the row's
-// day marked) anchored under the button, and the right-click menu (the same
-// list plus "Remove from plan" in the danger colour) at the pointer. Placed
+// The Plan list's day popover (laptop, agency, edit mode): the right-click
+// menu at the pointer: the "Move to" list (each plan day and No date with its
+// item count, the row's day marked) plus "Remove from plan" in the danger
+// colour. A pick or Remove only queues an op (Save changes writes). Placed
 // before paint (no jump), clamped inside the viewport, fixed width; no motion.
 // It follows its row on list scroll and window resize, and closes once the row
 // leaves the list's view. Escape (kept from the chat), Tab or a press outside
@@ -147,7 +147,7 @@ export function PlanDayPopover(props: {
     const onDown = (event: Event): void => {
       const target = event.target;
       if (target instanceof Node && ref.current?.contains(target) === true) return;
-      if (target instanceof Element && target.closest('[data-plan-row-calendar]') !== null) return;
+      if (target instanceof Element && target.closest('[data-plan-row-day-chip]') !== null) return;
       onClose.current();
     };
     el?.addEventListener('keydown', onKey);

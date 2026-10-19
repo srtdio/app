@@ -489,6 +489,50 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     });
     return null;
   },
+  // Mirrors the live proc (20261019030000_plan_save): the Plan screen's Save
+  // changes, one call with the queued ops in order. Agency only; 1 to 200 ops;
+  // each op runs the matching proc (update -> plan_update, remove ->
+  // plan_item_remove, move -> plan_item_move with keep_reviews defaulting to
+  // true, reorder -> plan_items_reorder); any other op is invalid_payload.
+  plan_save: (args, tables) => {
+    if (roleOf(tables, ME) === 'client') throw new HarnessRpcError('forbidden_role');
+    const plan = (tables.plans ?? []).find((p) => p.id === args.p_plan_id && p.deleted_at === null);
+    if (plan === undefined) throw new HarnessRpcError('plan_not_found');
+    const ops = Array.isArray(args.p_ops) ? (args.p_ops as Row[]) : null;
+    if (ops === null || ops.length < 1 || ops.length > 200) {
+      throw new HarnessRpcError('invalid_payload');
+    }
+    for (const op of ops) {
+      if (op.op === 'update') {
+        PLAN_RPC.plan_update?.(
+          {
+            p_plan_id: args.p_plan_id,
+            p_title: op.title,
+            p_starts_on: op.starts_on,
+            p_ends_on: op.ends_on,
+          },
+          tables,
+        );
+      } else if (op.op === 'remove') {
+        PLAN_RPC.plan_item_remove?.({ p_item_id: op.item_id }, tables);
+      } else if (op.op === 'move') {
+        PLAN_RPC.plan_item_move?.(
+          {
+            p_item_id: op.item_id,
+            p_target_date: op.target_date ?? null,
+            p_item_ids: op.item_ids,
+            p_keep_reviews: typeof op.keep_reviews === 'boolean' ? op.keep_reviews : true,
+          },
+          tables,
+        );
+      } else if (op.op === 'reorder') {
+        PLAN_RPC.plan_items_reorder?.({ p_item_ids: op.item_ids }, tables);
+      } else {
+        throw new HarnessRpcError('invalid_payload');
+      }
+    }
+    return null;
+  },
   // Mirrors the live proc: a live item on a live plan; a post item's post must
   // exist and not be deleted (invalid_payload, both sides); team side for the
   // agency roles; client side for a client on a client plan, a draft post

@@ -257,7 +257,7 @@ describe('both progress counts (D1)', () => {
     expect(progressPercent(p)).toBe(50);
     // Draft: the team side.
     const draft = planProgress({ ...b, plan: { ...b.plan, audience: 'team' } });
-    expect(progressLabel(draft, 'agency')).toBe('Team 3 of 4');
+    expect(progressLabel(draft, 'agency')).toBe('Creators 3 of 4');
     expect(progressPercent(draft)).toBe(75);
   });
 

@@ -1048,13 +1048,25 @@ describe('row thumbnails (L2)', () => {
         data: [
           {
             entity_id: 'a',
+            entity_type: 'post',
             asset_version_id: 'v-video',
             asset_versions: { mime_type: 'video/mp4' },
           },
-          { entity_id: 'a', asset_version_id: 'v-a1', asset_versions: { mime_type: 'image/png' } },
-          { entity_id: 'a', asset_version_id: 'v-a2', asset_versions: { mime_type: 'image/png' } },
+          {
+            entity_id: 'a',
+            entity_type: 'post',
+            asset_version_id: 'v-a1',
+            asset_versions: { mime_type: 'image/png' },
+          },
+          {
+            entity_id: 'a',
+            entity_type: 'post',
+            asset_version_id: 'v-a2',
+            asset_versions: { mime_type: 'image/png' },
+          },
           {
             entity_id: 'b',
+            entity_type: 'post',
             asset_version_id: 'v-b',
             asset_versions: [{ mime_type: 'image/jpeg' }],
           },
@@ -1065,7 +1077,8 @@ describe('row thumbnails (L2)', () => {
     const result = await readPostThumbs({ from } as unknown as Client, ['a', 'b', 'c']);
     expect(from).toHaveBeenCalledTimes(1);
     expect(from).toHaveBeenCalledWith('asset_attachments');
-    expect(calls).toContainEqual(['eq', ['entity_type', 'post']]);
+    // One read covers post images and concept tiles (entity_type in both).
+    expect(calls).toContainEqual(['in', ['entity_type', ['post', 'plan_item']]]);
     expect(calls).toContainEqual(['is', ['deleted_at', null]]);
     expect(result).toEqual({ ok: true, data: { a: 'v-a1', b: 'v-b' } });
     expect((await readPostThumbs({ from } as unknown as Client, [])).ok).toBe(true);

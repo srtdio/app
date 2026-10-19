@@ -1,6 +1,8 @@
 // Pure helpers behind the plan card and the Plan, Item and New plan screens:
-// progress maths, chips, status pills, kind labels, the default week and the
-// draft checks. No React, no reads, so every rule is unit-tested directly.
+// progress maths, chips, status pills, kind labels, the default week, the
+// draft checks, and the Plan screen's view / edit mode copy (Edit, Save
+// changes, the discard confirm, plan_save failure copy) and its one primary
+// footer action. No React, no reads, so every rule is unit-tested directly.
 
 import { planItemDayInZone } from '@/lib/chat/plans';
 import type {
@@ -147,7 +149,7 @@ function shownApproved(progress: PlanProgress): number {
  */
 export function progressLabel(progress: PlanProgress, side?: ViewerSide): string {
   void side;
-  const who = (progress.side ?? 'client') === 'team' ? 'Team' : 'Approved';
+  const who = (progress.side ?? 'client') === 'team' ? 'Creators' : 'Approved';
   return `${who} ${shownApproved(progress)} of ${progress.total}`;
 }
 
@@ -704,11 +706,95 @@ export const OPEN_FOR_CLIENT_LABEL = 'Open for approvers';
 export const OPEN_FOR_CLIENT_TITLE = 'Open this plan for approvers?';
 export const OPEN_FOR_CLIENT_BODY =
   'Approvers can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.';
-export const OPEN_FOR_CLIENT_TOAST = 'Open for approvers';
+/** N28: after Open for approvers (and after Send to approvers). */
+export const OPEN_FOR_CLIENT_TOAST = 'Approvers can now review this plan';
 export const OPEN_FOR_CLIENT_FAILED = "Couldn't open for approvers. Try again.";
 export const SEND_NEEDS_OPEN = 'Open the plan for approvers to send it here.';
 export const SEND_FAILED = "Couldn't send. Try again.";
+/** Send to approvers: the plan opened but chat_plan_share failed; Retry only reposts. */
+export const SEND_AFTER_OPEN_FAILED =
+  "Plan is open for approvers, but the card didn't post. Try again.";
+export const RETRY_LABEL = 'Retry';
 export const GO_TO_CARD_LABEL = 'Go to card';
+
+// ---------------------------------------------------------------------------
+// Edit mode (view / Edit / Save changes) copy and rules
+// ---------------------------------------------------------------------------
+
+export const EDIT_LABEL = 'Edit';
+export const EDITING_TITLE = 'Editing plan';
+export const SAVE_CHANGES_LABEL = 'Save changes';
+export const SAVING_LABEL = 'Saving…';
+export const CANCEL_EDIT_LABEL = 'Cancel';
+export const PLAN_SAVED_TOAST = 'Plan saved';
+/** The discard confirm when edit mode is left with queued changes (Cancel, Back, Esc). */
+export const DISCARD_EDITS = {
+  title: 'Discard changes?',
+  message: 'Your edits to this plan will be lost.',
+};
+export const KEEP_EDITING_LABEL = 'Keep editing';
+export const DISCARD_LABEL = 'Discard';
+/** The edit header's fields. */
+export const EDIT_TITLE_LABEL = 'Plan name';
+export const EDIT_FROM_LABEL = 'From';
+export const EDIT_TO_LABEL = 'To';
+
+/** Save changes failures, in plain words; nothing is ever half saved. */
+export const PLAN_SAVE_ERROR_COPY: PlanWriteErrorTable = {
+  network: "Couldn't reach Sorted. Nothing was saved. Check your connection and try again.",
+  date_outside_plan:
+    'An item sits on a day outside the plan dates. Nothing was saved. Move it or widen the dates.',
+  invalid_payload:
+    'Something in this plan is no longer available, such as a removed item. Nothing was saved.',
+  forbidden: 'Only creators can change a plan. Nothing was saved.',
+};
+export const PLAN_SAVE_FAILED_COPY = "Couldn't save the plan. Nothing was saved. Try again.";
+
+/** A failed plan_save's copy by cause. Pure. */
+export function planSaveErrorCopy(message: string): string {
+  return planWriteErrorCopy(message, PLAN_SAVE_FAILED_COPY, PLAN_SAVE_ERROR_COPY);
+}
+
+/** "Send to approvers in {chat}". Pure. */
+export function sendToApproversLabel(chatName: string): string {
+  return `Send to approvers in ${chatName}`;
+}
+
+/**
+ * The footer's one primary button (agency only): from a chat, a Draft plan
+ * sends to approvers (open, then post the card) and an Open plan sends the
+ * card; outside a chat a Draft plan opens for approvers and an Open plan has
+ * no button. A client never gets one. Pure.
+ */
+export type PrimaryAction =
+  | { kind: 'none' }
+  | { kind: 'open'; label: string }
+  | { kind: 'send-approvers'; label: string }
+  | { kind: 'send'; label: string };
+
+export function planPrimaryAction(input: {
+  side: ViewerSide;
+  audience: PlanAudience;
+  chat: { name: string } | null;
+}): PrimaryAction {
+  if (input.side !== 'agency') return { kind: 'none' };
+  const draft = input.audience === 'team';
+  if (input.chat === null) {
+    return draft ? { kind: 'open', label: OPEN_FOR_CLIENT_LABEL } : { kind: 'none' };
+  }
+  return draft
+    ? { kind: 'send-approvers', label: sendToApproversLabel(input.chat.name) }
+    : { kind: 'send', label: sendInLabel(input.chat.name) };
+}
+
+/** "Week of 12 Oct" for a Mon to Sun week, else the short range ("12 to 25 Oct"). Pure. */
+export function composeTitlePlaceholder(range: { startsOn: string; endsOn: string }): string {
+  if (range.startsOn === '' || range.endsOn === '') return 'Plan name';
+  const days = daysBetween(range.startsOn, range.endsOn);
+  const monday = new Date(`${range.startsOn}T00:00:00Z`).getUTCDay() === 1;
+  if (days === 6 && monday) return `Week of ${shortDay(range.startsOn)}`;
+  return planRangeShort(range.startsOn, range.endsOn);
+}
 export const CREATE_PLAN_LABEL = 'Create plan';
 export const KEEP_APPROVAL_YES = 'Yes, keep it';
 export const KEEP_APPROVAL_NO = 'No, ask again';

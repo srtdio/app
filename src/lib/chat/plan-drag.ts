@@ -1,8 +1,11 @@
-// Pure order math behind the Plan screen's drag and "Move to another day":
-// the list as day groups in display order, one item moved to a day at an
-// index, and the full plan order plan_item_move takes. No React, no reads,
-// so every case is unit-tested directly.
+// Pure order math behind the Plan screen's edit mode (drag, the day chip,
+// remove): the list as day groups in display order, one item moved to a day
+// at an index, the full plan order plan_item_move takes, and the edit queue:
+// the plan_save ops a Save changes sends, in order, and the bundle as those
+// ops leave it (what edit mode paints before anything is written). No React,
+// no reads, so every case is unit-tested directly.
 
+import type { PlanSaveOp } from '@srtdio/rpc';
 import { planItemDayInZone, sortPlanItemsByDate, type PlanBundle } from '@/lib/chat/plans';
 import { civilNoonInZoneIso } from '@/lib/plan-week';
 
@@ -127,4 +130,92 @@ export function applyMove(
 /** Whether the item has any slot tick that is not waiting (its move resets it). Pure. */
 export function hasTicks(bundle: Pick<PlanBundle, 'reviews'>, itemId: string): boolean {
   return bundle.reviews.some((r) => r.item_id === itemId && r.status !== 'waiting');
+}
+
+// ---------------------------------------------------------------------------
+// The edit queue (Save changes)
+// ---------------------------------------------------------------------------
+
+/** The title and dates edit mode's header holds. */
+export interface PlanHeaderDraft {
+  title: string;
+  startsOn: string;
+  endsOn: string;
+}
+
+/** The header draft as the plan is now. Pure. */
+export function headerDraftOf(
+  plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>,
+): PlanHeaderDraft {
+  return { title: plan.title, startsOn: plan.starts_on, endsOn: plan.ends_on };
+}
+
+/**
+ * The queue with the header draft laid in: one 'update' op, first (dates
+ * widen before any move lands on a new day), replaced on every edit and
+ * dropped when the draft is back to what the plan holds. The title is
+ * trimmed; an empty one keeps the plan's. Pure.
+ */
+export function withHeaderUpdate(
+  ops: readonly PlanSaveOp[],
+  plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>,
+  draft: PlanHeaderDraft,
+): PlanSaveOp[] {
+  const rest = ops.filter((op) => op.op !== 'update');
+  const title = draft.title.trim() === '' ? plan.title : draft.title.trim();
+  const same =
+    title === plan.title && draft.startsOn === plan.starts_on && draft.endsOn === plan.ends_on;
+  if (same) return rest;
+  return [{ op: 'update', title, starts_on: draft.startsOn, ends_on: draft.endsOn }, ...rest];
+}
+
+/** The queue with one more op at its end. Pure. */
+export function queueOp(ops: readonly PlanSaveOp[], op: PlanSaveOp): PlanSaveOp[] {
+  return [...ops, op];
+}
+
+/** Whether a Save would write anything. Pure. */
+export function hasQueuedOps(ops: readonly PlanSaveOp[]): boolean {
+  return ops.length > 0;
+}
+
+/** The item ids a 'remove' op in the queue hides. Pure. */
+export function removedIds(ops: readonly PlanSaveOp[]): Set<string> {
+  const out = new Set<string>();
+  for (const op of ops) if (op.op === 'remove') out.add(op.item_id);
+  return out;
+}
+
+/**
+ * The bundle as the queue leaves it, for edit mode's paint: the header
+ * update on the plan, removed items (and their reviews) gone, each move as
+ * applyMove paints it, each reorder's positions. Nothing is written. Pure.
+ */
+export function applyPlanOps(
+  bundle: PlanBundle,
+  ops: readonly PlanSaveOp[],
+  timeZone = 'UTC',
+): PlanBundle {
+  let next = bundle;
+  for (const op of ops) {
+    if (op.op === 'update') {
+      next = {
+        ...next,
+        plan: { ...next.plan, title: op.title, starts_on: op.starts_on, ends_on: op.ends_on },
+      };
+    } else if (op.op === 'remove') {
+      next = {
+        ...next,
+        items: next.items.filter((i) => i.id !== op.item_id),
+        reviews: next.reviews.filter((r) => r.item_id !== op.item_id),
+      };
+    } else if (op.op === 'move') {
+      next = applyMove(next, op.item_id, op.target_date, op.item_ids, timeZone, op.keep_reviews);
+    } else {
+      const position = new Map(op.item_ids.map((id, i) => [id, i]));
+      const items = next.items.map((i) => ({ ...i, position: position.get(i.id) ?? i.position }));
+      next = { ...next, items: sortPlanItemsByDate(items, next.postInfo, timeZone) };
+    }
+  }
+  return next;
 }
