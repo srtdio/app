@@ -5,7 +5,7 @@ import type {
   UIEvent as ReactUIEvent,
 } from 'react';
 import type { CSSProperties, ReactElement, ReactNode, Ref } from 'react';
-import { IconAssets, IconImagePlus, IconPin } from '@/components/ui/icons';
+import { IconAssets, IconImagePlus, IconMore, IconPin } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostLightbox, placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
@@ -475,7 +475,78 @@ interface GalleryViewProps {
   /** Framed: current-version pins per slide (relative to the original). */
   pinsFor?: ((item: GalleryItem) => PinDot[]) | undefined;
   onPinClick?: ((commentId: string) => void) | undefined;
+  /**
+   * H2: the visible "Add pin" button under the carousel arms placement on the
+   * current slide (the long-press still works); absent for viewers who cannot
+   * comment and on the brief grid.
+   */
+  onArmPin?: ((index: number) => void) | undefined;
+  /** H2: the Cancel shown while armed. */
+  onDisarmPin?: (() => void) | undefined;
+  /** H3 (agency side): a visible 44px ⋯ on each slide opening the slide actions. */
+  onSlideMenu?: ((index: number) => void) | undefined;
 }
+
+/**
+ * The row under the carousel: "Add pin" (pin icon + text, 44px) for anyone who
+ * can comment, or Cancel while a slide is armed. Nothing when pins are not on
+ * offer. Pure.
+ */
+export function pinControls(
+  active: number,
+  pinArmedIndex: number | null,
+  onArmPin: ((index: number) => void) | undefined,
+  onDisarmPin: (() => void) | undefined,
+): ReactElement | null {
+  if (onArmPin === undefined) return null;
+  return (
+    <div className="mt-1 flex items-center gap-2">
+      {pinArmedIndex === null ? (
+        <button
+          type="button"
+          data-add-pin=""
+          onClick={() => onArmPin(active)}
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <IconPin size={16} />
+          Add pin
+        </button>
+      ) : (
+        <button
+          type="button"
+          data-cancel-pin=""
+          onClick={() => onDisarmPin?.()}
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Cancel
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The 44px ⋯ over one slide (agency side), or nothing. Pure. */
+export function slideMenuButton(
+  index: number,
+  onSlideMenu: ((index: number) => void) | undefined,
+): ReactElement | null {
+  if (onSlideMenu === undefined) return null;
+  return (
+    <button
+      type="button"
+      aria-label={`Slide ${index + 1} actions`}
+      aria-haspopup="dialog"
+      onClick={() => onSlideMenu(index)}
+      className="absolute right-1 top-1 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-overlay text-overlay-fg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <IconMore size={18} />
+    </button>
+  );
+}
+
+// T13: a long-press on a slide must never open the browser's image callout or
+// start a text selection; the callout property is inherited by the image inside.
+const SLIDE_PRESS_CLASS = 'select-none [-webkit-touch-callout:none]';
 
 /**
  * The gallery's presentational tree, kept hookless so the tree-walking unit tests
@@ -517,6 +588,9 @@ export function galleryView({
   platformLabel = '',
   pinsFor,
   onPinClick,
+  onArmPin,
+  onDisarmPin,
+  onSlideMenu,
 }: GalleryViewProps): ReactElement {
   if (items.length === 0) {
     // Agency-side (onAddSlide present): a full-width "Add images" upload zone in
@@ -671,6 +745,7 @@ export function galleryView({
                       }}
                       className={cn(
                         'absolute inset-0 flex h-full w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+                        SLIDE_PRESS_CLASS,
                         pinArmedIndex === index && 'cursor-crosshair',
                       )}
                     >
@@ -688,11 +763,12 @@ export function galleryView({
                     </button>
                     {pinsFor !== undefined ? framePins(pinsFor(item), map, onPinClick) : null}
                     {pinsFor === undefined && pinCount > 0 ? (
-                      <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
+                      <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
                         <IconPin size={11} />
                         {pinCount}
                       </span>
                     ) : null}
+                    {slideMenuButton(index, onSlideMenu)}
                   </PlatformFrame>
                 </div>
               );
@@ -722,6 +798,7 @@ export function galleryView({
             {frameNote}
           </p>
         ) : null}
+        {pinControls(active, pinArmedIndex, onArmPin, onDisarmPin)}
         {dots}
       </div>
     );
@@ -747,43 +824,52 @@ export function galleryView({
           {items.map((item, index) => {
             const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
             return (
-              <button
+              // The wrapper carries the snap point and hosts the ⋯ beside the
+              // tile button (a button cannot nest a button); the tile keeps its
+              // reserved style box.
+              <div
                 key={item.assetAttachmentId}
-                type="button"
-                aria-label={`View image ${index + 1}`}
-                style={resolveRibbonTileStyle(item, measuredDimensions, items.length === 1)}
-                {...(slideGestures !== undefined ? slideGestures(index) : {})}
-                onClick={(event) => {
-                  if (onSlideTap !== undefined) {
-                    onSlideTap(index, event);
-                    return;
-                  }
-                  if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
-                  onOpen(index);
-                }}
-                className={cn(
-                  'group relative flex shrink-0 snap-start items-center justify-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  pinArmedIndex === index && 'cursor-crosshair',
-                )}
+                className="relative flex shrink-0 snap-start items-center justify-center"
               >
-                <GalleryThumb
-                  item={item}
-                  cache={cache}
-                  presignEnabled={presignEnabled}
-                  fit="contain"
-                  onMeasure={
-                    onMeasure !== undefined
-                      ? (width, height) => onMeasure(item.assetAttachmentId, width, height)
-                      : undefined
-                  }
-                />
-                {pinCount > 0 ? (
-                  <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
-                    <IconPin size={11} />
-                    {pinCount}
-                  </span>
-                ) : null}
-              </button>
+                <button
+                  type="button"
+                  aria-label={`View image ${index + 1}`}
+                  style={resolveRibbonTileStyle(item, measuredDimensions, items.length === 1)}
+                  {...(slideGestures !== undefined ? slideGestures(index) : {})}
+                  onClick={(event) => {
+                    if (onSlideTap !== undefined) {
+                      onSlideTap(index, event);
+                      return;
+                    }
+                    if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
+                    onOpen(index);
+                  }}
+                  className={cn(
+                    'group relative flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    SLIDE_PRESS_CLASS,
+                    pinArmedIndex === index && 'cursor-crosshair',
+                  )}
+                >
+                  <GalleryThumb
+                    item={item}
+                    cache={cache}
+                    presignEnabled={presignEnabled}
+                    fit="contain"
+                    onMeasure={
+                      onMeasure !== undefined
+                        ? (width, height) => onMeasure(item.assetAttachmentId, width, height)
+                        : undefined
+                    }
+                  />
+                  {pinCount > 0 ? (
+                    <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-overlay-fg">
+                      <IconPin size={11} />
+                      {pinCount}
+                    </span>
+                  ) : null}
+                </button>
+                {slideMenuButton(index, onSlideMenu)}
+              </div>
             );
           })}
         </div>
@@ -796,6 +882,7 @@ export function galleryView({
           </span>
         ) : null}
       </div>
+      {pinControls(active, pinArmedIndex, onArmPin, onDisarmPin)}
       {dots}
     </div>
   );
@@ -1066,6 +1153,16 @@ export function PostGallery({
       platformLabel: frame?.platformLabel ?? '',
       pinsFor,
       onPinClick,
+      // H2: the visible Add pin arms the same state the long-press does.
+      onArmPin: canPlacePins
+        ? (index: number) => {
+            setPinArmedIndex(index);
+            onRequestPin?.(index);
+          }
+        : undefined,
+      onDisarmPin: canPlacePins ? () => setPinArmedIndex(null) : undefined,
+      // H3: the visible ⋯ per carousel slide; the brief grid keeps long-press.
+      onSlideMenu: columns === 4 ? onSlideActions : undefined,
     })
   );
 }

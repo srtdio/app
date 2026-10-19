@@ -19,7 +19,11 @@ import { IconPaperclip } from '@/components/chat/AttachmentIcons';
 import { IconX } from '@/components/ui/icons';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
-import { PendingChip, doneVersionIds } from '@/components/comments/CommentComposer';
+import {
+  PendingChip,
+  canRetryPending,
+  doneVersionIds,
+} from '@/components/comments/CommentComposer';
 import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
 import type { Pending } from '@/components/comments/CommentComposer';
 
@@ -181,6 +185,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           file,
           previewUrl: null,
           status: { state: 'error', message: check.message },
+          retryable: false,
         };
         setSlots((prev) =>
           prev.map((slot) =>
@@ -196,27 +201,54 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           slot.id === slotId ? { ...slot, pending: [...slot.pending, item] } : slot,
         ),
       );
-      const outcome = await uploadFile(file);
-      setSlots((prev) =>
-        prev.map((slot) =>
-          slot.id !== slotId
-            ? slot
-            : {
-                ...slot,
-                pending: slot.pending.map((pendingItem) =>
-                  pendingItem.id === id
-                    ? {
-                        ...pendingItem,
-                        status: outcome.ok
-                          ? { state: 'done', versionId: outcome.versionId }
-                          : { state: 'error', message: outcome.message },
-                      }
-                    : pendingItem,
-                ),
-              },
-        ),
-      );
+      await uploadPending(slotId, id, file);
     }
+  }
+
+  // Upload one chip's file and settle its status; a failure keeps the chip
+  // (with its file) so Retry can run it again (FT17).
+  async function uploadPending(slotId: string, id: string, file: File): Promise<void> {
+    if (uploadFile === undefined) return;
+    const outcome = await uploadFile(file);
+    setSlots((prev) =>
+      prev.map((slot) =>
+        slot.id !== slotId
+          ? slot
+          : {
+              ...slot,
+              pending: slot.pending.map((pendingItem) =>
+                pendingItem.id === id
+                  ? {
+                      ...pendingItem,
+                      status: outcome.ok
+                        ? { state: 'done', versionId: outcome.versionId }
+                        : { state: 'error', message: outcome.message },
+                    }
+                  : pendingItem,
+              ),
+            },
+      ),
+    );
+  }
+
+  function retryPending(slotId: string, pendingId: string): void {
+    const target = slots
+      .find((slot) => slot.id === slotId)
+      ?.pending.find((item) => item.id === pendingId);
+    if (target === undefined || !canRetryPending(target)) return;
+    setSlots((prev) =>
+      prev.map((slot) =>
+        slot.id !== slotId
+          ? slot
+          : {
+              ...slot,
+              pending: slot.pending.map((item) =>
+                item.id === pendingId ? { ...item, status: { state: 'uploading' } } : item,
+              ),
+            },
+      ),
+    );
+    void uploadPending(slotId, pendingId, target.file);
   }
 
   function removePending(slotId: string, pendingId: string): void {
@@ -348,6 +380,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                       key={item.id}
                       item={item}
                       onRemove={() => removePending(slot.id, item.id)}
+                      onRetry={() => retryPending(slot.id, item.id)}
                     />
                   ))}
                 </ul>

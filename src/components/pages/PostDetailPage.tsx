@@ -81,8 +81,19 @@ import {
   removeAt,
 } from '@/components/pages/pcs/gallery-transforms';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
-import { Toasts } from '@/components/pages/assets/Toasts';
-import { useToasts } from '@/components/pages/assets/useToasts';
+import { LoadError } from '@/components/ui/LoadError';
+import { useOptionalToast } from '@/components/ui/toast';
+import { plainError } from '@/lib/error-copy';
+import { isTouchDevice } from '@/lib/modal-focus';
+import { PostDecisionBar, DECISION_BAR_SPACE_PX } from '@/components/pages/pcs/PostDecisionBar';
+import { runStageMoveCommit, showWhenVisible } from '@/components/pages/pcs/stage-move-commit';
+import { formatPostTargetDate } from '@/components/pages/pcs/post-date';
+import {
+  CAPTION_TIP_TEXT,
+  captionTipDismissed,
+  dismissCaptionTip,
+} from '@/components/pages/pcs/caption-tip';
+import { hasInAppHistory } from '@/components/pages/pcs/post-nav';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { listBuckets, type BucketOption } from '@/lib/buckets';
@@ -108,6 +119,18 @@ import { friendlyTransitionError } from '@/lib/post-transition-errors';
 import { createComment } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
 import { postSoftDelete, stageTransition } from '@srtdio/rpc';
+import type { DomainError } from '@srtdio/rpc';
+
+// A refused RPC carries a DomainError ({ code, message }); a thrown transport
+// error does not, and goes to plainError instead.
+function isDomainError(error: unknown): error is DomainError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    typeof (error as { code?: unknown }).code === 'string' &&
+    typeof (error as { message?: unknown }).message === 'string'
+  );
+}
 import { formatLabel, postStatusLine } from '@/lib/post-detail-presentation';
 import { isPostPlatform, platformLabel as postPlatformLabel } from '@srtdio/posts';
 
@@ -175,12 +198,6 @@ const STAGE_PILL_LABEL: Record<Stage, string> = {
   parked: 'Parked',
   rejected: 'Rejected',
 };
-
-function formatTargetDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 /**
  * The stage rail buttons. Hookless so the tree is unit tested by walking it.
@@ -302,6 +319,10 @@ export function StageReasonConfirm(props: {
       open={copy !== null}
       onClose={props.onCancel}
       title={copy?.title ?? ''}
+      // FT12: a typed reason is unsaved input: Esc, X, the backdrop and system
+      // Back all ask before dropping it.
+      dirty={props.reason.trim() !== ''}
+      discard={{ title: 'Discard your reason?', message: 'Your reason will be lost.' }}
       footer={
         <>
           <Button size="lg" className="ml-auto" onClick={props.onCancel}>
@@ -436,8 +457,11 @@ export function PostDetailPage({
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // FT3: a failed load shows ui/LoadError with Retry; the raw message is logged, never shown.
+  const [loadError, setLoadError] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  // The one-time caption tip (dismissed per user in localStorage).
+  const [captionTipOpen, setCaptionTipOpen] = useState(false);
 
   const [transitioning, setTransitioning] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -448,9 +472,28 @@ export function PostDetailPage({
   const [reasonTarget, setReasonTarget] = useState<Stage | null>(null);
   const [reasonDraft, setReasonDraft] = useState('');
   const [optimisticStage, setOptimisticStage] = useState<Stage | null>(null);
+  // True while mounted. Declared BEFORE useUndoableAction so this cleanup runs
+  // before the hook's unmount flush: a commit that starts during unmount sees
+  // the page as gone (no state writes, no navigation from a leaving page).
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const { run: runUndoable, flush: flushUndoable } = useUndoableAction();
   const postIdRef = useRef(postId);
   postIdRef.current = postId;
+  // Every toast on this page rides the app-wide ToastProvider (AppLayout),
+  // which outlives the page: a failure that lands after navigating away is
+  // still seen. Captured in a ref once, as PipelinePage does, so push is stable.
+  const toastApi = useOptionalToast();
+  const toastRef = useRef(toastApi);
+  toastRef.current = toastApi;
+  const push = useCallback((message: string): void => {
+    toastRef.current?.show({ title: message });
+  }, []);
 
   // Caption annotation state: the pending selection drives the composer, and a
   // bump of commentsRefresh re-fetches the comments list after a post.
@@ -510,7 +553,6 @@ export function PostDetailPage({
   // Only a list that loaded proves someone is not a current member: until then a
   // person not in it renders nothing extra, never "Former member".
   const membersLoaded = !membersLoading && membersError === null;
-  const { toasts, push, dismiss } = useToasts();
 
   const [showDetails, setShowDetails] = useState(false);
   // Workspace buckets, fetched once per workspace to resolve the post's bucket
@@ -599,6 +641,11 @@ export function PostDetailPage({
     setCommentDrafts({});
   }, [postId, flushUndoable]);
 
+  // The caption tip shows until this user taps Got it (storage permitting).
+  useEffect(() => {
+    setCaptionTipOpen(!captionTipDismissed(userId));
+  }, [userId]);
+
   useEffect(() => {
     if (workspaceId === null || userId === null) {
       setRole(null);
@@ -679,11 +726,12 @@ export function PostDetailPage({
         return;
       }
       if (!silent) setLoading(true);
-      setLoadError(null);
+      setLoadError(false);
       const result = await getPost(supabase, postId);
       if (!silent) setLoading(false);
       if (!result.ok) {
-        setLoadError(result.error.message);
+        logger.warn('post page: load failed', { error: result.error.message });
+        setLoadError(true);
         return;
       }
       if (result.data === null) {
@@ -777,8 +825,7 @@ export function PostDetailPage({
   // A host-owned open (the plan item's header button) while the sheet cannot
   // mount (loading, not found, an old version) closes again at once, so the
   // sheet never pops open later on its own.
-  const sheetMountable =
-    !loading && !notFound && loadError === null && detail !== null && !readOnly;
+  const sheetMountable = !loading && !notFound && !loadError && detail !== null && !readOnly;
   useEffect(() => {
     if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);
   }, [actionsOpenProp, sheetMountable, onActionsOpenChange]);
@@ -1082,11 +1129,20 @@ export function PostDetailPage({
   // the reason as a comment through the same create path as every comment. A
   // failed move puts the old stage back with the friendly error; a failed
   // reason comment leaves the move in place and says so.
+  //
+  // FB6: the commit may land after this page is gone (the undo hook flushes on
+  // unmount, hidden and pagehide), so it runs through runStageMoveCommit: a
+  // refusal or a thrown error reverts and shows the inline error while still
+  // here, and ALWAYS shows the app-wide toast ("Couldn't reject {title}. It's
+  // still in review." with Open), held while the document is hidden. It never
+  // rethrows, so the hook's own failure toast never doubles it.
   function confirmReasonMove(): void {
     const to = reasonTarget;
     const copy = to === null ? null : stageReasonConfirm(to);
-    if (to === null || copy === null || postId === undefined) return;
+    if (to === null || copy === null || postId === undefined || detail === null) return;
     const movedPostId = postId;
+    const fromStage = detail.post.stage as Stage;
+    const postTitle = detail.post.title;
     const reason = stageReasonComment(reasonDraft);
     setReasonTarget(null);
     setReasonDraft('');
@@ -1095,54 +1151,85 @@ export function PostDetailPage({
     runUndoable({
       label: copy.undoLabel,
       revert: () => setOptimisticStage(null),
-      commit: async () => {
+      commit: () => {
         const traceId = newTrace();
-        const result = await stageTransition(supabase, {
-          p_post_id: movedPostId,
-          p_to_stage: to,
-          p_trace_id: traceId,
-        });
-        const stillHere = postIdRef.current === movedPostId;
-        if (!result.ok) {
-          if (stillHere) {
+        return runStageMoveCommit({
+          to,
+          fromStage,
+          postTitle,
+          reason,
+          transition: async () => {
+            const result = await stageTransition(supabase, {
+              p_post_id: movedPostId,
+              p_to_stage: to,
+              p_trace_id: traceId,
+            });
+            return result.ok ? { ok: true } : { ok: false, error: result.error };
+          },
+          postReason: (body) => createAnchoredComment(body, traceId),
+          stillHere: () => mountedRef.current && postIdRef.current === movedPostId,
+          revert: () => setOptimisticStage(null),
+          setInlineError: setActionError,
+          friendlyError: (error) =>
+            isDomainError(error) ? friendlyTransitionError(error) : plainError(error),
+          afterSuccess: async () => {
+            await load(true);
             setOptimisticStage(null);
-            setActionError(friendlyTransitionError(result.error));
-          }
-          return;
-        }
-        if (reason !== null) {
-          const comment = await createAnchoredComment(reason, traceId);
-          if (!comment.ok) {
-            logger.warn('post page: stage reason comment failed', { error: comment.message });
-            if (stillHere) push(COMMENT_POST_FAILED);
-          }
-        }
-        if (!stillHere) return;
-        await load(true);
-        setOptimisticStage(null);
-        setCommentsRefresh((n) => n + 1);
-        dispatchInductionRefresh();
+            setCommentsRefresh((n) => n + 1);
+            dispatchInductionRefresh();
+          },
+          toast: toastRef.current,
+          openPost: () => navigate(`/posts/${movedPostId}`),
+          doc: document,
+          log: (message, data) => logger.warn(message, data),
+        });
       },
     });
   }
 
-  // Leaving the post: the host's own close when embedded, else the pipeline.
+  // Leaving the post (FT13): the host's own close when embedded; else one step
+  // back when there is in-app history to return to, else the pipeline.
   function leave(): void {
+    if (onNavigateAway !== undefined) {
+      onNavigateAway();
+      return;
+    }
+    if (hasInAppHistory(window.history.state)) navigate(-1);
+    else navigate('/pipeline');
+  }
+
+  // The explicit "Back to pipeline" (not found): never history back.
+  function goPipeline(): void {
     if (onNavigateAway !== undefined) onNavigateAway();
     else navigate('/pipeline');
   }
 
-  // Soft-delete the whole post (owner, admin or agency via canDeletePost; the proc re-checks the
-  // capability). On success leave PCS for the pipeline; a failure stays put with
-  // a toast, mirroring handleTransition's friendly-error shape.
+  // Soft-delete the whole post (FT14): a 7s Undo window ("Post deleted"), then
+  // the proc (which re-checks post.delete). The page leaves as the commit
+  // starts, so the write lands behind the navigation; a refusal is reported
+  // through the app-wide toast, which outlives the page, with Open to return.
   async function handleDeletePost(): Promise<void> {
-    if (postId === undefined) return;
-    const result = await postSoftDelete(supabase, { p_post_id: postId, p_trace_id: newTrace() });
-    if (!result.ok) {
-      push('Could not delete this post. Please try again.');
-      return;
-    }
-    leave();
+    if (postId === undefined || detail === null) return;
+    const deletedId = postId;
+    const postTitle = detail.post.title;
+    runUndoable({
+      label: 'Post deleted',
+      commit: async () => {
+        if (mountedRef.current && postIdRef.current === deletedId) leave();
+        const result = await postSoftDelete(supabase, {
+          p_post_id: deletedId,
+          p_trace_id: newTrace(),
+        });
+        if (result.ok) return;
+        logger.warn('post page: delete failed', { error: String(result.error.message) });
+        showWhenVisible(document, () => {
+          toastRef.current?.show({
+            title: `Couldn't delete ${postTitle}. It's still there.`,
+            action: { label: 'Open', onPress: () => navigate(`/posts/${deletedId}`) },
+          });
+        });
+      },
+    });
   }
 
   // One field at a time through post_update; the proc bumps row_version itself
@@ -1169,6 +1256,7 @@ export function PostDetailPage({
   // both suppress the trailing blur-save so the write never doubles.
   function openTitleEditor(): void {
     if (detail === null) return;
+    suppressTitleBlur.current = false;
     setTitleDraft(detail.post.title);
     setEditingTitle(true);
   }
@@ -1367,12 +1455,34 @@ export function PostDetailPage({
             {backButton}
           </div>
         )}
-        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading post</div>
+        {/* N12: a skeleton of the page's own shapes (title, meta line, media,
+            caption) from the existing tokens, with a screen-reader label. */}
+        <div aria-busy="true" className="flex flex-col gap-4 px-4 md:px-6 pt-4">
+          <span className="sr-only">Loading post</span>
+          <div aria-hidden className="flex items-center gap-2">
+            <div className="h-7 w-16 animate-pulse rounded-full bg-panel-3" />
+            <div className="h-4 w-28 animate-pulse rounded bg-panel-3" />
+          </div>
+          <div aria-hidden className="h-8 w-3/4 animate-pulse rounded bg-panel-3" />
+          <div aria-hidden className="flex items-center gap-2">
+            <div className="h-6 w-6 animate-pulse rounded-full bg-panel-3" />
+            <div className="h-3 w-32 animate-pulse rounded bg-panel-3" />
+          </div>
+          <div
+            aria-hidden
+            className="aspect-[4/5] w-full max-w-md animate-pulse rounded-xl bg-panel-3"
+          />
+          <div aria-hidden className="rounded-xl border border-border bg-panel-2 p-4">
+            <div className="h-3 w-full animate-pulse rounded bg-panel-3" />
+            <div className="mt-2 h-3 w-5/6 animate-pulse rounded bg-panel-3" />
+            <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
+          </div>
+        </div>
       </>
     );
   }
 
-  if (loadError !== null) {
+  if (loadError) {
     return (
       <>
         {embedded ? null : (
@@ -1381,9 +1491,7 @@ export function PostDetailPage({
           </div>
         )}
         <div className="px-4 md:px-6 mt-4">
-          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-            Could not load this post. {loadError}
-          </div>
+          <LoadError title="this post" onRetry={() => void load()} />
         </div>
       </>
     );
@@ -1402,7 +1510,7 @@ export function PostDetailPage({
           title="Post not found"
           description="This post may have been removed, or you may not have access to it."
           action={
-            <Button variant="primary" size="lg" onClick={leave}>
+            <Button variant="primary" size="lg" onClick={goPipeline}>
               Back to pipeline
             </Button>
           }
@@ -1422,56 +1530,70 @@ export function PostDetailPage({
   const pinKey =
     pinComposer !== null ? pinDraftKey(pinComposer.index, pinComposer.x, pinComposer.y) : null;
 
-  // The stage rail buttons, shared by the review helpers and the default branch.
-  // Opening the approve confirm clears a stale error, as the chat sheet does.
+  // A stage pick. Opening the approve confirm clears a stale error, as the
+  // chat sheet does. FN10: while a reject / park Undo window runs the buttons
+  // stay enabled, and a pick flushes that pending commit first.
+  function pickStage(to: Stage): void {
+    if (optimisticStage !== null) flushUndoable();
+    if (to === 'approved') setActionError(null);
+    if (stageReasonConfirm(to) !== null) {
+      setActionError(null);
+      setReasonDraft('');
+      setReasonTarget(to);
+      return;
+    }
+    approveGate.request(post.id, to);
+  }
   const stageButtons = (
-    <StageButtons
-      actions={stageActions}
-      transitioning={transitioning || optimisticStage !== null}
-      onPick={(to) => {
-        if (to === 'approved') setActionError(null);
-        if (stageReasonConfirm(to) !== null) {
-          setActionError(null);
-          setReasonDraft('');
-          setReasonTarget(to);
-          return;
-        }
-        approveGate.request(post.id, to);
-      }}
-    />
+    <StageButtons actions={stageActions} transitioning={transitioning} onPick={pickStage} />
   );
   const approveTimeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
-  // The stage-actions card. Rendered twice, one instance per breakpoint: in the
-  // desktop aside (hidden md:block) and at the bottom of the mobile Post tab
-  // (md:hidden), so stage moves stay reachable without leaving the post. Only
-  // buttons and copy live here, so no flashNode target id is ever duplicated.
+  // The helper line above the stage buttons, or null.
+  const stageHelper =
+    currentStage === 'review' && clientRole
+      ? 'Commenting keeps the post in review. Approval is deliberate, one post at a time.'
+      : currentStage === 'review' && agencySide
+        ? agencyReviewHelper(workspaceName)
+        : null;
+  const stageError =
+    actionError !== null ? (
+      <div role="alert" className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad">
+        {actionError}
+      </div>
+    ) : null;
+
+  // The stage-actions card, rendered ONCE. Desktop (and embedded): in the
+  // aside, with the buttons. Phone: the buttons move to the sticky decision
+  // bar (T12 / FN8) and only the helper copy and the error stay here, at the
+  // bottom of the Post tab. One conditional render, so the role=alert error
+  // never duplicates.
+  const phoneLayout = !isDesktop && !embedded;
   const stageSection = (
     <section className="rounded-xl border border-border bg-panel-2 p-4">
-      {currentStage === 'review' && clientRole ? (
-        <>
-          <p className="mb-3 text-sm text-fg-2">
-            Commenting keeps the post in review. Approval is deliberate, one post at a time.
-          </p>
-          {stageButtons}
-        </>
-      ) : currentStage === 'review' && agencySide ? (
-        <>
-          <p className="mb-3 text-sm text-fg-2">{agencyReviewHelper(workspaceName)}</p>
-          {stageButtons}
-        </>
-      ) : stageActions.length > 0 ? (
+      {stageHelper !== null ? <p className="mb-3 text-sm text-fg-2">{stageHelper}</p> : null}
+      {stageActions.length > 0 ? (
         stageButtons
       ) : (
         <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
       )}
-      {actionError !== null ? (
-        <div role="alert" className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad">
-          {actionError}
-        </div>
-      ) : null}
+      {stageError}
     </section>
   );
+  const phoneStageNotes =
+    stageHelper !== null || actionError !== null || stageActions.length === 0 ? (
+      <section className="rounded-xl border border-border bg-panel-2 p-4">
+        {stageHelper !== null ? <p className="text-sm text-fg-2">{stageHelper}</p> : null}
+        {stageActions.length === 0 ? (
+          <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
+        ) : null}
+        {stageError}
+      </section>
+    ) : null;
+  const decisionBar =
+    phoneLayout && !readOnly ? (
+      <PostDecisionBar actions={stageActions} transitioning={transitioning} onPick={pickStage} />
+    ) : null;
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
@@ -1544,16 +1666,49 @@ export function PostDetailPage({
 
         {agencySide && !readOnly ? (
           editingTitle ? (
-            <input
-              autoFocus
-              aria-label="Post title"
-              value={titleDraft}
-              disabled={savingMeta}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              onBlur={onTitleBlur}
-              onKeyDown={onTitleKeyDown}
-              className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
-            />
+            <div className="flex flex-col gap-2">
+              <input
+                autoFocus
+                aria-label="Post title"
+                value={titleDraft}
+                disabled={savingMeta}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onBlur={onTitleBlur}
+                onKeyDown={onTitleKeyDown}
+                className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
+              />
+              {isTouchDevice() ? (
+                // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
+                // visible. pointerdown is swallowed so the input's blur-save never
+                // runs ahead of (or instead of) the tapped button.
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    disabled={savingMeta}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      suppressTitleBlur.current = true;
+                      void saveTitle();
+                    }}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    disabled={savingMeta}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      suppressTitleBlur.current = true;
+                      setEditingTitle(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : null}
+            </div>
           ) : (
             <h2 className="text-[28px] font-semibold leading-tight tracking-tight">
               {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
@@ -1594,7 +1749,9 @@ export function PostDetailPage({
             ·
           </span>
           <span className="tabular-nums">
-            {post.target_date !== null ? formatTargetDate(post.target_date) : 'No date'}
+            {post.target_date !== null
+              ? formatPostTargetDate(post.target_date, approveTimeZone)
+              : 'No date'}
           </span>
           {!readOnly ? (
             <span className="text-fg-3">
@@ -1674,10 +1831,6 @@ export function PostDetailPage({
                 <p aria-live="polite" className="mt-2.5 text-xs text-fg-3">
                   Saving…
                 </p>
-              ) : gallery.length > 0 ? (
-                <p className="mt-2.5 text-xs text-fg-3">
-                  Tap a slide to view it. Long-press to place a pin.
-                </p>
               ) : null}
               {pinError !== null ? (
                 <div
@@ -1689,26 +1842,34 @@ export function PostDetailPage({
               ) : null}
             </section>
 
-            <section className="rounded-xl border border-border bg-panel-2 p-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-fg-3">
-                  Caption
-                </span>
-                {currentVersionNumber !== null ? (
-                  <VersionPill
-                    versionNumber={currentVersionNumber}
-                    onClick={() => setHistoryOpen(true)}
-                  />
-                ) : null}
-                {checkpointCounts.total > 0 ? (
-                  <span
-                    title="Checkpoints resolved"
-                    className="inline-flex h-7 items-center rounded-full border border-border px-2.5 text-xs font-medium tabular-nums text-fg-2"
-                  >
-                    {checkpointCounts.resolved} of {checkpointCounts.total}
-                  </span>
-                ) : null}
-                <div className="flex-1" />
+            {/* The caption block reads like the post (mock P1): the workspace
+                as the author row, then platform · format · v{n}, Edit at the
+                right, the caption text below. */}
+            <section
+              data-caption-block=""
+              className="rounded-xl border border-border bg-panel-2 p-4"
+            >
+              <div className="flex items-center gap-3">
+                <Avatar name={workspaceName ?? ''} size="md" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-fg">
+                    {workspaceName ?? ''}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-fg-3">
+                    <span>
+                      {platformLabel(post.platform)} · {formatLabel(post.format)}
+                    </span>
+                    {currentVersionNumber !== null ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <VersionPill
+                          versionNumber={currentVersionNumber}
+                          onClick={() => setHistoryOpen(true)}
+                        />
+                      </>
+                    ) : null}
+                  </div>
+                </div>
                 {hasCaption && !editingCaption ? (
                   <IconButton
                     label="Copy caption"
@@ -1722,9 +1883,15 @@ export function PostDetailPage({
                   </IconButton>
                 ) : null}
                 {agencySide && !editingCaption && !readOnly ? (
-                  <IconButton label="Edit caption" onClick={openCaptionEditor}>
-                    <IconPencil size={16} />
-                  </IconButton>
+                  <button
+                    type="button"
+                    data-caption-edit=""
+                    onClick={openCaptionEditor}
+                    className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <IconPencil size={15} />
+                    Edit
+                  </button>
                 ) : null}
               </div>
               {editingCaption ? (
@@ -1777,7 +1944,24 @@ export function PostDetailPage({
                       onAnnotate={handleAnnotate}
                     />
                   </div>
-                  <p className="mt-2 text-xs text-fg-3">Select any text to comment on it.</p>
+                  {captionTipOpen ? (
+                    <div
+                      data-caption-tip=""
+                      className="mt-2 flex items-center gap-2 text-xs text-fg-3"
+                    >
+                      <span>{CAPTION_TIP_TEXT}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCaptionTipOpen(false);
+                          dismissCaptionTip(userId);
+                        }}
+                        className="ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-xs font-medium text-accent transition-colors hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        Got it
+                      </button>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
@@ -1792,7 +1976,7 @@ export function PostDetailPage({
               ) : null}
             </section>
 
-            <div className="md:hidden">{stageSection}</div>
+            {phoneLayout ? phoneStageNotes : null}
           </div>
 
           <aside
@@ -1804,32 +1988,12 @@ export function PostDetailPage({
               pcsTabPanelClass(true, true),
             )}
           >
-            <div className="-mb-4 flex items-center gap-2 md:hidden">
-              <h2 className="text-lg font-semibold tracking-tight">Feedback</h2>
-              {checkpointCounts.total - checkpointCounts.resolved > 0 ? (
-                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent">
-                  {checkpointCounts.total - checkpointCounts.resolved}
-                </span>
-              ) : null}
-            </div>
-            {workspaceId !== null && postId !== undefined ? (
-              <CheckpointStrip
-                workspaceId={workspaceId}
-                postId={postId}
-                viewerIsClient={clientRole}
-                refreshSignal={commentsRefresh}
-                onCounts={handleCheckpointCounts}
-              />
-            ) : null}
+            {phoneLayout ? null : stageSection}
 
-            <div className="hidden md:block">{stageSection}</div>
-
+            {/* Comments own their header row ("Comments", the open-count chip,
+                Open / All); the checkpoint strip sits under it, only when
+                there are checkpoints (it renders nothing otherwise). */}
             <section className="rounded-xl border border-border bg-panel-2 p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-fg-3">
-                  Comments
-                </span>
-              </div>
               {workspaceId !== null && postId !== undefined ? (
                 <div data-induction={INDUCTION_KEYS.postCommentComposer}>
                   <Comments
@@ -1844,6 +2008,16 @@ export function PostDetailPage({
                     focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
                     viewerIsClient={clientRole}
                     guideReplyCommentId={firstHighlightCommentId(post.caption ?? '', highlights)}
+                    showHeader
+                    belowHeader={
+                      <CheckpointStrip
+                        workspaceId={workspaceId}
+                        postId={postId}
+                        viewerIsClient={clientRole}
+                        refreshSignal={commentsRefresh}
+                        onCounts={handleCheckpointCounts}
+                      />
+                    }
                   />
                 </div>
               ) : (
@@ -1867,6 +2041,17 @@ export function PostDetailPage({
           </aside>
         </div>
       )}
+
+      {/* The sticky decision bar (phone) and the room under the content so it
+          never covers the comment composer. */}
+      {decisionBar !== null ? (
+        <div
+          aria-hidden
+          data-decision-bar-space=""
+          style={{ height: `calc(${DECISION_BAR_SPACE_PX}px + env(safe-area-inset-bottom))` }}
+        />
+      ) : null}
+      {decisionBar}
 
       <CaptionAnnotationComposer
         open={composer !== null}
@@ -1940,6 +2125,7 @@ export function PostDetailPage({
         open={showDetails}
         onClose={() => setShowDetails(false)}
         workspaceId={workspaceId ?? ''}
+        timeZone={approveTimeZone}
         isAgencySide={agencySide}
         isClient={clientRole}
         bucketId={post.bucket_id}
@@ -1990,6 +2176,12 @@ export function PostDetailPage({
         }}
         onMoveRight={() => {
           if (slideIndex !== null) handleMoveRight(slideIndex);
+        }}
+        onMakeFirst={() => {
+          if (slideIndex !== null) handleMakeFirst(slideIndex);
+        }}
+        onMakeLast={() => {
+          if (slideIndex !== null) handleMakeLast(slideIndex);
         }}
         onAddAfter={() => {
           if (slideIndex !== null) openAdd({ mode: 'insertAfter', index: slideIndex });
@@ -2050,8 +2242,6 @@ export function PostDetailPage({
           {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
         />
       ) : null}
-
-      <Toasts toasts={toasts} onDismiss={dismiss} />
     </SearchWordsContext.Provider>
   );
 }
