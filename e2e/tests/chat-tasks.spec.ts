@@ -215,6 +215,10 @@ test('Close with unsaved changes asks "Discard unsaved changes?" in the page; De
   const ask = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
   await expect(ask).toBeVisible();
   await ask.getByRole('button', { name: 'Save' }).click();
+  // Wait for the Save itself, then for the row to be deleted.
+  await expect
+    .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_task_save_batch').length)
+    .toBe(1);
   await expect.poll(() => taskRow(network, 9).deleted_at).not.toBeNull();
   const call = network.rpcCalls.find((c) => c.name === 'chat_task_save_batch');
   expect((call?.args.p_batch as { deletes: unknown[] }).deletes).toHaveLength(1);

@@ -302,6 +302,7 @@ export function seedTasks(world: ChatWorld, now: number = Date.now()): void {
     created_by: COLLEAGUE_A,
     created_at: iso(base),
     updated_at: iso(base),
+    deleted_at: null,
     ...over,
   });
   const tasks: Row[] = [
