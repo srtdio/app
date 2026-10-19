@@ -227,9 +227,10 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   await page.getByRole('button', { name: 'Close viewer' }).click();
   await expect(page.getByRole('dialog', { name: `Viewing ${PDF_NAME}` })).toHaveCount(0);
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
-  // One thumbnail request per version for this page load (cached after: the
-  // lightbox and viewer round trip asked for none).
-  expect(thumbs.slice(thumbsBefore)).toEqual([PDF_VERSION]);
+  // No thumbnail request at all on Assets: the brief page already signed this
+  // version's thumbnail, and its URL is kept on the device across page loads
+  // (nor did the lightbox and viewer round trip ask again).
+  expect(thumbs.slice(thumbsBefore)).toEqual([]);
 
   // Nothing left the tab, and no request escaped the fixtures.
   expect(popups).toEqual([]);
