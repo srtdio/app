@@ -248,7 +248,7 @@ test('agency on an Open plan: read-only client checkbox, header subtitle, long t
   await sheet.getByRole('button', { name: /Delete post/ }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete post', exact: true });
   await expect(confirm.locator('[data-post-delete-text]')).toHaveText(
-    `Delete this post? This cannot be undone. It's in ${long} and will leave that plan.`,
+    `Delete this post? Moves to Recently deleted. It's in ${long} and will leave that plan.`,
   );
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await page.keyboard.press('Escape');
