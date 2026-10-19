@@ -13,6 +13,8 @@
 // Versions are processed in pages; one failed image is logged and skipped,
 // never aborting the rest (the next run picks it up again).
 
+import { createHash } from 'node:crypto';
+
 import { Pool } from 'pg';
 import sharp from 'sharp';
 import { v7 as uuidv7 } from 'uuid';
@@ -125,11 +127,8 @@ async function encodeListCopy(
   return null;
 }
 
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+function sha256Hex(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 type Outcome = 'made' | 'skipped' | 'failed';
@@ -162,7 +161,7 @@ async function thumbOne(
       row.version_id,
       row.workspace_id,
       key,
-      await sha256Hex(copy.bytes),
+      sha256Hex(copy.bytes),
       copy.bytes.byteLength,
       copy.width,
       copy.height,
