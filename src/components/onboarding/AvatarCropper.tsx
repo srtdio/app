@@ -10,6 +10,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { CROPPER_HINT } from '@/lib/onboarding';
 
 const FRAME = 260;
 const EXPORT = 512;
@@ -371,9 +372,7 @@ function AvatarCropperImpl(
         </div>
       </div>
 
-      {hasPhoto ? (
-        <p className="text-[11px] text-fg-3">Drag to move, pinch / slider / -/+ to zoom</p>
-      ) : null}
+      {hasPhoto ? <p className="text-xs text-fg-3">{CROPPER_HINT}</p> : null}
     </div>
   );
 }

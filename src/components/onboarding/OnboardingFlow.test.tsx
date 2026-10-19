@@ -3,19 +3,32 @@ import { act, forwardRef, useImperativeHandle, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockRequest, mockSave, mockUsername, newTrace, rows, mockSignout, mockNavigate, calls } =
-  vi.hoisted(() => ({
-    // Stable, as useNewTrace's is in the app.
-    newTrace: () => 'trace',
-    mockRequest: vi.fn(),
-    mockSave: vi.fn(),
-    mockUsername: vi.fn(),
-    mockSignout: vi.fn(async () => undefined),
-    mockNavigate: vi.fn(),
-    calls: [] as string[],
-    /** What each table read answers, per test. */
-    rows: {} as Record<string, { data: unknown; error: { message: string } | null }>,
-  }));
+const {
+  mockRequest,
+  mockSave,
+  mockUsername,
+  newTrace,
+  rows,
+  mockSignout,
+  mockNavigate,
+  calls,
+  testEnv,
+  mockUploadAvatar,
+} = vi.hoisted(() => ({
+  // Stable, as useNewTrace's is in the app.
+  newTrace: () => 'trace',
+  mockRequest: vi.fn(),
+  mockSave: vi.fn(),
+  mockUsername: vi.fn(),
+  mockSignout: vi.fn(async () => undefined),
+  mockNavigate: vi.fn(),
+  calls: [] as string[],
+  /** What each table read answers, per test. */
+  rows: {} as Record<string, { data: unknown; error: { message: string } | null }>,
+  /** The env the flow reads; a test sets VITE_AVATAR_UPLOAD_URL to send the photo. */
+  testEnv: {} as Record<string, unknown>,
+  mockUploadAvatar: vi.fn(),
+}));
 
 /** A chainable read: .select().eq()...maybeSingle() answers rows[table]. */
 function tableRead(table: string): unknown {
@@ -49,6 +62,11 @@ vi.mock('react-router-dom', () => ({
     mockNavigate(to, opts);
   },
 }));
+vi.mock('@/lib/env', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/env')>();
+  return { ...actual, env: Object.assign(testEnv, actual.env) };
+});
+vi.mock('@/lib/avatar-upload', () => ({ uploadAvatarFile: mockUploadAvatar }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@srtdio/rpc', () => ({ userOnboardingSave: mockSave, usernameAvailable: mockUsername }));
 vi.mock('@/components/induction/induction-data', () => ({
@@ -102,6 +120,8 @@ vi.mock('@/components/ui/Select', () => ({
 
 import { OnboardingFlow } from './OnboardingFlow';
 import { WORKSPACE_STEP } from '@/lib/induction';
+import { ONBOARDING_COPY } from '@/lib/induction-copy';
+import { SIGNOUT_EVENT } from '@/lib/events';
 import type { CurrentProfile } from '@/lib/use-current-profile';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -134,6 +154,8 @@ beforeEach(() => {
   mockNavigate.mockClear();
   calls.length = 0;
   for (const key of Object.keys(rows)) delete rows[key];
+  delete testEnv.VITE_AVATAR_UPLOAD_URL;
+  mockUploadAvatar.mockReset();
   window.localStorage.clear();
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -318,13 +340,13 @@ describe('invited welcome', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/signin?next=/pipeline', { replace: true });
   });
 
-  it('shows no step count on the welcome, then Step 1 of 2 and Step 2 of 2', async () => {
+  it('shows no step count on the welcome, then Setup 1 of 2 and Setup 2 of 2', async () => {
     invitedAs({ role: 'client' });
     await renderInvitee();
     expect(document.querySelector('[data-onboarding-step]')).toBeNull();
     expect(document.body.textContent).not.toContain('Step ');
     await click(button('Continue'));
-    expect(stepLabel()).toBe('Step 1 of 2');
+    expect(stepLabel()).toBe('Setup 1 of 2');
     expect(document.body.textContent).toContain('Your name');
     await type(document.querySelector<HTMLInputElement>('#ob-name')!, 'Riya Menon');
     await act(async () => {
@@ -335,7 +357,7 @@ describe('invited welcome', () => {
     });
     await addPhoto();
     await click(button('Continue'));
-    expect(stepLabel()).toBe('Step 2 of 2');
+    expect(stepLabel()).toBe('Setup 2 of 2');
     // An approver invitee picks from the approver roles: the side came from the membership.
     await pick('Job title', 'Brand manager');
     await click(button('Continue'));
@@ -347,9 +369,10 @@ describe('invited welcome', () => {
 });
 
 describe('pre-app screens', () => {
-  it('opens a self sign-up on Your role, Creator and Approver', async () => {
+  it("opens a self sign-up on How you'll use Sorted, Creator and Approver", async () => {
     await render({});
-    expect(document.body.textContent).toContain('Your role');
+    expect(document.querySelector('h1')?.textContent).toBe("How you'll use Sorted");
+    expect(document.body.textContent).not.toContain('Your role');
     expect(document.body.textContent).toContain('We make the posts');
     expect(document.body.textContent).toContain('We approve them');
     expect(button('Continue').disabled).toBe(true);
@@ -357,28 +380,76 @@ describe('pre-app screens', () => {
 
   it('counts the self sign-up steps: side, name, role', async () => {
     await render({});
-    expect(stepLabel()).toBe('Step 1 of 3');
+    expect(stepLabel()).toBe('Setup 1 of 3');
   });
 
-  it('requires a photo before the name screen continues', async () => {
+  // W11 fix 8: the pre-app counter never reads like the guide's "Step 1".
+  it('says Setup, never Step, so it cannot clash with the guide', async () => {
+    await render({});
+    expect(document.body.textContent).toContain('Setup 1 of 3');
+    expect(document.body.textContent).not.toMatch(/Step \d/);
+  });
+
+  // W11 fix 1: the photo is optional.
+  it('continues from the name screen without a photo', async () => {
     await toNameScreen('Creator');
     expect(mockUsername.mock.calls.length).toBe(1);
     expect(document.body.textContent).toContain('@riya.menon is yours.');
-    expect(button('Continue').disabled).toBe(true);
-    await addPhoto();
+    expect(button('Add a photo (optional)')).toBeDefined();
+    expect(document.body.textContent).not.toContain('Needed to continue');
     expect(button('Continue').disabled).toBe(false);
+    await click(button('Continue'));
+    await click(button('Continue'));
+    const payload = mockSave.mock.calls[0]?.[1]?.p_payload as Record<string, unknown>;
+    expect('avatar_url' in payload).toBe(false);
+    expect(onFinish).toHaveBeenCalledWith('/pipeline');
+  });
+
+  // W11 fix 1: a failed upload never blocks the save.
+  it('saves the profile when the photo fails to upload, and says so', async () => {
+    testEnv.VITE_AVATAR_UPLOAD_URL = 'https://avatar.test/upload';
+    mockUploadAvatar.mockResolvedValue({ ok: false, error: { message: 'network' } });
+    await toNameScreen('Approver');
+    await addPhoto();
+    await click(button('Continue'));
+    await click(button('Continue'));
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    const payload = mockSave.mock.calls[0]?.[1]?.p_payload as Record<string, unknown>;
+    expect('avatar_url' in payload).toBe(false);
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    expect(document.body.textContent).toContain(
+      "Couldn't upload your photo. You can add it later in settings.",
+    );
+    expect(document.body.textContent).toContain('Who makes your posts?');
+  });
+
+  // W11 fix 4: the job title is optional.
+  it('saves without a job title, labelled optional', async () => {
+    await toNameScreen('Creator');
+    await click(button('Continue'));
+    expect(document.body.textContent).toContain('Job title (optional)');
+    expect(button('Continue').disabled).toBe(false);
+    await click(button('Continue'));
+    const payload = mockSave.mock.calls[0]?.[1]?.p_payload as Record<string, unknown>;
+    expect(payload.designation).toBe('');
+    expect(payload.username).toBe('riya.menon');
+  });
+
+  // W11 fix 7: hints are 12px or larger.
+  it('draws no 11px hint on the name screen', async () => {
+    await toNameScreen('Creator');
+    expect(document.querySelector('[class*="text-[11px]"]')).toBeNull();
   });
 
   it('takes free text for Something else, with no age range and no How did you hear', async () => {
     await toNameScreen('Creator');
     await addPhoto();
     await click(button('Continue'));
-    expect(stepLabel()).toBe('Step 3 of 3');
+    expect(stepLabel()).toBe('Setup 3 of 3');
     expect(document.body.textContent).not.toContain('How did you hear');
     expect(document.body.textContent).not.toContain('age range');
     expect(document.querySelector('[aria-label="Your age range"]')).toBeNull();
     await pick('Job title', 'Something else');
-    expect(button('Continue').disabled).toBe(true);
     await type(document.querySelector<HTMLInputElement>('#ob-role-other')!, 'Community lead');
     expect(button('Continue').disabled).toBe(false);
     await click(button('Continue'));
@@ -418,7 +489,36 @@ describe('pre-app screens', () => {
     });
     expect(onStep).toHaveBeenCalledWith('approver_waiting');
     expect(document.body.textContent).toContain('Your team is on its way');
-    expect(document.body.textContent).not.toContain('I make the posts after all');
+    expect(button('I make the posts after all')).toBeDefined();
+  });
+
+  // W11 fix 2: a wrong side is changed from the next screen, through the induction step.
+  it('lets an approver change to Creator from the brand screen', async () => {
+    await toNameScreen('Approver');
+    await click(button('Continue'));
+    await click(button('Continue'));
+    expect(document.body.textContent).toContain('Who makes your posts?');
+    expect(document.querySelector('button[aria-label="Back"]')).not.toBeNull();
+    await click(button(ONBOARDING_COPY.changeRole));
+    expect(document.querySelector('h1')?.textContent).toBe("How you'll use Sorted");
+    await click(button('CreatorWe make the posts'));
+    await click(button('Continue'));
+    expect(onStep).toHaveBeenLastCalledWith(WORKSPACE_STEP);
+    expect(onFinish).toHaveBeenCalledWith('/pipeline');
+    // The profile is not saved again: only the side moved.
+    expect(mockSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('Back from the brand screen opens the side, and Back again returns', async () => {
+    await render({
+      profile: { ...NEW_PROFILE, profile_completed_at: '2026-10-15T00:00:00Z' },
+      approverStage: 'brand',
+    });
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!);
+    expect(document.querySelector('h1')?.textContent).toBe("How you'll use Sorted");
+    await click(document.querySelector<HTMLButtonElement>('button[aria-label="Back"]')!);
+    expect(document.body.textContent).toContain('Who makes your posts?');
+    expect(onStep).not.toHaveBeenCalled();
   });
 
   it('maps too_many_requests on Resend to the five-sends line', async () => {
@@ -438,15 +538,49 @@ describe('pre-app screens', () => {
     );
   });
 
-  it('holds a waiting approver on the wait, with Resend and no way round it', async () => {
+  // W11 fix 3: the solo approver can leave the wait.
+  it('offers Resend, I make the posts after all, Use a different email and Sign out', async () => {
     await render({
       profile: { ...NEW_PROFILE, profile_completed_at: '2026-10-15T00:00:00Z' },
       approverStage: 'waiting',
     });
     expect(document.body.textContent).toContain('Your team is on its way');
     expect(button('Resend')).toBeDefined();
-    expect(document.body.textContent).not.toContain('after all');
+    for (const label of ['I make the posts after all', 'Use a different email', 'Sign out']) {
+      expect(button(label).className).toContain('min-h-[44px]');
+    }
     expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it('I make the posts after all sends the approver on as a Creator', async () => {
+    await render({
+      profile: { ...NEW_PROFILE, profile_completed_at: '2026-10-15T00:00:00Z' },
+      approverStage: 'waiting',
+    });
+    await click(button('I make the posts after all'));
+    expect(onStep).toHaveBeenCalledWith(WORKSPACE_STEP);
+    expect(onFinish).toHaveBeenCalledWith('/pipeline');
+  });
+
+  it('Use a different email signs out, then opens sign-up', async () => {
+    await render({
+      profile: { ...NEW_PROFILE, profile_completed_at: '2026-10-15T00:00:00Z' },
+      approverStage: 'waiting',
+    });
+    await click(button('Use a different email'));
+    expect(calls).toEqual(['signout', 'navigate /signup']);
+  });
+
+  it('Sign out raises the app sign-out event', async () => {
+    await render({
+      profile: { ...NEW_PROFILE, profile_completed_at: '2026-10-15T00:00:00Z' },
+      approverStage: 'waiting',
+    });
+    const heard = vi.fn();
+    window.addEventListener(SIGNOUT_EVENT, heard);
+    await click(button('Sign out'));
+    window.removeEventListener(SIGNOUT_EVENT, heard);
+    expect(heard).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -480,7 +614,7 @@ describe('refresh mid-onboarding', () => {
       }),
     );
     await render({});
-    expect(stepLabel()).toBe('Step 3 of 3');
+    expect(stepLabel()).toBe('Setup 3 of 3');
     const title = document.querySelector('select[aria-label="Job title"]') as unknown as {
       value: string;
     };
@@ -518,7 +652,7 @@ describe('refresh mid-onboarding', () => {
   it('ignores a draft that is not one', async () => {
     window.localStorage.setItem(DRAFT_KEY, '{not json');
     await render({});
-    expect(stepLabel()).toBe('Step 1 of 3');
+    expect(stepLabel()).toBe('Setup 1 of 3');
   });
 });
 

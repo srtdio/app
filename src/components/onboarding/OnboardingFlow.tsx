@@ -6,6 +6,8 @@
 // Which screens a person walks comes from stepsFor (src/lib/onboarding.ts):
 //   self sign-up, Creator:  side, name, role, then the shell (make the workspace)
 //   self sign-up, Approver: side, name, role, brand, waiting
+// An approver who picked the wrong side goes back to the side screen from the
+// brand screen ("Wrong role? Change it") or leaves the wait as a Creator.
 //   invitee:                welcome, name, role, then the shell
 //
 // The invitee's link already signed them in and invite-accept already ran, so
@@ -45,8 +47,9 @@ import { Sheet } from '@/components/ui/Sheet';
 import { uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
+import { SIGNOUT_EVENT, dispatchSorted } from '@/lib/events';
 import { fetchWithTrace } from '@/lib/fetch';
-import { WELCOME_COPY, fillCopy } from '@/lib/induction-copy';
+import { ONBOARDING_COPY, WELCOME_COPY, fillCopy } from '@/lib/induction-copy';
 import {
   APPROVER_BRAND_STEP,
   APPROVER_WAITING_STEP,
@@ -68,6 +71,7 @@ import {
   normalizeUsernameInput,
   notYouPath,
   progressSteps,
+  setupCounter,
   sideForMemberRole,
   stepsFor,
   suggestUsername,
@@ -216,6 +220,8 @@ export function OnboardingFlow({
   const [side, setSide] = useState<Side | null>(
     approverStage !== 'none' ? 'approver' : (draft?.side ?? null),
   );
+  // Back on the side screen after the profile is saved, to change a wrong side.
+  const [changingSide, setChangingSide] = useState(false);
   const [welcome, setWelcome] = useState<WelcomeFacts>(NO_WELCOME_FACTS);
   const shownSide: Side = invitee ? welcome.side : (side ?? 'creator');
   // Fixed at mount except for the approver's tail, which follows the side picked.
@@ -231,7 +237,7 @@ export function OnboardingFlow({
     const at = draft === undefined ? -1 : steps.indexOf(draft.step);
     return at < 0 ? 0 : at;
   });
-  const step: OnboardingStep = steps[index] ?? 'waiting';
+  const step: OnboardingStep = changingSide ? 'side' : (steps[index] ?? 'waiting');
 
   // Profile answers
   // A new account's display_name is the email's local part (signup trigger), not
@@ -287,6 +293,10 @@ export function OnboardingFlow({
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A photo that did not upload: the profile saved without it, and this says so.
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null);
+  // A Creator whose photo did not upload stays to read that, then goes on.
+  const [readyForShell, setReadyForShell] = useState(false);
 
   const shownUsername = usernameEdited ? username : suggestUsername(name);
   const format = usernameFormat(shownUsername);
@@ -379,7 +389,7 @@ export function OnboardingFlow({
   ]);
 
   const progress = progressSteps(steps);
-  const progressAt = progress.indexOf(step);
+  const progressAt = changingSide ? -1 : progress.indexOf(step);
 
   function next(): void {
     setError(null);
@@ -389,7 +399,55 @@ export function OnboardingFlow({
 
   function back(): void {
     setError(null);
+    if (changingSide) {
+      // Changed their mind about changing: still the approver they saved as.
+      setChangingSide(false);
+      setSide('approver');
+      return;
+    }
+    if (step === 'brand') {
+      setChangingSide(true);
+      return;
+    }
     if (index > 0) setIndex(index - 1);
+  }
+
+  /** The side saved after the profile: stored as the first save stored it (the induction step). */
+  async function confirmSide(): Promise<void> {
+    if (side === 'creator') {
+      await switchToCreator();
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const saved = await onStep(APPROVER_BRAND_STEP);
+    setBusy(false);
+    if (!saved) {
+      setError("We couldn't save that. Try again.");
+      return;
+    }
+    setChangingSide(false);
+    setIndex(Math.max(0, steps.indexOf('brand')));
+  }
+
+  /** An approver who makes the posts after all: on to the shell to make the workspace. */
+  async function switchToCreator(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    const saved = await onStep(WORKSPACE_STEP);
+    if (!saved) {
+      setBusy(false);
+      setError("We couldn't save that. Try again.");
+      return;
+    }
+    finish(SHELL_HOME);
+  }
+
+  /** Signed up with the wrong email: sign out on this device, then sign up again. */
+  async function startOverWithNewEmail(): Promise<void> {
+    setBusy(true);
+    await performSignout(supabase);
+    navigate('/signup', { replace: true });
   }
 
   function finish(to: string): void {
@@ -443,13 +501,11 @@ export function OnboardingFlow({
     // A photo uploaded before a refresh is already there: no file to send again.
     let avatarUrl: string | null =
       photoFile === null && uploadedAvatar !== '' ? uploadedAvatar : null;
+    // The photo is optional: one that did not upload never holds up the profile.
+    let photoFailed = false;
     if (photoFile !== null && env.VITE_AVATAR_UPLOAD_URL !== undefined) {
       avatarUrl = await uploadPhoto(photoFile);
-      if (avatarUrl === null) {
-        setBusy(false);
-        setError("Your photo didn't upload. Check your connection and try again.");
-        return;
-      }
+      photoFailed = avatarUrl === null;
     }
     const payload: Record<string, Json> = {
       display_name: name.trim(),
@@ -477,10 +533,25 @@ export function OnboardingFlow({
     // Saved: the profile itself now says where to resume, the draft is done.
     draftDone.current = true;
     clearDraft(userId);
+    if (photoFailed) {
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      setPhotoNotice(ONBOARDING_COPY.photoUploadFailed);
+    }
     // A Creator makes the workspace in the shell; an approver goes on to name their team.
     if (!invitee && shownSide === 'creator') {
       await onStep(WORKSPACE_STEP);
+      if (photoFailed) {
+        setBusy(false);
+        setReadyForShell(true);
+        return;
+      }
       finish(SHELL_HOME);
+      return;
+    }
+    if (invitee && photoFailed) {
+      setBusy(false);
+      setReadyForShell(true);
       return;
     }
     if (!invitee) await onStep(APPROVER_BRAND_STEP);
@@ -564,14 +635,9 @@ export function OnboardingFlow({
         <Primary disabled={busy} onClick={next}>
           {WELCOME_COPY.continue}
         </Primary>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void notYou()}
-          className="min-h-[44px] w-full text-sm font-medium text-accent hover:underline disabled:opacity-35"
-        >
+        <TextAction disabled={busy} onClick={() => void notYou()}>
           {WELCOME_COPY.notYou}
-        </button>
+        </TextAction>
       </>
     );
     preview = null;
@@ -579,10 +645,14 @@ export function OnboardingFlow({
     body = (
       <>
         <Heading
-          title="Your role"
+          title={ONBOARDING_COPY.sideTitle}
           lead="Creators make the posts. Approvers evaluate them, share feedback and approve them."
         />
-        <div role="radiogroup" aria-label="Your role" className="flex flex-col gap-3">
+        <div
+          role="radiogroup"
+          aria-label={ONBOARDING_COPY.sideTitle}
+          className="flex flex-col gap-3"
+        >
           {SIDE_TILES.map((tile) => (
             <button
               key={tile.side}
@@ -604,14 +674,14 @@ export function OnboardingFlow({
         </div>
       </>
     );
-    continueEnabled = side !== null;
+    continueEnabled = side !== null && !changingSide;
     primary = (
       <Primary
-        disabled={side === null}
-        onClick={next}
+        disabled={busy || side === null}
+        onClick={changingSide ? () => void confirmSide() : next}
         anchor={INDUCTION_KEYS.onboardingSideContinue}
       >
-        Continue
+        {busy ? 'Saving' : 'Continue'}
       </Primary>
     );
   } else if (step === 'name') {
@@ -649,13 +719,9 @@ export function OnboardingFlow({
           )}
           <div className="flex min-w-0 flex-col gap-1">
             <Button size="lg" onClick={() => photoInputRef.current?.click()}>
-              {photoPreview !== null ? 'Change photo' : 'Add a photo'}
+              {photoPreview !== null ? ONBOARDING_COPY.changePhoto : ONBOARDING_COPY.addPhoto}
             </Button>
-            <p className="text-[11px] text-fg-3">
-              {photoPreview !== null
-                ? 'People see it next to your comments.'
-                : 'Needed to continue. People see it next to your comments.'}
-            </p>
+            <p className="text-xs text-fg-3">{ONBOARDING_COPY.photoHint}</p>
           </div>
           <input
             ref={photoInputRef}
@@ -703,7 +769,7 @@ export function OnboardingFlow({
               className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-sm text-fg outline-none placeholder:text-fg-3"
             />
           </div>
-          <p className={cn('mt-1.5 text-[11px]', hintTone)} aria-live="polite">
+          <p className={cn('mt-1.5 text-xs', hintTone)} aria-live="polite">
             {hint}
           </p>
         </div>
@@ -711,7 +777,6 @@ export function OnboardingFlow({
     );
     continueEnabled =
       !busy &&
-      photoPreview !== null &&
       name.trim().length > 0 &&
       format === 'ok' &&
       // A check that got no answer does not block: the save refuses a taken name.
@@ -734,7 +799,7 @@ export function OnboardingFlow({
       <>
         <Heading title="Your title" lead="It shows under your name, so people know who to ask." />
         <div>
-          <p className="mb-1.5 block text-sm font-medium">Job title</p>
+          <p className="mb-1.5 block text-sm font-medium">{ONBOARDING_COPY.jobTitleLabel}</p>
           <Select
             label="Job title"
             value={role}
@@ -756,11 +821,12 @@ export function OnboardingFlow({
         ) : null}
       </>
     );
-    continueEnabled = !busy && designation.length > 0;
+    // The title is optional: Continue always works; the hand waits for a pick.
+    continueEnabled = !busy && !readyForShell && designation.length > 0;
     primary = (
       <Primary
-        disabled={busy || designation.length === 0}
-        onClick={() => void saveProfile()}
+        disabled={busy}
+        onClick={readyForShell ? () => finish(SHELL_HOME) : () => void saveProfile()}
         anchor={INDUCTION_KEYS.onboardingRoleContinue}
       >
         {busy ? 'Saving' : 'Continue'}
@@ -796,28 +862,50 @@ export function OnboardingFlow({
       </>
     );
     primary = (
-      <Primary disabled={busy || !valid} onClick={() => void askTeam()}>
-        {busy ? 'Sending' : 'Ask them to join'}
-      </Primary>
+      <>
+        <Primary disabled={busy || !valid} onClick={() => void askTeam()}>
+          {busy ? 'Sending' : 'Ask them to join'}
+        </Primary>
+        {!invitee ? (
+          <TextAction disabled={busy} onClick={() => setChangingSide(true)}>
+            {ONBOARDING_COPY.changeRole}
+          </TextAction>
+        ) : null}
+      </>
     );
   } else {
     // waiting
     body = <WaitingBody email={teamEmail} resent={resent} />;
     primary = (
-      <Primary
-        disabled={busy || !isValidInviteEmail(teamEmail) || brandName.trim() === ''}
-        onClick={() => void askTeam()}
-      >
-        {busy ? 'Sending' : 'Resend'}
-      </Primary>
+      <>
+        <Primary
+          disabled={busy || !isValidInviteEmail(teamEmail) || brandName.trim() === ''}
+          onClick={() => void askTeam()}
+        >
+          {busy ? 'Sending' : 'Resend'}
+        </Primary>
+        <TextAction disabled={busy} onClick={() => void switchToCreator()}>
+          {ONBOARDING_COPY.makePostsAfterAll}
+        </TextAction>
+        <TextAction disabled={busy} onClick={() => void startOverWithNewEmail()}>
+          {ONBOARDING_COPY.differentEmail}
+        </TextAction>
+        <TextAction disabled={busy} onClick={() => dispatchSorted(SIGNOUT_EVENT)}>
+          {ONBOARDING_COPY.signOut}
+        </TextAction>
+      </>
     );
     preview = null;
   }
 
-  // Back is offered between the profile screens only; a saved profile is not undone.
+  // Back is offered between the profile screens, and from a self sign-up's brand
+  // screen to the side (a saved profile is not undone, only the side is changed).
   const previous = steps[index - 1];
   const canGoBack =
-    index > 0 && (step === 'name' || step === 'role') && previous !== 'welcome' && !busy;
+    !busy &&
+    (changingSide ||
+      (step === 'brand' && !invitee) ||
+      (index > 0 && (step === 'name' || step === 'role') && previous !== 'welcome'));
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-bg md:grid md:grid-cols-2 md:overflow-hidden">
@@ -852,10 +940,15 @@ export function OnboardingFlow({
               grey option boxes and the blue Continue inside it. */}
           <main className="flex flex-1 flex-col py-4">
             <StepLabel.Provider
-              value={progressAt >= 0 ? `Step ${progressAt + 1} of ${progress.length}` : null}
+              value={progressAt >= 0 ? setupCounter(progressAt + 1, progress.length) : null}
             >
               <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_-12px_rgba(0,0,0,0.12)]">
                 {body}
+                {photoNotice !== null && (step === 'brand' || readyForShell) ? (
+                  <p role="status" className="text-sm text-fg-2 [text-wrap:pretty]">
+                    {photoNotice}
+                  </p>
+                ) : null}
                 {error !== null ? (
                   <p role="alert" className="text-sm text-bad [text-wrap:pretty]">
                     {error}
@@ -914,7 +1007,7 @@ export function OnboardingFlow({
 
 // ---------- pieces ----------
 
-/** "Step 1 of 3" for the screen in view, shown under its title; null off the counted steps. */
+/** "Setup 1 of 3" for the screen in view, shown under its title; null off the counted steps. */
 const StepLabel = createContext<string | null>(null);
 
 function Heading({ title, lead }: { title: string; lead: string }): ReactElement {
@@ -949,7 +1042,7 @@ function Labeled({
         {label}
       </label>
       {children}
-      {hint !== undefined ? <p className="mt-1.5 text-[11px] text-fg-3">{hint}</p> : null}
+      {hint !== undefined ? <p className="mt-1.5 text-xs text-fg-3">{hint}</p> : null}
     </div>
   );
 }
@@ -973,6 +1066,28 @@ function Primary({
       disabled={disabled}
       onClick={onClick}
       className="h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A secondary way on, as a 44px text button under the primary. */
+function TextAction({
+  disabled,
+  onClick,
+  children,
+}: {
+  disabled: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="min-h-[44px] w-full text-sm font-medium text-accent hover:underline disabled:opacity-35"
     >
       {children}
     </button>

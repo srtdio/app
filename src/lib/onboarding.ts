@@ -126,6 +126,14 @@ export function progressSteps(steps: readonly OnboardingStep[]): OnboardingStep[
   return steps.filter((step) => step !== 'waiting' && step !== 'welcome');
 }
 
+/** "Setup 1 of 3": the pre-app counter, worded apart from the guide's "Step N". */
+export function setupCounter(at: number, total: number): string {
+  return `Setup ${at} of ${total}`;
+}
+
+/** The positioning sheet's one-line hint under the zoom slider. */
+export const CROPPER_HINT = 'Drag to move. Pinch or use the slider to zoom.';
+
 /** An invitee's side comes only from workspace_members.role: client approves. */
 export function sideForMemberRole(role: string): Side {
   return role === 'client' ? 'approver' : 'creator';
@@ -156,7 +164,7 @@ export function designationFor(role: string, other: string): string {
  * Where the guide's hand sits on a pre-app screen, or null for none. Every new
  * sign-up gets it on the side screen's Continue once a side is picked; then only
  * a Creator (the creator route) gets it, on each later Continue once it is
- * enabled (name screen: photo, name and a free username; role screen: a role),
+ * enabled (name screen: a name and a free username, the photo is optional; role screen: a role),
  * from where the shell's guide takes over at c_workspace. Before a pick the
  * screen stays clear, so nothing is dimmed while the person chooses.
  */

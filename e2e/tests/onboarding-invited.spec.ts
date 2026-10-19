@@ -24,7 +24,7 @@ import {
 } from '../helpers/guide';
 
 // The invited creator (an agency member who joined from an invite): the
-// welcome, name with photo and role screens (Step 1 of 2, Step 2 of 2, no
+// welcome, name with photo and role screens (Setup 1 of 2, Setup 2 of 2, no
 // password, no age), then the guide: the Approved chip, the first post (open
 // the sheet, then a tap each fills the caption, picks Single image and attaches
 // the sample photo, then send for review), the intro
@@ -90,17 +90,17 @@ function seedInvited(network: HarnessNetwork): void {
   });
 }
 
-/** The invited entry: welcome (no count), name with photo (Step 1 of 2), role (Step 2 of 2). */
+/** The invited entry: welcome (no count), name with photo (Setup 1 of 2), role (Setup 2 of 2). */
 async function walkEntry(page: Page): Promise<void> {
   await expect(
     page.getByRole('heading', { name: fillCopy(WELCOME_COPY.heading, copyContext()) }),
   ).toBeVisible({ timeout: 15_000 });
   await page.waitForLoadState('networkidle');
-  await expect(page.getByText(/Step \d of \d/)).toHaveCount(0);
+  await expect(page.getByText(/(Step|Setup) \d of \d/)).toHaveCount(0);
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
   await page.getByRole('button', { name: WELCOME_COPY.continue, exact: true }).click();
 
-  await expect(page.getByText('Step 1 of 2')).toBeVisible();
+  await expect(page.getByText('Setup 1 of 2')).toBeVisible();
   await page.getByLabel('Full name').fill('Meera Shah');
   await page.getByLabel('Choose a photo').setInputFiles({
     name: 'me.png',
@@ -112,7 +112,7 @@ async function walkEntry(page: Page): Promise<void> {
   await expect(cont).toBeEnabled();
   await cont.click();
 
-  await expect(page.getByText('Step 2 of 2')).toBeVisible();
+  await expect(page.getByText('Setup 2 of 2')).toBeVisible();
   await page.getByRole('button', { name: 'Job title' }).click();
   await page.getByRole('option', { name: 'Copywriter' }).click();
   // No age range any more (v13 dropped it).

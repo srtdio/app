@@ -3,7 +3,14 @@ import * as copy from './induction-copy';
 import * as routes from './induction-routes';
 import type { CopyContext } from './induction-model';
 
-const { CHECK_EMAIL_COPY, RECOVERY_COPY, WELCOME_COPY, fillCopy, hasUnfilledPlaceholder } = copy;
+const {
+  CHECK_EMAIL_COPY,
+  ONBOARDING_COPY,
+  RECOVERY_COPY,
+  WELCOME_COPY,
+  fillCopy,
+  hasUnfilledPlaceholder,
+} = copy;
 
 const FULL: CopyContext = {
   brand: 'Bloom',
@@ -88,14 +95,16 @@ describe('copy hygiene', () => {
 describe('entry screen copy is unchanged', () => {
   it('CHECK_EMAIL_COPY', () => {
     expect(CHECK_EMAIL_COPY).toEqual({
-      signUpSubtitle: 'No card needed.',
+      signUpSubtitle: "We'll email you a sign-in link. No password.",
       title: 'Check your email',
       body: 'We sent a link to {email}. Open it on this device to finish signing up.',
       resend: 'Resend link',
       differentEmail: 'Use a different email',
       createAccount: 'Create account',
       sending: 'Sending link',
-      rateLimited: 'Too many links asked for. Wait a few minutes, then try again.',
+      rateLimited: 'Too many tries. Wait a minute and try again.',
+      invalidEmail: 'Enter a valid email, like name@company.com',
+      genericError: 'Something went wrong. Try again.',
     });
   });
 
@@ -141,5 +150,24 @@ describe('cards', () => {
     expect(fillCopy(invited.closing.body, FULL)).toBe("Bloom's approvers have it.");
     expect(creator.intro.button).toBe('Start');
     expect(approver.closing.button).toBe('Done');
+  });
+});
+
+describe('ONBOARDING_COPY (W11)', () => {
+  // Fix 7: the first screen says what it asks.
+  it('titles the side screen How you will use Sorted, not Your role', () => {
+    expect(ONBOARDING_COPY.sideTitle).toBe("How you'll use Sorted");
+  });
+
+  // Fix 1 and fix 4: the photo and the job title read as optional.
+  it('marks the photo and the job title optional', () => {
+    expect(ONBOARDING_COPY.addPhoto).toBe('Add a photo (optional)');
+    expect(ONBOARDING_COPY.jobTitleLabel).toBe('Job title (optional)');
+  });
+
+  it('carries no dash', () => {
+    for (const text of Object.values(ONBOARDING_COPY)) {
+      expect(text).not.toMatch(/[\u2013\u2014]/);
+    }
   });
 });
