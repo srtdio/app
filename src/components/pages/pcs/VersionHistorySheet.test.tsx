@@ -103,26 +103,26 @@ describe('VersionHistorySheet author resolution', () => {
     const resolveAuthor = vi.fn(resolverWith({ 'u-1': 'Active Member' }));
     render({
       versions: [
-        version({ id: 'a', versionNumber: 1, createdBy: null, legacyAuthorName: 'Casey Cutover' }),
+        version({ id: 'a', versionNumber: 1, createdBy: null, legacyAuthorName: 'Casey Morgan' }),
         version({ id: 'b', versionNumber: 2, createdBy: 'u-1', legacyAuthorName: null }),
       ],
       currentVersionNumber: 2,
       resolveAuthor,
     });
-    expect(resolveAuthor).toHaveBeenCalledWith(null, 'Casey Cutover');
+    expect(resolveAuthor).toHaveBeenCalledWith(null, 'Casey Morgan');
     expect(resolveAuthor).toHaveBeenCalledWith('u-1', null);
   });
 
   it('shows the legacy name when the FK author is null/unresolved', () => {
     const tree = render({
       versions: [
-        version({ id: 'a', versionNumber: 1, createdBy: null, legacyAuthorName: 'Casey Cutover' }),
+        version({ id: 'a', versionNumber: 1, createdBy: null, legacyAuthorName: 'Casey Morgan' }),
         version({ id: 'b', versionNumber: 2, createdBy: 'gone', legacyAuthorName: 'Robin Legacy' }),
       ],
       currentVersionNumber: 2,
     });
     const shown = texts(tree);
-    expect(shown).toContain('Casey Cutover');
+    expect(shown).toContain('Casey Morgan');
     expect(shown).toContain('Robin Legacy');
     expect(shown).not.toContain('(ex-member)');
   });

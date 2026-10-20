@@ -81,7 +81,7 @@ describe('toExternalLinks (legacy reference_links shapes)', () => {
     ]);
   });
 
-  it('normalises the v1 ETL { drive_link, images } object, ignoring its other keys', () => {
+  it('normalises the legacy migrated { drive_link, images } object, ignoring its other keys', () => {
     expect(
       toExternalLinks({
         drive_link: 'https://drive.google.com/folder/xyz',

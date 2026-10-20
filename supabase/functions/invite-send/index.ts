@@ -7,7 +7,7 @@
 // imports are @supabase/supabase-js and zod via the function deno.json map.
 //
 // Device-fingerprint enforcement is intentionally OMITTED on this endpoint
-// (deferred to post-cutover hardening). verify_jwt stays ON at the gateway.
+// (deferred to later hardening). verify_jwt stays ON at the gateway.
 //
 // The request handling lives in handler.ts (unit-tested under Node); this
 // entry only binds it to the runtime env and the supabase-js client factory.

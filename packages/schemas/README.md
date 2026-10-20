@@ -1,6 +1,6 @@
 # @srtdio/schemas
 
-Single source of truth for data shapes shared by the Sorted v2 frontend and
+Single source of truth for data shapes shared by the Sorted frontend and
 backend.
 
 - `src/supabase.generated.ts` — Postgres row/insert/update types generated

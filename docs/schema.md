@@ -1,9 +1,9 @@
-# Sorted v2 Schema (MVP)
+# Sorted Schema (MVP)
 
-Generated from live database movnexawfhsyuluspxoc (srtdio-v2) after the MVP stripdown.
+Generated from live database movnexawfhsyuluspxoc after the MVP stripdown.
 This file is the human-readable design reference. The migrations folder is implementation truth.
 
-Sorted v2 MVP is a social-media approval tool: client writes a brief, agency drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling. Plans exist from 9 Oct 2026 (plans tables, step 3a). Chat history is the Postgres record (chat_messages); Agora is live delivery only. Email is out-of-app catch-up.
+Sorted MVP is a social-media approval tool: client writes a brief, agency drafts a post, post moves through review to approved, rejected, or parked. No publishing, no scheduling. Plans exist from 9 Oct 2026 (plans tables, step 3a). Chat history is the Postgres record (chat_messages); Agora is live delivery only. Email is out-of-app catch-up.
 
 All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` unless noted. Timestamps are `timestamptz`. `*_by` FK columns are SET NULL on delete except `workspaces.owner_user_id` (RESTRICT) and `asset_attachments` (NO ACTION).
 

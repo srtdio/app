@@ -9,7 +9,7 @@ import {
 } from '@/lib/post-versions';
 
 describe('parseSnapshot', () => {
-  it('reads caption and gallery from the canonical v2 shape', () => {
+  it('reads caption and gallery from the canonical shape', () => {
     const raw: Json = { caption: 'Hello world', gallery: ['av-1', 'av-2', 'av-3'] };
     expect(parseSnapshot(raw)).toEqual({
       caption: 'Hello world',
@@ -17,7 +17,7 @@ describe('parseSnapshot', () => {
     });
   });
 
-  it('treats an empty v2 gallery and a null caption as empty', () => {
+  it('treats an empty gallery and a null caption as empty', () => {
     expect(parseSnapshot({ caption: null, gallery: [] })).toEqual({
       caption: null,
       galleryVersionIds: [],
@@ -29,7 +29,7 @@ describe('parseSnapshot', () => {
     expect(parseSnapshot(raw)).toEqual({ caption: 'c', galleryVersionIds: ['av-1', 'av-2'] });
   });
 
-  it('handles a legacy ETL shape: keeps a string caption, drops unknown keys', () => {
+  it('handles a legacy migrated shape: keeps a string caption, drops unknown keys', () => {
     const raw: Json = {
       content: 'legacy body',
       images: ['x', 'y'],

@@ -515,10 +515,10 @@ describe('tombstoneText', () => {
       id: 'P',
       author_user_id: UUID_A,
       deleted_at: '2026-01-05T00:00:00.000Z',
-      legacy_author_name: 'Bob (v1)',
+      legacy_author_name: 'Bob (legacy)',
     });
     expect(tombstoneText(c, (id) => (id === UUID_A ? 'Operator' : null))).toMatch(
-      /^Deleted by Bob \(v1\) · /,
+      /^Deleted by Bob \(legacy\) · /,
     );
   });
 });
@@ -538,15 +538,15 @@ describe('canModifyComment', () => {
   });
 
   it('is false for a legacy (migrated) comment even when the current user is its FK author', () => {
-    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
+    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (legacy)' });
     expect(canModifyComment(legacy, UUID_A)).toBe(false);
   });
 });
 
-describe('legacy author display (migrated v1 comments)', () => {
+describe('legacy author display (migrated comments)', () => {
   // The card computes the author name/avatar inline; mirror its exact expressions
   // over the same profiles map so a migrated comment is attributed to its frozen
-  // v1 author, never the cutover operator whose FK it still carries.
+  // legacy author, never the migration operator whose FK it still carries.
   const profiles = new Map<string, CommentProfile>([
     [UUID_A, { displayName: 'Operator', avatarUrl: 'https://cdn/operator.png' }],
   ]);
@@ -554,14 +554,14 @@ describe('legacy author display (migrated v1 comments)', () => {
   const avatarOf = (id: string): string | null => profiles.get(id)?.avatarUrl ?? null;
 
   it('renders the legacy name, not the resolved FK (operator) name', () => {
-    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
+    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (legacy)' });
     const authorName = legacy.legacy_author_name ?? nameOf(legacy.author_user_id) ?? '';
-    expect(authorName).toBe('Bob (v1)');
+    expect(authorName).toBe('Bob (legacy)');
     expect(authorName).not.toBe('Operator');
   });
 
   it('borrows no avatar for a legacy comment (initials only, no src)', () => {
-    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
+    const legacy = row({ id: 'l', author_user_id: UUID_A, legacy_author_name: 'Bob (legacy)' });
     const authorAvatarUrl =
       legacy.legacy_author_name !== null ? null : avatarOf(legacy.author_user_id);
     expect(authorAvatarUrl).toBeNull();
@@ -594,7 +594,7 @@ describe('replySeed (reply pre-tags the root author)', () => {
   });
 
   it('seeds nothing for a legacy (ex-member) author', () => {
-    const comment = row({ id: 'c', author_user_id: UUID_A, legacy_author_name: 'Bob (v1)' });
+    const comment = row({ id: 'c', author_user_id: UUID_A, legacy_author_name: 'Bob (legacy)' });
     expect(replySeed(comment, UUID_B, candidates)).toBe('');
   });
 

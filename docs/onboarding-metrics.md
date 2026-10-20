@@ -8,7 +8,7 @@ No schema. The guide stores the last step reached in `user_private.induction_ste
 up alone (`approver_brand`, `approver_waiting`) and are left out.
 
 Run these read-only queries via the Supabase MCP `execute_sql` on project
-`movnexawfhsyuluspxoc` (v2). Nothing here writes.
+`movnexawfhsyuluspxoc`. Nothing here writes.
 
 ## Started, completed and completion rate per route
 

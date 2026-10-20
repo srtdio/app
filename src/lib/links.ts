@@ -2,8 +2,8 @@
 //
 // briefs.reference_links is jsonb with no schema and no server-side validation,
 // so the same column holds four different shapes in the wild (a bare string, a
-// string[], an array of { url } objects, and the v1 ETL object carrying
-// drive_link). Two separate defensive parsers used to live in the UI (one in
+// string[], an array of { url } objects, and the legacy migrated object
+// carrying drive_link). Two separate defensive parsers used to live in the UI (one in
 // BriefDetailPage, one in BriefCard) and they disagreed about which shapes were
 // usable. Both are deleted in favour of this module: one normaliser, one scheme
 // gate, one domain derivation, shared by every surface that renders a link.
@@ -53,7 +53,7 @@ function candidatesOf(value: unknown): unknown[] {
   if (Array.isArray(value)) {
     return value.map((item) => (isRecord(item) ? item.url : item));
   }
-  // The v1 ETL shape: { drive_link, images }. Only drive_link is a link; images
+  // The legacy migrated shape: { drive_link, images }. Only drive_link is a link; images
   // are storage keys, never URLs, so every other key is ignored by design.
   if (isRecord(value)) return [value.drive_link];
   return [];
