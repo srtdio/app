@@ -14,7 +14,7 @@ binding = "TRANSCRIBE_USAGE"
 id = "3aa4f55803c44c7c9cb9fe0764c3eba8"
 
 [vars]
-ALLOWED_ORIGINS = "https://srtd.io,https://v2.srtd.io,https://srtdio-app.pages.dev"
+ALLOWED_ORIGINS = "https://srtd.io,https://srtdio-app.pages.dev"
 
 # Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
 # srtdio-logs (see docs/cloudflare-logpush-setup.md).

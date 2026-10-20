@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-off: create the R2 bucket that backs Cloudflare Logpush for Sorted v2,
+# One-off: create the R2 bucket that backs Cloudflare Logpush for Sorted,
 # and apply a 30-day retention lifecycle rule.
 #
 # Manual step only. NOT run by CI. See docs/cloudflare-logpush-setup.md.

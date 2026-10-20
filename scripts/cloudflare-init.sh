@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Optional: This script is also run automatically by deploy.yml on first deploy.
 # Run manually only for local CLI testing.
-# One-off: create the Cloudflare Pages project for Sorted v2.
+# One-off: create the Cloudflare Pages project for Sorted.
 # Run with CLOUDFLARE_API_TOKEN set locally.
 # Idempotent: a pre-existing project is treated as success.
 set -euo pipefail

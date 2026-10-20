@@ -352,13 +352,13 @@ describe('chat-transcribe worker.fetch', () => {
     expect(kv.data.get(usageKey(new Date()))).toBe(String(DAILY_CAP_BYTES - 10));
   });
 
-  it('reflects an allowed origin (CORS allowlist unchanged)', async () => {
+  it('does not reflect the retired v2.srtd.io origin', async () => {
     const token = await mintToken(USER);
     upstream(new Uint8Array([1]));
     const req = transcribeRequest(token);
     req.headers.set('Origin', 'https://v2.srtd.io');
     const res = await worker.fetch(req, makeEnv(aiReturning('ok')));
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://v2.srtd.io');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
 
   it('keys the counter by UTC day', () => {

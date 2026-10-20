@@ -79,7 +79,7 @@ interface BriefPickerDbRow extends BriefCardRow {
 /** The PostgREST aggregate-embed shape: posts(count) comes back as [{ count }]. */
 type PostCountEmbed = ReadonlyArray<{ count: number }> | null | undefined;
 
-// PostgREST aggregates (posts(count)) are disabled on the v2 project, so the
+// PostgREST aggregates (posts(count)) are disabled on the project, so the
 // picker reads briefs and then counts their live posts in ONE second query over
 // the page's ids. Two queries total, never one per row.
 const BRIEF_PICKER_COLUMNS =

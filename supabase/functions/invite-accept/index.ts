@@ -6,7 +6,7 @@
 // The only external imports are @supabase/supabase-js and zod via deno.json.
 //
 // Device-fingerprint enforcement is intentionally OMITTED on this endpoint
-// (deferred to post-cutover hardening). verify_jwt stays ON at the gateway.
+// (deferred to later hardening). verify_jwt stays ON at the gateway.
 //
 // member_accept enforces caller == invitee, so it runs as the CALLER (anon key
 // + caller bearer) and is idempotent on the invite token (the member id).

@@ -85,11 +85,11 @@ function queuedWindow(urls: string[]): HistoryStepWindow & {
   };
 }
 
-const PIPELINE = 'https://v2.srtd.io/pipeline';
-const ACTIVITY = 'https://v2.srtd.io/activity';
-const LIST = 'https://v2.srtd.io/chat';
-const CHAT_A = 'https://v2.srtd.io/chat?channel=a';
-const CHAT_B = 'https://v2.srtd.io/chat?channel=b';
+const PIPELINE = 'https://srtd.io/pipeline';
+const ACTIVITY = 'https://srtd.io/activity';
+const LIST = 'https://srtd.io/chat';
+const CHAT_A = 'https://srtd.io/chat?channel=a';
+const CHAT_B = 'https://srtd.io/chat?channel=b';
 
 beforeEach(() => {
   resetHistorySteps();

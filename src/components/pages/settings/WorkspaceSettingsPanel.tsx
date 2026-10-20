@@ -1,7 +1,7 @@
 // Settings > Workspace: the brand name and platform (read-only for everyone,
 // final after creation), the timezone (owner/admin edit via workspace_update;
 // everyone else reads), and for the owner only the approved approver addresses.
-// No workspace logo in v2.0. Every colour is a theme token for light/dark
+// No workspace logo at launch. Every colour is a theme token for light/dark
 // parity; every control is >=44px.
 //
 // Danger: the owner deletes the workspace for good (workspace_delete) after

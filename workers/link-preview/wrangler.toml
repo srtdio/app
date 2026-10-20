@@ -4,7 +4,7 @@ compatibility_date = "2026-05-16"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-ALLOWED_ORIGINS = "https://srtd.io,https://v2.srtd.io,https://srtdio-app.pages.dev"
+ALLOWED_ORIGINS = "https://srtd.io,https://srtdio-app.pages.dev"
 # Public project URL (the frontend ships it too); its JWKS verifies callers.
 SUPABASE_URL = "https://movnexawfhsyuluspxoc.supabase.co"
 

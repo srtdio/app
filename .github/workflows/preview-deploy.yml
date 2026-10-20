@@ -3,8 +3,8 @@ name: Test Site Deploy
 # One permanent test site, https://test.srtdio-app.pages.dev, always shows the
 # latest push to any open pull request (app plus the browser-facing Workers),
 # so changes can be clicked through before merging to main. Production (branch
-# main) is untouched; the test site uses the same v2 Supabase project as
-# staging. With two PRs open, the most recent push wins.
+# main) is untouched; the test site uses the same Supabase project as
+# production. With two PRs open, the most recent push wins.
 
 on:
   pull_request:

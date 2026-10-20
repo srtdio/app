@@ -113,7 +113,7 @@ const IMAGE_TYPES: ReadonlySet<string> = new Set([
 ]);
 const CACHE_ORIGIN = 'https://link-preview.cache';
 
-const DEFAULT_ALLOWED_ORIGINS = ['https://srtd.io', 'https://v2.srtd.io'] as const;
+const DEFAULT_ALLOWED_ORIGINS = ['https://srtd.io'] as const;
 const CORS_MAX_AGE_SECONDS = 86_400;
 
 // ---------------------------------------------------------------------------

@@ -2906,7 +2906,7 @@ describe('F7: system back and iOS swipe-back exit selection first', () => {
       removeEventListener: (_type, l) => listeners.delete(l),
     };
   }
-  const CHAT = 'https://v2.srtd.io/chat?channel=c1';
+  const CHAT = 'https://srtd.io/chat?channel=c1';
 
   it('entering pushes one marker at the same URL (with ?channel=); back exits and stays in the chat', () => {
     resetSelectionHistory();
@@ -2955,7 +2955,7 @@ describe('F7: system back and iOS swipe-back exit selection first', () => {
     resetSelectionHistory();
     const win = fakeWindow(CHAT);
     const entry = enterSelectionHistory(win, vi.fn());
-    win.navigate('https://v2.srtd.io/pipeline');
+    win.navigate('https://srtd.io/pipeline');
     entry.dispose();
     // Back from the new page lands on the chat once, never on the dead marker.
     win.history.back();
@@ -3020,10 +3020,10 @@ describe('R6: selection history, switch, bound and double back', () => {
       removeEventListener: (_type, l) => listeners.delete(l),
     };
   }
-  const HOME = 'https://v2.srtd.io/pipeline';
-  const LIST = 'https://v2.srtd.io/chat';
-  const CHAT = 'https://v2.srtd.io/chat?channel=c1';
-  const OTHER = 'https://v2.srtd.io/chat?channel=c2';
+  const HOME = 'https://srtd.io/pipeline';
+  const LIST = 'https://srtd.io/chat';
+  const CHAT = 'https://srtd.io/chat?channel=c1';
+  const OTHER = 'https://srtd.io/chat?channel=c2';
 
   it('a channel switch while selecting exits selection through history.back(), then switches', () => {
     resetSelectionHistory();
@@ -3089,7 +3089,7 @@ describe('R6: selection history, switch, bound and double back', () => {
     resetSelectionHistory();
     const win = queuedWindow([HOME, LIST, CHAT]);
     const entry = enterSelectionHistory(win, vi.fn());
-    win.navigate('https://v2.srtd.io/posts');
+    win.navigate('https://srtd.io/posts');
     entry.dispose();
     // Both presses land before any popstate is handled.
     win.history.back();
@@ -3100,7 +3100,7 @@ describe('R6: selection history, switch, bound and double back', () => {
     resetSelectionHistory();
     const win2 = queuedWindow([HOME, LIST, CHAT]);
     const entry2 = enterSelectionHistory(win2, vi.fn());
-    win2.navigate('https://v2.srtd.io/posts');
+    win2.navigate('https://srtd.io/posts');
     entry2.dispose();
     win2.history.back();
     win2.flush();

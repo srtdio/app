@@ -16,7 +16,7 @@ import { domainBrandWord } from './members-data';
  * The editable workspace fields, as workspace_update's payload keys: the
  * timezone only. The brand name and platform are final after creation
  * (workspace_update refuses name with invalid_payload) and there is no
- * workspace logo in v2.0, so none of those is ever sent.
+ * workspace logo at launch, so none of those is ever sent.
  */
 export interface WorkspaceUpdatePayload {
   timezone: string;

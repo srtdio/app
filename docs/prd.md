@@ -1,8 +1,8 @@
-# Sorted v2 PRD (MVP)
+# Sorted PRD (MVP)
 
 Decisions only. No rationale.
 
-Sorted v2 is a social-media approval tool. Client writes a brief; agency drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no insights in the MVP. Plans are in: a shared object in chat holding concepts and posts with team and client approval; a plan is not scheduling.
+Sorted is a social-media approval tool. Client writes a brief; agency drafts a post; the post moves through review to approved, rejected, or parked. No publishing, no scheduling, no insights in the MVP. Plans are in: a shared object in chat holding concepts and posts with team and client approval; a plan is not scheduling.
 
 ## Index
 
@@ -25,7 +25,7 @@ Sorted v2 is a social-media approval tool. Client writes a brief; agency drafts 
 17. Search
 18. Devices
 19. Data model
-20. Migration and cutover
+20. Legacy migration
 21. Observability
 22. Security
 23. Chat and Comments
@@ -34,16 +34,7 @@ Sorted v2 is a social-media approval tool. Client writes a brief; agency drafts 
 
 ## 1. Project identifiers and DANGER
 
-| Env | Project ID | Region | Status | Touch from v2 build? |
-| --- | --- | --- | --- | --- |
-| v2 | movnexawfhsyuluspxoc | Mumbai (ap-south-1) | Build target | YES |
-| v1 | ozptjplxbyswclolbxyn | Mumbai (ap-south-1) | LIVE PRODUCTION | NO. Only via ETL cutover script, on cutover day. |
-
-Both projects are in Mumbai. Region is NOT a disambiguator. The project ID is the only safe identifier.
-
-Every Supabase MCP call from a v2 prompt MUST pass project_id="movnexawfhsyuluspxoc" explicitly. "Mumbai" alone, or "the Supabase project" alone, is never sufficient. Reject any prompt that uses them without the project ID.
-
-Any operation targeting ozptjplxbyswclolbxyn must say "v1" explicitly in the same prompt and state the reason. No v2 build prompt may target v1.
+Supabase project ID: movnexawfhsyuluspxoc. Pass it explicitly to every Supabase MCP call.
 
 ## 2. Goals and scope
 
@@ -53,9 +44,9 @@ Any operation targeting ozptjplxbyswclolbxyn must say "v1" explicitly in the sam
 | Launch | 2026 (web) |
 | Native mobile | Deferred. Reassess month 3 post-launch. |
 | Public signup | Live at launch. Paid. |
-| v1 tenant cutover | Separate track. Decoupled from public signup. |
+| Legacy tenant migration | Separate track. Decoupled from public signup. |
 | New tenants prelaunch | Free. |
-| Repo | Greenfield. Org srtdio. v2 project movnexawfhsyuluspxoc (Pro, Mumbai). See section 1. Public repository. |
+| Repo | Greenfield. Org srtdio. Project movnexawfhsyuluspxoc (Pro, Mumbai). See section 1. Public repository. |
 | Domain | srtd.io. Cockpit at platform.srtd.io. |
 
 ## 3. Operating principles
@@ -410,7 +401,7 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 
 ## 19. Data model
 
-Schema is fully executed on v2 project movnexawfhsyuluspxoc (Postgres 17). v1 (ozptjplxbyswclolbxyn) is untouched. See section 1. See supabase/migrations/*.sql for implementation truth and schema.md for the full reference.
+Schema is fully executed on project movnexawfhsyuluspxoc (Postgres 17). See section 1. See supabase/migrations/*.sql for implementation truth and schema.md for the full reference.
 
 ### Core tables
 
@@ -456,20 +447,9 @@ Schema is fully executed on v2 project movnexawfhsyuluspxoc (Postgres 17). v1 (o
 - No AI tables (ai_usage, ai_memory, tool_invocations, workspace_brand_guides).
 - post_versions and post_annotations carry no deleted_at (immutable).
 
-## 20. Migration and cutover
+## 20. Legacy migration
 
-| Item | Decision |
-| --- | --- |
-| Approach | Single ETL script. Two modes. |
-| Dev-seed mode | PII scrubbed (emails hashed, names replaced). Seeds dev from v1. |
-| Cutover mode | Real data. Run on cutover day against latest v1 state. |
-| Users | Not migrated. Clients sign up fresh post-cutover via invite flow. Legacy *_by columns set NULL, shown as ex-member. |
-| Content carried over | Workspaces, posts, briefs, assets, comments. Owner set to agency operator at ETL time; transferred post-cutover. |
-| Dev data treatment | Disposable fixtures. Wipe and re-seed freely. |
-| v1 freeze | v1 frozen for writes during cutover run only. |
-| Chat history | v1 has no Agora. v2 chat starts empty. Accepted gap. |
-| Schema drift handling | Re-run ETL after schema changes; no incremental migration burden. |
-| Post-cutover | Agency invites each client manually. Client signs up fresh, lands in pre-populated workspace. |
+v1 retired 20 Oct 2026. GBL data was migrated in June 2026; migrated rows keep legacy_author_* columns.
 
 ## 21. Observability
 
@@ -541,7 +521,7 @@ Not covered in MVP PRD. Defer to lawyer review pre-launch.
 ### Phasing
 
 - Phase 1: All backend. Schema, RLS, SECURITY DEFINER procs, triggers, edge functions, workers.
-- Phase 2: ETL single-shot, dev-seed + cutover modes, against complete schema.
+- Phase 2: v1 retired 20 Oct 2026. GBL data was migrated in June 2026; migrated rows keep legacy_author_* columns.
 - Phase 3: All frontend, against working backend.
 
 ### Test strategy
@@ -558,6 +538,6 @@ Not covered in MVP PRD. Defer to lawyer review pre-launch.
 - One PR per Claude Code prompt.
 - Audit prompts: report-only, no branches/PRs.
 - Always audit before any fix prompt (connectors, not memory).
-- Schema changes: SQL in chat, approval, execute via Supabase MCP with project_id="movnexawfhsyuluspxoc" passed explicitly, verify via information_schema, PR notes 'Schema already applied. Do NOT execute.' Never target v1 (ozptjplxbyswclolbxyn) from a v2 schema change.
+- Schema changes: SQL in chat, approval, execute via Supabase MCP with project_id="movnexawfhsyuluspxoc" passed explicitly, verify via information_schema, PR notes 'Schema already applied. Do NOT execute.'
 - Auto-merge disabled. Shubham merges manually.
 - Every prompt ends with: 'Return your entire response in ONE code block, most token-efficient form, no prose outside it.' and 'After pushing, reply with the exact GitHub PR URL.'

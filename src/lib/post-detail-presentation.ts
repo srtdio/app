@@ -1,6 +1,6 @@
 // Presentation helpers for the post-detail header: human platform/format labels
 // and the per-stage status line. Pure and unit tested; `now` is passed in so the
-// relative readings stay deterministic. The label maps are the known v2 values;
+// relative readings stay deterministic. The label maps are the known values;
 // an unknown value title-cases its raw token rather than rendering blank.
 
 import type { Stage } from '@srtdio/posts';

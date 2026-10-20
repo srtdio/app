@@ -1,5 +1,5 @@
 // Pure, dependency-free helpers behind the PCS version-history viewer (F7.5).
-// The post snapshot is free-form jsonb: the canonical v2 shape written by
+// The post snapshot is free-form jsonb: the canonical shape written by
 // _post_snapshot is { caption, gallery } (gallery = ordered asset_version_id
 // strings), but legacy ETL rows carry a different shape entirely (content /
 // images / canva_link / ...). Every function here is defensive: parseSnapshot
@@ -17,7 +17,7 @@ export interface PostVersionView {
   snapshot: Json;
   /** Author uuid, or null when the row predates / lost its created_by (SET NULL). */
   createdBy: string | null;
-  /** Cutover author name carried on legacy rows; null for natively-authored ones. */
+  /** Author name carried on migrated legacy rows; null for natively-authored ones. */
   legacyAuthorName: string | null;
   createdAt: string;
 }
@@ -34,8 +34,8 @@ function isRecord(value: Json | null): value is { [key: string]: Json | undefine
 }
 
 /**
- * Read the caption and gallery out of a version snapshot defensively. The v2
- * shape is { caption: string|null, gallery: string[] }; a legacy or malformed
+ * Read the caption and gallery out of a version snapshot defensively. The
+ * current shape is { caption: string|null, gallery: string[] }; a legacy or malformed
  * snapshot (wrong keys, wrong types, a primitive, null) yields its caption when
  * that happens to be a string and an empty gallery. Never throws; never invents.
  */

@@ -251,11 +251,11 @@ describe('F3: EmojiPicker and emoji-data are not in the main chunk', () => {
 describe('F15: the emoji data generator is typechecked and linted', () => {
   const repo = fileURLToPath(new URL('../../../', import.meta.url));
 
-  it('tests/etl/tsconfig.json (run by the ETL CI typecheck on every PR) includes the script', () => {
-    const config = JSON.parse(readFileSync(join(repo, 'tests/etl/tsconfig.json'), 'utf8')) as {
+  it('scripts/tsconfig.json (run by the scripts typecheck CI on every PR) includes the script', () => {
+    const config = JSON.parse(readFileSync(join(repo, 'scripts/tsconfig.json'), 'utf8')) as {
       include: string[];
     };
-    expect(config.include).toContain('../../scripts/gen-emoji-data.ts');
+    expect(config.include).toContain('./gen-emoji-data.ts');
   });
 
   it('the eslint config lints every .ts file and does not ignore scripts/', () => {

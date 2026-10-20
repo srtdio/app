@@ -97,11 +97,9 @@ describe('2. upload sheet is busy while uploading', () => {
 
 describe('3. Copy link copies a lasting in-app link', () => {
   it('is /assets?asset=<id>, never a presigned URL', () => {
-    expect(assetLink('https://v2.srtd.io/', 'a1')).toBe('https://v2.srtd.io/assets?asset=a1');
-    expect(folderLink('https://v2.srtd.io', 'f1')).toBe('https://v2.srtd.io/assets?folder=f1');
-    expect(copyLinkTarget(asset(), 'https://v2.srtd.io')).toBe(
-      'https://v2.srtd.io/assets?asset=a1',
-    );
+    expect(assetLink('https://srtd.io/', 'a1')).toBe('https://srtd.io/assets?asset=a1');
+    expect(folderLink('https://srtd.io', 'f1')).toBe('https://srtd.io/assets?folder=f1');
+    expect(copyLinkTarget(asset(), 'https://srtd.io')).toBe('https://srtd.io/assets?asset=a1');
     for (const path of [
       'src/components/pages/assets/AssetActionSheet.tsx',
       'src/components/pages/assets/AssetLightbox.tsx',
