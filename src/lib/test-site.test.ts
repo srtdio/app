@@ -5,7 +5,7 @@ describe('test site helpers', () => {
   it('only the test site host counts as the test site', () => {
     expect(isTestSite('test.srtdio-app.pages.dev')).toBe(true);
     expect(isTestSite('srtd.io')).toBe(false);
-    expect(isTestSite('v2.srtd.io')).toBe(false);
+    expect(isTestSite('other.example')).toBe(false);
   });
 
   it('test addresses are the test.srtd.io domain only', () => {

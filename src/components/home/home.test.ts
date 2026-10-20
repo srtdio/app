@@ -119,7 +119,7 @@ describe('homepage stale-deploy guard', () => {
       stylesheet: null,
       isDocumentComplete: () => true,
       readToken: () => token,
-      getHref: () => 'https://v2.srtd.io/',
+      getHref: () => 'https://srtd.io/',
       reload,
       replaceUrl: () => undefined,
       storage: () => {
@@ -139,6 +139,6 @@ describe('homepage stale-deploy guard', () => {
   it('reloads once when the homepage stylesheet is missing', async () => {
     const reload = vi.fn<(url: string) => void>();
     await expect(runStaleDeployGuard(deps('', reload))).resolves.toBe(false);
-    expect(reload).toHaveBeenCalledWith('https://v2.srtd.io/?_r=1');
+    expect(reload).toHaveBeenCalledWith('https://srtd.io/?_r=1');
   });
 });

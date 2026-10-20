@@ -36,7 +36,7 @@ function makeClient(result: { data: unknown; error: { message: string } | null }
 
 const CHANNEL = 'dm__ws__a__b';
 const CURSOR = { createdAt: '2026-09-22T10:00:00.123456+00:00', id: 'm-old' };
-const ORIGIN = 'https://v2.srtd.io';
+const ORIGIN = 'https://srtd.io';
 
 function row(over: Record<string, unknown>) {
   return {

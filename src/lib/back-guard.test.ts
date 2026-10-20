@@ -63,9 +63,9 @@ function queuedWindow(urls: string[]): HistoryStepWindow & {
   };
 }
 
-const PIPELINE = 'https://v2.srtd.io/pipeline';
-const LIST = 'https://v2.srtd.io/chat';
-const CHAT_A = 'https://v2.srtd.io/chat?channel=a';
+const PIPELINE = 'https://srtd.io/pipeline';
+const LIST = 'https://srtd.io/chat';
+const CHAT_A = 'https://srtd.io/chat?channel=a';
 
 const guardMarker = (win: HistoryStepWindow): number | null =>
   stepMarkerOf(win.history.state, BACK_GUARD_STEP_KEY);

@@ -34,7 +34,7 @@ function makeDeps(overrides: Partial<StaleDeployDeps> = {}): StaleDeployDeps & {
     stylesheet: null,
     isDocumentComplete: () => true,
     readToken: () => '#f7f8f9',
-    getHref: () => 'https://v2.srtd.io/pipeline?x=1#top',
+    getHref: () => 'https://srtd.io/pipeline?x=1#top',
     storage: () => storage,
     now: () => 1700000000000,
     ...overrides,
@@ -101,10 +101,10 @@ describe('runStaleDeployGuard', () => {
     storage.setItem(STALE_RELOAD_KEY, '1');
     const deps = makeDeps({
       storage: () => storage,
-      getHref: () => `https://v2.srtd.io/pipeline?x=1&${RELOAD_PARAM}=123#top`,
+      getHref: () => `https://srtd.io/pipeline?x=1&${RELOAD_PARAM}=123#top`,
     });
     await expect(runStaleDeployGuard(deps)).resolves.toBe(true);
-    expect(deps.replaceUrl).toHaveBeenCalledWith('https://v2.srtd.io/pipeline?x=1#top');
+    expect(deps.replaceUrl).toHaveBeenCalledWith('https://srtd.io/pipeline?x=1#top');
     expect(storage.getItem(STALE_RELOAD_KEY)).toBeNull();
     expect(deps.reload).not.toHaveBeenCalled();
   });
