@@ -154,6 +154,16 @@ describe('seo routes', () => {
     }
   });
 
+  it('links the JSON-LD nodes by @id: the Organization publishes the WebSite and the app', () => {
+    const [org, site, app] = homeJsonLd();
+    expect(org?.['@id']).toBe(`${SITE_URL}/#organization`);
+    expect(site?.['@id']).toBe(`${SITE_URL}/#website`);
+    expect(app?.['@id']).toBe(`${SITE_URL}/#app`);
+    expect(site?.publisher).toEqual({ '@id': org?.['@id'] });
+    expect(app?.publisher).toEqual({ '@id': org?.['@id'] });
+    expect(site?.inLanguage).toBe('en');
+  });
+
   it('fills the shell without dropping anything from its head', () => {
     const template = `<html><head><meta name="theme-color" content="#f7f8f9" /><title>Sorted</title></head><body>${EMPTY_ROOT}</body></html>`;
     const route = SEO_ROUTES[0];
@@ -188,6 +198,23 @@ describe('static files and shell', () => {
       }
     }
     expect(read('public/robots.txt')).toContain(`Sitemap: ${SITE_URL}/sitemap.xml`);
+  });
+
+  it('disallows every app route in robots.txt except "/" and /legal/', () => {
+    const disallows = [...read('public/robots.txt').matchAll(/^Disallow: (\S+)$/gm)].map(
+      (m) => m[1] ?? '',
+    );
+    const paths = [...read('src/App.tsx').matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1]);
+    const appPaths = paths.filter(
+      (p): p is string => p !== undefined && p !== '/' && p !== '*' && !p.startsWith('/legal/'),
+    );
+    expect(appPaths.length).toBeGreaterThan(10);
+    for (const path of appPaths) {
+      expect(disallows.some((rule) => path.startsWith(rule))).toBe(true);
+    }
+    for (const route of sitemapRoutes()) {
+      expect(disallows.some((rule) => route.path.startsWith(rule))).toBe(false);
+    }
   });
 
   it('keeps /og/ crawlable and adds no Content-Security-Policy', () => {
