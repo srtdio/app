@@ -31,5 +31,7 @@ Disallow: /invite/
 Disallow: /auth/
 Disallow: /signin
 Disallow: /signup
+Disallow: /unsubscribe
+Disallow: /test/
 
 Sitemap: https://srtd.io/sitemap.xml
