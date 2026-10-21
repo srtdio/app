@@ -106,12 +106,21 @@ function meta(attr: 'name' | 'property', key: string, content: string): string {
   return `<meta ${attr}="${key}" content="${escapeHtml(content)}" />`;
 }
 
+/** Stable JSON-LD node ids, so parsers read the three nodes as one entity graph. */
+export const JSON_LD_IDS = {
+  organization: `${SITE_URL}/#organization`,
+  website: `${SITE_URL}/#website`,
+  app: `${SITE_URL}/#app`,
+} as const;
+
 /** JSON-LD for "/": Organization, WebSite and SoftwareApplication (free offer). No ratings or reviews. */
 export function homeJsonLd(): Record<string, unknown>[] {
+  const publisher = { '@id': JSON_LD_IDS.organization };
   return [
     {
       '@context': 'https://schema.org',
       '@type': 'Organization',
+      '@id': JSON_LD_IDS.organization,
       name: SITE_NAME,
       alternateName: SITE_ALTERNATE_NAMES,
       url: SITE_URL,
@@ -120,13 +129,18 @@ export function homeJsonLd(): Record<string, unknown>[] {
     {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
+      '@id': JSON_LD_IDS.website,
       name: SITE_NAME,
       alternateName: SITE_ALTERNATE_NAMES,
       url: SITE_URL,
+      inLanguage: 'en',
+      publisher,
     },
     {
       '@context': 'https://schema.org',
       '@type': 'SoftwareApplication',
+      '@id': JSON_LD_IDS.app,
+      publisher,
       name: SITE_NAME,
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
