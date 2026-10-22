@@ -242,7 +242,7 @@ export function HelpPage() {
             </div>
           ) : (
             <div className="mt-2 rounded-xl border border-border bg-panel px-4 py-8 text-center">
-              <p className="text-sm font-medium">No matching articles</p>
+              <p className="text-sm font-medium">No help articles like that</p>
               <p className="mt-1 text-sm text-fg-3">
                 Try another search or choose a different topic.
               </p>

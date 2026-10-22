@@ -71,7 +71,7 @@ export function effectiveQuery(raw: string, kind: SearchKind | null): string {
 /** The failure row's copy (never connection wording). */
 export const SEARCH_FAILED_COPY = "Couldn't search. Try again.";
 /** The empty Messages section. */
-export const SEARCH_EMPTY_COPY = 'No messages found';
+export const SEARCH_EMPTY_COPY = 'No messages like that';
 
 /** One message hit, as the result rows and the in-chat bar read it. */
 export interface SearchHit {
@@ -533,9 +533,9 @@ export function searchSenderPrefix(input: {
   return prefix !== undefined ? `${prefix}: ` : '';
 }
 
-/** "N of M", with "+" while more pages exist; "0 of 0" with no hits. Pure. */
+/** "N of M", with "+" while more pages exist; "Not in this chat" with no hits. Pure. */
 export function searchCounterText(index: number, total: number, hasMore: boolean): string {
-  if (total === 0) return '0 of 0';
+  if (total === 0) return 'Not in this chat';
   return `${Math.min(index + 1, total)} of ${total}${hasMore ? '+' : ''}`;
 }
 

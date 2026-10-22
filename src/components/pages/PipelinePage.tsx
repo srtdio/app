@@ -395,7 +395,7 @@ export function filteredEmpty(onClear: () => void): ReactElement {
     <div data-filtered-empty="" className="px-4 md:px-6">
       <EmptyState
         icon={<IconPipeline size={22} />}
-        title="No matches"
+        title="Nothing fits these filters"
         action={
           <Button variant="default" size="lg" onClick={onClear}>
             Clear filters
@@ -759,7 +759,7 @@ export function PipelinePage() {
   // Per-tab counts over the filtered list: each stage plus the 'all' total.
   const counts = useMemo(() => stageCounts(grouped, STAGES), [grouped]);
 
-  // The empty view under active search/date filters gets "No matches".
+  // The empty view under active search/date filters gets "Nothing fits these filters".
   const visibleCount = (stage === ALL_KEY ? counts.all : counts[stage]) ?? 0;
 
   // The header counter: what the active view lists out of every post, honest

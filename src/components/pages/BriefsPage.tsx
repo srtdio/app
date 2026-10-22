@@ -144,6 +144,18 @@ export function briefsCountLine(shown: number, total: number): string {
 }
 
 /**
+ * The zero-result heading when briefs exist but none show: a search names the
+ * query; otherwise the heading names the active chip. Pure.
+ */
+export function briefsNoneTitle(filter: BriefFilter, search: string): string {
+  const query = search.trim();
+  if (query !== '') return `Nothing called "${query}"`;
+  if (filter === BRIEF_STATUS.open) return 'No open briefs right now';
+  if (filter === BRIEF_STATUS.closed) return 'No closed briefs yet';
+  return 'No briefs yet';
+}
+
+/**
  * Derive the rendered time sections from the loaded list: status chip, then
  * title search, then time grouping (newest-first, workspace weeks, month
  * buckets). `calendar` carries the workspace zone and week start, so the
@@ -398,7 +410,7 @@ export function BriefsPage() {
       ) : groups.length === 0 ? (
         <EmptyState
           icon={<IconBriefs size={24} />}
-          title="No matches"
+          title={briefsNoneTitle(filter, search)}
           action={
             <Button size="lg" onClick={() => setListState('all', '')}>
               Clear search

@@ -115,16 +115,17 @@ describe('channelListView', () => {
     expect(props.action).toBeDefined();
   });
 
-  it('renders a distinct No matches state, not the zero-state, when search hides all', () => {
+  it('renders a distinct no-chats-called state, not the zero-state, when search hides all', () => {
     const view = channelListView({
       channels: [],
       hasChannels: true,
+      search: ' zzz ',
       selectedChannelId: null,
       onSelect: () => {},
       onNewChat: () => {},
     });
     expect(view.type).not.toBe(EmptyState);
-    expect(texts(view)).toContain('No matches');
+    expect(texts(view)).toContain('No chats called "zzz"');
   });
 
   it('renders one row per channel when there are matches', () => {
@@ -155,10 +156,10 @@ describe('channelListContent', () => {
     expect((allLists[0]!.props as { children: ReactElement[] }).children).toHaveLength(2);
   });
 
-  it('shows No matches (not the zero-state) when a search matches nothing', () => {
+  it('names the query (not the zero-state) when a search matches nothing', () => {
     const tree = content({ channels, search: 'zzz' });
     expect(findAll(tree, (el) => el.type === EmptyState)).toHaveLength(0);
-    expect(texts(tree)).toContain('No matches');
+    expect(texts(tree)).toContain('No chats called "zzz"');
   });
 
   it('still shows the zero-state with New chat when there are no channels', () => {

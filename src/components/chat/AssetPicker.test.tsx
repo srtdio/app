@@ -60,6 +60,7 @@ function grid(over: Partial<Parameters<typeof AssetGrid>[0]> = {}): string {
       rows={[image, pdf]}
       count={2}
       searching={false}
+      query=""
       loadingMore={false}
       selected={[]}
       onToggle={() => undefined}
@@ -99,7 +100,9 @@ describe('AssetPicker grid', () => {
 
   it('empty library and empty search say so', () => {
     expect(grid({ rows: [], count: 0 })).toContain('No assets');
-    expect(grid({ rows: [], count: 0, searching: true })).toContain('No matches');
+    expect(grid({ rows: [], count: 0, searching: true, query: 'deck' })).toContain(
+      'No files called &quot;deck&quot;',
+    );
   });
 
   it('the loading state is static placeholder tiles (no motion)', () => {

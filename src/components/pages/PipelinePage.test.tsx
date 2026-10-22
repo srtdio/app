@@ -767,12 +767,12 @@ describe('W4 fix 3: create gating', () => {
 });
 
 describe('W4 fix 4: filtered empty state', () => {
-  it('says "No matches" with a Clear filters button that fires the reset', () => {
+  it('says "Nothing fits these filters" with a Clear filters button that fires the reset', () => {
     const onClear = vi.fn();
     const tree = filteredEmpty(onClear);
     const empty = findAll(tree, (el) => el.type === EmptyState)[0]!;
     const props = empty.props as { title: string; action: ReactElement };
-    expect(props.title).toBe('No matches');
+    expect(props.title).toBe('Nothing fits these filters');
     expect(texts(props.action)).toContain('Clear filters');
     (props.action.props as { onClick: () => void }).onClick();
     expect(onClear).toHaveBeenCalledTimes(1);

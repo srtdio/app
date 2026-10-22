@@ -469,7 +469,7 @@ export function MarksList(props: MarksListProps): ReactElement {
       ) : body === 'empty' ? (
         <EmptyState
           icon={<IconBookmark size={22} />}
-          title="Nothing here"
+          title="All clear"
           description={
             tab === 'open' ? 'No open marks in this chat.' : 'Nothing has been stamped yet.'
           }

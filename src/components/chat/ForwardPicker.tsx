@@ -134,7 +134,9 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
         aria-label="Search chats"
       />
       {listed.length === 0 ? (
-        <p className="px-1 py-3 text-sm text-fg-3">No matches</p>
+        <p className="px-1 py-3 text-sm text-fg-3">
+          {search.trim() !== '' ? `No chats called "${search.trim()}"` : 'No chats yet'}
+        </p>
       ) : (
         <ul className="mt-3 flex flex-col">
           {listed.map((channel) => {
