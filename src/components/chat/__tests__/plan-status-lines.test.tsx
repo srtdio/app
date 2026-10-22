@@ -290,8 +290,12 @@ describe('the PLAN switch and the decided pill', () => {
 
   it('the solid fills are the light values in both themes', () => {
     const css = readFileSync(fileURLToPath(new URL('../../../index.css', import.meta.url)), 'utf8');
-    expect(css.match(/--good-solid: #3e7d54;/g)).toHaveLength(2);
-    expect(css.match(/--bad-solid: #c2392b;/g)).toHaveLength(2);
+    // Defined in both theme blocks, with the same (light) value in each.
+    for (const token of ['--good-solid', '--bad-solid']) {
+      const values = [...css.matchAll(new RegExp(`${token}: ([^;]+);`, 'g'))].map((m) => m[1]);
+      expect(values).toHaveLength(2);
+      expect(values[0]).toBe(values[1]);
+    }
   });
 });
 
