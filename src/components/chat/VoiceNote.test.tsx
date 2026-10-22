@@ -19,9 +19,12 @@ import {
   waveTouchPhase,
   WAVE_SEEK_LOCK_PX,
   voiceBars,
-  WAVEFORM_BARS,
   VOICE_BAR_COUNT,
+  MIN_BAR_PX,
+  MAX_BAR_PX,
+  createVoiceRecovery,
   type VoiceAudio,
+  type VoiceFailure,
 } from '@/components/chat/VoiceNote';
 import { voiceStore } from '@/lib/chat/transcript-store';
 
@@ -176,6 +179,164 @@ describe('seek, speed and the auto-play chain', () => {
   });
 });
 
+describe('the error listener', () => {
+  it('reports media errors with the MediaError code and is removed on teardown', () => {
+    const audio = fakeAudio();
+    const errors: Array<number | null> = [];
+    const removed: string[] = [];
+    const remove = audio.removeEventListener;
+    audio.removeEventListener = (type, fn) => {
+      removed.push(type);
+      remove(type, fn);
+    };
+    const unbind = bindVoiceAudio(audio, {
+      duration: () => {},
+      time: () => {},
+      playing: () => {},
+      ended: () => {},
+      error: (code) => errors.push(code),
+    });
+    audio.error = { code: 4 };
+    audio.fire('error');
+    expect(errors).toEqual([4]);
+    unbind();
+    expect(removed).toContain('error');
+    audio.fire('error');
+    expect(errors).toEqual([4]);
+  });
+});
+
+describe('playback recovery', () => {
+  const flush = async (): Promise<void> => {
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  };
+  function setup(opts: {
+    peek?: string | null;
+    plays?: Array<Promise<void>>;
+    refreshed?: Array<string | null>;
+  }) {
+    let applied: string | null = 'https://r2/old';
+    const applies: string[] = [];
+    const plays = [...(opts.plays ?? [])];
+    const refreshed = [...(opts.refreshed ?? ['https://r2/new'])];
+    const play = vi.fn(() => plays.shift() ?? Promise.resolve());
+    const refreshUrl = vi.fn<(force: boolean) => Promise<string | null>>(
+      async () => refreshed.shift() ?? null,
+    );
+    const failed = vi.fn<(failure: VoiceFailure) => void>();
+    const recovery = createVoiceRecovery({
+      player: {
+        get applied() {
+          return applied;
+        },
+        apply: (url) => {
+          applied = url;
+          applies.push(url);
+        },
+        play,
+      },
+      peekUrl: () => (opts.peek === undefined ? 'https://r2/old' : opts.peek),
+      refreshUrl,
+      failed,
+    });
+    return { recovery, play, refreshUrl, failed, applies };
+  }
+  const notSupported = (): Promise<void> =>
+    Promise.reject(new DOMException('no', 'NotSupportedError'));
+
+  it('plays straight away from a url that is still fresh', async () => {
+    const { recovery, play, refreshUrl } = setup({});
+    recovery.play();
+    await flush();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(refreshUrl).not.toHaveBeenCalled();
+  });
+
+  it('re-presigns on a tap near expiry, then plays the new url', async () => {
+    const { recovery, play, refreshUrl, applies } = setup({ peek: null });
+    recovery.play();
+    expect(play).not.toHaveBeenCalled();
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(false);
+    expect(applies).toEqual(['https://r2/new']);
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it('a media error forces one re-presign and retries play once, then fails', async () => {
+    const { recovery, play, refreshUrl, failed } = setup({
+      refreshed: ['https://r2/new', 'https://r2/newer'],
+    });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(failed).not.toHaveBeenCalled();
+    recovery.mediaError(4);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect(failed).toHaveBeenCalledWith({ name: 'MediaError', code: 4, retried: true });
+    recovery.mediaError(4);
+    expect(failed).toHaveBeenCalledTimes(1);
+  });
+
+  it('a play() rejection retries once; the second rejection is final', async () => {
+    const { recovery, play, failed } = setup({ plays: [notSupported(), notSupported()] });
+    recovery.play();
+    await flush();
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(failed).toHaveBeenCalledWith({ name: 'NotSupportedError', code: null, retried: true });
+  });
+
+  it('an AbortError is never a failure', async () => {
+    const { recovery, play, failed, refreshUrl } = setup({
+      plays: [Promise.reject(new DOMException('paused', 'AbortError'))],
+    });
+    recovery.play();
+    await flush();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(refreshUrl).not.toHaveBeenCalled();
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('a failed re-presign is final, without a retry', async () => {
+    const { recovery, play, failed } = setup({ refreshed: [null] });
+    recovery.play();
+    await flush();
+    recovery.mediaError(2);
+    await flush();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(failed).toHaveBeenCalledWith({ name: 'PresignError', code: null, retried: true });
+  });
+
+  it('an error while not playing re-presigns but never starts playback', async () => {
+    const { recovery, play, refreshUrl } = setup({});
+    recovery.mediaError(2);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('after audio starts, a later failure gets its own retry', async () => {
+    const { recovery, refreshUrl, failed } = setup({
+      refreshed: ['https://r2/a', 'https://r2/b'],
+    });
+    recovery.play();
+    await flush();
+    recovery.mediaError(2);
+    await flush();
+    recovery.started();
+    recovery.mediaError(2);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(2);
+    expect(failed).not.toHaveBeenCalled();
+  });
+});
+
 describe('first paint', () => {
   const base = {
     url: 'https://signed/a',
@@ -185,10 +346,6 @@ describe('first paint', () => {
     nextVoiceId: null,
   };
   const ids: string[] = [];
-  const render = (id: string, mine = false): string => {
-    ids.push(id);
-    return renderToStaticMarkup(<VoiceNote {...base} messageId={id} mine={mine} />);
-  };
   afterEach(() => {
     for (const id of ids.splice(0))
       voiceStore.update(id, {
@@ -198,41 +355,15 @@ describe('first paint', () => {
         playedAt: undefined,
       });
   });
-
-  it('renders the total length, the 44px wave with the drag guards, and the dot', () => {
-    const html = render('fp-idle');
-    expect(html).toContain('0:18');
-    expect(html).toMatch(
-      /data-voice-wave="[^"]*"[^>]*class="[^"]*h-11[^"]*touch-none[^"]*select-none/,
-    );
-    expect(html).toContain('[-webkit-touch-callout:none]');
-    expect(html).toMatch(/data-voice-dot=""[^>]*class="[^"]*h-3 w-3[^"]*bg-accent\b/);
-    expect(html).toContain('font-mono text-xs');
-    // The drop-down is mounted closed, ready to reveal.
-    expect(html).toContain('data-voice-transcript="closed"');
-    expect(html).not.toContain('data-voice-transcript="open"');
-  });
-
-  it('draws the dot white on an own bubble', () => {
-    expect(render('fp-own', true)).toMatch(/data-voice-dot=""[^>]*class="[^"]*bg-accent-fg/);
-  });
-
-  it('shows the mic badge fg-3 until played, then accent', () => {
-    expect(render('fp-unplayed')).toContain('text-fg-3');
-    voiceStore.update('fp-played', { playedAt: 1 });
-    const html = render('fp-played');
-    expect(html).toContain('data-voice-played=""');
-    expect(html).toMatch(/rounded-full bg-panel-2 text-accent/);
-  });
-
-  const withLink = (id: string, mine = false): string => {
+  const render = (id: string, mine = false, withFlow = true): string => {
     ids.push(id);
     return renderToStaticMarkup(
       <VoiceNote
         {...base}
         messageId={id}
         mine={mine}
-        onTranscribe={() => {}}
+        bubbleInset
+        {...(withFlow ? { onTranscribe: () => {} } : {})}
         meta={<span data-meta="row">10:42</span>}
       />,
     );
@@ -240,126 +371,135 @@ describe('first paint', () => {
   const order = (html: string, ...needles: string[]): number[] =>
     needles.map((needle) => html.indexOf(needle));
 
-  it('received: play, wave, photo in row 1; length; Transcribe left and time right in row 3', () => {
-    const html = withLink('fp-received');
-    const [play, wave, mic, duration, foot, link, meta] = order(
-      html,
-      'aria-label="Play voice note"',
-      'data-voice-wave',
-      'data-voice-mic',
-      'data-voice-duration',
-      'data-voice-foot',
-      'data-voice-link="transcribe"',
-      'data-meta="row"',
-    );
-    expect(play).toBeGreaterThan(-1);
-    expect(play).toBeLessThan(wave as number);
-    expect(wave).toBeLessThan(mic as number);
-    expect(duration).toBeLessThan(foot as number);
-    expect(foot).toBeLessThan(link as number);
-    expect(link).toBeLessThan(meta as number);
-    // Row 3 is a fixed 44px row; the time is pushed right.
-    expect(html).toMatch(/data-voice-foot=""[^>]*class="flex h-11 items-center/);
-    expect(html).toMatch(/data-voice-meta=""[^>]*class="ml-auto flex shrink-0/);
+  it('is a fixed 264px wide with the 4/6/4/0 inset in a bubble', () => {
+    const html = render('fp-size');
+    expect(html).toMatch(/data-voice-note=""[^>]*class="[^"]*w-\[264px\][^"]*pb-1 pr-1\.5 pt-1/);
+    expect(html).toContain('font-sans');
+    expect(html).not.toContain('font-mono');
   });
 
-  it('own: photo, play, wave in row 1; length left and time right in row 2; no link', () => {
-    const html = withLink('fp-own-layout', true);
-    const [mic, play, wave, duration, meta] = order(
-      html,
-      'data-voice-mic',
-      'aria-label="Play voice note"',
-      'data-voice-wave',
-      'data-voice-duration',
-      'data-meta="row"',
-    );
-    expect(mic).toBeGreaterThan(-1);
-    expect(mic).toBeLessThan(play as number);
-    expect(play).toBeLessThan(wave as number);
-    expect(duration).toBeLessThan(meta as number);
-    expect(html).not.toContain('data-voice-link');
-    expect(html).not.toContain('data-voice-foot');
-    expect(html).not.toContain('Transcribe');
+  it('same layout on both sides: play, wave, photo; then length · Transcribe and the time', () => {
+    for (const mine of [false, true]) {
+      const html = render(`fp-layout-${String(mine)}`, mine);
+      const [play, wave, mic, duration, link, meta] = order(
+        html,
+        'aria-label="Play voice note"',
+        'data-voice-wave',
+        'data-voice-mic',
+        'data-voice-duration',
+        'data-voice-link="transcribe"',
+        'data-meta="row"',
+      );
+      expect(play).toBeGreaterThan(-1);
+      expect(play).toBeLessThan(wave as number);
+      expect(wave).toBeLessThan(mic as number);
+      expect(mic).toBeLessThan(duration as number);
+      expect(duration).toBeLessThan(link as number);
+      expect(link).toBeLessThan(meta as number);
+      expect(html).toMatch(
+        /data-voice-foot=""[^>]*class="flex min-h-4 items-center[^"]*pl-\[46px\]/,
+      );
+    }
   });
 
-  it('the link is plain accent text, 15px/500, 44px tall, never selecting or calling out', () => {
-    const html = withLink('fp-link');
+  it('offers Transcribe on sent and received notes', () => {
+    expect(render('fp-tr-received')).toContain('>Transcribe</button>');
+    expect(render('fp-tr-sent', true)).toContain('>Transcribe</button>');
+  });
+
+  it('play is a bare 44x44 hit area with a 20px glyph, accent received, white sent', () => {
+    const received = render('fp-play-r');
+    expect(received).toMatch(/aria-label="Play voice note" class="flex h-11 w-11[^"]*text-accent /);
+    expect(received).not.toMatch(/aria-label="Play voice note"[^>]*class="[^"]*\bbg-accent\b/);
+    expect(received).toContain('width="20" height="20"');
+    expect(render('fp-play-s', true)).toMatch(
+      /aria-label="Play voice note" class="flex h-11 w-11[^"]*text-accent-fg/,
+    );
+  });
+
+  it('draws the 10px seek dot in the played colour on both sides', () => {
+    expect(render('fp-dot-r')).toMatch(
+      /data-voice-dot=""[^>]*class="[^"]*h-2\.5 w-2\.5 rounded-full bg-accent\b/,
+    );
+    expect(render('fp-dot-s', true)).toMatch(
+      /data-voice-dot=""[^>]*class="[^"]*h-2\.5 w-2\.5 rounded-full bg-accent-fg/,
+    );
+  });
+
+  it('received badge is accent until this device played the note, then muted', () => {
+    expect(render('fp-unplayed')).toMatch(
+      /data-voice-mic="unplayed" class="[^"]*bg-accent text-accent-fg/,
+    );
+    voiceStore.update('fp-played', { playedAt: 1 });
+    const html = render('fp-played');
+    expect(html).toContain('data-voice-played=""');
+    expect(html).toMatch(/data-voice-mic="played" class="[^"]*bg-fg-3\b/);
+  });
+
+  it('sent badge is white with an accent mic, ringed in the bubble colour', () => {
+    expect(render('fp-own-badge', true)).toMatch(
+      /data-voice-mic="own" class="[^"]*ring-2 ring-bubble-own bg-accent-fg text-\[color:var\(--accent\)\]/,
+    );
+  });
+
+  it('the duration is Inter 12px medium tabular; Transcribe semibold with a 44px hit area', () => {
+    const html = render('fp-type');
+    expect(html).toMatch(/data-voice-foot=""[^>]*text-xs leading-4/);
+    expect(html).toContain('data-voice-duration="" class="font-medium tabular-nums"');
     expect(html).toMatch(
-      /<button type="button" data-voice-link="transcribe" data-induction="chat-transcript" class="flex h-11 select-none items-center text-\[15px\] font-medium leading-5 \[-webkit-touch-callout:none\] shrink-0 rounded-sm text-accent /,
+      /data-voice-link="transcribe"[^>]*class="shrink-0 rounded-sm font-semibold relative after:absolute after:inset-x-0 after:-inset-y-3\.5/,
     );
-    expect(html).toContain('>Transcribe</button>');
-    expect(html).not.toMatch(/data-voice-link="transcribe"[^>]*(bg-|rounded-full|border)/);
   });
 
-  it('no link without the transcribe flow; Show/Hide still toggles a stored transcript', () => {
-    ids.push('fp-nolink');
-    const bare = renderToStaticMarkup(<VoiceNote {...base} messageId="fp-nolink" />);
-    expect(bare).not.toContain('data-voice-link');
+  it('no Transcribe without the flow; Hide text still folds a stored transcript', () => {
+    expect(render('fp-nolink', false, false)).not.toContain('data-voice-link');
     voiceStore.update('fp-nolink-shown', { transcript: 'hi' });
-    ids.push('fp-nolink-shown');
-    const shown = renderToStaticMarkup(<VoiceNote {...base} messageId="fp-nolink-shown" />);
-    expect(shown).toContain('data-voice-link="hide"');
+    expect(render('fp-nolink-shown', false, false)).toContain('>Hide text</button>');
   });
 
-  it('pending: "Transcribing…" in fg-2, not a button', () => {
+  it('pending: "Transcribing…", not a button', () => {
     voiceStore.setPending('fp-pending', true);
-    const html = withLink('fp-pending');
+    const html = render('fp-pending');
     voiceStore.setPending('fp-pending', false);
-    expect(html).toMatch(
-      /<span data-voice-link="pending" role="status" class="[^"]*text-fg-2">Transcribing…<\/span>/,
-    );
+    expect(html).toContain('<span data-voice-link="pending" role="status"');
     expect(html).not.toContain('>Transcribe</button>');
   });
 
-  it('open: "Hide transcript" and the transcript open on first paint, selectable, under a hairline', () => {
+  it('open: "Hide text" and the transcript panel open on first paint, below row 2', () => {
     voiceStore.update('fp-shown', { transcript: 'नमस्ते, see you at 5' });
-    const html = withLink('fp-shown');
+    const html = render('fp-shown');
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain('>Hide transcript</button>');
+    expect(html).toContain('>Hide text</button>');
+    expect(html).toMatch(/data-voice-transcript="open" class="grid [^"]*visible grid-rows-\[1fr\]/);
     expect(html).toMatch(
-      /data-voice-transcript="open" class="grid [^"]*visible grid-rows-\[1fr\] opacity-100/,
+      /select-text[^"]*rounded-\[14px\][^"]*text-\[15px\] leading-\[21px\] bg-panel-3 text-fg/,
     );
-    expect(html).toContain('border-t border-border');
-    expect(html).toMatch(/select-text[^"]*text-\[15px\] leading-5 text-fg/);
     expect(html).toContain('नमस्ते, see you at 5');
-    // Below row 3.
     expect(html.indexOf('data-voice-transcript')).toBeGreaterThan(html.indexOf('data-voice-foot'));
   });
 
-  it('closed: "Show transcript" with the drop-down closed and hidden from AT', () => {
+  it('folded: "Transcribe" reopens it; the panel is closed and hidden from AT', () => {
     voiceStore.update('fp-collapsed', { transcript: 'hidden text', collapsed: true });
-    const html = withLink('fp-collapsed');
+    const html = render('fp-collapsed');
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('>Show transcript</button>');
+    expect(html).toContain('>Transcribe</button>');
     expect(html).toMatch(
-      /data-voice-transcript="closed" aria-hidden="true" class="grid [^"]*invisible grid-rows-\[0fr\] opacity-0/,
+      /data-voice-transcript="closed" aria-hidden="true" class="grid [^"]*invisible grid-rows-\[0fr\]/,
     );
   });
 
-  it('failed: "Transcript not available" in fg-3, then "Try again" in accent', () => {
-    voiceStore.update('fp-failed', { failedAt: 1 });
-    const html = withLink('fp-failed');
-    expect(html).toMatch(
-      /data-voice-link="failed" class="[^"]*text-fg-3"><span class="truncate">Transcript not available/,
-    );
-    expect(html).toMatch(
-      /data-voice-link="retry" class="[^"]*text-accent[^"]*">Try again<\/button>/,
-    );
-  });
-
-  it('reveals on height and opacity only, 180ms ease-out, none under reduced motion', () => {
-    const html = withLink('fp-motion');
+  it('opens on height only, 180ms ease-out, none under reduced motion', () => {
+    const html = render('fp-motion');
     expect(html).toContain(
-      'transition-[grid-template-rows,opacity,visibility] duration-[180ms] ease-out motion-reduce:transition-none',
+      'transition-[grid-template-rows] duration-[180ms] ease-out motion-reduce:transition-none',
     );
-    expect(html).not.toMatch(/data-voice-transcript[^>]*(translate|scale|rotate)/);
+    expect(html).not.toMatch(/data-voice-transcript[^>]*(translate|scale|rotate|opacity)/);
   });
 
-  it('own notes show a stored transcript open (no link to reopen it)', () => {
-    voiceStore.update('fp-own-shown', { transcript: 'mine', collapsed: true });
-    const html = withLink('fp-own-shown', true);
-    expect(html).toContain('data-voice-transcript="open"');
-    expect(html).toContain('mine');
+  it('shows no error row before any playback failure', () => {
+    const html = render('fp-no-error');
+    expect(html).not.toContain('data-voice-error');
+    expect(html).not.toContain('play here.');
   });
 });
 
@@ -393,46 +533,41 @@ describe('touch on the wave', () => {
   });
 });
 
-describe('T4: bars from the real waveform', () => {
-  /** The inline heights of the drawn bars, in order. */
+describe('bars from the real waveform', () => {
+  /** The inline heights (px) of the drawn bars, in order. */
   function barHeights(html: string): number[] {
     const wave = html.slice(html.indexOf('data-voice-bars'));
-    return [...wave.matchAll(/style="height:(\d+(?:\.\d+)?)%"/g)].map((m) => Number(m[1]));
+    return [...wave.matchAll(/style="height:(\d+)px"/g)].map((m) => Number(m[1]));
   }
   const base = { url: 'blob:a', name: 'voice-note.webm', durationMs: 5_000 };
 
-  it('renders the bars from the note peaks, resampled to the bar count', () => {
-    const peaks = Array.from({ length: 48 }, (_, i) => (i < 24 ? 20 : 100));
+  it('draws 30 bars, 3-20px, from the note peaks', () => {
+    const peaks = Array.from({ length: 48 }, (_, i) => (i < 24 ? 0 : 100));
     const html = renderToStaticMarkup(<VoiceNote {...base} peaks={peaks} />);
     expect(html).toContain('data-voice-bars="peaks"');
     const heights = barHeights(html);
-    expect(heights).toHaveLength(VOICE_BAR_COUNT);
-    expect(heights[0]).toBe(20);
-    expect(heights.at(-1)).toBe(100);
+    expect(VOICE_BAR_COUNT).toBe(30);
+    expect(heights).toHaveLength(30);
+    expect(heights[0]).toBe(MIN_BAR_PX);
+    expect(heights.at(-1)).toBe(MAX_BAR_PX);
     expect(heights).toEqual(voiceBars(peaks));
-    expect(heights).not.toEqual([...WAVEFORM_BARS]);
   });
 
-  it('a quiet stretch still draws a mark (minimum bar height)', () => {
-    const bars = voiceBars(new Array<number>(48).fill(0).map((v, i) => (i === 0 ? 100 : v)));
-    expect(Math.min(...bars)).toBeGreaterThan(0);
-  });
-
-  it('falls back to WAVEFORM_BARS without peaks (older notes, older clients)', () => {
+  it('falls back to the fixed levels without peaks, still 30 bars in range', () => {
     const html = renderToStaticMarkup(<VoiceNote {...base} />);
     expect(html).toContain('data-voice-bars="fallback"');
-    expect(barHeights(html)).toEqual([...WAVEFORM_BARS]);
-    expect(voiceBars(undefined)).toBe(WAVEFORM_BARS);
-    expect(voiceBars([])).toBe(WAVEFORM_BARS);
+    const heights = barHeights(html);
+    expect(heights).toHaveLength(30);
+    expect(Math.min(...heights)).toBeGreaterThanOrEqual(MIN_BAR_PX);
+    expect(Math.max(...heights)).toBeLessThanOrEqual(MAX_BAR_PX);
   });
 
-  it('played and unplayed colouring is unchanged with peaks', () => {
-    const html = renderToStaticMarkup(<VoiceNote {...base} peaks={[50, 60]} />);
-    const wave = html.slice(html.indexOf('data-voice-bars'));
-    // Nothing played yet: every bar is the unplayed ink.
-    expect((wave.match(new RegExp('flex-1 rounded-sm bg-fg-3', 'g')) ?? []).length).toBe(
-      VOICE_BAR_COUNT,
-    );
+  it('unplayed bars: the muted token received, white at 45% sent; 2px wide, 1px radius', () => {
+    const received = renderToStaticMarkup(<VoiceNote {...base} peaks={[50, 60]} />);
+    const wave = received.slice(received.indexOf('data-voice-bars'));
+    expect((wave.match(/w-0\.5 shrink-0 rounded-\[1px\] bg-fg-3"/g) ?? []).length).toBe(30);
     expect(wave).not.toContain('data-played');
+    const sent = renderToStaticMarkup(<VoiceNote {...base} mine peaks={[50, 60]} />);
+    expect(sent).toContain('w-0.5 shrink-0 rounded-[1px] bg-white/[.45]');
   });
 });
