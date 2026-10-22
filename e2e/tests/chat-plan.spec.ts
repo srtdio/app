@@ -299,10 +299,12 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(card.locator('[data-plan-forward]')).toBeVisible();
   expect(shared()).toEqual([[planId]]);
 
-  // D4 again from the card: the same one button.
+  // D4 again from the card: the same one button, now "Sent" (the chat's last
+  // send of this plan is newer than its last change).
   await card.locator('[data-plan-open]').click();
   await expect(plan).toBeVisible();
-  await expect(primary).toHaveText(`Send in ${PEER_NAME}`);
+  await expect(primary).toHaveText('Sent');
+  await expect(primary).toHaveAttribute('data-plan-send-state', 'sent');
 
   // A post item for the agency: the pipeline post view embedded, no plan
   // review buttons, and the header overflow opens the post view's own sheet.
