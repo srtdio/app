@@ -158,7 +158,7 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
     expect((await readEntry(snoozed)).readAt).toBeNull();
   });
 
-  it('inbox_mark_all_read marks a comment read and leaves a plan alert unread', async () => {
+  it('inbox_mark_all_read marks every type read: a comment and a plan alert (20261022190000)', async () => {
     const comment = await insertEntry(member.id);
     const plan = await insertEntry(member.id, {
       event_type: 'plan_updated',
@@ -172,7 +172,7 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
     });
     expect(result.ok).toBe(true);
     expect((await readEntry(comment)).readAt).not.toBeNull();
-    expect((await readEntry(plan)).readAt).toBeNull();
+    expect((await readEntry(plan)).readAt).not.toBeNull();
   });
 
   it('inbox_snooze sets snoozed_until and clear un-snoozes', async () => {
