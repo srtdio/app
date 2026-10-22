@@ -433,7 +433,7 @@ describe('first paint', () => {
     voiceStore.update('fp-played', { playedAt: 1 });
     const html = render('fp-played');
     expect(html).toContain('data-voice-played=""');
-    expect(html).toMatch(/data-voice-mic="played" class="[^"]*bg-fg-3/);
+    expect(html).toMatch(/data-voice-mic="played" class="[^"]*bg-fg-3\b/);
   });
 
   it('sent badge is white with an accent mic, ringed in the bubble colour', () => {
@@ -499,7 +499,7 @@ describe('first paint', () => {
   it('shows no error row before any playback failure', () => {
     const html = render('fp-no-error');
     expect(html).not.toContain('data-voice-error');
-    expect(html).not.toContain('Can&#x27;t play here.');
+    expect(html).not.toContain('play here.');
   });
 });
 
@@ -565,7 +565,7 @@ describe('bars from the real waveform', () => {
   it('unplayed bars: the muted token received, white at 45% sent; 2px wide, 1px radius', () => {
     const received = renderToStaticMarkup(<VoiceNote {...base} peaks={[50, 60]} />);
     const wave = received.slice(received.indexOf('data-voice-bars'));
-    expect((wave.match(/w-0\.5 shrink-0 rounded-\[1px\] bg-fg-3/g) ?? []).length).toBe(30);
+    expect((wave.match(/w-0\.5 shrink-0 rounded-\[1px\] bg-fg-3"/g) ?? []).length).toBe(30);
     expect(wave).not.toContain('data-played');
     const sent = renderToStaticMarkup(<VoiceNote {...base} mine peaks={[50, 60]} />);
     expect(sent).toContain('w-0.5 shrink-0 rounded-[1px] bg-white/[.45]');
