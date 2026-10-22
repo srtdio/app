@@ -1100,3 +1100,84 @@ export function setHarnessPlatform(world: ChatWorld, platform: string, format: s
     post.format = format;
   }
 }
+
+// ---------------------------------------------------------------------------
+// The Plan tab (/plan): a shared plan over this week and next, a Draft plan
+// over this week, and the world's own dated posts as posts in no plan
+// ---------------------------------------------------------------------------
+
+export const TAB_SHARED_PLAN_ID = '0190d000-0000-7000-8000-00000000d00a';
+export const TAB_SHARED_PLAN_TITLE = 'Autumn launch';
+export const TAB_DRAFT_PLAN_ID = '0190d000-0000-7000-8000-00000000d00b';
+export const TAB_DRAFT_PLAN_TITLE = 'Team ideas';
+/** The shared plan's concept with an approvers' OK (Plan OK). */
+export const TAB_OK_ITEM_ID = '0190d100-0000-7000-8000-00000000d1e1';
+export const TAB_OK_ITEM_TITLE = 'Harvest reel';
+/** The shared plan's undecided concept (the drag's subject). */
+export const TAB_MOVE_ITEM_ID = '0190d100-0000-7000-8000-00000000d1e2';
+export const TAB_MOVE_ITEM_TITLE = 'Market stall story';
+/** The shared plan's post item (Monday carousel, dated by its post). */
+export const TAB_POST_ITEM_ID = '0190d100-0000-7000-8000-00000000d1e3';
+/** The Draft plan's concept. */
+export const TAB_DRAFT_ITEM_ID = '0190d100-0000-7000-8000-00000000d1e4';
+export const TAB_DRAFT_ITEM_TITLE = 'Pumpkin poll';
+
+/** "YYYY-MM-DD" `days` after the civil day `day`. */
+export function civilPlus(day: string, days: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + days * 24 * HOUR).toISOString().slice(0, 10);
+}
+
+/** The Monday (UTC, the fixture workspace's zone) of the week holding `now`. */
+export function mondayOf(now: number): string {
+  const back = (new Date(now).getUTCDay() + 6) % 7;
+  return dayFrom(now, -back);
+}
+
+/**
+ * Seed the Plan tab: "Autumn launch" (shared) from this Monday to next Sunday
+ * with two concepts on today (one OK by the approvers) and Monday carousel (a
+ * post item); "Team ideas" (Draft) over this week with one concept on today.
+ * Friday reel and Product teaser stay dated posts in no plan.
+ */
+export function seedPlanTab(world: ChatWorld, opts: { sender: string; now?: number }): void {
+  const now = opts.now ?? Date.now();
+  const t = world.tables;
+  const monday = mondayOf(now);
+  const today = dayFrom(now, 0);
+  (t.plans ??= []).push(
+    planOn(
+      TAB_SHARED_PLAN_ID,
+      TAB_SHARED_PLAN_TITLE,
+      'client',
+      opts.sender,
+      monday,
+      civilPlus(monday, 13),
+    ),
+    planOn(
+      TAB_DRAFT_PLAN_ID,
+      TAB_DRAFT_PLAN_TITLE,
+      'team',
+      opts.sender,
+      monday,
+      civilPlus(monday, 6),
+    ),
+  );
+  const concept = (id: string, planId: string, title: string, position: number): Row => ({
+    ...itemRow(id, planId, 'concept', position, { title }, opts.sender),
+    target_date: today,
+  });
+  (t.plan_items ??= []).push(
+    concept(TAB_OK_ITEM_ID, TAB_SHARED_PLAN_ID, TAB_OK_ITEM_TITLE, 0),
+    concept(TAB_MOVE_ITEM_ID, TAB_SHARED_PLAN_ID, TAB_MOVE_ITEM_TITLE, 1),
+    itemRow(TAB_POST_ITEM_ID, TAB_SHARED_PLAN_ID, 'post', 2, { postId: POST_IDS[0] }, opts.sender),
+    concept(TAB_DRAFT_ITEM_ID, TAB_DRAFT_PLAN_ID, TAB_DRAFT_ITEM_TITLE, 0),
+  );
+  (t.plan_item_reviews ??= []).push({
+    item_id: TAB_OK_ITEM_ID,
+    workspace_id: WORKSPACE_ID,
+    side: 'client',
+    status: 'approved',
+    reviewed_by: PEER,
+    reviewed_at: iso(now - HOUR),
+  });
+}
