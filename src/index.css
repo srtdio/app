@@ -40,6 +40,10 @@
   --good: #3e7d54;
   --warn: #b8772b;
   --bad: #c2392b;
+  /* Solid fills under white text (the Plan OK / Not OK pill): the light values
+     in both themes so white stays at 4.5:1 or more. */
+  --good-solid: #3e7d54;
+  --bad-solid: #c2392b;
   /* Soft tints behind added / removed words in the version-compare diff. The
      good/bad tokens are bare hex, so Tailwind's /opacity modifier cannot mint a
      tint from them; these explicit low-alpha fills give light/dark parity. */
@@ -112,6 +116,8 @@
   --good: #5fb07d;
   --warn: #d59a4a;
   --bad: #e0685a;
+  --good-solid: #3e7d54;
+  --bad-solid: #c2392b;
   --good-soft: rgba(95, 176, 125, 0.16);
   --bad-soft: rgba(224, 104, 90, 0.14);
   --warn-soft: #2e2610;

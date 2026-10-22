@@ -5,15 +5,17 @@
 // for every day of the range ("Nothing planned" on an empty day, "No date"
 // last; a plan longer than a week adds a sticky "Week of" header per week).
 //
-// View mode (the default, everyone): each row shows the day column, the
-// thumbnail (a post's first image; a concept's first image file, a file tile
-// when it holds only documents, a dashed tile when it has none), title, type
-// line, the agency's status line, "Also in", "Approved by" and the slot tick.
-// No drag, no swipe, no grip, no row dustbin. Ticks work as before: a tick is
-// optimistic behind a 7s Undo toast with a countdown (useUndoableAction; the
-// write goes when the toast ends, never after Undo), an untick writes at once.
-// One view of ticks: a Draft plan shows the team side (agency only), an Open
-// plan the client side for everyone. Tapping a row opens the Item screen. The
+// View mode (the default, everyone): each day shows one calendar date tile
+// (56x56) beside its first row; a row is the title block (title, format line,
+// "Also in") with the thumbnail (56x56) on the right, then two lines: PLAN
+// (the viewer's check of the slot) and POST (the post's stage). PLAN is the
+// OK | Not OK switch while undecided and a solid pill once decided (tap to
+// change). OK is optimistic behind a 4s Undo toast with a countdown
+// (useUndoableAction; the write goes when the toast ends, never after Undo);
+// Not OK opens the Item screen with the note box open. One view: a Draft plan
+// shows the team side (agency only, writable), an Open plan the client side
+// (a client writes, the agency reads it as text). No drag, no swipe, no grip,
+// no row dustbin. Tapping a row opens the Item screen. The
 // agency side also gets the title menu (Rename, Delete plan), Add under each
 // day and "+" in the header (instant, their sheets have their own Save), the
 // header's "Edit" button, and the footer's one primary button: from a chat
@@ -24,8 +26,10 @@
 //
 // Edit mode (agency, "Edit"): the header becomes Cancel / "Editing plan" /
 // "Save changes"; the title and From/To dates are fields at the top; each row
-// gets a grip (touch or mouse drag; the laptop keyboard move too), a day chip
-// (the day picker) and a remove icon; the footer is hidden. Every change
+// is grip | date tile | title block | thumbnail with PLAN and POST as text,
+// and a bottom line with the day chip (the day picker) left and the remove
+// icon right (touch or mouse drag on the grip; the laptop keyboard move too);
+// the footer is hidden. Every change
 // paints at once but is only queued (plan-drag.ts: applyPlanOps); nothing is
 // written until Save changes, which sends the queue in one plan_save call
 // (all or nothing). Moving an Open plan's client-approved slot still asks
@@ -128,22 +132,23 @@ import {
   addedToast,
   alsoInLabel,
   approvedBy,
-  approvedByLine,
-  approvedWhen,
   approverIds,
   canDeletePlan,
-  commentsLabel,
+  countPercent,
   dayHeaderOf,
   deletePlanBody,
   deletePlanErrorCopy,
   draftLocked,
   draftProblem,
   itemDateLabel,
-  itemKindLabel,
-  itemStatusLine,
   keepApprovalBody,
   keepApprovalTitle,
   moveAsksKeep,
+  planControl,
+  planControlState,
+  planControlText,
+  planCountLabel,
+  planHeaderCounts,
   planHeaderSubtitle,
   planPrimaryAction,
   planProgressView,
@@ -151,15 +156,17 @@ import {
   planWriteErrorCopy,
   renameTitle,
   reviewStatus,
+  PLAN_LINE_LABEL,
+  PLAN_NOT_OK_LABEL,
+  PLAN_OK_LABEL,
+  PLAN_UNDO_MS,
+  POST_LINE_LABEL,
+  postLine,
   slotApprovedToast,
-  slotCheckboxShown,
   slotErrorCopy,
   slotSide,
-  slotTicked,
-  slotToastSpec,
-  stageLabel,
   withReviewOverrides,
-  type PillTone,
+  type PostLineTone,
   type PrimaryAction,
   type StatusPill,
 } from '@/components/chat/plan-card';
@@ -235,7 +242,6 @@ import {
   splitPickedByRange,
   readPlanScreen,
   refusedForClient,
-  runSlotWrite,
   type ConceptThumb,
   type PlanBundle,
   type PlanItemRow,
@@ -478,8 +484,8 @@ export function PlanPage(props: {
     >
       <header
         className={cn(
-          'relative z-20 flex min-h-[60px] shrink-0 items-center gap-2 border-b border-border bg-panel pr-3',
-          showBack ? 'pl-1' : 'pl-4',
+          // 16px on both sides: the back glyph and the last text action sit on the lines.
+          'relative z-20 flex min-h-[60px] shrink-0 items-center gap-2 border-b border-border bg-panel pl-4 pr-4',
         )}
       >
         {showBack ? (
@@ -489,7 +495,7 @@ export function PlanPage(props: {
               aria-label={props.backLabel}
               data-plan-back-text=""
               onClick={props.onBack}
-              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-[15px] font-medium text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="-ml-2 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-[15px] font-medium text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {props.backText}
             </button>
@@ -498,7 +504,7 @@ export function PlanPage(props: {
               type="button"
               aria-label={props.backLabel}
               onClick={props.onBack}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="-ml-[11px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {props.backIcon ?? <IconChevronLeft size={22} />}
             </button>
@@ -530,7 +536,7 @@ export function PlanPage(props: {
             aria-label={props.closeLabel ?? 'Close'}
             data-plan-close=""
             onClick={props.onDismiss ?? props.onBack}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="-mr-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <IconX size={20} />
           </button>
@@ -716,27 +722,52 @@ export function screenProgressLabel(bundle: PlanBundle, side?: ViewerSide): stri
 }
 
 /**
- * The progress block under the header (sans, 13px/18px): one line, Draft
- * "Creators X of N" or Open "Approved X of N", the same for every viewer; a
- * 4px bar below (accent for the team side, good for the client's).
+ * The progress under the header: two equal boxes (bg-panel-2, radius 12, 12px
+ * padding, 8px apart). PLAN: "{ok}/{n} OK" over the items the viewer's side
+ * reviews, a 4px good bar; POST: "{approved}/{n} approved" over the post
+ * items, a 4px accent bar. Numbers in JetBrains Mono.
  */
 export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }): ReactElement {
-  const view = planProgressView(props.bundle);
+  const counts = planHeaderCounts(props.bundle, props.side ?? 'unknown');
+  const boxes = [
+    {
+      key: 'plan',
+      label: PLAN_LINE_LABEL,
+      text: planCountLabel(counts.plan.ok, counts.plan.n, 'OK'),
+      percent: countPercent(counts.plan.ok, counts.plan.n),
+      bar: 'bg-good',
+      tone: 'good',
+    },
+    {
+      key: 'post',
+      label: POST_LINE_LABEL,
+      text: planCountLabel(counts.post.approved, counts.post.n, 'approved'),
+      percent: countPercent(counts.post.approved, counts.post.n),
+      bar: 'bg-accent',
+      tone: 'accent',
+    },
+  ] as const;
   return (
-    <div data-plan-progress-block="" className="flex flex-col gap-2 px-4 pt-3">
-      <div
-        data-plan-screen-progress=""
-        className="flex items-baseline justify-between gap-3 text-[13px] leading-[18px]"
-      >
-        <span className="font-semibold text-fg">{view.lead}</span>
-      </div>
-      <span className="block h-1 overflow-hidden rounded-[2px] bg-panel-3">
-        <span
-          data-plan-progress-bar={view.tone}
-          className={cn('block h-1', view.tone === 'accent' ? 'bg-accent' : 'bg-good')}
-          style={{ width: `${view.percent}%` }}
-        />
-      </span>
+    <div data-plan-progress-block="" className="grid grid-cols-2 gap-2 px-4 pt-3">
+      {boxes.map((box) => (
+        <div
+          key={box.key}
+          data-plan-screen-progress={box.key}
+          className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3"
+        >
+          <span className="text-[11px] font-semibold uppercase leading-[14px] tracking-[.06em] text-fg-2">
+            {box.label}
+          </span>
+          <span className="truncate font-mono text-[13px] leading-[18px] text-fg">{box.text}</span>
+          <span className="block h-1 overflow-hidden rounded-[2px] bg-panel-3">
+            <span
+              data-plan-progress-bar={box.tone}
+              className={cn('block h-1', box.bar)}
+              style={{ width: `${box.percent}%` }}
+            />
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -915,7 +946,7 @@ export function PlanScreen(props: {
   const { session } = useSession();
   const me = session?.user.id ?? null;
   const toast = useToast();
-  const undoable = useUndoableAction();
+  const undoable = useUndoableAction({ durationMs: PLAN_UNDO_MS });
   const planId = props.planId;
   const { read, reload } = useScreenRead<PlanScreenData>(
     props.open,
@@ -928,6 +959,8 @@ export function PlanScreen(props: {
       }),
   );
   const [itemId, setItemId] = useState<string | null>(props.initialItemId ?? null);
+  // The Item screen was opened by a row's Not OK: its note box opens focused.
+  const [askChanges, setAskChanges] = useState(false);
   const entryItemId = props.initialItemId ?? null;
   // Add: the sheet (its day; undefined = closed), the concept sheet, the picker.
   const [addFor, setAddFor] = useState<{ day: string | null } | null>(null);
@@ -1279,48 +1312,11 @@ export function PlanScreen(props: {
     if (primary.kind === 'send') void sendHere();
   };
 
-  // Slot ticks (view mode). A tick is optimistic behind a 7s Undo toast with a
+  // PLAN (view mode). OK is optimistic behind a 4s Undo toast with a
   // countdown: the write goes when the toast ends (or the screen is left),
-  // never after Undo; a failed write reverts with its copy. An untick writes
-  // at once (optimistic, reverted on failure) and toasts "removed".
-  const untickSlot = async (
-    item: PlanItemRow,
-    reviewSide: ReviewSide,
-    previous: ReviewStatus,
-    dayHeader: string | null,
-  ): Promise<void> => {
-    if (slotWriting.current.has(item.id)) return;
-    slotWriting.current.add(item.id);
-    const traceId = generateTraceId();
-    const result = await runSlotWrite({
-      status: 'waiting',
-      previous,
-      apply: (next) => setSlotOverrides((prev) => ({ ...prev, [item.id]: next })),
-      write: (next) =>
-        planItemReview(supabase, {
-          p_item_id: item.id,
-          p_side: reviewSide,
-          p_status: next,
-          p_trace_id: traceId,
-        }),
-    });
-    slotWriting.current.delete(item.id);
-    if (!result.ok) {
-      logger.warn('chat: plan slot review failed', {
-        trace_id: traceId,
-        item_id: item.id,
-        error: result.error.message,
-      });
-    } else {
-      dispatchPlanChanged(window, planId);
-    }
-    const spec = slotToastSpec(
-      'untick',
-      result.ok ? { ok: true } : { ok: false, message: result.error.message },
-      dayHeader,
-    );
-    if (spec !== null) toast.show({ title: spec.title });
-  };
+  // never after Undo; a failed write reverts with its copy. Not OK opens the
+  // Item screen with the note box open: Send writes 'changes', closing writes
+  // nothing.
   const tickSlot = (
     item: PlanItemRow,
     reviewSide: ReviewSide,
@@ -1362,14 +1358,21 @@ export function PlanScreen(props: {
       },
     });
   };
-  const toggleSlot = (item: PlanItemRow): void => {
-    // Read-only boxes (the agency on an Open plan) never write; edit mode shows none.
+  const planOk = (item: PlanItemRow): void => {
+    // Read-only (the agency on an Open plan) never writes; edit mode shows text.
     if (bundle === null || slot === null || editMode) return;
     const previous = reviewStatus(bundle, item.id, slot);
+    if (previous === 'approved') return;
     const day = planItemDayInZone(item, bundle.postInfo, timeZone);
     const dayHeader = day !== null ? formatCivilDayHeader(day) : null;
-    if (previous === 'approved') void untickSlot(item, slot, previous, dayHeader);
-    else tickSlot(item, slot, previous, dayHeader);
+    tickSlot(item, slot, previous, dayHeader);
+  };
+  const planNotOk = (item: PlanItemRow): void => {
+    if (bundle === null || slot === null || editMode) return;
+    // A pending OK goes first, so the note's 'changes' lands after it.
+    undoable.flush();
+    setAskChanges(true);
+    setItemId(item.id);
   };
 
   // Edit mode. Enter copies the header into its fields; every change paints
@@ -1527,6 +1530,7 @@ export function PlanScreen(props: {
   };
   const openItem = (id: string): void => {
     if (editMode) return;
+    setAskChanges(false);
     setItemId(id);
   };
 
@@ -1938,7 +1942,7 @@ export function PlanScreen(props: {
       aria-busy={saving}
       disabled={saving || headerProblem !== null}
       onClick={() => void saveChanges()}
-      className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+      className="-mr-2 min-h-[44px] md:mr-0 min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
     >
       {saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}
     </button>
@@ -1958,7 +1962,7 @@ export function PlanScreen(props: {
         type="button"
         data-plan-edit=""
         onClick={enterEdit}
-        className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-mr-2 min-h-[44px] md:mr-0 min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {EDIT_LABEL}
       </button>
@@ -2079,12 +2083,11 @@ export function PlanScreen(props: {
               timeZone={timeZone}
               thumbs={read.status === 'ready' ? read.data.thumbs : {}}
               conceptThumbs={read.status === 'ready' ? (read.data.conceptThumbs ?? {}) : {}}
-              counts={read.status === 'ready' ? read.data.commentCounts : {}}
-              names={names}
               alsoIn={read.status === 'ready' ? (read.data.alsoIn ?? {}) : {}}
               drag={drag.state}
               onOpenItem={openItem}
-              onToggleSlot={toggleSlot}
+              onPlanOk={planOk}
+              onPlanNotOk={planNotOk}
               {...(editing
                 ? {
                     onDragStart: (id: string, row: HTMLElement, clientY: number) =>
@@ -2167,6 +2170,7 @@ export function PlanScreen(props: {
           item={item}
           side={side}
           approverName={nameOf(approvedBy(bundle, item)?.userId ?? null)}
+          askChanges={askChanges}
           {...(itemId === entryItemId
             ? {
                 backLabel: 'Back',
@@ -2945,16 +2949,15 @@ export function PlanBody(props: {
   thumbs: Record<string, string>;
   /** Concept tiles by item id (the first image, or a file tile). */
   conceptThumbs?: Readonly<Record<string, ConceptThumb>>;
-  /** Visible comment counts by item id (the screen's one count read). */
-  counts?: Readonly<Record<string, number>>;
-  /** Approvers' names by user id (the Approved by lines). */
-  names?: Readonly<Record<string, string>>;
   /** Other plans' titles by post id (the Also in pill). */
   alsoIn?: Readonly<Record<string, string[]>>;
   /** The drag in progress, or null. */
   drag: DragState | null;
   onOpenItem: (id: string) => void;
-  onToggleSlot: (item: PlanItemRow) => void;
+  /** PLAN: OK on a row (behind the Undo toast). */
+  onPlanOk: (item: PlanItemRow) => void;
+  /** PLAN: Not OK on a row (the Item screen with the note box open). */
+  onPlanNotOk: (item: PlanItemRow) => void;
   /** Agency, view mode: a day's Add row (null = No date). */
   onAdd?: (day: string | null) => void;
   /** Edit mode: a row's grip lifts it. */
@@ -2972,7 +2975,7 @@ export function PlanBody(props: {
       : {};
   return (
     <>
-      <PlanProgressRow bundle={bundle} />
+      <PlanProgressRow bundle={bundle} side={side} />
       <div
         data-plan-list={weeks ? 'weeks' : 'days'}
         {...(edit !== undefined ? { 'data-plan-list-mode': 'edit' } : {})}
@@ -3009,7 +3012,22 @@ export function PlanBody(props: {
                   : null;
               const others = items.filter((i) => drag === null || i.id !== drag.itemId);
               const empty = items.length === 0;
+              // One date tile per day: on its first row, or beside the empty day's line.
+              const tile = <DayColumn day={day.day} today={today} empty={empty} />;
               let k = 0;
+              const emptyBody =
+                droppable && empty ? (
+                  <PlanDropHere over={hovered} />
+                ) : props.onAdd !== undefined && (day.day === null || day.inRange) ? (
+                  <AddRow day={day.day} empty onAdd={props.onAdd} />
+                ) : slotAt === null ? (
+                  <p
+                    data-plan-day-empty=""
+                    className="flex min-h-[44px] items-center text-[13px] text-fg-3"
+                  >
+                    Nothing planned
+                  </p>
+                ) : null;
               return (
                 <div
                   key={day.day ?? 'none'}
@@ -3017,65 +3035,53 @@ export function PlanBody(props: {
                   {...(day.day !== null && !day.inRange ? { 'data-plan-day-out': '' } : {})}
                   {...(droppable ? { 'data-plan-drop': '' } : {})}
                   {...(hovered ? { 'data-plan-drop-over': '' } : {})}
-                  className="flex gap-3 border-t border-border py-4 pl-4 pr-[5px]"
+                  className="flex flex-col gap-4 border-t border-border px-4 py-4"
                 >
-                  <DayColumn day={day.day} today={today} empty={empty} />
-                  <div className="flex min-w-0 flex-1 flex-col gap-4">
-                    {items.map((item) => {
-                      const lifted = drag !== null && item.id === drag.itemId;
-                      const slotHere = !lifted && slotAt === k;
-                      if (!lifted) k += 1;
-                      return (
-                        <Fragment key={item.id}>
-                          {slotHere ? <PlanDropLine /> : null}
-                          <PlanRow
-                            bundle={bundle}
-                            item={item}
-                            side={side}
-                            thumb={
-                              item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null
-                            }
-                            conceptThumb={props.conceptThumbs?.[item.id] ?? null}
-                            dimmed={lifted}
-                            comments={props.counts?.[item.id] ?? 0}
-                            timeZone={props.timeZone}
-                            approvedByName={(() => {
-                              const by = approvedBy(bundle, item);
-                              if (by === null) return null;
-                              return (
-                                (by.userId !== null ? props.names?.[by.userId] : undefined) ??
-                                MEMBER_NAME
-                              );
-                            })()}
-                            alsoIn={
-                              item.post_id !== null ? (props.alsoIn?.[item.post_id] ?? []) : []
-                            }
-                            day={day.day}
-                            onOpen={() => props.onOpenItem(item.id)}
-                            onToggleSlot={() => props.onToggleSlot(item)}
-                            {...(props.onDragStart !== undefined &&
-                            (day.day === null || day.inRange)
-                              ? { onDragStart: props.onDragStart }
-                              : {})}
-                            {...(edit !== undefined ? { edit } : {})}
-                          />
-                        </Fragment>
-                      );
-                    })}
-                    {slotAt !== null && slotAt >= others.length && !empty ? <PlanDropLine /> : null}
-                    {droppable && empty ? (
-                      <PlanDropHere over={hovered} />
-                    ) : props.onAdd !== undefined && (day.day === null || day.inRange) ? (
-                      <AddRow day={day.day} empty={empty} onAdd={props.onAdd} />
-                    ) : empty && slotAt === null ? (
-                      <p
-                        data-plan-day-empty=""
-                        className="flex min-h-[44px] items-center text-[13px] text-fg-3"
-                      >
-                        Nothing planned
-                      </p>
-                    ) : null}
-                  </div>
+                  {items.map((item, index) => {
+                    const lifted = drag !== null && item.id === drag.itemId;
+                    const slotHere = !lifted && slotAt === k;
+                    if (!lifted) k += 1;
+                    return (
+                      <Fragment key={item.id}>
+                        {slotHere ? <PlanDropLine /> : null}
+                        <PlanRow
+                          bundle={bundle}
+                          item={item}
+                          side={side}
+                          thumb={
+                            item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null
+                          }
+                          conceptThumb={props.conceptThumbs?.[item.id] ?? null}
+                          dimmed={lifted}
+                          tile={index === 0 ? tile : null}
+                          timeZone={props.timeZone}
+                          alsoIn={item.post_id !== null ? (props.alsoIn?.[item.post_id] ?? []) : []}
+                          day={day.day}
+                          onOpen={() => props.onOpenItem(item.id)}
+                          onPlanOk={() => props.onPlanOk(item)}
+                          onPlanNotOk={() => props.onPlanNotOk(item)}
+                          {...(props.onDragStart !== undefined && (day.day === null || day.inRange)
+                            ? { onDragStart: props.onDragStart }
+                            : {})}
+                          {...(edit !== undefined ? { edit } : {})}
+                        />
+                      </Fragment>
+                    );
+                  })}
+                  {slotAt !== null && slotAt >= others.length && !empty ? <PlanDropLine /> : null}
+                  {empty ? (
+                    <div className="flex items-center">
+                      {edit !== undefined ? (
+                        <span className="mr-1 shrink-0">
+                          <PlanGripSpacer />
+                        </span>
+                      ) : null}
+                      {tile}
+                      <div className="ml-3 min-w-0 flex-1">{emptyBody}</div>
+                    </div>
+                  ) : props.onAdd !== undefined && (day.day === null || day.inRange) ? (
+                    <AddRow day={day.day} empty={false} onAdd={props.onAdd} />
+                  ) : null}
                 </div>
               );
             })}
@@ -3088,9 +3094,9 @@ export function PlanBody(props: {
 
 /**
  * A day's Add row (agency, view mode): plus icon and "Add" (13px, 600, accent)
- * in a 44px target, its left edge on the thumbnail column. Under a day's rows
- * it tucks up so the gap stays 16px; on an empty day it sits right of
- * "Nothing planned".
+ * in a 44px target. Under a day's rows it sits on the title column and tucks
+ * up so the gap stays 16px; on an empty day it sits right of "Nothing
+ * planned", beside the date tile.
  */
 function AddRow(props: {
   day: string | null;
@@ -3101,7 +3107,10 @@ function AddRow(props: {
   return (
     <div
       data-plan-add-row=""
-      className={cn('flex min-h-[44px] items-center gap-2', !props.empty && '-mb-3 -mt-2')}
+      className={cn(
+        'flex min-h-[44px] items-center gap-2',
+        !props.empty && '-mb-3 -mt-2 pl-[68px]',
+      )}
     >
       {props.empty ? (
         <p data-plan-day-empty="" className="flex-1 text-[13px] text-fg-3">
@@ -3123,119 +3132,274 @@ function AddRow(props: {
 }
 
 /**
- * A day's left column: 48px wide, 44px tall (the thumbnail's height), the
- * weekday (11px/14px, 600, uppercase, .06em, muted) over the digits
- * (22px/28px, 600, -.01em, tabular), centred as one block with a 2px gap.
- * Today: both in the accent. An empty day's digits are faint. "No date": the
- * words in the weekday style, no digits.
+ * A day's calendar tile, shown once per day group: 56x56, radius 10, a 1px
+ * border-strong, bg-panel. An 18px strip on top holds the weekday (10px/12px,
+ * 700, uppercase, .08em, bg-panel-2, text-fg-2); the day number sits centred
+ * below it (JetBrains Mono 20px/24px, 500). Today (the workspace zone): the
+ * strip in the accent with accent-fg text and an accent border. "No date":
+ * the strip reads "No date" and the number area stays empty.
  */
 export function DayColumn(props: {
   day: string | null;
   today: string;
-  empty: boolean;
+  empty?: boolean;
 }): ReactElement {
-  const weekdayClass = 'text-[11px] font-semibold uppercase leading-[14px] tracking-[.06em]';
-  if (props.day === null) {
-    return (
-      <div
-        data-plan-day-col=""
-        className="flex h-11 w-12 shrink-0 flex-col items-center justify-center gap-0.5 text-center"
-      >
-        <span data-plan-day-weekday="" className={cn(weekdayClass, 'text-fg-3')}>
-          No date
-        </span>
-      </div>
-    );
-  }
-  const isToday = props.day === props.today;
+  const isToday = props.day !== null && props.day === props.today;
   return (
     <div
       data-plan-day-col=""
       {...(isToday ? { 'data-plan-today': '' } : {})}
-      className="flex h-11 w-12 shrink-0 flex-col items-center justify-center gap-0.5 text-center"
+      className={cn(
+        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-[10px] border bg-panel',
+        isToday ? 'border-accent' : 'border-border-strong',
+      )}
     >
       <span
         data-plan-day-weekday=""
-        className={cn(weekdayClass, isToday ? 'text-accent' : 'text-fg-3')}
+        className={cn(
+          'flex h-[18px] shrink-0 items-center justify-center whitespace-nowrap text-[10px] font-bold uppercase leading-3 tracking-[.08em]',
+          isToday ? 'bg-accent text-accent-fg' : 'bg-panel-2 text-fg-2',
+        )}
       >
-        {civilWeekdayShort(props.day)}
+        {props.day === null ? NO_DATE_LABEL : civilWeekdayShort(props.day)}
       </span>
       <span
         data-plan-day-number=""
-        className={cn(
-          'text-[22px] font-semibold leading-7 tracking-[-.01em] tabular-nums',
-          isToday ? 'text-accent' : props.empty ? 'text-border-strong' : 'text-fg',
-        )}
+        className="flex flex-1 items-center justify-center font-mono text-[20px] font-medium leading-6 tabular-nums text-fg"
       >
-        {dayOfMonth(props.day)}
+        {props.day === null ? '' : dayOfMonth(props.day)}
       </span>
     </div>
   );
 }
 
+/** The PLAN / POST line label: 36px column, 11px/14px, 600, uppercase, .06em. */
+const LINE_LABEL =
+  'w-9 shrink-0 text-[11px] font-semibold uppercase leading-[14px] tracking-[.06em] text-fg-2';
+
 /**
- * The slot checkbox, at a row's right end: a 22px box (radius 6) in a 44x44
- * target, top-aligned with the thumbnail so the box centres on it. Unticked:
- * a 1.5px border-strong outline. Ticked: the client side fills with the
- * success token, the team side with the accent; white tick. Tokens only.
+ * The PLAN switch: "OK" and "Not OK" joined (36px visual, min 84px each,
+ * 1px border-strong, bg-panel), each in a 44px tall target. Reopened from
+ * the pill, the current answer is highlighted. Not full width.
  */
-export function SlotCheckbox(props: {
+export function PlanSwitch(props: {
   side: ReviewSide;
-  checked: boolean;
   title: string;
-  /** Read-only (the agency on an Open plan): shown, disabled, never writes. */
-  readOnly?: boolean;
-  onToggle: () => void;
+  /** The answer it was reopened on; null when undecided. */
+  current: 'approved' | 'changes' | null;
+  onOk: () => void;
+  onNotOk: () => void;
 }): ReactElement {
-  const readOnly = props.readOnly === true;
+  const visual =
+    'flex h-9 min-w-[84px] items-center justify-center gap-1.5 border px-3.5 text-[13px] font-semibold leading-[18px]';
+  return (
+    <span
+      role="group"
+      aria-label={`${PLAN_LINE_LABEL}: ${props.title}`}
+      data-plan-slot={props.side}
+      data-plan-slot-state={planControlState(props.current ?? 'waiting')}
+      data-plan-control="switch"
+      className="flex shrink-0 items-center"
+    >
+      <button
+        type="button"
+        aria-pressed={props.current === 'approved'}
+        data-plan-ok=""
+        onClick={props.onOk}
+        className="group flex h-11 items-center focus-visible:outline-none"
+      >
+        <span
+          className={cn(
+            visual,
+            'rounded-l-lg text-good group-focus-visible:ring-2 group-focus-visible:ring-accent',
+            props.current === 'approved'
+              ? 'border-good bg-good-soft'
+              : 'border-border-strong bg-panel',
+          )}
+        >
+          <IconCheck size={16} />
+          {PLAN_OK_LABEL}
+        </span>
+      </button>
+      <button
+        type="button"
+        aria-pressed={props.current === 'changes'}
+        data-plan-not-ok=""
+        onClick={props.onNotOk}
+        className="group -ml-px flex h-11 items-center focus-visible:outline-none"
+      >
+        <span
+          className={cn(
+            visual,
+            'rounded-r-lg text-bad group-focus-visible:ring-2 group-focus-visible:ring-accent',
+            props.current === 'changes'
+              ? 'border-bad bg-bad-soft'
+              : 'border-border-strong bg-panel',
+          )}
+        >
+          <IconX size={16} />
+          {PLAN_NOT_OK_LABEL}
+        </span>
+      </button>
+    </span>
+  );
+}
+
+/**
+ * The decided PLAN pill: 32px visual in a 44px target, fully round, icon +
+ * "OK" / "Not OK" + a chevron at 70%. Solid good / bad fills (light values in
+ * both themes) under white text. Tapping it reopens the switch.
+ */
+export function PlanDecidedPill(props: {
+  side: ReviewSide;
+  title: string;
+  status: 'approved' | 'changes';
+  onChange: () => void;
+}): ReactElement {
+  const ok = props.status === 'approved';
   return (
     <button
       type="button"
-      role="checkbox"
-      aria-checked={props.checked}
-      aria-label={
-        readOnly
-          ? `${props.checked ? 'Approved' : 'Waiting for approval'}: ${props.title}`
-          : props.checked
-            ? `Remove slot approval: ${props.title}`
-            : `Approve slot: ${props.title}`
-      }
+      aria-label={`${PLAN_LINE_LABEL} ${ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}: ${props.title}`}
+      aria-haspopup="true"
       data-plan-slot={props.side}
-      data-plan-slot-state={props.checked ? 'approved' : 'pending'}
-      {...(readOnly ? { 'data-plan-slot-readonly': '' } : {})}
-      disabled={readOnly}
-      onClick={readOnly ? undefined : props.onToggle}
-      className="flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
+      data-plan-slot-state={planControlState(props.status)}
+      data-plan-control="pill"
+      onClick={props.onChange}
+      className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
     >
       <span
         className={cn(
-          'flex h-[22px] w-[22px] items-center justify-center rounded-[6px] text-accent-fg',
-          props.checked
-            ? props.side === 'client'
-              ? 'border-[1.5px] border-good bg-good'
-              : 'border-[1.5px] border-accent bg-accent'
-            : 'border-[1.5px] border-border-strong bg-panel',
+          'flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold leading-[18px] text-white group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-panel',
+          ok ? 'bg-[var(--good-solid)]' : 'bg-[var(--bad-solid)]',
         )}
       >
-        {props.checked ? <IconCheck size={14} /> : null}
+        {ok ? <IconCheck size={16} /> : <IconX size={16} />}
+        {ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}
+        <span aria-hidden="true" className="opacity-70">
+          <IconChevronDown size={14} />
+        </span>
       </span>
     </button>
   );
 }
 
-/** A row's meta line: a post's "Carousel · In review", a concept's description. Pure. */
+const PLAN_TEXT_TONES: Record<ReviewStatus, string> = {
+  approved: 'text-good',
+  changes: 'text-bad',
+  waiting: 'text-fg-2',
+};
+
+const POST_LINE_TONES: Record<PostLineTone, string> = {
+  draft: 'text-fg-2',
+  review: 'text-stage-review',
+  approved: 'text-stage-approved',
+  parked: 'text-stage-parked',
+  rejected: 'text-stage-rejected',
+  none: 'text-fg-2',
+};
+
+/**
+ * Under the title row: PLAN (the switch, the pill, or read-only text) and
+ * POST (an 8px dot and the stage, same colour). Edit mode shows both as text.
+ */
+function PlanStatusLines(props: {
+  bundle: PlanBundle;
+  item: PlanItemRow;
+  side: ViewerSide;
+  title: string;
+  /** Edit mode: text only. */
+  readOnly: boolean;
+  onOk: () => void;
+  onNotOk: () => void;
+}): ReactElement {
+  const [changing, setChanging] = useState(false);
+  const control = planControl(props.bundle, props.item, props.side);
+  const decided = control.kind === 'pill' ? control.status : null;
+  // A new answer (a write, an Undo, a re-read) closes the reopened switch.
+  useEffect(() => setChanging(false), [decided]);
+  const post = postLine(props.bundle, props.item);
+  let plan: ReactNode = null;
+  if (control.kind === 'text' || (props.readOnly && control.kind !== 'none')) {
+    const status =
+      control.kind === 'text'
+        ? control.status
+        : control.kind === 'pill'
+          ? control.status
+          : 'waiting';
+    plan = (
+      <span
+        data-plan-slot={control.side}
+        data-plan-slot-state={planControlState(status)}
+        data-plan-slot-readonly=""
+        data-plan-control="text"
+        className={cn('text-[13px] font-semibold leading-[18px]', PLAN_TEXT_TONES[status])}
+      >
+        {planControlText(status)}
+      </span>
+    );
+  } else if (control.kind === 'switch' || (control.kind === 'pill' && changing)) {
+    plan = (
+      <PlanSwitch
+        side={control.side}
+        title={props.title}
+        current={decided}
+        onOk={() => {
+          setChanging(false);
+          if (decided !== 'approved') props.onOk();
+        }}
+        onNotOk={() => {
+          setChanging(false);
+          props.onNotOk();
+        }}
+      />
+    );
+  } else if (control.kind === 'pill') {
+    plan = (
+      <PlanDecidedPill
+        side={control.side}
+        title={props.title}
+        status={control.status}
+        onChange={() => setChanging(true)}
+      />
+    );
+  }
+  return (
+    <div data-plan-row-lines="" className="mt-1 flex flex-col">
+      {plan !== null ? (
+        <div data-plan-line="plan" className="flex min-h-[44px] items-center gap-3">
+          <span className={LINE_LABEL}>{PLAN_LINE_LABEL}</span>
+          {plan}
+        </div>
+      ) : null}
+      <div data-plan-line="post" className="flex min-h-[24px] items-center gap-3">
+        <span className={LINE_LABEL}>{POST_LINE_LABEL}</span>
+        <span
+          data-plan-post-status={post.tone}
+          className={cn(
+            'flex min-w-0 items-center gap-2 text-[13px] font-medium leading-[18px]',
+            POST_LINE_TONES[post.tone],
+          )}
+        >
+          <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-current" />
+          <span className="truncate">{post.label}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** A row's format line: a post's format ("Carousel"), a concept's description. Pure. */
 export function rowMeta(bundle: PlanBundle, item: PlanItemRow): string {
   if (item.kind === 'concept') return rowSubline(item);
-  if (item.post_id === null) return stageLabel('draft');
-  const stage = stageLabel(bundle.postStages[item.post_id]);
-  const format = bundle.postInfo[item.post_id]?.format ?? null;
-  return format !== null && format !== '' ? `${formatLabel(format)} · ${stage}` : stage;
+  const format = item.post_id !== null ? (bundle.postInfo[item.post_id]?.format ?? null) : null;
+  return format !== null && format !== '' ? formatLabel(format) : '';
 }
 
 /**
- * The row's 44x44 tile: a post's first image, "Aa" for a text post; a
- * concept's first image file, a file icon when it holds only documents, and
- * the dashed outline when it has no files.
+ * The row's 56x56 tile (right end, radius 10, cropped): a post's first image,
+ * "Aa" for a text post; a concept's first image file, a file icon when it
+ * holds only documents, and the dashed outline when it has no files.
  */
 function RowTile(props: {
   item: PlanItemRow;
@@ -3249,7 +3413,7 @@ function RowTile(props: {
       return (
         <span
           data-plan-row-tile="concept-image"
-          className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-panel-2"
+          className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] bg-panel-2"
         >
           <Thumbnail
             assetVersionId={concept.versionId}
@@ -3265,16 +3429,16 @@ function RowTile(props: {
       return (
         <span
           data-plan-row-tile="concept-file"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[10px] bg-panel-3 text-fg-3"
         >
-          <IconFile size={18} />
+          <IconFile size={22} />
         </span>
       );
     }
     return (
       <span
         data-plan-row-tile="concept"
-        className="h-11 w-11 shrink-0 rounded-lg border-[1.5px] border-dashed border-border-strong"
+        className="h-14 w-14 shrink-0 rounded-[10px] border-[1.5px] border-dashed border-border-strong"
       />
     );
   }
@@ -3282,7 +3446,7 @@ function RowTile(props: {
     return (
       <span
         data-plan-row-tile="image"
-        className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-panel-2"
+        className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] bg-panel-2"
       >
         <Thumbnail
           assetVersionId={props.thumb}
@@ -3298,7 +3462,7 @@ function RowTile(props: {
     <span
       data-plan-row-tile="text"
       className={cn(
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[15px] font-semibold',
+        'flex h-14 w-14 shrink-0 items-center justify-center rounded-[10px] text-[17px] font-semibold',
         props.muted ? 'bg-panel-2 text-fg-3' : 'bg-accent-soft text-accent',
       )}
     >
@@ -3307,28 +3471,6 @@ function RowTile(props: {
   );
 }
 
-/** The Post / Concept tag pill (11px/18px, 650, radius 4, padding 0 6, tinted). */
-function KindTag(props: { item: PlanItemRow; label: string }): ReactElement {
-  const post = props.item.kind === 'post';
-  return (
-    <span
-      data-plan-row-kind={props.label}
-      className={cn(
-        'inline-flex shrink-0 items-center rounded px-1.5 text-[11px] font-[650] leading-[18px]',
-        post ? 'bg-accent-soft text-accent' : 'bg-panel-3 text-fg-2',
-      )}
-    >
-      {post ? 'Post' : 'Concept'}
-    </span>
-  );
-}
-
-const STATUS_TONES: Record<PillTone, string> = {
-  good: 'text-good',
-  review: 'text-stage-review',
-  neutral: 'text-fg-3',
-};
-
 function PlanRow(props: {
   bundle: PlanBundle;
   item: PlanItemRow;
@@ -3336,18 +3478,19 @@ function PlanRow(props: {
   thumb: string | null;
   conceptThumb?: ConceptThumb | null;
   dimmed: boolean;
-  /** Visible comments on the item; shown when above zero. */
-  comments: number;
-  /** The workspace zone (the Approved by time, the date line). */
+  /** The day's date tile on its first row; null on the rows under it. */
+  tile: ReactNode;
+  /** The workspace zone (the date line). */
   timeZone?: string;
-  /** An Open plan's client-approved row: the approver's name; null otherwise. */
-  approvedByName?: string | null;
   /** Other live plans this post sits in (the Also in pill). */
   alsoIn?: readonly string[];
   /** The row's plan day (the edit chip's label). */
   day?: string | null;
   onOpen: () => void;
-  onToggleSlot: () => void;
+  /** PLAN: OK (behind the Undo toast). */
+  onPlanOk: () => void;
+  /** PLAN: Not OK (the Item screen with the note box open). */
+  onPlanNotOk: () => void;
   /** Edit mode: the grip lifts the row. */
   onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
   /** Edit mode: grip, day chip, remove (laptop: right-click, keyboard). */
@@ -3359,12 +3502,12 @@ function PlanRow(props: {
   const id = props.item.id;
   const wrapRef = useRef<HTMLDivElement>(null);
   const lastPointer = useRef('');
-  const kindLabel = itemKindLabel(props.bundle.items, props.item);
   const title = rowTitle(props.bundle, props.item);
-  const comments = commentsLabel(props.comments);
   const date = itemDateLabel(props.bundle, props.item, zone);
   const alsoIn = alsoInLabel(props.alsoIn ?? []);
-  const by = props.approvedByName != null ? approvedBy(props.bundle, props.item) : null;
+  const dim = props.dimmed && 'opacity-25';
+  // The tile column stays 56px wide on every row, so titles align.
+  const tileCol = props.tile ?? <span aria-hidden="true" className="w-14 shrink-0" />;
   const dateLine = (
     <span
       data-plan-row-date={date.dated ? 'dated' : 'none'}
@@ -3373,38 +3516,42 @@ function PlanRow(props: {
       {date.label}
     </span>
   );
+  const titleText = (muted: boolean): ReactElement => (
+    <span
+      data-plan-row-title=""
+      className={cn(
+        'line-clamp-2 break-words text-[15px] font-semibold leading-5',
+        muted ? 'text-fg-2' : 'text-fg',
+      )}
+    >
+      <Highlight text={title} />
+    </span>
+  );
   if (draftLocked(props.bundle, props.item, props.side)) {
-    // Name only: no checkbox (the right side stays empty), no open, no hover.
+    // Name only: no PLAN control, no open, no hover.
     return (
-      <div
-        role="button"
-        aria-disabled="true"
-        data-plan-row={props.item.id}
-        data-plan-row-draft="locked"
-        onContextMenu={(event) => event.preventDefault()}
-        className={cn('flex w-full cursor-default items-start gap-3 pr-12', NO_TOUCH_SELECT)}
-      >
-        <RowTile item={props.item} thumb={null} muted />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span
-            data-plan-row-title=""
-            className="truncate text-[15px] font-semibold leading-5 text-fg-2"
-          >
-            <Highlight text={title} />
+      <div data-plan-row-wrap={id} className="flex w-full min-w-0 items-start gap-3">
+        {tileCol}
+        <div
+          role="button"
+          aria-disabled="true"
+          data-plan-row={props.item.id}
+          data-plan-row-draft="locked"
+          onContextMenu={(event) => event.preventDefault()}
+          className={cn('flex min-w-0 flex-1 cursor-default items-start gap-3', NO_TOUCH_SELECT)}
+        >
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            {titleText(true)}
+            <span className="truncate text-[13px] leading-[18px] text-fg-2">{DRAFT_NOT_READY}</span>
+            {dateLine}
           </span>
-          <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-fg-3">
-            <KindTag item={props.item} label={kindLabel} />
-            <span className="truncate">{DRAFT_NOT_READY}</span>
-          </span>
-          {dateLine}
-        </span>
+          <RowTile item={props.item} thumb={null} muted />
+        </div>
       </div>
     );
   }
-  const slot = slotCheckboxShown(props.bundle, props.item, props.side);
   const picked = edit?.pickedId === id;
   const meta = rowMeta(props.bundle, props.item);
-  const status = itemStatusLine(props.bundle, props.item, props.side);
   const rowButton = (
     <button
       type="button"
@@ -3417,48 +3564,17 @@ function PlanRow(props: {
       }}
       {...(picked ? { 'data-plan-row-picked': '' } : {})}
       className={cn(
-        'flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex w-full min-w-0 items-start gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         picked && 'ring-2 ring-accent ring-offset-2 ring-offset-panel',
         edit !== undefined && 'cursor-default',
         NO_TOUCH_SELECT,
       )}
     >
-      <RowTile
-        item={props.item}
-        thumb={props.thumb}
-        conceptThumb={props.conceptThumb ?? null}
-        muted={false}
-      />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span
-          data-plan-row-title=""
-          className="truncate text-[15px] font-semibold leading-5 text-fg"
-        >
-          <Highlight text={title} />
-        </span>
-        <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-[18px] text-fg-3">
-          <KindTag item={props.item} label={kindLabel} />
-          {meta !== '' ? (
-            <span data-plan-row-meta="" className="truncate">
-              {meta}
-            </span>
-          ) : null}
-        </span>
-        {status !== null ? (
-          <span data-plan-row-status="" className="flex min-w-0 items-center text-xs leading-4">
-            <span className={cn('flex shrink-0 items-center gap-1.5', STATUS_TONES[status.tone])}>
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
-              {status.label}
-            </span>
-            {comments !== null ? (
-              <span data-plan-row-comments="" className="truncate text-fg-3">
-                {` · ${comments}`}
-              </span>
-            ) : null}
-          </span>
-        ) : comments !== null ? (
-          <span data-plan-row-comments="" className="truncate text-xs leading-4 text-fg-3">
-            {comments}
+        {titleText(false)}
+        {meta !== '' ? (
+          <span data-plan-row-meta="" className="truncate text-[13px] leading-[18px] text-fg-2">
+            {meta}
           </span>
         ) : null}
         {alsoIn !== null ? (
@@ -3469,23 +3585,30 @@ function PlanRow(props: {
             {alsoIn}
           </span>
         ) : null}
-        {by !== null && props.approvedByName != null ? (
-          <span
-            data-plan-row-approved-by=""
-            className="flex min-w-0 items-center gap-1 text-xs leading-4 text-good"
-          >
-            <IconCheck size={12} />
-            <span className="truncate">
-              {approvedByLine(props.approvedByName, approvedWhen(by.at, new Date(), zone))}
-            </span>
-          </span>
-        ) : null}
         {dateLine}
       </span>
+      <RowTile
+        item={props.item}
+        thumb={props.thumb}
+        conceptThumb={props.conceptThumb ?? null}
+        muted={false}
+      />
     </button>
   );
+  const lines = (
+    <PlanStatusLines
+      bundle={props.bundle}
+      item={props.item}
+      side={props.side}
+      title={title}
+      readOnly={edit !== undefined}
+      onOk={props.onPlanOk}
+      onNotOk={props.onPlanNotOk}
+    />
+  );
   if (edit !== undefined) {
-    // Edit mode: grip, the row, the day chip and the remove icon; no tick.
+    // Edit mode: grip | date tile | title block | thumbnail; PLAN and POST as
+    // text; the day chip and the remove icon on the row's bottom line.
     return (
       <div
         ref={wrapRef}
@@ -3504,54 +3627,47 @@ function PlanRow(props: {
           if (edit.onMenu === undefined || edit.dragging || wrapRef.current === null) return;
           edit.onMenu(id, wrapRef.current, event.clientX, event.clientY);
         }}
-        className={cn(
-          'group flex w-full min-w-0 items-start gap-1',
-          props.dimmed && 'opacity-25',
-          NO_TOUCH_SELECT,
-        )}
+        className={cn('group flex w-full min-w-0 items-start', NO_TOUCH_SELECT)}
       >
-        {onDragStart !== undefined ? (
-          <PlanGrip
-            onLift={(clientY) => {
-              if (wrapRef.current !== null) onDragStart(id, wrapRef.current, clientY);
-            }}
+        <span className={cn('mr-1 shrink-0', dim)}>
+          {onDragStart !== undefined ? (
+            <PlanGrip
+              onLift={(clientY) => {
+                if (wrapRef.current !== null) onDragStart(id, wrapRef.current, clientY);
+              }}
+            />
+          ) : (
+            <PlanGripSpacer />
+          )}
+        </span>
+        {tileCol}
+        <div className={cn('ml-3 flex min-w-0 flex-1 flex-col', dim)}>
+          {rowButton}
+          {lines}
+          <PlanRowEditButtons
+            title={title}
+            dayLabel={dropDayLabel(props.day ?? null)}
+            dayOpen={edit.dayOpenId === id}
+            onDay={(anchor) => edit.onDay(id, anchor)}
+            onRemove={() => edit.onRemove(id)}
           />
-        ) : (
-          <PlanGripSpacer />
-        )}
-        {rowButton}
-        <PlanRowEditButtons
-          title={title}
-          dayLabel={dropDayLabel(props.day ?? null)}
-          dayOpen={edit.dayOpenId === id}
-          onDay={(anchor) => edit.onDay(id, anchor)}
-          onRemove={() => edit.onRemove(id)}
-        />
+        </div>
       </div>
     );
   }
-  const slotBox =
-    slot !== null ? (
-      <SlotCheckbox
-        side={slot.side}
-        checked={slotTicked(props.bundle, props.item.id, slot.side)}
-        title={title}
-        readOnly={!slot.writable}
-        onToggle={props.onToggleSlot}
-      />
-    ) : (
-      <span aria-hidden="true" className="h-11 w-11 shrink-0" />
-    );
-  // View mode: the row, then the tick. No grip, no swipe, no dustbin.
+  // View mode: date tile | title block | thumbnail, then PLAN and POST.
   return (
     <div
       ref={wrapRef}
       data-plan-row-wrap={id}
       {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
-      className={cn('flex w-full min-w-0 items-start gap-1', props.dimmed && 'opacity-25')}
+      className="flex w-full min-w-0 items-start gap-3"
     >
-      {rowButton}
-      {slotBox}
+      {tileCol}
+      <div className={cn('flex min-w-0 flex-1 flex-col', dim)}>
+        {rowButton}
+        {lines}
+      </div>
     </div>
   );
 }

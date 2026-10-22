@@ -1,7 +1,8 @@
 // The Plan list's edit mode row pieces (agency, every width): the grip handle
 // on a row's left (a mouse or a finger lifts the row after 4px of travel, no
-// long-press), the day chip (opens the day picker) and the remove icon (bad
-// colour, 44px) right of the text, the 3px drop line with its dot, the "Drop
+// long-press), the row's bottom line with the day chip (opens the day picker)
+// on the left and the remove icon (bad colour, 44px) on the right edge, the
+// 3px drop line with its dot, the "Drop
 // here" target of an empty day and the slim laptop keyboard hint line. View
 // mode shows none of these. Tokens only; the lifted card moves on translateY
 // only.
@@ -80,9 +81,10 @@ export function PlanGripSpacer(): ReactElement {
 }
 
 /**
- * The edit row's day chip ("Wed 14", "No date") and remove icon: the chip
- * opens the day picker, 44px tall; the remove is a 44x44 target in the bad
- * colour. Nothing is written until Save changes.
+ * The edit row's bottom line: the day chip ("Thu 22", "No date"; calendar
+ * icon, 32px visual with a 1px border-strong in a 44px target) on the left,
+ * the remove icon (a 44x44 target in the bad colour) on the right edge. The
+ * chip opens the day picker. Nothing is written until Save changes.
  */
 export function PlanRowEditButtons(props: {
   title: string;
@@ -94,7 +96,10 @@ export function PlanRowEditButtons(props: {
   onRemove: () => void;
 }): ReactElement {
   return (
-    <span className={cn('flex shrink-0 items-start gap-0.5', NO_TOUCH_SELECT)}>
+    <span
+      data-plan-row-edit-line=""
+      className={cn('flex w-full items-center justify-between gap-2', NO_TOUCH_SELECT)}
+    >
       <button
         type="button"
         aria-label={`${CHANGE_DAY_LABEL}: ${props.title}`}
@@ -103,10 +108,12 @@ export function PlanRowEditButtons(props: {
         title={CHANGE_DAY_LABEL}
         data-plan-row-day-chip=""
         onClick={(event) => props.onDay(event.currentTarget)}
-        className="flex min-h-[44px] shrink-0 items-center gap-1 self-start rounded-md px-1.5 text-[13px] font-semibold text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
       >
-        <IconCalendar size={16} />
-        <span className="font-mono tabular-nums">{props.dayLabel}</span>
+        <span className="flex h-8 items-center gap-1.5 rounded-lg border border-border-strong bg-panel px-2.5 text-[13px] font-semibold text-fg-2 group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent">
+          <IconCalendar size={16} />
+          <span className="font-mono tabular-nums">{props.dayLabel}</span>
+        </span>
       </button>
       <button
         type="button"
@@ -114,7 +121,7 @@ export function PlanRowEditButtons(props: {
         title={REMOVE_LABEL}
         data-plan-row-remove-edit=""
         onClick={props.onRemove}
-        className="flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-md text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-mr-[13px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <IconTrash size={18} />
       </button>

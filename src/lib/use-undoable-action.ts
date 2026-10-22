@@ -77,10 +77,14 @@ export function undoFailureTitle(label: string): string {
  * commits flush immediately on unmount, on visibilitychange to hidden, and on
  * pagehide, so navigating away never loses them.
  */
-export function useUndoableAction(): {
+export function useUndoableAction(options?: {
+  /** The toast's window before the commit. Default UNDO_WINDOW_MS. */
+  durationMs?: number;
+}): {
   run: (action: UndoableAction) => void;
   flush: () => void;
 } {
+  const durationMs = options?.durationMs ?? UNDO_WINDOW_MS;
   const toast = useOptionalToast();
   const toastRef = useRef<ToastApi | null>(toast);
   toastRef.current = toast;
@@ -131,12 +135,12 @@ export function useUndoableAction(): {
         title: action.label,
         ...(action.tone !== undefined ? { tone: action.tone } : {}),
         action: { label: 'Undo', onPress: () => undo(entry) },
-        durationMs: UNDO_WINDOW_MS,
+        durationMs,
         countdown: true,
         onExpire: () => commit(entry),
       });
     },
-    [commit, undo],
+    [commit, undo, durationMs],
   );
 
   useEffect(() => {
