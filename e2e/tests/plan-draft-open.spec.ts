@@ -217,7 +217,7 @@ test('agency: not the creator nor an owner/admin: the menu has Rename only', asy
   expectClean(network);
 });
 
-test('Open plan: Approved by under a client-approved row, Also in, and keep the approval on a move', async ({
+test('Open plan: the client OK on a client-approved row, Also in, and keep the approval on a move', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -254,22 +254,25 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
 
   const wrap = plan.locator(`[data-plan-row-wrap="${offer.id}"]`);
   await wrap.scrollIntoViewIfNeeded();
-  const approved = wrap.locator('[data-plan-row-approved-by]');
-  await expect(approved).toHaveText(`Approved by ${PEER_NAME} · 9 Oct, 1:15 pm`);
-  await expect(approved).toHaveClass(/text-good/);
+  // No Approved by line on the row any more: the PLAN line reads OK.
+  await expect(wrap.locator('[data-plan-row-approved-by]')).toHaveCount(0);
   const also = wrap.locator('[data-plan-row-also-in]');
   await expect(also).toHaveText('Also in Launch week');
   await expect(also).toHaveClass(/bg-warn-soft/);
-  // The agency sees the client's tick, read-only.
-  await expect(wrap.locator('[data-plan-slot="client"]')).toHaveAttribute('aria-checked', 'true');
-  await expect(wrap.locator('[data-plan-slot="client"]')).toBeDisabled();
+  // The agency sees the client's answer as read-only text.
+  const clientPlan = wrap.locator('[data-plan-slot="client"]');
+  await expect(clientPlan).toHaveAttribute('data-plan-control', 'text');
+  await expect(clientPlan).toHaveAttribute('data-plan-slot-state', 'approved');
+  await expect(clientPlan).toHaveText('OK');
+  await expect(clientPlan).toHaveClass(/text-good/);
 
   // Moving the approved slot to another day (Edit mode) asks first; cancelling
   // cancels. Nothing is written until Save changes.
   const moves = () => network.rpcCalls.filter((c) => c.name === 'plan_item_move');
   await enterEdit(plan);
-  // The Approved by line stays on the edit row.
-  await expect(wrap.locator('[data-plan-row-approved-by]')).toBeVisible();
+  // The edit row keeps PLAN as text.
+  await expect(clientPlan).toHaveText('OK');
+  await expect(wrap.locator('[data-plan-row-edit-line]')).toBeVisible();
   await dragToDay(page, plan, offer.id, '2026-10-14');
   const keep = page.getByRole('dialog', { name: `Slot approved by ${PEER_NAME}` });
   await expect(keep).toBeVisible();
@@ -309,8 +312,8 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
   await expect(dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
     1,
   );
-  await expect(wrap.locator('[data-plan-slot="client"]')).toHaveAttribute('aria-checked', 'true');
-  await expect(wrap.locator('[data-plan-row-approved-by]')).toBeVisible();
+  await expect(clientPlan).toHaveAttribute('data-plan-slot-state', 'approved');
+  await expect(clientPlan).toHaveText('OK');
 
   // No, ask again: keep_reviews false; after Save the approval resets.
   await enterEdit(plan);
@@ -331,8 +334,8 @@ test('Open plan: Approved by under a client-approved row, Also in, and keep the 
   await expect(dayBlock(plan, '2026-10-15').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
     1,
   );
-  await expect(wrap.locator('[data-plan-slot="client"]')).toHaveAttribute('aria-checked', 'false');
-  await expect(wrap.locator('[data-plan-row-approved-by]')).toHaveCount(0);
+  await expect(clientPlan).toHaveAttribute('data-plan-slot-state', 'pending');
+  await expect(clientPlan).toHaveText('Not checked yet');
   expectClean(network);
 });
 
@@ -526,16 +529,29 @@ async function planLayout(page: Page) {
     const rows = [...document.querySelectorAll<HTMLElement>('[data-plan-row-wrap]')].map((wrap) => {
       const box = wrap.getBoundingClientRect();
       const title = wrap.querySelector<HTMLElement>('[data-plan-row-title]');
-      const tick = wrap.querySelector<HTMLElement>('[data-plan-slot]')?.getBoundingClientRect();
+      const control = wrap.querySelector<HTMLElement>('[data-plan-control]');
+      const tick = control?.getBoundingClientRect();
       const t = title?.getBoundingClientRect();
       return {
         id: wrap.getAttribute('data-plan-row-wrap') ?? '',
         left: box.left,
         right: box.right,
         titleRight: t?.right ?? 0,
-        titleClipped: title !== null && title.scrollWidth > title.clientWidth,
-        titleEllipsis: title !== null && getComputedStyle(title).textOverflow === 'ellipsis',
-        tick: tick === undefined ? null : { left: tick.left, right: tick.right, width: tick.width },
+        // Titles clamp to two lines.
+        titleClipped:
+          title !== null &&
+          (title.scrollHeight > title.clientHeight || title.scrollWidth > title.clientWidth),
+        titleEllipsis:
+          title !== null && getComputedStyle(title).getPropertyValue('-webkit-line-clamp') === '2',
+        tick:
+          tick === undefined
+            ? null
+            : {
+                left: tick.left,
+                right: tick.right,
+                width: tick.width,
+                kind: control?.getAttribute('data-plan-control') ?? '',
+              },
       };
     });
     return {
@@ -550,7 +566,7 @@ async function planLayout(page: Page) {
 }
 
 test(
-  'agency, 120+ character titles: no sideways page, titles truncate, ticks on screen; the edit controls fit too',
+  'agency, 120+ character titles: no sideways page, titles clamp, PLAN on screen; the edit controls fit too',
   {
     tag: '@theme',
   },
@@ -583,7 +599,10 @@ test(
         if (row.tick !== null) {
           expect(row.tick.left, `tick ${row.id}`).toBeGreaterThanOrEqual(0);
           expect(row.tick.right, `tick ${row.id}`).toBeLessThanOrEqual(layout.vw + 0.5);
-          expect(Math.round(row.tick.width)).toBeGreaterThanOrEqual(44);
+          // A switch or a pill is a target; read-only text is not.
+          if (row.tick.kind !== 'text') {
+            expect(Math.round(row.tick.width)).toBeGreaterThanOrEqual(44);
+          }
         }
       }
       for (const id of [long.concept, long.post]) {
@@ -592,7 +611,7 @@ test(
         );
       }
     };
-    /** View mode at rest: the layout, every row with its tick, no edit control. */
+    /** View mode at rest: the layout, every row with its PLAN control, no edit control. */
     const expectAtRest = async (): Promise<void> => {
       await expectInside();
       await expect(
@@ -773,14 +792,20 @@ test('agency: view mode has no edit controls and no peek; Edit shows the fields 
   await expect(plan.locator('[data-plan-edit-title]')).toHaveValue(DATED_PLAN_TITLE);
   await expect(plan.locator('[data-plan-edit-date="startsOn"]')).toHaveValue('2026-10-12');
   await expect(plan.locator('[data-plan-edit-date="endsOn"]')).toHaveValue('2026-10-18');
-  // Every row: a day chip and a remove; no ticks and no footer while editing.
+  // Every row: a day chip and a remove; PLAN as read-only text and no footer while editing.
   const rows = plan.locator('[data-plan-row-wrap]');
   const count = await rows.count();
   expect(count).toBeGreaterThan(0);
   await expect(plan.locator('[data-plan-row-wrap] [data-plan-row-day-chip]')).toHaveCount(count);
   await expect(plan.locator('[data-plan-row-wrap] [data-plan-row-remove-edit]')).toHaveCount(count);
   expect(await plan.locator('[data-plan-grip]').count()).toBeGreaterThan(0);
-  await expect(plan.locator('[data-plan-slot], [data-plan-footer]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-row-wrap] [data-plan-row-edit-line]')).toHaveCount(count);
+  await expect(plan.locator('[data-plan-row-wrap] [data-plan-control="text"]')).toHaveCount(count);
+  await expect(
+    plan.locator(
+      '[data-plan-control="switch"], [data-plan-control="pill"], [data-plan-ok], [data-plan-footer]',
+    ),
+  ).toHaveCount(0);
 
   // Cancel with nothing changed: straight back to view mode, no dialog, nothing written.
   await plan.locator('[data-plan-back-text]').click();
