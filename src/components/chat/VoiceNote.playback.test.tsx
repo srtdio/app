@@ -7,8 +7,13 @@ const { logError } = vi.hoisted(() => ({ logError: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
   logger: { error: logError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
+// MessageThread (for OWN_BUBBLE_CONTENT) pulls the agora-chat browser SDK.
+vi.mock('agora-chat', () => ({
+  default: { connection: vi.fn(), message: { create: vi.fn() } },
+}));
 
-import { VoiceNote } from '@/components/chat/VoiceNote';
+import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
+import { VOICE_START_TIMEOUT_MS, VoiceNote } from '@/components/chat/VoiceNote';
 import { voiceStore } from '@/lib/chat/transcript-store';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -30,6 +35,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root?.unmount());
   root = null;
   document.body.innerHTML = '';
@@ -67,6 +73,15 @@ function mount(props: {
 
 const playButton = (): HTMLButtonElement =>
   document.querySelector<HTMLButtonElement>('button[aria-label="Play voice note"]')!;
+
+const pauseButton = (): HTMLButtonElement =>
+  document.querySelector<HTMLButtonElement>('button[aria-label="Pause voice note"]')!;
+
+function fire(audio: HTMLAudioElement, type: string): void {
+  act(() => {
+    audio.dispatchEvent(new Event(type));
+  });
+}
 
 function fireError(audio: HTMLAudioElement): void {
   Object.defineProperty(audio, 'error', { configurable: true, value: { code: 4 } });
@@ -117,6 +132,7 @@ describe('VoiceNote playback', () => {
       code: 4,
       mime: 'audio/webm',
       retried: 'yes',
+      reason: 'error',
     });
     expect(JSON.stringify(logError.mock.calls)).not.toContain('https://');
     const read = document.querySelector<HTMLButtonElement>('[data-voice-read]');
@@ -178,5 +194,120 @@ describe('VoiceNote playback', () => {
     expect(pill().textContent).toBe('2×');
     act(() => pill().click());
     expect(pill().textContent).toBe('1×');
+  });
+  it('a note that never starts shows the error row once the watchdog runs out twice', async () => {
+    vi.useFakeTimers();
+    play.mockResolvedValue(undefined);
+    const refreshUrl = vi.fn(async () => 'https://r2/fresh');
+    mount({ peekUrl: () => 'https://r2/a', refreshUrl });
+    act(() => playButton().click());
+    await flush();
+    act(() => {
+      vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS);
+    });
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+    expect(document.querySelector('[data-voice-error]')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS);
+    });
+    await flush();
+    expect(document.querySelector('[data-voice-error]')?.textContent).toContain("Can't play here.");
+    expect(logError).toHaveBeenCalledWith('chat: voice note play failed', {
+      name: 'NoProgress',
+      code: null,
+      mime: 'audio/webm',
+      retried: 'yes',
+      reason: 'stall',
+    });
+  });
+
+  it('a user pause during a retry cancels it with no error row', async () => {
+    play.mockResolvedValue(undefined);
+    const waiting: Array<(url: string | null) => void> = [];
+    const refreshUrl = vi.fn(() => new Promise<string | null>((resolve) => waiting.push(resolve)));
+    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl });
+    act(() => playButton().click());
+    await flush();
+    fireError(audio);
+    // The retry's re-presign is in flight: the control still offers pause.
+    act(() => pauseButton().click());
+    waiting.shift()?.('https://r2/fresh');
+    await flush();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[data-voice-error]')).toBeNull();
+    expect(logError).not.toHaveBeenCalled();
+    expect(playButton()).not.toBeNull();
+  });
+
+  it('a pause the element makes during an attempt fails, and twice shows the error row', async () => {
+    play.mockResolvedValue(undefined);
+    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/b' });
+    act(() => playButton().click());
+    await flush();
+    fire(audio, 'pause');
+    await flush();
+    expect(play).toHaveBeenCalledTimes(2);
+    fire(audio, 'pause');
+    await flush();
+    expect(document.querySelector('[data-voice-error]')).not.toBeNull();
+    expect(logError).toHaveBeenCalledWith(
+      'chat: voice note play failed',
+      expect.objectContaining({ name: 'Paused', reason: 'stall' }),
+    );
+  });
+
+  it('unmount clears every watchdog: nothing fires afterwards', async () => {
+    vi.useFakeTimers();
+    play.mockResolvedValue(undefined);
+    const refreshUrl = vi.fn(async () => 'https://r2/fresh');
+    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl });
+    act(() => playButton().click());
+    await flush();
+    fire(audio, 'seeking');
+    act(() => root?.unmount());
+    root = null;
+    vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS * 3);
+    await flush();
+    expect(refreshUrl).not.toHaveBeenCalled();
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it('the own-bubble hover tint skips every voice control and still tints other buttons', async () => {
+    // The tint's selector, as the arbitrary variant writes it (minus :hover).
+    const variant = /\[&_(button\S*?):hover\]:bg-white\/\[\.24\]/.exec(OWN_BUBBLE_CONTENT)?.[1];
+    expect(variant).toBe('button:not([data-upload-ring]):not([data-voice-control])');
+    const selector = variant!;
+    voiceStore.update('pb-1', { transcript: 'hello there', collapsed: true });
+    play.mockRejectedValue(new DOMException('no', 'NotSupportedError'));
+    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/b' });
+    fire(audio, 'play');
+    // Play/pause, the speed pill and the Transcribe link while playing.
+    const playingButtons = [...document.querySelectorAll('[data-voice-note] button')];
+    expect(document.querySelector('[data-voice-speed]')).not.toBeNull();
+    fire(audio, 'pause');
+    act(() => playButton().click());
+    await flush();
+    await flush();
+    // The error row's "Read the transcript".
+    expect(document.querySelector('[data-voice-read]')).not.toBeNull();
+    const failedButtons = [...document.querySelectorAll('[data-voice-note] button')];
+    const controls = [...playingButtons, ...failedButtons];
+    expect(controls.length).toBeGreaterThanOrEqual(5);
+    for (const button of controls) expect(button.matches(selector)).toBe(false);
+    // Any other button in an own bubble keeps the tint; the upload ring never had it.
+    const other = document.createElement('button');
+    const ring = document.createElement('button');
+    ring.setAttribute('data-upload-ring', '');
+    expect(other.matches(selector)).toBe(true);
+    expect(ring.matches(selector)).toBe(false);
+  });
+
+  it('play is a bare glyph: no rounded box and no fill classes', () => {
+    mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/a' });
+    const cls = playButton().className;
+    expect(cls).not.toMatch(/\brounded-/);
+    expect(cls).not.toMatch(/(^|\s)(hover:|active:|focus:)?!?bg-/);
+    expect(playButton().hasAttribute('data-voice-control')).toBe(true);
   });
 });

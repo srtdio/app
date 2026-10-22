@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   AUTO_NEXT_DELAY_MS,
@@ -23,6 +23,9 @@ import {
   MIN_BAR_PX,
   MAX_BAR_PX,
   createVoiceRecovery,
+  VOICE_SEEK_TIMEOUT_MS,
+  VOICE_STALL_TIMEOUT_MS,
+  VOICE_START_TIMEOUT_MS,
   type VoiceAudio,
   type VoiceFailure,
 } from '@/components/chat/VoiceNote';
@@ -207,6 +210,12 @@ describe('the error listener', () => {
 });
 
 describe('playback recovery', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   const flush = async (): Promise<void> => {
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
   };
@@ -214,20 +223,26 @@ describe('playback recovery', () => {
     peek?: string | null;
     plays?: Array<Promise<void>>;
     refreshed?: Array<string | null>;
+    refreshUrl?: (force: boolean) => Promise<string | null>;
   }) {
     let applied: string | null = 'https://r2/old';
+    const clock = { time: 0 };
     const applies: string[] = [];
     const plays = [...(opts.plays ?? [])];
     const refreshed = [...(opts.refreshed ?? ['https://r2/new'])];
     const play = vi.fn(() => plays.shift() ?? Promise.resolve());
     const refreshUrl = vi.fn<(force: boolean) => Promise<string | null>>(
-      async () => refreshed.shift() ?? null,
+      opts.refreshUrl ?? (async () => refreshed.shift() ?? null),
     );
     const failed = vi.fn<(failure: VoiceFailure) => void>();
+    const wanted = vi.fn<(wanted: boolean) => void>();
     const recovery = createVoiceRecovery({
       player: {
         get applied() {
           return applied;
+        },
+        get currentTime() {
+          return clock.time;
         },
         apply: (url) => {
           applied = url;
@@ -238,11 +253,29 @@ describe('playback recovery', () => {
       peekUrl: () => (opts.peek === undefined ? 'https://r2/old' : opts.peek),
       refreshUrl,
       failed,
+      wanted,
     });
-    return { recovery, play, refreshUrl, failed, applies };
+    // 'playing', then a timeupdate that moved: the attempt is a success.
+    const confirm = (): void => {
+      recovery.started();
+      clock.time += 0.25;
+      recovery.progress(clock.time);
+    };
+    return { recovery, play, refreshUrl, failed, wanted, applies, clock, confirm };
   }
   const notSupported = (): Promise<void> =>
     Promise.reject(new DOMException('no', 'NotSupportedError'));
+  /** A refreshUrl whose results the test hands out one at a time. */
+  function deferredRefresh(): {
+    refreshUrl: (force: boolean) => Promise<string | null>;
+    resolve: (url: string | null) => void;
+  } {
+    const waiting: Array<(url: string | null) => void> = [];
+    return {
+      refreshUrl: () => new Promise((resolve) => waiting.push(resolve)),
+      resolve: (url) => waiting.shift()?.(url),
+    };
+  }
 
   it('plays straight away from a url that is still fresh', async () => {
     const { recovery, play, refreshUrl } = setup({});
@@ -279,7 +312,12 @@ describe('playback recovery', () => {
     expect(refreshUrl).toHaveBeenCalledTimes(1);
     expect(play).toHaveBeenCalledTimes(2);
     expect(failed).toHaveBeenCalledTimes(1);
-    expect(failed).toHaveBeenCalledWith({ name: 'MediaError', code: 4, retried: true });
+    expect(failed).toHaveBeenCalledWith({
+      name: 'MediaError',
+      code: 4,
+      retried: true,
+      reason: 'error',
+    });
     recovery.mediaError(4);
     expect(failed).toHaveBeenCalledTimes(1);
   });
@@ -289,7 +327,12 @@ describe('playback recovery', () => {
     recovery.play();
     await flush();
     expect(play).toHaveBeenCalledTimes(2);
-    expect(failed).toHaveBeenCalledWith({ name: 'NotSupportedError', code: null, retried: true });
+    expect(failed).toHaveBeenCalledWith({
+      name: 'NotSupportedError',
+      code: null,
+      retried: true,
+      reason: 'reject',
+    });
   });
 
   it('an AbortError is never a failure', async () => {
@@ -310,7 +353,12 @@ describe('playback recovery', () => {
     recovery.mediaError(2);
     await flush();
     expect(play).toHaveBeenCalledTimes(1);
-    expect(failed).toHaveBeenCalledWith({ name: 'PresignError', code: null, retried: true });
+    expect(failed).toHaveBeenCalledWith({
+      name: 'PresignError',
+      code: null,
+      retried: true,
+      reason: 'error',
+    });
   });
 
   it('an error while not playing re-presigns but never starts playback', async () => {
@@ -322,18 +370,243 @@ describe('playback recovery', () => {
   });
 
   it('after audio starts, a later failure gets its own retry', async () => {
-    const { recovery, refreshUrl, failed } = setup({
+    const { recovery, refreshUrl, failed, confirm } = setup({
       refreshed: ['https://r2/a', 'https://r2/b'],
     });
     recovery.play();
     await flush();
     recovery.mediaError(2);
     await flush();
-    recovery.started();
+    confirm();
     recovery.mediaError(2);
     await flush();
     expect(refreshUrl).toHaveBeenCalledTimes(2);
     expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('the watchdog fails an attempt with no progress at 10s, retries, then is final', async () => {
+    const { recovery, play, refreshUrl, failed } = setup({
+      refreshed: ['https://r2/new'],
+    });
+    recovery.play();
+    await flush();
+    vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS - 1);
+    expect(refreshUrl).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+    expect(play).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS);
+    await flush();
+    expect(failed).toHaveBeenCalledWith({
+      name: 'NoProgress',
+      code: null,
+      retried: true,
+      reason: 'stall',
+    });
+  });
+
+  it("'playing' alone is not success: currentTime must move on a later timeupdate", async () => {
+    const { recovery, refreshUrl } = setup({});
+    recovery.play();
+    await flush();
+    recovery.started();
+    recovery.progress(0);
+    vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+  });
+
+  it('a confirmed attempt clears the start watchdog', async () => {
+    const { recovery, refreshUrl, failed, confirm } = setup({});
+    recovery.play();
+    await flush();
+    confirm();
+    vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS * 3);
+    await flush();
+    expect(refreshUrl).not.toHaveBeenCalled();
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('mid-play, waiting for 15s with no progress fails', async () => {
+    const { recovery, refreshUrl, confirm } = setup({});
+    recovery.play();
+    await flush();
+    confirm();
+    recovery.buffering();
+    vi.advanceTimersByTime(VOICE_STALL_TIMEOUT_MS - 1);
+    expect(refreshUrl).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+  });
+
+  it('progress while waiting clears the stall timer', async () => {
+    const { recovery, refreshUrl, confirm, clock } = setup({});
+    recovery.play();
+    await flush();
+    confirm();
+    recovery.buffering();
+    vi.advanceTimersByTime(VOICE_STALL_TIMEOUT_MS - 1_000);
+    clock.time += 0.5;
+    recovery.progress(clock.time);
+    vi.advanceTimersByTime(VOICE_STALL_TIMEOUT_MS);
+    await flush();
+    expect(refreshUrl).not.toHaveBeenCalled();
+  });
+
+  it("a seek with no 'seeked' within 5s fails; a landed seek does not", async () => {
+    const { recovery, refreshUrl, confirm } = setup({});
+    recovery.play();
+    await flush();
+    confirm();
+    recovery.seeking();
+    recovery.seeked();
+    vi.advanceTimersByTime(VOICE_SEEK_TIMEOUT_MS);
+    expect(refreshUrl).not.toHaveBeenCalled();
+    recovery.seeking();
+    vi.advanceTimersByTime(VOICE_SEEK_TIMEOUT_MS - 1);
+    expect(refreshUrl).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+  });
+
+  it('a second seek that never lands is final with the seek reason', async () => {
+    const { recovery, failed, confirm } = setup({});
+    recovery.play();
+    await flush();
+    confirm();
+    recovery.seeking();
+    vi.advanceTimersByTime(VOICE_SEEK_TIMEOUT_MS);
+    await flush();
+    recovery.seeking();
+    vi.advanceTimersByTime(VOICE_SEEK_TIMEOUT_MS);
+    await flush();
+    expect(failed).toHaveBeenCalledWith({
+      name: 'SeekTimeout',
+      code: null,
+      retried: true,
+      reason: 'seek',
+    });
+  });
+
+  it('a failure while a re-presign is in flight counts once it returns', async () => {
+    const deferred = deferredRefresh();
+    const { recovery, play, refreshUrl, failed } = setup({
+      peek: null,
+      refreshUrl: deferred.refreshUrl,
+    });
+    recovery.play();
+    recovery.mediaError(4);
+    deferred.resolve('https://r2/new');
+    await flush();
+    // Counted as the first failure: a forced re-presign, then the retry plays.
+    expect(refreshUrl.mock.calls).toEqual([[false], [true]]);
+    deferred.resolve('https://r2/newer');
+    await flush();
+    expect(play).toHaveBeenCalledTimes(1);
+    recovery.mediaError(4);
+    await flush();
+    expect(failed).toHaveBeenCalledWith({
+      name: 'MediaError',
+      code: 4,
+      retried: true,
+      reason: 'error',
+    });
+  });
+
+  it("a rejection and an 'error' from the same attempt count once", async () => {
+    const deferred = deferredRefresh();
+    const { recovery, play, failed } = setup({
+      plays: [notSupported()],
+      refreshUrl: deferred.refreshUrl,
+    });
+    recovery.play();
+    await flush();
+    // The retry's re-presign is in flight; the same attempt also reports an error.
+    recovery.mediaError(4);
+    deferred.resolve('https://r2/new');
+    await flush();
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('a user pause cancels a pending retry with no failure', async () => {
+    const deferred = deferredRefresh();
+    const { recovery, play, failed, wanted } = setup({ refreshUrl: deferred.refreshUrl });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    recovery.cancel();
+    expect(wanted).toHaveBeenLastCalledWith(false);
+    deferred.resolve(null);
+    await flush();
+    vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS * 3);
+    await flush();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('a pause the element makes during an attempt is a failure; twice is final', async () => {
+    const { recovery, play, refreshUrl, failed } = setup({});
+    recovery.play();
+    await flush();
+    recovery.elementPaused();
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+    expect(play).toHaveBeenCalledTimes(2);
+    recovery.elementPaused();
+    await flush();
+    expect(failed).toHaveBeenCalledWith({
+      name: 'Paused',
+      code: null,
+      retried: true,
+      reason: 'stall',
+    });
+  });
+
+  it('a pause the element makes while playing just stops the note', async () => {
+    const { recovery, refreshUrl, failed, wanted, confirm } = setup({});
+    recovery.play();
+    await flush();
+    confirm();
+    recovery.elementPaused();
+    vi.advanceTimersByTime(VOICE_STALL_TIMEOUT_MS * 2);
+    await flush();
+    expect(refreshUrl).not.toHaveBeenCalled();
+    expect(failed).not.toHaveBeenCalled();
+    expect(wanted).toHaveBeenLastCalledWith(false);
+  });
+
+  it('cancel, the end and a source change leave no timer running', async () => {
+    const { recovery, confirm } = setup({});
+    recovery.play();
+    await flush();
+    expect(vi.getTimerCount()).toBe(1);
+    recovery.cancel();
+    expect(vi.getTimerCount()).toBe(0);
+
+    recovery.play();
+    await flush();
+    confirm();
+    recovery.buffering();
+    recovery.seeking();
+    expect(vi.getTimerCount()).toBe(2);
+    recovery.stopped();
+    expect(vi.getTimerCount()).toBe(0);
+
+    recovery.seeking();
+    recovery.sourceChanged();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('wants play from the tap until a final failure', async () => {
+    const { recovery, wanted } = setup({ plays: [notSupported(), notSupported()] });
+    recovery.play();
+    expect(wanted).toHaveBeenLastCalledWith(true);
+    await flush();
+    expect(wanted).toHaveBeenLastCalledWith(false);
   });
 });
 

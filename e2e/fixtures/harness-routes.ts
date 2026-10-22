@@ -1074,8 +1074,11 @@ export async function installHarnessNetwork(
   page: Page,
   opts: {
     planSwipePeek?: boolean;
-    /** The voice notes' bytes: the silent wav (default) or bytes no browser can decode. */
-    voiceAudio?: 'wav' | 'invalid';
+    /**
+     * The voice notes' bytes: the silent wav (default), bytes no browser can
+     * decode, or 'stall': the request is never answered, so no data arrives.
+     */
+    voiceAudio?: 'wav' | 'invalid' | 'stall';
     /** A transcript stored on every voice note's attachment_meta (the legacy field). */
     voiceTranscript?: string;
   } = {},
@@ -1260,6 +1263,8 @@ export async function installHarnessNetwork(
     }
     if (url.hostname === ASSET_READ_HOST) {
       if (url.pathname.startsWith('/blob/audio')) {
+        // Left pending: the element never gets a byte, an error or an end.
+        if (opts.voiceAudio === 'stall') return;
         await route.fulfill({
           status: 200,
           headers: {
