@@ -69,14 +69,15 @@ const paint = (side: 'agency' | 'client', audience: 'team' | 'client'): string =
         thumbs={{}}
         drag={null}
         onOpenItem={() => undefined}
-        onToggleSlot={() => undefined}
+        onPlanOk={() => undefined}
+        onPlanNotOk={() => undefined}
         {...(side === 'agency' ? { onAdd: () => undefined } : {})}
       />
     </MemoryRouter>,
   );
 
 describe('view mode rows: no swipe, no dustbin, no grip', () => {
-  it('agency rows on Draft and Open plans carry only the row and the tick', () => {
+  it('agency rows on Draft and Open plans carry only the row and the PLAN / POST lines', () => {
     for (const audience of ['team', 'client'] as const) {
       const html = paint('agency', audience);
       expect(html).not.toContain('data-plan-row-swipe');
@@ -135,7 +136,7 @@ describe('long titles stay inside the column (view mode)', () => {
   const tag = (html: string, attr: string): string =>
     html.match(new RegExp(`<[a-z]+[^>]*${attr}[^>]*>`))?.[0] ?? '';
 
-  it('both long titles render in full text and truncate; every wrapper is min-w-0', () => {
+  it('both long titles render in full text and clamp to two lines; every wrapper is min-w-0', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <PlanBody
@@ -146,20 +147,21 @@ describe('long titles stay inside the column (view mode)', () => {
           thumbs={{}}
           drag={null}
           onOpenItem={() => undefined}
-          onToggleSlot={() => undefined}
+          onPlanOk={() => undefined}
+        onPlanNotOk={() => undefined}
         />
       </MemoryRouter>,
     );
     for (const title of [LONG_CONCEPT, LONG_POST]) {
       expect(html).toMatch(
         new RegExp(
-          `data-plan-row-title=""[^>]*class="[^"]*\\btruncate\\b[^"]*"[^>]*>${title.slice(0, 40)}`,
+          `data-plan-row-title=""[^>]*class="[^"]*\\bline-clamp-2\\b[^"]*"[^>]*>${title.slice(0, 40)}`,
         ),
       );
     }
     for (const id of ['c1', 'p1']) {
       expect(tag(html, `data-plan-row-wrap="${id}"`)).toContain(
-        'flex w-full min-w-0 items-start gap-1',
+        'flex w-full min-w-0 items-start gap-3',
       );
       expect(tag(html, `data-plan-row="${id}"`)).toContain('min-w-0');
     }
