@@ -61,18 +61,22 @@ async function openTab(page: Page): Promise<void> {
   });
 }
 
-/** A full-page screenshot in the current scheme, then in the other one. */
+/** A full-page screenshot in the current scheme, then in the other one, then back. */
 async function shootBoth(page: Page, name: string, ready: () => Promise<void>): Promise<void> {
   const info = test.info();
   const light = info.project.use.colorScheme === 'light' || info.project.use.colorScheme == null;
+  const isDark = (): Promise<boolean> =>
+    page.evaluate(() => document.documentElement.classList.contains('dark'));
+  const switchTo = async (scheme: 'light' | 'dark'): Promise<void> => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.reload();
+    await ready();
+    await expect.poll(isDark).toBe(scheme === 'dark');
+  };
   await page.screenshot({ path: info.outputPath(`${name}-${light ? 'light' : 'dark'}.png`) });
-  await page.emulateMedia({ colorScheme: light ? 'dark' : 'light' });
-  await page.reload();
-  await ready();
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
-    .toBe(light);
+  await switchTo(light ? 'dark' : 'light');
   await page.screenshot({ path: info.outputPath(`${name}-${light ? 'dark' : 'light'}.png`) });
+  await switchTo(light ? 'light' : 'dark');
 }
 
 test('phone: the Plan tab lists plans in sections and a tap opens the plan @theme', async ({
