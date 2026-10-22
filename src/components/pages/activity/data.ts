@@ -4,8 +4,11 @@
 // plan and task alerts the chat bell used to show (alerts.ts), on one feed.
 // The per-user read-state and snooze mutations go through the @srtdio/rpc
 // wrappers, and Retry on a failed send through chat_scheduled_send_now (each
-// carries an explicit p_trace_id). Everything here that does not touch the
-// network is a pure, unit-tested function so the page stays thin.
+// carries an explicit p_trace_id). The Upcoming chip is not inbox rows: it
+// reads the viewer's scheduled messages not yet sent and pending reminders
+// (fetchUpcoming), with the bell's Edit and Cancel writes. Everything here that
+// does not touch the network is a pure, unit-tested function so the page stays
+// thin.
 
 import type { Client, Result } from '@srtdio/rpc';
 import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '@srtdio/rpc';
@@ -15,7 +18,9 @@ import { parseMentions } from '@srtdio/comments';
 import { entityUrlPath } from '@/lib/entityRef';
 import { logger } from '@/lib/logger';
 import {
+  mentionIds,
   mentionNamesIn,
+  mentionTargets,
   resolveMentionPreview,
   resolvePersonMentionText,
   type NameOf,
@@ -60,7 +65,16 @@ import {
 } from '@/lib/inbox/alerts';
 import { TASKS_SHEET_ONLY } from '@/lib/chat/tasks';
 import { ACTION_FAILED_COPY } from '@/lib/chat/reminders';
-import { mapScheduleError, sendScheduledNow } from '@/lib/chat/scheduled';
+import {
+  cancelScheduledMessage,
+  mapScheduleError,
+  readUpcomingScheduled,
+  rowMentions,
+  sendScheduledNow,
+  updateScheduledMessage,
+  type ScheduledRow,
+} from '@/lib/chat/scheduled';
+import { readPendingReminders, type ReminderRow } from '@/lib/chat/reminders';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
@@ -138,8 +152,20 @@ export function warnUnknownEventType(eventType: string): void {
  */
 export const MENTION_EVENT_TYPE: InboxEventTypeValue = 'mention';
 
-/** The chips (single-select): which slice of the inbox is shown. */
-export type ActivityState = 'all' | 'unread' | 'mentions' | 'briefs' | 'plans' | 'snoozed';
+/**
+ * The chips (single-select): which slice of the inbox is shown. Upcoming is
+ * not an inbox slice: it lists the viewer's scheduled messages and pending
+ * reminders (fetchUpcoming), so no inbox row ever shows, counts or is marked
+ * read under it.
+ */
+export type ActivityState =
+  | 'all'
+  | 'unread'
+  | 'mentions'
+  | 'briefs'
+  | 'plans'
+  | 'upcoming'
+  | 'snoozed';
 
 /** The inbox scope every brief event is written with (brief comments, mentions,
  *  brief created / closed, posts created from a brief). */
@@ -946,9 +972,10 @@ export function isSnoozed(item: ActivityItem, nowMs: number): boolean {
  * Mentions is every mention (post, brief and chat; read AND unread) that is
  * not snoozed; Briefs is every brief event (scope 'briefs') that is not
  * snoozed; Plans is every plan alert (the six plan_* types) that is not
- * snoozed; Snoozed is only snoozed. Reminders, scheduled sends and task
- * alerts have no chip of their own. Input order is preserved, so a
- * newest-first page stays newest-first through the filter.
+ * snoozed; Upcoming shows no inbox row (its rows are fetchUpcoming's);
+ * Snoozed is only snoozed. Reminders, scheduled sends and task alerts have no
+ * chip of their own. Input order is preserved, so a newest-first page stays
+ * newest-first through the filter.
  */
 export function filterByState(
   items: readonly ActivityItem[],
@@ -968,6 +995,8 @@ export function filterByState(
       return items.filter((item) => item.scope === BRIEFS_SCOPE && !isSnoozed(item, nowMs));
     case 'plans':
       return items.filter((item) => isBellPlanEvent(item.eventType) && !isSnoozed(item, nowMs));
+    case 'upcoming':
+      return [];
     case 'all':
     default:
       return items.filter((item) => !isSnoozed(item, nowMs));
@@ -984,7 +1013,7 @@ export const ACTIVITY_LOAD_FAILED = "Couldn't load activity. Check your connecti
  * The entries "Mark all read" clears: the unread, non-snoozed items the active
  * chip shows, except a failed scheduled send (it stays until it is retried,
  * edited or opened, as the bell kept it). Every other chip's rows are left
- * alone. Pure.
+ * alone; Upcoming has none. Pure.
  */
 export function markAllTargets(
   items: readonly ActivityItem[],
@@ -994,32 +1023,6 @@ export function markAllTargets(
   return filterByState(items, state, nowMs).filter(
     (item) =>
       item.readAt === null && !isSnoozed(item, nowMs) && item.eventType !== 'scheduled_failed',
-  );
-}
-
-/**
- * The event types inbox_mark_all_read leaves unread (20261012190000_plan_part_2b:
- * the bell's types when it had its own Mark all read), chat mentions aside.
- */
-export const MARK_ALL_READ_PROC_SKIPS: ReadonlySet<string> = new Set([
-  'reminder',
-  'scheduled_sent',
-  'scheduled_failed',
-  ...BELL_PLAN_EVENT_TYPES,
-]);
-
-/**
- * The All chip's targets the workspace-wide proc does not clear, so "Mark all
- * read" marks them one by one in the same action: the types it skips, chat
- * mentions, and any row with an elapsed snooze (the proc only clears rows
- * that were never snoozed). Pure.
- */
-export function markAllPerRow(targets: readonly ActivityItem[]): ActivityItem[] {
-  return targets.filter(
-    (item) =>
-      MARK_ALL_READ_PROC_SKIPS.has(item.eventType) ||
-      isChatMention(item) ||
-      item.snoozedUntil !== null,
   );
 }
 
@@ -1211,7 +1214,7 @@ interface FirstImageRow {
 }
 
 /** A chat row's chat: its kind, and the Sorted group id for a group. */
-interface ChatRowChannel {
+export interface ChatRowChannel {
   type: 'group' | 'dm';
   groupId: string | null;
 }
@@ -1374,7 +1377,8 @@ function stitchAlert(alert: AlertInfo, messageId: string | null, from: AlertSour
  * failed sends and plan titles join in the same batched waves). Pass
  * `before` (the oldest loaded created_at) to fetch the next, older page. Pass
  * `state` to filter server-side to the active chip (Unread, Mentions, Briefs,
- * Plans, Snoozed; All has no filter), so older matches are never hidden behind the
+ * Plans, Snoozed; All has no filter; Upcoming is not an inbox slice, so the page
+ * loads fetchUpcoming for it instead), so older matches are never hidden behind the
  * newest-page cap: the DESC order, the keyset `before` cursor and the page size
  * are all preserved unchanged. `nowIso` is the snooze cut-off (defaults to now).
  */
@@ -1852,4 +1856,243 @@ export function snoozeEntry(
     p_kind: kind,
     p_trace_id: traceId,
   });
+}
+
+// --- Upcoming ----------------------------------------------------------------
+
+/**
+ * One Upcoming row: a scheduled message of the viewer's not yet sent, or a
+ * pending reminder. Never an inbox row: it never counts toward the unread
+ * badge and "Mark all read" never touches it.
+ */
+export type UpcomingItem =
+  | (UpcomingBase & { kind: 'reminder'; row: ReminderRow })
+  | (UpcomingBase & { kind: 'scheduled'; row: ScheduledRow });
+
+interface UpcomingBase {
+  /** The reminder's or scheduled row's id. */
+  id: string;
+  channelId: string;
+  /** When it fires: remind_at, or send_at. */
+  dueAt: string;
+  /** The chat's name for a group; null for a direct chat or an unread one (reads "Chat"). */
+  chatName: string | null;
+  /** The chat's kind, for a scheduled edit's mention list; null when the read failed. */
+  channelType: 'group' | 'dm' | null;
+  /** The reminded message's preview, or the scheduled body's. */
+  preview: string;
+}
+
+/** What buildUpcoming joins in: the batched reads' maps. */
+export interface UpcomingSources {
+  channels: ReadonlyMap<string, ChatRowChannel>;
+  groupNames: ReadonlyMap<string, string>;
+  messages: ReadonlyMap<string, ChatMessagePreview>;
+  nameOf: NameOf;
+}
+
+/** An Upcoming row's tag: "Reminder" or "Scheduled". Pure. */
+export function upcomingTag(item: Pick<UpcomingItem, 'kind'>): string {
+  return item.kind === 'reminder' ? REMINDER_LABEL : SCHEDULED_LABEL;
+}
+
+/** An Upcoming row's chat: the group's name, else "Chat". Pure. */
+export function upcomingChat(item: Pick<UpcomingItem, 'chatName'>): string {
+  return item.chatName ?? CHAT_LABEL;
+}
+
+/**
+ * Where tapping an Upcoming row goes: a reminder opens its chat at the
+ * message; a scheduled message (not sent, so no message yet) opens its chat.
+ * Pure.
+ */
+export function upcomingHref(item: UpcomingItem): string {
+  return chatMessageHref(item.channelId, item.kind === 'reminder' ? item.row.message_id : null);
+}
+
+/**
+ * The Upcoming rows from the pending reminders and the scheduled messages not
+ * yet sent, joined with the batched reads, soonest first (a tie keeps
+ * reminders first). Pure.
+ */
+export function buildUpcoming(
+  reminders: readonly ReminderRow[],
+  scheduled: readonly ScheduledRow[],
+  from: UpcomingSources,
+): UpcomingItem[] {
+  const chatOf = (channelId: string): Pick<UpcomingBase, 'chatName' | 'channelType'> => {
+    const channel = from.channels.get(channelId);
+    return {
+      chatName: channel?.groupId != null ? (from.groupNames.get(channel.groupId) ?? null) : null,
+      channelType: channel?.type ?? null,
+    };
+  };
+  const items: UpcomingItem[] = [
+    ...reminders
+      .filter((r) => r.fired_at === null && r.cancelled_at === null)
+      .map(
+        (r): UpcomingItem => ({
+          kind: 'reminder',
+          row: r,
+          id: r.id,
+          channelId: r.channel_id,
+          dueAt: r.remind_at,
+          ...chatOf(r.channel_id),
+          preview: messagePreview(from.messages.get(r.message_id), from.nameOf),
+        }),
+      ),
+    ...scheduled
+      .filter((r) => r.status === 'scheduled')
+      .map(
+        (r): UpcomingItem => ({
+          kind: 'scheduled',
+          row: r,
+          id: r.id,
+          channelId: r.channel_id,
+          dueAt: r.send_at,
+          ...chatOf(r.channel_id),
+          preview: scheduledPreview(r, from.nameOf),
+        }),
+      ),
+  ];
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => Date.parse(a.item.dueAt) - Date.parse(b.item.dueAt) || a.index - b.index)
+    .map(({ item }) => item);
+}
+
+/** Upcoming's load result. */
+export type UpcomingResult = { ok: true; data: UpcomingItem[] } | { ok: false; error: string };
+
+/**
+ * Load the Upcoming chip: the viewer's pending reminders and their scheduled
+ * messages not yet sent (one read each, a page of up to 1000, in parallel;
+ * either failing fails the load), then the chats and the reminded messages
+ * (chat_channels and chat_messages IN reads), the group names (one IN read)
+ * and every person a preview names (one batched read). Never one read per row.
+ * The enrichment reads are best-effort: a failure leaves a row's chat or
+ * preview generic, never failed.
+ */
+export async function fetchUpcoming(client: Client, workspaceId: string): Promise<UpcomingResult> {
+  const [remindersRes, scheduledRes] = await Promise.all([
+    readPendingReminders(client, { workspaceId }),
+    readUpcomingScheduled(client, { workspaceId }),
+  ]);
+  if (!remindersRes.ok) return { ok: false, error: remindersRes.error.message };
+  if (!scheduledRes.ok) return { ok: false, error: scheduledRes.error.message };
+  const reminders = remindersRes.data;
+  const scheduled = scheduledRes.data;
+  const chat = await readChatSources(client, {
+    channelIds: unique([
+      ...reminders.map((r) => r.channel_id),
+      ...scheduled.map((r) => r.channel_id),
+    ]),
+    messageIds: unique(reminders.map((r) => r.message_id)),
+  });
+  const groupIds = unique(
+    [...chat.channels.values()].flatMap((c) => (c.groupId !== null ? [c.groupId] : [])),
+  );
+  const peopleIds = unique([
+    ...[...chat.messages.values()].flatMap((m) => mentionIds(m.body ?? '')),
+    ...scheduled.flatMap((r) => mentionIds(r.body ?? '')),
+  ]);
+  const [, groupNames] = await Promise.all([
+    resolvePeople(client, workspaceId, peopleIds),
+    readGroupNames(client, groupIds),
+  ]);
+  return {
+    ok: true,
+    data: buildUpcoming(reminders, scheduled, {
+      channels: chat.channels,
+      groupNames,
+      messages: chat.messages,
+      nameOf: mentionNamesIn(workspaceId),
+    }),
+  };
+}
+
+/** Upcoming's empty state, in the bell's words. */
+export const UPCOMING_EMPTY = 'Nothing coming up';
+
+/** The confirm before a pending reminder is cancelled, in the bell's words. */
+export const CANCEL_REMINDER_TITLE = 'Cancel this reminder?';
+
+/** What the scheduled writes need: injected so tests drive them with a recording client. */
+export interface UpcomingWriteDeps {
+  client: Client;
+  newTraceId: () => string;
+  /** After every write, landed or not: Upcoming reloads. */
+  reload: () => void;
+  /** Log a failure; toast `copy`, null stays silent. */
+  failed: (what: string, traceId: string, message: string, copy: string | null) => void;
+  /** The chat's kind (a group's "@all" is a mention), null when unknown. */
+  channelTypeOf: (channelId: string) => 'group' | 'dm' | null;
+}
+
+/** The "Scheduled in this chat" sheet's writes (ScheduledListSheet's actions). */
+export interface UpcomingScheduledWrites {
+  onSendNow: (row: ScheduledRow) => Promise<void>;
+  onSaveBody: (row: ScheduledRow, body: string) => Promise<boolean>;
+  onRetime: (row: ScheduledRow, sendAt: Date) => Promise<boolean>;
+  onCancel: (row: ScheduledRow) => Promise<boolean>;
+}
+
+/**
+ * The scheduled writes an Upcoming row's Edit and Cancel make, as the bell
+ * made them: chat_scheduled_send_now, chat_scheduled_update (a new body at
+ * the row's time, or a new time with the body and mentions unchanged) and
+ * chat_scheduled_cancel, each with an explicit p_trace_id. Every write
+ * reloads; a failure logs and toasts the mapped copy ("not found" stays
+ * silent).
+ */
+export function createUpcomingScheduledWrites(deps: UpcomingWriteDeps): UpcomingScheduledWrites {
+  const write = async <T>(
+    what: string,
+    run: (traceId: string) => Promise<{ ok: true; row: T } | { ok: false; message: string }>,
+  ): Promise<boolean> => {
+    const traceId = deps.newTraceId();
+    const res = await run(traceId);
+    deps.reload();
+    if (res.ok) return true;
+    deps.failed(what, traceId, res.message, mapScheduleError(res.message));
+    return false;
+  };
+  return {
+    onSendNow: async (row) => {
+      await write('scheduled send now', (traceId) =>
+        sendScheduledNow({ client: deps.client, id: row.id, traceId }),
+      );
+    },
+    onSaveBody: (row, body) =>
+      write('scheduled edit', (traceId) =>
+        updateScheduledMessage({
+          client: deps.client,
+          id: row.id,
+          sendAt: new Date(row.send_at),
+          body,
+          mentions: mentionTargets(body, deps.channelTypeOf(row.channel_id) ?? undefined),
+          traceId,
+        }),
+      ),
+    onRetime: (row, sendAt) =>
+      write('scheduled retime', (traceId) =>
+        updateScheduledMessage({
+          client: deps.client,
+          id: row.id,
+          sendAt,
+          body: row.body ?? '',
+          mentions: rowMentions(row),
+          traceId,
+        }),
+      ),
+    onCancel: (row) =>
+      write('scheduled cancel', (traceId) =>
+        cancelScheduledMessage({
+          client: deps.client,
+          id: row.id,
+          channelId: row.channel_id,
+          traceId,
+        }),
+      ),
+  };
 }

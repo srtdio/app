@@ -398,6 +398,34 @@ export async function readScheduledMessages(
   }
 }
 
+/** The most rows one Upcoming read returns (one page; PostgREST's own cap). */
+export const UPCOMING_PAGE = 1000;
+
+/**
+ * The caller's scheduled messages not yet sent in a workspace (status
+ * 'scheduled'), soonest first: the Notifications Upcoming chip. RLS returns
+ * only the caller's own rows. Never throws.
+ */
+export async function readUpcomingScheduled(
+  client: Client,
+  params: { workspaceId: string; signal?: AbortSignal },
+): Promise<Result<ScheduledRow[]>> {
+  try {
+    const query = client
+      .from('chat_scheduled_messages')
+      .select('*')
+      .eq('workspace_id', params.workspaceId)
+      .eq('status', 'scheduled')
+      .order('send_at', { ascending: true })
+      .limit(UPCOMING_PAGE);
+    const { data, error } = await abortable(query, params.signal);
+    if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
+    return { ok: true, data: soonestFirst((data ?? []) as ScheduledRow[]) };
+  } catch (error) {
+    return { ok: false, error: { code: 'unknown', message: String(error) } };
+  }
+}
+
 export type ScheduleWriteResult<T> = { ok: true; row: T } | RecordFailed;
 
 async function runProc<T>(

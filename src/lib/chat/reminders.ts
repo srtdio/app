@@ -24,6 +24,7 @@ import {
   inSentence,
   isWithinScheduleWindow,
   presetTimes,
+  UPCOMING_PAGE,
 } from '@/lib/chat/scheduled';
 
 type Functions = Database['public']['Functions'];
@@ -300,7 +301,8 @@ export async function readPendingReminders(
       .eq('workspace_id', params.workspaceId)
       .is('fired_at', null)
       .is('cancelled_at', null)
-      .order('remind_at', { ascending: true });
+      .order('remind_at', { ascending: true })
+      .limit(UPCOMING_PAGE);
     const { data, error } = await abortable(query, params.signal);
     if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
     return { ok: true, data: pendingSoonestFirst((data ?? []) as ReminderRow[]) };

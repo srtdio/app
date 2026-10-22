@@ -26,6 +26,8 @@ const FAILED_SCHEDULED_ID = '0190f200-0000-7000-8000-0000000000b2';
 const FAILED_BODY = 'Sending the final cut tonight';
 const REMINDER_ENTRY_ID = '0190f100-0000-7000-8000-0000000000f1';
 const REMINDER_ID = '0190e000-0000-7000-8000-000000000001';
+const UPCOMING_SCHEDULED_ID = '0190f200-0000-7000-8000-0000000000c1';
+const UPCOMING_BODY = 'Draft goes out at noon';
 
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
@@ -151,7 +153,15 @@ test(
     await expect(card(page, 'scheduled_failed')).toBeVisible();
 
     // The chips (their order is a unit check): the counted ones carry their counts.
-    for (const name of ['All', 'Unread 3', 'Mentions 1', 'Briefs', 'Plans', 'Snoozed']) {
+    for (const name of [
+      'All',
+      'Unread 3',
+      'Mentions 1',
+      'Briefs',
+      'Plans',
+      'Upcoming',
+      'Snoozed',
+    ]) {
       await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
     }
 
@@ -343,5 +353,78 @@ test('a reminder fires while the app is open: toast; its card opens the chat at 
   await expect(page).toHaveURL(new RegExp(`/chat\\?channel=${encodeURIComponent(DM_CHANNEL)}`));
   await expect(page.locator(`[data-msg-id="${String(dm.id)}"]`)).toBeVisible({ timeout: 8000 });
   expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toEqual([]);
+  expectClean(network);
+});
+
+test('Upcoming: a pending reminder and a scheduled message, soonest first; never counted; Cancel', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  const dm = network.world.dmMessages[10];
+  if (dm === undefined) throw new Error('fixture message');
+  const now = Date.now();
+  (network.world.tables.chat_message_reminders ??= []).push({
+    id: REMINDER_ID,
+    user_id: ME,
+    message_id: dm.id,
+    channel_id: DM_CHANNEL,
+    workspace_id: WORKSPACE_ID,
+    remind_at: new Date(now + 3 * 3_600_000).toISOString(),
+    fired_at: null,
+    cancelled_at: null,
+    created_at: new Date(now).toISOString(),
+  });
+  (network.world.tables.chat_scheduled_messages ??= []).push({
+    id: UPCOMING_SCHEDULED_ID,
+    channel_id: DM_CHANNEL,
+    workspace_id: WORKSPACE_ID,
+    sender_user_id: ME,
+    body: UPCOMING_BODY,
+    mentions: null,
+    attachment_asset_ids: null,
+    attachment_meta: null,
+    shared_post_ids: null,
+    shared_brief_ids: null,
+    reply_to_message_id: null,
+    send_at: new Date(now + 3_600_000).toISOString(),
+    status: 'scheduled',
+    failure_reason: null,
+    sent_at: null,
+    created_at: new Date(now).toISOString(),
+    updated_at: new Date(now).toISOString(),
+  });
+
+  await page.goto('/notifications');
+  const button = page.locator('header [data-notifications-button]');
+  await button.waitFor({ state: 'visible', timeout: 15_000 });
+  // Neither is an inbox row: the badge has nothing to count.
+  await expect(button).not.toHaveAttribute('aria-label', /unread/);
+
+  await page.getByRole('button', { name: 'Upcoming', exact: true }).click();
+  const rows = page.locator('[data-upcoming-row]');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toHaveAttribute('data-upcoming-row', 'scheduled');
+  await expect(rows.nth(0)).toContainText('Scheduled');
+  await expect(rows.nth(0)).toContainText(UPCOMING_BODY);
+  await expect(rows.nth(1)).toHaveAttribute('data-upcoming-row', 'reminder');
+  await expect(rows.nth(1)).toContainText('Reminder');
+  await expect(rows.nth(1)).toContainText(String(dm.body));
+  await expect(page.getByRole('button', { name: 'Mark all read', exact: true })).toHaveCount(0);
+
+  const reminder = page.locator('[data-upcoming-row="reminder"]');
+  const changeTime = reminder.locator('[data-upcoming-action="edit"]');
+  const cancel = reminder.locator('[data-upcoming-action="cancel"]');
+  await expect(changeTime).toHaveText('Change time');
+  expectMinTouchTarget(await changeTime.boundingBox());
+  expectMinTouchTarget(await cancel.boundingBox());
+
+  await cancel.click();
+  await expect(page.getByRole('dialog', { name: 'Cancel this reminder?' })).toBeVisible();
+  await page.locator('[data-confirm-cancel-upcoming]').click();
+  await expect
+    .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_reminder_cancel').length)
+    .toBe(1);
+  await expect(page.locator('[data-upcoming-row="reminder"]')).toHaveCount(0);
+  await expect(page.locator('[data-upcoming-row="scheduled"]')).toHaveCount(1);
   expectClean(network);
 });

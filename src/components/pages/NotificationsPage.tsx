@@ -1,30 +1,55 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Sheet } from '@/components/ui/Sheet';
 import { PageHead } from '@/components/shell/PageHead';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import { IconActivity, IconAlarmClock, IconAt, IconBriefs, IconPlan } from '@/components/ui/icons';
+import {
+  IconActivity,
+  IconAlarmClock,
+  IconAt,
+  IconBriefs,
+  IconCalendarClock,
+  IconPlan,
+} from '@/components/ui/icons';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
-import { ActivityCard } from '@/components/pages/activity/ActivityCard';
+import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
 import { NOTIFICATIONS_TITLE } from '@/components/shell/NotificationsButton';
-import { mentionHandle } from '@/lib/chat/mentions';
+import { REMINDER_CANCELLED_COPY, createReminderActions } from '@/components/chat/ReminderContext';
+import { CANCEL_REMINDER_LABEL, ReminderSheet } from '@/components/chat/ReminderSheet';
+import {
+  CANCEL_CONFIRM_TITLE,
+  DONT_SEND_LABEL,
+  ScheduledListSheet,
+} from '@/components/chat/ScheduledListSheet';
+import { mentionHandle, mentionNamesIn } from '@/lib/chat/mentions';
+import { newMessageId } from '@/lib/chat/message-id';
+import {
+  ACTION_FAILED_COPY,
+  REMINDERS_CHANGED_EVENT,
+  announceRemindersChanged,
+} from '@/lib/chat/reminders';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import { logger } from '@/lib/logger';
 import {
   ACTIVITY_PAGE_SIZE,
   bucketActorNames,
+  createUpcomingScheduledWrites,
   fetchActivityEntries,
+  fetchUpcoming,
   filterByState,
   groupDigest,
+  upcomingHref,
   ACTIVITY_LOAD_FAILED,
+  CANCEL_REMINDER_TITLE,
   MARKED_READ_LABEL,
-  markAllPerRow,
+  UPCOMING_EMPTY,
   markAllTargets,
   markAllEntriesRead,
   markEntryRead,
@@ -36,6 +61,7 @@ import {
   type ActivityItem,
   type ActivityState,
   type SnoozeKind,
+  type UpcomingItem,
 } from '@/components/pages/activity/data';
 import { fetchUnreadMentionCount } from '@/lib/inbox/inbox-reads';
 import { supabase } from '@/lib/supabase';
@@ -73,6 +99,22 @@ function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
     case 'clear':
       return null;
   }
+}
+
+/** A load failure: the plain copy and Retry (the feed's and Upcoming's). */
+function LoadFailed({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="px-4 md:px-6 mt-4">
+      <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
+        {ACTIVITY_LOAD_FAILED}
+      </div>
+      <div className="mt-3">
+        <Button size="lg" onClick={onRetry}>
+          Retry
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function NotificationsPage() {
@@ -158,21 +200,69 @@ export function NotificationsPage() {
     if (res.ok) setMentionCount(res.data);
   }, [workspaceId, userId]);
 
+  // Upcoming: the viewer's scheduled messages not yet sent and pending
+  // reminders, soonest first (fetchUpcoming). Never inbox rows: they never
+  // count toward the unread badge and Mark all read never touches them. A
+  // reload that fails keeps the rows on screen; only a first load shows the error.
+  const [upcoming, setUpcoming] = useState<UpcomingItem[]>([]);
+  const [upcomingLoaded, setUpcomingLoaded] = useState(false);
+  const [upcomingError, setUpcomingError] = useState(false);
+  // Rows a cancel is removing, hidden at once until the reload drops them.
+  const [hiddenUpcoming, setHiddenUpcoming] = useState<ReadonlySet<string>>(new Set());
+  const upcomingSeqRef = useRef(0);
+  const upcomingLoadedRef = useRef(false);
+  const loadUpcoming = useCallback(async () => {
+    if (workspaceId === null) return;
+    upcomingSeqRef.current += 1;
+    const seq = upcomingSeqRef.current;
+    const result = await fetchUpcoming(supabase, workspaceId);
+    if (seq !== upcomingSeqRef.current) return;
+    setNowMs(Date.now());
+    if (!result.ok) {
+      logger.warn('notifications: upcoming load failed', { error: result.error });
+      if (!upcomingLoadedRef.current) setUpcomingError(true);
+      return;
+    }
+    upcomingLoadedRef.current = true;
+    setUpcomingLoaded(true);
+    setUpcomingError(false);
+    setUpcoming(result.data);
+    const present = new Set(result.data.map((item) => item.id));
+    setHiddenUpcoming((prev) => new Set([...prev].filter((id) => present.has(id))));
+  }, [workspaceId]);
+
   useEffect(() => {
-    void loadActivity();
-  }, [loadActivity]);
+    if (state === 'upcoming') void loadUpcoming();
+    else void loadActivity();
+  }, [state, loadActivity, loadUpcoming]);
+
+  // A reminder set, cancelled or rung anywhere (and the shell's poll tick)
+  // reloads Upcoming while it is on screen.
+  useEffect(() => {
+    if (state !== 'upcoming') return;
+    const reload = (): void => void loadUpcoming();
+    window.addEventListener(REMINDERS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(REMINDERS_CHANGED_EVENT, reload);
+  }, [state, loadUpcoming]);
 
   useEffect(() => {
     void loadMentionCount();
   }, [loadMentionCount]);
   useWorkspaceDataChanged(() => {
-    void loadActivity();
+    if (state === 'upcoming') void loadUpcoming();
+    else void loadActivity();
     void loadMentionCount();
   });
 
-  // Reset filters when the active workspace changes.
+  // Reset filters (and Upcoming) when the active workspace changes.
   useEffect(() => {
     setState('all');
+    upcomingSeqRef.current += 1;
+    upcomingLoadedRef.current = false;
+    setUpcoming([]);
+    setUpcomingLoaded(false);
+    setUpcomingError(false);
+    setHiddenUpcoming(new Set());
   }, [workspaceId]);
 
   const buckets = useMemo(
@@ -239,9 +329,10 @@ export function NotificationsPage() {
   // The active chip only: mark its unread, non-snoozed rows read at once and
   // write immediately; no Undo and no confirmation toast (the unread state just
   // clears). On failure the rows go back to unread with a fixed error toast.
-  // The All chip uses the workspace-wide proc (inbox_mark_all_read) plus one
-  // inbox_mark_read per loaded row the proc skips (markAllPerRow). A failed
-  // scheduled send is never a target (markAllTargets).
+  // The All chip is ONE call to inbox_mark_all_read (every unread, never-snoozed
+  // row of every type); another chip marks its own rows one by one. Then the
+  // Mentions count and the nav badge refetch. A failed scheduled send is never
+  // an optimistic target (markAllTargets); Upcoming has no targets.
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
     const targets = markAllTargets(items, state, nowMs);
@@ -252,12 +343,12 @@ export function NotificationsPage() {
     setItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
     const traceId = newTrace();
     void (async () => {
-      const results = await Promise.all([
-        ...(chip === 'all' ? [markAllEntriesRead(supabase, workspaceId, traceId)] : []),
-        ...(chip === 'all' ? markAllPerRow(targets) : targets).map((item) =>
-          markEntryRead(supabase, item, workspaceId, traceId),
-        ),
-      ]);
+      const results =
+        chip === 'all'
+          ? [await markAllEntriesRead(supabase, workspaceId, traceId)]
+          : await Promise.all(
+              targets.map((item) => markEntryRead(supabase, item, workspaceId, traceId)),
+            );
       if (results.some((result) => !result.ok)) {
         setItems((prev) =>
           prev.map((item) =>
@@ -335,6 +426,121 @@ export function NotificationsPage() {
     [handleMarkRead, navigate],
   );
 
+  // Upcoming's Edit and Cancel, as the bell had them: a reminder's Change time
+  // (the reminder sheet in change mode, with Cancel reminder) and Cancel (a
+  // confirm); a scheduled message's Edit ("Scheduled in this chat": Send now,
+  // Edit, Time, Don't send) and Cancel (a confirm). Every write carries its
+  // own trace id; a failure toasts "Couldn't do that. Try again." (a "not
+  // found" stays silent) and the rows reload.
+  const upcomingFailed = useCallback(
+    (what: string, traceId: string, message: string, copy: string | null = ACTION_FAILED_COPY) => {
+      logger.warn(`notifications: ${what} failed`, { trace_id: traceId, error: message });
+      if (copy !== null) toast?.show({ title: copy });
+    },
+    [toast],
+  );
+  const reminderActions = useMemo(
+    () =>
+      createReminderActions({
+        client: supabase,
+        newTraceId: newTrace,
+        newId: newMessageId,
+        failed: upcomingFailed,
+        notify: (title) => toast?.show({ title }),
+        // Every reminder reader reloads, Upcoming included (the listener above).
+        remindersChanged: announceRemindersChanged,
+        reminderChanged: () => undefined,
+      }),
+    [newTrace, upcomingFailed, toast],
+  );
+  const upcomingRef = useRef(upcoming);
+  upcomingRef.current = upcoming;
+  const scheduledWrites = useMemo(
+    () =>
+      createUpcomingScheduledWrites({
+        client: supabase,
+        newTraceId: newTrace,
+        reload: () => void loadUpcoming(),
+        failed: upcomingFailed,
+        channelTypeOf: (channelId) =>
+          upcomingRef.current.find((item) => item.channelId === channelId)?.channelType ?? null,
+      }),
+    [newTrace, loadUpcoming, upcomingFailed],
+  );
+  const [reminderEdit, setReminderEdit] = useState<UpcomingItem | null>(null);
+  const [scheduledChat, setScheduledChat] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<UpcomingItem | null>(null);
+  // The confirm keeps its words while it slides away (the target clears first).
+  const cancelShownRef = useRef<UpcomingItem | null>(null);
+  if (cancelTarget !== null) cancelShownRef.current = cancelTarget;
+  const cancelShown = cancelShownRef.current;
+
+  const visibleUpcoming = useMemo(
+    () => upcoming.filter((item) => !hiddenUpcoming.has(item.id)),
+    [upcoming, hiddenUpcoming],
+  );
+  const scheduledSheetRows = useMemo(
+    () =>
+      scheduledChat === null
+        ? []
+        : visibleUpcoming.flatMap((item) =>
+            item.kind === 'scheduled' && item.channelId === scheduledChat ? [item.row] : [],
+          ),
+    [visibleUpcoming, scheduledChat],
+  );
+
+  const handleOpenUpcoming = useCallback(
+    (item: UpcomingItem) => navigate(upcomingHref(item)),
+    [navigate],
+  );
+  const handleEditUpcoming = useCallback((item: UpcomingItem) => {
+    if (item.kind === 'reminder') setReminderEdit(item);
+    else setScheduledChat(item.channelId);
+  }, []);
+
+  const cancelUpcoming = useCallback(
+    async (item: UpcomingItem): Promise<boolean> => {
+      setHiddenUpcoming((prev) => new Set([...prev, item.id]));
+      const ok =
+        item.kind === 'reminder'
+          ? await reminderActions.cancelReminder(item.row)
+          : await scheduledWrites.onCancel(item.row);
+      if (!ok) {
+        setHiddenUpcoming((prev) => new Set([...prev].filter((id) => id !== item.id)));
+      }
+      return ok;
+    },
+    [reminderActions, scheduledWrites],
+  );
+
+  const confirmCancel = useCallback(() => {
+    const target = cancelTarget;
+    setCancelTarget(null);
+    if (target !== null) void cancelUpcoming(target);
+  }, [cancelTarget, cancelUpcoming]);
+
+  const pickReminderTime = useCallback(
+    (at: Date) => {
+      const target = reminderEdit;
+      setReminderEdit(null);
+      if (target?.kind !== 'reminder') return;
+      void reminderActions.setReminderAt(
+        { messageId: target.row.message_id, channelId: target.row.channel_id },
+        at,
+      );
+    },
+    [reminderEdit, reminderActions],
+  );
+
+  const cancelFromReminderSheet = useCallback(() => {
+    const target = reminderEdit;
+    setReminderEdit(null);
+    if (target === null) return;
+    void cancelUpcoming(target).then((ok) => {
+      if (ok) toast?.show({ title: REMINDER_CANCELLED_COPY });
+    });
+  }, [reminderEdit, cancelUpcoming, toast]);
+
   const listLoading = workspaceId === null || (loading && items.length === 0);
 
   return (
@@ -365,17 +571,29 @@ export function NotificationsPage() {
         mentionCount={mentionCount}
       />
 
-      {error ? (
-        <div className="px-4 md:px-6 mt-4">
-          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
-            {ACTIVITY_LOAD_FAILED}
+      {state === 'upcoming' ? (
+        upcomingError ? (
+          <LoadFailed onRetry={() => void loadUpcoming()} />
+        ) : workspaceId === null || !upcomingLoaded ? (
+          <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading activity</div>
+        ) : visibleUpcoming.length === 0 ? (
+          <EmptyState icon={<IconCalendarClock size={24} />} title={UPCOMING_EMPTY} />
+        ) : (
+          <div data-upcoming-list="" className="mt-4 flex flex-col gap-2 px-4 pb-6 md:px-6">
+            {visibleUpcoming.map((item) => (
+              <UpcomingCard
+                key={item.id}
+                item={item}
+                now={new Date(nowMs)}
+                onOpen={handleOpenUpcoming}
+                onEdit={handleEditUpcoming}
+                onCancel={setCancelTarget}
+              />
+            ))}
           </div>
-          <div className="mt-3">
-            <Button size="lg" onClick={() => void loadActivity()}>
-              Retry
-            </Button>
-          </div>
-        </div>
+        )
+      ) : error ? (
+        <LoadFailed onRetry={() => void loadActivity()} />
       ) : listLoading ? (
         <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading activity</div>
       ) : buckets.length === 0 ? (
@@ -465,6 +683,44 @@ export function NotificationsPage() {
           ) : null}
         </div>
       )}
+
+      <ReminderSheet
+        open={reminderEdit !== null}
+        onClose={() => setReminderEdit(null)}
+        preview={reminderEdit?.preview ?? null}
+        onPick={pickReminderTime}
+        change={{ onCancelReminder: cancelFromReminderSheet }}
+      />
+      <ScheduledListSheet
+        open={scheduledChat !== null && scheduledSheetRows.length > 0}
+        onClose={() => setScheduledChat(null)}
+        rows={scheduledSheetRows}
+        nameOf={mentionNamesIn(workspaceId)}
+        {...scheduledWrites}
+      />
+      <Sheet
+        open={cancelTarget !== null}
+        onClose={() => setCancelTarget(null)}
+        title={cancelShown?.kind === 'scheduled' ? CANCEL_CONFIRM_TITLE : CANCEL_REMINDER_TITLE}
+        footer={
+          <div className="flex w-full justify-end gap-2">
+            <Button type="button" size="lg" onClick={() => setCancelTarget(null)}>
+              Keep
+            </Button>
+            <Button
+              type="button"
+              size="lg"
+              variant="danger"
+              data-confirm-cancel-upcoming=""
+              onClick={confirmCancel}
+            >
+              {cancelShown?.kind === 'scheduled' ? DONT_SEND_LABEL : CANCEL_REMINDER_LABEL}
+            </Button>
+          </div>
+        }
+      >
+        <p className="truncate text-sm text-fg-2">{cancelShown?.preview ?? ''}</p>
+      </Sheet>
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
     </>

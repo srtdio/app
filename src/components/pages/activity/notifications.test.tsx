@@ -1,7 +1,7 @@
 // Notifications: Activity and the chat bell on one feed. The chips (Mentions
 // takes chat mentions, Plans the six plan alerts, reminders / scheduled sends /
-// task alerts only under All and Unread), Mark all read (the proc plus one mark
-// per row it skips; a failed send stays), every former bell tap rule, Retry on
+// task alerts only under All and Unread), Mark all read (one inbox_mark_all_read
+// call on All; a failed send stays), every former bell tap rule, Retry on
 // a failed send, the alert cards, and the batched enrichment (one IN read per
 // table, never per row).
 
@@ -29,8 +29,8 @@ import {
   fetchActivityEntries,
   filterByState,
   mapEntry,
-  markAllPerRow,
   markAllTargets,
+  unreadCount,
   openAction,
   opensNothing,
   retryFailedSend,
@@ -209,7 +209,7 @@ describe('chips', () => {
     for (const id of alertIds) {
       expect(ids('all')).toContain(id);
       expect(ids('unread')).toContain(id);
-      for (const state of ['mentions', 'briefs', 'plans', 'snoozed'] as const) {
+      for (const state of ['mentions', 'briefs', 'plans', 'upcoming', 'snoozed'] as const) {
         expect(ids(state)).not.toContain(id);
       }
     }
@@ -232,23 +232,27 @@ describe('Mark all read', () => {
     }
   });
 
-  it('the All chip marks per row exactly what inbox_mark_all_read skips', () => {
-    const elapsed = item({ id: 'woke', snoozed_until: '2026-10-20T10:00:00.000Z' });
-    const per = markAllPerRow(markAllTargets([...feed, elapsed], 'all', NOW)).map((i) => i.id);
-    expect(per).toEqual([
-      'rem',
-      'sent',
-      'cm',
-      'plan_opened',
-      'plan_deleted',
-      'plan_date_changed',
-      'plan_updated',
-      'plan_review',
-      'plan_comment',
-      'woke',
-    ]);
-    // The proc clears post mentions, comments and the task alerts itself.
-    for (const id of ['pm', 'comment', 'task', 'due']) expect(per).not.toContain(id);
+  it('the All chip targets every unread row of every type (one proc call covers them)', () => {
+    const targets = markAllTargets(feed, 'all', NOW).map((i) => i.id);
+    for (const id of ['rem', 'sent', 'cm', 'pm', ...PLAN_TYPES, 'task', 'due', 'comment']) {
+      expect(targets).toContain(id);
+    }
+  });
+
+  it('the page makes one inbox_mark_all_read call on All, never a per-row or per-type top-up', () => {
+    const page = readFileSync(
+      fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(page).toContain('[await markAllEntriesRead(supabase, workspaceId, traceId)]');
+    expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
+  });
+
+  it('Upcoming has no inbox rows: nothing to mark, nothing counted', () => {
+    expect(ids('upcoming')).toEqual([]);
+    expect(markAllTargets(feed, 'upcoming', NOW)).toEqual([]);
+    // The unread badge counts inbox rows only; the Upcoming chip adds none.
+    expect(unreadCount(feed, NOW)).toBe(feed.length);
   });
 });
 

@@ -33,11 +33,15 @@ import {
   isWelcome,
   opensNothing,
   segmentSelfMentions,
+  upcomingChat,
+  upcomingTag,
   type ActivityItem,
   type AlertInfo,
   type SnoozeKind,
+  type UpcomingItem,
 } from '@/components/pages/activity/data';
 import { NOT_SENT_LABEL, failureInPlainWords } from '@/lib/inbox/alerts';
+import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 
 interface ActivityCardProps {
@@ -557,6 +561,115 @@ export function ActivityCard({
             ))}
           </ul>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Cancel in the danger token (the bell's): a 44px outlined button, text in bad. */
+const UPCOMING_CANCEL_CLASS =
+  'inline-flex h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-panel px-4 text-sm font-medium text-bad transition-colors duration-fast hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+
+/** A pending reminder's edit: the bell's "Change time" (the reminder sheet in change mode). */
+export const CHANGE_TIME_LABEL = 'Change time';
+
+/** An Upcoming row's Edit label: "Change time" on a reminder, "Edit" on a scheduled message. */
+export function upcomingEditLabel(item: Pick<UpcomingItem, 'kind'>): string {
+  return item.kind === 'reminder' ? CHANGE_TIME_LABEL : 'Edit';
+}
+
+/**
+ * One Upcoming row, in the same card as every Notifications row: the neutral
+ * rail, the tag (Reminder or Scheduled) as the top line, the chat as the
+ * title, the message preview, the alarm clock or calendar clock tile, then
+ * Edit (Change time on a reminder) and Cancel, and the due time in the footer.
+ * Never unread: no dot, no accent border. A tap opens the chat at the
+ * reminded message (a scheduled message opens its chat).
+ */
+export function UpcomingCard({
+  item,
+  now,
+  onOpen,
+  onEdit,
+  onCancel,
+}: {
+  item: UpcomingItem;
+  now: Date;
+  onOpen: (item: UpcomingItem) => void;
+  onEdit: (item: UpcomingItem) => void;
+  onCancel: (item: UpcomingItem) => void;
+}): ReactElement {
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen(item);
+    }
+  }
+  return (
+    <div
+      data-upcoming-row={item.kind}
+      data-upcoming-id={item.id}
+      className="flex overflow-hidden rounded-xl border border-border bg-panel transition-colors"
+    >
+      <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
+
+      <div className="min-w-0 flex-1">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpen(item)}
+          onKeyDown={onKeyDown}
+          data-upcoming-open=""
+          className="flex cursor-pointer items-start gap-3 p-[14px] transition-colors hover:bg-panel-2"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="mb-1.5 flex items-center gap-[7px]">
+              <span data-upcoming-tag="" className="truncate text-xs font-medium text-fg-3">
+                {upcomingTag(item)}
+              </span>
+            </div>
+            <p className="truncate text-[15px] font-semibold leading-[1.3] text-fg">
+              {upcomingChat(item)}
+            </p>
+            <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              {item.preview}
+            </p>
+          </div>
+
+          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg">
+            <div
+              aria-hidden="true"
+              className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
+            >
+              {item.kind === 'reminder' ? (
+                <IconAlarmClock size={28} />
+              ) : (
+                <IconCalendarClock size={28} />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div data-upcoming-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
+          <Button type="button" size="lg" data-upcoming-action="edit" onClick={() => onEdit(item)}>
+            {upcomingEditLabel(item)}
+          </Button>
+          <button
+            type="button"
+            data-upcoming-action="cancel"
+            className={UPCOMING_CANCEL_CLASS}
+            onClick={() => onCancel(item)}
+          >
+            Cancel
+          </button>
+        </div>
+
+        <div className="h-px bg-border" />
+        <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
+          <span data-upcoming-due="" className="font-mono text-xs tabular-nums text-fg-3">
+            {formatSendLabel(new Date(item.dueAt), now)}
+          </span>
+        </div>
       </div>
     </div>
   );

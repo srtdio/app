@@ -17,7 +17,6 @@ import {
   withoutBellEntries,
 } from '@/lib/inbox/bell-types';
 import { INBOX_EVENT_TYPES } from '@srtdio/schemas';
-import { MARK_ALL_READ_PROC_SKIPS } from '@/components/pages/activity/data';
 
 describe('isBellEntry: the rows the live layer toasts apart', () => {
   it('a chat mention is a bell row', () => {
@@ -138,22 +137,20 @@ describe('chatMessageHref: the Activity chat-mention deep link', () => {
   });
 });
 
-describe('Mark all read covers what inbox_mark_all_read skips', () => {
+describe('Mark all read: inbox_mark_all_read skips no event type', () => {
   const MIGRATION = fileURLToPath(
-    new URL('../../../supabase/migrations/20261012190000_plan_part_2b.sql', import.meta.url),
+    new URL(
+      '../../../supabase/migrations/20261022190000_inbox_mark_all_read_all_types.sql',
+      import.meta.url,
+    ),
   );
 
-  it("the per-row list is exactly the live proc's NOT IN list (chat mentions on their own)", () => {
+  it('the live proc clears every unread, never-snoozed row of every type in one update', () => {
     const sql = readFileSync(MIGRATION, 'utf8');
     const body = sql.slice(sql.indexOf('FUNCTION public.inbox_mark_all_read('));
-    const match = /event_type NOT IN \(([^)]*)\)/.exec(body);
-    expect(match).not.toBeNull();
-    const skipped = [...(match?.[1] ?? '').matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
-    expect([...MARK_ALL_READ_PROC_SKIPS].sort()).toEqual([...skipped].sort());
-    expect(body).toContain("NOT (event_type = 'mention' AND entity_type = 'chat_channel')");
-    // The task alerts came after 2b: the proc clears them itself.
-    for (const eventType of BELL_TASK_EVENT_TYPES) {
-      expect(MARK_ALL_READ_PROC_SKIPS.has(eventType)).toBe(false);
-    }
+    expect(body).toContain('read_at IS NULL AND snoozed_until IS NULL AND deleted_at IS NULL');
+    // No per-type exclusion is left: chat mentions and the bell's types included.
+    expect(body).not.toMatch(/event_type/);
+    expect(body).not.toMatch(/entity_type/);
   });
 });
