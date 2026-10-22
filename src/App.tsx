@@ -1,5 +1,6 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/components/shell/AppLayout';
+import { ActivityRedirect } from '@/components/shell/ActivityRedirect';
 import { PipelinePage } from '@/components/pages/PipelinePage';
 import { PostDetailPage } from '@/components/pages/PostDetailPage';
 import { BriefsPage } from '@/components/pages/BriefsPage';
@@ -43,12 +44,6 @@ function WorkspaceLayout() {
       </ChatProvider>
     </WorkspaceProvider>
   );
-}
-
-/** /activity (old links, bookmarks): Notifications in place, query string kept. */
-export function ActivityRedirect() {
-  const { search } = useLocation();
-  return <Navigate to={`/notifications${search}`} replace />;
 }
 
 export default function App() {
