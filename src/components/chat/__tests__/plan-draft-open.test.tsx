@@ -337,7 +337,7 @@ describe('item 4: footer', () => {
   });
 });
 
-describe('item 5: one view of ticks', () => {
+describe('item 5: one view of the PLAN line', () => {
   const paint = (side: 'agency' | 'client', audience: 'team' | 'client'): string =>
     renderToStaticMarkup(
       <MemoryRouter>
@@ -347,29 +347,38 @@ describe('item 5: one view of ticks', () => {
           side={side}
           timeZone="Asia/Kolkata"
           thumbs={{}}
-          names={{ 'u-client': 'Riya Shah' }}
           drag={null}
           onOpenItem={() => undefined}
-          onToggleSlot={() => undefined}
+          onPlanOk={() => undefined}
+          onPlanNotOk={() => undefined}
         />
       </MemoryRouter>,
     );
 
-  it('Open: client side for everyone; agency boxes read-only; never a team tick', () => {
+  it('Open: client side for everyone; the agency reads it as text; never a team answer', () => {
     const agency = paint('agency', 'client');
     expect(agency).not.toContain('data-plan-slot="team"');
-    expect(agency).toMatch(/data-plan-slot="client"[^>]*data-plan-slot-state="approved"/);
+    expect(agency).toMatch(
+      /data-plan-slot="client"[^>]*data-plan-slot-state="approved"[^>]*data-plan-control="text"[^>]*>OK</,
+    );
     expect(agency).toContain('data-plan-slot-readonly=""');
-    expect(agency).toContain('Approved 1 of 2');
+    expect(agency).not.toContain('data-plan-ok=');
+    expect(agency).toContain('1/2 OK');
     const client = paint('client', 'client');
     expect(client).not.toContain('data-plan-slot-readonly');
-    expect(client).toContain('Approved 1 of 2');
+    // The client's approved slot is the solid pill; the undecided concept the switch.
+    expect(client).toMatch(
+      /data-plan-slot="client" data-plan-slot-state="approved" data-plan-control="pill"/,
+    );
+    expect(client).toContain('data-plan-control="switch"');
+    expect(client).toContain('1/2 OK');
   });
 
   it('Draft: the team side for the agency, writable', () => {
     const html = paint('agency', 'team');
     expect(html).toMatch(/data-plan-slot="team"[^>]*data-plan-slot-state="approved"/);
-    expect(html).toContain('Creators 1 of 2');
+    expect(html).toContain('data-plan-control="pill"');
+    expect(html).toContain('1/2 OK');
   });
 
   it('the screen never writes the team side on an Open plan', () => {
@@ -378,7 +387,7 @@ describe('item 5: one view of ticks', () => {
       'const slot = shownBundle !== null ? slotSide(side, shownBundle.plan.audience) : null;',
     );
     expect(src).toMatch(
-      /Read-only boxes \(the agency on an Open plan\) never write[^\n]*\n\s*if \(bundle === null \|\| slot === null \|\| editMode\) return;/,
+      /Read-only \(the agency on an Open plan\) never writes[^\n]*\n\s*if \(bundle === null \|\| slot === null \|\| editMode\) return;/,
     );
   });
 });
@@ -405,7 +414,7 @@ describe('item 6: Approved by', () => {
     );
   });
 
-  it('renders under the approved row in the good token, with the account name', () => {
+  it('the row shows no Approved by line any more: the PLAN line reads OK', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <PlanBody
@@ -414,15 +423,16 @@ describe('item 6: Approved by', () => {
           side="agency"
           timeZone="Asia/Kolkata"
           thumbs={{}}
-          names={{ 'u-client': 'Riya Shah' }}
           drag={null}
           onOpenItem={() => undefined}
-          onToggleSlot={() => undefined}
+          onPlanOk={() => undefined}
+          onPlanNotOk={() => undefined}
         />
       </MemoryRouter>,
     );
-    expect(html).toMatch(/data-plan-row-approved-by=""[^>]*text-good/);
-    expect(html).toContain('Approved by Riya Shah · ');
+    expect(html).not.toContain('data-plan-row-approved-by');
+    expect(html).not.toContain('Approved by Riya Shah');
+    expect(html).toMatch(/data-plan-control="text"[^>]*text-good[^>]*>OK</);
     expect(MEMBER_NAME).toBe('Member');
   });
 
@@ -558,7 +568,8 @@ describe('item 9: Also in', () => {
           alsoIn={{ post1: ['Launch'] }}
           drag={null}
           onOpenItem={() => undefined}
-          onToggleSlot={() => undefined}
+          onPlanOk={() => undefined}
+          onPlanNotOk={() => undefined}
         />
       </MemoryRouter>,
     );
