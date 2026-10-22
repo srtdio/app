@@ -291,9 +291,47 @@ describe('week list layout (L1-L4)', () => {
       other,
     );
     const none = renderToStaticMarkup(<DayColumn day={null} today="2026-10-14" />);
-    expect(none).toMatch(/data-plan-day-weekday=""[^>]*>No date</);
-    expect(none).toMatch(/data-plan-day-number=""[^>]*><\/span>/);
+    expect(none).toMatch(/data-plan-day-weekday=""[^>]*bg-panel-2[^>]*><\/span>/);
+    expect(none).toMatch(/data-plan-day-number=""[^>]*>No date<\/span>/);
     expect(none).not.toContain('data-plan-today');
+  });
+
+  it('No date tile: blank strip, "No date" in the body in Inter, never today (regression)', () => {
+    const none = renderToStaticMarkup(<DayColumn day={null} today="2026-10-14" />);
+    const weekday = none.match(/<span data-plan-day-weekday="" class="([^"]*)">([^<]*)<\/span>/);
+    expect(weekday?.[2]).toBe('');
+    expect(weekday?.[1]).toContain('bg-panel-2');
+    expect(weekday?.[1]).not.toContain('bg-accent');
+    const number = none.match(/<span data-plan-day-number="" class="([^"]*)">([^<]*)<\/span>/);
+    expect(number?.[2]).toBe('No date');
+    const numberClasses = (number?.[1] ?? '').split(' ');
+    expect(numberClasses).not.toContain('font-mono');
+    expect(numberClasses).not.toContain('tabular-nums');
+    expect(numberClasses).not.toContain('uppercase');
+    expect(numberClasses).toEqual(
+      expect.arrayContaining([
+        'whitespace-nowrap',
+        'text-[11px]',
+        'leading-[14px]',
+        'font-semibold',
+        'text-fg-2',
+      ]),
+    );
+    expect(none).not.toContain('data-plan-today');
+    expect(none).not.toContain('border-accent');
+    expect(none).toContain('border-border-strong');
+  });
+
+  it('dated tile: weekday in the strip, day number in mono', () => {
+    const html = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" />);
+    const weekday = html.match(/<span data-plan-day-weekday="" class="([^"]*)">([^<]*)<\/span>/);
+    expect(weekday?.[2]).toBe('Thu');
+    expect(weekday?.[1]).toContain('uppercase');
+    const number = html.match(/<span data-plan-day-number="" class="([^"]*)">([^<]*)<\/span>/);
+    expect(number?.[2]).toBe('15');
+    expect((number?.[1] ?? '').split(' ')).toEqual(
+      expect.arrayContaining(['font-mono', 'text-[20px]', 'tabular-nums', 'text-fg']),
+    );
   });
 
   it('format line: the format label alone for a post (no stage), the description for a concept', () => {

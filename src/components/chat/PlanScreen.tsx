@@ -3201,7 +3201,9 @@ function AddRow(props: {
  * 700, uppercase, .08em, bg-panel-2, text-fg-2); the day number sits centred
  * below it (JetBrains Mono 20px/24px, 500). Today (the workspace zone): the
  * strip in the accent with accent-fg text and an accent border. "No date":
- * the strip reads "No date" and the number area stays empty.
+ * the strip stays empty (bg-panel-2) and the body reads "No date" centred on
+ * one line (Inter 11px/14px, 600, text-fg-2, not uppercase); it is never
+ * today, so no accent.
  */
 export function DayColumn(props: {
   day: string | null;
@@ -3225,13 +3227,18 @@ export function DayColumn(props: {
           isToday ? 'bg-accent text-accent-fg' : 'bg-panel-2 text-fg-2',
         )}
       >
-        {props.day === null ? NO_DATE_LABEL : civilWeekdayShort(props.day)}
+        {props.day === null ? '' : civilWeekdayShort(props.day)}
       </span>
       <span
         data-plan-day-number=""
-        className="flex flex-1 items-center justify-center font-mono text-[20px] font-medium leading-6 tabular-nums text-fg"
+        className={cn(
+          'flex flex-1 items-center justify-center',
+          props.day === null
+            ? 'whitespace-nowrap text-[11px] font-semibold leading-[14px] text-fg-2'
+            : 'font-mono text-[20px] font-medium leading-6 tabular-nums text-fg',
+        )}
       >
-        {props.day === null ? '' : dayOfMonth(props.day)}
+        {props.day === null ? NO_DATE_LABEL : dayOfMonth(props.day)}
       </span>
     </div>
   );
