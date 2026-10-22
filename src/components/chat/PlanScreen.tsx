@@ -354,6 +354,11 @@ export function PlanPage(props: {
   action?: ReactNode;
   /** Replaces the title line (the agency's menu button, the inline rename). */
   titleSlot?: ReactNode;
+  /**
+   * The Plan screen's view header: line 1 the back button and a 28px title,
+   * line 2 the subtitle with these actions (Add, Edit) on the right.
+   */
+  twoLine?: { actions?: ReactNode };
   /** Drawn under the header, anchored to it (the header menu). */
   overlay?: ReactNode;
   /** The scrolling body (a drag auto-scrolls it). */
@@ -461,6 +466,39 @@ export function PlanPage(props: {
   }, [props.open]);
   if (!rendered) return null;
   const showBack = !desktop || props.desktopBack === true;
+  const backButton = showBack ? (
+    props.backText !== undefined ? (
+      <button
+        type="button"
+        aria-label={props.backLabel}
+        data-plan-back-text=""
+        onClick={props.onBack}
+        className="-ml-2 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-[15px] font-medium text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        {props.backText}
+      </button>
+    ) : (
+      <button
+        type="button"
+        aria-label={props.backLabel}
+        onClick={props.onBack}
+        className="-ml-[11px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        {props.backIcon ?? <IconChevronLeft size={22} />}
+      </button>
+    )
+  ) : null;
+  const closeButton = desktop ? (
+    <button
+      type="button"
+      aria-label={props.closeLabel ?? 'Close'}
+      data-plan-close=""
+      onClick={props.onDismiss ?? props.onBack}
+      className="-mr-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <IconX size={20} />
+    </button>
+  ) : null;
   return createPortal(
     <div
       ref={pageRef}
@@ -488,67 +526,72 @@ export function PlanPage(props: {
             : 'translate-y-full',
       )}
     >
-      <header
-        className={cn(
-          // 16px on both sides: the back glyph and the last text action sit on the lines.
-          'relative z-20 flex min-h-[60px] shrink-0 items-center gap-2 border-b border-border bg-panel pl-4 pr-4',
-        )}
-      >
-        {showBack ? (
-          props.backText !== undefined ? (
-            <button
-              type="button"
-              aria-label={props.backLabel}
-              data-plan-back-text=""
-              onClick={props.onBack}
-              className="-ml-2 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-[15px] font-medium text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              {props.backText}
-            </button>
-          ) : (
-            <button
-              type="button"
-              aria-label={props.backLabel}
-              onClick={props.onBack}
-              className="-ml-[11px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              {props.backIcon ?? <IconChevronLeft size={22} />}
-            </button>
-          )
-        ) : null}
-        <div
-          data-plan-page-titles=""
-          {...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {})}
-          className="flex min-w-0 flex-1 flex-col rounded-md focus:outline-none"
+      {props.twoLine !== undefined ? (
+        // Line 1 (48px): back, the 28px title (2 lines at most). Line 2 (44px,
+        // 2px below): the subtitle, then the actions on the 16px edge. Line 2
+        // is always drawn so the header never grows after the plan loads.
+        <header
+          data-plan-header-two-line=""
+          className="relative z-20 flex shrink-0 flex-col gap-[2px] border-b border-border bg-panel px-4"
         >
-          {props.titleSlot ?? (
-            <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">
-              <Highlight text={props.title} />
-            </h2>
-          )}
-          {props.subtitle !== undefined ? (
+          <div data-plan-header-line="1" className="flex min-h-[48px] items-center gap-2">
+            {backButton}
+            <div
+              data-plan-page-titles=""
+              {...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {})}
+              className="flex min-w-0 flex-1 flex-col rounded-md focus:outline-none"
+            >
+              {props.titleSlot ?? (
+                <h2 className={PLAN_HEADER_TITLE}>
+                  <Highlight text={props.title} />
+                </h2>
+              )}
+            </div>
+            {closeButton}
+          </div>
+          <div data-plan-header-line="2" className="flex min-h-[44px] items-center gap-2">
             <span
-              data-plan-page-subtitle=""
-              className="truncate text-[13px] leading-[18px] text-fg-3"
+              {...(props.subtitle !== undefined ? { 'data-plan-page-subtitle': '' } : {})}
+              className="min-w-0 flex-1 truncate text-[13px] font-medium leading-[18px] text-fg-2"
             >
               {props.subtitle}
             </span>
-          ) : null}
-        </div>
-        {props.action}
-        {desktop ? (
-          <button
-            type="button"
-            aria-label={props.closeLabel ?? 'Close'}
-            data-plan-close=""
-            onClick={props.onDismiss ?? props.onBack}
-            className="-mr-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            {props.twoLine.actions}
+          </div>
+          {props.overlay}
+        </header>
+      ) : (
+        <header
+          className={cn(
+            // 16px on both sides: the back glyph and the last text action sit on the lines.
+            'relative z-20 flex min-h-[60px] shrink-0 items-center gap-2 border-b border-border bg-panel pl-4 pr-4',
+          )}
+        >
+          {backButton}
+          <div
+            data-plan-page-titles=""
+            {...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {})}
+            className="flex min-w-0 flex-1 flex-col rounded-md focus:outline-none"
           >
-            <IconX size={20} />
-          </button>
-        ) : null}
-        {props.overlay}
-      </header>
+            {props.titleSlot ?? (
+              <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">
+                <Highlight text={props.title} />
+              </h2>
+            )}
+            {props.subtitle !== undefined ? (
+              <span
+                data-plan-page-subtitle=""
+                className="truncate text-[13px] leading-[18px] text-fg-3"
+              >
+                {props.subtitle}
+              </span>
+            ) : null}
+          </div>
+          {props.action}
+          {closeButton}
+          {props.overlay}
+        </header>
+      )}
       <div
         ref={props.bodyRef}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain"
@@ -1983,24 +2026,38 @@ export function PlanScreen(props: {
       {saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}
     </button>
   );
+  // Line 2's boxed pair: Add (accent soft), then Edit (outlined), each box 34px
+  // in a 44px tap target, the last one's right edge on the 16px line.
   const viewActions = (
-    <span className="flex shrink-0 items-center">
+    <span data-plan-header-actions="" className="flex shrink-0 items-center gap-2">
       <button
         type="button"
         aria-label="Add to plan"
         data-plan-add-header=""
         onClick={() => openAdd(null)}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
       >
-        <IconPlus size={22} />
+        <span
+          data-plan-header-box=""
+          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-transparent bg-accent-soft px-3 text-[14px] font-semibold leading-5 text-accent group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+        >
+          <IconPlus size={15} />
+          Add
+        </span>
       </button>
       <button
         type="button"
         data-plan-edit=""
         onClick={enterEdit}
-        className="-mr-2 min-h-[44px] md:mr-0 min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
       >
-        {EDIT_LABEL}
+        <span
+          data-plan-header-box=""
+          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-border-strong bg-panel px-3 text-[14px] font-semibold leading-5 text-fg group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+        >
+          <IconEdit size={15} />
+          {EDIT_LABEL}
+        </span>
       </button>
     </span>
   );
@@ -2026,6 +2083,11 @@ export function PlanScreen(props: {
               titleSlot: editHeaderSlot,
               action: saveButton,
             }
+          : renaming === null
+            ? { twoLine: agency ? { actions: viewActions } : {} }
+            : {})}
+        {...(editing
+          ? {}
           : agency
             ? {
                 titleSlot:
@@ -2060,7 +2122,6 @@ export function PlanScreen(props: {
                     onClose={() => setMenuOpen(false)}
                   />
                 ),
-                ...(renaming === null ? { action: viewActions } : {}),
               }
             : {})}
       >
@@ -2445,9 +2506,13 @@ export function PlanEditHeader(props: {
   );
 }
 
+/** The view header's title: 28/34 bold, 2 lines at most, wrapping at word breaks. */
+const PLAN_HEADER_TITLE =
+  'line-clamp-2 break-normal text-[28px] font-bold leading-[34px] tracking-[-0.02em] text-fg';
+
 /**
- * The agency's header title: a button with a small chevron that opens the
- * header menu (Rename, Delete plan). 44px tall; truncates.
+ * The agency's header title: a button with a chevron (18px, 6px gap) that
+ * opens the header menu (Rename, Delete plan). At least 44px tall; 2 lines.
  */
 function PlanTitleButton(props: {
   title: string;
@@ -2463,13 +2528,13 @@ function PlanTitleButton(props: {
       onClick={props.onToggle}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        '-ml-1 flex min-h-[44px] min-w-0 max-w-full items-center gap-1 self-start rounded-md px-1 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        '-ml-1 flex min-h-[44px] min-w-0 max-w-full items-center gap-1.5 self-start rounded-md px-1 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         NO_TOUCH_SELECT,
       )}
     >
-      <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">{props.title}</h2>
-      <span aria-hidden="true" className="shrink-0 text-fg-3">
-        <IconChevronDown size={16} />
+      <h2 className={PLAN_HEADER_TITLE}>{props.title}</h2>
+      <span aria-hidden="true" className="shrink-0 text-fg-2">
+        <IconChevronDown size={18} />
       </span>
     </button>
   );
