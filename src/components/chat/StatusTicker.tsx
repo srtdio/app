@@ -71,7 +71,7 @@ const ICON_TONE: Record<StatusTone, string> = {
   warn: 'text-warn',
   good: 'text-good',
 };
-
+/** Room full mode (and compact mode with plan titles) keeps before the chevron (px). */
 /** Room full mode keeps between the last item and the chevron (px). */
 const FULL_CHEVRON_GAP = 12;
 
@@ -82,6 +82,9 @@ const BAR =
  * One bar item; compact drops the word and the "+K" (a plan keeps its lead).
  * `keep` is how many words a plan title keeps in compact mode (absent: all).
  * The compact measuring copy splits a title into its words to size them.
+ * A compact plan title item may also shrink: when whole words are not enough
+ * its title ends on the browser's ellipsis (whole glyphs only), so the row
+ * never runs under the chevron.
  */
 function TickerItem(props: {
   item: StatusItem;
@@ -91,6 +94,7 @@ function TickerItem(props: {
 }): ReactElement {
   const { item, compact } = props;
   const Icon = STATUS_ICON[item.key];
+  const shrink = props.measure !== true && compact && item.trim;
   const lead =
     item.lead === null ? null : props.measure === true && compact && item.trim ? (
       <span data-status-title={item.id}>
@@ -101,7 +105,7 @@ function TickerItem(props: {
         ))}
       </span>
     ) : (
-      <span>
+      <span className={cn(shrink && 'min-w-0 truncate')}>
         {compact && item.trim && props.keep !== undefined
           ? keptTitle(item.lead, props.keep)
           : item.lead}
@@ -114,7 +118,7 @@ function TickerItem(props: {
       <span
         data-status-number=""
         className={cn(
-          'font-mono font-semibold tabular-nums',
+          'shrink-0 font-mono font-semibold tabular-nums',
           compact && 'tracking-tighter',
           NUMBER_TONE[item.tone],
         )}
@@ -129,7 +133,10 @@ function TickerItem(props: {
       ) : null}
     </>
   );
-  const box = 'flex shrink-0 items-center gap-1 whitespace-nowrap text-xs leading-4 text-fg-2';
+  const box = cn(
+    'flex items-center gap-1 whitespace-nowrap text-xs leading-4 text-fg-2',
+    shrink ? 'min-w-0 shrink' : 'shrink-0',
+  );
   if (props.measure === true) return <span className={cn(box, 'h-9')}>{parts}</span>;
   return (
     <button
@@ -204,6 +211,7 @@ export function StatusTickerBar(props: {
   const measureRef = useRef<HTMLDivElement | null>(null);
   const compactRef = useRef<HTMLDivElement | null>(null);
   const ellipsisRef = useRef<HTMLSpanElement | null>(null);
+  const trims = items?.some((i) => i.trim) === true;
   const itemsKey =
     items?.map((i) => `${i.id}:${i.lead ?? ''}${i.number}:${i.word ?? ''}:${i.more}`).join('|') ??
     '';
@@ -220,7 +228,11 @@ export function StatusTickerBar(props: {
     const row = compactRef.current;
     setKept(
       nextCompact && row !== null
-        ? measureKept(row, ellipsisRef.current?.offsetWidth ?? 0, area.clientWidth)
+        ? measureKept(
+            row,
+            ellipsisRef.current?.offsetWidth ?? 0,
+            area.clientWidth - FULL_CHEVRON_GAP,
+          )
         : null,
     );
     if (paintLogOn()) {
@@ -298,7 +310,9 @@ export function StatusTickerBar(props: {
         data-status-items=""
         className={cn(
           'relative flex min-w-0 flex-1 items-center',
-          compact ? 'gap-2' : 'gap-3 pr-3',
+          // Compact plan titles shrink to the edge: the 12px space before the
+          // chevron stays, so its widened hit area never covers the last item.
+          compact ? cn('gap-2', trims && 'pr-3') : 'gap-3 pr-3',
         )}
       >
         {items?.map((item) => (

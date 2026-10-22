@@ -95,8 +95,9 @@ describe('compact with two current shared plans', () => {
   });
 
   it('still over: titles drop whole trailing words, widest first, both items stay', () => {
-    // 100 over. "Festive fortnight" (70 + 100) drops " fortnight" first, then
-    // "Week ahead plan" (40 + 60 + 50) drops " plan".
+    // 112 over (300 less the 12px chevron space). "Festive fortnight"
+    // (70 + 100) drops " fortnight" first, then "Week ahead plan"
+    // (40 + 60 + 50) drops " plan".
     WIDTH.compact = 400;
     render([plan('a', 'Week ahead plan'), plan('b', 'Festive fortnight')]);
     const view = painted();
@@ -105,6 +106,13 @@ describe('compact with two current shared plans', () => {
     // The screen reader name keeps the whole title.
     const first = host.querySelector('[data-status-items] > [data-status-item="plan"]');
     expect(first?.getAttribute('aria-label')).toBe('Week ahead plan 1 of 4 approved');
+    // Past whole words the plan items still shrink (ellipsis on whole glyphs)
+    // and the space before the chevron stays; other items never shrink.
+    expect(first?.className).toContain('min-w-0');
+    expect(first?.querySelector('span')?.className).toContain('truncate');
+    const posts = host.querySelector('[data-status-items] > [data-status-item="posts"]');
+    expect(posts?.className).toContain('shrink-0');
+    expect(host.querySelector('[data-status-items]')?.className).toContain('pr-3');
   });
 
   it('three plans compact: two plan items, the +K hidden like every compact +K', () => {
