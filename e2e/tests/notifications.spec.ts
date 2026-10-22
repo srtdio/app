@@ -397,8 +397,8 @@ test('Upcoming: a pending reminder and a scheduled message, soonest first; never
   await page.goto('/notifications');
   const button = page.locator('header [data-notifications-button]');
   await button.waitFor({ state: 'visible', timeout: 15_000 });
-  // Neither is an inbox row: the badge has nothing to count.
-  await expect(button).not.toHaveAttribute('aria-label', /unread/);
+  // Neither is an inbox row: the badge counts only the fixture's one chat mention.
+  await expect(button).toHaveAttribute('aria-label', 'Notifications, 1 unread');
 
   await page.getByRole('button', { name: 'Upcoming', exact: true }).click();
   const rows = page.locator('[data-upcoming-row]');
