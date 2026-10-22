@@ -12,7 +12,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   DayColumn,
   PlanBody,
-  SlotCheckbox,
   planListGroups,
   rowMeta,
   screenProgressLabel,
@@ -135,35 +134,6 @@ describe('checkbox per role (W4)', () => {
     expect(slotTicked(b, 'c1', 'client')).toBe(false);
     expect(itemPills(b, at(b, 'p2'), 'client').map((p) => p.side)).toEqual(['client']);
   });
-
-  it('the checkbox is a 22px box in a 44x44 target, with tokens only', () => {
-    const html = renderToStaticMarkup(
-      <SlotCheckbox side="client" checked title="One" onToggle={() => undefined} />,
-    );
-    expect(html).toContain('role="checkbox"');
-    expect(html).toContain('aria-checked="true"');
-    expect(html).toContain('h-11 w-11');
-    expect(html).toContain('h-[22px] w-[22px]');
-    expect(html).toContain('rounded-[6px]');
-    // Top-aligned with the thumbnail; the day block's 5px right padding puts the box 16px in.
-    expect(html).toContain('self-start');
-    expect(html).toContain('data-plan-slot="client"');
-    // Client ticked: success fill, white tick.
-    expect(html).toContain('bg-good');
-    expect(html).toContain('text-accent-fg');
-    const team = renderToStaticMarkup(
-      <SlotCheckbox side="team" checked title="One" onToggle={() => undefined} />,
-    );
-    expect(team).toContain('bg-accent');
-    expect(team).not.toContain('bg-good');
-    expect(html).not.toMatch(new RegExp(`${String.fromCharCode(35)}[0-9a-f]{3,6}`, 'i'));
-    const off = renderToStaticMarkup(
-      <SlotCheckbox side="team" checked={false} title="One" onToggle={() => undefined} />,
-    );
-    expect(off).toContain('aria-checked="false"');
-    expect(off).toContain('data-plan-slot-state="pending"');
-    expect(off).toContain('border-[1.5px] border-border-strong');
-  });
 });
 
 describe('optimistic counts and toasts (W4, W6)', () => {
@@ -216,9 +186,13 @@ describe('optimistic counts and toasts (W4, W6)', () => {
     expect(SLOT_FAILED).toBe("Couldn't update this slot. Try again.");
   });
 
-  it('the screen: an untick writes through runSlotWrite; a tick waits behind the Undo toast (X3)', () => {
+  it('the screen: OK waits behind the Undo toast (X3); there is no untick, Not OK opens the item', () => {
     const src = read('PlanScreen.tsx');
-    expect(src).toContain('await runSlotWrite({');
+    expect(src).not.toContain('await runSlotWrite({');
+    expect(src).not.toContain('untickSlot');
+    expect(src).toMatch(
+      /const planOk = [\s\S]*?if \(previous === 'approved'\) return;[\s\S]*?tickSlot\(item, slot, previous, dayHeader\);/,
+    );
     expect(src).toContain('p_trace_id: traceId');
     expect(src).toContain('dispatchPlanChanged(window, planId);');
     // Undo means the write never goes (useUndoableAction), so no write-back.
@@ -250,6 +224,9 @@ describe('post item header (W7, W8)', () => {
     expect(header).toMatch(/className="flex min-w-0 flex-1 flex-col[^"]*"/);
     expect(header).toContain('<h2 className="truncate');
     expect(header.indexOf('{props.action}')).toBeGreaterThan(header.indexOf('</h2>'));
+    // 16px on both sides for every header (no pl-1 with a back button).
+    expect(header).toContain('border-b border-border bg-panel pl-4 pr-4');
+    expect(header).not.toContain("showBack ? 'pl-1'");
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain('action: (');
     expect(item).toContain('data-plan-more=""');
@@ -293,35 +270,37 @@ describe('Undo restores the exact previous status (A3)', () => {
 });
 
 describe('week list layout (L1-L4)', () => {
-  it('day column: 48x44, weekday over the digits centred; today both accent; empty faint; No date', () => {
-    const today = renderToStaticMarkup(
-      <DayColumn day="2026-10-14" today="2026-10-14" empty={false} />,
-    );
-    expect(today).toContain('flex h-11 w-12 shrink-0 flex-col items-center justify-center gap-0.5');
+  it('date tile: 56x56, weekday strip over the number; today accent strip and border; No date', () => {
+    const today = renderToStaticMarkup(<DayColumn day="2026-10-14" today="2026-10-14" />);
+    expect(today).toContain('flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-[10px] border');
     expect(today).toContain('data-plan-today=""');
-    expect(today).toMatch(
-      /text-\[11px\] font-semibold uppercase leading-\[14px\] tracking-\[\.06em\] text-accent">Wed</,
+    expect(today).toContain('border-accent');
+    expect(today).toMatch(/data-plan-day-weekday=""[^>]*bg-accent text-accent-fg">Wed</);
+    expect(today).toMatch(/data-plan-day-number=""[^>]*font-mono[^>]*tabular-nums text-fg">14</);
+    // The weekday is no longer accent text on the panel.
+    expect(today).not.toMatch(/ text-accent">/);
+    const other = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" />);
+    expect(other).not.toContain('data-plan-today');
+    expect(other).toContain('border-border-strong');
+    expect(other).toMatch(/data-plan-day-weekday=""[^>]*bg-panel-2 text-fg-2">Thu</);
+    expect(other).toMatch(/tabular-nums text-fg">15</);
+    // `empty` is optional and no longer changes the tile.
+    expect(renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" empty />)).toBe(
+      other,
     );
-    expect(today).toMatch(
-      /text-\[22px\] font-semibold leading-7 tracking-\[-\.01em\] tabular-nums text-accent">14</,
-    );
-    const empty = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" empty />);
-    expect(empty).toMatch(/text-fg-3">Thu</);
-    expect(empty).toMatch(/tabular-nums text-border-strong">15</);
-    const busy = renderToStaticMarkup(
-      <DayColumn day="2026-10-15" today="2026-10-14" empty={false} />,
-    );
-    expect(busy).toMatch(/tabular-nums text-fg">15</);
-    const none = renderToStaticMarkup(<DayColumn day={null} today="2026-10-14" empty={false} />);
-    expect(none).toContain('No date');
-    expect(none).not.toContain('data-plan-day-number');
+    const none = renderToStaticMarkup(<DayColumn day={null} today="2026-10-14" />);
+    expect(none).toMatch(/data-plan-day-weekday=""[^>]*>No date</);
+    expect(none).toMatch(/data-plan-day-number=""[^>]*><\/span>/);
+    expect(none).not.toContain('data-plan-today');
   });
 
-  it('meta line: format and stage for a post, the description for a concept', () => {
+  it('format line: the format label alone for a post (no stage), the description for a concept', () => {
     const b = bundle('client');
     b.postInfo.post1 = { title: 'One', target_date: null, format: 'carousel' };
-    expect(rowMeta(b, at(b, 'p1'))).toMatch(/ · In review$/);
-    expect(rowMeta(b, at(b, 'p2'))).toBe('Approved');
+    expect(rowMeta(b, at(b, 'p1'))).toBe('Carousel');
+    // No format: nothing (the stage lives on the POST line).
+    expect(rowMeta(b, at(b, 'p2'))).toBe('');
+    expect(rowMeta(b, item({ id: 'x', post_id: null }))).toBe('');
     expect(rowMeta({ ...b }, { ...at(b, 'c1'), description: 'Morning light' })).toBe(
       'Morning light',
     );
@@ -338,92 +317,100 @@ describe('week list layout (L1-L4)', () => {
           thumbs={{ post1: 'v1' }}
           drag={null}
           onOpenItem={() => undefined}
-          onToggleSlot={() => undefined}
+          onPlanOk={() => undefined}
+          onPlanNotOk={() => undefined}
           {...(side === 'agency' ? { onAdd: () => undefined, onDragStart: () => undefined } : {})}
         />
       </MemoryRouter>,
     );
   }
 
-  function paintCounts(side: 'client' | 'agency', counts: Record<string, number>): string {
-    return renderToStaticMarkup(
-      <MemoryRouter>
-        <PlanBody
-          bundle={bundle('client')}
-          groups={planListGroups(bundle('client'), 'UTC', side)}
-          side={side}
-          timeZone="UTC"
-          thumbs={{}}
-          counts={counts}
-          drag={null}
-          onOpenItem={() => undefined}
-          onToggleSlot={() => undefined}
-        />
-      </MemoryRouter>,
-    );
-  }
-
-  it('B3 comments: agency at the end of the status line, muted; client as the third line', () => {
-    const rowOf = (html: string): string =>
-      /<div data-plan-row-wrap="p1"[^>]*>[\s\S]*?<\/button>/.exec(html)?.[0] ?? '';
-    const agency = rowOf(paintCounts('agency', { p1: 3 }));
-    expect(agency).toMatch(
-      /data-plan-row-status=""[^>]*class="flex min-w-0 items-center text-xs leading-4">[\s\S]*?<span data-plan-row-comments="" class="truncate text-fg-3"> · 3 comments<\/span><\/span>/,
-    );
-    const client = rowOf(paintCounts('client', { p1: 1 }));
-    expect(client).not.toContain('data-plan-row-status');
-    expect(client).toContain(
-      '<span data-plan-row-comments="" class="truncate text-xs leading-4 text-fg-3">1 comment</span>',
-    );
-    // None when zero, on either side.
-    expect(rowOf(paintCounts('agency', { p1: 0 }))).not.toContain('data-plan-row-comments');
-    expect(rowOf(paintCounts('client', {}))).not.toContain('data-plan-row-comments');
+  it('a row carries no kind tag, status, comments or Approved by line, and no checkbox', () => {
+    for (const side of ['client', 'agency'] as const) {
+      const html = paint(side, 'client');
+      for (const gone of [
+        'data-plan-row-kind',
+        'data-plan-row-status',
+        'data-plan-row-comments',
+        'data-plan-row-approved-by',
+        'role="checkbox"',
+        'aria-checked',
+      ]) {
+        expect(html).not.toContain(gone);
+      }
+    }
     expect(commentsLabel(0)).toBeNull();
     expect(commentsLabel(2)).toBe('2 comments');
   });
 
-  it('each row: the open area first, the checkbox last; Nothing planned 36px; day blocks bordered', () => {
+  it('each row: date tile, title block, thumbnail on the right, then PLAN and POST; day blocks bordered', () => {
     const html = paint('client', 'client');
-    const wrap = /<div data-plan-row-wrap="p1"[^>]*>([\s\S]*?)<\/button><\/div>/.exec(html);
-    expect(wrap).not.toBeNull();
-    const row = wrap![0];
-    expect(row.indexOf('data-plan-row="p1"')).toBeLessThan(row.indexOf('data-plan-slot='));
-    // The checkbox is the row's last element.
-    expect(row.trimEnd().endsWith('</span></button></div>')).toBe(true);
+    const row = html.slice(
+      html.indexOf('data-plan-row-wrap="p1"'),
+      html.indexOf('data-plan-day="2026-10-14"'),
+    );
+    const order = [
+      'data-plan-day-col',
+      'data-plan-row="p1"',
+      'data-plan-row-title',
+      'data-plan-row-tile="image"',
+      'data-plan-line="plan"',
+      'data-plan-line="post"',
+    ].map((k) => row.indexOf(k));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // The thumbnail: 56x56, radius 10, inside the row button after the title.
+    expect(row).toContain('h-14 w-14 shrink-0 overflow-hidden rounded-[10px]');
+    // The title wraps to two lines.
+    expect(row).toMatch(/data-plan-row-title=""[^>]*line-clamp-2/);
+    // PLAN: the client's approved slot is the OK pill; POST: the stage.
+    expect(row).toMatch(/data-plan-line="plan"[\s\S]*?>PLAN<[\s\S]*?data-plan-control="pill"/);
+    expect(row).toMatch(/data-plan-post-status="review"[\s\S]*?>Review</);
     expect(html).toMatch(
       /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-\[13px\] text-fg-3">Nothing planned/,
     );
-    // Day block: 16px top/bottom/left, 5px right, a 1px line between days.
-    expect(html).toContain('flex gap-3 border-t border-border py-4 pl-4 pr-[5px]');
-    // Items 16px apart; title, type line and status 2px apart.
-    expect(html).toContain('flex min-w-0 flex-1 flex-col gap-4');
+    // Day block: 16px all round, a 1px line between days, rows 16px apart.
+    expect(html).toContain('flex flex-col gap-4 border-t border-border px-4 py-4');
     expect(html).toContain('flex min-w-0 flex-1 flex-col gap-0.5');
-    // A client sees no Add, no status line, no drag.
+    // A client sees no Add, no drag.
     expect(html).not.toContain('data-plan-add=');
-    expect(html).not.toContain('data-plan-row-status');
-    // Day column left of items.
-    const day = html.slice(html.indexOf('data-plan-day="2026-10-13"'));
-    expect(day.indexOf('data-plan-day-col')).toBeLessThan(day.indexOf('data-plan-row'));
+    // One date tile per day: the No date day has three rows and one tile.
+    const none = html.slice(html.indexOf('data-plan-day="none"'));
+    expect(none.match(/data-plan-day-col=""/g)).toHaveLength(1);
+    expect(none.match(/data-plan-row-wrap=/g)).toHaveLength(3);
+    // Rows under the first keep the 56px column with a spacer.
+    expect(none).toContain('<span aria-hidden="true" class="w-14 shrink-0"></span>');
     // Tiles: the first image, the text tile, the dashed concept outline.
     expect(html).toContain('data-plan-row-tile="image"');
     expect(html).toContain('data-plan-row-tile="text"');
     expect(html).toContain('data-plan-row-tile="concept"');
-    expect(html).toMatch(/data-plan-row-kind="Post 1 of 3"[^>]*>Post</);
-    // A client: no team state; the locked draft has no checkbox.
+    // A client: no team state; the locked draft has no PLAN line and no switch.
     expect(html).not.toContain('data-plan-slot="team"');
-    expect(html).not.toContain('data-plan-row-wrap="d1"');
     expect(html).toContain('data-plan-row-draft="locked"');
+    const draft = html.slice(html.indexOf('data-plan-row-wrap="d1"'));
+    const draftRow = draft.slice(0, draft.indexOf('data-plan-row-wrap=', 1));
+    expect(draftRow).not.toContain('data-plan-line');
+    expect(draftRow).not.toContain('data-plan-control');
   });
 
-  it('agency on an Open plan: read-only client checkboxes, the client status line, Add rows, No date kept', () => {
+  it('agency on an Open plan: the client PLAN as read-only text, Add rows, No date kept', () => {
     const html = paint('agency', 'client');
-    // Team reviews are never shown on an Open plan: the client side, read-only.
+    // Team reviews are never shown on an Open plan: the client side, read-only text.
     expect(html).not.toContain('data-plan-slot="team"');
     expect(html).toContain('data-plan-slot="client"');
     expect(html).toContain('data-plan-slot-readonly=""');
-    expect(html).toMatch(/data-plan-slot="client"[^>]*disabled=""/);
-    expect(html).toContain('Approved 1 of 4');
-    expect(html).toMatch(/data-plan-row-status=""[^>]*>.*Approved</);
+    expect(html).not.toContain('data-plan-control="switch"');
+    expect(html).not.toContain('data-plan-control="pill"');
+    expect(html).not.toContain('data-plan-ok=');
+    expect(html).toMatch(/data-plan-slot-state="approved"[^>]*data-plan-control="text"[^>]*>OK</);
+    expect(html).toMatch(/data-plan-slot-state="changes"[^>]*data-plan-control="text"[^>]*>Not OK</);
+    expect(html).toMatch(
+      /data-plan-slot-state="pending"[^>]*data-plan-control="text"[^>]*>Not checked yet</,
+    );
+    // Header: PLAN over every item, POST over the post items.
+    expect(html).toContain('1/4 OK');
+    expect(html).toContain('1/3 approved');
+    expect(html).not.toContain('data-plan-row-status');
     expect(html).not.toContain('Approvers · Approved');
     expect(html).not.toContain('data-plan-pill="draft"');
     expect(html).toContain('data-plan-row-wrap="d1"');
@@ -432,19 +419,30 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toContain('data-plan-day="none"');
   });
 
-  it('agency on a Draft plan: writable team checkboxes and "Creators X of N"', () => {
+  it('agency on a Draft plan: the writable team switch and pill, "1/4 OK"', () => {
     const html = paint('agency', 'team');
     expect(html).toContain('data-plan-slot="team"');
     expect(html).not.toContain('data-plan-slot="client"');
     expect(html).not.toContain('data-plan-slot-readonly');
-    expect(html).toContain('Creators 1 of 4');
+    expect(html).toMatch(/data-plan-slot="team" data-plan-slot-state="approved" data-plan-control="pill"/);
+    expect(html).toMatch(/data-plan-slot="team" data-plan-slot-state="pending" data-plan-control="switch"/);
+    expect(html).toContain('1/4 OK');
+    expect(html).toContain('data-plan-screen-progress="plan"');
+    expect(html).toContain('data-plan-screen-progress="post"');
+    expect(html).toContain('data-plan-progress-bar="good"');
     expect(html).toContain('data-plan-progress-bar="accent"');
   });
 
-  it('a client on an Open plan ticks the client side (writable)', () => {
+  it('a client on an Open plan answers the client side (writable)', () => {
     const html = paint('client', 'client');
     expect(html).toContain('data-plan-slot="client"');
     expect(html).not.toContain('data-plan-slot-readonly');
-    expect(html).toContain('Approved 1 of 4');
+    // p2 is undecided: the OK | Not OK switch.
+    expect(html).toMatch(/data-plan-control="switch"[\s\S]*?data-plan-ok=""[\s\S]*?data-plan-not-ok=""/);
+    // c1 asked changes: the Not OK pill.
+    expect(html).toMatch(/data-plan-slot-state="changes" data-plan-control="pill"/);
+    // The locked draft is not one the client checks: 1 of 3.
+    expect(html).toContain('1/3 OK');
+    expect(html).toContain('1/3 approved');
   });
 });
