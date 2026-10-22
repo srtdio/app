@@ -1,12 +1,5 @@
 import { useState } from 'react';
-import {
-  IconCopy,
-  IconDownload,
-  IconEdit,
-  IconFolder,
-  IconLink,
-  IconTrash,
-} from '@/components/ui/icons';
+import { IconCopy, IconDownload, IconEdit, IconLink, IconTrash } from '@/components/ui/icons';
 import { IconInfo } from '@/components/pages/assets/viewerIcons';
 import { displayLabel, linkDomain, type AssetListItem } from '@/lib/assets';
 import { downloadFile, openLinkInNewTab } from '@/components/pages/assets/openExternal';
@@ -17,15 +10,15 @@ import { useEscapeLayer } from '@/lib/escape-stack';
 const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 
 /** One row of the file menu, in display order. */
-export type AssetMenuRow = 'primary' | 'copy' | 'move' | 'rename' | 'info' | 'delete';
+export type AssetMenuRow = 'primary' | 'copy' | 'rename' | 'info' | 'delete';
 
 /**
  * The file menu's rows in order: Download (Open {domain} for a link), Copy
- * link, Move to folder, Rename (owner/admin/agency only), Info (files only,
+ * link, Rename (owner/admin/agency only), Info (files only,
  * links never open in the viewer), Delete last. Pure.
  */
 export function assetMenuRows(isLink: boolean, canRename: boolean): AssetMenuRow[] {
-  const rows: AssetMenuRow[] = ['primary', 'copy', 'move'];
+  const rows: AssetMenuRow[] = ['primary', 'copy'];
   if (canRename) rows.push('rename');
   if (!isLink) rows.push('info');
   rows.push('delete');
@@ -52,8 +45,6 @@ interface AssetActionSheetProps {
   onClose: () => void;
   /** Open the lightbox for this asset with its Info sheet shown (non-links only). */
   onInfo: (item: AssetListItem) => void;
-  /** Open the move sheet for this one asset. */
-  onMove?: ((item: AssetListItem) => void) | undefined;
   /** Open the rename sheet for this asset. */
   onRename?: ((item: AssetListItem) => void) | undefined;
   /** Hide the asset now and offer Undo; the page commits after the window. */
@@ -91,8 +82,8 @@ function Row({
 
 /**
  * Bottom action sheet opened by a card's ⋯ or a long-press. Rows follow
- * assetMenuRows: Download (or Open {domain}), Copy link, Move to folder, Rename,
- * Info, and a destructive Delete last. Theme tokens only; rows are 48px.
+ * assetMenuRows: Download (or Open {domain}), Copy link, Rename, Info, and a
+ * destructive Delete last. Theme tokens only; rows are 48px.
  */
 export function AssetActionSheet({
   item,
@@ -101,7 +92,6 @@ export function AssetActionSheet({
   canRename = false,
   onClose,
   onInfo,
-  onMove,
   onRename,
   onDelete,
   onToast,
@@ -145,8 +135,7 @@ export function AssetActionSheet({
   };
 
   const rows = assetMenuRows(isLink, canRename && onRename !== undefined).filter(
-    (row) =>
-      (row !== 'move' || onMove !== undefined) && (row !== 'delete' || onDelete !== undefined),
+    (row) => row !== 'delete' || onDelete !== undefined,
   );
 
   return (
@@ -183,15 +172,6 @@ export function AssetActionSheet({
                   label="Copy link"
                   onClick={handleCopy}
                   disabled={!canCopy || busy}
-                />
-              );
-            case 'move':
-              return (
-                <Row
-                  key={row}
-                  icon={<IconFolder size={18} />}
-                  label="Move to folder"
-                  onClick={() => onMove?.(item)}
                 />
               );
             case 'rename':

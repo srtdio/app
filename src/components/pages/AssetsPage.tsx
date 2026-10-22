@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconAssets, IconChevronRight, IconUpload } from '@/components/ui/icons';
+import { IconAssets, IconUpload } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
@@ -16,35 +16,22 @@ import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { AddLinkSheet } from '@/components/pages/assets/AddLinkSheet';
 import { ASSET_TABPANEL_ID, AssetTabs, assetTabId } from '@/components/pages/assets/AssetTabs';
-import { FolderCard } from '@/components/pages/assets/FolderCard';
-import { FolderActionSheet } from '@/components/pages/assets/FolderActionSheet';
-import { FolderRenameSheet } from '@/components/pages/assets/FolderRenameSheet';
-import { MoveToFolderSheet } from '@/components/pages/assets/MoveToFolderSheet';
 import { AssetRenameSheet } from '@/components/pages/assets/AssetRenameSheet';
 import {
   ASSET_GONE_TOAST,
   ASSET_PARAM,
-  FOLDER_DELETED_LABEL,
   RECENTLY_DELETED_LABEL,
   RECENTLY_DELETED_PATH,
-  ROOT_LABEL,
   assetParamIsGone,
   deleteFailedLabel,
   deleteToastLabel,
-  folderFromParams,
-  folderLink,
-  folderStackOf,
-  folderStep,
   selectAllCapLabel,
   selectAllIds,
   selectCapLabel,
   selectedLabel,
-  withFolderParam,
-  type FolderHistoryState,
 } from '@/components/pages/assets/assets-nav';
 import { useOptionalToast } from '@/components/ui/toast';
 import { useUndoableAction } from '@/lib/use-undoable-action';
-import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
@@ -58,15 +45,9 @@ import { logger } from '@/lib/logger';
 import {
   addAssetLink,
   canRenameAssets,
-  deleteFolderRequest,
-  moveAssetsRequest,
   renameAsset,
-  renameFolderRequest,
   uploadAssetFile,
-  type FolderDeleteOutcome,
-  type FolderRenameOutcome,
   type LinkOutcome,
-  type MoveAssetsOutcome,
   type RenameOutcome,
   type UploadOutcome,
 } from '@/lib/asset-upload';
@@ -78,14 +59,10 @@ import {
   ASSET_TAB_DEFAULT,
   buildTabCounts,
   canBulkDelete,
-  childFolders,
   displayLabel,
-  fetchFolders,
   fetchMemberRole,
   filterAssets,
   findAssetsInUse,
-  folderBreadcrumb,
-  folderChildCount,
   assetInUseMessage,
   inUseKeptLabel,
   inUseTitle,
@@ -100,7 +77,6 @@ import {
   type AssetListItem,
   type AssetSort,
   type AssetTab,
-  type FolderItem,
 } from '@/lib/assets';
 
 const SKELETON_COUNT = 12;
@@ -118,12 +94,10 @@ export function AssetsPage() {
   const userId = session?.user.id ?? null;
 
   const [items, setItems] = useState<AssetListItem[]>([]);
-  const [folders, setFolders] = useState<FolderItem[]>([]);
   const [loading, setLoading] = useState(false);
-  // A failed read of the files or the folders is a page load error: the grid,
-  // folders and counts never render from a partial read. The cause is logged.
+  // A failed read of the files is a page load error: the grid and counts never
+  // render from a partial read. The cause is logged.
   const [assetsFailed, setAssetsFailed] = useState(false);
-  const [foldersFailed, setFoldersFailed] = useState(false);
   const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -134,27 +108,15 @@ export function AssetsPage() {
   const [actionItem, setActionItem] = useState<AssetListItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
-  const [folderAction, setFolderAction] = useState<FolderItem | null>(null);
-  const [renameTarget, setRenameTarget] = useState<FolderItem | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  // The asset ids the move sheet relocates: the selection, or one file from its menu.
-  const [moveIds, setMoveIds] = useState<string[] | null>(null);
   const [renameItem, setRenameItem] = useState<AssetListItem | null>(null);
   // Deleted but still inside the Undo window: hidden from every list until the
   // delete commits (then the rows go) or Undo brings them back.
   const [pendingDelete, setPendingDelete] = useState<ReadonlySet<string>>(() => new Set());
-  // Folders inside their Undo window: hidden until the delete commits or Undo.
-  const [pendingFolderDelete, setPendingFolderDelete] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  // Where the files the move sheet relocates are now (null: All assets).
-  const [moveFrom, setMoveFrom] = useState<string | null | undefined>(undefined);
-  const [foldersLoaded, setFoldersLoaded] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [inUse, setInUse] = useState<AssetInUseState | null>(null);
   const navigate = useNavigate();
-  const location = useLocation();
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   // The shell's ui/toast. show is the provider's stable function (the wrapper
   // object is new each render), so callbacks built on it stay stable.
@@ -168,9 +130,6 @@ export function AssetsPage() {
   const { run: runUndoable } = useUndoableAction();
   const [searchParams, setSearchParams] = useSearchParams();
   const openedAssetParam = useRef<string | null>(null);
-
-  // The open folder lives in ?folder=<id>, so refresh and Back keep it.
-  const folderId = folderFromParams(searchParams);
 
   // The tab lives in ?type= (default All, unknown is All), so it survives Back
   // and refresh. Switching only filters the loaded list: no read, instant.
@@ -211,55 +170,32 @@ export function AssetsPage() {
     setAssetsLoaded(true);
   }, [workspaceId]);
 
-  // Load the workspace's folder rows alongside the assets. A failed read is a
-  // page load error too: with no folder list every file would look like it sits
-  // in All assets and every folder would look empty, so nothing renders from it.
-  const loadFolders = useCallback(async () => {
-    if (workspaceId === null) return;
-    const result = await fetchFolders(supabase, workspaceId);
-    if (!result.ok) {
-      logger.warn('assets: folders read failed', { error: result.error.message });
-      setFoldersFailed(true);
-      return;
-    }
-    setFoldersFailed(false);
-    setFolders(result.data);
-    setFoldersLoaded(true);
-  }, [workspaceId]);
-
-  // Retry re-reads both, so a page that failed on either comes back whole.
   const retryLoad = useCallback(async () => {
     setRetrying(true);
     try {
-      await Promise.all([loadAssets(), loadFolders()]);
+      await loadAssets();
     } finally {
       setRetrying(false);
     }
-  }, [loadAssets, loadFolders]);
+  }, [loadAssets]);
 
   useEffect(() => {
     void loadAssets();
-    void loadFolders();
-  }, [loadAssets, loadFolders]);
+  }, [loadAssets]);
   useWorkspaceDataChanged(() => {
     void loadAssets();
-    void loadFolders();
   });
 
-  // Back to All assets when the active workspace changes (not on the first
-  // mount, which keeps a ?folder= deep link).
+  // Forget the last workspace's load state when the active workspace changes.
   const lastWorkspace = useRef(workspaceId);
   useEffect(() => {
     const previous = lastWorkspace.current;
     lastWorkspace.current = workspaceId;
     if (previous !== null && previous !== workspaceId) {
-      setSearchParams((prev) => withFolderParam(prev, null), { replace: true });
-      setFoldersLoaded(false);
       setAssetsLoaded(false);
       setAssetsFailed(false);
-      setFoldersFailed(false);
     }
-  }, [workspaceId, setSearchParams]);
+  }, [workspaceId]);
 
   // Reset overlays when the active workspace changes.
   useEffect(() => {
@@ -267,15 +203,10 @@ export function AssetsPage() {
     setActionItem(null);
     setUploadOpen(false);
     setAddLinkOpen(false);
-    setFolderAction(null);
-    setRenameTarget(null);
     setSelectMode(false);
     setSelected(new Set());
-    setMoveIds(null);
     setRenameItem(null);
     setPendingDelete(new Set());
-    setPendingFolderDelete(new Set());
-    setMoveFrom(undefined);
     setInUse(null);
   }, [workspaceId]);
 
@@ -297,8 +228,6 @@ export function AssetsPage() {
   }, [workspaceId, userId]);
 
   const canRename = canRenameAssets(role);
-  // Folder rename/delete share the asset rename role gate (owner/admin/agency).
-  const canManageFolders = canRename;
 
   const searching = search.trim() !== '';
 
@@ -308,81 +237,23 @@ export function AssetsPage() {
     [items, pendingDelete],
   );
 
-  // Tab counts reflect what the grid shows: the whole library while searching,
-  // otherwise just the open folder's assets. Same loaded list, no extra read.
-  const counts = useMemo(
-    () =>
-      buildTabCounts(
-        searching ? liveItems : liveItems.filter((item) => item.folderId === folderId),
-      ),
-    [liveItems, searching, folderId],
-  );
+  // Tab counts reflect the whole library. Same loaded list, no extra read.
+  const counts = useMemo(() => buildTabCounts(liveItems), [liveItems]);
 
-  const visible = useMemo(() => {
-    const byTab = filterAssets(liveItems, tab, search);
-    const scoped = searching ? byTab : byTab.filter((item) => item.folderId === folderId);
-    return sortAssets(scoped, sort);
-  }, [liveItems, tab, search, folderId, searching, sort]);
+  const visible = useMemo(
+    () => sortAssets(filterAssets(liveItems, tab, search), sort),
+    [liveItems, tab, search, sort],
+  );
 
   // The viewer iterates the currently visible list with links excluded; links
   // open their external URL directly and never enter the lightbox.
   const navigable = useMemo(() => visible.filter((item) => item.kind !== 'link'), [visible]);
 
-  // Child folders of the current level (none while searching, which spans folders).
-  const currentFolders = useMemo(
-    () =>
-      searching
-        ? []
-        : childFolders(folders, folderId).filter((f) => !pendingFolderDelete.has(f.id)),
-    [folders, folderId, searching, pendingFolderDelete],
-  );
+  // Display labels of the assets already in the library, so the upload sheet
+  // continues numbering past them when auto-naming.
+  const siblingLabels = useMemo(() => liveItems.map(displayLabel), [liveItems]);
 
-  const segments = useMemo(() => folderBreadcrumb(folders, folderId), [folders, folderId]);
-
-  // Open a folder (null: All assets). A child is a new history entry, so Back
-  // goes up one folder; an ancestor steps Back through the entries this page
-  // pushed, so Back afterwards keeps going up and then leaves Assets.
-  const openFolder = useCallback(
-    (target: string | null): void => {
-      const trail = segments.map((segment) => segment.id);
-      const step = folderStep(trail, target, folderStackOf(location.state));
-      if (step.kind === 'back') {
-        navigate(-step.delta);
-        return;
-      }
-      const params = withFolderParam(searchParams, target);
-      const query = params.toString();
-      const state: FolderHistoryState = { assetsFolderStack: step.stack };
-      navigate(
-        { pathname: location.pathname, search: query === '' ? '' : `?${query}` },
-        { state, replace: step.kind === 'replace' },
-      );
-    },
-    [segments, location.state, location.pathname, navigate, searchParams],
-  );
-
-  // A ?folder= that no longer exists (deleted, or another workspace's) falls
-  // back to All assets once the folder list has loaded.
-  useEffect(() => {
-    if (!foldersLoaded || folderId === null) return;
-    if (folders.some((folder) => folder.id === folderId)) return;
-    setSearchParams((prev) => withFolderParam(prev, null), { replace: true });
-  }, [foldersLoaded, folderId, folders, setSearchParams]);
-
-  // The open folder's name (null at the root), used to auto-name uploads into it.
-  const currentFolderName = useMemo(
-    () => (folderId === null ? null : (folders.find((f) => f.id === folderId)?.name ?? null)),
-    [folders, folderId],
-  );
-
-  // Display labels of the assets already in the current scope, so the upload sheet
-  // continues numbering past them (per-folder, or the root) when auto-naming.
-  const siblingLabels = useMemo(
-    () => liveItems.filter((item) => item.folderId === folderId).map(displayLabel),
-    [liveItems, folderId],
-  );
-
-  // Toggle one asset's selection, capping the set at 200 (the move batch limit);
+  // Toggle one asset's selection, capping the set at 200 (the delete batch limit);
   // adding past the cap is ignored with a toast rather than silently dropped.
   const toggleSelect = useCallback(
     (item: AssetListItem): void => {
@@ -422,8 +293,8 @@ export function AssetsPage() {
   // Email deep-link: ?asset={assetId} opens that asset in the lightbox once the
   // list has loaded (an empty library counts as loaded). Fired once per distinct
   // id; only 'asset' is stripped, preserving any sibling deep-link param. A
-  // copied link (/assets?asset=<id>) lands on the asset's own folder first, on
-  // the All tab, so it is in the navigable list when it opens. An id that is not
+  // copied link (/assets?asset=<id>) lands on the All tab first, so it is in the
+  // navigable list when it opens. An id that is not
   // in the library (deleted, or never here) says so, with a way to Recently deleted.
   useEffect(() => {
     if (!assetsLoaded) return;
@@ -431,16 +302,11 @@ export function AssetsPage() {
     if (asset === null || asset === '') return;
     if (openedAssetParam.current === asset) return;
     const item = items.find((candidate) => candidate.id === asset);
-    if (item !== undefined && item.kind !== 'link' && !searching) {
-      const inScope = item.folderId === folderId && tab === ASSET_TAB_DEFAULT;
-      const target = item.folderId;
-      if (!inScope && target !== null && !foldersLoaded) return;
-      if (!inScope && (target === null || folders.some((folder) => folder.id === target))) {
-        const next = withFolderParam(searchParams, target);
-        next.delete('type');
-        setSearchParams(next, { replace: true });
-        return;
-      }
+    if (item !== undefined && item.kind !== 'link' && !searching && tab !== ASSET_TAB_DEFAULT) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('type');
+      setSearchParams(next, { replace: true });
+      return;
     }
     openedAssetParam.current = asset;
     if (item !== undefined) openAsset(item);
@@ -461,11 +327,8 @@ export function AssetsPage() {
     searchParams,
     setSearchParams,
     openAsset,
-    folderId,
     tab,
     searching,
-    foldersLoaded,
-    folders,
   ]);
 
   // Mint an attachment-disposition presigned URL for a stored asset version, so
@@ -587,54 +450,10 @@ export function AssetsPage() {
     deleteItems(ids);
   }, [selected, deleteItems]);
 
-  // Delete a folder behind the 7s Undo toast: the card hides at once and the
-  // worker delete (files inside move to All assets) runs when the window ends.
-  // Undo, or a refused delete, brings the card back.
-  const unhideFolder = useCallback((id: string): void => {
-    setPendingFolderDelete((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }, []);
-
-  const handleDeleteFolderRef = useRef<
-    ((folder: FolderItem) => Promise<FolderDeleteOutcome>) | null
-  >(null);
-
-  const deleteFolderUndoable = useCallback(
-    (folder: FolderItem): void => {
-      setPendingFolderDelete((prev) => new Set([...prev, folder.id]));
-      runUndoable({
-        label: FOLDER_DELETED_LABEL,
-        revert: () => unhideFolder(folder.id),
-        commit: async () => {
-          const run = handleDeleteFolderRef.current;
-          const outcome: FolderDeleteOutcome =
-            run !== null
-              ? await run(folder)
-              : { ok: false, message: "Couldn't delete the folder. Try again." };
-          unhideFolder(folder.id);
-          if (!outcome.ok) push(outcome.message);
-        },
-      });
-    },
-    [runUndoable, unhideFolder, push],
-  );
-
-  const copyFolderLink = useCallback(
-    (folder: FolderItem): void => {
-      void copyText(folderLink(window.location.origin, folder.id)).then((ok) =>
-        push(ok ? 'Link copied' : COPY_FAILED),
-      );
-    },
-    [push],
-  );
-
   // Commit one queued file to the asset-upload worker: the file part keeps its
   // ORIGINAL device name (stored as assets.filename, with its extension for type
   // icons), the sheet's resolved friendly name rides along as display_name, and
-  // the destination folder rides along as folder_id. The worker resolves the
+  // folder_id is null (the library root). The worker resolves the
   // shown label as display_name ?? filename and now persists display_name on
   // upload (and supports rename), so there is no naming gap to work around.
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
@@ -698,102 +517,6 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace],
   );
 
-  // Move the current selection into a destination folder (or back to the root,
-  // target null) via the worker's /folders/move route. Guards mirror the
-  // other worker calls; the sheet refreshes the lists and exits select mode on a
-  // successful move. Allowed for every active member (no role gate).
-  const handleMoveAssets = useCallback(
-    async (targetFolderId: string | null): Promise<MoveAssetsOutcome> => {
-      if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return { ok: false, message: "Couldn't move the files. Try again." };
-      }
-      if (workspaceId === null) {
-        return { ok: false, message: 'No workspace selected.' };
-      }
-      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
-      if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
-      }
-      return moveAssetsRequest({
-        endpoint: uploadEndpoint,
-        token,
-        workspaceId,
-        assetIds: moveIds ?? [],
-        targetFolderId,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
-      });
-    },
-    [uploadEndpoint, workspaceId, moveIds, newTrace],
-  );
-
-  // Rename one folder via the worker's /folders/rename route. On success the
-  // folder list is reloaded so the new name shows; a sibling collision
-  // (folder_name_taken) and the 403 role guard are surfaced by the sheet.
-  const handleRenameFolder = useCallback(
-    async (folder: FolderItem, name: string): Promise<FolderRenameOutcome> => {
-      if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return {
-          ok: false,
-          nameTaken: false,
-          message: "Couldn't rename the folder. Try again.",
-        };
-      }
-      if (workspaceId === null) {
-        return { ok: false, nameTaken: false, message: 'No workspace selected.' };
-      }
-      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
-      if (token === null || token === '') {
-        return { ok: false, nameTaken: false, message: 'Your session expired. Sign in again.' };
-      }
-      const outcome = await renameFolderRequest({
-        endpoint: uploadEndpoint,
-        token,
-        workspaceId,
-        folderId: folder.id,
-        name,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
-      });
-      if (outcome.ok) void loadFolders();
-      return outcome;
-    },
-    [uploadEndpoint, workspaceId, newTrace, loadFolders],
-  );
-
-  // Delete one folder via the worker's /folders/delete route. The worker
-  // soft-deletes the folder and detaches its child folders + assets to the root,
-  // so on success both the folder list and the asset list are reloaded.
-  const handleDeleteFolder = useCallback(
-    async (folder: FolderItem): Promise<FolderDeleteOutcome> => {
-      if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return {
-          ok: false,
-          message: "Couldn't delete the folder. Try again.",
-        };
-      }
-      if (workspaceId === null) {
-        return { ok: false, message: 'No workspace selected.' };
-      }
-      const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
-      if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
-      }
-      const outcome = await deleteFolderRequest({
-        endpoint: uploadEndpoint,
-        token,
-        workspaceId,
-        folderId: folder.id,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
-      });
-      if (outcome.ok) {
-        void loadFolders();
-        void loadAssets();
-      }
-      return outcome;
-    },
-    [uploadEndpoint, workspaceId, newTrace, loadFolders, loadAssets],
-  );
-  handleDeleteFolderRef.current = handleDeleteFolder;
-
   // Rename one asset via the worker's /rename route. On success the name is
   // updated in place (grid card + open lightbox) without a full reload; a 403
   // (defense in depth) surfaces the agency-only message.
@@ -829,7 +552,6 @@ export function AssetsPage() {
   );
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
-  const loadFailed = assetsFailed || foldersFailed;
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
 
   const exitSelectMode = (): void => {
@@ -843,42 +565,8 @@ export function AssetsPage() {
     setSelectMode(true);
   };
 
-  const moveSelected = (): void => {
-    setMoveFrom(searching ? undefined : folderId);
-    setMoveIds(Array.from(selected));
-  };
-
   return (
     <>
-      {/* Breadcrumb only inside a folder; the root needs no lone "/" crumb. */}
-      {!searching && segments.length > 0 ? (
-        <nav
-          aria-label="Folders"
-          className="px-4 md:px-6 pt-1 flex items-center gap-1 text-sm text-fg-3 flex-wrap"
-        >
-          <button
-            type="button"
-            onClick={() => openFolder(null)}
-            className="inline-flex min-h-[44px] items-center rounded-md px-1 hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            {ROOT_LABEL}
-          </button>
-          {segments.map((segment, i) => (
-            <span key={segment.id} className="flex items-center gap-1">
-              <IconChevronRight size={14} className="text-fg-3" />
-              <button
-                type="button"
-                onClick={() => openFolder(segment.id)}
-                aria-current={i === segments.length - 1 ? 'page' : undefined}
-                className="inline-flex min-h-[44px] items-center rounded-md px-1 hover:text-fg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                {segment.name}
-              </button>
-            </span>
-          ))}
-        </nav>
-      ) : null}
-
       {/* Search + sort + add, then the type tabs: shared page-header chrome. */}
       <SectionHeader<AssetSort>
         search={{ value: search, onChange: setSearch, placeholder: 'Search files' }}
@@ -916,16 +604,8 @@ export function AssetsPage() {
               >
                 Select all
               </Button>
-              {/* Desktop keeps Move and Delete up here; phones get the bottom bar. */}
+              {/* Desktop keeps Delete up here; phones get the bottom bar. */}
               <span className="hidden gap-2 md:flex">
-                <Button
-                  size="lg"
-                  variant="primary"
-                  disabled={selected.size === 0}
-                  onClick={moveSelected}
-                >
-                  Move
-                </Button>
                 <Button
                   size="lg"
                   variant="danger"
@@ -942,39 +622,19 @@ export function AssetsPage() {
               </span>
             ) : null}
           </div>
-        ) : loadFailed ? null : (
+        ) : assetsFailed ? null : (
           <AssetTabs value={tab} counts={counts} onChange={setTab} />
         )}
       </SectionHeader>
-
-      {!searching && !selectMode && !loadFailed && currentFolders.length > 0 ? (
-        <div className="px-4 md:px-6 mt-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
-            {currentFolders.map((f) => (
-              <FolderCard
-                key={f.id}
-                name={f.name}
-                count={folderChildCount(folders, liveItems, f.id)}
-                onOpen={() => openFolder(f.id)}
-                onManage={() => setFolderAction(f)}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       <div
         role={selectMode ? undefined : 'tabpanel'}
         id={ASSET_TABPANEL_ID}
         aria-labelledby={selectMode ? undefined : assetTabId(tab)}
       >
-        {loadFailed ? (
+        {assetsFailed ? (
           <div className="px-4 md:px-6 mt-4">
-            <LoadError
-              title={assetsFailed ? 'your files' : 'your folders'}
-              onRetry={() => void retryLoad()}
-              retrying={retrying}
-            />
+            <LoadError title="your files" onRetry={() => void retryLoad()} retrying={retrying} />
           </div>
         ) : listLoading ? (
           <div className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
@@ -988,7 +648,7 @@ export function AssetsPage() {
               </div>
             ))}
           </div>
-        ) : tab === 'all' && liveItems.length === 0 && folders.length === 0 ? (
+        ) : tab === 'all' && liveItems.length === 0 ? (
           <EmptyState
             icon={<IconAssets size={24} />}
             title="No assets yet"
@@ -1009,17 +669,6 @@ export function AssetsPage() {
           ) : tab !== 'all' ? (
             <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-sm text-fg-3">
               {TAB_EMPTY[tab]}
-            </div>
-          ) : currentFolders.length === 0 ? (
-            <div
-              data-empty-folder=""
-              className="px-4 md:px-6 py-10 flex flex-col items-start gap-3"
-            >
-              <p className="text-sm text-fg-3">No files in this folder yet.</p>
-              <Button variant="primary" onClick={() => setUploadOpen(true)}>
-                <IconUpload size={16} />
-                Upload
-              </Button>
             </div>
           ) : null
         ) : (
@@ -1053,7 +702,7 @@ export function AssetsPage() {
         </div>
       ) : null}
 
-      {/* Phones: Move and Delete pinned at the bottom while selecting, in thumb
+      {/* Phones: Delete pinned at the bottom while selecting, in thumb
           reach above the tab bar; the spacer keeps the last row uncovered. */}
       {selectMode ? (
         <>
@@ -1063,15 +712,6 @@ export function AssetsPage() {
             className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
           >
             <div className="flex items-center gap-2">
-              <Button
-                size="lg"
-                variant="primary"
-                className="min-w-[44px] flex-1"
-                disabled={selected.size === 0}
-                onClick={moveSelected}
-              >
-                Move
-              </Button>
               <Button
                 size="lg"
                 variant="danger"
@@ -1121,11 +761,6 @@ export function AssetsPage() {
             setActionItem(null);
             openAsset(item, true);
           }}
-          onMove={(item) => {
-            setActionItem(null);
-            setMoveFrom(item.folderId);
-            setMoveIds([item.id]);
-          }}
           onRename={(item) => {
             setActionItem(null);
             setRenameItem(item);
@@ -1164,8 +799,6 @@ export function AssetsPage() {
         onUploaded={() => {
           void loadAssets();
         }}
-        folderId={folderId}
-        folderName={currentFolderName}
         siblingLabels={siblingLabels}
       />
 
@@ -1175,59 +808,6 @@ export function AssetsPage() {
         onSubmit={handleAddLink}
         onToast={push}
         onAdded={() => void loadAssets()}
-      />
-
-      <MoveToFolderSheet
-        open={moveIds !== null}
-        count={moveIds?.length ?? 0}
-        folders={folders}
-        currentFolderId={moveFrom}
-        onClose={() => setMoveIds(null)}
-        onMove={handleMoveAssets}
-        onToast={push}
-        onMoved={() => {
-          void loadAssets();
-          void loadFolders();
-          exitSelectMode();
-          setMoveIds(null);
-        }}
-      />
-
-      {folderAction !== null ? (
-        <FolderActionSheet
-          name={folderAction.name}
-          canManage={canManageFolders}
-          onClose={() => setFolderAction(null)}
-          onOpen={() => {
-            const f = folderAction;
-            setFolderAction(null);
-            openFolder(f.id);
-          }}
-          onCopyLink={() => {
-            const f = folderAction;
-            setFolderAction(null);
-            copyFolderLink(f);
-          }}
-          onRename={() => {
-            const f = folderAction;
-            setFolderAction(null);
-            setRenameTarget(f);
-          }}
-          onConfirmDelete={async () => {
-            deleteFolderUndoable(folderAction);
-            return { ok: true };
-          }}
-          onToast={push}
-        />
-      ) : null}
-
-      <FolderRenameSheet
-        open={renameTarget !== null}
-        initialName={renameTarget?.name ?? ''}
-        onClose={() => setRenameTarget(null)}
-        onSubmit={(name) => handleRenameFolder(renameTarget!, name)}
-        onToast={push}
-        onRenamed={() => void loadFolders()}
       />
 
       <AssetInUseSheet

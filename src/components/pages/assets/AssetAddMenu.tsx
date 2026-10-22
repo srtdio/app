@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
-import { IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
+import { IconLink, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 interface AssetAddMenuProps {
@@ -11,11 +11,10 @@ interface AssetAddMenuProps {
 }
 
 /**
- * The Assets toolbar add control: a 44x44 accent trigger that opens a small
- * menu anchored beneath it. "Upload files" opens the upload sheet; "Add link"
- * opens the link sheet. Folder creation is not offered here (existing folders
- * still open, rename, move and delete), and selecting starts from the round box
- * on each file card. Outside tap and Esc dismiss
+ * The Assets toolbar add control: a 44px-tall "New asset" accent trigger that
+ * opens a small menu anchored beneath it. "Upload files" opens the upload sheet;
+ * "Add link" opens the link sheet. Selecting starts from the round box on each
+ * file card. Outside tap and Esc dismiss
  * via MenuPopover. Themed with tokens so light and dark match; no hover-only
  * behaviour (tap toggles the menu).
  */
@@ -28,12 +27,11 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Add asset"
         data-induction={INDUCTION_KEYS.assetsAdd}
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-accent text-accent-fg transition-colors hover:bg-accent-hover"
+        className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover"
       >
-        <IconPlus size={18} />
+        New asset
       </button>
 
       <MenuPopover open={open} onClose={() => setOpen(false)} align="right">
