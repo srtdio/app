@@ -22,7 +22,10 @@
 // "Send to approvers in {chat}" on a Draft plan (plan_share_with_client, then
 // chat_plan_share; a failed second step offers Retry that only reposts) or
 // "Send in {chat}" on an Open plan; outside a chat "Open for approvers" on a
-// Draft plan, nothing on an Open one.
+// Draft plan, nothing on an Open one. A send from a chat reads "Sending in
+// {chat}…" (disabled); a done "Send in {chat}" reads "Sent" (soft, disabled)
+// until a change here, and on reopening while the chat's last send of this
+// plan (read with the screen) is newer than the plan's last change.
 //
 // Edit mode (agency, "Edit"): the header becomes Cancel / "Editing plan" /
 // "Save changes"; the title and From/To dates are fields at the top; each row
@@ -150,7 +153,9 @@ import {
   planCountLabel,
   planHeaderCounts,
   planHeaderSubtitle,
+  planFooterLabel,
   planPrimaryAction,
+  planSendButtonState,
   planProgressView,
   planSaveErrorCopy,
   planWriteErrorCopy,
@@ -168,6 +173,7 @@ import {
   withReviewOverrides,
   type PostLineTone,
   type PrimaryAction,
+  type SendButtonState,
   type StatusPill,
 } from '@/components/chat/plan-card';
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
@@ -948,14 +954,16 @@ export function PlanScreen(props: {
   const toast = useToast();
   const undoable = useUndoableAction({ durationMs: PLAN_UNDO_MS });
   const planId = props.planId;
+  const sentInChannelId = props.chat?.channelId;
   const { read, reload } = useScreenRead<PlanScreenData>(
     props.open,
-    `${planId}:${timeZone}`,
+    `${planId}:${timeZone}:${sentInChannelId ?? ''}`,
     (signal) =>
       readPlanScreen(supabase, planId, signal, {
         timeZone,
         approvers: approverIds,
         readNames: (ids, s) => readProfiles(supabase, ids, s),
+        sentInChannelId,
       }),
   );
   const [itemId, setItemId] = useState<string | null>(props.initialItemId ?? null);
@@ -989,6 +997,14 @@ export function PlanScreen(props: {
   const [openError, setOpenError] = useState<string | null>(null);
   const [sendBusy, setSendBusy] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // "Sent" in this screen session: true after a send here, false after any
+  // change here; null: the read decides (last send vs last change).
+  const [sentHere, setSentHere] = useState<boolean | null>(null);
+  // A second tap before the busy state paints does nothing.
+  const sendingRef = useRef(false);
+  // The kind of the tap that started the send (a Retry keeps it): only a
+  // "Send in {chat}" turns Sent.
+  const sendKindRef = useRef<PrimaryAction['kind']>('none');
   const [keepAsk, setKeepAsk] = useState<KeepAsk | null>(null);
   const [sendGuard] = useState(createInFlightGuard);
   const { canAttach, uploadFile } = useCommentAttachments();
@@ -1029,6 +1045,7 @@ export function PlanScreen(props: {
     setOpenConfirm(false);
     setOpenError(null);
     setSendError(null);
+    setSentHere(null);
     setKeepAsk(null);
     setEditMode(false);
     setOps([]);
@@ -1041,7 +1058,10 @@ export function PlanScreen(props: {
   useEffect(() => {
     if (!props.open) return;
     const onChanged = (event: Event): void => {
-      if (planChangedId(event) === planId) reload();
+      if (planChangedId(event) !== planId) return;
+      // Any change (Save, Add, Plan OK, rename) brings "Send in {chat}" back.
+      setSentHere(false);
+      reload();
     };
     window.addEventListener(PLAN_CHANGED_EVENT, onChanged);
     return () => window.removeEventListener(PLAN_CHANGED_EVENT, onChanged);
@@ -1225,7 +1245,8 @@ export function PlanScreen(props: {
   // `afterOpen`: the second step of "Send to approvers"; its failure says the
   // plan is open and offers a Retry that only reposts.
   const sendHere = async (afterOpen = false): Promise<void> => {
-    if (chat === null || sendBusy) return;
+    if (chat === null || sendBusy || sendingRef.current) return;
+    sendingRef.current = true;
     setSendError(null);
     setSendBusy(true);
     const result = await sharePlanToChannel(
@@ -1246,6 +1267,7 @@ export function PlanScreen(props: {
       },
       { channelId: chat.channelId, planId },
     );
+    sendingRef.current = false;
     setSendBusy(false);
     if (!result.ok) {
       if (result.reason === 'busy') return;
@@ -1263,6 +1285,7 @@ export function PlanScreen(props: {
       );
       return;
     }
+    if (sendKindRef.current === 'send') setSentHere(true);
     chat.onSent(result.row, result.traceId);
   };
 
@@ -1298,12 +1321,23 @@ export function PlanScreen(props: {
           chat: chat !== null ? { name: chat.name } : null,
         })
       : { kind: 'none' };
+  const readData = read.status === 'ready' ? read.data : null;
+  const sendState: SendButtonState = planSendButtonState({
+    kind: primary.kind,
+    busy: sendBusy || openBusy,
+    error: sendError !== null,
+    sentHere,
+    lastSentAt: readData?.lastSentAt ?? null,
+    lastChangedAt: readData?.lastChangedAt ?? null,
+  });
   const onPrimary = (): void => {
+    if (sendingRef.current || sendState !== 'idle') return;
     if (sendError !== null) {
       // Retry only reposts the card.
       void sendHere(true);
       return;
     }
+    sendKindRef.current = primary.kind;
     if (primary.kind === 'open' || primary.kind === 'send-approvers') {
       setOpenError(null);
       setOpenConfirm(true);
@@ -1924,6 +1958,8 @@ export function PlanScreen(props: {
         action={primary}
         busy={sendBusy || openBusy}
         error={sendError}
+        state={sendState}
+        chatName={chat?.name ?? null}
         onPress={onPrimary}
       />
     ) : undefined;
@@ -2597,17 +2633,44 @@ export function RenameField(props: {
  * The Plan screen's footer (view mode): one primary button, 48px tall, full
  * width: "Send to approvers in {chat}" / "Send in {chat}" / "Open for
  * approvers" (planPrimaryAction). An error line sits above it; while an
- * error is shown the button reads "Retry". Hidden in edit mode.
+ * error is shown the button reads "Retry". From a chat a send in flight reads
+ * "Sending in {chat}…"; a sent "Send in {chat}" reads "Sent" in the soft
+ * accent (same box, disabled, no icon). Hidden in edit mode.
  */
 export function PlanFooter(props: {
   action: PrimaryAction;
   busy: boolean;
   error: string | null;
+  /** The button's state (planSendButtonState); absent reads as idle. */
+  state?: SendButtonState;
+  /** The chat's title for "Sending in {chat}…"; null outside a chat. */
+  chatName?: string | null;
   onPress: () => void;
 }): ReactElement | null {
   const { action } = props;
   if (action.kind === 'none' && props.error === null) return null;
-  const label = props.error !== null ? RETRY_LABEL : action.kind === 'none' ? '' : action.label;
+  const state = props.state ?? 'idle';
+  const label = planFooterLabel({
+    action,
+    state,
+    error: props.error !== null,
+    chatName: props.chatName ?? null,
+  });
+  if (state === 'sent') {
+    return (
+      <div data-plan-footer="" className="flex flex-col gap-1.5">
+        <button
+          type="button"
+          data-plan-primary={action.kind}
+          data-plan-send-state="sent"
+          disabled
+          className="inline-flex h-11 min-h-[48px] w-full min-w-0 cursor-default select-none items-center justify-center gap-2 rounded-md bg-accent-soft px-4 text-sm font-medium text-accent"
+        >
+          <span className="truncate">{label}</span>
+        </button>
+      </div>
+    );
+  }
   return (
     <div data-plan-footer="" className="flex flex-col gap-1.5">
       {props.error !== null ? (
@@ -2619,9 +2682,10 @@ export function PlanFooter(props: {
         size="lg"
         variant="primary"
         data-plan-primary={props.error !== null ? 'retry' : action.kind}
-        className="min-h-[48px] w-full min-w-0"
+        data-plan-send-state={state}
+        className={cn('min-h-[48px] w-full min-w-0', state === 'sending' && 'disabled:opacity-100')}
         aria-busy={props.busy}
-        disabled={props.busy}
+        disabled={props.busy || state !== 'idle'}
         onClick={props.onPress}
       >
         <span className="truncate">{label}</span>

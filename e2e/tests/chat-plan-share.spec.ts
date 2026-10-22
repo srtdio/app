@@ -249,3 +249,85 @@ test('agency: no upcoming plans shows the empty line and New plan', async ({ pag
   await expect(page.locator('[data-plan-page="compose"]')).toBeVisible();
   expectClean(network);
 });
+
+test('agency: Send in {chat} reads Sending, then Sent; again does nothing; an edit brings Send back', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const network = await installHarnessNetwork(page);
+  seedUpcomingPlans(network.world, { sender: ME });
+  // Hold the send long enough to see "Sending in {chat}…" (falls back to the harness).
+  await page.route('**/rest/v1/rpc/chat_plan_share', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fallback();
+  });
+  await openChat(page, PEER_NAME);
+
+  const picker = await openPicker(page);
+  await picker.locator(`[data-plan-pick="${UPCOMING_CLIENT_PLAN_ID}"]`).click();
+  await expect(picker).toBeHidden();
+  const plan = page.locator('[data-plan-page="plan"]');
+  await expect(plan).toBeVisible();
+  const primary = plan.locator('[data-plan-primary]');
+  await expect(primary).toHaveText(`Send in ${PEER_NAME}`);
+  await expect(primary).toHaveAttribute('data-plan-send-state', 'idle');
+  const idleBox = await primary.boundingBox();
+
+  // Tap: "Sending in {chat}…", disabled; a double tap sends once.
+  await primary.dblclick();
+  await expect(primary).toHaveText(`Sending in ${PEER_NAME}…`);
+  await expect(primary).toBeDisabled();
+  // Then "Sent": disabled, soft accent, no icon, same box.
+  await expect(primary).toHaveText('Sent');
+  await expect(primary).toHaveAttribute('data-plan-send-state', 'sent');
+  await expect(primary).toBeDisabled();
+  await expect(primary).toHaveClass(/bg-accent-soft/);
+  await expect(primary).toHaveClass(/text-accent/);
+  await expect(primary.locator('svg')).toHaveCount(0);
+  const sentBox = await primary.boundingBox();
+  expect(sentBox?.height).toBe(idleBox?.height);
+  expect(sentBox?.y).toBe(idleBox?.y);
+  expectMinTouchTarget(sentBox);
+  expect(sharedPlans(network, DM_CHANNEL)).toEqual([[UPCOMING_CLIENT_PLAN_ID]]);
+
+  // A second tap does nothing.
+  await primary.click({ force: true });
+  await page.waitForTimeout(400);
+  expect(network.rpcCalls.filter((c) => c.name === 'chat_plan_share')).toHaveLength(1);
+  await expect(primary).toHaveText('Sent');
+
+  // Close and reopen from the same chat: "Sent" on first paint (no "Send in" flash).
+  await page.goBack();
+  await expect(plan).toBeHidden();
+  const card = page.locator(`[data-plan-card="${UPCOMING_CLIENT_PLAN_ID}"]`).last();
+  await card.scrollIntoViewIfNeeded();
+  const labels: string[] = [];
+  await page.exposeFunction('__sendLabel', (text: string) => labels.push(text));
+  await page.evaluate(() => {
+    const w = window as unknown as { __sendLabel: (text: string) => void };
+    const seen = (): void => {
+      const el = document.querySelector('[data-plan-page="plan"] [data-plan-primary]');
+      if (el !== null) w.__sendLabel(el.textContent ?? '');
+    };
+    new MutationObserver(seen).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  });
+  await card.locator('[data-plan-open]').click();
+  await expect(plan).toBeVisible();
+  await expect(primary).toHaveText('Sent');
+  expect(labels.filter((t) => t.startsWith('Send in'))).toEqual([]);
+
+  // Edit the plan (Save in Edit mode): back to "Send in {chat}".
+  await plan.locator('[data-plan-edit]').click();
+  const titleField = plan.locator('[data-plan-edit-title]');
+  await titleField.fill(`${UPCOMING_CLIENT_PLAN_TITLE} v2`);
+  await plan.locator('[data-plan-save]').click();
+  await expect(page.getByText('Plan saved')).toBeVisible();
+  await expect(primary).toHaveText(`Send in ${PEER_NAME}`);
+  await expect(primary).toBeEnabled();
+  await expect(primary).toHaveAttribute('data-plan-send-state', 'idle');
+  expectClean(network);
+});

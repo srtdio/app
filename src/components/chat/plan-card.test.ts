@@ -15,7 +15,15 @@ import {
   planRangeLabel,
   progressLabel,
   progressPercent,
+  planFooterLabel,
+  planSendButtonState,
+  RETRY_LABEL,
+  SENT_LABEL,
+  sendingInLabel,
+  sentAfterChange,
+  type PrimaryAction,
 } from '@/components/chat/plan-card';
+import { planLastChangedAt } from '@/lib/chat/plans';
 import type { PlanBundle, PlanItemRow, PlanReviewRow } from '@/lib/chat/plans';
 
 function item(over: Partial<PlanItemRow>): PlanItemRow {
@@ -327,5 +335,108 @@ describe('date labels (D3, item 8)', () => {
       label: NO_DATE_LABEL,
       dated: false,
     });
+  });
+});
+
+describe('Plan screen send button: Sending / Sent', () => {
+  const SEND: PrimaryAction = { kind: 'send', label: 'Send in Riya' };
+  const APPROVERS: PrimaryAction = { kind: 'send-approvers', label: 'Send to approvers in Riya' };
+  const OPEN: PrimaryAction = { kind: 'open', label: 'Open for approvers' };
+  const SENT_AT = '2026-10-20T10:00:05.123456+00:00';
+  const CHANGED_AT = '2026-10-20T10:00:00+00:00';
+  const base = {
+    kind: 'send' as const,
+    busy: false,
+    error: false,
+    sentHere: null,
+    lastSentAt: null,
+    lastChangedAt: CHANGED_AT,
+  };
+
+  it('copy: "Sending in {chat}…" and "Sent"', () => {
+    expect(sendingInLabel('Riya')).toBe('Sending in Riya\u2026');
+    expect(SENT_LABEL).toBe('Sent');
+  });
+
+  it('idle: never sent reads the action label', () => {
+    expect(planSendButtonState(base)).toBe('idle');
+    expect(planFooterLabel({ action: SEND, state: 'idle', error: false, chatName: 'Riya' })).toBe(
+      'Send in Riya',
+    );
+  });
+
+  it('sending: busy from a chat reads "Sending in {chat}…"', () => {
+    expect(planSendButtonState({ ...base, busy: true })).toBe('sending');
+    expect(planSendButtonState({ ...base, kind: 'send-approvers', busy: true })).toBe('sending');
+    expect(
+      planFooterLabel({ action: SEND, state: 'sending', error: false, chatName: 'Riya' }),
+    ).toBe('Sending in Riya\u2026');
+    expect(
+      planFooterLabel({ action: APPROVERS, state: 'sending', error: false, chatName: 'Riya' }),
+    ).toBe('Sending in Riya\u2026');
+  });
+
+  it('outside a chat Open for approvers keeps its label while busy', () => {
+    expect(planSendButtonState({ ...base, kind: 'open', busy: true })).toBe('idle');
+    expect(planFooterLabel({ action: OPEN, state: 'idle', error: false, chatName: null })).toBe(
+      'Open for approvers',
+    );
+  });
+
+  it('sent: after a send here, and on reopen when the last send is newer than the last change', () => {
+    expect(planSendButtonState({ ...base, sentHere: true })).toBe('sent');
+    expect(planSendButtonState({ ...base, lastSentAt: SENT_AT })).toBe('sent');
+    expect(planSendButtonState({ ...base, lastSentAt: SENT_AT, lastChangedAt: null })).toBe('sent');
+    expect(planFooterLabel({ action: SEND, state: 'sent', error: false, chatName: 'Riya' })).toBe(
+      'Sent',
+    );
+  });
+
+  it('only "Send in {chat}" is ever Sent', () => {
+    expect(planSendButtonState({ ...base, kind: 'send-approvers', sentHere: true })).toBe('idle');
+    expect(planSendButtonState({ ...base, kind: 'open', lastSentAt: SENT_AT })).toBe('idle');
+    expect(planSendButtonState({ ...base, kind: 'none', sentHere: true })).toBe('idle');
+  });
+
+  it('changed after send: a change here, or a later change on reopen, brings Send back', () => {
+    expect(planSendButtonState({ ...base, lastSentAt: SENT_AT, sentHere: false })).toBe('idle');
+    expect(
+      planSendButtonState({
+        ...base,
+        lastSentAt: CHANGED_AT,
+        lastChangedAt: '2026-10-20T10:00:06+00:00',
+      }),
+    ).toBe('idle');
+    // Equal is not newer.
+    expect(sentAfterChange(CHANGED_AT, CHANGED_AT)).toBe(false);
+    expect(sentAfterChange(null, CHANGED_AT)).toBe(false);
+    expect(sentAfterChange(SENT_AT, null)).toBe(true);
+  });
+
+  it('failed: the error shows Retry and the button is idle', () => {
+    expect(planSendButtonState({ ...base, error: true, busy: true })).toBe('idle');
+    expect(planSendButtonState({ ...base, error: true, sentHere: true })).toBe('idle');
+    expect(planFooterLabel({ action: SEND, state: 'idle', error: true, chatName: 'Riya' })).toBe(
+      RETRY_LABEL,
+    );
+  });
+
+  it("last change: the latest of plans.updated_at and its items' updated_at", () => {
+    const b = bundle([
+      item({ id: 'a', updated_at: '2026-10-20T09:00:00+00:00' }),
+      item({ id: 'b', updated_at: '2026-10-20T11:00:00+00:00' }),
+    ]);
+    expect(planLastChangedAt(b)).toBe('2026-10-20T11:00:00+00:00');
+    const withPlan = { ...b, plan: { ...b.plan, updated_at: '2026-10-20T12:00:00+00:00' } };
+    expect(planLastChangedAt(withPlan)).toBe('2026-10-20T12:00:00+00:00');
+    expect(planLastChangedAt(bundle([item({ id: 'c' })]))).toBeNull();
+  });
+
+  it('the screen reads the last send with its first load and greys nothing while sending', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PlanScreen.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('sentInChannelId,');
+    expect(src).toContain('bg-accent-soft');
+    expect(src).toContain("state === 'sending' && 'disabled:opacity-100'");
+    expect(src).toMatch(/if \(sendingRef\.current \|\| sendState !== 'idle'\) return;/);
   });
 });
