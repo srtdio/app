@@ -15,6 +15,7 @@ import { dispatchSorted } from '@/lib/events';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { Chip } from '@/components/ui/Chip';
+import { IconPlus } from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { BriefFilter } from '@/lib/brief-list';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
@@ -50,6 +51,10 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
   return all.filter(predicate);
 }
 
+function isNewBrief(el: ReactElement): boolean {
+  return (el.props as { children?: ReactNode }).children === 'New brief';
+}
+
 function header(
   onFilterChange: (filter: BriefFilter) => void = () => {},
   canCreate = true,
@@ -70,22 +75,32 @@ describe('briefsHeader', () => {
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
   });
 
-  it('dispatches sorted:create-brief from the "+" action', () => {
-    const button = findAll(
-      header(),
-      (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Create brief',
-    );
+  it('dispatches sorted:create-brief from the New brief action', () => {
+    const button = findAll(header(), isNewBrief);
     expect(button).toHaveLength(1);
     (button[0]!.props as { onClick: () => void }).onClick();
     expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-brief');
   });
 
-  it('hides the "+" (and its induction target) without brief.create', () => {
+  it('shows New brief as visible text with its induction target when brief.create is held', () => {
+    const tree = header(() => {}, true);
+    const button = findAll(tree, isNewBrief);
+    expect(button).toHaveLength(1);
+    const props = button[0]!.props as { 'aria-label'?: string; 'data-induction'?: string };
+    expect(props['aria-label']).toBeUndefined();
+    expect(props['data-induction']).toBe('briefs-new');
+    expect(findAll(tree, (el) => el.type === IconPlus)).toHaveLength(0);
+    expect(
+      findAll(
+        tree,
+        (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Create brief',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('hides New brief (and its induction target) without brief.create', () => {
     const tree = header(() => {}, false);
-    const button = findAll(
-      tree,
-      (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Create brief',
-    );
+    const button = findAll(tree, isNewBrief);
     expect(button).toHaveLength(0);
     const target = findAll(
       tree,

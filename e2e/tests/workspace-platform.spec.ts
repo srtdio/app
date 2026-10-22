@@ -67,7 +67,7 @@ test('create a workspace with a platform, then post in its formats @theme @deskt
   expect(create?.args.p_payload).toMatchObject({ name: 'Kite', platform: 'instagram' });
 
   // New post: no Platform field, and only Instagram's formats.
-  await page.getByRole('button', { name: 'Create post' }).click();
+  await page.getByRole('button', { name: 'New post', exact: true }).click();
   const format = page.getByRole('button', { name: 'Format' });
   await expect(format).toContainText('Reel');
   await expect(page.getByRole('button', { name: 'Platform' })).toHaveCount(0);
