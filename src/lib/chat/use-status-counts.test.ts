@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Client, Result } from '@srtdio/rpc';
 import {
+  CURRENT_PLANS_LIMIT,
   createRoundRunner,
   fetchStatusRound,
   mergeStatusRound,
+  readCurrentSharedPlanIds,
   type OpenBriefRow,
   type StatusReads,
 } from '@/lib/chat/use-status-counts';
@@ -19,7 +21,76 @@ const ok = <T>(data: T): Promise<Result<T>> => Promise.resolve({ ok: true, data 
 const bad = <T>(): Promise<Result<T>> =>
   Promise.resolve({ ok: false, error: { code: 'unknown', message: 'x' } });
 
+/** A fake client recording each chained call of one select, answering `result`. */
+function recordingClient(result: { data: unknown; error: { message: string } | null }) {
+  const calls: Array<[string, ...unknown[]]> = [];
+  const chain: Record<string, unknown> = {};
+  for (const name of ['select', 'eq', 'is', 'lte', 'gte', 'order', 'limit']) {
+    chain[name] = (...args: unknown[]) => {
+      calls.push([name, ...args]);
+      return chain;
+    };
+  }
+  chain.then = (resolve: (value: unknown) => unknown) => resolve(result);
+  const from = (table: string) => {
+    calls.push(['from', table]);
+    return chain;
+  };
+  return { client: { from } as unknown as Client, calls };
+}
+
+describe('readCurrentSharedPlanIds', () => {
+  it('one workspace-wide select: shared, not deleted, range holding today in any zone', async () => {
+    const { client: fake, calls } = recordingClient({
+      data: [{ id: 'p1' }, { id: 'p2' }],
+      error: null,
+    });
+    const result = await readCurrentSharedPlanIds(
+      fake,
+      'w1',
+      undefined,
+      new Date('2026-10-09T20:00:00Z'),
+    );
+    expect(result).toEqual({ ok: true, data: ['p1', 'p2'] });
+    expect(calls).toEqual([
+      ['from', 'plans'],
+      ['select', 'id'],
+      ['eq', 'workspace_id', 'w1'],
+      ['eq', 'audience', 'client'],
+      ['is', 'deleted_at', null],
+      ['lte', 'starts_on', '2026-10-10'],
+      ['gte', 'ends_on', '2026-10-09'],
+      ['order', 'ends_on', { ascending: true }],
+      ['order', 'starts_on', { ascending: true }],
+      ['order', 'id', { ascending: true }],
+      ['limit', CURRENT_PLANS_LIMIT],
+    ]);
+    // No channel filter: every chat reads the same plans.
+    expect(calls.some((c) => c.includes('channel_id'))).toBe(false);
+  });
+
+  it('a failed select is a failed result, never a throw', async () => {
+    const { client: fake } = recordingClient({ data: null, error: { message: 'boom' } });
+    const result = await readCurrentSharedPlanIds(fake, 'w1');
+    expect(result.ok).toBe(false);
+  });
+});
+
 describe('fetchStatusRound', () => {
+  it('the plan read is the workspace one: the same ids in every chat', async () => {
+    const planIds = vi.fn((_c: Client, workspaceId: string) => ok([`${workspaceId}-plan`]));
+    const reads: StatusReads = {
+      planIds,
+      briefs: vi.fn(() => ok<OpenBriefRow[]>([])),
+      briefCount: vi.fn(() => ok(0)),
+    };
+    const one = await fetchStatusRound(client, { workspaceId: 'w', channelId: 'c1' }, reads);
+    const two = await fetchStatusRound(client, { workspaceId: 'w', channelId: 'c2' }, reads);
+    expect(one.planIds).toEqual(['w-plan']);
+    expect(two.planIds).toEqual(['w-plan']);
+    expect(planIds.mock.calls.map((call) => call[1])).toEqual(['w', 'w']);
+  });
+
   it('runs the three reads once each; a failed read is null', async () => {
     const reads: StatusReads = {
       planIds: vi.fn(() => ok(['p1'])),

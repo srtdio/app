@@ -1,14 +1,16 @@
 // The chat status ticker: a 36px bar under the thread header (in the slot the
 // open-loops strip held) and the drawer it drops down. The bar lists, in one
-// fixed order, the soonest-ending open plan, posts in review, open briefs and
-// this chat's open commitments, decisions and pending marks; zero items are
-// left out and the rest close up. Full width first; when the items do not fit
-// (measured on a hidden copy before paint, again on resize and font load)
-// every item drops its word together and the gap tightens: never a mix, never
-// cut text, never a visible switch. Until every read has settled the slot is
-// empty and inert, so the first painted bar is final; "Nothing open between
-// you" shows only when every read succeeded with nothing open, never as a
-// button. The drawer opens by a tap on the bar (top of the list), a tap on an
+// fixed order, the workspace's current shared plans (one item per plan for at
+// most two, then "+K"), posts in review, open briefs and this chat's open
+// commitments, decisions and pending marks; zero items are left out and the
+// rest close up. Full width first; when the items do not fit (measured on a
+// hidden copy before paint, again on resize and font load) every item drops
+// its word together and the gap tightens: never a mix, never a visible switch.
+// Both plan items stay; if the compact row still overflows, their titles drop
+// whole trailing words (measured on a second hidden copy, never a cut glyph).
+// Until every read has settled the slot is empty and inert, so the first
+// painted bar is final; "Nothing open between you" shows only when every read
+// succeeded with nothing open, never as a button. The drawer opens by a tap on the bar (top of the list), a tap on an
 // item (scrolled to its section before paint) or a drag down; it closes by
 // the scrim, a drag up on its handle, or another tap on the bar. It moves on
 // translateY only, snapping at 40% of its height or a flick over 0.4 px/ms.
@@ -37,7 +39,11 @@ import {
   NOTHING_OPEN_LINE,
   SECTION_ROWS,
   STATUS_ORDER,
+  TITLE_ELLIPSIS,
   drawerShouldClose,
+  keptTitle,
+  titleWords,
+  titleWordsKept,
   type StatusBar,
   type StatusItem,
   type StatusKey,
@@ -72,18 +78,39 @@ const FULL_CHEVRON_GAP = 12;
 const BAR =
   'relative z-10 flex h-9 w-full shrink-0 items-center border-b border-border bg-panel px-4';
 
-/** One bar item; compact drops the word and the "+K" (the plan keeps "Plan"). */
+/**
+ * One bar item; compact drops the word and the "+K" (a plan keeps its lead).
+ * `keep` is how many words a plan title keeps in compact mode (absent: all).
+ * The compact measuring copy splits a title into its words to size them.
+ */
 function TickerItem(props: {
   item: StatusItem;
   compact: boolean;
   measure?: boolean;
+  keep?: number | undefined;
 }): ReactElement {
   const { item, compact } = props;
   const Icon = STATUS_ICON[item.key];
+  const lead =
+    item.lead === null ? null : props.measure === true && compact && item.trim ? (
+      <span data-status-title={item.id}>
+        {titleWords(item.lead).map((word, i) => (
+          <span key={i} data-title-word="">
+            {i > 0 ? ` ${word}` : word}
+          </span>
+        ))}
+      </span>
+    ) : (
+      <span>
+        {compact && item.trim && props.keep !== undefined
+          ? keptTitle(item.lead, props.keep)
+          : item.lead}
+      </span>
+    );
   const parts = (
     <>
       <Icon size={16} className={cn('shrink-0', ICON_TONE[item.tone])} />
-      {item.lead !== null ? <span>{item.lead}</span> : null}
+      {lead}
       <span
         data-status-number=""
         className={cn(
@@ -130,6 +157,31 @@ export function needsCompact(fullWidth: number, available: number): boolean {
 }
 
 /**
+ * The words each plan title keeps, by item id, from the compact measuring
+ * copy: null when the compact row fits as is.
+ */
+function measureKept(
+  row: HTMLElement,
+  ellipsis: number,
+  available: number,
+): Record<string, number> | null {
+  const overflow = row.offsetWidth - available;
+  if (available <= 0 || overflow <= 0) return null;
+  const titles = [...row.querySelectorAll<HTMLElement>('[data-status-title]')];
+  if (titles.length === 0) return null;
+  const kept = titleWordsKept(
+    titles.map((title) =>
+      [...title.querySelectorAll<HTMLElement>('[data-title-word]')].map((w) => w.offsetWidth),
+    ),
+    ellipsis,
+    overflow,
+  );
+  return Object.fromEntries(
+    titles.map((title, i) => [title.getAttribute('data-status-title') ?? '', kept[i] ?? 0]),
+  );
+}
+
+/**
  * The bar alone (no drawer). `bar` null is the inert empty slot while reads
  * settle; 'blank' is a bar with nothing it can claim (a read failed).
  */
@@ -146,20 +198,31 @@ export function StatusTickerBar(props: {
   const { bar } = props;
   const items = bar !== null && bar.kind === 'items' ? bar.items : null;
   const [compact, setCompact] = useState(false);
+  const [kept, setKept] = useState<Record<string, number> | null>(null);
   const [sizeTick, setSizeTick] = useState(0);
   const areaRef = useRef<HTMLDivElement | null>(null);
   const measureRef = useRef<HTMLDivElement | null>(null);
+  const compactRef = useRef<HTMLDivElement | null>(null);
+  const ellipsisRef = useRef<HTMLSpanElement | null>(null);
   const itemsKey =
-    items?.map((i) => `${i.key}:${i.lead ?? ''}${i.number}:${i.word ?? ''}:${i.more}`).join('|') ??
+    items?.map((i) => `${i.id}:${i.lead ?? ''}${i.number}:${i.word ?? ''}:${i.more}`).join('|') ??
     '';
 
-  // Before paint: the full row's width against the room it has.
+  // Before paint: the full row's width against the room it has; compact, the
+  // plan titles' words against what is still over.
   useLayoutEffect(() => {
     const area = areaRef.current;
     const measure = measureRef.current;
     if (area === null || measure === null) return;
     // Full mode keeps a 12px space before the chevron (the area's right padding).
-    setCompact(needsCompact(measure.offsetWidth + FULL_CHEVRON_GAP, area.clientWidth));
+    const nextCompact = needsCompact(measure.offsetWidth + FULL_CHEVRON_GAP, area.clientWidth);
+    setCompact(nextCompact);
+    const row = compactRef.current;
+    setKept(
+      nextCompact && row !== null
+        ? measureKept(row, ellipsisRef.current?.offsetWidth ?? 0, area.clientWidth)
+        : null,
+    );
     if (paintLogOn()) {
       paintLog(`ticker measure ${measure.offsetWidth} in ${area.clientWidth} (tick ${sizeTick})`);
     }
@@ -239,7 +302,7 @@ export function StatusTickerBar(props: {
         )}
       >
         {items?.map((item) => (
-          <TickerItem key={item.key} item={item} compact={compact} />
+          <TickerItem key={item.id} item={item} compact={compact} keep={kept?.[item.id]} />
         ))}
         <div
           ref={measureRef}
@@ -248,9 +311,27 @@ export function StatusTickerBar(props: {
           className="pointer-events-none invisible absolute left-0 top-0 flex w-max gap-3"
         >
           {items?.map((item) => (
-            <TickerItem key={item.key} item={item} compact={false} measure />
+            <TickerItem key={item.id} item={item} compact={false} measure />
           ))}
         </div>
+        <div
+          ref={compactRef}
+          aria-hidden="true"
+          data-status-measure="compact"
+          className="pointer-events-none invisible absolute left-0 top-0 flex w-max gap-2"
+        >
+          {items?.map((item) => (
+            <TickerItem key={item.id} item={item} compact measure />
+          ))}
+        </div>
+        <span
+          ref={ellipsisRef}
+          aria-hidden="true"
+          data-status-measure="ellipsis"
+          className="pointer-events-none invisible absolute left-0 top-0 whitespace-pre text-xs leading-4"
+        >
+          {TITLE_ELLIPSIS}
+        </span>
       </div>
       <button
         type="button"

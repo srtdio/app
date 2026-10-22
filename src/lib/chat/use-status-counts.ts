@@ -1,17 +1,21 @@
-// The status ticker's own reads: the plans shared in this chat and the
-// workspace's open briefs. Posts in review come from useOpenPosts and the marks
-// from the thread's live marks, so neither is read again here.
+// The status ticker's own reads: the workspace's current shared plans and its
+// open briefs. Posts in review come from useOpenPosts and the marks from the
+// thread's live marks, so neither is read again here.
 //
-// One round is three reads in parallel, each bounded with withReadTimeout:
-// this channel's chat_messages that carry shared_plan_ids (one select, distinct
-// ids in memory), the open briefs list (newest first, limit 100) and the
-// head-only open briefs count. The plan ids then go through the thread's plan
-// card cache (PlanCardsProvider, one batched read per 100 ids, never one per
-// plan); outside a chat a local cache does the same. RLS decides what comes
-// back, so a team plan never reaches a client. No realtime: a round refetches
-// on PLAN_CHANGED_EVENT, POST_CHANGED_EVENT and a tab returning after more
-// than a minute, single-flight (a trigger mid-round runs exactly one more).
-// Plans shared live into the loaded thread are added from its messages.
+// One round is three reads in parallel, each bounded with withReadTimeout: the
+// ids of the workspace's shared plans (audience 'client', not deleted) whose
+// range can hold today in any zone (one plans select; the bar keeps the exact
+// ones for the workspace zone), the open briefs list (newest first, limit 100)
+// and the head-only open briefs count. Every chat shows the same plans, shared
+// in it or not. The plan ids then go through the thread's plan card cache
+// (PlanCardsProvider, one batched read per 100 ids, IN lists for items,
+// reviews and stages, never one per plan); outside a chat a local cache does
+// the same. RLS decides what comes back, so a team plan never reaches a
+// client. No realtime: a round refetches on PLAN_CHANGED_EVENT,
+// POST_CHANGED_EVENT and a tab returning after more than a minute,
+// single-flight (a trigger mid-round runs exactly one more). Plans shared live
+// into the loaded thread are added from its messages (the bar's filter still
+// keeps only current shared ones).
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
@@ -28,14 +32,14 @@ import {
   type PlanCardCache,
 } from '@/lib/chat/plans';
 import { chatKey, openCache, type ChatKey } from '@/lib/chat/open-cache';
-import { distinctPlanIds } from '@/lib/chat/status-bar';
+import { currentPlanWindow } from '@/lib/chat/status-bar';
 import { supabase } from '@/lib/supabase';
 
 /** Open briefs a round lists (newest first). */
 export const OPEN_BRIEFS_LIMIT = 100;
 
-/** Plan-carrying messages one round reads (newest first). */
-export const PLAN_MESSAGES_LIMIT = 500;
+/** Current shared plans one round reads (ending soonest first). */
+export const CURRENT_PLANS_LIMIT = 100;
 
 /** One open brief row as the drawer lists it. */
 export interface OpenBriefRow {
@@ -49,29 +53,36 @@ function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
 }
 
-/** The distinct plan ids shared in one channel (one select). Never throws. */
-export async function readSharedPlanIds(
+/**
+ * The ids of the workspace's shared plans (audience 'client', not deleted)
+ * current at `now` in some zone ({@link currentPlanWindow}), ending soonest
+ * first, at most 100 (one select). Never throws.
+ */
+export async function readCurrentSharedPlanIds(
   client: Client,
-  channelId: string,
+  workspaceId: string,
   signal?: AbortSignal,
+  now: Date = new Date(),
 ): Promise<Result<string[]>> {
   try {
+    const range = currentPlanWindow(now);
     const res = await abortable(
       client
-        .from('chat_messages')
-        .select('shared_plan_ids')
-        .eq('channel_id', channelId)
+        .from('plans')
+        .select('id')
+        .eq('workspace_id', workspaceId)
+        .eq('audience', 'client')
         .is('deleted_at', null)
-        .not('shared_plan_ids', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(PLAN_MESSAGES_LIMIT),
+        .lte('starts_on', range.to)
+        .gte('ends_on', range.from)
+        .order('ends_on', { ascending: true })
+        .order('starts_on', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(CURRENT_PLANS_LIMIT),
       signal,
     );
-    if (res.error) return fail(`readSharedPlanIds: ${res.error.message}`);
-    return {
-      ok: true,
-      data: distinctPlanIds((res.data ?? []) as Array<{ shared_plan_ids: string[] | null }>),
-    };
+    if (res.error) return fail(`readCurrentSharedPlanIds: ${res.error.message}`);
+    return { ok: true, data: ((res.data ?? []) as Array<{ id: string }>).map((row) => row.id) };
   } catch (error) {
     return fail(String(error));
   }
@@ -134,7 +145,7 @@ export interface StatusRound {
 
 /** The injectable reads (tests pass fakes). */
 export interface StatusReads {
-  planIds: (client: Client, channelId: string, signal: AbortSignal) => Promise<Result<string[]>>;
+  planIds: (client: Client, workspaceId: string, signal: AbortSignal) => Promise<Result<string[]>>;
   briefs: (
     client: Client,
     workspaceId: string,
@@ -144,7 +155,7 @@ export interface StatusReads {
 }
 
 const READS: StatusReads = {
-  planIds: readSharedPlanIds,
+  planIds: readCurrentSharedPlanIds,
   briefs: listOpenBriefs,
   briefCount: countOpenBriefs,
 };
@@ -173,7 +184,7 @@ export function startStatusReads(
   reads: StatusReads = READS,
 ): { [K in keyof StatusReadResults]: () => Promise<StatusReadResults[K]> } {
   return {
-    planIds: () => withReadTimeout((signal) => reads.planIds(client, key.channelId, signal)),
+    planIds: () => withReadTimeout((signal) => reads.planIds(client, key.workspaceId, signal)),
     briefs: () => withReadTimeout((signal) => reads.briefs(client, key.workspaceId, signal)),
     briefCount: () =>
       withReadTimeout((signal) => reads.briefCount(client, key.workspaceId, signal)),
@@ -311,7 +322,7 @@ export interface StatusPlans {
   ready: boolean;
   /** A read failed: the plan item is omitted and the bar never says nothing is open. */
   failed: boolean;
-  /** Readable plans shared here (open or not; the caller filters by date). */
+  /** Readable plans read for the bar (the caller keeps the current shared ones). */
   bundles: PlanBundle[];
 }
 
@@ -344,7 +355,8 @@ function parseKey(key: string): { workspaceId: string; channelId: string | null 
 
 /**
  * The ticker's plans and briefs for the open chat. `livePlanIds` are the plan
- * ids on the loaded thread's messages (a live share shows without a round).
+ * ids on the loaded thread's messages (a live share of a current shared plan
+ * shows without a round).
  * With `userId` the chat's last settled view shows at once (the open's round
  * revalidates it; a same-data round changes nothing) and the open's first
  * round joins the reads the tap started (kickoffChatOpen).
@@ -512,7 +524,8 @@ export function useStatusCounts(params: {
   const capped = waiting && cappedKey === idKey;
 
   const roundReady = view !== null;
-  const planIdsFailed = roundReady && view.planIds === null && live.length === 0;
+  // The live ids are only this thread's shares: they never stand in for the read.
+  const planIdsFailed = roundReady && view.planIds === null;
   const plans: StatusPlans = {
     ready:
       key === null || (roundReady && (cache === null || ids.length === 0 || !waiting || capped)),

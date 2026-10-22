@@ -8,6 +8,7 @@ vi.mock('@/lib/workspace-context', () => ({
 
 import { ToastProvider } from '@/components/ui/toast';
 import {
+  PlanBlock,
   StatusDrawerList,
   StatusMarkRow,
   type StatusDrawerActions,
@@ -31,14 +32,19 @@ import {
   snapShut,
 } from '@/components/chat/StatusTicker';
 import type { ChatMark } from '@/lib/chat/marks';
+import type { PlanBundle } from '@/lib/chat/plans';
 import type { WriteResult } from '@/lib/chat/record';
-import { statusBar, type StatusBar } from '@/lib/chat/status-bar';
+import { statusBar, type PlanSummary, type StatusBar } from '@/lib/chat/status-bar';
 import type { ThreadMessage } from '@/lib/chat/thread';
 
 const NO_MARKS = { commitments: 0, decisions: 0, pending: 0, p1: 0 };
 
 function bar(over: Partial<Parameters<typeof statusBar>[0]> = {}): StatusBar {
-  return statusBar({ plan: 'none', posts: 0, briefs: 0, marks: NO_MARKS, side: 'agency', ...over });
+  return statusBar({ plans: [], posts: 0, briefs: 0, marks: NO_MARKS, side: 'agency', ...over });
+}
+
+function plan(id: string, title: string, approved = 1, total = 5, changes = 0): PlanSummary {
+  return { id, title, approved, total, changes };
 }
 
 function mark(id: string, type: ChatMark['type'] = 'commitment'): ChatMark {
@@ -80,9 +86,12 @@ function walk(node: ReactNode, out: ReactElement[] = []): ReactElement[] {
   return out;
 }
 
-/** The painted text, without the hidden measuring copy. */
+/** The painted text, without the hidden measuring copies. */
 const visible = (html: string): string =>
-  html.replace(/<div[^>]*data-status-measure=""[\s\S]*?<\/div>/, '').replace(/<[^>]+>/g, '');
+  html
+    .replace(/<div[^>]*data-status-measure="[^"]*"[\s\S]*?<\/div>/g, '')
+    .replace(/<span[^>]*data-status-measure="ellipsis"[^>]*>[^<]*<\/span>/g, '')
+    .replace(/<[^>]+>/g, '');
 
 describe('first paint is final', () => {
   it('holds an empty, inert 36px slot until every read settles, then paints once', () => {
@@ -122,7 +131,10 @@ describe('the bar', () => {
   it('items are 44px targets over a 36px bar: tokens only, no callout', () => {
     const html = renderToStaticMarkup(
       <StatusTickerBar
-        bar={bar({ plan: { approved: 1, total: 5, changes: 1, more: 1 }, briefs: 2 })}
+        bar={bar({
+          plans: [plan('a', 'Week ahead', 1, 5, 1), plan('b', 'Festive'), plan('c', 'Later')],
+          briefs: 2,
+        })}
       />,
     );
     expect(html).toContain('h-9');
@@ -135,6 +147,43 @@ describe('the bar', () => {
     expect(html).toContain('text-warn');
     expect(html).toContain('data-status-more=""');
     expect(html).toContain('data-status-chevron=""');
+  });
+
+  it('no current shared plan: no plan item', () => {
+    const html = renderToStaticMarkup(<StatusTickerBar bar={bar({ briefs: 2 })} />);
+    expect(html).not.toContain('data-status-item="plan"');
+    expect(visible(html)).toBe('2briefs');
+  });
+
+  it('one plan reads as today: "Plan A/N", no +K', () => {
+    const html = renderToStaticMarkup(
+      <StatusTickerBar bar={bar({ plans: [plan('a', 'Week ahead', 2, 5)], briefs: 2 })} />,
+    );
+    expect(html.match(/data-status-item="plan"/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Plan 2 of 5 approved"');
+    expect(visible(html)).toBe('Plan2/52briefs');
+  });
+
+  it('two plans: one item each, titled, soonest end first, no +K', () => {
+    const html = renderToStaticMarkup(
+      <StatusTickerBar
+        bar={bar({ plans: [plan('a', 'Week ahead', 2, 5), plan('b', 'Festive', 3, 3)] })}
+      />,
+    );
+    expect(html.match(/data-status-item="plan"/g)).toHaveLength(2);
+    expect(visible(html)).toBe('Week ahead2/5Festive3/3');
+    expect(html).toContain('aria-label="Week ahead 2 of 5 approved"');
+    expect(html).not.toContain('data-status-more=""');
+  });
+
+  it('three plans: two items, then +1 for the rest', () => {
+    const html = renderToStaticMarkup(
+      <StatusTickerBar
+        bar={bar({ plans: [plan('a', 'Week ahead'), plan('b', 'Festive'), plan('c', 'Later')] })}
+      />,
+    );
+    expect(visible(html)).toBe('Week ahead1/5Festive1/5+1');
+    expect(html).not.toContain('Later');
   });
 
   it('compact only when the full row overflows its room', () => {
@@ -163,6 +212,37 @@ describe('the bar', () => {
     expect(snapShut({ offset: 95, height: 100, velocity: -0.5 })).toBe(true);
   });
 });
+
+/** A current shared plan with one concept item. */
+function planBundle(id: string, title: string): PlanBundle {
+  return {
+    plan: {
+      id,
+      workspace_id: 'w',
+      title,
+      starts_on: '2026-10-01',
+      ends_on: '2026-10-30',
+      audience: 'client',
+      created_by: null,
+    },
+    items: [
+      {
+        id: `${id}-i`,
+        plan_id: id,
+        kind: 'concept',
+        position: 0,
+        title: 'Concept',
+        description: null,
+        post_id: null,
+        created_at: '2026-10-01T00:00:00Z',
+        target_date: null,
+      },
+    ],
+    reviews: [],
+    postStages: {},
+    postInfo: {},
+  };
+}
 
 describe('the drawer list', () => {
   const marks = new Map(
@@ -228,6 +308,29 @@ describe('the drawer list', () => {
     expect(html).toContain('data-priority="P1"');
     expect(html).toContain('min-h-[44px]');
     expect(html).toContain('line-clamp-2');
+  });
+
+  it('Plans lists every current shared plan in order; a tap opens that plan', () => {
+    const plans = [
+      planBundle('a', 'Week ahead'),
+      planBundle('b', 'Festive'),
+      planBundle('c', 'Later'),
+    ];
+    const { html, tree, actions } = drawer({ keys: ['plan'], plans });
+    expect(html).toContain('Plans');
+    expect(html).toContain('3 open');
+    const blocks = [...html.matchAll(/data-plan-block="([^"]+)"/g)].map((m) => m[1]);
+    expect(blocks).toEqual(['a', 'b', 'c']);
+    const open = tree.filter((el) => el.type === PlanBlock);
+    expect(open).toHaveLength(3);
+    (open[1]?.props as { onOpen: () => void }).onOpen();
+    expect(actions.onOpenPlan).toHaveBeenCalledWith('b');
+  });
+
+  it('one plan: the section reads Plan and A/N', () => {
+    const { html } = drawer({ keys: ['plan'], plans: [planBundle('a', 'Week ahead')] });
+    expect(html).toContain('>Plan<');
+    expect(html).toContain('0/1');
   });
 
   it('"See all" for marks opens the MarksSheet', () => {

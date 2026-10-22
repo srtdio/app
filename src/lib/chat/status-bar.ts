@@ -1,9 +1,11 @@
 // The chat status ticker's pure pieces: which items the bar shows and how each
 // reads (fixed order, zero items omitted, 99+ cap, plural words, side wording,
-// plan colour), the open-plan filter and pick (ends_on >= today in the
-// workspace zone, ending soonest first), the empty and failed-read rules, the
-// first-paint gate and the drawer's per-section rows. No React and no reads,
-// so every rule is unit-tested directly.
+// plan colour), the current shared plans filter and order (audience 'client',
+// starts_on <= today <= ends_on in the workspace zone, ending soonest first),
+// one bar item per plan for at most two plans then "+K", compact mode's plan
+// title word drop, the empty and failed-read rules, the first-paint gate and
+// the drawer's per-section rows. No React and no reads, so every rule is
+// unit-tested directly.
 
 import { NOTHING_OPEN, type MarkCounts, type ChatMark, type MarkType } from '@/lib/chat/marks';
 import type { PlanBundle } from '@/lib/chat/plans';
@@ -35,25 +37,28 @@ export function capCount(n: number): string {
   return n > BAR_CAP ? `${BAR_CAP}+` : String(Math.max(0, n));
 }
 
-/** What the bar reads of the soonest-ending open plan. */
+/** What the bar reads of one current shared plan. */
 export interface PlanSummary {
+  id: string;
+  title: string;
   /** Items the client approved. */
   approved: number;
   /** Every item. */
   total: number;
   /** Items the client asked changes on. */
   changes: number;
-  /** Other open plans (the "+K"). */
-  more: number;
 }
+
+/** Plan items the bar shows before its "+K" (the rest are in the drawer). */
+export const BAR_PLANS = 2;
 
 /**
  * One settled round of every read the bar counts. `null` is a read that
  * failed (its item is omitted and the bar never says nothing is open).
  */
 export interface StatusInput {
-  /** The soonest-ending open plan, or 'none' when no plan is open. */
-  plan: PlanSummary | 'none' | null;
+  /** The current shared plans, ending soonest first ([] when none). */
+  plans: readonly PlanSummary[] | null;
   /** Posts in review (the head-only count). */
   posts: number | null;
   /** Open briefs (the head-only count). */
@@ -68,13 +73,17 @@ export type StatusTone = 'default' | 'warn' | 'good';
 /** One bar item. */
 export interface StatusItem {
   key: StatusKey;
-  /** Kept in compact mode: the plan's "Plan". */
+  /** Unique on the bar: the key, or "plan:{id}" for a plan item. */
+  id: string;
+  /** Kept in compact mode: "Plan" for a lone plan, else the plan's title. */
   lead: string | null;
+  /** Compact mode may drop the lead's trailing words (a plan title). */
+  trim: boolean;
   /** The number as shown ("3", "99+", "2/5"). */
   number: string;
   /** Dropped in compact mode: "in review", "briefs". */
   word: string | null;
-  /** The plan's "+K" (other open plans); 0 for none. Hidden in compact mode. */
+  /** The last plan item's "+K" (current shared plans past it); 0 for none. Hidden in compact mode. */
   more: number;
   tone: StatusTone;
   /** The real count (the plan's open items for its section). */
@@ -107,7 +116,9 @@ function countItem(
 ): StatusItem {
   return {
     key,
+    id: key,
     lead: null,
+    trim: false,
     number: capCount(count),
     word,
     more: 0,
@@ -117,22 +128,39 @@ function countItem(
   };
 }
 
-/** The bar's items in the fixed order; zero and failed ones are left out. Pure. */
+/**
+ * One plan's bar item: "Plan" leads a lone plan, the plan's title leads each
+ * of two or more; "A/N" either way. `more` is the "+K" it carries. Pure.
+ */
+function planItem(plan: PlanSummary, lone: boolean, more: number): StatusItem {
+  const lead = lone ? 'Plan' : plan.title;
+  return {
+    key: 'plan',
+    id: `plan:${plan.id}`,
+    lead,
+    trim: !lone,
+    number: `${capCount(plan.approved)}/${capCount(plan.total)}`,
+    word: null,
+    more: Math.max(0, more),
+    tone: planTone(plan),
+    count: plan.total,
+    aria: `${lead} ${plan.approved} of ${plan.total} approved`,
+  };
+}
+
+/**
+ * The bar's items in the fixed order; zero and failed ones are left out. The
+ * plans come first: one item per plan for the first {@link BAR_PLANS}, the
+ * last of them carrying "+K" for the rest. Pure.
+ */
 export function statusItems(input: StatusInput): StatusItem[] {
   const items: StatusItem[] = [];
-  const plan = input.plan;
-  if (plan !== null && plan !== 'none') {
-    items.push({
-      key: 'plan',
-      lead: 'Plan',
-      number: `${capCount(plan.approved)}/${capCount(plan.total)}`,
-      word: null,
-      more: Math.max(0, plan.more),
-      tone: planTone(plan),
-      count: plan.total,
-      aria: `Plan ${plan.approved} of ${plan.total} approved`,
-    });
-  }
+  const plans = input.plans ?? [];
+  const shown = plans.slice(0, BAR_PLANS);
+  shown.forEach((plan, i) => {
+    const last = i === shown.length - 1;
+    items.push(planItem(plan, plans.length === 1, last ? plans.length - shown.length : 0));
+  });
   if (input.posts !== null && input.posts > 0) {
     items.push(countItem('posts', input.posts, postsWord(input.side)));
   }
@@ -165,7 +193,7 @@ export function statusItems(input: StatusInput): StatusItem[] {
 /** Whether any read of the round failed. Pure. */
 export function anyReadFailed(input: StatusInput): boolean {
   return (
-    input.plan === null || input.posts === null || input.briefs === null || input.marks === null
+    input.plans === null || input.posts === null || input.briefs === null || input.marks === null
   );
 }
 
@@ -216,33 +244,107 @@ export function openPlans(bundles: Iterable<PlanBundle>, today: string): PlanBun
     );
 }
 
-/** The bar's plan summary over the open plans (already sorted soonest first). Pure. */
-export function planSummary(
-  open: readonly PlanBundle[],
-  progressOf: (bundle: PlanBundle) => { approved: number; total: number; changes: number },
-): PlanSummary | 'none' {
-  const [first] = open;
-  if (first === undefined) return 'none';
-  const progress = progressOf(first);
-  return {
-    approved: progress.approved,
-    total: progress.total,
-    changes: progress.changes,
-    more: open.length - 1,
-  };
+/**
+ * The bar's plans: shared ones (audience 'client'; a draft never shows) whose
+ * range holds `today` ("YYYY-MM-DD" in the workspace zone), so starts_on <=
+ * today <= ends_on, ending soonest first (ties by start, then id). Deleted
+ * plans never reach here (the read and RLS leave them out). Pure.
+ */
+export function currentSharedPlans(bundles: Iterable<PlanBundle>, today: string): PlanBundle[] {
+  return [...bundles]
+    .filter(
+      (b) =>
+        b.plan.audience === 'client' &&
+        b.plan.starts_on.slice(0, 10) <= today &&
+        b.plan.ends_on.slice(0, 10) >= today,
+    )
+    .sort(
+      (a, b) =>
+        a.plan.ends_on.localeCompare(b.plan.ends_on) ||
+        a.plan.starts_on.localeCompare(b.plan.starts_on) ||
+        a.plan.id.localeCompare(b.plan.id),
+    );
 }
 
-/** Distinct shared plan ids over message rows, first seen first. Pure. */
-export function distinctPlanIds(
-  rows: ReadonlyArray<{ shared_plan_ids?: readonly string[] | null }>,
-): string[] {
-  const seen = new Set<string>();
-  for (const row of rows) {
-    for (const id of row.shared_plan_ids ?? []) {
-      if (typeof id === 'string' && id !== '') seen.add(id);
+const HOUR_MS = 3_600_000;
+
+/**
+ * The calendar days "today" can be anywhere at `now` (UTC-12 to UTC+14), so
+ * one read with starts_on <= to and ends_on >= from holds every plan current
+ * in any workspace zone; {@link currentSharedPlans} then keeps the exact
+ * ones for the workspace's own today. Pure.
+ */
+export function currentPlanWindow(now: Date): { from: string; to: string } {
+  const day = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+  return { from: day(now.getTime() - 12 * HOUR_MS), to: day(now.getTime() + 14 * HOUR_MS) };
+}
+
+/** The bar's summaries of the current shared plans (already in order). Pure. */
+export function planSummaries(
+  plans: readonly PlanBundle[],
+  progressOf: (bundle: PlanBundle) => { approved: number; total: number; changes: number },
+): PlanSummary[] {
+  return plans.map((bundle) => {
+    const progress = progressOf(bundle);
+    return {
+      id: bundle.plan.id,
+      title: bundle.plan.title,
+      approved: progress.approved,
+      total: progress.total,
+      changes: progress.changes,
+    };
+  });
+}
+
+/** The drawer's sections for the bar's items: each key once, in the bar's order. Pure. */
+export function drawerKeys(items: readonly StatusItem[]): StatusKey[] {
+  return [...new Set(items.map((item) => item.key))];
+}
+
+/** A plan title's words, as compact mode drops them. Pure. */
+export function titleWords(title: string): string[] {
+  return title.split(/\s+/).filter((word) => word !== '');
+}
+
+/** The ellipsis a title with dropped words ends on. */
+export const TITLE_ELLIPSIS = '\u2026';
+
+/** A title kept to its first `keep` words (at least one); "…" when any dropped. Pure. */
+export function keptTitle(title: string, keep: number): string {
+  const words = titleWords(title);
+  if (keep >= words.length) return title;
+  return `${words.slice(0, Math.max(1, keep)).join(' ')}${TITLE_ELLIPSIS}`;
+}
+
+/**
+ * Compact mode's plan titles, once every other item has dropped its word:
+ * how many leading words each title keeps so the row stops overflowing.
+ * `words[i][j]` is title i's word j width (with its leading space past the
+ * first), `ellipsis` the "…" width a shortened title adds, `overflow` how far
+ * the compact row is over its room. Drops the last word of the widest title
+ * first, whole words only (never a cut glyph), never below one word. Pure.
+ */
+export function titleWordsKept(
+  words: ReadonlyArray<readonly number[]>,
+  ellipsis: number,
+  overflow: number,
+): number[] {
+  const kept = words.map((w) => w.length);
+  const width = (i: number): number =>
+    (words[i] ?? []).slice(0, kept[i]).reduce((sum, w) => sum + w, 0) +
+    ((kept[i] ?? 0) < (words[i] ?? []).length ? ellipsis : 0);
+  let over = overflow;
+  while (over > 0) {
+    let pick = -1;
+    for (let i = 0; i < kept.length; i += 1) {
+      if ((kept[i] ?? 0) > 1 && (pick === -1 || width(i) > width(pick))) pick = i;
     }
+    if (pick === -1) break;
+    const before = width(pick);
+    kept[pick] = (kept[pick] ?? 1) - 1;
+    over -= before - width(pick);
   }
-  return [...seen];
+  return kept;
 }
 
 /** Which mark type a marks section lists. */
@@ -297,7 +399,10 @@ export function sectionLabel(
 }
 
 /** The plan section header's count: "A/N" for one plan, "N open" for more. Pure. */
-export function planSectionCount(plans: number, first: PlanSummary | null): string {
+export function planSectionCount(
+  plans: number,
+  first: Pick<PlanSummary, 'approved' | 'total'> | null,
+): string {
   if (plans > 1) return `${plans} open`;
   return first !== null ? `${first.approved}/${first.total}` : '';
 }
