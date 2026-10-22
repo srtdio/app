@@ -272,7 +272,9 @@ describe('Undo restores the exact previous status (A3)', () => {
 describe('week list layout (L1-L4)', () => {
   it('date tile: 56x56, weekday strip over the number; today accent strip and border; No date', () => {
     const today = renderToStaticMarkup(<DayColumn day="2026-10-14" today="2026-10-14" />);
-    expect(today).toContain('flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-[10px] border');
+    expect(today).toContain(
+      'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-[10px] border',
+    );
     expect(today).toContain('data-plan-today=""');
     expect(today).toContain('border-accent');
     expect(today).toMatch(/data-plan-day-weekday=""[^>]*bg-accent text-accent-fg">Wed</);
@@ -403,7 +405,9 @@ describe('week list layout (L1-L4)', () => {
     expect(html).not.toContain('data-plan-control="pill"');
     expect(html).not.toContain('data-plan-ok=');
     expect(html).toMatch(/data-plan-slot-state="approved"[^>]*data-plan-control="text"[^>]*>OK</);
-    expect(html).toMatch(/data-plan-slot-state="changes"[^>]*data-plan-control="text"[^>]*>Not OK</);
+    expect(html).toMatch(
+      /data-plan-slot-state="changes"[^>]*data-plan-control="text"[^>]*>Not OK</,
+    );
     expect(html).toMatch(
       /data-plan-slot-state="pending"[^>]*data-plan-control="text"[^>]*>Not checked yet</,
     );
@@ -424,8 +428,12 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toContain('data-plan-slot="team"');
     expect(html).not.toContain('data-plan-slot="client"');
     expect(html).not.toContain('data-plan-slot-readonly');
-    expect(html).toMatch(/data-plan-slot="team" data-plan-slot-state="approved" data-plan-control="pill"/);
-    expect(html).toMatch(/data-plan-slot="team" data-plan-slot-state="pending" data-plan-control="switch"/);
+    expect(html).toMatch(
+      /data-plan-slot="team" data-plan-slot-state="approved" data-plan-control="pill"/,
+    );
+    expect(html).toMatch(
+      /data-plan-slot="team" data-plan-slot-state="pending" data-plan-control="switch"/,
+    );
     expect(html).toContain('1/4 OK');
     expect(html).toContain('data-plan-screen-progress="plan"');
     expect(html).toContain('data-plan-screen-progress="post"');
@@ -438,7 +446,9 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toContain('data-plan-slot="client"');
     expect(html).not.toContain('data-plan-slot-readonly');
     // p2 is undecided: the OK | Not OK switch.
-    expect(html).toMatch(/data-plan-control="switch"[\s\S]*?data-plan-ok=""[\s\S]*?data-plan-not-ok=""/);
+    expect(html).toMatch(
+      /data-plan-control="switch"[\s\S]*?data-plan-ok=""[\s\S]*?data-plan-not-ok=""/,
+    );
     // c1 asked changes: the Not OK pill.
     expect(html).toMatch(/data-plan-slot-state="changes" data-plan-control="pill"/);
     // The locked draft is not one the client checks: 1 of 3.
