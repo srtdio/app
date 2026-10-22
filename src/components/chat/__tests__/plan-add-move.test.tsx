@@ -97,7 +97,9 @@ describe('header, progress and status (A1)', () => {
     expect(planProgressView(open)).toEqual({ lead: 'Approved 0 of 3', percent: 0, tone: 'good' });
     const src = read('PlanScreen.tsx');
     const block = src.slice(src.indexOf('export function PlanProgressRow'));
-    expect(block.slice(0, 1500)).not.toContain('font-mono');
+    // Two boxes (PLAN, POST); their counts are in JetBrains Mono.
+    expect(block.slice(0, 2500)).toContain('data-plan-screen-progress={box.key}');
+    expect(block.slice(0, 2500)).toContain('font-mono');
   });
 
   it('status line: agency only, "Client waiting / approved / changes asked"', () => {
