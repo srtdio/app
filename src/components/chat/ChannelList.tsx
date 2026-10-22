@@ -163,6 +163,8 @@ interface ChannelListProps {
 interface ChannelListBodyProps extends Omit<ChannelListProps, 'status' | 'onRetry'> {
   /** Whether any conversations exist before the search filter is applied. */
   hasChannels: boolean;
+  /** The name search; the no-match heading names it. */
+  search?: string;
   /** Read-only store summaries; absent in pure tests (every card reads empty). */
   summaryFor?: SummaryLookup;
   /** Clock for relative-time labels; defaults to 0 when no summary is supplied. */
@@ -208,7 +210,7 @@ export function useChannelListInput(): ChannelListInput {
 /**
  * The channel list body. Pure and exported so its three states are unit tested:
  * the zero-state when no conversations exist (with a real "New chat" action), a
- * distinct "No matches" state when a search hides every conversation, and one row
+ * distinct "No chats called" state when a search hides every conversation, and one row
  * per channel otherwise.
  */
 export function channelListView(props: ChannelListBodyProps): ReactElement {
@@ -229,7 +231,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   if (props.channels.length === 0) {
     return (
       <div className="px-4 py-12 text-center">
-        <p className="text-sm text-fg-2">No matches</p>
+        <p className="text-sm text-fg-2">{`No chats called "${(props.search ?? '').trim()}"`}</p>
         <p className="mt-1 text-xs text-fg-3">Try a different name or clear the search.</p>
       </div>
     );
@@ -1136,6 +1138,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
               : channelListView({
                   channels: visibleChannels(props.channels, summaryFor, isHidden, props.search),
                   hasChannels: hasChannels || props.search.trim() !== '',
+                  search: props.search,
                   selectedChannelId: props.selectedChannelId,
                   onSelect: props.onSelect,
                   onNewChat: newChat,

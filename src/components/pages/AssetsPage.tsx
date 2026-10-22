@@ -1015,7 +1015,7 @@ export function AssetsPage() {
               data-empty-folder=""
               className="px-4 md:px-6 py-10 flex flex-col items-start gap-3"
             >
-              <p className="text-sm text-fg-3">This folder is empty.</p>
+              <p className="text-sm text-fg-3">No files in this folder yet.</p>
               <Button variant="primary" onClick={() => setUploadOpen(true)}>
                 <IconUpload size={16} />
                 Upload

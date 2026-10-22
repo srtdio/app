@@ -161,7 +161,7 @@ describe('X6 folders read failure', () => {
     // anywhere, there are no tab counts, and nothing claims the folder is empty.
     expect(text()).not.toContain('inside-brand.png');
     expect(document.querySelector('[role="tablist"]')).toBeNull();
-    expect(text()).not.toContain('This folder is empty');
+    expect(text()).not.toContain('No files in this folder yet');
     expect(text()).not.toContain('boom');
 
     fetchFolders.mockResolvedValueOnce({ ok: true, data: [BRAND] });

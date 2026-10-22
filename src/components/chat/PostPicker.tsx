@@ -655,6 +655,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       <SearchResultsView
         rows={searchRows}
         count={searchCount}
+        query={trimmed}
         loadingMore={search.loadingMore}
         onLoadMore={loadMore}
         {...listProps}
@@ -847,6 +848,8 @@ export function SearchResultsView(
   props: PostRowContext & {
     rows: PostPickerPageRow[];
     count: number;
+    /** The search text; the no-match heading names it. */
+    query: string;
     loadingMore: boolean;
     onLoadMore: () => void;
   },
@@ -855,7 +858,7 @@ export function SearchResultsView(
     return (
       <EmptyState
         icon={<IconPipeline size={22} />}
-        title="No matches"
+        title={`No posts called "${props.query.trim()}"`}
         description="Try another word or a post number."
       />
     );

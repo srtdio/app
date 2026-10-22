@@ -632,7 +632,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
             : {})}
         />
       ) : (
-        <EmptyState icon={<IconBookmark size={22} />} title="Nothing here" />
+        <EmptyState icon={<IconBookmark size={22} />} title="All clear" />
       );
   }
 

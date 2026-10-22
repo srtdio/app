@@ -172,7 +172,7 @@ describe('Briefs list filter and search', () => {
       data: [brief('b1', { title: 'Launch reel' }), brief('b2', { status: 'closed' })],
     });
     await mount('/briefs?status=closed&q=zzz');
-    expect(text()).toContain('No matches');
+    expect(text()).toContain('Nothing called "zzz"');
     // The empty state's text button, not the search field's own X (aria-label "Clear search").
     const clear = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
       (b) => b.textContent?.trim() === 'Clear search',
@@ -195,6 +195,69 @@ describe('Briefs list filter and search', () => {
     await mount();
     expect(button('Write your first brief')).toBeUndefined();
     expect(text()).toContain('No briefs yet');
+  });
+});
+
+// The empty state's own "Clear search" text button (not the header X, which
+// carries the same aria-label and renders only while the search is non-empty).
+const clearSearchText = () =>
+  [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) => b.textContent?.trim() === 'Clear search',
+  );
+
+describe('Briefs zero-result headings', () => {
+  it('Open chip, empty search, no open briefs: "No open briefs right now" with Clear search', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { status: 'closed' })] });
+    await mount();
+    expect(text()).toContain('0 of 1 brief');
+    expect(text()).toContain('No open briefs right now');
+    expect(text()).not.toContain('No matches');
+    expect(clearSearchText()).toBeDefined();
+    await act(async () => clearSearchText()?.click());
+    expect(location).toBe('/briefs?status=all');
+  });
+
+  it('Closed chip, empty search, no closed briefs: "No closed briefs yet" with Clear search', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
+    await mount('/briefs?status=closed');
+    expect(text()).toContain('No closed briefs yet');
+    expect(text()).not.toContain('No matches');
+    expect(clearSearchText()).toBeDefined();
+  });
+
+  it('non-empty search, zero results: names the query with Clear search', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { title: 'Launch reel' })] });
+    await mount('/briefs?q=diwali');
+    expect(text()).toContain('Nothing called "diwali"');
+    expect(text()).not.toContain('No open briefs right now');
+    expect(clearSearchText()).toBeDefined();
+  });
+
+  it('each zero state renders the same markup in light and dark mode', async () => {
+    const cases: { path: string; data: BriefWithThumbnail[]; heading: string }[] = [
+      {
+        path: '/briefs',
+        data: [brief('b1', { status: 'closed' })],
+        heading: 'No open briefs right now',
+      },
+      { path: '/briefs?status=closed', data: [brief('b1')], heading: 'No closed briefs yet' },
+      { path: '/briefs?q=diwali', data: [brief('b1')], heading: 'Nothing called "diwali"' },
+    ];
+    for (const item of cases) {
+      const markup: string[] = [];
+      for (const dark of [false, true]) {
+        document.documentElement.classList.toggle('dark', dark);
+        listBriefs.mockResolvedValue({ ok: true, data: item.data });
+        await mount(item.path);
+        expect(text()).toContain(item.heading);
+        markup.push(document.body.innerHTML);
+        act(() => root?.unmount());
+        root = null;
+        document.body.innerHTML = '';
+      }
+      expect(markup[1]).toBe(markup[0]);
+    }
+    document.documentElement.classList.remove('dark');
   });
 });
 

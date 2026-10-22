@@ -450,7 +450,7 @@ describe('CommandPalette', () => {
     expect(texts(body('diwali', loading))).toContain('Searching…');
 
     expect(texts(body('diwali', ready('diwali', [], [])))).toContain(emptyCopy('diwali'));
-    expect(emptyCopy(' diwali ')).toBe('No results for "diwali"');
+    expect(emptyCopy(' diwali ')).toBe('Nothing called "diwali"');
 
     let retried = 0;
     const errTree = PaletteBody({

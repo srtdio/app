@@ -378,6 +378,7 @@ describe('search paging', () => {
       <SearchResultsView
         rows={rows}
         count={120}
+        query=""
         loadingMore={false}
         onLoadMore={() => undefined}
         {...ctx}
@@ -393,6 +394,7 @@ describe('search paging', () => {
       <SearchResultsView
         rows={[row(1)]}
         count={1}
+        query=""
         loadingMore={false}
         onLoadMore={() => undefined}
         {...ctx}
@@ -410,6 +412,7 @@ describe('in this chat', () => {
       <SearchResultsView
         rows={rows}
         count={2}
+        query=""
         loadingMore={false}
         onLoadMore={() => undefined}
         {...ctx}
@@ -424,6 +427,7 @@ describe('in this chat', () => {
       <SearchResultsView
         rows={[row(1)]}
         count={1}
+        query=""
         loadingMore={false}
         onLoadMore={() => undefined}
         {...ctx}

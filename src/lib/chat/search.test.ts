@@ -313,7 +313,7 @@ describe('in-chat counter and arrows', () => {
   it('reads "N of M", "+" while more pages exist', () => {
     expect(searchCounterText(0, 4, false)).toBe('1 of 4');
     expect(searchCounterText(2, 30, true)).toBe('3 of 30+');
-    expect(searchCounterText(0, 0, false)).toBe('0 of 0');
+    expect(searchCounterText(0, 0, false)).toBe('Not in this chat');
   });
 });
 

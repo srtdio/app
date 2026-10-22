@@ -281,7 +281,7 @@ export function paletteSections(input: {
 
 /** The empty copy for a query with no hits. Pure. */
 export function emptyCopy(query: string): string {
-  return `No results for "${normalizeQuery(query)}"`;
+  return `Nothing called "${normalizeQuery(query)}"`;
 }
 
 /** The person, mention and actor ids a set of rows needs names for. Pure. */

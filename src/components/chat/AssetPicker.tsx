@@ -162,6 +162,7 @@ export function AssetPicker(props: {
         rows={list.rows}
         count={list.count}
         searching={list.text !== ''}
+        query={list.text}
         loadingMore={list.loadingMore}
         selected={selected}
         onToggle={(asset) => setSelected((prev) => toggleLibraryAsset(prev, asset))}
@@ -225,6 +226,8 @@ export function AssetGrid(props: {
   rows: LibraryAsset[];
   count: number;
   searching: boolean;
+  /** The search text; the no-match heading names it. */
+  query: string;
   loadingMore: boolean;
   selected: readonly LibraryAsset[];
   onToggle: (asset: LibraryAsset) => void;
@@ -234,7 +237,7 @@ export function AssetGrid(props: {
     return (
       <EmptyState
         icon={<IconAssets size={22} />}
-        title={props.searching ? 'No matches' : 'No assets'}
+        title={props.searching ? `No files called "${props.query.trim()}"` : 'No assets'}
         description={props.searching ? 'Try another name.' : 'Files added to Assets show up here.'}
       />
     );

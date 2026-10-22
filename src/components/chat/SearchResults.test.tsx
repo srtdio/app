@@ -104,7 +104,7 @@ describe('searchResultsView', () => {
     expect(html).toContain('[-webkit-touch-callout:none]');
   });
 
-  it('shows "No messages found" when nothing matches', () => {
+  it('shows "No messages like that" when nothing matches', () => {
     expect(view(ready([]))).toContain(SEARCH_EMPTY_COPY);
   });
 
@@ -131,7 +131,7 @@ describe('searchResultsView', () => {
     expect(html).not.toContain('data-search-hit');
   });
 
-  it('a 101 character query reads "No messages found"', () => {
+  it('a 101 character query reads "No messages like that"', () => {
     expect(view(IDLE_SEARCH, 'x'.repeat(101))).toContain(SEARCH_EMPTY_COPY);
   });
 
