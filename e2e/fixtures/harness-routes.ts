@@ -1072,9 +1072,23 @@ export interface HarnessNetwork {
 
 export async function installHarnessNetwork(
   page: Page,
-  opts: { planSwipePeek?: boolean } = {},
+  opts: {
+    planSwipePeek?: boolean;
+    /** The voice notes' bytes: the silent wav (default) or bytes no browser can decode. */
+    voiceAudio?: 'wav' | 'invalid';
+    /** A transcript stored on every voice note's attachment_meta (the legacy field). */
+    voiceTranscript?: string;
+  } = {},
 ): Promise<HarnessNetwork> {
   const world = buildWorld();
+  if (opts.voiceTranscript !== undefined) {
+    for (const m of world.tables.chat_messages ?? []) {
+      const meta = m.attachment_meta as Record<string, Record<string, unknown>> | null;
+      for (const entry of Object.values(meta ?? {})) {
+        if (String(entry.mime).startsWith('audio/')) entry.transcript = opts.voiceTranscript;
+      }
+    }
+  }
   const unmatched: string[] = [];
   const blocked: string[] = [];
   let historyGate: Promise<void> | null = null;
@@ -1098,6 +1112,8 @@ export async function installHarnessNetwork(
 
   const png = solidPng(64, 48, [96, 128, 160]);
   const wav = silentWav();
+  // Not audio at all: the element raises a media error and play() rejects.
+  const brokenAudio = Buffer.from('this is not an audio file', 'utf8');
   const pdf = fixturePdf(FIXTURE_PDF_PAGES);
 
   const handle = async (route: Route): Promise<void> => {
@@ -1246,8 +1262,11 @@ export async function installHarnessNetwork(
       if (url.pathname.startsWith('/blob/audio')) {
         await route.fulfill({
           status: 200,
-          headers: { ...CORS, 'content-type': 'audio/wav' },
-          body: wav,
+          headers: {
+            ...CORS,
+            'content-type': opts.voiceAudio === 'invalid' ? 'audio/webm' : 'audio/wav',
+          },
+          body: opts.voiceAudio === 'invalid' ? brokenAudio : wav,
         });
         return;
       }

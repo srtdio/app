@@ -483,6 +483,16 @@ export function IconPause(props: IconProps) {
   );
 }
 
+/** The filled pause glyph (two rounded bars), the pair of the filled IconPlay. */
+export function IconPauseFill(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x={6.5} y={5} width={4} height={14} rx={1.2} fill="currentColor" stroke="none" />
+      <rect x={13.5} y={5} width={4} height={14} rx={1.2} fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
 export function IconCalendar(props: IconProps) {
   return (
     <Svg {...props}>

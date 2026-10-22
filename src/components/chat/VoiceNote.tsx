@@ -1,33 +1,37 @@
 // The voice-note body that sits inside the normal message bubble shell (same
-// radius, border and own/peer tint as a text bubble, owned by MessageBubble),
-// WhatsApp style. Received, three rows: [play 44x44] [waveform with dot]
-// [sender photo 40px + mic badge]; the mono m:ss length under the wave's start;
-// the always-visible Transcribe link left and the bubble's time right in a
-// fixed 44px row. Own, two rows: [own photo + mic badge] [play] [waveform];
-// the length left and the time and ticks right. The mic badge is fg-3 until
-// the note has played to the end once on this device, then accent; while
-// playing the photo slot shows a speed pill cycling 1x / 1.5x / 2x (remembered
-// for the session across notes). When a note ends and the message right below
-// is an unplayed voice note from the same sender, that one starts 350ms later.
+// radius and own/peer fill as a text bubble, owned by MessageBubble). One
+// layout for both sides, only the colours differ. In a chat bubble the note
+// is a fixed 264px wide with a 4px top/bottom, 6px right and 0 left inset (it
+// pulls out of the shell's padding). Row 1: [play 44x44, a bare 20px glyph]
+// [waveform: 30 bars from the stored peaks and a 10px seek dot] [sender photo
+// 34px + a 14px mic badge, or while playing the speed pill 1x / 1.5x / 2x,
+// remembered for the session across notes]. Row 2 starts under the wave
+// (46px): the length (elapsed while playing or paused mid-way) · Transcribe /
+// Hide text left, the bubble's time and ticks right. The transcript panel
+// drops down under row 2; when playback failed an error row there offers
+// "Read the transcript". The received mic badge is accent until this device
+// has played the note to the end once, then muted. When a note ends and the
+// message right below is an unplayed voice note from the same sender, that
+// one starts 350ms later. One note plays at a time across the app.
+//
 // The length shows before play from the stored durationMs (the recorder's
 // value); a finite media duration (loadedmetadata or durationchange) refines
 // it, and a non-finite one (MediaRecorder webm reports Infinity) never replaces
-// it. One note plays at a time across the app. No recording, no presign logic
-// (the url is handed in, null while the presign is still in flight).
+// it. No recording here. The url is handed in (null while the presign is still
+// in flight) and set on the element imperatively, so a background refresh
+// never reloads a note that is playing or paused mid-way. A tap plays from a
+// fresh url: when the held one is expired or within 60s of expiry the note
+// asks for a new presign first (refreshUrl). The first media error or play()
+// rejection forces one re-presign and retries once; a second failure shows the
+// error row and is logged (error name, MediaError code, mime, retried).
 //
 // The transcript state is read synchronously from the per-device transcript
-// store so first paint is final. On a received note the link reads
-// "Transcribe", "Transcribing…", "Hide transcript" / "Show transcript", or
-// "Transcript not available" + "Try again"; the transcript drops down under the
-// link row. Own notes carry no link (the menu's Transcribe stays).
+// store so first paint is final.
 //
-// The bars are drawn from the note's own peaks (read from the finished
-// recording, resampled to the bar count) when it carries them; older notes and older
-// clients fall back to the fixed WAVEFORM_BARS. While an own note uploads, the
-// play spot holds the UploadRing (tap X cancels the send) and the wave is a
-// plain flat line of the same length; when the upload finishes, X becomes play
-// and the line becomes the waveform in a 150ms opacity crossfade (nothing
-// moves or resizes).
+// While an own note uploads, the play spot holds the UploadRing (tap X cancels
+// the send) and the wave is a plain flat line of the same length; when the
+// upload finishes, X becomes play and the line becomes the waveform in a 150ms
+// opacity crossfade (nothing moves or resizes).
 
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -39,7 +43,8 @@ import type {
 } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { UploadRing } from '@/components/chat/UploadRing';
-import { IconMic, IconPause, IconPlay } from '@/components/ui/icons';
+import { sized, useChatLayout, type ChatSize } from '@/components/chat/chat-type';
+import { IconAlertTriangle, IconMic, IconPauseFill, IconPlay } from '@/components/ui/icons';
 import {
   cancelPendingLongPressesWithin,
   LONG_PRESS_MS,
@@ -57,26 +62,31 @@ import {
 } from '@/lib/chat/transcript-store';
 
 /**
- * Fixed decorative bar heights (percent of the track): the fallback for a
- * note without peaks (older notes, older clients).
+ * Fixed decorative levels (percent): the fallback for a note without peaks
+ * (older notes, older clients), resampled to the bar count like real peaks.
  */
 export const WAVEFORM_BARS: readonly number[] = [
   35, 60, 45, 80, 55, 70, 40, 90, 50, 65, 30, 75, 48, 85, 42, 68, 38, 72, 52, 58,
 ];
 
 /** How many bars the wave draws. */
-export const VOICE_BAR_COUNT = 20;
+export const VOICE_BAR_COUNT = 30;
 
-/** The lowest bar drawn from peaks (percent), so a quiet stretch still shows a mark. */
-const MIN_BAR = 8;
+/** The shortest bar (px), so a quiet stretch still shows a mark. */
+export const MIN_BAR_PX = 3;
+
+/** The tallest bar (px). */
+export const MAX_BAR_PX = 20;
 
 /**
- * The bar heights (percent) to draw: the note's peaks resampled to the bar
- * count when it has them, else the fixed fallback. Pure.
+ * The bar heights (px, MIN_BAR_PX..MAX_BAR_PX) to draw: the note's peaks
+ * resampled to the bar count when it has them, else the fixed fallback. Pure.
  */
 export function voiceBars(peaks: readonly number[] | undefined): readonly number[] {
-  if (peaks === undefined || peaks.length === 0) return WAVEFORM_BARS;
-  return resamplePeaks(peaks, VOICE_BAR_COUNT).map((height) => Math.max(MIN_BAR, height));
+  const source = peaks === undefined || peaks.length === 0 ? WAVEFORM_BARS : peaks;
+  return resamplePeaks(source, VOICE_BAR_COUNT).map((level) =>
+    Math.round(MIN_BAR_PX + (Math.min(100, Math.max(0, level)) / 100) * (MAX_BAR_PX - MIN_BAR_PX)),
+  );
 }
 
 /** The label when no length is known yet. */
@@ -132,6 +142,8 @@ export function voiceProgress(
 export interface VoiceAudio {
   duration: number;
   currentTime: number;
+  /** The element's MediaError, when it has one. */
+  error?: { code: number } | null;
   pause: () => void;
   addEventListener: (type: string, listener: () => void) => void;
   removeEventListener: (type: string, listener: () => void) => void;
@@ -140,7 +152,10 @@ export interface VoiceAudio {
 /**
  * Wire an audio element's events to the note's state. A duration event only
  * reports a usable (finite, positive) value, so Infinity or NaN never
- * overwrites what the note already shows. Returns the teardown.
+ * overwrites what the note already shows. `error` hears the element's media
+ * errors (with the MediaError code, null when absent) and `started` the
+ * 'playing' event (audio is actually coming out). Returns the teardown, which
+ * removes every listener it added.
  */
 export function bindVoiceAudio(
   audio: VoiceAudio,
@@ -149,6 +164,8 @@ export function bindVoiceAudio(
     time: (seconds: number) => void;
     playing: (playing: boolean) => void;
     ended: () => void;
+    error?: (code: number | null) => void;
+    started?: () => void;
   },
 ): () => void {
   const onDuration = (): void => {
@@ -164,17 +181,134 @@ export function bindVoiceAudio(
     voicePlayback.release(audio);
     on.ended();
   };
+  const onError = (): void => on.error?.(audio.error?.code ?? null);
+  const onStarted = (): void => on.started?.();
   const events: Array<[string, () => void]> = [
     ['loadedmetadata', onDuration],
     ['durationchange', onDuration],
     ['timeupdate', onTime],
     ['play', onPlay],
+    ['playing', onStarted],
     ['pause', onPause],
     ['ended', onEnded],
+    ['error', onError],
   ];
   for (const [type, fn] of events) audio.addEventListener(type, fn);
   return () => {
     for (const [type, fn] of events) audio.removeEventListener(type, fn);
+  };
+}
+
+/** What a final playback failure reports (never a user id or a url). */
+export interface VoiceFailure {
+  name: string;
+  /** The MediaError code, null for a play() rejection. */
+  code: number | null;
+  retried: boolean;
+}
+
+/** The element-side moves the recovery makes; the component backs it with the <audio>. */
+export interface VoicePlayer {
+  /** The url set on the element, null before one is. */
+  readonly applied: string | null;
+  /** Point the element at a url (keeping the position when paused mid-way). */
+  apply: (url: string) => void;
+  play: () => Promise<void>;
+}
+
+/**
+ * The playback recovery: plays from a fresh url, and on the first media error
+ * or play() rejection (an AbortError from a quick pause or a src swap is not
+ * one) forces one re-presign and retries once; a play retries only when the
+ * failure came from a tap. A second failure, or a re-presign that fails, is
+ * final: `failed` is called once. DOM-free so it is unit-tested with fakes.
+ */
+export function createVoiceRecovery(deps: {
+  player: VoicePlayer;
+  /** A still-valid url (more than 60s from expiry), else null. */
+  peekUrl: () => string | null;
+  /** A url from the presign cache (force: always a new presign); null on failure. */
+  refreshUrl: (force: boolean) => Promise<string | null>;
+  failed: (failure: VoiceFailure) => void;
+}): {
+  /** A tap (or the auto-play chain): play from a fresh url. */
+  play: () => void;
+  /** The element reported a media error. */
+  mediaError: (code: number | null) => void;
+  /** Audio is coming out: the next failure starts a fresh retry. */
+  started: () => void;
+  /** Paused or ended: a later error is not a tap's. */
+  stopped: () => void;
+} {
+  let wantPlay = false;
+  let retried = false;
+  let busy = false;
+  let done = false;
+
+  const final = (name: string, code: number | null, didRetry: boolean): void => {
+    done = true;
+    wantPlay = false;
+    deps.failed({ name, code, retried: didRetry });
+  };
+  const attempt = (): void => {
+    void deps.player.play().catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      fail(error instanceof Error ? error.name : 'unknown', null);
+    });
+  };
+  // Resolve a url (forced or from the cache), apply it, then run `then`.
+  const withUrl = (force: boolean, then: () => void, didRetry: boolean): void => {
+    busy = true;
+    void deps.refreshUrl(force).then((url) => {
+      busy = false;
+      if (url === null) {
+        final('PresignError', null, didRetry);
+        return;
+      }
+      if (force || url !== deps.player.applied) deps.player.apply(url);
+      then();
+    });
+  };
+  function fail(name: string, code: number | null): void {
+    if (busy || done) return;
+    if (retried) {
+      final(name, code, true);
+      return;
+    }
+    retried = true;
+    withUrl(
+      true,
+      () => {
+        if (wantPlay) attempt();
+      },
+      true,
+    );
+  }
+
+  return {
+    play() {
+      wantPlay = true;
+      retried = false;
+      done = false;
+      if (busy) return;
+      const fresh = deps.peekUrl();
+      if (fresh !== null) {
+        if (fresh !== deps.player.applied) deps.player.apply(fresh);
+        attempt();
+        return;
+      }
+      withUrl(false, attempt, false);
+    },
+    mediaError(code) {
+      fail('MediaError', code);
+    },
+    started() {
+      retried = false;
+      done = false;
+    },
+    stopped() {
+      wantPlay = false;
+    },
   };
 }
 
@@ -255,14 +389,6 @@ export function shouldAutoPlayNext(
   return typeof nextId === 'string' && nextId !== '' && nextPlayedAt === undefined;
 }
 
-/** A play() rejection worth reporting: an abort from a quick pause is not. */
-function logPlayFailure(error: unknown): void {
-  if (error instanceof DOMException && error.name === 'AbortError') return;
-  logger.error('chat: voice note play failed', {
-    name: error instanceof Error ? error.name : 'unknown',
-  });
-}
-
 /** A touch on the wave seeks once it moves this far (px) along X before the hold time. */
 export const WAVE_SEEK_LOCK_PX = 8;
 
@@ -290,7 +416,7 @@ export function waveTouchPhase(
   return 'pending';
 }
 
-/** The Transcribe link's label state on a received note. */
+/** The Transcribe button's state in row 2. */
 export type TranscribeLinkState = 'transcribe' | 'pending' | 'hide' | 'show' | 'failed';
 
 /** The link state for a transcript view. Pure. */
@@ -319,41 +445,89 @@ const STOP_POINTER = {
   onPointerCancel: stopPointer,
 };
 
-/** The link's type and 44px hit row; never selects text or opens the callout. */
-const LINK_TEXT =
-  'flex h-11 select-none items-center text-[15px] font-medium leading-5 [-webkit-touch-callout:none]';
-const LINK_BUTTON = cn(
-  LINK_TEXT,
-  'shrink-0 rounded-sm text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-);
+/**
+ * The in-bubble inset: pull out of the shell's padding (BUBBLE_PAD) to a 4px
+ * top/bottom, 6px right, 0 left edge, at a fixed 264px. The top pulls up only
+ * when nothing (a reply quote, a forwarded label, a mark) sits above the note.
+ */
+const BUBBLE_INSET: ChatSize = {
+  touch:
+    'w-[264px] -mx-3 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
+  laptop:
+    'w-[264px] -ml-[9px] -mr-[7px] -mb-[8px] [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-[6px]',
+};
 
-/** The always-visible Transcribe link on a received note; null when there is nothing to offer. */
-function TranscribeLink(props: {
+/** Row 2 and the error row start under the wave: 44px play + 2px gap. */
+const UNDER_WAVE = 'pl-[46px]';
+
+/** A 44px tall hit area on a 16px control, without growing its row. */
+const TALL_HIT = "relative after:absolute after:inset-x-0 after:-inset-y-3.5 after:content-['']";
+
+/** No hover fill from the own bubble's button rule; controls draw no background. */
+const NO_FILL = 'hover:!bg-transparent';
+
+/** Per side colours. Sent avoids the class names the own bubble restyles. */
+function sideTone(mine: boolean): {
+  glyph: string;
+  played: string;
+  unplayed: string;
+  ink: string;
+  focus: string;
+  ring: string;
+  panel: string;
+  panelInk: string;
+  pill: string;
+} {
+  return mine
+    ? {
+        glyph: 'text-accent-fg',
+        played: 'bg-accent-fg',
+        unplayed: 'bg-white/[.45]',
+        ink: 'text-accent-fg',
+        focus: 'focus-visible:ring-accent-fg',
+        ring: 'ring-bubble-own',
+        panel: 'bg-white/[.16]',
+        panelInk: 'text-accent-fg',
+        pill: 'bg-white/[.22] text-accent-fg',
+      }
+    : {
+        glyph: 'text-accent',
+        played: 'bg-accent',
+        unplayed: 'bg-fg-3',
+        ink: 'text-fg-2',
+        focus: 'focus-visible:ring-accent',
+        ring: 'ring-panel-2',
+        panel: 'bg-panel-3',
+        panelInk: 'text-fg',
+        pill: 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-accent',
+      };
+}
+
+/** The Transcribe / Hide text control in row 2; null when there is nothing to offer. */
+function transcribeLink(props: {
   state: TranscribeLinkState;
   onTranscribe: (() => void) | undefined;
   onCollapse: (collapsed: boolean) => void;
+  className: string;
 }): ReactElement | null {
-  const { state, onTranscribe } = props;
+  const { state, onTranscribe, className } = props;
   switch (state) {
     case 'transcribe':
+    case 'failed':
       return onTranscribe === undefined ? null : (
         <button
           type="button"
-          data-voice-link="transcribe"
+          data-voice-link={state === 'failed' ? 'retry' : 'transcribe'}
           data-induction={INDUCTION_KEYS.chatTranscript}
           onClick={onTranscribe}
-          className={LINK_BUTTON}
+          className={className}
         >
           Transcribe
         </button>
       );
     case 'pending':
       return (
-        <span
-          data-voice-link="pending"
-          role="status"
-          className={cn(LINK_TEXT, 'shrink-0 text-fg-2')}
-        >
+        <span data-voice-link="pending" role="status" className="shrink-0 font-semibold">
           Transcribing…
         </span>
       );
@@ -366,53 +540,46 @@ function TranscribeLink(props: {
           data-induction={INDUCTION_KEYS.chatTranscript}
           aria-expanded={state === 'hide'}
           onClick={() => props.onCollapse(state === 'hide')}
-          className={LINK_BUTTON}
+          className={className}
         >
-          {state === 'hide' ? 'Hide transcript' : 'Show transcript'}
+          {state === 'hide' ? 'Hide text' : 'Transcribe'}
         </button>
-      );
-    case 'failed':
-      return (
-        <>
-          <span data-voice-link="failed" className={cn(LINK_TEXT, 'min-w-0 text-fg-3')}>
-            <span className="truncate">Transcript not available</span>
-          </span>
-          {onTranscribe !== undefined ? (
-            <button
-              type="button"
-              data-voice-link="retry"
-              onClick={onTranscribe}
-              className={LINK_BUTTON}
-            >
-              Try again
-            </button>
-          ) : null}
-        </>
       );
   }
 }
 
 /**
- * The transcript drop-down: a hairline rule, then the selectable text. It
- * reveals on height (grid rows 0fr to 1fr) and opacity, 180ms ease-out, Y only;
+ * The transcript panel: a rounded tinted box with the selectable text. It
+ * reveals on height only (grid rows 0fr to 1fr), 180ms ease-out, Y only;
  * reduced motion shows it at once. It mounts in its current state, so a stored
- * transcript paints open on first paint with no transition.
+ * transcript paints open on first paint with no transition. The width never
+ * changes.
  */
-function TranscriptDrop({ text, open }: { text: string; open: boolean }): ReactElement {
+function TranscriptDrop(props: {
+  text: string;
+  open: boolean;
+  panel: string;
+  ink: string;
+}): ReactElement {
+  const { text, open } = props;
   return (
     <div
       data-voice-transcript={open ? 'open' : 'closed'}
       aria-hidden={open ? undefined : true}
       className={cn(
-        'grid transition-[grid-template-rows,opacity,visibility] duration-[180ms] ease-out motion-reduce:transition-none',
-        open ? 'visible grid-rows-[1fr] opacity-100' : 'invisible grid-rows-[0fr] opacity-0',
+        'grid transition-[grid-template-rows] duration-[180ms] ease-out motion-reduce:transition-none',
+        open ? 'visible grid-rows-[1fr]' : 'invisible grid-rows-[0fr]',
       )}
     >
       <div className="min-h-0 overflow-hidden">
-        <div className="border-t border-border pb-1 pt-2">
+        <div className="pl-1.5 pt-1">
           <p
             dir="auto"
-            className="select-text whitespace-pre-wrap [overflow-wrap:anywhere] text-[15px] leading-5 text-fg"
+            className={cn(
+              'select-text whitespace-pre-wrap rounded-[14px] px-3 py-2 [overflow-wrap:anywhere] text-[15px] leading-[21px]',
+              props.panel,
+              props.ink,
+            )}
           >
             {text}
           </p>
@@ -420,32 +587,6 @@ function TranscriptDrop({ text, open }: { text: string; open: boolean }): ReactE
       </div>
     </div>
   );
-}
-
-/** An own note's in-flight or failed status line (own notes carry no link). */
-function OwnTranscriptStatus({ view }: { view: TranscriptView }): ReactElement | null {
-  if (view.kind === 'pending') {
-    return (
-      <p
-        data-voice-transcript="pending"
-        role="status"
-        className="flex h-11 items-center border-t border-border text-[15px] leading-5 text-fg-2"
-      >
-        Transcribing…
-      </p>
-    );
-  }
-  if (view.kind === 'failed') {
-    return (
-      <p
-        data-voice-transcript="failed"
-        className="flex h-11 items-center border-t border-border text-[15px] leading-5 text-fg-3"
-      >
-        Transcript not available
-      </p>
-    );
-  }
-  return null;
 }
 
 /** The voice ring's place: absolutely centred inside the (relative, 44px) play slot. */
@@ -464,6 +605,7 @@ export interface VoiceUpload {
 export function VoiceNote({
   url,
   name,
+  mime,
   durationMs,
   peaks,
   upload,
@@ -475,9 +617,14 @@ export function VoiceNote({
   meta,
   onTranscribe,
   storedTranscript,
+  peekUrl,
+  refreshUrl,
+  bubbleInset = false,
 }: {
   url: string | null;
   name: string;
+  /** The attachment's MIME, for the failure log only. */
+  mime?: string | undefined;
   /** The stored length from the attachment meta; absent on older notes. */
   durationMs: number | undefined;
   /** The recorded waveform (0..100 levels); absent on older notes. */
@@ -488,15 +635,15 @@ export function VoiceNote({
   spacer?: ReactNode;
   /** The recorded message's id: keys the played state and the transcript. */
   messageId?: string | undefined;
-  /** Own bubble: photo first, the dot and badge draw on the bubble-own fill. */
+  /** Own bubble: the controls, bars and badge draw on the bubble-own fill. */
   mine?: boolean | undefined;
   /** Whose photo fills the photo slot while the note is not playing. */
   sender?: { name: string; src?: string | undefined } | undefined;
   /** The message right below, when it is a voice note from the same sender. */
   nextVoiceId?: string | null | undefined;
-  /** The bubble's time (and ticks): right of the Transcribe row, or of the length on own notes. */
+  /** The bubble's time (and ticks), right of row 2. */
   meta?: ReactNode;
-  /** Received, recorded notes only: run the tap-to-transcribe flow. */
+  /** Recorded notes: run the tap-to-transcribe flow. */
   onTranscribe?: (() => void) | undefined;
   /**
    * A transcript stored on the message itself (attachment_meta), as the
@@ -504,31 +651,90 @@ export function VoiceNote({
    * with no transcription call.
    */
   storedTranscript?: string | undefined;
+  /** A presigned note: the cached url while it is more than 60s from expiry, else null. */
+  peekUrl?: (() => string | null) | undefined;
+  /** A presigned note: a url through the presign cache (force: a new presign); null on failure. */
+  refreshUrl?: ((force: boolean) => Promise<string | null>) | undefined;
+  /** In a chat bubble: the fixed 264px width and the bubble inset. */
+  bubbleInset?: boolean | undefined;
 }): ReactElement {
+  const layout = useChatLayout();
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveRef = useRef<HTMLDivElement>(null);
+  const appliedRef = useRef<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [mediaSeconds, setMediaSeconds] = useState(Number.NaN);
   const [rate, setRate] = useState(sessionRate);
+  const [playFailed, setPlayFailed] = useState(false);
   // The drag position (0..1) while the wave is held; null when not dragging.
   const [drag, setDrag] = useState<number | null>(null);
   // The touch on the wave, from its pointerdown until it lifts.
   const touch = useRef<{ x: number; y: number; t: number; phase: WaveTouchPhase } | null>(null);
   const { record, pending } = useVoiceRecord(messageId);
   const played = record?.playedAt !== undefined;
-  const latest = useRef({ messageId, nextVoiceId });
-  latest.current = { messageId, nextVoiceId };
+  const latest = useRef({ messageId, nextVoiceId, mime, peekUrl, refreshUrl });
+  latest.current = { messageId, nextVoiceId, mime, peekUrl, refreshUrl };
+
+  const recoveryRef = useRef<ReturnType<typeof createVoiceRecovery> | null>(null);
+  if (recoveryRef.current === null) {
+    recoveryRef.current = createVoiceRecovery({
+      player: {
+        get applied() {
+          return appliedRef.current;
+        },
+        apply(next) {
+          const audio = audioRef.current;
+          if (audio === null) return;
+          const at = audio.currentTime;
+          audio.src = next;
+          appliedRef.current = next;
+          if (at > 0) audio.currentTime = at;
+        },
+        play() {
+          const audio = audioRef.current;
+          return audio === null ? Promise.resolve() : audio.play();
+        },
+      },
+      // A local file (no presign) is always fresh.
+      peekUrl: () => {
+        const peek = latest.current.peekUrl;
+        return peek === undefined ? appliedRef.current : peek();
+      },
+      refreshUrl: (force) => {
+        const refresh = latest.current.refreshUrl;
+        return refresh === undefined ? Promise.resolve(appliedRef.current) : refresh(force);
+      },
+      failed: (failure) => {
+        setPlaying(false);
+        setPlayFailed(true);
+        logger.error('chat: voice note play failed', {
+          name: failure.name,
+          code: failure.code,
+          mime: latest.current.mime ?? 'unknown',
+          retried: failure.retried ? 'yes' : 'no',
+        });
+      },
+    });
+  }
+  const recovery = recoveryRef.current;
+
+  // The handed-in url goes on the element unless the note is playing or paused
+  // mid-way: a refresh never resets it (a tap picks up the fresh url).
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio === null || url === null || appliedRef.current === url) return;
+    if (appliedRef.current !== null && (!audio.paused || audio.currentTime > 0)) return;
+    audio.src = url;
+    appliedRef.current = url;
+  }, [url]);
 
   const start = (audio: HTMLAudioElement): void => {
     voicePlayback.claim(audio);
     audio.defaultPlaybackRate = sessionRate;
     audio.playbackRate = sessionRate;
     setRate(sessionRate);
-    void audio.play().catch((error: unknown) => {
-      setPlaying(false);
-      logPlayFailure(error);
-    });
+    recovery.play();
   };
 
   useEffect(() => {
@@ -537,8 +743,17 @@ export function VoiceNote({
     const unbind = bindVoiceAudio(audio, {
       duration: setMediaSeconds,
       time: setCurrent,
-      playing: setPlaying,
+      playing: (now) => {
+        setPlaying(now);
+        if (!now) recovery.stopped();
+      },
+      error: recovery.mediaError,
+      started: () => {
+        recovery.started();
+        setPlayFailed(false);
+      },
       ended: () => {
+        recovery.stopped();
         setPlaying(false);
         setCurrent(0);
         const { messageId: id, nextVoiceId: nextId } = latest.current;
@@ -559,14 +774,14 @@ export function VoiceNote({
       audio.pause();
       voicePlayback.release(audio);
     };
-  }, []);
+  }, [recovery]);
 
   // Register this note so the one above it can hand on to it.
   useEffect(() => {
     if (messageId === undefined) return;
     const play = (): void => {
       const audio = audioRef.current;
-      if (audio !== null && audio.src !== '') start(audio);
+      if (audio !== null && appliedRef.current !== null) start(audio);
     };
     voiceChain.set(messageId, play);
     return () => {
@@ -596,6 +811,7 @@ export function VoiceNote({
     }
   };
 
+  const tone = sideTone(mine);
   const uploading = upload?.active === true;
   const disabled = url === null || uploading;
   const bars = voiceBars(peaks);
@@ -633,8 +849,8 @@ export function VoiceNote({
     const scope = e.currentTarget.closest('[data-bubble]') ?? document.body;
     cancelPendingLongPressesWithin(scope);
   };
-  // Mouse: the wave owns its pointer, a press seeks at once (unchanged). Touch
-  // and pen, WhatsApp style: the press reaches the bubble, which arms its
+  // Mouse: the wave owns its pointer, a press seeks at once and a drag follows.
+  // Touch and pen, WhatsApp style: the press reaches the bubble, which arms its
   // long-press and swipe; the wave keeps the moves (the swipe never sees them)
   // and a horizontal move of 8px within 450ms cancels the hold and seeks. A
   // still finger at 450ms is the bubble's long-press. The wave is touch-none,
@@ -711,18 +927,27 @@ export function VoiceNote({
       ? { ...record, transcript: storedTranscript, collapsed: record?.collapsed ?? true }
       : record;
   const view = transcriptView(withStored, pending);
-  const received = !mine;
+  const dropOpen = view.kind === 'shown' && !view.collapsed;
+  const openTranscript = (): void => {
+    if (messageId === undefined) return;
+    if (view.kind === 'shown') voiceStore.update(messageId, { collapsed: false });
+    else onTranscribe?.();
+  };
+  const canOpenTranscript = view.kind === 'shown' || onTranscribe !== undefined;
+  const controlFocus = cn(
+    'cursor-pointer select-none [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2',
+    tone.focus,
+    NO_FILL,
+  );
   const link =
-    received && messageId !== undefined ? (
-      <TranscribeLink
-        state={transcribeLinkState(view)}
-        onTranscribe={onTranscribe}
-        onCollapse={(collapsed) => voiceStore.update(messageId, { collapsed })}
-      />
-    ) : null;
-  // Own notes carry no link, so a stored transcript there is always open.
-  const dropOpen = view.kind === 'shown' && (mine || !view.collapsed);
-  const showDrop = messageId !== undefined && (received || view.kind === 'shown');
+    messageId !== undefined
+      ? transcribeLink({
+          state: transcribeLinkState(view),
+          onTranscribe,
+          onCollapse: (collapsed) => voiceStore.update(messageId, { collapsed }),
+          className: cn('shrink-0 rounded-sm font-semibold', TALL_HIT, controlFocus),
+        })
+      : null;
   const metaSlot =
     meta !== undefined ? (
       <span data-voice-meta="" className="ml-auto flex shrink-0 items-center [&>*]:mt-0">
@@ -730,7 +955,7 @@ export function VoiceNote({
       </span>
     ) : null;
 
-  // 44x44 hit area around the 36px square play control (primary button look).
+  // 44x44 transparent hit area; the visible control is the bare 20px glyph.
   const playControl = (
     <button
       type="button"
@@ -739,18 +964,24 @@ export function VoiceNote({
       aria-label={playing ? 'Pause voice note' : 'Play voice note'}
       {...(uploading ? { 'aria-hidden': true, tabIndex: -1 } : {})}
       className={cn(
-        'group/play flex h-11 w-11 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex h-11 w-11 shrink-0 items-center justify-center rounded-md disabled:cursor-default',
+        controlFocus,
+        tone.glyph,
         upload === undefined
-          ? 'disabled:opacity-40'
+          ? playFailed
+            ? 'opacity-[.45]'
+            : 'disabled:opacity-[.45]'
           : cn(
               'transition-[opacity,visibility] duration-150 motion-reduce:transition-none',
-              uploading ? 'invisible opacity-0' : url === null ? 'opacity-40' : 'opacity-100',
+              uploading
+                ? 'invisible opacity-0'
+                : url === null || playFailed
+                  ? 'opacity-[.45]'
+                  : 'opacity-100',
             ),
       )}
     >
-      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-accent text-accent-fg group-hover/play:bg-accent-hover">
-        {playing ? <IconPause size={18} /> : <IconPlay size={18} />}
-      </span>
+      {playing ? <IconPauseFill size={20} /> : <IconPlay size={20} />}
     </button>
   );
   // An own note sent this session: the play spot holds the ring while it
@@ -761,7 +992,7 @@ export function VoiceNote({
   const playButton = (
     <div
       data-voice-play-slot={upload === undefined ? undefined : uploading ? 'upload' : 'play'}
-      className={cn('relative h-11 w-11 shrink-0', received && '-ml-1')}
+      className="relative h-11 w-11 shrink-0"
     >
       {playControl}
       {upload !== undefined ? (
@@ -776,152 +1007,189 @@ export function VoiceNote({
     </div>
   );
 
-  // The 44px photo slot: the sender photo (40px) with the mic badge, or while
-  // playing the speed pill.
+  // The 44px right slot: the sender photo (34px) with the 14px mic badge, or
+  // while playing the speed pill.
   const photoSlot = (
-    <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center', mine && '-ml-0.5')}>
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center">
       {playing ? (
         <button
           type="button"
           data-voice-speed=""
           onClick={cycleSpeed}
           aria-label={`Playback speed ${speedLabel(rate)}`}
-          className="flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className={cn('flex h-11 w-11 items-center justify-center rounded-full', controlFocus)}
         >
-          <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-xs text-accent-fg">
+          <span
+            className={cn(
+              'flex h-6 items-center rounded-full px-2 text-xs font-semibold leading-4 tabular-nums',
+              tone.pill,
+            )}
+          >
             {speedLabel(rate)}
           </span>
         </button>
       ) : sender !== undefined ? (
         <span className="relative flex" data-voice-played={played ? '' : undefined}>
-          <Avatar
-            name={sender.name}
-            {...(sender.src !== undefined ? { src: sender.src } : {})}
-            size="header"
-          />
+          {/* The 40px header photo drawn at 34px (its box is sized inline). */}
+          <span className="flex [&>*]:!h-[34px] [&>*]:!w-[34px]">
+            <Avatar
+              name={sender.name}
+              {...(sender.src !== undefined ? { src: sender.src } : {})}
+              size="header"
+            />
+          </span>
           <span
             aria-hidden="true"
-            data-voice-mic=""
+            data-voice-mic={mine ? 'own' : played ? 'played' : 'unplayed'}
             className={cn(
-              'absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full',
-              mine ? 'bg-bubble-own' : 'bg-panel-2',
+              'absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2',
+              tone.ring,
               mine
-                ? played
-                  ? 'text-accent-fg'
-                  : 'text-accent-fg opacity-60'
+                ? 'bg-accent-fg text-[color:var(--accent)]'
                 : played
-                  ? 'text-accent'
-                  : 'text-fg-3',
+                  ? 'bg-fg-3 text-panel-2'
+                  : 'bg-accent text-accent-fg',
             )}
           >
-            <IconMic size={12} />
+            <IconMic size={9} />
           </span>
         </span>
       ) : null}
     </div>
   );
 
-  const duration = (
-    <span
-      data-voice-duration=""
-      className="font-mono text-xs leading-4 tabular-nums text-fg-2"
-      title={name}
-    >
-      {label}
-    </span>
-  );
+  const showError = playFailed && !dropOpen;
 
   return (
     <div
       data-voice-note=""
       data-voice-side={mine ? 'own' : 'received'}
-      className="flex w-full flex-col"
+      className={cn(
+        'flex flex-col font-sans',
+        bubbleInset ? cn(sized(BUBBLE_INSET, layout), 'pb-1 pr-1.5 pt-1') : 'w-full',
+      )}
     >
-      <audio ref={audioRef} src={url ?? undefined} preload="metadata" className="hidden" />
-      <div className="flex items-center gap-2">
-        {mine ? photoSlot : null}
+      <audio ref={audioRef} preload="metadata" className="hidden" />
+      <div className="flex items-center gap-0.5">
         {playButton}
-        <div className="flex min-w-[120px] flex-1 flex-col">
+        <div
+          ref={waveRef}
+          data-voice-wave=""
+          role="slider"
+          tabIndex={disabled ? -1 : 0}
+          aria-label="Seek voice note"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(total ?? 0)}
+          aria-valuenow={Math.round(shownSeconds)}
+          aria-valuetext={label}
+          {...wave}
+          className={cn(
+            'relative flex h-11 min-w-0 flex-1 cursor-pointer touch-none select-none items-center rounded-sm [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2',
+            tone.focus,
+          )}
+        >
           <div
-            ref={waveRef}
-            data-voice-wave=""
-            role="slider"
-            tabIndex={disabled ? -1 : 0}
-            aria-label="Seek voice note"
-            aria-valuemin={0}
-            aria-valuemax={Math.round(total ?? 0)}
-            aria-valuenow={Math.round(shownSeconds)}
-            aria-valuetext={label}
-            {...wave}
-            className="relative flex h-11 cursor-pointer touch-none select-none items-center [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            data-voice-bars={peaks !== undefined && peaks.length > 0 ? 'peaks' : 'fallback'}
+            className={cn(
+              'flex h-7 w-full items-center justify-between',
+              upload !== undefined &&
+                'transition-[opacity,visibility] duration-150 motion-reduce:transition-none',
+              uploading && 'invisible opacity-0',
+            )}
+            aria-hidden="true"
           >
-            <div
-              data-voice-bars={peaks !== undefined && peaks.length > 0 ? 'peaks' : 'fallback'}
-              className={cn(
-                'flex h-6 w-full items-center gap-0.5',
-                upload !== undefined &&
-                  'transition-[opacity,visibility] duration-150 motion-reduce:transition-none',
-                uploading && 'invisible opacity-0',
-              )}
-              aria-hidden="true"
-            >
-              {bars.map((height, index) => (
-                <span
-                  key={index}
-                  data-played={barPlayed(index, progress, bars.length) ? '' : undefined}
-                  className={cn(
-                    'flex-1 rounded-sm',
-                    barPlayed(index, progress, bars.length) ? 'bg-accent' : 'bg-fg-3',
-                  )}
-                  style={{ height: `${height}%` }}
-                />
-              ))}
-            </div>
-            {upload !== undefined ? (
-              // While uploading: a plain flat line, the wave's full length.
+            {bars.map((height, index) => (
               <span
-                aria-hidden="true"
-                data-voice-flat={uploading ? 'shown' : 'hidden'}
+                key={index}
+                data-played={barPlayed(index, progress, bars.length) ? '' : undefined}
                 className={cn(
-                  'pointer-events-none absolute inset-x-0 top-1/2 -mt-px h-0.5 rounded-full bg-fg-3',
-                  'transition-opacity duration-150 motion-reduce:transition-none',
-                  uploading ? 'opacity-100' : 'opacity-0',
+                  'w-0.5 shrink-0 rounded-[1px]',
+                  barPlayed(index, progress, bars.length) ? tone.played : tone.unplayed,
                 )}
+                style={{ height: `${height}px` }}
               />
-            ) : null}
+            ))}
+          </div>
+          {upload !== undefined ? (
+            // While uploading: a plain flat line, the wave's full length.
             <span
               aria-hidden="true"
-              data-voice-dot=""
+              data-voice-flat={uploading ? 'shown' : 'hidden'}
               className={cn(
-                'pointer-events-none absolute top-1/2 -ml-1.5 -mt-1.5 h-3 w-3 rounded-full',
-                mine ? 'bg-accent-fg' : 'bg-accent',
-                upload !== undefined &&
-                  'transition-opacity duration-150 motion-reduce:transition-none',
-                uploading && 'opacity-0',
+                'pointer-events-none absolute inset-x-0 top-1/2 -mt-px h-0.5 rounded-full',
+                tone.unplayed,
+                'transition-opacity duration-150 motion-reduce:transition-none',
+                uploading ? 'opacity-100' : 'opacity-0',
               )}
-              style={{ left: `${progress}%` }}
             />
-          </div>
-          {/* Row 2: the length under the wave's start; own notes end it with the time and ticks. */}
-          <div className="-mt-1 flex min-h-4 items-center gap-2 whitespace-nowrap">
-            {duration}
-            {mine ? metaSlot : null}
-          </div>
+          ) : null}
+          <span
+            aria-hidden="true"
+            data-voice-dot=""
+            className={cn(
+              'pointer-events-none absolute top-1/2 -ml-[5px] -mt-[5px] h-2.5 w-2.5 rounded-full',
+              tone.played,
+              upload !== undefined &&
+                'transition-opacity duration-150 motion-reduce:transition-none',
+              uploading && 'opacity-0',
+            )}
+            style={{ left: `${progress}%` }}
+          />
         </div>
-        {received ? photoSlot : null}
+        {photoSlot}
       </div>
-      {received && (link !== null || metaSlot !== null) ? (
-        // Row 3: a fixed 44px row, so a label change never moves the time.
-        <div data-voice-foot="" className="flex h-11 items-center gap-3 whitespace-nowrap">
+      {/* Row 2: length · Transcribe under the wave's start, the time and ticks right. */}
+      <div
+        data-voice-foot=""
+        className={cn(
+          'flex min-h-4 items-center gap-1 whitespace-nowrap text-xs leading-4',
+          UNDER_WAVE,
+          tone.ink,
+        )}
+      >
+        <span data-voice-duration="" className="font-medium tabular-nums" title={name}>
+          {label}
+        </span>
+        {link !== null ? (
           <span className="flex min-w-0 items-center gap-1" {...STOP_POINTER}>
+            <span aria-hidden="true">·</span>
             {link}
           </span>
-          {metaSlot}
+        ) : null}
+        {metaSlot}
+      </div>
+      {showError ? (
+        <div
+          data-voice-error=""
+          role="alert"
+          className={cn(
+            'flex min-h-4 items-center gap-1 whitespace-nowrap text-xs leading-4',
+            UNDER_WAVE,
+            tone.ink,
+          )}
+          {...STOP_POINTER}
+        >
+          <IconAlertTriangle size={14} className="shrink-0" />
+          <span>Can&apos;t play here.</span>
+          {canOpenTranscript ? (
+            <button
+              type="button"
+              data-voice-read=""
+              onClick={openTranscript}
+              className={cn('shrink-0 rounded-sm font-semibold underline', TALL_HIT, controlFocus)}
+            >
+              Read the transcript
+            </button>
+          ) : null}
         </div>
       ) : null}
-      {mine ? <OwnTranscriptStatus view={view} /> : null}
-      {showDrop ? (
-        <TranscriptDrop text={view.kind === 'shown' ? view.text : ''} open={dropOpen} />
+      {messageId !== undefined ? (
+        <TranscriptDrop
+          text={view.kind === 'shown' ? view.text : ''}
+          open={dropOpen}
+          panel={tone.panel}
+          ink={tone.panelInk}
+        />
       ) : null}
       {spacer !== undefined ? (
         <p className="h-3 text-xs leading-3" aria-hidden="true">

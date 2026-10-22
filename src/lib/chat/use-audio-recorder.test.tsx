@@ -63,6 +63,25 @@ describe('pickRecorderMimeType', () => {
     } as never;
     expect(pickRecorderMimeType()).toBe('audio/webm');
   });
+
+  it('tries mp4 before webm', () => {
+    const asked: string[] = [];
+    (globalThis as { MediaRecorder?: unknown }).MediaRecorder = {
+      isTypeSupported: (t: string) => {
+        asked.push(t);
+        return t === 'audio/mp4' || t === 'audio/webm';
+      },
+    } as never;
+    expect(pickRecorderMimeType()).toBe('audio/mp4');
+    expect(asked[0]).toBe('audio/mp4');
+  });
+
+  it("returns '' when neither container is supported", () => {
+    (globalThis as { MediaRecorder?: unknown }).MediaRecorder = {
+      isTypeSupported: () => false,
+    } as never;
+    expect(pickRecorderMimeType()).toBe('');
+  });
 });
 
 describe('T1: the recorder attaches nothing to the live stream', () => {

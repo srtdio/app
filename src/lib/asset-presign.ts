@@ -292,6 +292,15 @@ export class PresignCache {
     return promise;
   }
 
+  /**
+   * Drop the cached URL for a version and presign it again (a voice note whose
+   * playback failed). A request already in flight is shared, not doubled.
+   */
+  refresh(assetVersionId: string): Promise<PresignedUrl> {
+    this.cache.delete(assetVersionId);
+    return this.resolve(assetVersionId);
+  }
+
   /** Run `fn` once a concurrency slot is free, releasing it (and the next waiter) after. */
   private async withSlot<T>(fn: () => Promise<T>): Promise<T> {
     if (this.active >= this.concurrency) {

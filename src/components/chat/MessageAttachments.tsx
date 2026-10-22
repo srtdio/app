@@ -26,7 +26,7 @@
 // arriving never shifts layout. Every tile is a real button that opens the
 // lightbox at its index; non-image attachments render below the album as before.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { IconDownload, IconFile, IconImage } from '@/components/ui/icons';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -47,12 +47,23 @@ import {
   type MessageAttachment,
 } from '@/lib/chat/attachments';
 
-/** Presign one attachment id once, refreshing shortly before expiry; never throws. */
+/**
+ * Presign one attachment id once, refreshing shortly before expiry and when the
+ * page comes back to the foreground (iOS throttles the timer in the
+ * background); never throws. `peek` is the cached URL while it is more than 60s
+ * from expiry (else null); `refresh` resolves a URL through the cache (force:
+ * a new presign) and resolves null on failure. Both work only while enabled.
+ */
 export function useAttachmentUrl(
   assetId: string,
   cache: PresignCache,
   enabled: boolean,
-): { url: string | null; failed: boolean } {
+): {
+  url: string | null;
+  failed: boolean;
+  peek: () => string | null;
+  refresh: (force: boolean) => Promise<string | null>;
+} {
   const [url, setUrl] = useState<string | null>(() =>
     enabled && assetId !== '' ? (cache.peek(assetId)?.url ?? null) : null,
   );
@@ -76,14 +87,40 @@ export function useAttachmentUrl(
         if (live) setFailed(true);
       }
     };
+    const onVisible = (): void => {
+      if (document.visibilityState !== 'visible' || cache.peek(assetId) !== null) return;
+      clearTimeout(timer);
+      void load();
+    };
     void load();
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       live = false;
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [assetId, cache, enabled]);
 
-  return { url, failed };
+  const peek = useCallback(
+    (): string | null => (enabled && assetId !== '' ? (cache.peek(assetId)?.url ?? null) : null),
+    [assetId, cache, enabled],
+  );
+  const refresh = useCallback(
+    async (force: boolean): Promise<string | null> => {
+      if (!enabled || assetId === '') return null;
+      try {
+        const presigned = await (force ? cache.refresh(assetId) : cache.resolve(assetId));
+        setUrl(presigned.url);
+        setFailed(false);
+        return presigned.url;
+      } catch {
+        return null;
+      }
+    },
+    [assetId, cache, enabled],
+  );
+
+  return { url, failed, peek, refresh };
 }
 
 /**
@@ -208,11 +245,8 @@ function AttachmentItem({
   // A file bubble never uses the file's own link (it presigns its thumbnail
   // and the viewer asks for a fresh link on open): only images and voice notes do.
   const needsUrl = classifyAttachment(attachment.mime) !== 'file' || isVoiceAttachment(attachment);
-  const { url, failed } = useAttachmentUrl(
-    attachment.assetId,
-    cache,
-    presignEnabled && !hasPreview && needsUrl,
-  );
+  const presigned = presignEnabled && !hasPreview && needsUrl;
+  const { url, failed, peek, refresh } = useAttachmentUrl(attachment.assetId, cache, presigned);
   const view = attachmentView({ attachment, presignEnabled, url, failed, localUrl });
 
   switch (view.kind) {
@@ -272,7 +306,10 @@ function AttachmentItem({
           <VoiceNote
             url={view.url}
             name={view.name}
+            mime={attachment.mime}
             durationMs={view.durationMs}
+            {...(presigned ? { peekUrl: peek, refreshUrl: refresh } : {})}
+            bubbleInset={voice !== undefined}
             peaks={attachment.peaks}
             storedTranscript={attachment.transcript}
             {...(onCancelUpload !== undefined && attachment.local !== undefined
@@ -619,7 +656,7 @@ function MessageAttachmentsBody({
     <div
       className={cn(
         'flex flex-col gap-1.5',
-        voiceSpacer !== undefined ? 'items-stretch' : 'mt-1.5 items-start',
+        voiceSpacer !== undefined || voice !== undefined ? 'items-stretch' : 'mt-1.5 items-start',
       )}
     >
       {attachments.map((attachment, index) => (

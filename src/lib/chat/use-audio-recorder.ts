@@ -32,12 +32,13 @@ export function baseMime(mime: string): string {
 
 /**
  * The best container MediaRecorder supports here, '' when none is usable (or the
- * API is absent). Prefer webm, then mp4; passing '' lets the recorder pick its
- * own default.
+ * API is absent). Prefer mp4, then webm: iOS Safari records WebM/Opus with no
+ * duration or cues, which plays unreliably. Passing '' lets the recorder pick
+ * its own default.
  */
 export function pickRecorderMimeType(): string {
   if (typeof MediaRecorder === 'undefined') return '';
-  for (const candidate of ['audio/webm', 'audio/mp4']) {
+  for (const candidate of ['audio/mp4', 'audio/webm']) {
     if (MediaRecorder.isTypeSupported(candidate)) return candidate;
   }
   return '';
