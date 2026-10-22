@@ -60,8 +60,6 @@ async function mount(onSubmit: ReturnType<typeof fakeSubmit>) {
         onSubmit={onSubmit}
         onToast={onToast}
         onSummary={onSummary}
-        folderId="f1"
-        folderName="Brand"
       />,
     );
   });
@@ -129,6 +127,8 @@ describe('X6 system Back during an upload', () => {
     const { onSummary, onClose } = await mount(onSubmit);
     await startUpload(3);
     expect(onSubmit).toHaveBeenCalledTimes(1);
+    // Every upload lands in the library root: there are no folders.
+    expect(onSubmit.mock.calls[0]?.[2]).toBeNull();
     const runSignal = pending[0]?.signal;
 
     await pressBack();

@@ -1,32 +1,18 @@
 // @vitest-environment jsdom
 // X6 honest copy and the small rules behind it: in-use copy by parent, the
 // bulk delete split, delete and select toasts, role copy, Recently deleted,
-// Move to folder marking, and the FileViewer top bar Assets passes actions into.
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+// and the FileViewer top bar Assets passes actions into.
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  assetInUseMessage,
-  inUseKeptLabel,
-  inUseTitle,
-  splitFreeAssets,
-  type FolderItem,
-} from '@/lib/assets';
+import { describe, expect, it, vi } from 'vitest';
+import { assetInUseMessage, inUseKeptLabel, inUseTitle, splitFreeAssets } from '@/lib/assets';
 import { renameErrorMessage } from '@/lib/asset-upload';
 import {
   ASSET_GONE_TOAST,
-  FOLDER_DELETED_LABEL,
-  ROOT_LABEL,
   assetParamIsGone,
   deleteToastLabel,
   selectAllCapLabel,
   selectCapLabel,
 } from '@/components/pages/assets/assets-nav';
-import {
-  MoveToFolderSheet,
-  isCurrentDestination,
-} from '@/components/pages/assets/MoveToFolderSheet';
 import { MEMBER_PURGE_NOTE, RecentlyDeletedView } from '@/components/pages/RecentlyDeletedPage';
 import {
   DOWNLOAD_ERROR,
@@ -79,10 +65,9 @@ describe('X6 bulk delete split', () => {
   });
 });
 
-describe('X6 delete, folder and deep link toasts', () => {
+describe('X6 delete and deep link toasts', () => {
   it('says where a deleted file goes', () => {
     expect(deleteToastLabel(1)).toBe('File deleted. Undo or find it in Recently deleted.');
-    expect(FOLDER_DELETED_LABEL).toBe('Folder deleted');
     expect(ASSET_GONE_TOAST).toBe('This file was deleted.');
   });
 
@@ -92,7 +77,7 @@ describe('X6 delete, folder and deep link toasts', () => {
     expect(assetParamIsGone(true, [{ id: 'x' }], 'x')).toBe(false);
   });
 
-  it('states the 200 cap for select, not move', () => {
+  it('states the 200 cap for select', () => {
     expect(selectCapLabel(200)).toBe('You can select up to 200 files at once.');
     expect(selectAllCapLabel(200)).toBe(
       'Selected the first 200. You can select up to 200 files at once.',
@@ -136,50 +121,6 @@ describe('X6 per-file Retry', () => {
   it('is a 44px target', () => {
     expect(RETRY_BUTTON).toContain('min-h-[44px]');
     expect(RETRY_BUTTON).toContain('min-w-[44px]');
-  });
-});
-
-let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-  document.body.innerHTML = '';
-});
-
-describe('X6 Move to folder marks the current folder', () => {
-  const folders: FolderItem[] = [
-    { id: 'f1', name: 'Brand', parentId: null },
-    { id: 'f2', name: 'Shoots', parentId: null },
-  ];
-
-  it('marks and disables the folder the files are in; All assets is the root name', async () => {
-    expect(isCurrentDestination('f1', 'f1')).toBe(true);
-    expect(isCurrentDestination(null, null)).toBe(true);
-    expect(isCurrentDestination('f1', undefined)).toBe(false);
-    const host = document.createElement('div');
-    document.body.appendChild(host);
-    root = createRoot(host);
-    await act(async () =>
-      root?.render(
-        <MoveToFolderSheet
-          open
-          count={1}
-          folders={folders}
-          currentFolderId="f1"
-          onClose={() => {}}
-          onMove={async () => ({ ok: true, moved: 1 })}
-          onToast={() => {}}
-          onMoved={() => {}}
-        />,
-      ),
-    );
-    const rows = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')];
-    const brand = rows.find((b) => b.textContent?.includes('Brand'));
-    expect(brand?.getAttribute('aria-current')).toBe('true');
-    expect(brand?.disabled).toBe(true);
-    expect(brand?.textContent).toContain('Current');
-    expect(rows.find((b) => b.textContent?.includes('Shoots'))?.disabled).toBe(false);
-    expect(rows.some((b) => b.textContent?.includes(ROOT_LABEL))).toBe(true);
   });
 });
 
