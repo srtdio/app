@@ -193,8 +193,9 @@ import { useStatusCounts, type UseStatusCounts } from '@/lib/chat/use-status-cou
 import { chatKey, openCache, OPEN_HOLD_MS } from '@/lib/chat/open-cache';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
-  openPlans,
-  planSummary,
+  currentSharedPlans,
+  drawerKeys,
+  planSummaries,
   statusBar,
   statusReady,
   type StatusBar,
@@ -599,8 +600,8 @@ export function threadStripSlot(input: { hasMarks: boolean; selecting: boolean }
  * The status ticker's bar: null (the inert empty slot) until the posts round,
  * the viewer side, this channel's marks, the shared plans and the open briefs
  * have all settled, so the first painted bar is final; then each read that
- * failed is left out (null) and the rest are counted. `open` are the plans
- * still open today, ending soonest first.
+ * failed is left out (null) and the rest are counted. `open` are the
+ * workspace's current shared plans, ending soonest first.
  */
 export function tickerBar(input: {
   openPosts: Pick<UseOpenPosts, 'ready' | 'count' | 'failed'>;
@@ -619,7 +620,7 @@ export function tickerBar(input: {
   });
   if (!ready) return null;
   const counts: StatusInput = {
-    plan: input.status.plans.failed ? null : planSummary(input.open, planProgress),
+    plans: input.status.plans.failed ? null : planSummaries(input.open, planProgress),
     posts: input.openPosts.failed ? null : input.openPosts.count,
     briefs: input.status.briefs.failed ? null : input.status.briefs.count,
     marks: markCounts(input.marks.values()),
@@ -5934,8 +5935,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     ? deleteSelectionBlock(selected, selectable, marks, serverNow(), notes)
     : null;
   const stripSlot = threadStripSlot({ hasMarks: props.marks !== undefined, selecting });
-  // The status ticker: open plans today on the workspace clock, then the bar.
-  const statusOpenPlans = openPlans(
+  // The status ticker: the workspace's shared plans current today on its
+  // clock (every chat, shared here or not), then the bar.
+  const statusOpenPlans = currentSharedPlans(
     statusCounts.plans.bundles,
     todayInZone(new Date(), props.timeZone),
   );
@@ -6209,7 +6211,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           drawer={{
             keys:
               statusBarState !== null && statusBarState.kind === 'items'
-                ? statusBarState.items.map((item) => item.key)
+                ? drawerKeys(statusBarState.items)
                 : [],
             side: viewerSide.side,
             timeZone: props.timeZone,

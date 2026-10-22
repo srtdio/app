@@ -1,10 +1,21 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
-import { BUCKET_ID, DM_CHANNEL, ME, PEER, PEER_NAME, WORKSPACE_ID } from '../fixtures/chat-data';
+import {
+  BUCKET_ID,
+  DM_CHANNEL,
+  GROUP_NAME,
+  ME,
+  PEER,
+  PEER_NAME,
+  WORKSPACE_ID,
+} from '../fixtures/chat-data';
 import type { Row } from '../fixtures/postgrest';
 
 // The chat status ticker under the thread header and its drop-down drawer:
-// open by a tap on an item (scrolled to its section), open by dragging the bar
+// the workspace's current shared plans in a chat that never shared them (one
+// item per plan, a draft and a future plan never shown, the drawer lists them
+// and a tap opens that plan), open by a tap on an item (scrolled to its
+// section), open by dragging the bar
 // down, close by dragging the handle up, compact mode on a 360px phone with
 // every count over 99 (no overflow, chevron visible), and no text selection
 // or callout on a long-press of the bar. Runs in both colour schemes (the dark
@@ -20,23 +31,48 @@ function uuid(prefix: string, n: number): string {
   return `${prefix}-0000-7000-8000-${String(n).padStart(12, '0')}`;
 }
 
-/** Two open plans shared into the DM (the bar shows the one ending soonest, "+1"). */
+/** The current shared plans the bar shows, ending soonest first. */
+const CURRENT_PLANS = [
+  { id: uuid('0190d900', 1), title: 'Week ahead', approved: 1, items: 5 },
+  { id: uuid('0190d900', 2), title: 'Festive fortnight', approved: 1, items: 3 },
+] as const;
+
+/** Workspace plans that never reach the bar: a draft and one not started yet. */
+const HIDDEN_PLANS = [
+  { id: uuid('0190d900', 3), title: 'Draft for the team' },
+  { id: uuid('0190d900', 4), title: 'Next month' },
+] as const;
+
+/**
+ * The workspace's plans, none shared in any chat (no chat_messages row names
+ * them): two current shared plans (ending in 3 and 12 days), a current draft
+ * (team audience) and a shared plan that starts in 5 days.
+ */
 function seedPlans(network: HarnessNetwork): void {
   const t = network.world.tables;
-  const plans: Array<{ id: string; title: string; ends: number; items: number }> = [
-    { id: uuid('0190d900', 1), title: 'Week ahead', ends: 3, items: 5 },
-    { id: uuid('0190d900', 2), title: 'Festive fortnight', ends: 12, items: 3 },
+  const plans: Array<{
+    id: string;
+    title: string;
+    starts: number;
+    ends: number;
+    items: number;
+    audience: 'client' | 'team';
+  }> = [
+    { ...CURRENT_PLANS[1], starts: -1, ends: 12, audience: 'client' },
+    { ...HIDDEN_PLANS[0], starts: -1, ends: 2, items: 2, audience: 'team' },
+    { ...CURRENT_PLANS[0], starts: -1, ends: 3, audience: 'client' },
+    { ...HIDDEN_PLANS[1], starts: 5, ends: 30, items: 2, audience: 'client' },
   ];
   for (const [p, plan] of plans.entries()) {
     (t.plans ??= []).push({
       id: plan.id,
       workspace_id: WORKSPACE_ID,
       title: plan.title,
-      starts_on: isoDay(-1),
+      starts_on: isoDay(plan.starts),
       ends_on: isoDay(plan.ends),
-      audience: 'client',
-      shared_with_client_at: '2026-10-09T09:00:00Z',
-      shared_with_client_by: ME,
+      audience: plan.audience,
+      shared_with_client_at: plan.audience === 'client' ? '2026-10-09T09:00:00Z' : null,
+      shared_with_client_by: plan.audience === 'client' ? ME : null,
       created_by: ME,
       created_at: '2026-10-09T09:00:00Z',
       updated_at: '2026-10-09T09:00:00Z',
@@ -68,26 +104,6 @@ function seedPlans(network: HarnessNetwork): void {
         });
       }
     }
-    (t.chat_messages ??= []).push({
-      id: uuid('0190d920', p + 1),
-      channel_id: DM_CHANNEL,
-      workspace_id: WORKSPACE_ID,
-      sender_user_id: ME,
-      body: null,
-      mentions: null,
-      attachment_asset_ids: null,
-      shared_post_ids: null,
-      shared_brief_ids: null,
-      shared_plan_ids: [plan.id],
-      reply_to_message_id: null,
-      forwarded_from_message_id: null,
-      attachment_meta: null,
-      agora_event_id: null,
-      created_at: new Date(Date.now() - (90 + p) * 60_000).toISOString(),
-      edited_at: null,
-      deleted_at: null,
-      thread_root_message_id: null,
-    });
   }
 }
 
@@ -182,9 +198,9 @@ function seedMarks(
   }
 }
 
-async function openDm(page: Page): Promise<Locator> {
+async function openDm(page: Page, name: string = PEER_NAME): Promise<Locator> {
   await page.goto('/chat');
-  const row = page.getByText(PEER_NAME, { exact: true }).first();
+  const row = page.getByText(name, { exact: true }).first();
   await row.waitFor({ state: 'visible' });
   await row.click();
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
@@ -222,6 +238,50 @@ async function drawerClosed(page: Page): Promise<void> {
 }
 
 test.describe('chat status ticker', () => {
+  for (const chat of [PEER_NAME, GROUP_NAME]) {
+    test(`${chat}: the workspace's current shared plans show though never shared here`, async ({
+      page,
+    }) => {
+      const network = await installHarnessNetwork(page);
+      seedPlans(network);
+      const planIds = [...CURRENT_PLANS, ...HIDDEN_PLANS].map((p) => p.id);
+      const shared = (network.world.tables.chat_messages ?? []).filter((m) =>
+        ((m.shared_plan_ids as string[] | null) ?? []).some((id) => planIds.includes(id)),
+      );
+      expect(shared).toEqual([]);
+      const bar = await openDm(page, chat);
+
+      // One item per current shared plan, soonest end first, title then A/N.
+      const items = bar.locator('[data-status-items] > [data-status-item="plan"]');
+      await expect(items).toHaveCount(2);
+      for (const [i, plan] of CURRENT_PLANS.entries()) {
+        await expect(items.nth(i)).toHaveAttribute(
+          'aria-label',
+          `${plan.title} ${plan.approved} of ${plan.items} approved`,
+        );
+        await expect(items.nth(i).locator('[data-status-number]')).toHaveText(
+          `${plan.approved}/${plan.items}`,
+        );
+      }
+      await expect(items.first()).toContainText(CURRENT_PLANS[0].title);
+      await expect(bar.locator('[data-status-more]')).toHaveCount(0);
+      for (const hidden of HIDDEN_PLANS) await expect(bar).not.toContainText(hidden.title);
+
+      // The drawer lists the same plans in the same order; a tap opens that plan.
+      await items.first().click();
+      await drawerOpen(page);
+      const blocks = await page
+        .locator('[data-plan-block]')
+        .evaluateAll((els) => els.map((el) => el.getAttribute('data-plan-block')));
+      expect(blocks).toEqual(CURRENT_PLANS.map((p) => p.id));
+      await page.locator(`[data-plan-block="${CURRENT_PLANS[1].id}"] [data-plan-open]`).click();
+      const screen = page.locator('[data-plan-page="plan"]');
+      await expect(screen).toBeVisible();
+      await expect(screen).toContainText(CURRENT_PLANS[1].title);
+      expect(network.blocked).toEqual([]);
+    });
+  }
+
   test('open by a tap on an item lands on its section; a tap on the bar closes', async ({
     page,
   }) => {
@@ -234,7 +294,15 @@ test.describe('chat status ticker', () => {
     const keys = await bar
       .locator('[data-status-item]')
       .evaluateAll((els) => els.map((el) => el.getAttribute('data-status-item')));
-    expect(keys).toEqual(['plan', 'posts', 'briefs', 'commitments', 'decisions', 'pending']);
+    expect(keys).toEqual([
+      'plan',
+      'plan',
+      'posts',
+      'briefs',
+      'commitments',
+      'decisions',
+      'pending',
+    ]);
     const barBox = await bar.boundingBox();
     expect(barBox?.height).toBe(36);
 
@@ -276,7 +344,7 @@ test.describe('chat status ticker', () => {
     await drawerClosed(page);
   });
 
-  test('compact at 360px with all six items over 99: no overflow, chevron visible', async ({
+  test('compact at 360px with two plans and every count over 99: no overflow, chevron visible', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 780 });
@@ -288,12 +356,14 @@ test.describe('chat status ticker', () => {
     const bar = await openDm(page);
     await expect(bar).toHaveAttribute('data-status-ticker', 'compact');
     const numbers = await bar.locator('[data-status-item] [data-status-number]').allTextContents();
-    expect(numbers.slice(1)).toEqual(['99+', '99+', '99+', '99+', '99+']);
+    expect(numbers.slice(2)).toEqual(['99+', '99+', '99+', '99+', '99+']);
     await expect(bar.locator('[data-status-item] [data-status-word]')).toHaveCount(0);
     await expect(bar.locator('[data-status-item] [data-status-more]')).toHaveCount(0);
-    await expect(
-      bar.locator('[data-status-item="plan"]').getByText('Plan', { exact: true }),
-    ).toBeVisible();
+    // Compact keeps both plan items (their titles may drop trailing words).
+    const plans = bar.locator('[data-status-items] > [data-status-item="plan"]');
+    await expect(plans).toHaveCount(2);
+    await expect(plans.first()).toBeVisible();
+    await expect(plans.nth(1)).toBeVisible();
 
     const chevron = page.locator('[data-status-chevron]');
     await expect(chevron).toBeVisible();

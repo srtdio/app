@@ -630,7 +630,8 @@ export interface OpenKickoffReads {
   viewerSide: () => void;
   marks: (channelId: string) => Promise<OpenReads['marks']>;
   openPosts: (workspaceId: string) => Promise<OpenReads['openPosts']>;
-  planIds: (channelId: string) => Promise<OpenReads['planIds']>;
+  /** The workspace's current shared plan ids (the same in every chat). */
+  planIds: (workspaceId: string) => Promise<OpenReads['planIds']>;
   briefs: (workspaceId: string) => Promise<OpenReads['briefs']>;
   briefCount: (workspaceId: string) => Promise<OpenReads['briefCount']>;
 }
@@ -639,7 +640,7 @@ export interface OpenKickoffReads {
  * A chat tap: every read the open needs starts now, together, before the
  * thread mounts: the messages page, this channel's marks, the viewer side,
  * the open posts list and count, the open briefs list and count and the
- * shared plan ids; the plan bundles start the moment the plan ids are in,
+ * workspace's current shared plan ids; the plan bundles start the moment the plan ids are in,
  * through the chat's one plan card cache (a reopen re-reads what it holds).
  * Nothing waits for the messages page. Reads already started for this open
  * are joined, never asked twice.
@@ -657,7 +658,7 @@ export function kickoffChatOpen(
   void store.joinOrStart(key, 'marks', () => reads.marks(key.channelId));
   void store.joinOrStart(key, 'openPosts', () => reads.openPosts(key.workspaceId));
   void store
-    .joinOrStart(key, 'planIds', () => reads.planIds(key.channelId))
+    .joinOrStart(key, 'planIds', () => reads.planIds(key.workspaceId))
     .then((result) => {
       if (result.ok && result.data.length > 0) cache.request(result.data);
     });
