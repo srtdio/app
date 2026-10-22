@@ -75,6 +75,8 @@ export interface PlanRow {
   ends_on: string;
   audience: PlanAudience;
   created_by: string | null;
+  /** Bumped by plan_update / plan_share_with_client (the Plan screen's Sent state). */
+  updated_at?: string;
 }
 
 export interface PlanItemRow {
@@ -86,6 +88,8 @@ export interface PlanItemRow {
   description: string | null;
   post_id: string | null;
   created_at: string;
+  /** Bumped by edits and moves (the Plan screen's Sent state); absent on a draft row. */
+  updated_at?: string;
   /**
    * A concept's plan day ("YYYY-MM-DD"); null is No date. A post slot carries
    * no day of its own (its post's posts.target_date is the day); a draft row
@@ -152,9 +156,10 @@ export interface PlanPostInfo {
   format?: string | null;
 }
 
-const PLAN_COLUMNS = 'id, workspace_id, title, starts_on, ends_on, audience, created_by';
+const PLAN_COLUMNS =
+  'id, workspace_id, title, starts_on, ends_on, audience, created_by, updated_at';
 const ITEM_COLUMNS =
-  'id, plan_id, kind, position, title, description, post_id, created_at, target_date';
+  'id, plan_id, kind, position, title, description, post_id, created_at, updated_at, target_date';
 const REVIEW_COLUMNS = 'item_id, side, status, reviewed_by, reviewed_at';
 const COMMENT_COLUMNS = 'id, item_id, author_user_id, body, visibility, created_at';
 
@@ -214,6 +219,7 @@ interface PlanQuery extends PromiseLike<SelectResult> {
   in: (column: string, values: readonly string[]) => PlanQuery;
   is: (column: string, value: null) => PlanQuery;
   eq: (column: string, value: string) => PlanQuery;
+  contains: (column: string, value: readonly string[]) => PlanQuery;
   gte: (column: string, value: string) => PlanQuery;
   order: (column: string, opts?: { ascending?: boolean }) => PlanQuery;
   limit: (count: number) => PlanQuery;
@@ -1127,6 +1133,14 @@ export interface PlanScreenData {
   names?: Record<string, string>;
   /** Other live plans (titles) each post sits in, by post id (the Also in pill). */
   alsoIn?: Record<string, string[]>;
+  /**
+   * Opened from a chat: when the plan's card was last sent there (the latest
+   * non-deleted chat_messages row whose shared_plan_ids holds it); null when
+   * never, or when that read failed.
+   */
+  lastSentAt?: string | null;
+  /** The latest of plans.updated_at and its items' updated_at; null when unknown. */
+  lastChangedAt?: string | null;
 }
 
 /** A concept row's tile: its first image file, or "has files, none an image". */
@@ -1274,6 +1288,51 @@ export interface PlanScreenReadOptions {
   readNames?: (userIds: string[], signal?: AbortSignal) => Promise<Result<NameRow[]>>;
   /** The approver ids to name (approverIds of the bundle). */
   approvers?: (bundle: PlanBundle) => string[];
+  /** Opened from a chat: its channel id (one read of the plan's last send there). */
+  sentInChannelId?: string;
+}
+
+/**
+ * When the plan's card was last sent into the chat: one chat_messages select
+ * (channel, shared_plan_ids holds the plan, not deleted, newest first, one
+ * row). Null when never sent. Never throws.
+ */
+export async function readLastPlanSend(
+  client: Client,
+  channelId: string,
+  planId: string,
+  signal?: AbortSignal,
+): Promise<Result<string | null>> {
+  try {
+    const query = (client.from('chat_messages') as unknown as PlanTable)
+      .select('created_at')
+      .eq('channel_id', channelId)
+      .contains('shared_plan_ids', [planId])
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const res = (await abortable(query, signal)) as SelectResult;
+    if (res.error !== null) return fail(`chat_messages: ${res.error.message}`);
+    const rows = (res.data ?? []) as Array<{ created_at: string }>;
+    return { ok: true, data: rows[0]?.created_at ?? null };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/** The latest of the plan's and its items' updated_at; null when none is known. Pure. */
+export function planLastChangedAt(bundle: PlanBundle): string | null {
+  let best: string | null = null;
+  let bestMs = -Infinity;
+  const stamps = [bundle.plan.updated_at, ...bundle.items.map((i) => i.updated_at)];
+  for (const stamp of stamps) {
+    if (stamp === undefined) continue;
+    const ms = Date.parse(stamp);
+    if (Number.isNaN(ms) || ms <= bestMs) continue;
+    best = stamp;
+    bestMs = ms;
+  }
+  return best;
 }
 
 /**
@@ -1295,7 +1354,8 @@ export async function readPlanScreen(
   const conceptIds = bundle.items.flatMap((i) => (i.kind === 'concept' ? [i.id] : []));
   const approvers = opts.approvers?.(bundle) ?? [];
   const readNames = opts.readNames;
-  const [counts, thumbs, alsoIn, names] = await Promise.all([
+  const channelId = opts.sentInChannelId;
+  const [counts, thumbs, alsoIn, names, lastSent] = await Promise.all([
     readCommentCounts(
       client,
       bundle.items.map((i) => i.id),
@@ -1306,12 +1366,16 @@ export async function readPlanScreen(
     approvers.length > 0 && readNames !== undefined
       ? readNames(approvers, signal)
       : Promise.resolve<Result<NameRow[]>>({ ok: true, data: [] }),
+    channelId !== undefined
+      ? readLastPlanSend(client, channelId, planId, signal)
+      : Promise.resolve<Result<string | null>>({ ok: true, data: null }),
   ]);
   if (!counts.ok) return counts;
   const nameMap: Record<string, string> = {};
   // A failed name read keeps the screen (the lines read "Member").
   if (names.ok) for (const row of names.data) nameMap[row.userId] = row.displayName;
-  // A failed thumbnail or Also in read keeps the screen: those rows show without.
+  // A failed thumbnail, Also in or last-send read keeps the screen: those show
+  // without (a failed last-send read leaves the button at "Send in {chat}").
   return {
     ok: true,
     data: {
@@ -1321,6 +1385,8 @@ export async function readPlanScreen(
       conceptThumbs: thumbs.ok ? thumbs.data.concepts : {},
       names: nameMap,
       alsoIn: alsoIn.ok ? alsoIn.data : {},
+      lastSentAt: lastSent.ok ? lastSent.data : null,
+      lastChangedAt: planLastChangedAt(bundle),
     },
   };
 }

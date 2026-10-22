@@ -900,6 +900,67 @@ export function sendInLabel(chatName: string): string {
   return `Send in ${chatName}`;
 }
 
+/** "Sending in {chat name}…": the in-chat send (or send to approvers) in flight. Pure. */
+export function sendingInLabel(chatName: string): string {
+  return `Sending in ${chatName}…`;
+}
+export const SENT_LABEL = 'Sent';
+
+/** The footer button's state: idle (its action label), sending, or sent (in-chat Send only). */
+export type SendButtonState = 'idle' | 'sending' | 'sent';
+
+/**
+ * Whether a send is newer than the plan's last change (ms compare; equal is
+ * not newer). Null `sentAt`: never sent. Null `changedAt`: no known change. Pure.
+ */
+export function sentAfterChange(sentAt: string | null, changedAt: string | null): boolean {
+  if (sentAt === null) return false;
+  const sent = Date.parse(sentAt);
+  if (Number.isNaN(sent)) return false;
+  if (changedAt === null) return true;
+  const changed = Date.parse(changedAt);
+  return Number.isNaN(changed) || sent > changed;
+}
+
+/**
+ * The footer button's state. An error shows Retry (idle). While busy, a send
+ * from a chat ("Send in" or "Send to approvers in") is sending. Only "Send in
+ * {chat}" is ever sent: `sentHere` is this screen session's word (true after
+ * a send here, false after any change here), else the read decides (the last
+ * send in this chat is newer than the plan's last change). Pure.
+ */
+export function planSendButtonState(input: {
+  kind: PrimaryAction['kind'];
+  busy: boolean;
+  error: boolean;
+  sentHere: boolean | null;
+  lastSentAt: string | null;
+  lastChangedAt: string | null;
+}): SendButtonState {
+  if (input.error) return 'idle';
+  const fromChat = input.kind === 'send' || input.kind === 'send-approvers';
+  if (input.busy) return fromChat ? 'sending' : 'idle';
+  if (input.kind !== 'send') return 'idle';
+  if (input.sentHere !== null) return input.sentHere ? 'sent' : 'idle';
+  return sentAfterChange(input.lastSentAt, input.lastChangedAt) ? 'sent' : 'idle';
+}
+
+/**
+ * The footer button's label: Retry on an error, "Sending in {chat}…" while
+ * sending from a chat, "Sent" once sent, else the action's own label. Pure.
+ */
+export function planFooterLabel(input: {
+  action: PrimaryAction;
+  state: SendButtonState;
+  error: boolean;
+  chatName: string | null;
+}): string {
+  if (input.error) return RETRY_LABEL;
+  if (input.state === 'sending' && input.chatName !== null) return sendingInLabel(input.chatName);
+  if (input.state === 'sent') return SENT_LABEL;
+  return input.action.kind === 'none' ? '' : input.action.label;
+}
+
 /**
  * The delete confirm's body: the cards line, " Client gets a notification."
  * only on an Open plan, then " This cannot be undone." Pure.
