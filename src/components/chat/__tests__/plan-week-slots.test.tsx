@@ -304,7 +304,7 @@ describe('week list layout (L1-L4)', () => {
     expect(weekday?.[1]).not.toContain('bg-accent');
     const number = none.match(/<span data-plan-day-number="" class="([^"]*)">([^<]*)<\/span>/);
     expect(number?.[2]).toBe('No date');
-    const numberClasses = number?.[1].split(' ') ?? [];
+    const numberClasses = (number?.[1] ?? '').split(' ');
     expect(numberClasses).not.toContain('font-mono');
     expect(numberClasses).not.toContain('tabular-nums');
     expect(numberClasses).not.toContain('uppercase');
@@ -329,7 +329,7 @@ describe('week list layout (L1-L4)', () => {
     expect(weekday?.[1]).toContain('uppercase');
     const number = html.match(/<span data-plan-day-number="" class="([^"]*)">([^<]*)<\/span>/);
     expect(number?.[2]).toBe('15');
-    expect(number?.[1].split(' ')).toEqual(
+    expect((number?.[1] ?? '').split(' ')).toEqual(
       expect.arrayContaining(['font-mono', 'text-[20px]', 'tabular-nums', 'text-fg']),
     );
   });
