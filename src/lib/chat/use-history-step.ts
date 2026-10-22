@@ -1,6 +1,6 @@
 // One history step per open layer: the one mechanism behind "every open is a
 // history step; every back pops exactly one step" inside chat. Opening a layer
-// (selection mode, the thread view, a sheet, the bell) pushes one entry at the
+// (selection mode, the thread view, a sheet) pushes one entry at the
 // same URL whose state carries a marker under the layer's key; a popstate off
 // that entry closes the layer and stays put. Closing the layer itself (its X,
 // Close, swipe-down) pops the entry, so none is left behind. An entry buried
@@ -245,8 +245,8 @@ function onPopstate(): void {
     top.onExit();
     return;
   }
-  // The same entry adopted by more than one layer (two bell providers landing
-  // on one kept entry) is one step: every adopter closes with it.
+  // The same entry adopted by more than one layer (two layers landing on one
+  // kept entry) is one step: every adopter closes with it.
   const id = idOf(top);
   const peers = openSteps.filter((s) => s !== top && s.active && s.pushed && idOf(s) === id);
   finish(top, !top.guard);
@@ -256,8 +256,7 @@ function onPopstate(): void {
 /**
  * Open one step under `key`. It pushes an entry at the same URL (the
  * ?channel= included) whose state carries a fresh marker, after any pop still
- * landing; `adopt` takes the current entry instead (a landing on a kept entry,
- * the bell). A popstate off the entry runs onExit once. With `guard`, a
+ * landing; `adopt` takes the current entry instead (a landing on a kept entry). A popstate off the entry runs onExit once. With `guard`, a
  * popstate off the entry re-pushes it and runs onExit every time (the layer
  * stays); the guard leaves only through dispose() or cancel().
  */
@@ -468,8 +467,6 @@ export const HISTORY_STEP_KEYS = {
   groupInfo: 'chatGroupInfo',
   scheduledList: 'chatScheduledList',
   newChat: 'chatNewChat',
-  bell: 'chatBell',
-  bellScheduled: 'chatBellScheduled',
   planCompose: 'chatPlanCompose',
   plan: 'chatPlan',
   planItem: 'chatPlanItem',
@@ -484,7 +481,7 @@ for (const key of [...Object.values(HISTORY_STEP_KEYS), 'chatSelection', BACK_GU
 
 /**
  * Whether the entry is a layer's step (any key in use), not a screen's own
- * entry. The bell open over chat home is a step, not the bare list. Pure.
+ * entry. A sheet open over chat home is a step, not the bare list. Pure.
  */
 export function isStepEntry(state: unknown): boolean {
   for (const key of stepKeys) if (stepMarkerOf(state, key) !== null) return true;

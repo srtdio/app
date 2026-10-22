@@ -741,15 +741,6 @@ export function IconArrowUp(props: IconProps) {
   );
 }
 
-export function IconBell(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z" />
-      <path d="M10 20.5a2 2 0 0 0 4 0" />
-    </Svg>
-  );
-}
-
 export function IconAlarmClock(props: IconProps) {
   return (
     <Svg {...props}>
