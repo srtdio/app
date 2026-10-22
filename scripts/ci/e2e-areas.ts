@@ -111,7 +111,7 @@ export const AREAS: Area[] = [
     name: 'plan-tab',
     entries: ['src/components/pages/PlanTabPage.tsx', 'src/components/pages/PlanPage.tsx'],
     routed: true,
-    specs: ['plan-desktop', 'plan-draft-open'].map(t),
+    specs: ['plan-desktop', 'plan-draft-open', 'plan-tab'].map(t),
   },
   {
     name: 'pipeline',
