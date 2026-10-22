@@ -3711,8 +3711,10 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     );
     const restyled = [...OWN_BUBBLE_CONTENT.matchAll(/\[&_\.([a-z0-9-]+)/g)].map((m) => m[1]);
     for (const name of restyled) expect(classes.has(name ?? '')).toBe(false);
-    // The hover tint skips the ring's button.
-    expect(OWN_BUBBLE_CONTENT).toContain('[&_button:not([data-upload-ring]):hover]');
+    // The hover tint skips the ring's button (and the voice note's controls).
+    expect(OWN_BUBBLE_CONTENT).toContain(
+      '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]',
+    );
     expect(OWN_BUBBLE_CONTENT).not.toContain('[&_button:hover]');
   });
 

@@ -153,9 +153,10 @@ export interface VoiceAudio {
  * Wire an audio element's events to the note's state. A duration event only
  * reports a usable (finite, positive) value, so Infinity or NaN never
  * overwrites what the note already shows. `error` hears the element's media
- * errors (with the MediaError code, null when absent) and `started` the
- * 'playing' event (audio is actually coming out). Returns the teardown, which
- * removes every listener it added.
+ * errors (with the MediaError code, null when absent), `started` the
+ * 'playing' event (audio is actually coming out), `paused` every 'pause',
+ * `buffering` 'waiting' and 'stalled', `seeking` / `seeked` the seek pair.
+ * Returns the teardown, which removes every listener it added.
  */
 export function bindVoiceAudio(
   audio: VoiceAudio,
@@ -166,6 +167,10 @@ export function bindVoiceAudio(
     ended: () => void;
     error?: (code: number | null) => void;
     started?: () => void;
+    paused?: () => void;
+    buffering?: () => void;
+    seeking?: () => void;
+    seeked?: () => void;
   },
 ): () => void {
   const onDuration = (): void => {
@@ -176,13 +181,19 @@ export function bindVoiceAudio(
     voicePlayback.claim(audio);
     on.playing(true);
   };
-  const onPause = (): void => on.playing(false);
+  const onPause = (): void => {
+    on.playing(false);
+    on.paused?.();
+  };
   const onEnded = (): void => {
     voicePlayback.release(audio);
     on.ended();
   };
   const onError = (): void => on.error?.(audio.error?.code ?? null);
   const onStarted = (): void => on.started?.();
+  const onBuffering = (): void => on.buffering?.();
+  const onSeeking = (): void => on.seeking?.();
+  const onSeeked = (): void => on.seeked?.();
   const events: Array<[string, () => void]> = [
     ['loadedmetadata', onDuration],
     ['durationchange', onDuration],
@@ -192,6 +203,10 @@ export function bindVoiceAudio(
     ['pause', onPause],
     ['ended', onEnded],
     ['error', onError],
+    ['waiting', onBuffering],
+    ['stalled', onBuffering],
+    ['seeking', onSeeking],
+    ['seeked', onSeeked],
   ];
   for (const [type, fn] of events) audio.addEventListener(type, fn);
   return () => {
@@ -199,29 +214,54 @@ export function bindVoiceAudio(
   };
 }
 
+/** A play attempt must show 'playing' and then move currentTime within this. */
+export const VOICE_START_TIMEOUT_MS = 10_000;
+/** Mid-play, 'waiting' or 'stalled' with no currentTime progress for this long fails. */
+export const VOICE_STALL_TIMEOUT_MS = 15_000;
+/** A seek with no 'seeked' within this fails. */
+export const VOICE_SEEK_TIMEOUT_MS = 5_000;
+
+/** What failed: a media error, a play() rejection, no progress, or a seek that never lands. */
+export type VoiceFailReason = 'error' | 'reject' | 'stall' | 'seek';
+
 /** What a final playback failure reports (never a user id or a url). */
 export interface VoiceFailure {
   name: string;
-  /** The MediaError code, null for a play() rejection. */
+  /** The MediaError code, null for any other failure. */
   code: number | null;
   retried: boolean;
+  reason: VoiceFailReason;
 }
 
 /** The element-side moves the recovery makes; the component backs it with the <audio>. */
 export interface VoicePlayer {
   /** The url set on the element, null before one is. */
   readonly applied: string | null;
+  /** The element's playback position in seconds. */
+  readonly currentTime: number;
   /** Point the element at a url (keeping the position when paused mid-way). */
   apply: (url: string) => void;
   play: () => Promise<void>;
 }
 
+type Failure = Omit<VoiceFailure, 'retried'>;
+
 /**
- * The playback recovery: plays from a fresh url, and on the first media error
- * or play() rejection (an AbortError from a quick pause or a src swap is not
- * one) forces one re-presign and retries once; a play retries only when the
- * failure came from a tap. A second failure, or a re-presign that fails, is
- * final: `failed` is called once. DOM-free so it is unit-tested with fakes.
+ * The playback recovery: plays from a fresh url and watches each attempt. An
+ * attempt succeeds once 'playing' fired and a later timeupdate moved
+ * currentTime; with no success within VOICE_START_TIMEOUT_MS it fails. Once
+ * playing, 'waiting' / 'stalled' with no progress for VOICE_STALL_TIMEOUT_MS
+ * fails, and so does a seek with no 'seeked' within VOICE_SEEK_TIMEOUT_MS. A
+ * media error, a play() rejection (an AbortError from a quick pause or a src
+ * swap is not one) and a pause the element makes during an attempt fail too.
+ * The first failure forces one re-presign and retries once (a play retries
+ * only when a play was wanted); a second failure, or a re-presign that fails,
+ * is final: `failed` is called once. Each attempt counts one failure; later
+ * signals for the same attempt are the same result. A failure while a
+ * re-presign is in flight is held and settles as the result once it returns.
+ * Only `cancel` (a user pause, another note starting, unmount) stops a
+ * pending retry, without a failure. Every timer is cleared on cancel, end,
+ * source change and failure. DOM-free so it is unit-tested with fakes.
  */
 export function createVoiceRecovery(deps: {
   player: VoicePlayer;
@@ -230,64 +270,145 @@ export function createVoiceRecovery(deps: {
   /** A url from the presign cache (force: always a new presign); null on failure. */
   refreshUrl: (force: boolean) => Promise<string | null>;
   failed: (failure: VoiceFailure) => void;
+  /** Whether a play is wanted (a tap until it is paused, ends or fails). */
+  wanted?: (wanted: boolean) => void;
 }): {
   /** A tap (or the auto-play chain): play from a fresh url. */
   play: () => void;
+  /** A user pause, another note starting, or unmount: stop without a failure. */
+  cancel: () => void;
   /** The element reported a media error. */
   mediaError: (code: number | null) => void;
-  /** Audio is coming out: the next failure starts a fresh retry. */
+  /** The element fired 'playing'. */
   started: () => void;
-  /** Paused or ended: a later error is not a tap's. */
+  /** A timeupdate at `seconds`. */
+  progress: (seconds: number) => void;
+  /** The element fired 'waiting' or 'stalled'. */
+  buffering: () => void;
+  /** The element fired 'seeking'. */
+  seeking: () => void;
+  /** The element fired 'seeked'. */
+  seeked: () => void;
+  /** The element paused on its own (not a user pause). */
+  elementPaused: () => void;
+  /** The note ended. */
   stopped: () => void;
+  /** The element's source was swapped outside the recovery. */
+  sourceChanged: () => void;
 } {
   let wantPlay = false;
   let retried = false;
   let busy = false;
   let done = false;
+  // Bumped by cancel: a re-presign started before it settles without a result.
+  let epoch = 0;
+  // The current attempt, and the last one whose failure was counted.
+  let attemptId = 0;
+  let failedId = -1;
+  // 'starting' until the attempt shows progress, then 'playing'.
+  let live: 'none' | 'starting' | 'playing' = 'none';
+  let sawPlaying = false;
+  let baseline = 0;
+  let stallAt = 0;
+  let held: Failure | null = null;
+  let startTimer: ReturnType<typeof setTimeout> | null = null;
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+  let seekTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const final = (name: string, code: number | null, didRetry: boolean): void => {
+  const want = (next: boolean): void => {
+    if (wantPlay === next) return;
+    wantPlay = next;
+    deps.wanted?.(next);
+  };
+  const clearTimers = (): void => {
+    if (startTimer !== null) clearTimeout(startTimer);
+    if (stallTimer !== null) clearTimeout(stallTimer);
+    if (seekTimer !== null) clearTimeout(seekTimer);
+    startTimer = null;
+    stallTimer = null;
+    seekTimer = null;
+  };
+  const final = (failure: Failure, didRetry: boolean): void => {
+    clearTimers();
     done = true;
-    wantPlay = false;
-    deps.failed({ name, code, retried: didRetry });
+    live = 'none';
+    want(false);
+    deps.failed({ ...failure, retried: didRetry });
   };
   const attempt = (): void => {
+    clearTimers();
+    attemptId += 1;
+    const id = attemptId;
+    live = 'starting';
+    sawPlaying = false;
+    baseline = deps.player.currentTime;
+    startTimer = setTimeout(() => {
+      startTimer = null;
+      if (attemptId === id && live === 'starting') {
+        fail({ name: 'NoProgress', code: null, reason: 'stall' });
+      }
+    }, VOICE_START_TIMEOUT_MS);
     void deps.player.play().catch((error: unknown) => {
       if (error instanceof DOMException && error.name === 'AbortError') return;
-      fail(error instanceof Error ? error.name : 'unknown', null);
+      // A rejection from an attempt a newer one replaced is not this attempt's.
+      if (attemptId !== id) return;
+      fail({ name: error instanceof Error ? error.name : 'unknown', code: null, reason: 'reject' });
     });
   };
-  // Resolve a url (forced or from the cache), apply it, then run `then`.
-  const withUrl = (force: boolean, then: () => void, didRetry: boolean): void => {
-    busy = true;
-    void deps.refreshUrl(force).then((url) => {
-      busy = false;
-      if (url === null) {
-        final('PresignError', null, didRetry);
-        return;
-      }
-      if (force || url !== deps.player.applied) deps.player.apply(url);
-      then();
-    });
-  };
-  function fail(name: string, code: number | null): void {
-    if (busy || done) return;
+  // Count a failure as the current attempt's result: retry once, then final.
+  const count = (failure: Failure): void => {
+    failedId = attemptId;
+    live = 'none';
+    clearTimers();
     if (retried) {
-      final(name, code, true);
+      final(failure, true);
       return;
     }
     retried = true;
-    withUrl(
-      true,
-      () => {
-        if (wantPlay) attempt();
-      },
-      true,
-    );
+    withUrl(true, failure, () => {
+      if (wantPlay) attempt();
+    });
+  };
+  // Resolve a url (forced or from the cache), apply it, then run `then`.
+  const withUrl = (force: boolean, cause: Failure | null, then: () => void): void => {
+    busy = true;
+    held = null;
+    const at = epoch;
+    void deps.refreshUrl(force).then((url) => {
+      busy = false;
+      const result = held;
+      held = null;
+      // Cancelled meanwhile with no play tapped since: no failure, no play.
+      if (at !== epoch && !wantPlay) {
+        if (url !== null && url !== deps.player.applied) deps.player.apply(url);
+        return;
+      }
+      if (url === null) {
+        final({ name: 'PresignError', code: null, reason: cause?.reason ?? 'error' }, retried);
+        return;
+      }
+      if (force || url !== deps.player.applied) deps.player.apply(url);
+      if (result !== null) {
+        count(result);
+        return;
+      }
+      then();
+    });
+  };
+  function fail(failure: Failure): void {
+    if (done) return;
+    // A later signal for an attempt already counted is the same result.
+    if (failedId === attemptId && live === 'none') return;
+    if (busy) {
+      held ??= failure;
+      return;
+    }
+    count(failure);
   }
 
   return {
     play() {
-      wantPlay = true;
+      want(true);
       retried = false;
       done = false;
       if (busy) return;
@@ -297,17 +418,75 @@ export function createVoiceRecovery(deps: {
         attempt();
         return;
       }
-      withUrl(false, attempt, false);
+      withUrl(false, null, attempt);
+    },
+    cancel() {
+      epoch += 1;
+      held = null;
+      live = 'none';
+      clearTimers();
+      want(false);
     },
     mediaError(code) {
-      fail('MediaError', code);
+      fail({ name: 'MediaError', code, reason: 'error' });
     },
     started() {
-      retried = false;
-      done = false;
+      sawPlaying = true;
+      baseline = deps.player.currentTime;
+    },
+    progress(seconds) {
+      if (live === 'starting') {
+        if (!sawPlaying || seconds <= baseline) return;
+        live = 'playing';
+        if (startTimer !== null) clearTimeout(startTimer);
+        startTimer = null;
+        // Audio is coming out: the next failure starts a fresh retry.
+        retried = false;
+        return;
+      }
+      if (live === 'playing' && stallTimer !== null && seconds > stallAt) {
+        clearTimeout(stallTimer);
+        stallTimer = null;
+      }
+    },
+    buffering() {
+      if (live !== 'playing' || stallTimer !== null) return;
+      stallAt = deps.player.currentTime;
+      stallTimer = setTimeout(() => {
+        stallTimer = null;
+        if (live === 'playing' && deps.player.currentTime <= stallAt) {
+          fail({ name: 'Stall', code: null, reason: 'stall' });
+        }
+      }, VOICE_STALL_TIMEOUT_MS);
+    },
+    seeking() {
+      if (seekTimer !== null) clearTimeout(seekTimer);
+      seekTimer = setTimeout(() => {
+        seekTimer = null;
+        fail({ name: 'SeekTimeout', code: null, reason: 'seek' });
+      }, VOICE_SEEK_TIMEOUT_MS);
+    },
+    seeked() {
+      if (seekTimer !== null) clearTimeout(seekTimer);
+      seekTimer = null;
+    },
+    elementPaused() {
+      if (live === 'starting' || (busy && wantPlay)) {
+        fail({ name: 'Paused', code: null, reason: 'stall' });
+        return;
+      }
+      // A pause while playing (an interruption): the note simply stops.
+      live = 'none';
+      clearTimers();
+      want(false);
     },
     stopped() {
-      wantPlay = false;
+      live = 'none';
+      clearTimers();
+      want(false);
+    },
+    sourceChanged() {
+      clearTimers();
     },
   };
 }
@@ -321,6 +500,8 @@ interface Pausable {
 export function createPlaybackRegistry(): {
   claim: (audio: Pausable) => void;
   release: (audio: Pausable) => void;
+  /** Whether `audio` is the one note claimed now. */
+  owns: (audio: Pausable) => boolean;
 } {
   let active: Pausable | null = null;
   return {
@@ -330,6 +511,9 @@ export function createPlaybackRegistry(): {
     },
     release(audio) {
       if (active === audio) active = null;
+    },
+    owns(audio) {
+      return active === audio;
     },
   };
 }
@@ -463,9 +647,6 @@ const UNDER_WAVE = 'pl-[46px]';
 /** A 44px tall hit area on a 16px control, without growing its row. */
 const TALL_HIT = "relative after:absolute after:inset-x-0 after:-inset-y-3.5 after:content-['']";
 
-/** No hover fill from the own bubble's button rule; controls draw no background. */
-const NO_FILL = 'hover:!bg-transparent';
-
 /** Per side colours. Sent avoids the class names the own bubble restyles. */
 function sideTone(mine: boolean): {
   glyph: string;
@@ -517,6 +698,7 @@ function transcribeLink(props: {
       return onTranscribe === undefined ? null : (
         <button
           type="button"
+          data-voice-control=""
           data-voice-link={state === 'failed' ? 'retry' : 'transcribe'}
           data-induction={INDUCTION_KEYS.chatTranscript}
           onClick={onTranscribe}
@@ -536,6 +718,7 @@ function transcribeLink(props: {
       return (
         <button
           type="button"
+          data-voice-control=""
           data-voice-link={state}
           data-induction={INDUCTION_KEYS.chatTranscript}
           aria-expanded={state === 'hide'}
@@ -667,6 +850,8 @@ export function VoiceNote({
   const [mediaSeconds, setMediaSeconds] = useState(Number.NaN);
   const [rate, setRate] = useState(sessionRate);
   const [playFailed, setPlayFailed] = useState(false);
+  // A play is wanted (from the tap until a pause, the end or a final failure).
+  const [wanted, setWanted] = useState(false);
   // The drag position (0..1) while the wave is held; null when not dragging.
   const [drag, setDrag] = useState<number | null>(null);
   // The touch on the wave, from its pointerdown until it lifts.
@@ -687,9 +872,15 @@ export function VoiceNote({
           const audio = audioRef.current;
           if (audio === null) return;
           const at = audio.currentTime;
+          // A non-finite duration (MediaRecorder webm) may never answer a seek,
+          // so the position is only restored on a seekable note.
+          const seekable = usable(audio.duration);
           audio.src = next;
           appliedRef.current = next;
-          if (at > 0) audio.currentTime = at;
+          if (at > 0 && seekable) audio.currentTime = at;
+        },
+        get currentTime() {
+          return audioRef.current?.currentTime ?? 0;
         },
         play() {
           const audio = audioRef.current;
@@ -706,6 +897,8 @@ export function VoiceNote({
         return refresh === undefined ? Promise.resolve(appliedRef.current) : refresh(force);
       },
       failed: (failure) => {
+        // A stalled load may still deliver later: the failed note stays silent.
+        audioRef.current?.pause();
         setPlaying(false);
         setPlayFailed(true);
         logger.error('chat: voice note play failed', {
@@ -713,8 +906,10 @@ export function VoiceNote({
           code: failure.code,
           mime: latest.current.mime ?? 'unknown',
           retried: failure.retried ? 'yes' : 'no',
+          reason: failure.reason,
         });
       },
+      wanted: setWanted,
     });
   }
   const recovery = recoveryRef.current;
@@ -727,7 +922,8 @@ export function VoiceNote({
     if (appliedRef.current !== null && (!audio.paused || audio.currentTime > 0)) return;
     audio.src = url;
     appliedRef.current = url;
-  }, [url]);
+    recovery.sourceChanged();
+  }, [url, recovery]);
 
   const start = (audio: HTMLAudioElement): void => {
     voicePlayback.claim(audio);
@@ -742,11 +938,21 @@ export function VoiceNote({
     if (audio === null) return;
     const unbind = bindVoiceAudio(audio, {
       duration: setMediaSeconds,
-      time: setCurrent,
-      playing: (now) => {
-        setPlaying(now);
-        if (!now) recovery.stopped();
+      time: (seconds) => {
+        setCurrent(seconds);
+        recovery.progress(seconds);
       },
+      playing: setPlaying,
+      paused: () => {
+        // A late event from before the latest play(), or the end of the note.
+        if (!audio.paused || audio.ended) return;
+        // Another note took over (the registry paused this one): not a failure.
+        if (voicePlayback.owns(audio)) recovery.elementPaused();
+        else recovery.cancel();
+      },
+      buffering: recovery.buffering,
+      seeking: recovery.seeking,
+      seeked: recovery.seeked,
       error: recovery.mediaError,
       started: () => {
         recovery.started();
@@ -771,6 +977,7 @@ export function VoiceNote({
     });
     return () => {
       unbind();
+      recovery.cancel();
       audio.pause();
       voicePlayback.release(audio);
     };
@@ -789,11 +996,15 @@ export function VoiceNote({
     };
   }, [messageId]);
 
+  // Pause shows from the tap on, through any retry, until it stops or fails.
+  const active = playing || wanted;
   const toggle = (): void => {
     const audio = audioRef.current;
     if (audio === null) return;
     cancelPendingNext();
-    if (playing) {
+    if (active) {
+      // The user's pause: stops a pending retry too, with no error row.
+      recovery.cancel();
       audio.pause();
       return;
     }
@@ -937,7 +1148,6 @@ export function VoiceNote({
   const controlFocus = cn(
     'cursor-pointer select-none [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2',
     tone.focus,
-    NO_FILL,
   );
   const link =
     messageId !== undefined
@@ -959,12 +1169,13 @@ export function VoiceNote({
   const playControl = (
     <button
       type="button"
+      data-voice-control=""
       onClick={toggle}
       disabled={disabled}
-      aria-label={playing ? 'Pause voice note' : 'Play voice note'}
+      aria-label={active ? 'Pause voice note' : 'Play voice note'}
       {...(uploading ? { 'aria-hidden': true, tabIndex: -1 } : {})}
       className={cn(
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-md disabled:cursor-default',
+        'flex h-11 w-11 shrink-0 items-center justify-center disabled:cursor-default',
         controlFocus,
         tone.glyph,
         upload === undefined
@@ -981,7 +1192,7 @@ export function VoiceNote({
             ),
       )}
     >
-      {playing ? <IconPauseFill size={20} /> : <IconPlay size={20} />}
+      {active ? <IconPauseFill size={20} /> : <IconPlay size={20} />}
     </button>
   );
   // An own note sent this session: the play spot holds the ring while it
@@ -1014,6 +1225,7 @@ export function VoiceNote({
       {playing ? (
         <button
           type="button"
+          data-voice-control=""
           data-voice-speed=""
           onClick={cycleSpeed}
           aria-label={`Playback speed ${speedLabel(rate)}`}
@@ -1174,6 +1386,7 @@ export function VoiceNote({
           {canOpenTranscript ? (
             <button
               type="button"
+              data-voice-control=""
               data-voice-read=""
               onClick={openTranscript}
               className={cn('shrink-0 rounded-sm font-semibold underline', TALL_HIT, controlFocus)}

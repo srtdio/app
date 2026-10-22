@@ -1623,7 +1623,7 @@ export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-10 bg-
  */
 export const OWN_BUBBLE_CONTENT = cn(
   '[&_.bg-panel]:bg-white/[.16] [&_.bg-panel-3]:bg-white/[.16] [&_.border-border]:border-white/[.16]',
-  '[&_button:not([data-upload-ring]):hover]:bg-white/[.24] [&_a:hover>span]:bg-white/[.24]',
+  '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-white/[.24] [&_a:hover>span]:bg-white/[.24]',
   '[&_.bg-accent]:bg-white/70 [&_.bg-accent.text-accent-fg]:bg-white/[.16] [&_.bg-fg-3]:bg-white/40',
   '[&_.text-fg]:text-accent-fg [&_.text-accent]:text-accent-fg',
   '[&_.text-fg-2]:text-accent-fg [&_.text-fg-2]:opacity-80',
