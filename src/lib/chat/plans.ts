@@ -1289,7 +1289,7 @@ export interface PlanScreenReadOptions {
   /** The approver ids to name (approverIds of the bundle). */
   approvers?: (bundle: PlanBundle) => string[];
   /** Opened from a chat: its channel id (one read of the plan's last send there). */
-  sentInChannelId?: string;
+  sentInChannelId?: string | undefined;
 }
 
 /**
