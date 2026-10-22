@@ -221,18 +221,18 @@ describe('a guard over a chat history step keeps the chat layer', () => {
   });
 });
 
-describe('one kept entry adopted by two layers (the two bell providers)', () => {
+describe('one kept entry adopted by two layers (two providers on one kept entry)', () => {
   it('Back closes both adopters, so the layer that shows the sheet closes too', () => {
     const win = queuedWindow([PIPELINE, LIST]);
-    const kept = enterHistoryStep(win, HISTORY_STEP_KEYS.bell, vi.fn());
+    const kept = enterHistoryStep(win, HISTORY_STEP_KEYS.scheduledList, vi.fn());
     kept.detach();
     win.write(CHAT_A);
     back(win);
-    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.bell)).not.toBeNull();
+    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.scheduledList)).not.toBeNull();
     const primaryExit = vi.fn();
     const chatExit = vi.fn();
-    enterHistoryStep(win, HISTORY_STEP_KEYS.bell, primaryExit, { adopt: true });
-    enterHistoryStep(win, HISTORY_STEP_KEYS.bell, chatExit, { adopt: true });
+    enterHistoryStep(win, HISTORY_STEP_KEYS.scheduledList, primaryExit, { adopt: true });
+    enterHistoryStep(win, HISTORY_STEP_KEYS.scheduledList, chatExit, { adopt: true });
     expect(win.index()).toBe(2);
     back(win);
     expect(primaryExit).toHaveBeenCalledOnce();

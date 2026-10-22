@@ -110,8 +110,8 @@ import {
   rememberMentionRead,
 } from '@/lib/chat/mentions';
 import { useToast } from '@/components/ui/toast';
-import { BellProvider } from '@/components/chat/BellContext';
-import { NotificationsSheets } from '@/components/chat/NotificationsPanel';
+import { ReminderProvider } from '@/components/chat/ReminderContext';
+import { ChatReminderSheet } from '@/components/chat/ReminderSheet';
 import { SavedFromProvider, type SavedFromWiring } from '@/components/chat/NotesBits';
 import { useNotes } from '@/lib/chat/use-notes';
 import { useCurrentProfile } from '@/lib/use-current-profile';
@@ -639,7 +639,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   });
   const notesChat = notes.summary;
   // Every chat the page resolves against: notes first (forward picker, deep
-  // links, search hit names, the bell), then the roster.
+  // links, search hit names), then the roster.
   const chatRoster = useMemo(() => withNotesFirst(roster, notesChat), [roster, notesChat]);
 
   // The open thread lives in ?channel={channelId}, so the shell hides the
@@ -797,7 +797,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       { replace: true, state: entryUsr(window.history.state) },
     );
   }, [setSearchParams]);
-  // A bell task row's ?task=: the chat opens with its task sheet up and that
+  // A task alert's ?task= (Notifications): the chat opens with its task sheet up and that
   // item expanded. Consumed once, like ?message= (a replace keeps the entry).
   const [pendingTask, setPendingTask] = useState<{ channelId: string; taskId: string } | null>(
     null,
@@ -2205,20 +2205,19 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     </div>
   );
 
-  // The chat bell (Chat home), its sheets and the message menu's Remind me.
+  // The message menu's Remind me and its sheet.
   return (
     <StarStoreContext.Provider value={starStore}>
-      <BellProvider
+      <ReminderProvider
         workspaceId={workspaceId}
         currentUserId={currentUserId}
-        roster={chatRoster}
         openChannelId={selected?.channelId ?? null}
         messages={threadCurrent ? threadMessages : NO_MESSAGES}
         nameOf={scheduleNameOf}
       >
         {surface}
-        <NotificationsSheets />
-      </BellProvider>
+        <ChatReminderSheet />
+      </ReminderProvider>
     </StarStoreContext.Provider>
   );
 }

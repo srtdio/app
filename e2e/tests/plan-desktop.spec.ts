@@ -835,18 +835,18 @@ test('F: at 1024x768 the panel overlays the thread with a shadow, the channel li
   expectClean(network);
 });
 
-test('F7: Activity stays mounted while a plan opens and closes beside it @desktop', async ({
+test('F7: Notifications stays mounted while a plan opens and closes beside it @desktop', async ({
   page,
 }) => {
   laptopOnly(page);
   test.setTimeout(120_000);
   const network = await installHarnessNetwork(page);
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
-  await page.goto('/activity');
-  const beside = page.locator('[data-activity-beside]');
+  await page.goto('/notifications');
+  const beside = page.locator('[data-plan-beside]');
   await expect(beside).toBeAttached();
   await page.waitForTimeout(1500);
-  // Mark Activity's node and remember its scroll.
+  // Mark the Notifications node and remember its scroll.
   await beside.evaluate((el) => {
     (el.firstElementChild as HTMLElement & { __mark?: number }).__mark = 7;
   });
@@ -868,10 +868,10 @@ test('F7: Activity stays mounted while a plan opens and closes beside it @deskto
       (el) => (el.firstElementChild as HTMLElement & { __mark?: number }).__mark,
     ),
   ).toBe(7);
-  // Close: back on Activity, the same node.
+  // Close: back on Notifications, the same node.
   await panel.locator('[data-plan-close]').click();
   await expect(panel).toHaveCount(0);
-  await expect(page).toHaveURL(/\/activity$/);
+  await expect(page).toHaveURL(/\/notifications$/);
   expect(
     await beside.evaluate(
       (el) => (el.firstElementChild as HTMLElement & { __mark?: number }).__mark,

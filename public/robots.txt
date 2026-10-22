@@ -22,6 +22,8 @@ Disallow: /briefs
 Disallow: /b/
 Disallow: /chat
 Disallow: /activity
+Disallow: /notifications
+Disallow: /plan
 Disallow: /plans/
 Disallow: /assets
 Disallow: /settings

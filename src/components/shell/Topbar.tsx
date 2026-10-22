@@ -1,5 +1,5 @@
-import { TopbarBell } from '@/components/chat/BellButton';
 import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
+import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronDown, IconPlus, IconSearch } from '@/components/ui/icons';
@@ -81,8 +81,8 @@ export function Topbar({
             <IconSearch />
           </IconButton>
         )}
-        {/* The bell on every main screen (its one mount), with its unread count. */}
-        {workspaceName !== null && onCreateWorkspace === undefined ? <TopbarBell /> : null}
+        {/* Notifications on every main screen (its one mount), with the unread count. */}
+        {workspaceName !== null && onCreateWorkspace === undefined ? <NotificationsButton /> : null}
 
         <button
           type="button"

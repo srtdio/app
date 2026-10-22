@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { MARK_TONE } from '@/components/chat/MarkBits';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
-import { useBellOptional } from '@/components/chat/BellContext';
+import { useReminderOptional } from '@/components/chat/ReminderContext';
 import { logger } from '@/lib/logger';
 import { DELETE_SELECTION_WINDOW_MS } from '@/lib/chat/forward';
 import { TYPE_LABEL, type ChatMark, type MarkType } from '@/lib/chat/marks';
@@ -213,7 +213,7 @@ interface MessageActionMenuProps {
   onSelectText?: () => void;
   /**
    * Offers "Remind me" (a recorded message). When absent, the menu offers it
-   * itself for the held bubble's message inside a BellProvider.
+   * itself for the held bubble's message inside a ReminderProvider.
    */
   canRemind?: boolean;
   onRemind?: () => void;
@@ -1181,30 +1181,30 @@ export function reminderMenuTime(at: Date, now: Date): string {
   return label.startsWith('Today ') ? formatClock(at) : label;
 }
 
-type BellRemind = Pick<
-  NonNullable<ReturnType<typeof useBellOptional>>,
+type ChatRemind = Pick<
+  NonNullable<ReturnType<typeof useReminderOptional>>,
   'canRemind' | 'openReminderFor'
 > &
-  Partial<Pick<NonNullable<ReturnType<typeof useBellOptional>>, 'pendingReminderFor'>>;
+  Partial<Pick<NonNullable<ReturnType<typeof useReminderOptional>>, 'pendingReminderFor'>>;
 
 /**
  * "Remind me" for the menu: the caller's own wiring when given, else the
- * bell's for the held bubble's row (its data-msg-id). With a pending reminder
- * on that message (the bell's already-loaded list, no read here) the row
+ * chat's reminders for the held bubble's row (its data-msg-id). With a pending
+ * reminder on that message (the already-loaded list, no read here) the row
  * carries its time and opens the sheet in change mode. Pure but for the lookup.
  */
 export function remindProps(
   props: Pick<MessageActionMenuProps, 'canRemind' | 'onRemind' | 'reminderAt'>,
-  bell: BellRemind | null,
+  reminders: ChatRemind | null,
   held: HTMLElement | null | undefined,
 ): Pick<MessageActionMenuProps, 'canRemind' | 'onRemind' | 'reminderAt'> {
   if (props.canRemind !== undefined) return props;
   const messageId = held?.closest('[data-msg-id]')?.getAttribute('data-msg-id') ?? null;
-  if (bell === null || messageId === null || !bell.canRemind(messageId)) return {};
-  const pending = bell.pendingReminderFor?.(messageId) ?? null;
+  if (reminders === null || messageId === null || !reminders.canRemind(messageId)) return {};
+  const pending = reminders.pendingReminderFor?.(messageId) ?? null;
   return {
     canRemind: true,
-    onRemind: () => bell.openReminderFor(messageId),
+    onRemind: () => reminders.openReminderFor(messageId),
     ...(pending !== null ? { reminderAt: pending.remind_at } : {}),
   };
 }
@@ -1253,7 +1253,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   pickingRef.current = picking;
   const moreRef = useRef<HTMLButtonElement>(null);
   const layout = useChatLayout();
-  const bell = useBellOptional();
+  const reminders = useReminderOptional();
   // The held copy glides back on close (translateY only) when it had moved;
   // Select, scroll, resize and reduced motion close at once.
   const [instantClose, setInstantClose] = useState(false);
@@ -1421,8 +1421,10 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
       : view === 'mark'
         ? markSubmenuItems(props, () => setView('more'))
         : view === 'more'
-          ? moreSubmenuItems({ ...props, ...remindProps(props, bell, held) }, () => setView('main'))
-          : messageMenuItems({ ...props, ...remindProps(props, bell, held) });
+          ? moreSubmenuItems({ ...props, ...remindProps(props, reminders, held) }, () =>
+              setView('main'),
+            )
+          : messageMenuItems({ ...props, ...remindProps(props, reminders, held) });
   const run = (item: MessageMenuItem): void => {
     // Select hands the bubble to the native selection: no glide back.
     if (item.key === 'select-text') setInstantClose(true);

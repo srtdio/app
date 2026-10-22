@@ -15,8 +15,6 @@ interface Scenario {
   start: string;
   /** The tap target that opens the thread. */
   target: (page: Page) => Locator;
-  /** A step before the target shows (open the bell). */
-  prepare?: (page: Page) => Promise<void>;
 }
 
 const SCENARIOS: Scenario[] = [
@@ -27,15 +25,14 @@ const SCENARIOS: Scenario[] = [
     target: (page) => page.getByText(PEER_NAME, { exact: true }).first(),
   },
   {
-    // Chat mentions live in the chat bell, not Activity (decision 89).
-    name: 'dm-from-bell',
+    // A chat mention's card on Notifications.
+    name: 'dm-from-notifications',
     isDm: true,
-    start: '/chat',
-    prepare: (page) => page.locator('[data-bell-button]').click(),
+    start: '/notifications',
     target: (page) =>
       page
-        .locator('[data-bell-row="mention"]', { hasText: MENTION_PREVIEW })
-        .locator('[data-bell-open]')
+        .locator('[data-activity-event="mention"]', { hasText: MENTION_PREVIEW })
+        .locator('[data-activity-lead]')
         .first(),
   },
   {
@@ -63,7 +60,6 @@ for (const scenario of SCENARIOS) {
 
     // First paint: hold the history read so the opening state is on screen.
     await page.goto(scenario.start);
-    await scenario.prepare?.(page);
     const target = scenario.target(page);
     await target.waitFor({ state: 'visible' });
     const gate = network.holdHistory();

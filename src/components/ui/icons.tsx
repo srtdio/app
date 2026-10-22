@@ -129,6 +129,16 @@ export function IconChat(props: IconProps) {
   );
 }
 
+/** Notifications: a stacked tray (the top bar's inbox of everything). */
+export function IconNotifications(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x={4} y={9} width={16} height={11} rx={2} />
+      <path d="M6.5 6h11M9 3h6" />
+    </Svg>
+  );
+}
+
 export function IconActivity(props: IconProps) {
   return (
     <Svg {...props}>
@@ -727,15 +737,6 @@ export function IconArrowUp(props: IconProps) {
   return (
     <Svg {...props}>
       <path d="M12 19V5M6 11l6-6 6 6" />
-    </Svg>
-  );
-}
-
-export function IconBell(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z" />
-      <path d="M10 20.5a2 2 0 0 0 4 0" />
     </Svg>
   );
 }

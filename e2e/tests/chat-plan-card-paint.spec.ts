@@ -173,12 +173,24 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
+/**
+ * Whether a request is a plan bundle read's first select (GET plans), not the
+ * ticker's list of the workspace's current shared plans (audience=eq.client).
+ */
+function isBundlePlansRead(request: { method(): string; url(): string }): boolean {
+  const url = new URL(request.url());
+  return (
+    request.method() === 'GET' &&
+    url.pathname === '/rest/v1/plans' &&
+    url.searchParams.get('audience') !== 'eq.client'
+  );
+}
+
 /** The plans GETs the page made (the bundle read's first select). */
 function countPlanReads(page: Page): () => number {
   let n = 0;
   page.on('request', (request) => {
-    const url = new URL(request.url());
-    if (request.method() === 'GET' && url.pathname === '/rest/v1/plans') n += 1;
+    if (isBundlePlansRead(request)) n += 1;
   });
   return () => n;
 }
@@ -537,7 +549,7 @@ async function runTickerFill(page: Page): Promise<void> {
   page.on('request', (request) => {
     const url = new URL(request.url());
     if (request.method() !== 'GET') return;
-    if (url.pathname === '/rest/v1/plans') reads.plans += 1;
+    if (isBundlePlansRead(request)) reads.plans += 1;
     if (
       url.pathname === '/rest/v1/chat_messages' &&
       url.searchParams.get('select') !== 'shared_plan_ids'

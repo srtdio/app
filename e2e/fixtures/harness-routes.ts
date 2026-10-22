@@ -780,19 +780,10 @@ const RPC: Record<string, RpcHandler> = {
     return null;
   },
   inbox_mark_read: () => null,
-  // Bell read state: snooze one entry, or mark every unread entry of the types read.
+  // Notifications read state: snooze one entry.
   inbox_snooze: (args, tables) => {
     const row = (tables.inbox_entries ?? []).find((r) => r.id === args.p_entry_id);
     if (row !== undefined) row.snoozed_until = new Date(Date.now() + 3_600_000).toISOString();
-    return null;
-  },
-  inbox_mark_read_events: (args, tables) => {
-    const types = Array.isArray(args.p_event_types) ? args.p_event_types.map(String) : [];
-    for (const row of tables.inbox_entries ?? []) {
-      if (row.read_at === null && types.includes(String(row.event_type))) {
-        row.read_at = new Date().toISOString();
-      }
-    }
     return null;
   },
   // Reminders: an id already held is a no-op; a new one replaces the pending
@@ -970,6 +961,17 @@ const RPC: Record<string, RpcHandler> = {
     if (row === undefined) return null;
     row.status = 'sent';
     row.sent_at = new Date().toISOString();
+    // The proc's chat_scheduled_clear_failed: the send's failed entry is read now.
+    for (const entry of tables.inbox_entries ?? []) {
+      const payload = entry.payload as Record<string, unknown> | null;
+      if (
+        entry.event_type === 'scheduled_failed' &&
+        entry.read_at === null &&
+        payload?.scheduled_id === row.id
+      ) {
+        entry.read_at = row.sent_at;
+      }
+    }
     const send = RPC.chat_message_send;
     return send === undefined
       ? null

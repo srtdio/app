@@ -33,7 +33,6 @@ const t = (name: string): string => `e2e/tests/${name}.spec.ts`;
 
 const CHAT_SPECS = [
   'chat-back-navigation',
-  'chat-bell',
   'chat-file-viewer',
   'chat-imessage-threads',
   'chat-keyboard-gap',
@@ -75,6 +74,8 @@ const CHAT_SPECS = [
   'onboarding-approver',
   // Link cards in a chat, then on a post's comments.
   'link-previews',
+  // Remind me from a held message; a reminder card opens the chat.
+  'notifications',
   // Delete a message with a file (purge-chat), then Settings > Delete workspace.
   'workspace-delete-chat-purge',
 ];
@@ -87,24 +88,32 @@ export const AREAS: Area[] = [
     specs: CHAT_SPECS.map(t),
   },
   {
-    // /activity and /plans/:id share ActivityPlanLayout (PlanPage.tsx).
-    name: 'activity',
-    entries: ['src/components/pages/ActivityPage.tsx', 'src/components/pages/PlanPage.tsx'],
+    // /notifications and /plans/:id share PlanBesideLayout (PlanPage.tsx).
+    name: 'notifications',
+    entries: ['src/components/pages/NotificationsPage.tsx', 'src/components/pages/PlanPage.tsx'],
     routed: true,
     specs: [
       'activity-plan',
       'agency-actions',
       'chat-back-navigation',
-      'chat-bell',
       'chat-plan-card-paint',
       'chat-plan-dates',
       'chat-tasks',
+      'chat-thread',
+      'notifications',
       'plan-desktop',
       'plan-draft-open',
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
     ].map(t),
+  },
+  {
+    // The Plan tab: /plan and /plan/:id share PlanBesideLayout (PlanPage.tsx).
+    name: 'plan-tab',
+    entries: ['src/components/pages/PlanTabPage.tsx', 'src/components/pages/PlanPage.tsx'],
+    routed: true,
+    specs: ['plan-desktop', 'plan-draft-open', 'plan-tab'].map(t),
   },
   {
     name: 'pipeline',

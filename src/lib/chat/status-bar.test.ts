@@ -6,16 +6,21 @@ import {
   NOTHING_OPEN_LINE,
   SECTION_ROWS,
   STATUS_ORDER,
+  BAR_PLANS,
+  TITLE_ELLIPSIS,
   anyReadFailed,
   capCount,
-  distinctPlanIds,
+  currentPlanWindow,
+  currentSharedPlans,
   drawerDay,
+  drawerKeys,
   drawerShouldClose,
+  keptTitle,
   openMarksOfType,
   openPlans,
   planSectionCount,
   planSegment,
-  planSummary,
+  planSummaries,
   planTone,
   postsWord,
   sectionLabel,
@@ -23,6 +28,9 @@ import {
   statusBar,
   statusItems,
   statusReady,
+  titleWords,
+  titleWordsKept,
+  type PlanSummary,
   type StatusInput,
   type StatusKey,
 } from '@/lib/chat/status-bar';
@@ -30,7 +38,7 @@ import {
 const NO_MARKS: MarkCounts = { commitments: 0, decisions: 0, pending: 0, p1: 0 };
 
 function input(over: Partial<StatusInput> = {}): StatusInput {
-  return { plan: 'none', posts: 0, briefs: 0, marks: NO_MARKS, side: 'agency', ...over };
+  return { plans: [], posts: 0, briefs: 0, marks: NO_MARKS, side: 'agency', ...over };
 }
 
 function bundle(
@@ -38,6 +46,7 @@ function bundle(
   endsOn: string,
   items: Array<{ client?: 'approved' | 'changes'; team?: 'approved' }> = [],
   startsOn = '2026-10-01',
+  audience: 'client' | 'team' = 'client',
 ): PlanBundle {
   const rows: PlanItemRow[] = items.map((_, i) => ({
     id: `${id}-i${i}`,
@@ -57,7 +66,7 @@ function bundle(
       title: `Plan ${id}`,
       starts_on: startsOn,
       ends_on: endsOn,
-      audience: 'client',
+      audience,
       created_by: null,
     },
     items: rows,
@@ -74,13 +83,17 @@ function bundle(
   };
 }
 
+function summary(id: string, approved: number, total: number, changes = 0): PlanSummary {
+  return { id, title: `Plan ${id}`, approved, total, changes };
+}
+
 describe('statusItems: every on/off combination of the six items', () => {
   it('all 64 combos: fixed order, zero items omitted, the rest close up', () => {
     for (let mask = 0; mask < 64; mask += 1) {
       const on = (bit: number): boolean => (mask & (1 << bit)) !== 0;
       const items = statusItems(
         input({
-          plan: on(0) ? { approved: 1, total: 3, changes: 0, more: 0 } : 'none',
+          plans: on(0) ? [summary('p', 1, 3)] : [],
           posts: on(1) ? 2 : 0,
           briefs: on(2) ? 3 : 0,
           marks: {
@@ -95,7 +108,7 @@ describe('statusItems: every on/off combination of the six items', () => {
       expect(items.map((i) => i.key)).toEqual(expected);
       const bar = statusBar(
         input({
-          plan: on(0) ? { approved: 1, total: 3, changes: 0, more: 0 } : 'none',
+          plans: on(0) ? [summary('p', 1, 3)] : [],
           posts: on(1) ? 2 : 0,
           briefs: on(2) ? 3 : 0,
           marks: {
@@ -129,7 +142,7 @@ describe('bar wording', () => {
     const [posts] = statusItems(input({ posts: 120 }));
     expect(posts?.number).toBe('99+');
     expect(posts?.count).toBe(120);
-    const [plan] = statusItems(input({ plan: { approved: 100, total: 140, changes: 0, more: 0 } }));
+    const [plan] = statusItems(input({ plans: [summary('p', 100, 140)] }));
     expect(plan?.number).toBe('99+/99+');
   });
 
@@ -153,9 +166,52 @@ describe('bar wording', () => {
     expect(statusItems(input({ posts: 2, side: 'client' }))[0]?.word).toBe('waiting');
   });
 
-  it('the plan keeps "Plan", shows A/N and +K', () => {
-    const [plan] = statusItems(input({ plan: { approved: 2, total: 5, changes: 0, more: 1 } }));
-    expect(plan).toMatchObject({ lead: 'Plan', number: '2/5', word: null, more: 1 });
+  it('one plan reads as today: "Plan", A/N, no +K, never trimmed', () => {
+    const items = statusItems(input({ plans: [summary('p', 2, 5)] }));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      key: 'plan',
+      id: 'plan:p',
+      lead: 'Plan',
+      trim: false,
+      number: '2/5',
+      word: null,
+      more: 0,
+      tone: 'default',
+      aria: 'Plan 2 of 5 approved',
+    });
+  });
+
+  it('two plans: one item each, the title leads, in the given order, no +K', () => {
+    const items = statusItems(
+      input({ plans: [summary('a', 1, 3, 1), summary('b', 2, 2)], posts: 4 }),
+    );
+    expect(items.map((i) => i.id)).toEqual(['plan:a', 'plan:b', 'posts']);
+    expect(items[0]).toMatchObject({
+      lead: 'Plan a',
+      trim: true,
+      number: '1/3',
+      tone: 'warn',
+      more: 0,
+      aria: 'Plan a 1 of 3 approved',
+    });
+    expect(items[1]).toMatchObject({ lead: 'Plan b', number: '2/2', tone: 'good', more: 0 });
+  });
+
+  it('three plans: the first two show, the second carries +1', () => {
+    const plans = [summary('a', 0, 1), summary('b', 0, 2), summary('c', 0, 3)];
+    const items = statusItems(input({ plans }));
+    expect(BAR_PLANS).toBe(2);
+    expect(items.map((i) => [i.id, i.more])).toEqual([
+      ['plan:a', 0],
+      ['plan:b', 1],
+    ]);
+    const five = statusItems(input({ plans: [...plans, summary('d', 0, 1), summary('e', 0, 1)] }));
+    expect(five.map((i) => i.more)).toEqual([0, 3]);
+  });
+
+  it('no plan: no plan item', () => {
+    expect(statusItems(input({ plans: [], briefs: 1 })).map((i) => i.key)).toEqual(['briefs']);
   });
 
   it('plan colour: changes warn, complete good, else normal', () => {
@@ -181,7 +237,7 @@ describe('empty and failed reads', () => {
   });
 
   it('a failed read never yields empty, and omits only its own item', () => {
-    for (const failed of ['plan', 'posts', 'briefs', 'marks'] as const) {
+    for (const failed of ['plans', 'posts', 'briefs', 'marks'] as const) {
       const bar = statusBar(input({ [failed]: null }));
       expect(bar.kind).toBe('blank');
       expect(anyReadFailed(input({ [failed]: null }))).toBe(true);
@@ -216,42 +272,139 @@ describe('open plans', () => {
     ];
     expect(openPlans(plans, '2026-10-10').map((b) => b.plan.id)).toEqual(['today', 'soon', 'late']);
   });
+});
 
-  it('ends_on filter uses the workspace zone: late on 9 Oct UTC is 10 Oct in Kolkata', () => {
-    const now = new Date('2026-10-09T20:00:00Z');
-    const plans = [bundle('p', '2026-10-09')];
-    expect(openPlans(plans, todayInZone(now, 'UTC')).length).toBe(1);
-    expect(openPlans(plans, todayInZone(now, 'Asia/Kolkata')).length).toBe(0);
+describe('current shared plans', () => {
+  it('shared only, and only when the range holds today (both ends inclusive)', () => {
+    const plans = [
+      bundle('draft', '2026-10-20', [], '2026-10-01', 'team'),
+      bundle('ended', '2026-10-09'),
+      bundle('ends-today', '2026-10-10'),
+      bundle('starts-today', '2026-10-30', [], '2026-10-10'),
+      bundle('future', '2026-10-30', [], '2026-10-11'),
+      bundle('running', '2026-10-20'),
+    ];
+    expect(currentSharedPlans(plans, '2026-10-10').map((b) => b.plan.id)).toEqual([
+      'ends-today',
+      'running',
+      'starts-today',
+    ]);
   });
 
-  it('the bar picks the soonest-ending plan and counts the rest as +K', () => {
-    const open = openPlans(
+  it('ordered by soonest end, then start, then id (never the title)', () => {
+    const a = bundle('a', '2026-10-20', [], '2026-10-05');
+    const b = bundle('b', '2026-10-20', [], '2026-10-02');
+    const c = bundle('c', '2026-10-20', [], '2026-10-02');
+    c.plan.title = 'A first by title';
+    const d = bundle('d', '2026-10-15');
+    expect(currentSharedPlans([a, c, b, d], '2026-10-10').map((x) => x.plan.id)).toEqual([
+      'd',
+      'b',
+      'c',
+      'a',
+    ]);
+  });
+
+  it('today is the workspace zone: late on 9 Oct UTC is 10 Oct in Kolkata', () => {
+    const now = new Date('2026-10-09T20:00:00Z');
+    const ends = [bundle('ends', '2026-10-09')];
+    expect(currentSharedPlans(ends, todayInZone(now, 'UTC')).length).toBe(1);
+    expect(currentSharedPlans(ends, todayInZone(now, 'Asia/Kolkata')).length).toBe(0);
+    const starts = [bundle('starts', '2026-10-30', [], '2026-10-10')];
+    expect(currentSharedPlans(starts, todayInZone(now, 'UTC')).length).toBe(0);
+    expect(currentSharedPlans(starts, todayInZone(now, 'Asia/Kolkata')).length).toBe(1);
+  });
+
+  it('the read window covers today in every zone (UTC-12 to UTC+14)', () => {
+    expect(currentPlanWindow(new Date('2026-10-09T20:00:00Z'))).toEqual({
+      from: '2026-10-09',
+      to: '2026-10-10',
+    });
+    expect(currentPlanWindow(new Date('2026-10-09T05:00:00Z'))).toEqual({
+      from: '2026-10-08',
+      to: '2026-10-09',
+    });
+    const now = new Date('2026-10-09T11:30:00Z');
+    const range = currentPlanWindow(now);
+    for (const zone of ['Pacific/Kiritimati', 'Asia/Kolkata', 'UTC', 'Etc/GMT+12']) {
+      const today = todayInZone(now, zone);
+      expect(today >= range.from && today <= range.to).toBe(true);
+    }
+  });
+
+  it('summaries keep the order and count like the single plan did', () => {
+    const current = currentSharedPlans(
       [
         bundle('b', '2026-10-25', [{ client: 'approved' }, {}]),
         bundle('a', '2026-10-16', [{ client: 'approved' }, { client: 'changes' }, {}]),
       ],
       '2026-10-10',
     );
-    expect(planSummary(open, planProgress)).toEqual({
-      approved: 1,
-      total: 3,
-      changes: 1,
-      more: 1,
-    });
-    expect(planSummary([], planProgress)).toBe('none');
+    expect(planSummaries(current, planProgress)).toEqual([
+      { id: 'a', title: 'Plan a', approved: 1, total: 3, changes: 1 },
+      { id: 'b', title: 'Plan b', approved: 1, total: 2, changes: 0 },
+    ]);
+    expect(planSummaries([], planProgress)).toEqual([]);
   });
 
-  it('distinct plan ids over message rows', () => {
+  it('the drawer lists each section once even with two plan items', () => {
+    const items = statusItems(
+      input({ plans: [summary('a', 0, 1), summary('b', 0, 1)], briefs: 2 }),
+    );
+    expect(drawerKeys(items)).toEqual(['plan', 'briefs']);
+  });
+});
+
+describe('compact plan titles drop whole words', () => {
+  it('words split on whitespace; a kept title ends on the ellipsis', () => {
+    expect(titleWords('  Diwali   week  two ')).toEqual(['Diwali', 'week', 'two']);
+    expect(keptTitle('Diwali week two', 3)).toBe('Diwali week two');
+    expect(keptTitle('Diwali week two', 2)).toBe(`Diwali week${TITLE_ELLIPSIS}`);
+    expect(keptTitle('Diwali week two', 0)).toBe(`Diwali${TITLE_ELLIPSIS}`);
+  });
+
+  it('nothing over: every word stays', () => {
+    expect(titleWordsKept([[30, 20], [40]], 8, 0)).toEqual([2, 1]);
+  });
+
+  it('drops from the widest title first, never below one word', () => {
+    // Title 0 is 30+20+20 = 70 wide, title 1 is 40+30 = 70: ties go to the first.
     expect(
-      distinctPlanIds([
-        { shared_plan_ids: ['a', 'b'] },
-        { shared_plan_ids: null },
-        { shared_plan_ids: [] },
-        { shared_plan_ids: ['b', 'c', ''] },
-      ]),
-    ).toEqual(['a', 'b', 'c']);
+      titleWordsKept(
+        [
+          [30, 20, 20],
+          [40, 30],
+        ],
+        5,
+        10,
+      ),
+    ).toEqual([2, 2]);
+    // 30 over: title 0 drops one (saves 15), then title 1 (now widest) drops one.
+    expect(
+      titleWordsKept(
+        [
+          [30, 20, 20],
+          [40, 30],
+        ],
+        5,
+        30,
+      ),
+    ).toEqual([2, 1]);
+    // Far over: both stop at one word.
+    expect(
+      titleWordsKept(
+        [
+          [30, 20, 20],
+          [40, 30],
+        ],
+        5,
+        999,
+      ),
+    ).toEqual([1, 1]);
   });
+});
 
+describe('plan rows', () => {
   it('segments: client approved, changes, team approved on the agency side only', () => {
     expect(planSegment({ client: true, changes: false, team: true }, 'agency')).toBe('client');
     expect(planSegment({ client: false, changes: true, team: true }, 'agency')).toBe('changes');
@@ -261,7 +414,7 @@ describe('open plans', () => {
   });
 
   it('section count: A/N for one plan, N open for more', () => {
-    expect(planSectionCount(1, { approved: 2, total: 5, changes: 0, more: 0 })).toBe('2/5');
+    expect(planSectionCount(1, { approved: 2, total: 5 })).toBe('2/5');
     expect(planSectionCount(3, null)).toBe('3 open');
   });
 });

@@ -407,7 +407,7 @@ export function placeRoute(place: StepPlace, ctx: PlaceContext): string {
     case 'briefs':
       return '/briefs';
     case 'activity':
-      return '/activity';
+      return '/notifications';
     case 'chat':
       return '/chat';
     case 'group':

@@ -280,7 +280,7 @@ function iso(ms: number): string {
 /**
  * Seed the group chat's list: items 8 to 11 (P0 to P2), each with its created
  * line after the newest message (older rows, no batch id), and an older
- * unread task_due bell row for item 10.
+ * unread task_due alert (Notifications) for item 10.
  */
 export function seedTasks(world: ChatWorld, now: number = Date.now()): void {
   const tables = world.tables;

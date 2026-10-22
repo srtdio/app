@@ -1,8 +1,9 @@
 // The status ticker's drop-down drawer: the sections behind each bar item in
 // the bar's fixed order (only the non-zero ones), each listing its first five
-// rows then "See all N". Plans: every open plan shared here, ending soonest
-// first, with its segmented bar, progress line and first items (tap opens the
-// Plan screen, at the item for an item row). Posts in review open the same
+// rows then "See all N". Plans: every current shared plan of the workspace
+// (shared in this chat or not), ending soonest first, with its segmented bar,
+// progress line and first items (tap opens the Plan screen, at the item for
+// an item row). Posts in review open the same
 // PostSheet a PostCard tap opens. Briefs navigate to the brief. Marks jump to
 // the message and keep their stamp (Delivered / Closed / Completed) with the
 // existing inline confirm. The panel only moves on the Y axis; colours are
@@ -114,7 +115,7 @@ export interface StatusDrawerData {
   side: ViewerSide;
   timeZone: string;
   workspaceKey: string | null;
-  /** Open plans, ending soonest first. */
+  /** The workspace's current shared plans, ending soonest first (the bar's set). */
   plans: readonly PlanBundle[];
   posts: { heading: string; rows: readonly OpenPostRow[]; count: number };
   briefs: { rows: readonly OpenBriefRow[]; count: number };
@@ -288,7 +289,7 @@ function useConceptTiles(rows: readonly PlanItemRow[]): Record<string, ConceptTh
   return tiles !== null && tiles.key === key ? tiles.data : null;
 }
 
-/** One open plan: its title row, segmented bar, progress line and first items. */
+/** One current shared plan: its title row, segmented bar, progress line and first items. */
 export function PlanBlock(props: {
   bundle: PlanBundle;
   side: ViewerSide;
@@ -548,10 +549,7 @@ export function StatusDrawerList(
         if (key === 'plan') {
           return section(
             key,
-            planSectionCount(
-              props.plans.length,
-              firstProgress !== null ? { ...firstProgress, more: 0 } : null,
-            ),
+            planSectionCount(props.plans.length, firstProgress),
             props.plans.map((bundle, i) => (
               <PlanBlock
                 key={bundle.plan.id}

@@ -10,8 +10,9 @@
 // caller's pending reminder on the same message. "Change time" therefore sends
 // a NEW id for the same message (the earlier row is cancelled by the proc).
 //
-// Also here: the ring's pure scheduling (one timer for the next due reminder)
-// and the per-device "last seen" mark behind "You missed N reminders".
+// Also here: the ring's pure scheduling (one timer for the next due reminder),
+// the per-device "last seen" mark and the read behind "You missed N
+// reminders", and the window event that asks every reminder reader to reload.
 // Every time is the device's local zone. Pure helpers take `now`.
 
 import type { Client, Result } from '@srtdio/rpc';
@@ -23,6 +24,7 @@ import {
   inSentence,
   isWithinScheduleWindow,
   presetTimes,
+  UPCOMING_PAGE,
 } from '@/lib/chat/scheduled';
 
 type Functions = Database['public']['Functions'];
@@ -182,6 +184,18 @@ export function missedCount(
   }).length;
 }
 
+/** Fired on window when the pending reminders may have changed: the ring and the chat reload them. */
+export const REMINDERS_CHANGED_EVENT = 'sorted:reminders-changed';
+
+/**
+ * Ask every reminder reader (the ring, the chat's Remind me) to reload: after a
+ * reminder is set, moved or cancelled on this device, after one rings, and on
+ * the shell's inbox poll tick (a reminder set on another device).
+ */
+export function announceRemindersChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(REMINDERS_CHANGED_EVENT));
+}
+
 /** "You missed 1 reminder" / "You missed N reminders". Pure. */
 export function missedCopy(count: number): string {
   return `You missed ${count} reminder${count === 1 ? '' : 's'}`;
@@ -287,10 +301,55 @@ export async function readPendingReminders(
       .eq('workspace_id', params.workspaceId)
       .is('fired_at', null)
       .is('cancelled_at', null)
-      .order('remind_at', { ascending: true });
+      .order('remind_at', { ascending: true })
+      .limit(UPCOMING_PAGE);
     const { data, error } = await abortable(query, params.signal);
     if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
     return { ok: true, data: pendingSoonestFirst((data ?? []) as ReminderRow[]) };
+  } catch (error) {
+    return { ok: false, error: { code: 'unknown', message: String(error) } };
+  }
+}
+
+/** How many missed 'reminder' rows one open reads. */
+export const MISSED_READ_LIMIT = 50;
+
+/**
+ * The caller's unread 'reminder' inbox rows created after `sinceIso` (the
+ * missed count on open), newest first, at most MISSED_READ_LIMIT. Never throws.
+ */
+export async function readUnreadRemindersSince(
+  client: Client,
+  params: { workspaceId: string; userId: string; sinceIso: string },
+): Promise<Result<MissedCandidate[]>> {
+  try {
+    const { data, error } = await client
+      .from('inbox_entries')
+      .select('created_at, read_at, payload')
+      .eq('workspace_id', params.workspaceId)
+      .eq('user_id', params.userId)
+      .eq('event_type', 'reminder')
+      .is('read_at', null)
+      .is('deleted_at', null)
+      .gt('created_at', params.sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(MISSED_READ_LIMIT);
+    if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
+    return {
+      ok: true,
+      data: (data ?? []).map((row) => {
+        const payload: unknown = row.payload;
+        const reminderId =
+          typeof payload === 'object' && payload !== null
+            ? (payload as Record<string, unknown>).reminder_id
+            : null;
+        return {
+          createdAt: row.created_at,
+          readAt: row.read_at,
+          reminderId: typeof reminderId === 'string' && reminderId !== '' ? reminderId : null,
+        };
+      }),
+    };
   } catch (error) {
     return { ok: false, error: { code: 'unknown', message: String(error) } };
   }

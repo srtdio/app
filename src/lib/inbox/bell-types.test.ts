@@ -6,7 +6,6 @@ import {
   BELL_PLAN_EVENT_TYPES,
   BELL_TASK_EVENT_TYPES,
   NOT_CHAT_MENTION_OR,
-  ONLY_BELL_OR,
   chatMessageHref,
   chatTaskHref,
   isBellEntry,
@@ -14,18 +13,17 @@ import {
   isBellRow,
   isBellTaskEvent,
   taskLinkToken,
-  onlyBellEntries,
   planHref,
   withoutBellEntries,
 } from '@/lib/inbox/bell-types';
 import { INBOX_EVENT_TYPES } from '@srtdio/schemas';
 
-describe('isBellEntry: the one bell / Activity split', () => {
+describe('isBellEntry: the rows the live layer toasts apart', () => {
   it('a chat mention is a bell row', () => {
     expect(isBellEntry({ eventType: 'mention', entityType: 'chat_channel' })).toBe(true);
   });
 
-  it('post and brief mentions stay in Activity', () => {
+  it('post and brief mentions are activity rows', () => {
     expect(isBellEntry({ eventType: 'mention', entityType: 'post' })).toBe(false);
     expect(isBellEntry({ eventType: 'mention', entityType: 'brief' })).toBe(false);
     expect(isBellEntry({ eventType: 'mention', entityType: null })).toBe(false);
@@ -38,7 +36,7 @@ describe('isBellEntry: the one bell / Activity split', () => {
     }
   });
 
-  it('every other event type stays in Activity', () => {
+  it('every other event type is an activity row', () => {
     const others = INBOX_EVENT_TYPES.filter(
       (t) => t !== 'mention' && !(BELL_ONLY_EVENT_TYPES as readonly string[]).includes(t),
     );
@@ -52,7 +50,7 @@ describe('isBellEntry: the one bell / Activity split', () => {
     for (const t of BELL_ONLY_EVENT_TYPES) expect(INBOX_EVENT_TYPES).toContain(t);
   });
 
-  it('the plan alerts are bell-only rows (item 12): plan and plan_item entities alike', () => {
+  it('the plan alerts (the Plans chip): plan and plan_item entities alike', () => {
     expect([...BELL_PLAN_EVENT_TYPES]).toEqual([
       'plan_opened',
       'plan_deleted',
@@ -76,7 +74,7 @@ describe('isBellEntry: the one bell / Activity split', () => {
     expect(planHref('p1', '')).toBe('/plans/p1');
   });
 
-  it('the task alerts are bell-only rows: never in Activity', () => {
+  it('the task alerts', () => {
     expect([...BELL_TASK_EVENT_TYPES]).toEqual(['task_changed', 'task_due']);
     for (const eventType of BELL_TASK_EVENT_TYPES) {
       expect(isBellTaskEvent(eventType)).toBe(true);
@@ -92,7 +90,7 @@ describe('isBellEntry: the one bell / Activity split', () => {
   });
 });
 
-describe('query helpers', () => {
+describe('query helper', () => {
   function recorder() {
     const calls: { method: string; args: unknown[] }[] = [];
     const q = {
@@ -108,7 +106,7 @@ describe('query helpers', () => {
     return { q, calls };
   }
 
-  it('withoutBellEntries drops the bell-only types and chat mentions (null entity kept)', () => {
+  it('withoutBellEntries drops the old bell types and chat mentions (null entity kept)', () => {
     const { q, calls } = recorder();
     withoutBellEntries(q);
     expect(calls).toEqual([
@@ -123,15 +121,6 @@ describe('query helpers', () => {
       { method: 'or', args: [NOT_CHAT_MENTION_OR] },
     ]);
     expect(NOT_CHAT_MENTION_OR).toContain('entity_type.is.null');
-  });
-
-  it('onlyBellEntries keeps exactly the bell rows', () => {
-    const { q, calls } = recorder();
-    onlyBellEntries(q);
-    expect(calls).toEqual([{ method: 'or', args: [ONLY_BELL_OR] }]);
-    expect(ONLY_BELL_OR).toBe(
-      'event_type.in.(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment,task_changed,task_due),and(event_type.eq.mention,entity_type.eq.chat_channel)',
-    );
   });
 });
 
@@ -148,23 +137,20 @@ describe('chatMessageHref: the Activity chat-mention deep link', () => {
   });
 });
 
-describe('inbox_mark_all_read skips every bell-only type', () => {
+describe('Mark all read: inbox_mark_all_read skips no event type', () => {
   const MIGRATION = fileURLToPath(
-    new URL('../../../supabase/migrations/20261012190000_plan_part_2b.sql', import.meta.url),
+    new URL(
+      '../../../supabase/migrations/20261022190000_inbox_mark_all_read_all_types.sql',
+      import.meta.url,
+    ),
   );
 
-  it("the 2b migration's NOT IN list contains every BELL_ONLY_EVENT_TYPES value", () => {
+  it('the live proc clears every unread, never-snoozed row of every type in one update', () => {
     const sql = readFileSync(MIGRATION, 'utf8');
     const body = sql.slice(sql.indexOf('FUNCTION public.inbox_mark_all_read('));
-    const match = /event_type NOT IN \(([^)]*)\)/.exec(body);
-    expect(match).not.toBeNull();
-    const skipped = [...(match?.[1] ?? '').matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
-    // The task alerts came after 2b; that proc does not list them yet (a
-    // follow-up migration must add them, see the task list PR), so only the
-    // types it was written for are checked here.
-    const task = new Set<string>(BELL_TASK_EVENT_TYPES);
-    for (const eventType of BELL_ONLY_EVENT_TYPES) {
-      if (!task.has(eventType)) expect(skipped).toContain(eventType);
-    }
+    expect(body).toContain('read_at IS NULL AND snoozed_until IS NULL AND deleted_at IS NULL');
+    // No per-type exclusion is left: chat mentions and the bell's types included.
+    expect(body).not.toMatch(/event_type/);
+    expect(body).not.toMatch(/entity_type/);
   });
 });

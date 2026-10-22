@@ -4,12 +4,7 @@
 // every decision the live layer makes is unit-tested in isolation here.
 
 import type { Database } from '@srtdio/schemas';
-import {
-  BELL_MENTION_EVENT,
-  BELL_OPEN_HREF,
-  chatMessageHref,
-  isBellRow,
-} from '@/lib/inbox/bell-types';
+import { BELL_MENTION_EVENT, chatMessageHref, isBellRow } from '@/lib/inbox/bell-types';
 import { resolveMentionText, splitMentions } from '@/lib/chat/mentions';
 
 /** The raw inbox_entries row, reused from the generated schema (never redefined). */
@@ -428,19 +423,14 @@ export function toastFromEnriched(enriched: EnrichedNew): ToastSpec | null {
   return description !== null ? { ...base, description } : base;
 }
 
-/** A batch of new rows split between the two surfaces. */
+/** A batch of new rows split between the two live toasts. */
 export interface NewRowsSplit {
-  /** Rows Activity shows (and toasts for). */
+  /** Rows the activity toast words (and the tone plays for). */
   activity: InboxRow[];
-  /** New chat mentions: the bell's toast, never Activity's. */
+  /** New chat mentions: their own "<name> mentioned you" toast. */
   chatMentions: InboxRow[];
 }
 
-/**
- * Split new rows: Activity's own, and the chat mentions the bell toasts for.
- * Reminders and scheduled outcomes get no live toast here (the ring and the
- * bell own them). Pure.
- */
 /**
  * Rows written by someone else. The actor's own already-read row (inbox_self_entry,
  * 20261018140000) is history, not news: it never toasts or plays the tone.
@@ -452,8 +442,8 @@ export function othersRows<T extends { actor_user_id: string | null }>(
   return rows.filter((row) => row.actor_user_id !== selfId);
 }
 
-/** The Activity route prefix: new Activity rows never tone while it is on screen. */
-export const ACTIVITY_PATH = '/activity';
+/** The Notifications route prefix: new rows never tone while it is on screen. */
+export const ACTIVITY_PATH = '/notifications';
 
 /**
  * Whether new Activity rows play the shared notification tone: only when at least
@@ -469,6 +459,11 @@ export function activityToneWanted(
   return newOthersCount > 0 && (tabHidden || !pathname.startsWith(ACTIVITY_PATH));
 }
 
+/**
+ * Split new rows: the activity toast's own, and the chat mentions that toast
+ * on their own. Reminders, scheduled outcomes and the plan and task alerts get
+ * no live toast here (the ring owns reminders); they show on Notifications. Pure.
+ */
 export function splitNewRows(rows: readonly InboxRow[]): NewRowsSplit {
   return {
     activity: rows.filter((row) => !isBellRow(row)),
@@ -476,11 +471,11 @@ export function splitNewRows(rows: readonly InboxRow[]): NewRowsSplit {
   };
 }
 
-/** The bell's live toast for new chat mentions. */
+/** The live toast for new chat mentions. */
 export interface MentionToastSpec {
   title: string;
   description: string;
-  /** Where Open goes: the message for one mention, the bell for several. */
+  /** Where Open goes: the message for one mention, Notifications for several. */
   href: string;
   actorId: string | null;
 }
@@ -490,7 +485,7 @@ export const MENTION_TOAST_ACTION = 'Open';
 
 /**
  * "<name> mentioned you" (Open goes to the message) for one new chat mention;
- * "N new mentions" (Open goes to the bell) for several. Null for none. Pure.
+ * "N new mentions" (Open goes to Notifications) for several. Null for none. Pure.
  */
 export function mentionToastFrom(
   rows: readonly InboxRow[],
@@ -501,7 +496,7 @@ export function mentionToastFrom(
     return {
       title: `${spellCount(rows.length)} new mentions`,
       description: MENTION_TOAST_ACTION,
-      href: BELL_OPEN_HREF,
+      href: ACTIVITY_PATH,
       actorId: null,
     };
   }
@@ -520,7 +515,7 @@ export function mentionToastFrom(
     href:
       row.entity_id !== null
         ? chatMessageHref(row.entity_id, typeof messageId === 'string' ? messageId : null)
-        : BELL_OPEN_HREF,
+        : ACTIVITY_PATH,
     actorId,
   };
 }

@@ -270,16 +270,18 @@ function expectClean(network: HarnessNetwork): void {
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
 }
 
-/** Count GET reads of a REST table (or the shared plan ids select). */
+/** Count GET reads of a REST table (or the ticker's current shared plan ids select). */
 function countReads(page: Page): (name: string) => number {
   const counts = new Map<string, number>();
   page.on('request', (request) => {
     const url = new URL(request.url());
     if (request.method() !== 'GET' || !url.pathname.startsWith('/rest/v1/')) return;
     const table = url.pathname.replace('/rest/v1/', '');
+    // The ticker's list of the workspace's current shared plans is its own
+    // read (select=id), not the plan bundle read the card and ticker share.
     const name =
-      table === 'chat_messages' && url.searchParams.get('select') === 'shared_plan_ids'
-        ? 'shared_plan_ids'
+      table === 'plans' && url.searchParams.get('audience') === 'eq.client'
+        ? 'current_plan_ids'
         : table;
     counts.set(name, (counts.get(name) ?? 0) + 1);
   });
@@ -402,7 +404,7 @@ async function runAtOnce(page: Page): Promise<void> {
   expect(log.cardNodes).toBe(1);
   expect(log.scrollJumps).toBe(0);
   // One read each per open (no read waits on, or repeats, another).
-  for (const name of ['plans', 'plan_items', 'plan_item_reviews', 'shared_plan_ids']) {
+  for (const name of ['plans', 'plan_items', 'plan_item_reviews', 'current_plan_ids']) {
     expect(reads(name), `${name} reads`).toBe(1);
   }
   expect(network.rpcCalls.filter((c) => c.name === 'plan_draft_rows')).toHaveLength(1);
@@ -602,11 +604,12 @@ async function runSwitch(page: Page): Promise<void> {
     const inGroup = framesSince(log, groupTap);
     const inDm = framesSince(log, dmTap).filter((f) => f.at < groupTap - dmTap);
     report(`switch round ${round + 1}`, { dm: show(inDm), group: show(inGroup) });
-    // The group never shows the DM's plan card, its badge or its plan count.
+    // The group never shows the DM's plan card or its badge. Its ticker may
+    // read the plan: the bar shows the workspace's current shared plans in
+    // every chat.
     for (const f of inGroup) {
       expect(f.card, show(inGroup).join('\n')).toBe('none');
       expect(f.badges).toBe(0);
-      expect(f.ticker).not.toMatch(/plan/);
       if (f.msgs) expect(groupIds.has(f.chat) || f.chat === '-').toBe(true);
     }
     // The DM never shows the group's rows.

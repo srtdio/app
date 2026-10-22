@@ -156,7 +156,8 @@ export interface PlanPostInfo {
   format?: string | null;
 }
 
-const PLAN_COLUMNS =
+/** The plans columns every plan read selects. */
+export const PLAN_COLUMNS =
   'id, workspace_id, title, starts_on, ends_on, audience, created_by, updated_at';
 const ITEM_COLUMNS =
   'id, plan_id, kind, position, title, description, post_id, created_at, updated_at, target_date';
@@ -176,7 +177,8 @@ function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
 }
 
-type SelectResult = { data: unknown; error: { message: string } | null };
+/** What one PostgREST select resolves to (typed loosely: no embeds). */
+export type SelectResult = { data: unknown; error: { message: string } | null };
 
 /**
  * One table read by an id list, chunked: every chunk is one select; any chunk
@@ -215,16 +217,19 @@ async function selectIn<T>(
 }
 
 /** The slice of a PostgREST builder these reads use (typed loosely: no embeds). */
-interface PlanQuery extends PromiseLike<SelectResult> {
+export interface PlanQuery extends PromiseLike<SelectResult> {
   in: (column: string, values: readonly string[]) => PlanQuery;
   is: (column: string, value: null) => PlanQuery;
   eq: (column: string, value: string) => PlanQuery;
   contains: (column: string, value: readonly string[]) => PlanQuery;
   gte: (column: string, value: string) => PlanQuery;
+  lte: (column: string, value: string) => PlanQuery;
   order: (column: string, opts?: { ascending?: boolean }) => PlanQuery;
   limit: (count: number) => PlanQuery;
+  range: (from: number, to: number) => PlanQuery;
 }
-interface PlanTable {
+/** A table's select entry point, as these reads type it. */
+export interface PlanTable {
   select: (columns: string) => PlanQuery;
 }
 
@@ -324,12 +329,14 @@ export async function readPlanBundles(
 
 /**
  * The bundles of plans already read: their draft rows, and their items then
- * (as soon as the items are in) the reviews and post stages. Never throws.
+ * (as soon as the items are in) the reviews and post stages. Items are
+ * ordered in `timeZone` (UTC by default). Never throws.
  */
-async function readBundlesOf(
+export async function readBundlesOf(
   client: Client,
   plans: readonly PlanRow[],
   signal: AbortSignal | undefined,
+  timeZone = 'UTC',
 ): Promise<Result<Map<string, PlanBundle>>> {
   if (plans.length === 0) return { ok: true, data: new Map() };
   const ids = plans.map((p) => p.id);
@@ -346,6 +353,7 @@ async function readBundlesOf(
       mergeDraftRows(items.data.items, drafts.data),
       items.data.reviews,
       items.data.stages,
+      timeZone,
     ),
   };
 }

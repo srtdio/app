@@ -5,9 +5,9 @@ import type { ReactElement, ReactNode } from 'react';
 // and its element tree walked (the SectionHeader/SortMenu test style in this
 // codebase). Topbar holds no hooks, so no renderer is needed.
 import { Topbar } from '@/components/shell/Topbar';
-import { TopbarBell } from '@/components/chat/BellButton';
+import { NotificationsButton } from '@/components/shell/NotificationsButton';
 
-// The bell's module graph reaches the chat SDK and the logger: stub both.
+// The button's module graph reaches the chat SDK and the logger: stub both.
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
@@ -116,16 +116,16 @@ describe('Topbar create menu', () => {
   });
 });
 
-describe('W8 fix 1: the bell lives in the top bar on every main screen', () => {
-  it('mounts the bell once beside search and the account menu', () => {
+describe('Notifications lives in the top bar on every main screen', () => {
+  it('mounts the Notifications button once beside search and the account menu', () => {
     const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
-    expect(findAll(tree, (el) => el.type === TopbarBell)).toHaveLength(1);
+    expect(findAll(tree, (el) => el.type === NotificationsButton)).toHaveLength(1);
   });
 
-  it('leaves the bell out while there is no workspace yet', () => {
+  it('leaves the button out while there is no workspace yet', () => {
     const creating = Topbar({ ...baseProps, workspaceName: null, onCreateWorkspace: () => {} });
-    expect(findAll(creating, (el) => el.type === TopbarBell)).toHaveLength(0);
+    expect(findAll(creating, (el) => el.type === NotificationsButton)).toHaveLength(0);
     const loading = Topbar({ ...baseProps, workspaceName: null });
-    expect(findAll(loading, (el) => el.type === TopbarBell)).toHaveLength(0);
+    expect(findAll(loading, (el) => el.type === NotificationsButton)).toHaveLength(0);
   });
 });

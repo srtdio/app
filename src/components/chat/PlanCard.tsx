@@ -174,6 +174,63 @@ function PlanCardItem(props: {
   );
 }
 
+/**
+ * The card's top lines: the PLAN eyebrow, the title and the mono date range.
+ * The title stays on one line (the chat card keeps its skeleton's height);
+ * `wrapTitle` lets it wrap to two lines, then end on an ellipsis.
+ */
+export function PlanCardTop(props: {
+  plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>;
+  wrapTitle?: boolean;
+}): ReactElement {
+  return (
+    <>
+      <span className="flex h-4 items-center gap-1.5 text-xs font-semibold leading-4 tracking-wide text-accent">
+        <IconPlan size={16} />
+        {PLAN_EYEBROW}
+      </span>
+      <span
+        data-plan-title=""
+        className={cn(
+          'text-[17px] font-semibold leading-[22px] text-fg',
+          props.wrapTitle === true ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'truncate',
+        )}
+      >
+        {props.plan.title}
+      </span>
+      <span data-plan-range="" className="truncate font-mono text-[13px] leading-5 text-fg-3">
+        {planRangeLabel(props.plan.starts_on, props.plan.ends_on)}
+      </span>
+    </>
+  );
+}
+
+/** The card's progress bar: the team side's fill in accent, the client side's in good. */
+export function PlanCardBar(props: {
+  label: string;
+  value: number;
+  max: number;
+  percent: number;
+  side: 'team' | 'client';
+}): ReactElement {
+  return (
+    <span
+      role="progressbar"
+      aria-label={props.label}
+      aria-valuemin={0}
+      aria-valuemax={props.max}
+      aria-valuenow={props.value}
+      className="block h-1.5 overflow-hidden rounded-full bg-panel-3"
+    >
+      <span
+        data-plan-card-bar={props.side}
+        className={cn('block h-1.5', props.side === 'team' ? 'bg-accent' : 'bg-good')}
+        style={{ width: `${props.percent}%` }}
+      />
+    </span>
+  );
+}
+
 /** The card itself: a pure render (no reads), so both sides are tested statically. */
 export function PlanCardBody(props: {
   view: PlanCardView;
@@ -198,19 +255,7 @@ export function PlanCardBody(props: {
   return (
     <div data-plan-card={bundle.plan.id} className={PLAN_CARD}>
       <div className="flex min-h-0 flex-1 flex-col gap-2 px-3.5 pb-2.5 pt-3">
-        <span className="flex h-4 items-center gap-1.5 text-xs font-semibold leading-4 tracking-wide text-accent">
-          <IconPlan size={16} />
-          {PLAN_EYEBROW}
-        </span>
-        <span
-          data-plan-title=""
-          className="truncate text-[17px] font-semibold leading-[22px] text-fg"
-        >
-          {bundle.plan.title}
-        </span>
-        <span data-plan-range="" className="truncate font-mono text-[13px] leading-5 text-fg-3">
-          {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
-        </span>
+        <PlanCardTop plan={bundle.plan} />
         <span className="flex h-6 gap-1.5 overflow-hidden">
           {planChips(bundle).map((chip) => (
             <span
@@ -227,20 +272,13 @@ export function PlanCardBody(props: {
             </span>
           ))}
         </span>
-        <span
-          role="progressbar"
-          aria-label={draft ? 'Checked by creators' : 'Approved'}
-          aria-valuemin={0}
-          aria-valuemax={progress.total}
-          aria-valuenow={draft ? progress.teamApproved : progress.approved}
-          className="block h-1.5 overflow-hidden rounded-full bg-panel-3"
-        >
-          <span
-            data-plan-card-bar={draft ? 'team' : 'client'}
-            className={cn('block h-1.5', draft ? 'bg-accent' : 'bg-good')}
-            style={{ width: `${progressPercent(progress)}%` }}
-          />
-        </span>
+        <PlanCardBar
+          label={draft ? 'Checked by creators' : 'Approved'}
+          value={draft ? progress.teamApproved : progress.approved}
+          max={progress.total}
+          percent={progressPercent(progress)}
+          side={draft ? 'team' : 'client'}
+        />
         <span data-plan-progress="" className="truncate text-xs leading-4 text-fg-3">
           {progressLabel(progress)}
         </span>

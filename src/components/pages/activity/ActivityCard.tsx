@@ -2,11 +2,19 @@ import { useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
 import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
-import { IconClock, IconPlan } from '@/components/ui/icons';
+import {
+  IconAlarmClock,
+  IconCalendarClock,
+  IconClock,
+  IconPlan,
+  IconSend,
+  IconTaskSquare,
+} from '@/components/ui/icons';
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 import {
   ACTOR_ROW_EVENTS,
@@ -14,16 +22,27 @@ import {
   PLAN_ITEM_ENTITY,
   UNKNOWN_ACTOR,
   activityLine,
+  alertBody,
+  alertTitle,
+  alertTopLine,
   cardBodyLine,
   cardTitle,
   isSnoozed,
   relativeTime,
   isChatMention,
   isWelcome,
+  opensNothing,
   segmentSelfMentions,
+  upcomingChat,
+  upcomingTag,
   type ActivityItem,
+  type AlertInfo,
   type SnoozeKind,
+  type UpcomingItem,
 } from '@/components/pages/activity/data';
+import { NOT_SENT_LABEL, failureInPlainWords } from '@/lib/inbox/alerts';
+import { formatSendLabel } from '@/lib/chat/scheduled';
+import type { ViewerSide } from '@/lib/chat/viewer-role';
 
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (threaded). */
@@ -42,6 +61,12 @@ interface ActivityCardProps {
   /** The signed-in user's resolved display name, used to accent their own @name
    *  inside a mention preview; null when it has not resolved yet. */
   selfName: string | null;
+  /** The viewer's side: a plan_opened alert reads "shared with you" for a client. */
+  side?: ViewerSide;
+  /** A failed scheduled send's Retry (send it now; a stale row just clears). */
+  onRetry?: (item: ActivityItem) => void;
+  /** A failed scheduled send's Edit (open its chat; a stale row just clears). */
+  onEdit?: (item: ActivityItem) => void;
 }
 
 /**
@@ -216,9 +241,58 @@ export function groupHasUnread(group: readonly ActivityItem[]): boolean {
 /** The unread dot: one size (8px) on the card and on every expanded row. */
 export const UNREAD_DOT_CLASS = 'h-2 w-2 shrink-0 rounded-full bg-accent';
 
-/** A deleted post has nowhere to open: its entries are not tappable. */
-function opensNothing(item: ActivityItem): boolean {
-  return item.eventType === 'post_deleted';
+/** An alert card's icon tile: what kind of alert at a glance (a missed or failed one in bad). */
+function AlertIcon({ item, alert }: { item: ActivityItem; alert: AlertInfo }): ReactElement {
+  const bad = alert.kind === 'failed' || item.eventType === 'task_due';
+  const icon =
+    alert.kind === 'reminder' || item.eventType === 'task_due' ? (
+      <IconAlarmClock size={28} />
+    ) : alert.kind === 'sent' ? (
+      <IconSend size={28} />
+    ) : alert.kind === 'failed' ? (
+      <IconCalendarClock size={28} />
+    ) : alert.kind === 'plan' ? (
+      <IconPlan size={28} />
+    ) : (
+      <IconTaskSquare size={28} />
+    );
+  return (
+    <div
+      data-activity-alert-icon={alert.kind}
+      aria-hidden="true"
+      className={cn(
+        'flex aspect-square w-full items-center justify-center bg-panel-2',
+        bad ? 'text-bad' : 'text-fg-3',
+      )}
+    >
+      {icon}
+    </div>
+  );
+}
+
+/** An alert card's title: a failed send's "Not sent" and a missed due time in bad. */
+function AlertTitle({
+  item,
+  alert,
+  side,
+}: {
+  item: ActivityItem;
+  alert: AlertInfo;
+  side: ViewerSide;
+}): ReactElement {
+  if (alert.kind === 'failed') {
+    return (
+      <>
+        <span className="text-bad">{NOT_SENT_LABEL}</span>
+        <span className="font-normal text-fg-2">
+          {' · '}
+          {failureInPlainWords(alert.reason)}
+        </span>
+      </>
+    );
+  }
+  const line = alertTitle(item, alert, side);
+  return item.eventType === 'task_due' ? <span className="text-bad">{line}</span> : <>{line}</>;
 }
 
 /**
@@ -228,7 +302,9 @@ function opensNothing(item: ActivityItem): boolean {
  * the meta (relative time, scope tag, snoozed chip). A threaded group (>1 entry)
  * adds a "+N more" toggle to the footer that expands the remaining events inside
  * the same card. The content row opens the thread (marking the lead read). The
- * footer's ⋯ opens the row menu (Mark as read, Snooze) for the whole card.
+ * footer's ⋯ opens the row menu (Mark as read, Snooze) for the whole card. A
+ * chat, plan or task alert (lead.alert) reads in the bell's words beside its
+ * own icon tile; a failed scheduled send adds Edit and Retry under its text.
  */
 export function ActivityCard({
   group,
@@ -240,12 +316,17 @@ export function ActivityCard({
   onSnooze,
   onMarkRead,
   selfName,
+  side = 'unknown',
+  onRetry,
+  onEdit,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const lead = group[0];
   if (lead === undefined) return null;
   const rest = group.slice(1);
+  // A chat, plan or task alert reads in the bell's words, with its own icon.
+  const alert = lead.alert ?? null;
 
   const unread = groupHasUnread(group);
   const snoozed = isSnoozed(lead, nowMs);
@@ -258,6 +339,8 @@ export function ActivityCard({
   const welcome = isWelcome(lead);
   // A deleted post's card is "<who> deleted" over its title: no body line repeats it.
   const showsBody = (hasEntity || assetsDeleted || welcome) && lead.eventType !== 'post_deleted';
+  const alertLine = alert !== null ? alertBody(alert) : null;
+  // An alert's title is its AlertTitle (the bell's line, partly in bad).
   const title =
     hasEntity || welcome ? cardTitle(lead) : assetsDeleted ? 'Assets' : activityLine(lead);
   const leadTappable = !opensNothing(lead);
@@ -277,6 +360,7 @@ export function ActivityCard({
 
   return (
     <div
+      data-activity-event={lead.eventType}
       className={cn(
         'flex overflow-hidden rounded-xl border bg-panel transition-colors',
         unread ? 'border-accent-line' : 'border-border',
@@ -313,7 +397,7 @@ export function ActivityCard({
                 />
               ) : null}
               <span className="truncate text-xs font-medium text-fg-3">
-                {actorLine(actorEntry, actorName)}
+                {alert !== null ? alertTopLine(lead, alert) : actorLine(actorEntry, actorName)}
               </span>
               {unread ? (
                 <span
@@ -324,7 +408,15 @@ export function ActivityCard({
               ) : null}
             </div>
 
-            <p className="truncate text-[15px] font-semibold leading-[1.3] text-fg">{title}</p>
+            <p className="truncate text-[15px] font-semibold leading-[1.3] text-fg">
+              {alert !== null ? <AlertTitle item={lead} alert={alert} side={side} /> : title}
+            </p>
+
+            {alertLine !== null ? (
+              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+                {alertLine}
+              </p>
+            ) : null}
 
             {showsBody ? (
               <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2">
@@ -340,7 +432,9 @@ export function ActivityCard({
           </div>
 
           <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg">
-            {planItem ? (
+            {alert !== null ? (
+              <AlertIcon item={lead} alert={alert} />
+            ) : planItem ? (
               <div
                 data-activity-plan-icon=""
                 aria-hidden="true"
@@ -360,6 +454,32 @@ export function ActivityCard({
             )}
           </div>
         </div>
+
+        {alert?.kind === 'failed' && (onEdit !== undefined || onRetry !== undefined) ? (
+          <div data-activity-failed-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
+            {onEdit !== undefined ? (
+              <Button
+                type="button"
+                size="lg"
+                data-activity-action="edit"
+                onClick={() => onEdit(lead)}
+              >
+                Edit
+              </Button>
+            ) : null}
+            {onRetry !== undefined ? (
+              <Button
+                type="button"
+                size="lg"
+                variant="primary"
+                data-activity-action="retry"
+                onClick={() => onRetry(lead)}
+              >
+                Retry
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="h-px bg-border" />
         <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
@@ -441,6 +561,115 @@ export function ActivityCard({
             ))}
           </ul>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Cancel in the danger token (the bell's): a 44px outlined button, text in bad. */
+const UPCOMING_CANCEL_CLASS =
+  'inline-flex h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-panel px-4 text-sm font-medium text-bad transition-colors duration-fast hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+
+/** A pending reminder's edit: the bell's "Change time" (the reminder sheet in change mode). */
+export const CHANGE_TIME_LABEL = 'Change time';
+
+/** An Upcoming row's Edit label: "Change time" on a reminder, "Edit" on a scheduled message. */
+export function upcomingEditLabel(item: Pick<UpcomingItem, 'kind'>): string {
+  return item.kind === 'reminder' ? CHANGE_TIME_LABEL : 'Edit';
+}
+
+/**
+ * One Upcoming row, in the same card as every Notifications row: the neutral
+ * rail, the tag (Reminder or Scheduled) as the top line, the chat as the
+ * title, the message preview, the alarm clock or calendar clock tile, then
+ * Edit (Change time on a reminder) and Cancel, and the due time in the footer.
+ * Never unread: no dot, no accent border. A tap opens the chat at the
+ * reminded message (a scheduled message opens its chat).
+ */
+export function UpcomingCard({
+  item,
+  now,
+  onOpen,
+  onEdit,
+  onCancel,
+}: {
+  item: UpcomingItem;
+  now: Date;
+  onOpen: (item: UpcomingItem) => void;
+  onEdit: (item: UpcomingItem) => void;
+  onCancel: (item: UpcomingItem) => void;
+}): ReactElement {
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen(item);
+    }
+  }
+  return (
+    <div
+      data-upcoming-row={item.kind}
+      data-upcoming-id={item.id}
+      className="flex overflow-hidden rounded-xl border border-border bg-panel transition-colors"
+    >
+      <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
+
+      <div className="min-w-0 flex-1">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpen(item)}
+          onKeyDown={onKeyDown}
+          data-upcoming-open=""
+          className="flex cursor-pointer items-start gap-3 p-[14px] transition-colors hover:bg-panel-2"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="mb-1.5 flex items-center gap-[7px]">
+              <span data-upcoming-tag="" className="truncate text-xs font-medium text-fg-3">
+                {upcomingTag(item)}
+              </span>
+            </div>
+            <p className="truncate text-[15px] font-semibold leading-[1.3] text-fg">
+              {upcomingChat(item)}
+            </p>
+            <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              {item.preview}
+            </p>
+          </div>
+
+          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg">
+            <div
+              aria-hidden="true"
+              className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
+            >
+              {item.kind === 'reminder' ? (
+                <IconAlarmClock size={28} />
+              ) : (
+                <IconCalendarClock size={28} />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div data-upcoming-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
+          <Button type="button" size="lg" data-upcoming-action="edit" onClick={() => onEdit(item)}>
+            {upcomingEditLabel(item)}
+          </Button>
+          <button
+            type="button"
+            data-upcoming-action="cancel"
+            className={UPCOMING_CANCEL_CLASS}
+            onClick={() => onCancel(item)}
+          >
+            Cancel
+          </button>
+        </div>
+
+        <div className="h-px bg-border" />
+        <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
+          <span data-upcoming-due="" className="font-mono text-xs tabular-nums text-fg-3">
+            {formatSendLabel(new Date(item.dueAt), now)}
+          </span>
+        </div>
       </div>
     </div>
   );

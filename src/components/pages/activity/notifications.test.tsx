@@ -1,0 +1,652 @@
+// Notifications: Activity and the chat bell on one feed. The chips (Mentions
+// takes chat mentions, Plans the six plan alerts, reminders / scheduled sends /
+// task alerts only under All and Unread), Mark all read (one inbox_mark_all_read
+// call on All; a failed send stays), every former bell tap rule, Retry on
+// a failed send, the alert cards, and the batched enrichment (one IN read per
+// table, never per row).
+
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
+vi.mock('@/lib/workspace-context', async (importOriginal) => ({
+  workspaceDisplayName: (await importOriginal<typeof import('@/lib/workspace-context')>())
+    .workspaceDisplayName,
+  useWorkspace: () => ({ workspaceKey: 'gbl' }),
+}));
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { Database } from '@srtdio/schemas';
+import { ActivityCard } from '@/components/pages/activity/ActivityCard';
+import {
+  alertBody,
+  alertTitle,
+  alertTopLine,
+  fetchActivityEntries,
+  filterByState,
+  mapEntry,
+  markAllTargets,
+  unreadCount,
+  openAction,
+  opensNothing,
+  retryFailedSend,
+  type ActivityItem,
+  type ActivityState,
+} from '@/components/pages/activity/data';
+import { PLAN_DELETED_TOAST } from '@/lib/inbox/alerts';
+import { TASKS_SHEET_ONLY } from '@/lib/chat/tasks';
+import { resetMentionNames } from '@/lib/chat/mentions';
+import type { PresignCache } from '@/lib/asset-presign';
+import { NOTIFICATIONS_TITLE } from '@/components/shell/NotificationsButton';
+
+type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
+
+const NOW = Date.parse('2026-10-20T12:00:00.000Z');
+const LATER = new Date(NOW + 3_600_000).toISOString();
+
+function row(over: Partial<InboxEntryRow>): InboxEntryRow {
+  return {
+    id: 'e1',
+    user_id: 'u1',
+    workspace_id: 'w1',
+    event_type: 'comment',
+    entity_type: 'post',
+    entity_id: 'p1',
+    scope: 'posts',
+    scope_key: null,
+    tier: 'active',
+    payload: {},
+    read_at: null,
+    snoozed_until: null,
+    actor_user_id: null,
+    email_sent_at: null,
+    deleted_at: null,
+    created_at: '2026-10-20T11:00:00.000Z',
+    ...over,
+  };
+}
+
+const item = (over: Partial<InboxEntryRow>): ActivityItem => mapEntry(row(over));
+
+const reminder = (over: Partial<InboxEntryRow> = {}) =>
+  item({
+    id: 'rem',
+    event_type: 'reminder',
+    entity_type: 'chat_channel',
+    entity_id: 'c1',
+    scope: 'people',
+    payload: { message_id: 'm1', reminder_id: 'r1' },
+    ...over,
+  });
+const sent = (over: Partial<InboxEntryRow> = {}) =>
+  item({
+    id: 'sent',
+    event_type: 'scheduled_sent',
+    entity_type: 'chat_channel',
+    entity_id: 'c1',
+    scope: 'groups',
+    payload: { scheduled_id: 's2', message_id: 'm2' },
+    ...over,
+  });
+const failed = (over: Partial<InboxEntryRow> = {}) =>
+  item({
+    id: 'fail',
+    event_type: 'scheduled_failed',
+    entity_type: 'chat_channel',
+    entity_id: 'c1',
+    scope: 'groups',
+    tier: 'urgent',
+    payload: { scheduled_id: 's1', reason: 'not a member of this chat' },
+    ...over,
+  });
+const chatMention = (over: Partial<InboxEntryRow> = {}) =>
+  item({
+    id: 'cm',
+    event_type: 'mention',
+    entity_type: 'chat_channel',
+    entity_id: 'c1',
+    scope: 'people',
+    actor_user_id: 'u2',
+    payload: { message_id: 'm9' },
+    ...over,
+  });
+const postMention = () => item({ id: 'pm', event_type: 'mention', payload: { comment_id: 'cc1' } });
+const plan = (eventType: string, over: Partial<InboxEntryRow> = {}) =>
+  item({
+    id: eventType,
+    event_type: eventType,
+    entity_type: 'plan',
+    entity_id: 'plan1',
+    actor_user_id: 'u2',
+    payload: { plan_id: 'plan1', plan_title: 'Week of 12 Oct', item_id: 'i1' },
+    ...over,
+  });
+const planItemEvent = (eventType: 'plan_review' | 'plan_comment') =>
+  item({
+    id: eventType,
+    event_type: eventType,
+    entity_type: 'plan_item',
+    entity_id: 'i1',
+    actor_user_id: 'u2',
+    payload: { plan_id: 'plan1', comment_id: 'pc1', side: 'client', status: 'approved' },
+  });
+const task = (over: Partial<InboxEntryRow> = {}) =>
+  item({
+    id: 'task',
+    event_type: 'task_changed',
+    entity_type: 'chat_channel',
+    entity_id: 'c1',
+    scope: 'groups',
+    actor_user_id: 'u2',
+    payload: { task_id: 't1', number: 3, title: 'Hook', kind: 'created', new: 'Hook' },
+    ...over,
+  });
+const taskDue = () =>
+  item({
+    id: 'due',
+    event_type: 'task_due',
+    entity_type: 'chat_channel',
+    entity_id: 'c1',
+    payload: { task_id: 't2', number: 4, title: 'Hook copy' },
+  });
+
+const PLAN_TYPES = [
+  'plan_opened',
+  'plan_deleted',
+  'plan_date_changed',
+  'plan_updated',
+  'plan_review',
+  'plan_comment',
+];
+
+const feed: ActivityItem[] = [
+  reminder(),
+  sent(),
+  failed(),
+  chatMention(),
+  postMention(),
+  ...['plan_opened', 'plan_deleted', 'plan_date_changed', 'plan_updated'].map((t) => plan(t)),
+  planItemEvent('plan_review'),
+  planItemEvent('plan_comment'),
+  task(),
+  taskDue(),
+  item({ id: 'comment' }),
+];
+
+const ids = (state: ActivityState, items: readonly ActivityItem[] = feed): string[] =>
+  filterByState(items, state, NOW).map((i) => i.id);
+
+describe('the page', () => {
+  it('is titled "Notifications"; the Plans chip has a friendly zero state', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(NOTIFICATIONS_TITLE).toBe('Notifications');
+    expect(src).toContain('title={NOTIFICATIONS_TITLE}');
+    expect(src).not.toContain('title="Activity"');
+    expect(src).toMatch(
+      /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{24\} \/>\} title="You are all caught up" \/>/,
+    );
+  });
+});
+
+describe('chips', () => {
+  it('Mentions takes every mention: chat mentions and post mentions alike', () => {
+    expect(ids('mentions')).toEqual(['cm', 'pm']);
+  });
+
+  it('Plans takes the six plan alert types and nothing else', () => {
+    expect(ids('plans')).toEqual(PLAN_TYPES);
+  });
+
+  it('reminders, scheduled sends and task alerts show only under All and Unread', () => {
+    const alertIds = ['rem', 'sent', 'fail', 'task', 'due'];
+    for (const id of alertIds) {
+      expect(ids('all')).toContain(id);
+      expect(ids('unread')).toContain(id);
+      for (const state of ['mentions', 'briefs', 'plans', 'upcoming', 'snoozed'] as const) {
+        expect(ids(state)).not.toContain(id);
+      }
+    }
+  });
+
+  it('a snoozed alert moves to Snoozed', () => {
+    const snoozed = [reminder({ snoozed_until: LATER }), task({ snoozed_until: LATER })];
+    expect(ids('snoozed', snoozed)).toEqual(['rem', 'task']);
+    expect(ids('all', snoozed)).toEqual([]);
+    expect(ids('unread', snoozed)).toEqual([]);
+  });
+});
+
+describe('Mark all read', () => {
+  it('never targets a failed scheduled send, on any chip', () => {
+    for (const state of ['all', 'unread'] as const) {
+      const targets = markAllTargets(feed, state, NOW).map((i) => i.id);
+      expect(targets).not.toContain('fail');
+      expect(targets).toContain('rem');
+    }
+  });
+
+  it('the All chip targets every unread row of every type (one proc call covers them)', () => {
+    const targets = markAllTargets(feed, 'all', NOW).map((i) => i.id);
+    for (const id of ['rem', 'sent', 'cm', 'pm', ...PLAN_TYPES, 'task', 'due', 'comment']) {
+      expect(targets).toContain(id);
+    }
+  });
+
+  it('the page makes one inbox_mark_all_read call on All, never a per-row or per-type top-up', () => {
+    const page = readFileSync(
+      fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(page).toContain('[await markAllEntriesRead(supabase, workspaceId, traceId)]');
+    expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
+  });
+
+  it('Upcoming has no inbox rows: nothing to mark, nothing counted', () => {
+    expect(ids('upcoming')).toEqual([]);
+    expect(markAllTargets(feed, 'upcoming', NOW)).toEqual([]);
+    // The unread badge counts inbox rows only; the Upcoming chip adds none.
+    expect(unreadCount(feed, NOW)).toBe(feed.length);
+  });
+});
+
+describe('taps: every former bell row keeps its behaviour', () => {
+  it('a reminder opens the chat at the message and does NOT mark it read', () => {
+    expect(openAction(reminder())).toEqual({
+      href: '/chat?channel=c1&message=m1',
+      markRead: false,
+      toast: null,
+    });
+  });
+
+  it('a chat mention and a sent row mark read, then open the message', () => {
+    expect(openAction(chatMention())).toEqual({
+      href: '/chat?channel=c1&message=m9',
+      markRead: true,
+      toast: null,
+    });
+    expect(openAction(sent())).toEqual({
+      href: '/chat?channel=c1&message=m2',
+      markRead: true,
+      toast: null,
+    });
+    // An older sent row without its message id opens through the scheduled id.
+    expect(openAction(sent({ payload: { scheduled_id: 's2' } })).href).toBe(
+      '/chat?channel=c1&message=s2',
+    );
+  });
+
+  it('a plan alert marks read, then opens /plans/{id} with ?item= (not when the item left)', () => {
+    expect(openAction(plan('plan_opened'))).toEqual({
+      href: '/plans/plan1?item=i1',
+      markRead: true,
+      toast: null,
+    });
+    const left = plan('plan_date_changed', {
+      payload: { plan_id: 'plan1', item_id: 'i1', left_plan: true },
+    });
+    expect(openAction(left).href).toBe('/plans/plan1');
+  });
+
+  it('plan_deleted (or a plan alert with no id) marks read, toasts and opens nothing', () => {
+    const deleted = { href: null, markRead: true, toast: PLAN_DELETED_TOAST };
+    expect(openAction(plan('plan_deleted'))).toEqual(deleted);
+    expect(openAction(plan('plan_updated', { entity_id: null, payload: {} }))).toEqual(deleted);
+    expect(PLAN_DELETED_TOAST).toBe('This plan was deleted');
+  });
+
+  it('plan_comment and plan_review keep their Activity deep link', () => {
+    expect(openAction(planItemEvent('plan_comment')).href).toBe('/plans/plan1?item=i1&comment=pc1');
+    expect(openAction(planItemEvent('plan_review')).href).toBe('/plans/plan1?item=i1');
+  });
+
+  it('a task alert marks read and opens the chat with its task sheet', () => {
+    expect(openAction(task())).toEqual({
+      href: '/chat?channel=c1&task=t1',
+      markRead: true,
+      toast: null,
+    });
+    const batch = task({ payload: { kind: 'batch', batch_id: 'B', created: 1, changed: 2 } });
+    expect(openAction(batch).href).toBe(`/chat?channel=c1&task=${TASKS_SHEET_ONLY}`);
+  });
+
+  it('a failed send has no tap (Retry and Edit instead); a deleted post neither', () => {
+    expect(opensNothing(failed())).toBe(true);
+    expect(openAction(failed()).href).toBeNull();
+    expect(opensNothing(item({ event_type: 'post_deleted' }))).toBe(true);
+    expect(opensNothing(reminder())).toBe(false);
+    expect(opensNothing(plan('plan_deleted'))).toBe(false);
+  });
+});
+
+describe('Retry on a failed send', () => {
+  function recorder(error: { message: string } | null = null) {
+    const rpcs: { name: string; args: Record<string, unknown> }[] = [];
+    const client = {
+      rpc(name: string, args: Record<string, unknown>) {
+        rpcs.push({ name, args });
+        const result = Promise.resolve({ data: error === null ? { id: 'x' } : null, error });
+        return Object.assign(result, { abortSignal: () => result });
+      },
+    } as unknown as Parameters<typeof retryFailedSend>[0];
+    return { client, rpcs };
+  }
+
+  it('calls chat_scheduled_send_now on the scheduled id with the trace id', async () => {
+    const { client, rpcs } = recorder();
+    expect(await retryFailedSend(client, failed(), 'w1', 'trace-x')).toEqual({ kind: 'sent' });
+    expect(rpcs).toEqual([
+      { name: 'chat_scheduled_send_now', args: { p_id: 's1', p_trace_id: 'trace-x' } },
+    ]);
+  });
+
+  it('a row resolved elsewhere (stale) only marks its entry read', async () => {
+    const { client, rpcs } = recorder();
+    const stale = failed();
+    if (stale.alert != null) stale.alert.stale = true;
+    expect(await retryFailedSend(client, stale, 'w1', 'trace-y')).toEqual({ kind: 'cleared' });
+    expect(rpcs).toEqual([
+      {
+        name: 'inbox_mark_read',
+        args: {
+          p_entry_id: 'fail',
+          p_workspace_id: 'w1',
+          p_created_at: '2026-10-20T11:00:00.000Z',
+          p_trace_id: 'trace-y',
+        },
+      },
+    ]);
+  });
+
+  it('a refusal toasts the action copy; "not found" stays silent', async () => {
+    const refused = await retryFailedSend(
+      recorder({ message: 'not a member of this chat' }).client,
+      failed(),
+      'w1',
+      't',
+    );
+    expect(refused).toMatchObject({ kind: 'failed', copy: "Couldn't do that. Try again." });
+    const gone = await retryFailedSend(
+      recorder({ message: 'scheduled message not found' }).client,
+      failed(),
+      'w1',
+      't',
+    );
+    expect(gone).toMatchObject({ kind: 'failed', copy: null });
+  });
+});
+
+describe('alert wording (the bell lines on Activity cards)', () => {
+  it('top line: the actor, else the alert label', () => {
+    const r = reminder();
+    if (r.alert == null) throw new Error('fixture');
+    expect(alertTopLine(r, r.alert)).toBe('Reminder');
+    expect(alertTopLine({ actorName: 'Priya' }, r.alert)).toBe('Priya');
+    const s = sent();
+    if (s.alert == null) throw new Error('fixture');
+    expect(alertTopLine(s, s.alert)).toBe('Scheduled');
+  });
+
+  it('titles and bodies', () => {
+    const s = sent();
+    const f = failed();
+    const p = { ...plan('plan_opened'), actorName: 'Priya' };
+    const t = { ...task(), actorName: 'Leo' };
+    if (s.alert == null || f.alert == null || p.alert == null || t.alert == null) {
+      throw new Error('fixture');
+    }
+    expect(alertTitle(s, s.alert, 'agency')).toBe('Sent in Chat');
+    expect(alertTitle(s, { ...s.alert, chatName: 'Launch crew' }, 'agency')).toBe(
+      'Sent in Launch crew',
+    );
+    expect(alertTitle(f, f.alert, 'agency')).toBe("Not sent · You're no longer in this chat");
+    expect(alertTitle(p, p.alert, 'client')).toBe('Priya shared Week of 12 Oct with you');
+    expect(alertTitle(p, p.alert, 'agency')).toBe('Priya opened Week of 12 Oct for approvers');
+    expect(alertTitle(t, t.alert, 'agency')).toBe(`Leo · added ${String.fromCharCode(35)}3 Hook`);
+    expect(alertBody(t.alert)).toBe('Chat');
+    expect(alertBody({ ...p.alert, itemTitle: 'Carousel' })).toBe('Carousel');
+    expect(alertBody(s.alert)).toBeNull();
+  });
+});
+
+describe('alert cards: Activity cards, not the old bell panel', () => {
+  const cache = {} as unknown as PresignCache;
+  function card(group: ActivityItem[], extra: Partial<Parameters<typeof ActivityCard>[0]> = {}) {
+    return renderToStaticMarkup(
+      <ActivityCard
+        group={group}
+        nowMs={NOW}
+        cache={cache}
+        presignEnabled={false}
+        onOpenGroup={() => {}}
+        onOpenEntry={() => {}}
+        onSnooze={() => {}}
+        onMarkRead={() => {}}
+        selfName={null}
+        {...extra}
+      />,
+    );
+  }
+
+  it('a failed send: "Not sent" in bad, the reason, Retry and Edit, and no tap', () => {
+    const html = card([failed()], { onRetry: () => {}, onEdit: () => {} });
+    expect(html).toContain('data-activity-event="scheduled_failed"');
+    expect(html).toMatch(/class="text-bad">Not sent</);
+    expect(html).toContain('no longer in this chat');
+    expect(html).toContain('data-activity-action="retry"');
+    expect(html).toContain('data-activity-action="edit"');
+    expect(html).toMatch(/class="[^"]*h-11[^"]*"[^>]*data-activity-action="retry"/);
+    expect(html).not.toMatch(/role="button"[^>]*data-activity-lead/);
+    expect(html).toContain('data-activity-alert-icon="failed"');
+  });
+
+  it('a reminder: the card frame, the menu, the unread highlight and its icon', () => {
+    const html = card([reminder()]);
+    expect(html).toContain('data-activity-event="reminder"');
+    expect(html).toContain('data-activity-menu');
+    expect(html).toContain('border-accent-line');
+    expect(html).toContain('data-activity-alert-icon="reminder"');
+    expect(html).toContain('>Reminder<');
+    expect(html).not.toContain('data-activity-action');
+  });
+
+  it('a plan alert reads the side-aware line', () => {
+    const p = { ...plan('plan_opened'), actorName: 'Priya' };
+    expect(card([p], { side: 'client' })).toContain('Priya shared Week of 12 Oct with you');
+    expect(card([p])).toContain('Priya opened Week of 12 Oct for approvers');
+  });
+});
+
+describe('fetchActivityEntries: alert enrichment is batched', () => {
+  beforeEach(() => resetMentionNames());
+  type QueryResult = { data: Record<string, unknown>[] | null; error: { message: string } | null };
+  type FakeClient = Parameters<typeof fetchActivityEntries>[0];
+
+  function recordingClient(tables: Record<string, QueryResult>): {
+    client: FakeClient;
+    ins: { table: string; vals: unknown[] }[];
+  } {
+    const ins: { table: string; vals: unknown[] }[] = [];
+    const client = {
+      from(table: string) {
+        const members: QueryResult = {
+          data: (tables.users?.data ?? []).map((u) => ({ user_id: u.id, role: 'agency' })),
+          error: null,
+        };
+        const result =
+          tables[table] ?? (table === 'workspace_members' ? members : { data: [], error: null });
+        const self = {
+          select: () => self,
+          eq: () => self,
+          is: () => self,
+          order: () => self,
+          limit: () => self,
+          lt: () => self,
+          like: () => self,
+          or: () => self,
+          in: (_col: string, vals: readonly unknown[]) => {
+            ins.push({ table, vals: [...vals] });
+            return self;
+          },
+          then(onfulfilled?: (value: QueryResult) => unknown) {
+            return Promise.resolve(result).then(onfulfilled);
+          },
+        };
+        return self;
+      },
+    };
+    return { client: client as unknown as FakeClient, ins };
+  }
+  const ok = (data: Record<string, unknown>[]): QueryResult => ({ data, error: null });
+  const raw = (over: Partial<InboxEntryRow>) => row(over) as unknown as Record<string, unknown>;
+
+  it('one IN read per table for every alert on the page; fields resolved', async () => {
+    const rows = [
+      ...Array.from({ length: 3 }, (_, i) =>
+        raw({
+          id: `rem${i}`,
+          event_type: 'reminder',
+          entity_type: 'chat_channel',
+          entity_id: 'g-chan',
+          payload: { message_id: `m${i}` },
+        }),
+      ),
+      raw({
+        id: 'sent',
+        event_type: 'scheduled_sent',
+        entity_type: 'chat_channel',
+        entity_id: 'dm-chan',
+        payload: { scheduled_id: 's2', message_id: 'm9' },
+      }),
+      raw({
+        id: 'fail',
+        event_type: 'scheduled_failed',
+        entity_type: 'chat_channel',
+        entity_id: 'g-chan',
+        payload: { scheduled_id: 's1' },
+      }),
+      raw({
+        id: 'moved',
+        event_type: 'plan_date_changed',
+        entity_type: 'plan',
+        entity_id: 'plan2',
+        actor_user_id: 'u-cy',
+        payload: { plan_id: 'plan2', item_id: 'i2', post_id: 'post2', to: '2026-10-15' },
+      }),
+      raw({
+        id: 'task',
+        event_type: 'task_changed',
+        entity_type: 'chat_channel',
+        entity_id: 'g-chan',
+        actor_user_id: 'u-cy',
+        payload: { kind: 'batch', batch_id: 'B' },
+      }),
+    ];
+    const { client, ins } = recordingClient({
+      inbox_entries: ok(rows),
+      chat_channels: ok([
+        { channel_id: 'g-chan', channel_type: 'group', entity_id: 'g1' },
+        { channel_id: 'dm-chan', channel_type: 'dm', entity_id: null },
+      ]),
+      groups: ok([{ id: 'g1', name: 'Launch crew' }]),
+      chat_messages: ok([
+        { id: 'm0', channel_id: 'g-chan', sender_user_id: 'u-ana', body: 'Ship the reel' },
+        { id: 'm9', channel_id: 'dm-chan', sender_user_id: 'u1', body: 'See you at 5' },
+      ]),
+      chat_scheduled_messages: ok([
+        { id: 's1', status: 'failed', failure_reason: 'exceeds 5000', body: 'Long one' },
+      ]),
+      plans: ok([{ id: 'plan2', title: 'Launch' }]),
+      plan_items: ok([{ id: 'i2', plan_id: 'plan2', kind: 'post', title: null, post_id: 'post2' }]),
+      posts: ok([{ id: 'post2', title: 'Carousel', format: 'text', caption: null, number: 2 }]),
+      users: ok([
+        { id: 'u-ana', display_name: 'Ana', avatar_url: null },
+        { id: 'u-cy', display_name: 'Cy', avatar_url: null },
+      ]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const byId = new Map(res.data.map((i) => [i.id, i]));
+
+    const rem = byId.get('rem0');
+    expect(rem?.actorName).toBe('Ana');
+    expect(rem?.alert).toMatchObject({ chatName: 'Launch crew', preview: 'Ship the reel' });
+    // A message that did not load still reads, never blank.
+    expect(byId.get('rem1')?.alert?.preview).toBe('Message');
+    expect(byId.get('sent')?.alert).toMatchObject({ chatName: null, preview: 'See you at 5' });
+    expect(byId.get('fail')?.alert).toMatchObject({
+      reason: 'exceeds 5000',
+      preview: 'Long one',
+      stale: false,
+    });
+    const moved = byId.get('moved');
+    expect(moved?.actorName).toBe('Cy');
+    expect(moved?.alert).toMatchObject({ planTitle: 'Launch', itemTitle: 'Carousel' });
+    const t = byId.get('task');
+    if (t?.alert == null) throw new Error('fixture');
+    expect(alertTitle(t, t.alert, 'agency')).toBe('Cy edited tasks');
+    expect(alertBody(t.alert)).toBe('Launch crew');
+
+    const perTable = (table: string) => ins.filter((c) => c.table === table);
+    for (const table of [
+      'chat_channels',
+      'chat_messages',
+      'chat_scheduled_messages',
+      'groups',
+      'plans',
+      'plan_items',
+      'posts',
+    ]) {
+      expect(perTable(table), table).toHaveLength(1);
+    }
+    expect(perTable('chat_channels')[0]?.vals.sort()).toEqual(['dm-chan', 'g-chan']);
+    expect(perTable('chat_messages')[0]?.vals.sort()).toEqual(['m0', 'm1', 'm2', 'm9']);
+    expect(perTable('chat_scheduled_messages')[0]?.vals).toEqual(['s1']);
+  });
+
+  it('a failed-rows read that fails never marks a failed send stale', async () => {
+    const { client } = recordingClient({
+      inbox_entries: ok([
+        raw({
+          id: 'fail',
+          event_type: 'scheduled_failed',
+          entity_type: 'chat_channel',
+          entity_id: 'c1',
+          payload: { scheduled_id: 's1', reason: 'not a member of this chat' },
+        }),
+      ]),
+      chat_scheduled_messages: { data: null, error: { message: 'boom' } },
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data[0]?.alert).toMatchObject({
+      stale: false,
+      reason: 'not a member of this chat',
+      preview: 'Scheduled message',
+    });
+  });
+
+  it('a gone failed send (read ok, no row) is stale', async () => {
+    const { client } = recordingClient({
+      inbox_entries: ok([
+        raw({
+          id: 'fail',
+          event_type: 'scheduled_failed',
+          entity_type: 'chat_channel',
+          entity_id: 'c1',
+          payload: { scheduled_id: 's1' },
+        }),
+      ]),
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    expect(res.ok && res.data[0]?.alert?.stale).toBe(true);
+  });
+});

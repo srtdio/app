@@ -19,6 +19,8 @@
 // closes. The phone page is a modal dialog (focus moves in and returns, see
 // PlanPage). Tokens only; translateY motion for sheets, a short translateX
 // shake on the first flagged row.
+// The Plan tab opens it too, outside any chat, its dates the week of a
+// picked day when one is passed (initialRange).
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -195,6 +197,8 @@ export function PlanComposeScreen(props: {
   open: boolean;
   workspaceId: string;
   timeZone: string;
+  /** The plan dates each open starts with (default: this Monday to Sunday). */
+  initialRange?: ComposeRange;
   onClose: () => void;
   /**
    * The plan exists with its items: open its Plan screen. `stale` is true when
@@ -204,7 +208,13 @@ export function PlanComposeScreen(props: {
 }): ReactElement | null {
   const toast = useToast();
   const [title, setTitle] = useState('');
-  const [range, setRange] = useState(() => defaultPlanRange(new Date(), props.timeZone));
+  const startsOn = props.initialRange?.startsOn;
+  const endsOn = props.initialRange?.endsOn;
+  const [range, setRange] = useState(() =>
+    startsOn !== undefined && endsOn !== undefined
+      ? { startsOn, endsOn }
+      : defaultPlanRange(new Date(), props.timeZone),
+  );
   const [items, setItems] = useState<ComposeItem[]>([]);
   // The picker's rows for the posts in the list (the picker's selection).
   const [picked, setPicked] = useState<PostCardFields[]>([]);
@@ -246,7 +256,11 @@ export function PlanComposeScreen(props: {
   useEffect(() => {
     if (!open) return;
     setTitle('');
-    setRange(defaultPlanRange(new Date(), timeZone));
+    setRange(
+      startsOn !== undefined && endsOn !== undefined
+        ? { startsOn, endsOn }
+        : defaultPlanRange(new Date(), timeZone),
+    );
     setItems([]);
     setPicked([]);
     setPicker(null);
@@ -260,7 +274,7 @@ export function PlanComposeScreen(props: {
     setTriedShare(false);
     setCloseConfirm(false);
     inFlight.current = false;
-  }, [open, timeZone]);
+  }, [open, timeZone, startsOn, endsOn]);
 
   // Every close (X, back, Escape) asks first while the plan holds anything.
   const hasContent = composeHasContent({ title, items, conceptDraft: conceptForm });

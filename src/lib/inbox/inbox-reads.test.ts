@@ -235,7 +235,7 @@ describe('fetchInboxSince', () => {
     if (!res.ok) return;
     expect(res.data.activityCount).toBe(37);
     expect(res.data.rows).toHaveLength(11);
-    // The Activity read drops bell rows in the query itself, before its limit.
+    // The activity read drops the old bell rows in the query itself, before its limit.
     const act = calls.find((c) => c.nots.length > 0);
     expect(act?.ors.length).toBeGreaterThan(0);
     expect(act?.opts).toEqual({ count: 'exact' });
@@ -472,7 +472,7 @@ describe('enrichNewRows', () => {
   });
 });
 
-describe('bell rows stay out of the Activity counts', () => {
+describe('merged counts: the Notifications badge and the Mentions chip count every row', () => {
   function recording(): {
     client: Parameters<typeof fetchInboxUnreadCount>[0];
     calls: { method: string; args: unknown[] }[];
@@ -486,36 +486,36 @@ describe('bell rows stay out of the Activity counts', () => {
       };
     }
     self.then = (onfulfilled: (v: QueryResult) => unknown) =>
-      Promise.resolve({ count: 0, error: null }).then(onfulfilled);
+      Promise.resolve({ count: 7, error: null }).then(onfulfilled);
     const client = { from: () => self };
     return { client: client as unknown as Parameters<typeof fetchInboxUnreadCount>[0], calls };
   }
   const params = { workspaceId: 'w1', userId: 'u1', nowIso: '2026-10-03T00:00:00.000Z' };
+  const SNOOZE_OR = `snoozed_until.is.null,snoozed_until.lte.${params.nowIso}`;
 
-  it('the Activity badge excludes reminder, scheduled and chat mention rows', async () => {
+  it('the badge counts every unread, non-deleted, non-snoozed row: the old bell rows too', async () => {
     const { client, calls } = recording();
-    await fetchInboxUnreadCount(client, params);
-    expect(calls).toContainEqual({
-      method: 'not',
-      args: [
-        'event_type',
-        'in',
-        '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment,task_changed,task_due)',
-      ],
-    });
-    expect(calls).toContainEqual({
-      method: 'or',
-      args: ['event_type.neq.mention,entity_type.is.null,entity_type.neq.chat_channel'],
-    });
+    const res = await fetchInboxUnreadCount(client, params);
+    expect(res).toEqual({ ok: true, data: 7 });
+    expect(calls).toEqual([
+      { method: 'select', args: ['id', { count: 'exact', head: true }] },
+      { method: 'eq', args: ['workspace_id', 'w1'] },
+      { method: 'eq', args: ['user_id', 'u1'] },
+      { method: 'is', args: ['read_at', null] },
+      { method: 'is', args: ['deleted_at', null] },
+      { method: 'or', args: [SNOOZE_OR] },
+    ]);
+    // No event_type or entity filter: reminders, scheduled sends, plan and
+    // task alerts and chat mentions all count.
+    expect(calls.some((c) => c.method === 'not')).toBe(false);
   });
 
-  it('the Mentions count keeps post and brief mentions only', async () => {
+  it('the Mentions count includes chat mentions (event_type mention, any entity)', async () => {
     const { client, calls } = recording();
     await fetchUnreadMentionCount(client, params);
     expect(calls).toContainEqual({ method: 'eq', args: ['event_type', 'mention'] });
-    expect(calls).toContainEqual({
-      method: 'or',
-      args: ['event_type.neq.mention,entity_type.is.null,entity_type.neq.chat_channel'],
-    });
+    expect(calls.filter((c) => c.method === 'or')).toEqual([{ method: 'or', args: [SNOOZE_OR] }]);
+    expect(calls.some((c) => c.method === 'not')).toBe(false);
+    expect(calls.some((c) => c.args[0] === 'entity_type')).toBe(false);
   });
 });

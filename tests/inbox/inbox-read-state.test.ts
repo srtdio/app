@@ -2,7 +2,8 @@
 // stack as the authenticated role (the path the Activity surface uses). Each
 // proc is gated on is_active_workspace_member and scoped to auth.uid(), so the
 // suite proves: a member clears only their OWN rows, a non-member is rejected,
-// mark-all skips snoozed rows, and snooze validates its kind. Ground truth is
+// mark-all clears every event type but skips snoozed rows, and snooze validates
+// its kind. Ground truth is
 // read back through the service role.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -158,12 +159,47 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
     expect((await readEntry(snoozed)).readAt).toBeNull();
   });
 
-  it('inbox_mark_all_read marks a comment read and leaves a plan alert unread', async () => {
-    const comment = await insertEntry(member.id);
-    const plan = await insertEntry(member.id, {
+  it('inbox_mark_all_read clears every event type: chat mentions, reminders, scheduled and plan alerts', async () => {
+    const chat = { entity_type: 'chat_channel', entity_id: `dm__${crypto.randomUUID()}` };
+    const plan = { entity_type: 'plan', entity_id: crypto.randomUUID() };
+    const cleared = [
+      await insertEntry(member.id),
+      await insertEntry(member.id, { event_type: 'mention', scope: 'people', ...chat }),
+      await insertEntry(member.id, { event_type: 'reminder', scope: 'people', ...chat }),
+      await insertEntry(member.id, { event_type: 'scheduled_sent', scope: 'people', ...chat }),
+      await insertEntry(member.id, { event_type: 'scheduled_failed', scope: 'people', ...chat }),
+      ...(await Promise.all(
+        ['plan_opened', 'plan_deleted', 'plan_date_changed', 'plan_updated'].map((eventType) =>
+          insertEntry(member.id, { event_type: eventType, ...plan }),
+        ),
+      )),
+      ...(await Promise.all(
+        ['plan_review', 'plan_comment'].map((eventType) =>
+          insertEntry(member.id, {
+            event_type: eventType,
+            entity_type: 'plan_item',
+            entity_id: crypto.randomUUID(),
+          }),
+        ),
+      )),
+    ];
+    // Snoozed rows of the former bell types stay unread too.
+    const snoozedMention = await insertEntry(member.id, {
+      event_type: 'mention',
+      scope: 'people',
+      snoozed_until: '2026-07-20T00:00:00.000Z',
+      ...chat,
+    });
+    const snoozedReminder = await insertEntry(member.id, {
+      event_type: 'reminder',
+      scope: 'people',
+      snoozed_until: '2026-07-20T00:00:00.000Z',
+      ...chat,
+    });
+    const snoozedPlan = await insertEntry(member.id, {
       event_type: 'plan_updated',
-      entity_type: 'plan',
-      entity_id: crypto.randomUUID(),
+      snoozed_until: '2026-07-20T00:00:00.000Z',
+      ...plan,
     });
 
     const result = await inboxMarkAllRead(clientFor(member.id), {
@@ -171,8 +207,10 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
       p_trace_id: generateTraceId(),
     });
     expect(result.ok).toBe(true);
-    expect((await readEntry(comment)).readAt).not.toBeNull();
-    expect((await readEntry(plan)).readAt).toBeNull();
+    for (const id of cleared) expect((await readEntry(id)).readAt).not.toBeNull();
+    for (const id of [snoozedMention, snoozedReminder, snoozedPlan]) {
+      expect((await readEntry(id)).readAt).toBeNull();
+    }
   });
 
   it('inbox_snooze sets snoozed_until and clear un-snoozes', async () => {

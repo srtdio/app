@@ -133,7 +133,7 @@ describe('W8 fix 5: Mark all read applies to the active chip only', () => {
 
   it('shows no Undo and no success toast: Mark all read just clears unread', () => {
     const src = readFileSync(
-      fileURLToPath(new URL('../ActivityPage.tsx', import.meta.url)),
+      fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
     expect(src).not.toContain('useUndoableAction');
@@ -154,7 +154,7 @@ describe('W8 fix 6: the load error is plain copy, never raw error text', () => {
 });
 
 describe('W8 fix 7: shared snooze labels and one unread dot size', () => {
-  it('Activity uses the same snooze labels as the bell', () => {
+  it('Notifications uses the one shared set of snooze labels', () => {
     expect(SNOOZE_OPTIONS).toBe(INBOX_SNOOZE_OPTIONS);
     expect(SNOOZE_OPTIONS.map((o) => o.label)).toEqual([
       '1 hour',
