@@ -148,7 +148,7 @@ describe('long titles stay inside the column (view mode)', () => {
           drag={null}
           onOpenItem={() => undefined}
           onPlanOk={() => undefined}
-        onPlanNotOk={() => undefined}
+          onPlanNotOk={() => undefined}
         />
       </MemoryRouter>,
     );
