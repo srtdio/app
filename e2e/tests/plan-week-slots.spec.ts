@@ -10,6 +10,7 @@ import {
   ME,
   PEER,
   PEER_NAME,
+  PLAN_CONCEPT_ITEM,
   PLAN_ID,
   PLAN_POST_ITEM,
   PLAN_TITLE,
@@ -20,13 +21,15 @@ import {
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Plan week list and slot approval: one list grouped by day (empty days read
-// "Nothing planned"), a slot checkbox per row (client side for a client, team
-// side for the agency), an optimistic tick behind a 7s Undo toast (X3 / FT52:
-// the write goes when the toast ends or is closed, never after Undo), a draft
-// row without a checkbox for a client, the post item's "Slot approved" header
-// and its overflow (the post view's own sheet), the delete confirm naming the
-// plan, and the withdrawal in Activity. Runs in both colour schemes (the dark
-// and light projects) on the iPhone viewport.
+// "Nothing planned", one date tile per day), a PLAN line per row (the OK | Not
+// OK switch while undecided, a solid pill once decided; client side for a
+// client, team side for the agency, read-only text for the agency on an Open
+// plan), an optimistic OK behind a 4s Undo toast (X3 / FT52: the write goes
+// when the toast ends or is closed, never after Undo), Not OK opening the item
+// with the note box focused, a draft row without a PLAN line for a client, the
+// post item's "Slot approved" header and its overflow (the post view's own
+// sheet), and the delete confirm naming the plan. Runs in both colour schemes
+// (the dark and light projects) on the iPhone viewport.
 
 const FILE_VERSION = '0190e100-0000-7000-8000-0000000000c1';
 
@@ -53,25 +56,28 @@ function viewAsClient(network: HarnessNetwork): void {
 }
 
 /**
- * A1: the tick is the row's last element and its 22px box's right edge sits
- * 16px from the viewport edge; the 48px day column sits left of the items,
- * its top level with the day's first thumbnail.
+ * A1: the row is date tile | title block | thumbnail, then the PLAN and POST
+ * lines. The thumbnail (56px) sits 16px from the viewport's right edge; the
+ * day's one date tile (56x56) sits left of the rows, its top level with the
+ * day's first thumbnail.
  */
 async function expectRowLayout(page: Page, itemId: string): Promise<void> {
   const wrap = page.locator(`[data-plan-row-wrap="${itemId}"]`);
-  const last = await wrap.evaluate((el) => el.lastElementChild?.getAttribute('data-plan-slot'));
-  expect(last === 'client' || last === 'team').toBe(true);
-  const row = await wrap.boundingBox();
-  const box = await wrap.locator('[data-plan-slot] > span').boundingBox();
+  await expect(wrap.locator('[data-plan-line="plan"]')).toHaveCount(1);
+  await expect(wrap.locator('[data-plan-line="post"]')).toHaveCount(1);
+  const row = await wrap.locator('[data-plan-row]').boundingBox();
+  const thumb = await wrap.locator('[data-plan-row-tile]').boundingBox();
   const viewport = page.viewportSize();
-  expect(row !== null && box !== null && viewport !== null).toBe(true);
-  if (row === null || box === null || viewport === null) return;
-  expect(Math.round(box.width)).toBe(22);
-  expect(Math.round(viewport.width - (box.x + box.width))).toBe(16);
+  expect(row !== null && thumb !== null && viewport !== null).toBe(true);
+  if (row === null || thumb === null || viewport === null) return;
+  expect(Math.round(thumb.width)).toBe(56);
+  expect(Math.round(viewport.width - (thumb.x + thumb.width))).toBe(16);
   const day = page.locator('[data-plan-day]').filter({ has: wrap });
+  await expect(day.locator('[data-plan-day-col]')).toHaveCount(1);
   const col = await day.locator('[data-plan-day-col]').boundingBox();
   expect(col !== null && col.x + col.width <= row.x).toBe(true);
-  expect(col?.width).toBe(48);
+  expect(col?.width).toBe(56);
+  expect(col?.height).toBe(56);
   const tile = await day.locator('[data-plan-row-tile]').first().boundingBox();
   if (col !== null && tile !== null) expect(Math.round(col.y)).toBe(Math.round(tile.y));
 }
@@ -87,7 +93,7 @@ async function openPlan(page: Page, planId: string) {
   return plan;
 }
 
-test('client: week list, tick with Undo, counts, slot header, overflow, withdrawal row', async ({
+test('client: week list, OK with Undo, counts, slot header, overflow, reopen the switch', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -103,7 +109,7 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
 
   // One list by day: every day of the range, empty ones "Nothing planned".
   await expect(plan.locator('[data-plan-tab]')).toHaveCount(0);
-  // Day column on the left: weekday over the date number.
+  // Date tile on the left: weekday strip over the date number.
   const firstDay = plan.locator('[data-plan-day]').first();
   await expect(firstDay).toHaveAttribute('data-plan-day', '2026-10-12');
   await expect(firstDay.locator('[data-plan-day-weekday]')).toHaveText(/^mon$/i);
@@ -111,32 +117,43 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await expect(plan.locator('[data-plan-day-empty]').first()).toHaveText('Nothing planned');
   expect(await plan.locator('[data-plan-day-empty]').count()).toBeGreaterThan(0);
   await expect(plan.locator('[data-plan-week-header]')).toHaveCount(0);
-  await expect(plan.locator('[data-plan-row-kind]')).toHaveCount(2);
-  const progress = plan.locator('[data-plan-screen-progress]');
-  await expect(progress).toHaveText('Approved 0 of 2');
+  await expect(plan.locator('[data-plan-row]')).toHaveCount(2);
+  await expect(plan.locator('[data-plan-row-kind]')).toHaveCount(0);
+  const progress = plan.locator('[data-plan-screen-progress="plan"]');
+  await expect(progress).toContainText('0/2 OK');
+  await expect(plan.locator('[data-plan-screen-progress="post"]')).toContainText('0/1 approved');
 
-  // The client box writes the client side; no team state anywhere.
-  const box = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"] [data-plan-slot]`);
+  // The client's switch writes the client side; no team state anywhere.
+  const wrap = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"]`);
+  const box = wrap.locator('[data-plan-control]');
+  const ok = wrap.locator('[data-plan-ok]');
+  await expect(box).toHaveAttribute('data-plan-control', 'switch');
   await expect(box).toHaveAttribute('data-plan-slot', 'client');
-  await expect(box).toHaveAttribute('aria-checked', 'false');
+  await expect(box).toHaveAttribute('data-plan-slot-state', 'pending');
+  await expect(ok).toHaveText('OK');
+  await expect(wrap.locator('[data-plan-not-ok]')).toHaveText('Not OK');
   await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);
-  expectMinTouchTarget(await box.boundingBox());
+  await expect(plan.locator('[role="checkbox"]')).toHaveCount(0);
+  expectMinTouchTarget(await ok.boundingBox());
+  expectMinTouchTarget(await wrap.locator('[data-plan-not-ok]').boundingBox());
   await expectRowLayout(page, PLAN_POST_ITEM);
-  await box.scrollIntoViewIfNeeded();
+  await ok.scrollIntoViewIfNeeded();
 
-  // Tick: optimistic, the count moves, the toast offers Undo for 7s. Nothing
-  // is written while it counts down (X3 / FT52).
+  // OK: optimistic, the pill shows, the count moves, the toast offers Undo for
+  // 4s. Nothing is written while it counts down (X3 / FT52).
   const reviews = () => network.world.tables.plan_item_reviews ?? [];
   const reviewCalls = () => network.rpcCalls.filter((c) => c.name === 'plan_item_review');
-  await box.click();
-  await expect(box).toHaveAttribute('aria-checked', 'true');
-  await expect(progress).toHaveText('Approved 1 of 2');
+  await ok.click();
+  await expect(box).toHaveAttribute('data-plan-control', 'pill');
+  await expect(box).toHaveAttribute('data-plan-slot-state', 'approved');
+  await expect(box).toHaveText('OK');
+  await expect(progress).toContainText('1/2 OK');
   const undo = page.locator('[data-toast-action]');
   await expect(undo).toHaveText('Undo');
   // The fixture's post item has no plan day, so the toast names none.
   await expect(page.getByText(/^Slot approved( · \w{3} \d{1,2} \w{3})?$/)).toBeVisible();
-  // L5: the success-tinted toast with Undo at its right end (the 7s countdown
+  // L5: the success-tinted toast with Undo at its right end (the 4s countdown
   // bar under the card is the only thing after it).
   const success = page.locator('[data-toast-tone="success"]');
   await expect(success).toBeVisible();
@@ -158,11 +175,12 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   const stage = post?.stage;
   expect(stage).not.toBe('approved');
 
-  // Undo: back to waiting, the count back; the write never goes, so nothing
+  // Undo: back to the switch, the count back; the write never goes, so nothing
   // to withdraw either.
   await undo.click();
-  await expect(box).toHaveAttribute('aria-checked', 'false');
-  await expect(progress).toHaveText('Approved 0 of 2');
+  await expect(box).toHaveAttribute('data-plan-control', 'switch');
+  await expect(box).toHaveAttribute('data-plan-slot-state', 'pending');
+  await expect(progress).toContainText('0/2 OK');
   await page.waitForTimeout(500);
   expect(reviews()).toEqual([]);
   expect(reviewCalls()).toEqual([]);
@@ -173,10 +191,10 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   ).toEqual([]);
   expect(post?.stage).toBe(stage);
 
-  // Tick again and close the toast: closing commits at once (one write), then
+  // OK again and close the toast: closing commits at once (one write), then
   // the post item's header reads "Slot approved".
-  await box.click();
-  await expect(box).toHaveAttribute('aria-checked', 'true');
+  await ok.click();
+  await expect(box).toHaveAttribute('data-plan-control', 'pill');
   await page.getByRole('button', { name: 'Dismiss notification' }).first().click();
   await expect.poll(() => reviews()[0]?.status).toBe('approved');
   expect(reviews()).toEqual([
@@ -201,34 +219,77 @@ test('client: week list, tick with Undo, counts, slot header, overflow, withdraw
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
-  // Untick from the list: written at once, removed (no Undo); the withdrawal
-  // is the newest entry.
+  // No untick: tapping the pill reopens the switch with OK pressed; nothing
+  // is written.
   await page.goBack();
   await expect(item).toBeHidden();
+  await expect(box).toHaveAttribute('data-plan-control', 'pill');
+  expectMinTouchTarget(await box.boundingBox());
   await box.click();
-  await expect(box).toHaveAttribute('aria-checked', 'false');
-  await expect(page.getByText('Slot approval removed')).toBeVisible();
-  await expect(progress).toHaveText('Approved 0 of 2');
-  await expect.poll(() => reviews()[0]?.status).toBe('waiting');
-  expect(
-    (network.world.tables.inbox_entries ?? []).filter(
-      (r) => (r.payload as Record<string, unknown> | null)?.withdrawn === true,
-    ).length,
-  ).toBeGreaterThan(0);
-  expectClean(network);
-
-  // The withdrawal row goes to the other members (never the actor): a plan
-  // alert, so a bell row for them (never Activity).
-  const latest = (network.world.tables.inbox_entries ?? []).filter(
-    (r) => r.event_type === 'plan_review' && r.user_id !== ME,
-  );
-  expect(
-    latest.some((r) => (r.payload as Record<string, unknown> | null)?.withdrawn === true),
-  ).toBe(true);
+  await expect(box).toHaveAttribute('data-plan-control', 'switch');
+  await expect(ok).toHaveAttribute('aria-pressed', 'true');
+  await expect(wrap.locator('[data-plan-not-ok]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(progress).toContainText('1/2 OK');
+  await expect(page.getByText('Slot approval removed')).toHaveCount(0);
+  expect(reviewCalls()).toHaveLength(1);
+  expect(reviews()[0]?.status).toBe('approved');
   expectClean(network);
 });
 
-test('agency on an Open plan: read-only client checkbox, header subtitle, long title, delete confirm names the plan', async ({
+test('client: OK shows the pill with Undo; Not OK opens the item with the note box focused', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const network = await installHarnessNetwork(page);
+  viewAsClient(network);
+  seedClientPlan(network.world, {
+    channelId: DM_CHANNEL,
+    sender: PEER,
+    fileVersionId: FILE_VERSION,
+  });
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, PLAN_ID);
+
+  // OK on the post row: the pill reads OK and the Undo toast shows.
+  const post = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"]`);
+  await post.locator('[data-plan-ok]').scrollIntoViewIfNeeded();
+  await post.locator('[data-plan-ok]').click();
+  const pill = post.locator('[data-plan-control="pill"]');
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveText('OK');
+  await expect(pill).toHaveAttribute('data-plan-slot-state', 'approved');
+  await expect(page.locator('[data-toast-action]')).toHaveText('Undo');
+
+  // Not OK on the undecided concept row: the item screen opens with the note
+  // box open and focused.
+  const concept = plan.locator(`[data-plan-row-wrap="${PLAN_CONCEPT_ITEM}"]`);
+  await expect(concept.locator('[data-plan-control="switch"]')).toBeVisible();
+  await concept.locator('[data-plan-not-ok]').scrollIntoViewIfNeeded();
+  await concept.locator('[data-plan-not-ok]').click();
+  const item = planPage(page, 'item');
+  await expect(item).toBeVisible();
+  await expect(page.getByLabel('Comment', { exact: true })).toBeFocused();
+  await expect(item.locator('[data-plan-ask-hint]')).toBeVisible();
+  await expect(page.getByLabel('Comment', { exact: true })).toHaveAttribute(
+    'placeholder',
+    'What should change?',
+  );
+  // Not OK flushed the pending OK first; the changes are written only on Send.
+  await expect
+    .poll(
+      () =>
+        (network.world.tables.plan_item_reviews ?? []).find(
+          (r) => r.item_id === PLAN_POST_ITEM && r.side === 'client',
+        )?.status,
+    )
+    .toBe('approved');
+  expect(
+    (network.world.tables.plan_item_reviews ?? []).some((r) => r.item_id === PLAN_CONCEPT_ITEM),
+  ).toBe(false);
+  expectClean(network);
+});
+
+test('agency on an Open plan: read-only client PLAN text, header subtitle, long title, delete confirm names the plan', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -239,18 +300,22 @@ test('agency on an Open plan: read-only client checkbox, header subtitle, long t
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, PLAN_ID);
 
-  // One view of ticks: the client side for everyone, read-only for the agency.
+  // One view: the client side for everyone, read-only text for the agency.
   const box = plan.locator(`[data-plan-row-wrap="${PLAN_POST_ITEM}"] [data-plan-slot]`);
   await expect(box).toHaveAttribute('data-plan-slot', 'client');
-  await expect(box).toBeDisabled();
+  await expect(box).toHaveAttribute('data-plan-control', 'text');
+  await expect(box).toHaveAttribute('data-plan-slot-readonly', '');
+  await expect(box).toHaveText('Not checked yet');
+  await expect(plan.locator('[data-plan-ok]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-control="pill"]')).toHaveCount(0);
   await expectRowLayout(page, PLAN_POST_ITEM);
   await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
   const row = plan.locator(`[data-plan-row="${PLAN_POST_ITEM}"]`);
-  await expect(row.locator('[data-plan-row-status]')).toHaveText('Waiting for approval');
+  await expect(plan.locator('[data-plan-row-status]')).toHaveCount(0);
   await expect(row.getByText('Approvers · Waiting')).toHaveCount(0);
   await box.click({ force: true });
-  await expect(box).toHaveAttribute('aria-checked', 'false');
-  await expect(plan.locator('[data-plan-screen-progress] > span')).toHaveText(['Approved 0 of 2']);
+  await expect(box).toHaveText('Not checked yet');
+  await expect(plan.locator('[data-plan-screen-progress="plan"]')).toContainText('0/2 OK');
   expect(network.world.tables.plan_item_reviews ?? []).toEqual([]);
   expect(network.rpcCalls.filter((c) => c.name === 'plan_item_review')).toEqual([]);
   // The subtitle, the same for every viewer.
@@ -282,7 +347,7 @@ test('agency on an Open plan: read-only client checkbox, header subtitle, long t
   expectClean(network);
 });
 
-test('client: a long plan shows week headers, 44px empty days, and a draft with no checkbox', async ({
+test('client: a long plan shows week headers, 44px empty days, and a draft with no PLAN line', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -300,15 +365,22 @@ test('client: a long plan shows week headers, 44px empty days, and a draft with 
   const draft = plan.locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`);
   await draft.scrollIntoViewIfNeeded();
   await expect(draft).toHaveAttribute('aria-disabled', 'true');
-  await expect(plan.locator(`[data-plan-row-wrap="${DRAFT_ITEM_ID}"]`)).toHaveCount(0);
+  const draftWrap = plan.locator(`[data-plan-row-wrap="${DRAFT_ITEM_ID}"]`);
+  await expect(draftWrap).toHaveCount(1);
+  await expect(draftWrap.locator('[data-plan-control]')).toHaveCount(0);
+  await expect(draftWrap.locator('[data-plan-line]')).toHaveCount(0);
   await expect(draft.locator('[data-plan-slot]')).toHaveCount(0);
-  // Today's weekday is in the accent.
+  // Today's tile: the weekday strip in the accent, an accent border.
   const today = plan.locator('[data-plan-today] [data-plan-day-weekday]');
-  if ((await today.count()) > 0) await expect(today).toHaveClass(/text-accent/);
+  if ((await today.count()) > 0) {
+    await expect(today).toHaveClass(/\bbg-accent\b/);
+    await expect(today).toHaveClass(/\btext-accent-fg\b/);
+    await expect(plan.locator('[data-plan-today]')).toHaveClass(/\bborder-accent\b/);
+  }
   expectClean(network);
 });
 
-test('client: Undo after ticking a concept with changes asked keeps changes: the write never goes', async ({
+test('client: Undo after OK on a concept with changes asked keeps changes: the write never goes', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -319,24 +391,34 @@ test('client: Undo after ticking a concept with changes asked keeps changes: the
   if (concept === undefined) throw new Error('fixture');
   await openChat(page, PEER_NAME);
   const plan = await openPlan(page, DATED_PLAN_ID);
-  const box = plan.locator(`[data-plan-row-wrap="${concept.id}"] [data-plan-slot]`);
+  const wrap = plan.locator(`[data-plan-row-wrap="${concept.id}"]`);
+  const box = wrap.locator('[data-plan-control]');
   await box.scrollIntoViewIfNeeded();
-  await expect(box).toHaveAttribute('aria-checked', 'false');
+  // Changes asked: the Not OK pill.
+  await expect(box).toHaveAttribute('data-plan-control', 'pill');
+  await expect(box).toHaveAttribute('data-plan-slot-state', 'changes');
+  await expect(box).toHaveText('Not OK');
   const status = () =>
     (network.world.tables.plan_item_reviews ?? []).find(
       (r) => r.item_id === concept.id && r.side === 'client',
     )?.status;
   expect(status()).toBe('changes');
+  // Tapping the pill reopens the switch with Not OK pressed; OK from there.
   await box.click();
-  await expect(box).toHaveAttribute('aria-checked', 'true');
-  // The tick waits behind the 7s Undo toast: the review is still "changes".
+  await expect(box).toHaveAttribute('data-plan-control', 'switch');
+  await expect(wrap.locator('[data-plan-not-ok]')).toHaveAttribute('aria-pressed', 'true');
+  await wrap.locator('[data-plan-ok]').click();
+  await expect(box).toHaveAttribute('data-plan-control', 'pill');
+  await expect(box).toHaveAttribute('data-plan-slot-state', 'approved');
+  // The OK waits behind the 4s Undo toast: the review is still "changes".
   expect(status()).toBe('changes');
   await page.locator('[data-toast-action]').click();
-  await expect(box).toHaveAttribute('aria-checked', 'false');
+  await expect(box).toHaveAttribute('data-plan-slot-state', 'changes');
+  await expect(box).toHaveText('Not OK');
   await page.waitForTimeout(500);
   expect(status()).toBe('changes');
   expect(network.rpcCalls.filter((c) => c.name === 'plan_item_review')).toEqual([]);
-  // A client's row carries the tick only: no status line.
+  // A client's row carries the PLAN and POST lines only: no status line.
   await expect(plan.locator(`[data-plan-row="${concept.id}"] [data-plan-row-status]`)).toHaveCount(
     0,
   );

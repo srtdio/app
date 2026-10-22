@@ -220,8 +220,9 @@ test('client: a draft post in a client plan shows by name only and does nothing'
   await expect(plan).toBeVisible();
   const row = plan.locator(`[data-plan-row="${DRAFT_ITEM_ID}"]`);
   await row.scrollIntoViewIfNeeded();
-  // A draft is name only for a client: no slot checkbox.
-  await expect(plan.locator(`[data-plan-row-wrap="${DRAFT_ITEM_ID}"]`)).toHaveCount(0);
+  // A draft is name only for a client: no PLAN or POST line.
+  const draftWrap = plan.locator(`[data-plan-row-wrap="${DRAFT_ITEM_ID}"]`);
+  await expect(draftWrap.locator('[data-plan-control], [data-plan-line]')).toHaveCount(0);
   await expect(row.locator('[data-plan-slot]')).toHaveCount(0);
   await expect(row).toHaveAttribute('aria-disabled', 'true');
   await expect(row.getByText('Not ready to view yet')).toBeVisible();

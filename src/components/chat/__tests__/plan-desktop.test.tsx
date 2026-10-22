@@ -86,7 +86,8 @@ const paint = (side: 'agency' | 'client', rowEdit?: PlanRowEdit): string =>
         thumbs={{}}
         drag={null}
         onOpenItem={() => undefined}
-        onToggleSlot={() => undefined}
+        onPlanOk={() => undefined}
+        onPlanNotOk={() => undefined}
         {...(rowEdit !== undefined ? { onDragStart: () => undefined, edit: rowEdit } : {})}
         {...(side === 'agency' && rowEdit === undefined ? { onAdd: () => undefined } : {})}
       />
@@ -94,7 +95,7 @@ const paint = (side: 'agency' | 'client', rowEdit?: PlanRowEdit): string =>
   );
 
 describe('edit mode rows (agency, laptop and phone alike)', () => {
-  it('grip on droppable rows, the day chip then the remove icon; no tick, no swipe', () => {
+  it('grip, date tile, the row, then the bottom line (day chip, remove); PLAN as text, no swipe', () => {
     const html = paint('agency', edit());
     // c1 is inside the plan (grip); c2 is dated outside it (a spacer keeps the column).
     expect(html.match(/data-plan-grip=""/g)).toHaveLength(1);
@@ -102,13 +103,22 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
     expect(html.match(/data-plan-row-remove-edit=""/g)).toHaveLength(2);
     expect(html).not.toContain('data-plan-row-swipe');
     expect(html).not.toContain('data-plan-row-remove="');
-    expect(html).not.toContain('data-plan-slot=');
+    // PLAN and POST stay as read-only text: no OK / Not OK switch, no pill.
+    expect(html).toContain('data-plan-control="text"');
+    expect(html).not.toContain('data-plan-control="switch"');
+    expect(html).not.toContain('data-plan-control="pill"');
+    expect(html).not.toContain('data-plan-ok=');
+    expect(html.match(/data-plan-line="post"/g)).toHaveLength(2);
+    expect(html.match(/data-plan-row-edit-line=""/g)).toHaveLength(2);
     expect(html).not.toContain('data-plan-add=');
     expect(html).toContain('data-plan-list-mode="edit"');
     const row = html.slice(html.indexOf('data-plan-row-wrap="c1"'));
     const order = [
       'data-plan-grip',
+      'data-plan-day-col',
       'data-plan-row="c1"',
+      'data-plan-line="plan"',
+      'data-plan-row-edit-line',
       'data-plan-row-day-chip',
       'data-plan-row-remove-edit',
     ].map((k) => row.indexOf(k));
@@ -121,7 +131,9 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
       /data-plan-grip=""[^>]*class="[^"]*h-11 w-7[^"]*cursor-grab[^"]*touch-none/,
     );
     expect(html).not.toMatch(/data-plan-grip=""[^>]*opacity-0/);
-    expect(html).toMatch(/data-plan-row-day-chip=""[^>]*class="[^"]*min-h-\[44px\]/);
+    // The chip: a 44px tall target holding a 32px bordered chip.
+    expect(html).toMatch(/data-plan-row-day-chip=""[^>]*class="[^"]*h-11/);
+    expect(html).toContain('flex h-8 items-center gap-1.5 rounded-lg border border-border-strong');
     expect(html).toContain('>Tue 13<');
     expect(html).toContain('>Tue 20<');
     expect(html).toMatch(/data-plan-row-remove-edit=""[^>]*class="[^"]*h-11 w-11[^"]*text-bad/);
@@ -151,7 +163,7 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
 });
 
 describe('view mode (laptop and phone)', () => {
-  it('no grip, chip, remove or menu for anyone; ticks as today', () => {
+  it('no grip, chip, remove or menu for anyone; the PLAN line as before', () => {
     for (const side of ['agency', 'client'] as const) {
       const html = paint(side);
       for (const k of ['data-plan-grip', 'data-plan-row-day-chip', 'data-plan-row-remove-edit']) {

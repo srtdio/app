@@ -39,6 +39,12 @@ function Probe(): ReactElement {
   return <div />;
 }
 
+// The plan screens pass their own window (PLAN_UNDO_MS).
+function WindowProbe(props: { durationMs: number }): ReactElement {
+  api = useUndoableAction({ durationMs: props.durationMs });
+  return <div />;
+}
+
 async function mount(): Promise<void> {
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -74,6 +80,25 @@ describe('useUndoableAction', () => {
     expect(toast.action?.label).toBe('Undo');
     expect(toast.durationMs).toBe(UNDO_WINDOW_MS);
     expect(toast.countdown).toBe(true);
+  });
+
+  it('the default window stays 7000ms; a durationMs option reaches the toast', async () => {
+    expect(run({ label: 'Default', commit: vi.fn() }).durationMs).toBe(7000);
+    await act(async () => root?.render(<WindowProbe durationMs={4000} />));
+    const toast = run({ label: 'Slot approved', commit: vi.fn() });
+    expect(toast.durationMs).toBe(4000);
+    expect(toast.countdown).toBe(true);
+    expect(toast.action?.label).toBe('Undo');
+  });
+
+  it('with a durationMs option the commit still waits for the toast to end', async () => {
+    await act(async () => root?.render(<WindowProbe durationMs={4000} />));
+    const commit = vi.fn();
+    const toast = run({ label: 'Slot approved', commit });
+    expect(commit).not.toHaveBeenCalled();
+    act(() => toast.onExpire?.());
+    await flushPromises();
+    expect(commit).toHaveBeenCalledTimes(1);
   });
 
   it('Undo reverts and commit never runs', async () => {

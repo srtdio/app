@@ -10,8 +10,10 @@ import {
   ME,
   PEER,
   PEER_NAME,
+  PLAN_CONCEPT_ITEM,
   PLAN_CONCEPT_TITLE,
   PLAN_ID,
+  PLAN_POST_ITEM,
   PLAN_TITLE,
   THREAD_DM,
   WORKSPACE_ID,
@@ -174,7 +176,8 @@ async function agencyFlow(page: Page): Promise<void> {
   expect(network.rpcCalls.filter((c) => c.name === 'chat_plan_share')).toEqual([]);
   // The header: the range, then Draft; progress the creators' side (FT56).
   await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Draft$/);
-  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Creators 0 of 2');
+  const planProgress = plan.locator('[data-plan-screen-progress="plan"]');
+  await expect(planProgress).toContainText('0/2 OK');
   // The Draft footer from a chat: one primary button, "Send to approvers in
   // {chat}"; no second button, no hint, no Go to card.
   const primary = plan.locator('[data-plan-primary]');
@@ -187,20 +190,25 @@ async function agencyFlow(page: Page): Promise<void> {
   ).toHaveCount(0);
   await expect(plan.getByText("Agency only. The client can't see it yet.")).toHaveCount(0);
   expectMinTouchTarget(await primary.boundingBox());
-  // One list by day (no Concepts/Posts tabs): each row tagged with its kind.
+  // One list by day (no Concepts/Posts tabs, no kind tags): rows by item id.
   await expect(plan.locator('[data-plan-tab]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row]')).toHaveCount(2);
-  const kind = (label: string) => page.locator(`[data-plan-row-kind="${label}"]`);
-  const conceptRow = () => plan.locator('[data-plan-row]').filter({ has: kind('Concept 1 of 1') });
-  const postRow = () => plan.locator('[data-plan-row]').filter({ has: kind('Post 1 of 1') });
-  // On a Draft plan the agency's team state is the row's checkbox.
-  const conceptWrap = () =>
-    plan.locator('[data-plan-row-wrap]').filter({ has: kind('Concept 1 of 1') });
+  await expect(plan.locator('[data-plan-row-kind]')).toHaveCount(0);
+  const itemIdOf = (kind: 'concept' | 'post'): string =>
+    String((tables.plan_items ?? []).find((i) => i.plan_id === planId && i.kind === kind)?.id);
+  const conceptId = itemIdOf('concept');
+  const postId = itemIdOf('post');
+  const conceptRow = () => plan.locator(`[data-plan-row="${conceptId}"]`);
+  const postRow = () => plan.locator(`[data-plan-row="${postId}"]`);
+  // On a Draft plan the agency's team state is the row's PLAN switch.
+  const conceptWrap = () => plan.locator(`[data-plan-row-wrap="${conceptId}"]`);
   const row = conceptRow();
   await expect(conceptWrap().locator('[data-plan-slot="team"]')).toHaveAttribute(
-    'aria-checked',
-    'false',
+    'data-plan-control',
+    'switch',
   );
+  // The concept has no post yet; the post's POST line reads its stage.
+  await expect(conceptWrap().locator('[data-plan-post-status]')).toHaveText('Not made yet');
 
   // D5: the Item screen, agency approve with its confirm (a Draft plan).
   await row.click();
@@ -227,15 +235,15 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(note.getByText('Creators only')).toBeVisible();
   await expect(note).toHaveClass(/bg-warn-soft/);
 
-  // Back closes one layer: the item; the Draft plan shows the team tick.
+  // Back closes one layer: the item; the Draft plan shows the team OK pill.
   await page.goBack();
   await expect(item).toBeHidden();
   await expect(plan).toBeVisible();
-  await expect(conceptWrap().locator('[data-plan-slot="team"]')).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
-  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Creators 1 of 2');
+  const teamControl = conceptWrap().locator('[data-plan-slot="team"]');
+  await expect(teamControl).toHaveAttribute('data-plan-control', 'pill');
+  await expect(teamControl).toHaveAttribute('data-plan-slot-state', 'approved');
+  await expect(teamControl).toHaveText('OK');
+  await expect(planProgress).toContainText('1/2 OK');
 
   // Send to approvers: the confirm (opening is one-way), then the client side
   // for everyone and the card in the chat: plan_share_with_client, then
@@ -263,14 +271,17 @@ async function agencyFlow(page: Page): Promise<void> {
       .filter((n) => n === 'plan_share_with_client' || n === 'chat_plan_share'),
   ).toEqual(['plan_share_with_client', 'chat_plan_share']);
   await expect(plan.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
-  // Team ticks are never shown on an Open plan: read-only client boxes.
+  // Team answers are never shown on an Open plan: the client side as read-only text.
   await expect(plan.locator('[data-plan-slot="team"]')).toHaveCount(0);
-  await expect(conceptWrap().locator('[data-plan-slot="client"]')).toBeDisabled();
-  await expect(plan.locator('[data-plan-screen-progress]')).toHaveText('Approved 0 of 2');
-  // The agency's status line: the client's side, then the visible comment count.
-  await expect(conceptRow().locator('[data-plan-row-status]')).toHaveText(
-    'Waiting for approval · 1 comment',
-  );
+  const clientText = conceptWrap().locator('[data-plan-slot="client"]');
+  await expect(clientText).toHaveAttribute('data-plan-control', 'text');
+  await expect(clientText).toHaveText('Not checked yet');
+  await expect(plan.locator('[data-plan-ok], [data-plan-not-ok]')).toHaveCount(0);
+  await expect(planProgress).toContainText('0/2 OK');
+  // No status or comments line on a row any more.
+  await expect(
+    conceptRow().locator('[data-plan-row-status], [data-plan-row-comments]'),
+  ).toHaveCount(0);
   // An Open plan from a chat: the one button now reads "Send in {chat}"; no Go to card.
   await expect(primary).toHaveAttribute('data-plan-primary', 'send');
   await expect(primary).toHaveText(`Send in ${PEER_NAME}`);
@@ -401,20 +412,15 @@ async function clientFlow(page: Page): Promise<void> {
   await expect(
     plan.locator('[data-plan-add], [data-plan-add-header], [data-plan-edit]'),
   ).toHaveCount(0);
-  // The concept's Everyone comment shows as the row's third line.
+  // No comments line on a row; the client answers on the PLAN switch.
+  await expect(plan.locator('[data-plan-row-comments]')).toHaveCount(0);
   await expect(
-    plan
-      .locator('[data-plan-row]')
-      .filter({ has: page.locator('[data-plan-row-kind="Concept 1 of 1"]') })
-      .locator('[data-plan-row-comments]'),
-  ).toHaveText('1 comment');
+    plan.locator(`[data-plan-row-wrap="${PLAN_CONCEPT_ITEM}"] [data-plan-control="switch"]`),
+  ).toBeVisible();
   await expect(plan.locator('[data-plan-pill="team"]')).toHaveCount(0);
 
   // D5: a concept: Approve with its confirm.
-  await plan
-    .locator('[data-plan-row]')
-    .filter({ has: page.locator('[data-plan-row-kind="Concept 1 of 1"]') })
-    .click();
+  await plan.locator(`[data-plan-row="${PLAN_CONCEPT_ITEM}"]`).click();
   const item = page_(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByText('Can we keep it under 30 seconds?')).toBeVisible();
@@ -437,9 +443,7 @@ async function clientFlow(page: Page): Promise<void> {
   // A post item: the pipeline post view embedded, no plan review buttons.
   await page.goBack();
   await expect(item).toBeHidden();
-  const postRow = plan
-    .locator('[data-plan-row]')
-    .filter({ has: page.locator('[data-plan-row-kind="Post 1 of 1"]') });
+  const postRow = plan.locator(`[data-plan-row="${PLAN_POST_ITEM}"]`);
   await postRow.scrollIntoViewIfNeeded();
   await postRow.click();
   await expect(item).toBeVisible();

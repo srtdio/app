@@ -162,7 +162,10 @@ describe('Plan screen edit mode and the Back guard', () => {
     expect(document.querySelectorAll('[data-plan-grip]')).toHaveLength(2);
     expect(document.querySelectorAll('[data-plan-row-day-chip]')).toHaveLength(2);
     expect(q('[data-plan-footer]')).toBeNull();
-    expect(q('[data-plan-slot]')).toBeNull();
+    // PLAN shows as read-only text in edit mode: no switch, no pill.
+    expect(q('[data-plan-control="switch"]')).toBeNull();
+    expect(q('[data-plan-control="pill"]')).toBeNull();
+    expect(q('[data-plan-control="text"][data-plan-slot-readonly]')).not.toBeNull();
     expect(button('Save changes')).toBeDefined();
     expect(button('Cancel')).toBeDefined();
     // No changes: no guard, and Cancel leaves edit mode at once.

@@ -412,8 +412,8 @@ export const SLOT_REMOVED_TOAST = 'Slot approval removed';
 export const SLOT_FAILED = "Couldn't update this slot. Try again.";
 export const SLOT_POST_NOT_READY = "This post isn't ready yet.";
 export const SLOT_UNDO = 'Undo';
-/** How long the "Slot approved" toast (and its Undo) stays. */
-export const SLOT_UNDO_MS = 5_000;
+/** The plan screens' Undo window (a row's OK, an item move); 7s stays elsewhere. */
+export const PLAN_UNDO_MS = 4_000;
 /** The post item header's subtitle. */
 export const SLOT_APPROVED_LABEL = 'Slot approved';
 export const SLOT_PENDING_LABEL = 'Slot pending';
@@ -469,6 +469,102 @@ export function slotCheckboxShown(
 /** A ticked slot: the side's review is approved ('changes' shows unticked). Pure. */
 export function slotTicked(bundle: PlanBundle, itemId: string, side: ReviewSide): boolean {
   return reviewStatus(bundle, itemId, side) === 'approved';
+}
+
+/** The PLAN and POST line labels and the PLAN control's copy. */
+export const PLAN_LINE_LABEL = 'PLAN';
+export const POST_LINE_LABEL = 'POST';
+export const PLAN_OK_LABEL = 'OK';
+export const PLAN_NOT_OK_LABEL = 'Not OK';
+export const PLAN_NOT_CHECKED_LABEL = 'Not checked yet';
+export const POST_NOT_MADE_LABEL = 'Not made yet';
+
+/**
+ * A row's PLAN control: none (a draft locked to the viewer, an unknown side);
+ * the OK | Not OK switch (writable, undecided); the solid pill (writable,
+ * decided); read-only text (the agency on an Open plan). Pure.
+ */
+export type PlanControl =
+  | { kind: 'none' }
+  | { kind: 'switch'; side: ReviewSide }
+  | { kind: 'pill'; side: ReviewSide; status: 'approved' | 'changes' }
+  | { kind: 'text'; side: ReviewSide; status: ReviewStatus };
+
+export function planControl(bundle: PlanBundle, item: PlanItemRow, side: ViewerSide): PlanControl {
+  const view = slotCheckboxShown(bundle, item, side);
+  if (view === null) return { kind: 'none' };
+  const status = reviewStatus(bundle, item.id, view.side);
+  if (!view.writable) return { kind: 'text', side: view.side, status };
+  if (status === 'waiting') return { kind: 'switch', side: view.side };
+  return { kind: 'pill', side: view.side, status };
+}
+
+/** The control's data-plan-slot-state: approved, changes, else pending. Pure. */
+export function planControlState(status: ReviewStatus): 'approved' | 'changes' | 'pending' {
+  return status === 'waiting' ? 'pending' : status;
+}
+
+/** The read-only PLAN text: "OK", "Not OK" or "Not checked yet". Pure. */
+export function planControlText(status: ReviewStatus): string {
+  if (status === 'approved') return PLAN_OK_LABEL;
+  if (status === 'changes') return PLAN_NOT_OK_LABEL;
+  return PLAN_NOT_CHECKED_LABEL;
+}
+
+export type PostLineTone = 'draft' | 'review' | 'approved' | 'parked' | 'rejected' | 'none';
+
+const POST_LINE_TONES = ['draft', 'review', 'approved', 'parked', 'rejected'] as const;
+
+const POST_LINE_LABELS: Record<Exclude<PostLineTone, 'none'>, string> = {
+  draft: 'Draft',
+  review: 'Review',
+  approved: 'Approved',
+  parked: 'Parked',
+  rejected: 'Rejected',
+};
+
+/**
+ * A row's POST line: the post's stage name as is ("Review", "Approved"), or
+ * "Not made yet" for a concept or a slot with no post. Pure.
+ */
+export function postLine(
+  bundle: Pick<PlanBundle, 'postStages'>,
+  item: PlanItemRow,
+): { label: string; tone: PostLineTone } {
+  const stage =
+    item.kind === 'post' && item.post_id !== null ? bundle.postStages[item.post_id] : undefined;
+  const tone = POST_LINE_TONES.find((t) => t === stage);
+  if (tone !== undefined) return { label: POST_LINE_LABELS[tone], tone };
+  return { label: POST_NOT_MADE_LABEL, tone: 'none' };
+}
+
+/**
+ * The header's two boxes: PLAN, the viewer's side OK count over the items
+ * that side reviews (a draft locked to the viewer is not one); POST, approved
+ * posts over the post items. Pure.
+ */
+export function planHeaderCounts(
+  bundle: PlanBundle,
+  side: ViewerSide,
+): { plan: { ok: number; n: number }; post: { approved: number; n: number } } {
+  const reviewSide: ReviewSide = bundle.plan.audience === 'team' ? 'team' : 'client';
+  const reviewed = bundle.items.filter((i) => !draftLocked(bundle, i, side));
+  const ok = reviewed.filter((i) => reviewStatus(bundle, i.id, reviewSide) === 'approved').length;
+  const posts = bundle.items.filter((i) => i.kind === 'post');
+  const approved = posts.filter(
+    (i) => i.post_id !== null && bundle.postStages[i.post_id] === 'approved',
+  ).length;
+  return { plan: { ok, n: reviewed.length }, post: { approved, n: posts.length } };
+}
+
+/** "3/5 OK" and "2/4 approved". Pure. */
+export function planCountLabel(count: number, n: number, word: 'OK' | 'approved'): string {
+  return `${count}/${n} ${word}`;
+}
+
+/** A 0 to 100 bar width (0 when there is nothing to count). Pure. */
+export function countPercent(count: number, n: number): number {
+  return n > 0 ? Math.round((count / n) * 100) : 0;
 }
 
 /**

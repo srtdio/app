@@ -10,9 +10,12 @@
 // plan's concept (team reviews are never shown or written on an Open plan).
 // "Ask changes" opens the comment composer first (a note for the creators);
 // Send records the note, then the changes review. Approve keeps its confirm.
+// Opened by a Plan row's Not OK (askChanges), the note box is open and
+// focused from the start, a post item included; Send writes 'changes' for
+// the viewer's PLAN side, closing writes nothing.
 // The agency side gets a red "Remove from plan" at the bottom (the Remove
 // confirm, then plan_item_remove) and Move to another day: a move that resets
-// nothing waits behind a 7s Undo toast with a countdown (useUndoableAction;
+// nothing waits behind a 4s Undo toast with a countdown (useUndoableAction;
 // the write goes when the toast ends, never after Undo). Comments: the agency
 // sees all and picks Everyone or Agency only; a client sees Everyone ones
 // (RLS). A comment appends at once and keeps its text on failure. One read
@@ -55,6 +58,7 @@ import { postRoute } from '@/components/chat/post-card';
 import {
   COMMENT_FAILED,
   MOVE_FAILED,
+  PLAN_UNDO_MS,
   REMOVED_TOAST,
   REMOVE_FAILED,
   STATUS_LABELS,
@@ -72,6 +76,7 @@ import {
   moveAsksKeep,
   planWriteErrorCopy,
   reviewStatus,
+  slotSide,
   stageLabel,
   type PillTone,
 } from '@/components/chat/plan-card';
@@ -277,6 +282,8 @@ export function PlanItemScreen(props: {
   onRemoved?: () => void;
   /** The client approver's name (the keep sheet's title on an Open plan). */
   approverName?: string;
+  /** Opened by a row's Not OK: the note box opens focused; Send writes 'changes'. */
+  askChanges?: boolean;
 }): ReactElement | null {
   const { bundle, item, side } = props;
   const { workspaces, workspaceId } = useWorkspace();
@@ -332,7 +339,7 @@ export function PlanItemScreen(props: {
   const [askingChanges, setAskingChanges] = useState(false);
   const commentRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
-  const undoable = useUndoableAction();
+  const undoable = useUndoableAction({ durationMs: PLAN_UNDO_MS });
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<ConceptForm>(EMPTY_CONCEPT);
   // The concept's files when the sheet opened; null when not read yet.
@@ -387,20 +394,39 @@ export function PlanItemScreen(props: {
     setMoreOpen(false);
   }, [item.id]);
 
+  // Opened by a row's Not OK: the note box opens at once (after the resets
+  // above), and focus goes to it whenever it opens (the phone keyboard comes up).
+  useEffect(() => {
+    if (!props.open || props.askChanges !== true) return;
+    setActionError(null);
+    setAskingChanges(true);
+  }, [props.open, props.askChanges, item.id]);
+  useEffect(() => {
+    if (askingChanges) commentRef.current?.focus();
+  }, [askingChanges]);
+
   const actions = itemActions(side, item, bundle.plan.audience);
+  // The side a changes review writes: the item's own review actions, else
+  // (Not OK on a row, a post item too) the viewer's PLAN side.
+  const reviewSide =
+    actions.kind === 'review'
+      ? actions.side
+      : props.askChanges === true
+        ? slotSide(side, bundle.plan.audience)
+        : null;
   const title = rowTitle(bundle, item);
   const description = item.kind === 'concept' ? (item.description ?? '') : '';
 
   /** One review write; true when it landed on this item. */
   const review = async (status: ReviewStatus): Promise<boolean> => {
-    if (actions.kind !== 'review' || busy) return false;
+    if (reviewSide === null || busy) return false;
     const forItem = item.id;
     setBusy(true);
     setActionError(null);
     const traceId = generateTraceId();
     const result = await planItemReview(supabase, {
       p_item_id: forItem,
-      p_side: actions.side,
+      p_side: reviewSide,
       p_status: status,
       p_trace_id: traceId,
     });
@@ -419,7 +445,7 @@ export function PlanItemScreen(props: {
       return false;
     }
     setConfirmOpen(false);
-    setOverrides((prev) => ({ ...prev, [actions.side]: status }));
+    setOverrides((prev) => ({ ...prev, [reviewSide]: status }));
     dispatchPlanChanged(window, bundle.plan.id);
     return true;
   };
@@ -621,7 +647,7 @@ export function PlanItemScreen(props: {
     const spec = dayMoveToast(dayHeaderOf(day), item.kind === 'post', !keep && hadTicks);
     setMoveOpen(false);
     if (spec.undo) {
-      // Nothing is reset: the write waits behind the Undo toast (7s, countdown);
+      // Nothing is reset: the write waits behind the Undo toast (4s, countdown);
       // Undo means it never goes.
       undoable.run({
         label: spec.title,
@@ -737,7 +763,7 @@ export function PlanItemScreen(props: {
             }
           : {})}
         footer={
-          item.kind === 'post' ? undefined : (
+          item.kind === 'post' && !askingChanges ? undefined : (
             <form
               onSubmit={(e) => void send(e)}
               className="flex flex-col gap-1.5"

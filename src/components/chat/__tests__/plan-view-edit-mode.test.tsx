@@ -146,7 +146,8 @@ describe('concept photos (item 2)', () => {
           }}
           drag={null}
           onOpenItem={() => undefined}
-          onToggleSlot={() => undefined}
+          onPlanOk={() => undefined}
+          onPlanNotOk={() => undefined}
         />
       </MemoryRouter>,
     );
