@@ -1,4 +1,4 @@
-// The always-on inbox (Activity) live layer. Mounted once at the shell (inside the
+// The always-on inbox (Notifications) live layer. Mounted once at the shell (inside the
 // toast provider and the router), it seeds the unread count for the active
 // workspace and keeps it live with a foreground-only 30s poll. A poll that finds
 // rows newer than the high-water mark fires a single toast (coalescing a burst)
@@ -12,9 +12,12 @@
 // the viewer something happened (tab-alert.ts), and ticks immediately on the
 // return to visible.
 //
-// BELL: the chat bell's rows (bell-types.ts) never count or toast as Activity. A
-// new chat mention toasts "<name> mentioned you" with Open instead (the bell's
-// toast), and every tick asks the mounted bell to refetch. BellRing (the
+// COUNT: every unread row counts (the chat, plan and task alerts included), so
+// the Notifications badge matches the page.
+//
+// TOASTS: the rows the bell used to own (bell-types.ts) never word the activity
+// toast. A new chat mention toasts "<name> mentioned you" with Open instead,
+// and every tick asks the reminder readers to reload. ReminderRing (the
 // reminder ring, chime and missed-on-open toast) is mounted here so it runs on
 // every page from app start.
 //
@@ -23,7 +26,7 @@
 // othersRows drops them before any toast or tone.
 //
 // TONE: new Activity rows from someone else play the chat's notification tone
-// (shared throttle, notify-sound.ts), except while the Activity screen is open.
+// (shared throttle, notify-sound.ts), except while Notifications is open.
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -47,9 +50,9 @@ import {
 } from '@/lib/inbox/inbox-live';
 import { enrichNewRows, fetchInboxSince, fetchInboxUnreadCount } from '@/lib/inbox/inbox-reads';
 import { readProfiles } from '@/lib/chat-reads';
-import { requestBellRefresh } from '@/lib/chat/bell';
+import { announceRemindersChanged } from '@/lib/chat/reminders';
 import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
-import { BellRing } from '@/components/chat/BellRing';
+import { ReminderRing } from '@/components/chat/ReminderRing';
 import { playToneShared } from '@/lib/chat/notify-sound';
 import { pushTabAlert } from '@/lib/tab-alert';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
@@ -109,7 +112,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     const uid = userIdRef.current;
     if (ws === null || uid === null) return;
     refreshCount(ws, uid);
-    requestBellRefresh();
+    announceRemindersChanged();
     void (async () => {
       const sinceMs = highWaterRef.current;
       const sinceIso = new Date(sinceMs).toISOString();
@@ -168,7 +171,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     })();
   };
 
-  // The bell's toast for new chat mentions: one batched name read, one toast.
+  // The toast for new chat mentions: one batched name read, one toast.
   const toastMentions = async (rows: Parameters<typeof mentionToastFrom>[0]): Promise<void> => {
     const ids = [
       ...new Set(rows.flatMap((r) => (r.actor_user_id != null ? [r.actor_user_id] : []))),
@@ -261,7 +264,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     <InboxStoreContext.Provider value={value}>
       {children}
       {workspaceId !== null && userId !== null ? (
-        <BellRing key={`${workspaceId}:${userId}`} workspaceId={workspaceId} userId={userId} />
+        <ReminderRing key={`${workspaceId}:${userId}`} workspaceId={workspaceId} userId={userId} />
       ) : null}
     </InboxStoreContext.Provider>
   );

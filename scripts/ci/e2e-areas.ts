@@ -33,7 +33,6 @@ const t = (name: string): string => `e2e/tests/${name}.spec.ts`;
 
 const CHAT_SPECS = [
   'chat-back-navigation',
-  'chat-bell',
   'chat-file-viewer',
   'chat-imessage-threads',
   'chat-keyboard-gap',
@@ -75,6 +74,8 @@ const CHAT_SPECS = [
   'onboarding-approver',
   // Link cards in a chat, then on a post's comments.
   'link-previews',
+  // Remind me from a held message; a reminder card opens the chat.
+  'notifications',
   // Delete a message with a file (purge-chat), then Settings > Delete workspace.
   'workspace-delete-chat-purge',
 ];
@@ -95,10 +96,11 @@ export const AREAS: Area[] = [
       'activity-plan',
       'agency-actions',
       'chat-back-navigation',
-      'chat-bell',
       'chat-plan-card-paint',
       'chat-plan-dates',
       'chat-tasks',
+      'chat-thread',
+      'notifications',
       'plan-desktop',
       'plan-draft-open',
       'onboarding-creator',

@@ -1287,19 +1287,27 @@ describe('fetchActivityEntries query composition', () => {
     expect(hasCall(calls, 'limit', [50])).toBe(true);
   });
 
-  it('filters the chat bell rows out server-side (Activity is posts only)', async () => {
+  it('shows every row: no bell split on the feed (Notifications shows them all)', async () => {
     const { client, calls } = recordingClient([]);
     await fetchActivityEntries(client, 'w1');
+    expect(calls.some((c) => c.method === 'not')).toBe(false);
+    expect(calls.some((c) => c.method === 'or')).toBe(false);
+  });
+
+  it('filters the Plans chip server-side to the six plan alert types', async () => {
+    const { client, calls } = recordingClient([]);
+    await fetchActivityEntries(client, 'w1', { state: 'plans' });
     expect(
-      hasCall(calls, 'not', [
+      hasCall(calls, 'in', [
         'event_type',
-        'in',
-        '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment,task_changed,task_due)',
-      ]),
-    ).toBe(true);
-    expect(
-      hasCall(calls, 'or', [
-        'event_type.neq.mention,entity_type.is.null,entity_type.neq.chat_channel',
+        [
+          'plan_opened',
+          'plan_deleted',
+          'plan_date_changed',
+          'plan_updated',
+          'plan_review',
+          'plan_comment',
+        ],
       ]),
     ).toBe(true);
   });

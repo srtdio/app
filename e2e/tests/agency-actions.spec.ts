@@ -90,7 +90,7 @@ test('Activity: "<Name> approved" under the title, no brand suffix, never KEY-N'
       created_at: now,
     },
   );
-  await page.goto('/activity');
+  await page.goto('/notifications');
 
   // The title shows once, in the card header; the line keeps the stage change only.
   await expect(page.getByText('Leo Martins approved', { exact: true })).toBeVisible({

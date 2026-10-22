@@ -9,8 +9,8 @@
 // which mapScheduleError turns into user copy).
 //
 // Every successful write announces SCHEDULED_CHANGED_EVENT for its chat, so the
-// open chat's strip refetches whichever surface made the change (the chat, the
-// bell's Retry, the bell's "Scheduled in this chat").
+// open chat's strip refetches whichever surface made the change (the chat, or
+// a failed send's Retry on Notifications).
 //
 // Every time here is the device's local time zone: presets land on 9:00 AM
 // local and labels read local wall-clock time. Pure helpers take `now`.

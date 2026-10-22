@@ -1,9 +1,11 @@
-// Activity (Inbox) read + write data layer. The page reads inbox_entries with a
-// plain RLS-scoped select (each member sees only their own rows) and maps every
-// row into a render-ready ActivityItem. The per-user read-state and snooze
-// mutations go through the @srtdio/rpc wrappers (each carries an explicit
-// p_trace_id). Everything here that does not touch the network is a pure,
-// unit-tested function so the page stays thin.
+// Notifications (Inbox) read + write data layer. The page reads inbox_entries
+// with a plain RLS-scoped select (each member sees only their own rows) and maps
+// every row into a render-ready ActivityItem: Activity's rows and the chat,
+// plan and task alerts the chat bell used to show (alerts.ts), on one feed.
+// The per-user read-state and snooze mutations go through the @srtdio/rpc
+// wrappers, and Retry on a failed send through chat_scheduled_send_now (each
+// carries an explicit p_trace_id). Everything here that does not touch the
+// network is a pure, unit-tested function so the page stays thin.
 
 import type { Client, Result } from '@srtdio/rpc';
 import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '@srtdio/rpc';
@@ -16,9 +18,50 @@ import {
   mentionNamesIn,
   resolveMentionPreview,
   resolvePersonMentionText,
+  type NameOf,
 } from '@/lib/chat/mentions';
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
-import { INBOX_SNOOZE_OPTIONS, chatMessageHref, withoutBellEntries } from '@/lib/inbox/bell-types';
+import {
+  BELL_CHAT_ENTITY,
+  BELL_PLAN_EVENT_TYPES,
+  INBOX_SNOOZE_OPTIONS,
+  chatMessageHref,
+  isBellPlanEvent,
+  planHref,
+  taskLinkToken,
+} from '@/lib/inbox/bell-types';
+import {
+  CHAT_LABEL,
+  MESSAGE_LABEL,
+  NOT_SENT_LABEL,
+  PLAN_DELETED_TOAST,
+  PLAN_LABEL,
+  REMINDER_LABEL,
+  SCHEDULED_LABEL,
+  TASK_ALERT_LABEL,
+  alertKindOf,
+  failureInPlainWords,
+  isStaleFailed,
+  isTaskBatch,
+  messagePreview,
+  planAlertLine,
+  planFieldsOf,
+  readChatMessages,
+  readScheduledRows,
+  scheduledPreview,
+  sentTitle,
+  taskAlertLine,
+  taskFieldsOf,
+  type AlertKind,
+  type ChatMessagePreview,
+  type PlanAlertFields,
+  type ScheduledRead,
+  type TaskAlertFields,
+} from '@/lib/inbox/alerts';
+import { TASKS_SHEET_ONLY } from '@/lib/chat/tasks';
+import { ACTION_FAILED_COPY } from '@/lib/chat/reminders';
+import { mapScheduleError, sendScheduledNow } from '@/lib/chat/scheduled';
+import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
 
@@ -96,7 +139,7 @@ export function warnUnknownEventType(eventType: string): void {
 export const MENTION_EVENT_TYPE: InboxEventTypeValue = 'mention';
 
 /** The chips (single-select): which slice of the inbox is shown. */
-export type ActivityState = 'all' | 'unread' | 'mentions' | 'briefs' | 'snoozed';
+export type ActivityState = 'all' | 'unread' | 'mentions' | 'briefs' | 'plans' | 'snoozed';
 
 /** The inbox scope every brief event is written with (brief comments, mentions,
  *  brief created / closed, posts created from a brief). */
@@ -113,7 +156,7 @@ export interface SnoozeOption {
   label: string;
 }
 
-/** Menu options offered in the kebab: the bell's labels. 'clear' is shown separately by the menu. */
+/** Menu options offered in the kebab: the shared labels. 'clear' is shown separately by the menu. */
 export const SNOOZE_OPTIONS: readonly SnoozeOption[] = INBOX_SNOOZE_OPTIONS;
 
 /** One inbox entry, mapped to the fields the row renders. */
@@ -192,6 +235,53 @@ export interface ActivityItem {
   own?: boolean;
   /** brief_post_created only: the brief the post was created from (payload.brief_title). */
   fromBriefTitle?: string | null;
+  /** A chat, plan or task alert's own fields (alerts.ts); null or absent on every other row. */
+  alert?: AlertInfo | null;
+}
+
+/**
+ * The fields a chat, plan or task alert card reads: reminders, scheduled sends
+ * (sent and failed), the plan alerts that name a plan and the task alerts.
+ */
+export interface AlertInfo {
+  kind: AlertKind;
+  /** Chat rows (reminder, sent, failed, task): the chat (entity_id). */
+  channelId: string | null;
+  /** The chat's name for a group; null for a direct chat or an unread one (reads "Chat"). */
+  chatName: string | null;
+  /** Scheduled rows: the scheduled message (payload.scheduled_id). */
+  scheduledId: string | null;
+  /** failed: why it failed (the scheduled row's reason, else the payload's). */
+  reason: string | null;
+  /** failed: resolved elsewhere (sent, cancelled or edited): Retry clears the entry. */
+  stale: boolean;
+  /** The message (reminder, sent) or scheduled body (failed) preview, resolved by the loader. */
+  preview: string | null;
+  /** plan: the payload's fields, and the plan and item titles the loader resolved. */
+  plan?: PlanAlertFields;
+  planTitle: string | null;
+  itemTitle: string | null;
+  /** task: the payload's fields. */
+  task?: TaskAlertFields;
+}
+
+/** An alert's fields from its row: everything the loader does not resolve. Pure. */
+function alertOf(row: InboxEntryRow, payload: unknown): AlertInfo | null {
+  const kind = alertKindOf(row.event_type);
+  if (kind === null) return null;
+  return {
+    kind,
+    channelId: row.entity_type === BELL_CHAT_ENTITY ? row.entity_id : null,
+    chatName: null,
+    scheduledId: payloadStr(payload, 'scheduled_id'),
+    reason: kind === 'failed' ? payloadStr(payload, 'reason') : null,
+    stale: false,
+    preview: null,
+    ...(kind === 'plan' ? { plan: planFieldsOf(row) } : {}),
+    planTitle: null,
+    itemTitle: null,
+    ...(kind === 'task' ? { task: taskFieldsOf(row) } : {}),
+  };
 }
 
 /** The workspace a welcome row names: payload.workspace_name and payload.platform. */
@@ -384,6 +474,7 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     welcome: welcomeOf(row.event_type, payload),
     onBehalfOfId,
     onBehalfOfName: null,
+    alert: alertOf(row, payload),
   };
 }
 
@@ -663,14 +754,147 @@ export function cardBodyLine(item: ActivityItem, parts: { name?: boolean } = {})
   return shortLine(item, parts);
 }
 
+/** An alert row's chat name: the group's, else "Chat". Pure. */
+function alertChat(alert: AlertInfo): string {
+  return alert.chatName ?? CHAT_LABEL;
+}
+
+/**
+ * An alert card's top line, beside the actor's photo: the actor's name (a
+ * reminder's message sender, a plan or task change's author), else the
+ * alert's label ("Reminder", "Scheduled", "Plan", "Tasks"). Pure.
+ */
+export function alertTopLine(item: Pick<ActivityItem, 'actorName'>, alert: AlertInfo): string {
+  if (item.actorName !== null) return item.actorName;
+  switch (alert.kind) {
+    case 'reminder':
+      return REMINDER_LABEL;
+    case 'sent':
+    case 'failed':
+      return SCHEDULED_LABEL;
+    case 'plan':
+      return PLAN_LABEL;
+    case 'task':
+      return TASK_ALERT_LABEL;
+  }
+}
+
+/**
+ * An alert card's title, in the bell's words: a reminder's message preview;
+ * "Sent in <chat>"; "Not sent · <reason in plain words>"; the plan alert's
+ * line (side-aware for plan_opened); the task alert's line. Pure.
+ */
+export function alertTitle(
+  item: Pick<ActivityItem, 'eventType' | 'actorName'>,
+  alert: AlertInfo,
+  side: ViewerSide,
+): string {
+  switch (alert.kind) {
+    case 'reminder':
+      return alert.preview ?? MESSAGE_LABEL;
+    case 'sent':
+      return sentTitle(alertChat(alert));
+    case 'failed':
+      return `${NOT_SENT_LABEL} · ${failureInPlainWords(alert.reason)}`;
+    case 'plan':
+      return planAlertLine(
+        item.eventType,
+        alert.plan,
+        { who: item.actorName, plan: alert.planTitle, item: alert.itemTitle },
+        side,
+      );
+    case 'task':
+      return taskAlertLine(item.eventType, alert.task, item.actorName);
+  }
+}
+
+/**
+ * An alert card's second line: the chat for a reminder or a task alert, the
+ * message preview for a scheduled send, the item a plan alert names (never
+ * the plan twice), or null when there is none. Pure.
+ */
+export function alertBody(alert: AlertInfo): string | null {
+  switch (alert.kind) {
+    case 'reminder':
+    case 'task':
+      return alertChat(alert);
+    case 'sent':
+    case 'failed':
+      return alert.preview;
+    case 'plan':
+      return alert.itemTitle ?? alert.plan?.itemTitle ?? null;
+  }
+}
+
+/** The link an alert opens, or null (a failed send, a deleted plan, a row without its chat). Pure. */
+function alertHref(item: ActivityItem, alert: AlertInfo): string | null {
+  switch (alert.kind) {
+    case 'reminder':
+      return alert.channelId !== null ? chatMessageHref(alert.channelId, item.messageId) : null;
+    case 'sent':
+      return alert.channelId !== null
+        ? chatMessageHref(alert.channelId, item.messageId ?? alert.scheduledId)
+        : null;
+    case 'failed':
+      return null;
+    case 'plan': {
+      const plan = alert.plan;
+      if (item.eventType === 'plan_deleted' || plan?.planId == null) return null;
+      return planHref(plan.planId, plan.leftPlan ? null : plan.itemId);
+    }
+    case 'task': {
+      if (alert.channelId === null) return null;
+      // A batch opens the sheet with no row expanded; one task opens on that row.
+      const taskId = isTaskBatch(item.eventType, alert.task)
+        ? TASKS_SHEET_ONLY
+        : (alert.task?.taskId ?? null);
+      return chatMessageHref(
+        alert.channelId,
+        taskId !== null ? taskLinkToken(taskId) : item.messageId,
+      );
+    }
+  }
+}
+
+/** What a tap on a row does. */
+export interface OpenAction {
+  /** Where it goes; null opens nothing. */
+  href: string | null;
+  /** Whether the tap marks the row read (a reminder stays until Mark as read). */
+  markRead: boolean;
+  /** A toast the tap shows (a deleted plan's); null for none. */
+  toast: string | null;
+}
+
+/**
+ * The tap on a row, in the bell's rules for the alerts: a reminder opens the
+ * chat at its message and never marks it read; a deleted plan (or one with no
+ * id) marks read, opens nothing and toasts "This plan was deleted"; every
+ * other row marks read, then opens its link (entityHref). Pure.
+ */
+export function openAction(item: ActivityItem, workspaceKey: string | null = null): OpenAction {
+  const href = entityHref(item, workspaceKey);
+  if (item.alert?.kind === 'reminder') return { href, markRead: false, toast: null };
+  if (item.alert?.kind === 'plan' && href === null) {
+    return { href: null, markRead: true, toast: PLAN_DELETED_TOAST };
+  }
+  return { href, markRead: true, toast: null };
+}
+
+/** Rows with nowhere to open, whose card is not tappable: a deleted post, a failed send. Pure. */
+export function opensNothing(item: Pick<ActivityItem, 'eventType'>): boolean {
+  return item.eventType === 'post_deleted' || item.eventType === 'scheduled_failed';
+}
+
 /**
  * Route to open when a row is clicked, or null when it has no detail surface.
- * Asset events have no post/brief entity: they deep-link to the asset lightbox via
+ * An alert opens its chat, plan or task sheet (alertHref). Asset events have no post/brief entity: they deep-link to the asset lightbox via
  * the existing `?asset=` param. Post/brief comment events deep-link to the exact
  * comment via the existing `?comment=` param (consumed by PostDetailPage /
  * BriefDetailPage / AssetsPage already); a non-comment entry lands on the entity.
  */
 export function entityHref(item: ActivityItem, workspaceKey: string | null = null): string | null {
+  if (item.alert != null) return alertHref(item, item.alert);
   if (isChatMention(item)) {
     if (item.entityId === null) return null;
     return chatMessageHref(item.entityId, item.messageId);
@@ -719,9 +943,12 @@ export function isSnoozed(item: ActivityItem, nowMs: number): boolean {
 
 /**
  * Apply the chip: All hides snoozed; Unread is unread + not snoozed;
- * Mentions is every mention (read AND unread) that is not snoozed; Briefs is
- * every brief event (scope 'briefs') that is not snoozed; Snoozed is only snoozed. Input order is
- * preserved, so a newest-first page stays newest-first through the filter.
+ * Mentions is every mention (post, brief and chat; read AND unread) that is
+ * not snoozed; Briefs is every brief event (scope 'briefs') that is not
+ * snoozed; Plans is every plan alert (the six plan_* types) that is not
+ * snoozed; Snoozed is only snoozed. Reminders, scheduled sends and task
+ * alerts have no chip of their own. Input order is preserved, so a
+ * newest-first page stays newest-first through the filter.
  */
 export function filterByState(
   items: readonly ActivityItem[],
@@ -739,6 +966,8 @@ export function filterByState(
       );
     case 'briefs':
       return items.filter((item) => item.scope === BRIEFS_SCOPE && !isSnoozed(item, nowMs));
+    case 'plans':
+      return items.filter((item) => isBellPlanEvent(item.eventType) && !isSnoozed(item, nowMs));
     case 'all':
     default:
       return items.filter((item) => !isSnoozed(item, nowMs));
@@ -753,7 +982,9 @@ export const ACTIVITY_LOAD_FAILED = "Couldn't load activity. Check your connecti
 
 /**
  * The entries "Mark all read" clears: the unread, non-snoozed items the active
- * chip shows. Every other chip's rows are left alone. Pure.
+ * chip shows, except a failed scheduled send (it stays until it is retried,
+ * edited or opened, as the bell kept it). Every other chip's rows are left
+ * alone. Pure.
  */
 export function markAllTargets(
   items: readonly ActivityItem[],
@@ -761,7 +992,34 @@ export function markAllTargets(
   nowMs: number,
 ): ActivityItem[] {
   return filterByState(items, state, nowMs).filter(
-    (item) => item.readAt === null && !isSnoozed(item, nowMs),
+    (item) =>
+      item.readAt === null && !isSnoozed(item, nowMs) && item.eventType !== 'scheduled_failed',
+  );
+}
+
+/**
+ * The event types inbox_mark_all_read leaves unread (20261012190000_plan_part_2b:
+ * the bell's types when it had its own Mark all read), chat mentions aside.
+ */
+export const MARK_ALL_READ_PROC_SKIPS: ReadonlySet<string> = new Set([
+  'reminder',
+  'scheduled_sent',
+  'scheduled_failed',
+  ...BELL_PLAN_EVENT_TYPES,
+]);
+
+/**
+ * The All chip's targets the workspace-wide proc does not clear, so "Mark all
+ * read" marks them one by one in the same action: the types it skips, chat
+ * mentions, and any row with an elapsed snooze (the proc only clears rows
+ * that were never snoozed). Pure.
+ */
+export function markAllPerRow(targets: readonly ActivityItem[]): ActivityItem[] {
+  return targets.filter(
+    (item) =>
+      MARK_ALL_READ_PROC_SKIPS.has(item.eventType) ||
+      isChatMention(item) ||
+      item.snoozedUntil !== null,
   );
 }
 
@@ -952,50 +1210,42 @@ interface FirstImageRow {
   asset_versions: { mime_type: string | null } | null;
 }
 
-/** A chat mention's chat: its kind, and the Sorted group id for a group. */
-interface ChatMentionChannel {
+/** A chat row's chat: its kind, and the Sorted group id for a group. */
+interface ChatRowChannel {
   type: 'group' | 'dm';
   groupId: string | null;
 }
 
 /**
- * The chats and message bodies behind a page's chat mentions: one chat_channels
- * IN read and one chat_messages IN read (RLS: members only), in parallel. Each
- * is best-effort; a failure leaves its map empty (the row degrades, never fails).
+ * The chats and messages behind a page's chat rows (mentions, reminders,
+ * scheduled sends, task alerts): one chat_channels IN read and the chat_messages
+ * IN read (RLS: members only), in parallel. Each is best-effort; a failure
+ * leaves its map empty (the row degrades, never fails).
  */
-async function readChatMentionSources(
+async function readChatSources(
   client: Client,
   ids: { channelIds: string[]; messageIds: string[] },
-): Promise<{ channels: Map<string, ChatMentionChannel>; bodies: Map<string, string> }> {
-  const [channelsRes, messagesRes] = await Promise.all([
+): Promise<{
+  channels: Map<string, ChatRowChannel>;
+  messages: Map<string, ChatMessagePreview>;
+}> {
+  const [channelsRes, messages] = await Promise.all([
     ids.channelIds.length > 0
       ? client
           .from('chat_channels')
           .select('channel_id, channel_type, entity_id')
           .in('channel_id', ids.channelIds)
       : Promise.resolve(null),
-    ids.messageIds.length > 0
-      ? client
-          .from('chat_messages')
-          .select('id, body')
-          .in('id', ids.messageIds)
-          .is('deleted_at', null)
-      : Promise.resolve(null),
+    readChatMessages(client, ids.messageIds),
   ]);
-  const channels = new Map<string, ChatMentionChannel>();
+  const channels = new Map<string, ChatRowChannel>();
   if (channelsRes !== null && channelsRes.error === null) {
     for (const r of channelsRes.data ?? []) {
       const type = r.channel_type === 'group' ? 'group' : 'dm';
       channels.set(r.channel_id, { type, groupId: type === 'group' ? r.entity_id : null });
     }
   }
-  const bodies = new Map<string, string>();
-  if (messagesRes !== null && messagesRes.error === null) {
-    for (const r of messagesRes.data ?? []) {
-      if (typeof r.body === 'string') bodies.set(r.id, r.body);
-    }
-  }
-  return { channels, bodies };
+  return { channels, messages };
 }
 
 /** One plan item as the Activity card needs it. */
@@ -1069,16 +1319,62 @@ async function readGroupNames(client: Client, groupIds: string[]): Promise<Map<s
   return names;
 }
 
+/** What the loader's batched reads resolved, for filling an alert's fields. */
+interface AlertSources {
+  channels: ReadonlyMap<string, ChatRowChannel>;
+  groupNames: ReadonlyMap<string, string>;
+  messages: ReadonlyMap<string, ChatMessagePreview>;
+  failed: ScheduledRead;
+  planItems: ReadonlyMap<string, PlanItemInfo>;
+  planTitles: ReadonlyMap<string, string>;
+  postTitles: ReadonlyMap<string, string>;
+  chatNames: NameOf;
+}
+
+/**
+ * Fill an alert's resolved fields from the batched reads: its group chat's
+ * name, the message or scheduled body preview, a failed send's reason and
+ * staleness, a plan alert's plan and item titles. A field whose read failed
+ * stays empty and the row still renders.
+ */
+function stitchAlert(alert: AlertInfo, messageId: string | null, from: AlertSources): void {
+  const channel = alert.channelId !== null ? from.channels.get(alert.channelId) : undefined;
+  alert.chatName = channel?.groupId != null ? (from.groupNames.get(channel.groupId) ?? null) : null;
+  if (alert.kind === 'reminder' || alert.kind === 'sent') {
+    const message = messageId !== null ? from.messages.get(messageId) : undefined;
+    alert.preview = messagePreview(message, from.chatNames);
+  } else if (alert.kind === 'failed') {
+    const row = alert.scheduledId !== null ? from.failed.rows.get(alert.scheduledId) : undefined;
+    alert.preview = scheduledPreview(row, from.chatNames);
+    alert.reason = row?.failure_reason ?? alert.reason;
+    alert.stale = isStaleFailed(from.failed, alert.scheduledId);
+  } else if (alert.plan !== undefined) {
+    const f = alert.plan;
+    alert.planTitle =
+      f.planTitle ?? (f.planId !== null ? (from.planTitles.get(f.planId) ?? null) : null);
+    const info = f.itemId !== null ? from.planItems.get(f.itemId) : undefined;
+    const postId = info?.postId ?? f.postId;
+    alert.itemTitle =
+      f.itemTitle ??
+      (info !== undefined && info.kind !== 'post' && info.title !== null && info.title !== ''
+        ? info.title
+        : null) ??
+      (postId !== null ? (from.postTitles.get(postId) ?? null) : null);
+  }
+}
+
 /**
  * Read one page of the caller's inbox for a workspace and enrich each row with the
  * data the live (minimal) payloads omit: the actor's display name and the entity
  * title, both resolved by batched joins (no N+1). One RLS-scoped select, then wave
  * one (comments / posts / briefs by id) and wave two (users by id). Every join is
  * best-effort: a failed sub-query leaves its field null rather than failing the
- * feed. Soft-deleted rows are excluded; the inbox is a permanent surface. Pass
+ * feed. Soft-deleted rows are excluded; the inbox is a permanent surface. Every
+ * row shows, the chat, plan and task alerts included (their chats, messages,
+ * failed sends and plan titles join in the same batched waves). Pass
  * `before` (the oldest loaded created_at) to fetch the next, older page. Pass
  * `state` to filter server-side to the active chip (Unread, Mentions, Briefs,
- * Snoozed; All has no filter), so older matches are never hidden behind the
+ * Plans, Snoozed; All has no filter), so older matches are never hidden behind the
  * newest-page cap: the DESC order, the keyset `before` cursor and the page size
  * are all preserved unchanged. `nowIso` is the snooze cut-off (defaults to now).
  */
@@ -1087,27 +1383,24 @@ export async function fetchActivityEntries(
   workspaceId: string,
   input: { before?: string; state?: ActivityState; nowIso?: string } = {},
 ): Promise<LoadResult> {
-  // Activity is posts only: the chat bell's rows (chat mentions, reminders,
-  // scheduled sent / failed) are filtered out server-side, so paging and the
-  // Mentions chip never count them.
-  const base = withoutBellEntries(
-    client
-      .from('inbox_entries')
-      .select(SELECT_COLS)
-      .eq('workspace_id', workspaceId)
-      .is('deleted_at', null),
-  );
+  const base = client
+    .from('inbox_entries')
+    .select(SELECT_COLS)
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null);
   const nowIso = input.nowIso ?? new Date().toISOString();
   const typed =
     input.state === 'mentions'
       ? base.eq('event_type', MENTION_EVENT_TYPE)
       : input.state === 'briefs'
         ? base.eq('scope', BRIEFS_SCOPE)
-        : input.state === 'unread'
-          ? base.is('read_at', null).or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
-          : input.state === 'snoozed'
-            ? base.gt('snoozed_until', nowIso)
-            : base;
+        : input.state === 'plans'
+          ? base.in('event_type', [...BELL_PLAN_EVENT_TYPES])
+          : input.state === 'unread'
+            ? base.is('read_at', null).or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
+            : input.state === 'snoozed'
+              ? base.gt('snoozed_until', nowIso)
+              : base;
   const scoped = input.before !== undefined ? typed.lt('created_at', input.before) : typed;
   const res = await scoped.order('created_at', { ascending: false }).limit(ACTIVITY_PAGE_SIZE);
   if (res.error) return { ok: false, error: res.error.message };
@@ -1140,20 +1433,45 @@ export async function fetchActivityEntries(
       item.eventType === 'checkpoints_added' && item.batchId !== null ? [item.batchId] : [],
     ),
   );
-  // Chat mentions: the chats (kind + group) and the messages, one IN read each.
+  // Chat rows (mentions and the chat alerts): the chats (kind + group), one IN
+  // read; the messages a mention, reminder or sent row previews, one IN read.
   const chatMentions = items.filter(isChatMention);
-  const channelIds = unique(chatMentions.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])));
-  const messageIds = unique(
-    chatMentions.flatMap((i) => (i.messageId !== null ? [i.messageId] : [])),
+  const alerts = items.flatMap((i) => (i.alert != null ? [{ item: i, alert: i.alert }] : []));
+  const channelIds = unique([
+    ...chatMentions.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
+    ...alerts.flatMap(({ alert }) => (alert.channelId !== null ? [alert.channelId] : [])),
+  ]);
+  const messageIds = unique([
+    ...chatMentions.flatMap((i) => (i.messageId !== null ? [i.messageId] : [])),
+    ...alerts.flatMap(({ item, alert }) =>
+      (alert.kind === 'reminder' || alert.kind === 'sent') && item.messageId !== null
+        ? [item.messageId]
+        : [],
+    ),
+  ]);
+  // Failed sends: the scheduled rows behind them (reason, body, still failed?).
+  const failedIds = unique(
+    alerts.flatMap(({ alert }) =>
+      alert.kind === 'failed' && alert.scheduledId !== null ? [alert.scheduledId] : [],
+    ),
   );
-  // Plan events: the items, the plans and the plan comments, one IN read each,
-  // alongside the chat reads (the posts read below needs the post items' ids).
+  // Plan events and plan alerts: the items, the plans and the plan comments,
+  // one IN read each, alongside the chat reads (the posts read below needs the
+  // post items' ids). An alert reads only the titles its payload lacks.
   const planEvents = items.filter(isPlanEvent);
-  const [chatRes, planRes] = await Promise.all([
-    readChatMentionSources(client, { channelIds, messageIds }),
+  const planAlerts = alerts.flatMap(({ alert }) => (alert.plan !== undefined ? [alert.plan] : []));
+  const [chatRes, failedRes, planRes] = await Promise.all([
+    readChatSources(client, { channelIds, messageIds }),
+    readScheduledRows(client, failedIds),
     readPlanSources(client, {
-      itemIds: unique(planEvents.flatMap((i) => (i.entityId !== null ? [i.entityId] : []))),
-      planIds: unique(planEvents.flatMap((i) => (i.planId != null ? [i.planId] : []))),
+      itemIds: unique([
+        ...planEvents.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
+        ...planAlerts.flatMap((f) => (f.itemTitle === null && f.itemId !== null ? [f.itemId] : [])),
+      ]),
+      planIds: unique([
+        ...planEvents.flatMap((i) => (i.planId != null ? [i.planId] : [])),
+        ...planAlerts.flatMap((f) => (f.planTitle === null && f.planId !== null ? [f.planId] : [])),
+      ]),
       commentIds: unique(
         planEvents.flatMap((i) =>
           i.eventType === 'plan_comment' && i.commentId !== null ? [i.commentId] : [],
@@ -1161,12 +1479,14 @@ export async function fetchActivityEntries(
       ),
     }),
   ]);
-  // A post item's title is its post's: folded into the one posts read.
-  const planPostIds = unique(
-    [...planRes.items.values()].flatMap((info) =>
+  // A post item's title is its post's (and a plan alert may name its post
+  // directly): folded into the one posts read.
+  const planPostIds = unique([
+    ...[...planRes.items.values()].flatMap((info) =>
       info.kind === 'post' && info.postId !== null ? [info.postId] : [],
     ),
-  );
+    ...planAlerts.flatMap((f) => (f.itemTitle === null && f.postId !== null ? [f.postId] : [])),
+  ]);
   const postReadIds = unique([...postIds, ...planPostIds]);
 
   // WAVE 1: resolve comment authors and entity titles. Each sub-query is fired
@@ -1275,7 +1595,16 @@ export async function fetchActivityEntries(
     ...[...commentBodies.values()].flatMap((body) => parseMentions(body)),
     ...batchAuthors.values(),
     ...[...batchBodies.values()].flatMap((body) => parseMentions(body)),
-    ...[...chatRes.bodies.values()].flatMap((body) => parseMentions(body)),
+    ...[...chatRes.messages.values()].flatMap((m) => parseMentions(m.body ?? '')),
+    ...[...failedRes.rows.values()].flatMap((r) => parseMentions(r.body ?? '')),
+    // A reminder names its message's sender.
+    ...alerts.flatMap(({ item, alert }) => {
+      const sender =
+        alert.kind === 'reminder' && item.messageId !== null
+          ? chatRes.messages.get(item.messageId)?.senderUserId
+          : null;
+      return sender != null ? [sender] : [];
+    }),
     ...[...planRes.comments.values()].flatMap((c) =>
       c.authorId !== null ? [c.authorId, ...parseMentions(c.body)] : parseMentions(c.body),
     ),
@@ -1290,6 +1619,8 @@ export async function fetchActivityEntries(
   const nameOf = (id: string): string | null => personName(workspaceId, id) ?? null;
   // What a mention inside a body reads as: "@username", or "Former member".
   const mentionOf = (body: string): string => resolvePersonMentionText(body, workspaceId);
+  // A chat message's mentions, as the chat names them.
+  const chatNames = mentionNamesIn(workspaceId);
 
   // STITCH: fill actorName and the resolved entity title from the joins above.
   items.forEach((item, idx) => {
@@ -1305,8 +1636,17 @@ export async function fetchActivityEntries(
       const channel = item.entityId !== null ? chatRes.channels.get(item.entityId) : undefined;
       item.channelType = channel?.type ?? null;
       item.title = channel?.groupId != null ? (groupNames.get(channel.groupId) ?? null) : null;
-      const body = item.messageId !== null ? (chatRes.bodies.get(item.messageId) ?? null) : null;
-      item.body = chatMentionPreview(body, mentionNamesIn(workspaceId));
+      const body =
+        item.messageId !== null ? (chatRes.messages.get(item.messageId)?.body ?? null) : null;
+      item.body = chatMentionPreview(body, chatNames);
+    } else if (item.alert != null) {
+      // A reminder names its message's sender; every other alert its own actor.
+      actorUserId =
+        item.alert.kind === 'reminder'
+          ? ((item.messageId !== null
+              ? chatRes.messages.get(item.messageId)?.senderUserId
+              : null) ?? null)
+          : item.actorId;
     } else if (COMMENT_EVENTS.includes(item.eventType)) {
       actorUserId =
         (item.commentId !== null ? (commentAuthors.get(item.commentId) ?? null) : null) ??
@@ -1335,6 +1675,25 @@ export async function fetchActivityEntries(
     item.actorAvatarUrl = actorUserId !== null ? personAvatar(workspaceId, actorUserId) : null;
     item.onBehalfOfName = item.onBehalfOfId != null ? nameOf(item.onBehalfOfId) : null;
     if (isChatMention(item)) return;
+
+    if (item.alert != null) {
+      stitchAlert(item.alert, item.messageId, {
+        channels: chatRes.channels,
+        groupNames,
+        messages: chatRes.messages,
+        failed: failedRes,
+        planItems: planRes.items,
+        planTitles: planRes.planTitles,
+        postTitles,
+        chatNames,
+      });
+      item.title = null;
+      item.format = null;
+      item.caption = null;
+      item.thumbnailAssetVersionId = null;
+      item.number = null;
+      return;
+    }
 
     if (isPlanEvent(item)) {
       // Card title: the item's title (a concept's own, a post item's post title).
@@ -1428,6 +1787,45 @@ export function markEntryRead(
     p_created_at: item.createdAt,
     p_trace_id: traceId,
   });
+}
+
+/** What Retry on a failed scheduled send did. */
+export type RetryOutcome =
+  | { kind: 'sent' }
+  /** Resolved elsewhere (sent, cancelled or edited): the stale entry was marked read. */
+  | { kind: 'cleared' }
+  /** `copy` is the toast ("Couldn't do that. Try again."); null stays silent ("not found"). */
+  | { kind: 'failed'; message: string; copy: string | null };
+
+/**
+ * Retry a failed scheduled send, as the bell did: a send already resolved
+ * elsewhere only marks its stale entry read (inbox_mark_read); otherwise
+ * chat_scheduled_send_now sends it now (the proc clears the failed entry).
+ * Both carry the explicit trace id. Never throws.
+ */
+export async function retryFailedSend(
+  client: Client,
+  item: ActivityItem,
+  workspaceId: string,
+  traceId: string,
+): Promise<RetryOutcome> {
+  const alert = item.alert;
+  if (alert?.kind !== 'failed' || alert.scheduledId === null) {
+    return { kind: 'failed', message: 'not a failed send', copy: null };
+  }
+  if (alert.stale) {
+    const res = await markEntryRead(client, item, workspaceId, traceId);
+    return res.ok
+      ? { kind: 'cleared' }
+      : { kind: 'failed', message: res.error.message, copy: ACTION_FAILED_COPY };
+  }
+  const res = await sendScheduledNow({ client, id: alert.scheduledId, traceId });
+  if (res.ok) return { kind: 'sent' };
+  return {
+    kind: 'failed',
+    message: res.message,
+    copy: mapScheduleError(res.message) === null ? null : ACTION_FAILED_COPY,
+  };
 }
 
 /** Mark every unread, non-snoozed entry read (workspace-wide). */

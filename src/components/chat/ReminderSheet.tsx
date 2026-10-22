@@ -3,9 +3,10 @@
 // the same Custom step as the Schedule sheet (native date and time inputs, 1
 // minute to 365 days ahead). Device-local times in mono, the zone named in the
 // footer from Intl. Used for a new reminder and, in change mode (a reminder is
-// already pending: Change time from Upcoming, or "Reminder · <time>" from the
-// message menu), titled "Reminder" with a "Cancel reminder" row in the danger
-// token under the presets. Tokens only; the Sheet moves on translateY only.
+// already pending: "Reminder · <time>" from the message menu), titled
+// "Reminder" with a "Cancel reminder" row in the danger token under the
+// presets. ChatReminderSheet is the one the chat mounts, wired to the
+// ReminderProvider. Tokens only; the Sheet moves on translateY only.
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { IconAlarmClock, IconChevronRight, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
-import { useBellOptional } from '@/components/chat/BellContext';
+import { useReminderOptional } from '@/components/chat/ReminderContext';
 import { zoneLine } from '@/components/chat/ScheduleSheet';
 import {
   dateInputValue,
@@ -192,7 +193,7 @@ function CancelReminderRow(props: { onClick: () => void }): ReactElement {
 
 /**
  * The Remind me sheet (both layouts; the Sheet centres on wide screens). Change
- * mode comes from `change`, else from the bell's target when it is a change.
+ * mode comes from `change`, else from the reminder target when it is a change.
  */
 export function ReminderSheet(props: {
   open: boolean;
@@ -201,13 +202,13 @@ export function ReminderSheet(props: {
   onPick: (at: Date) => void;
   change?: { onCancelReminder: () => void } | undefined;
 }): ReactElement {
-  // System Back closes only this sheet; the chat or bell under it stays.
+  // System Back closes only this sheet; the chat under it stays.
   useHistoryStep(props.open, SHEET_STEP_KEYS.reminder, props.onClose);
-  const bell = useBellOptional();
+  const reminders = useReminderOptional();
   const live =
     props.change ??
-    (bell !== null && bell.reminderTarget?.mode === 'change'
-      ? { onCancelReminder: () => void bell.cancelReminderFromSheet() }
+    (reminders !== null && reminders.reminderTarget?.mode === 'change'
+      ? { onCancelReminder: () => void reminders.cancelReminderFromSheet() }
       : undefined);
   // The mode stays as opened while the sheet slides away (the target clears first).
   const openedAs = useRef(live);
@@ -241,5 +242,19 @@ export function ReminderSheet(props: {
         onCancelReminder={change?.onCancelReminder}
       />
     </Sheet>
+  );
+}
+
+/** The chat's reminder sheet, driven by the ReminderProvider (ChatConnected mounts it once). */
+export function ChatReminderSheet(): ReactElement | null {
+  const reminders = useReminderOptional();
+  if (reminders === null) return null;
+  return (
+    <ReminderSheet
+      open={reminders.reminderTarget !== null}
+      onClose={reminders.closeReminder}
+      preview={reminders.reminderTarget?.preview ?? null}
+      onPick={(at) => void reminders.pickReminderTime(at)}
+    />
   );
 }

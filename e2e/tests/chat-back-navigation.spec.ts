@@ -110,11 +110,11 @@ test('2b: the thread view closes on back (its fade) and stays in the chat', asyn
   expectClean(network);
 });
 
-test('3: Activity -> chat mention -> back = Activity', async ({ page }) => {
+test('3: Notifications -> chat mention -> back = Notifications', async ({ page }) => {
   await installHarnessNetwork(page);
-  await page.goto('/activity');
+  await page.goto('/notifications');
   await page.waitForTimeout(600);
-  // Activity's own tap: an in-app push of the mention's deep link (navigate(href)).
+  // The page's own tap: an in-app push of the mention's deep link (navigate(href)).
   await page.evaluate(
     ({ channel, message }) => {
       const state = (window.history.state ?? {}) as { idx?: number };
@@ -129,29 +129,22 @@ test('3: Activity -> chat mention -> back = Activity', async ({ page }) => {
   );
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
   await page.goBack();
-  await expect(page).toHaveURL(/\/activity$/);
+  await expect(page).toHaveURL(/\/notifications$/);
 });
 
-test('4: Chat home -> bell -> mention row -> back = chat home with the bell open; back again closes it', async ({
+test('4: Notifications -> chat mention card (marked read) -> back = Notifications', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
-  await page.goto('/chat');
-  await page.locator('[data-bell-button]').click();
-  const bell = page.getByRole('dialog', { name: 'Notifications' });
-  await expect(bell).toBeVisible();
-  await page
-    .locator('[data-bell-row="mention"]', { hasText: MENTION_PREVIEW })
-    .locator('[data-bell-open]')
-    .first()
-    .click();
+  await page.goto('/notifications');
+  const mention = page.locator('[data-activity-event="mention"]', { hasText: MENTION_PREVIEW });
+  await mention.locator('[data-activity-lead]').click();
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
+  await expect(page).toHaveURL(/\/chat\?channel=/);
   await page.goBack();
-  await expect(page).toHaveURL(/\/chat$/);
-  await expect(bell).toBeVisible();
-  await page.goBack();
-  await expect(bell).toBeHidden();
-  await expectList(page);
+  await expect(page).toHaveURL(/\/notifications$/);
+  await expect(mention).toBeVisible();
+  expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toHaveLength(1);
   expectClean(network);
 });
 
