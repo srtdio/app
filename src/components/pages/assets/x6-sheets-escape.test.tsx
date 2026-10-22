@@ -16,7 +16,6 @@ import { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 import { BACK_GUARD_STEP_KEY } from '@/lib/back-guard';
 import { resetHistorySteps, stepMarkerOf } from '@/lib/chat/use-history-step';
-import { DUR_BASE_MS } from '@/lib/motion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,7 +40,6 @@ const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (b) => b.textContent?.trim() === label,
   );
-const confirm = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
 const guarded = () => stepMarkerOf(window.history.state, BACK_GUARD_STEP_KEY) !== null;
 
 async function type(input: HTMLInputElement, value: string): Promise<void> {
