@@ -1,9 +1,9 @@
 // The empty-day menu (creators, laptop): anchored to the clicked day cell and
 // kept on screen near the edges. Header "Add on <day> to", then only the
-// plans whose dates hold that day (dot in the plan's colour, title, mono date
-// range, Draft tag), a divider and "+ New plan". Escape or a click outside
-// closes it and focus goes back to the cell; it opens with focus on its first
-// row. Tokens only.
+// plans whose dates hold that day (dot in the plan's colour, title on up to
+// two lines, mono date range, Draft tag), a divider and "+ New plan". Escape
+// or a click outside closes it and focus goes back to the cell; it opens with
+// focus on its first row. Tokens only.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -110,7 +110,7 @@ export function PlanDayMenu(props: {
             role="menuitem"
             data-plan-tab-menu-plan={bundle.plan.id}
             onClick={() => props.onPick(bundle)}
-            className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-2.5 text-left transition-colors hover:bg-panel-2 focus-visible:bg-panel-2 focus-visible:outline-none"
+            className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-panel-2 focus-visible:bg-panel-2 focus-visible:outline-none"
           >
             <span
               aria-hidden="true"
@@ -120,7 +120,12 @@ export function PlanDayMenu(props: {
               )}
             />
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium text-fg">{bundle.plan.title}</span>
+              <span
+                data-plan-tab-menu-title=""
+                className="line-clamp-2 text-sm font-medium text-fg [overflow-wrap:anywhere]"
+              >
+                {bundle.plan.title}
+              </span>
               <span className="truncate font-mono text-xs text-fg-3">
                 {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
               </span>

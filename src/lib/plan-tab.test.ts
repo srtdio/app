@@ -328,6 +328,14 @@ describe('the phone list', () => {
       label: '2 items · only your team sees this',
     });
   });
+
+  it('a draft with one item says "1 item"', () => {
+    const draft = bundle(plan('d1', today, today, 'team'), [item({ id: 'i5' })]);
+    expect(planCardMeta(draft)).toEqual({
+      kind: 'draft',
+      label: '1 item · only your team sees this',
+    });
+  });
 });
 
 describe('zero state', () => {

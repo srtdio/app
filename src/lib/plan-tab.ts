@@ -479,7 +479,8 @@ export function planSections<T extends { plan: Pick<PlanRow, 'id' | 'starts_on' 
 
 /**
  * The phone card's progress: a shared plan "N of M OK" (approvers' OKs) with
- * its bar; a Draft "N items · only your team sees this", no bar. Pure.
+ * its bar; a Draft "N items · only your team sees this" ("1 item" for one),
+ * no bar. Pure.
  */
 export function planCardMeta(
   bundle: PlanBundle,

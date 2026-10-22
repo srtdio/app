@@ -174,9 +174,14 @@ function PlanCardItem(props: {
   );
 }
 
-/** The card's top lines: the PLAN eyebrow, the title and the mono date range. */
+/**
+ * The card's top lines: the PLAN eyebrow, the title and the mono date range.
+ * The title stays on one line (the chat card keeps its skeleton's height);
+ * `wrapTitle` lets it wrap to two lines, then end on an ellipsis.
+ */
 export function PlanCardTop(props: {
   plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>;
+  wrapTitle?: boolean;
 }): ReactElement {
   return (
     <>
@@ -186,7 +191,10 @@ export function PlanCardTop(props: {
       </span>
       <span
         data-plan-title=""
-        className="truncate text-[17px] font-semibold leading-[22px] text-fg"
+        className={cn(
+          'text-[17px] font-semibold leading-[22px] text-fg',
+          props.wrapTitle === true ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'truncate',
+        )}
       >
         {props.plan.title}
       </span>

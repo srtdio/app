@@ -1,8 +1,8 @@
 // The Plan tab on a phone: the plans as cards in sections (This week, Next
 // week, Later, Earlier; empty ones hidden). A card has the chat plan card's
-// look (PLAN, the title, the mono date range) with the plan's covers, then a
-// shared plan's bar and "N of M OK", or a Draft's tag and "N items · only your
-// team sees this". A tap opens the plan's own screen (full page). The phone
+// look (PLAN, the title on up to two lines, the mono date range) with the
+// plan's covers, then a shared plan's bar and "N of M OK", or a Draft's tag
+// and "N items · only your team sees this" ("1 item" for one). A tap opens the plan's own screen (full page). The phone
 // Plan screens themselves are not touched. Tokens only.
 
 import type { ReactElement } from 'react';
@@ -74,7 +74,7 @@ export function PlanTabCard(props: {
       onClick={props.onOpen}
       className="flex w-full flex-col gap-2 rounded-lg border border-border bg-panel px-3.5 pb-3 pt-3 text-left transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <PlanCardTop plan={props.bundle.plan} />
+      <PlanCardTop plan={props.bundle.plan} wrapTitle />
       {props.covers.length > 0 ? (
         <span className="flex h-10 gap-1.5">
           {props.covers.map((version) => (

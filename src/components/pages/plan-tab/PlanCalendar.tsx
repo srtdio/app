@@ -1,5 +1,5 @@
 // The Plan tab on a laptop: the chip row (All, then one chip per plan in the
-// range, in its colour, Draft tagged), the toolbar (range label, Previous /
+// range, in its colour, Draft tagged), the toolbar (range label, Last /
 // Next, Today, the legend) and the Month or Week grid. Colour is which plan: a
 // plan item sits on its plan's soft colour with a round dot; a dated post in
 // no plan on the neutral panel with a square dot. A month cell shows three
@@ -181,7 +181,7 @@ export function PlanCalendar(props: {
           {rangeLabel(view, anchor)}
         </h2>
         <IconButton
-          label={view === 'month' ? 'Previous month' : 'Last week'}
+          label={view === 'month' ? 'Last month' : 'Last week'}
           data-plan-tab-prev=""
           onClick={() => props.onAnchor(shiftAnchor(view, anchor, -1))}
         >
@@ -560,9 +560,9 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
           {entry.title}
         </span>
         {entry.kind === 'item' ? (
-          <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-fg-2">
-            <span aria-hidden="true" className={cn('h-2 w-2 shrink-0', look.dot)} />
-            <span className="truncate">{entry.bundle.plan.title}</span>
+          <span className="flex min-w-0 items-start gap-1.5 text-[11px] leading-4 text-fg-2">
+            <span aria-hidden="true" className={cn('mt-1 h-2 w-2 shrink-0', look.dot)} />
+            <span className="line-clamp-2 [overflow-wrap:anywhere]">{entry.bundle.plan.title}</span>
           </span>
         ) : null}
         {pill !== null ? (
