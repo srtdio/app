@@ -953,3 +953,31 @@ test('E: phone (iPhone 13): full page; view mode has no edit controls; Edit show
   ).toEqual([]);
   expectClean(network);
 });
+
+test('H: the panel header keeps the phone layout: 28px title on line 1, boxed Add then Edit on line 2 on the 16px edge, at 440 and 360 @desktop', async ({
+  page,
+}) => {
+  laptopOnly(page);
+  test.setTimeout(120_000);
+  const network = await installHarnessNetwork(page);
+  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
+  await openChat(page);
+  const { panel } = await openPanel(page);
+  const line1 = panel.locator('[data-plan-header-line="1"]');
+  const line2 = panel.locator('[data-plan-header-line="2"]');
+  await expect(line1.locator('[data-plan-title-menu] h2')).toHaveCSS('font-size', '28px');
+  await expect(line1.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
+  for (const width of [1280, 950]) {
+    await page.setViewportSize({ width, height: 800 });
+    const box = await panel.boundingBox();
+    const add = await line2.locator('[data-plan-add-header] [data-plan-header-box]').boundingBox();
+    const edit = await line2.locator('[data-plan-edit] [data-plan-header-box]').boundingBox();
+    if (box === null || add === null || edit === null) throw new Error('boxes');
+    expect(add.x + add.width).toBeLessThan(edit.x);
+    expect(Math.round(box.x + box.width - (edit.x + edit.width))).toBe(16);
+    expect(Math.round(edit.height)).toBe(34);
+  }
+  await line2.locator('[data-plan-edit]').click();
+  await expect(panel.locator('[data-plan-edit-header]')).toBeVisible();
+  expectClean(network);
+});

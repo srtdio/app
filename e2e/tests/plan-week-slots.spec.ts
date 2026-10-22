@@ -424,3 +424,87 @@ test('client: Undo after OK on a concept with changes asked keeps changes: the w
   );
   expectClean(network);
 });
+
+/** Rounded box of a locator (throws when it is not laid out). */
+async function boxOf(locator: ReturnType<Page['locator']>) {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error('no box');
+  return box;
+}
+
+test('header: agency sees the 28px title, then boxed Add and Edit on line 2 (both work); a client sees no buttons', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const network = await installHarnessNetwork(page);
+  seedClientPlan(network.world, { channelId: DM_CHANNEL, sender: ME, fileVersionId: FILE_VERSION });
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, PLAN_ID);
+  const viewport = page.viewportSize();
+  if (viewport === null) throw new Error('viewport');
+
+  // Line 1: back then the title button (28px, chevron); nothing else.
+  const line1 = plan.locator('[data-plan-header-line="1"]');
+  const line2 = plan.locator('[data-plan-header-line="2"]');
+  const title = line1.locator('[data-plan-title-menu] h2');
+  await expect(title).toHaveCSS('font-size', '28px');
+  await expect(title).toHaveCSS('font-weight', '700');
+  await expect(line1.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
+  const l1 = await boxOf(line1);
+  const l2 = await boxOf(line2);
+  expect(Math.round(l2.y - (l1.y + l1.height))).toBe(2);
+  expect(Math.round(l2.height)).toBe(44);
+  expect(Math.round(l2.x)).toBe(16);
+
+  // Line 2: the subline, then Add, then Edit; the last box on the 16px edge.
+  await expect(line2.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
+  const add = line2.locator('[data-plan-add-header]');
+  const edit = line2.locator('[data-plan-edit]');
+  await expect(add).toHaveAccessibleName('Add to plan');
+  await expect(add).toHaveText('Add');
+  await expect(edit).toHaveText('Edit');
+  const addBox = await boxOf(add.locator('[data-plan-header-box]'));
+  const editBox = await boxOf(edit.locator('[data-plan-header-box]'));
+  expect(Math.round(addBox.height)).toBe(34);
+  expect(Math.round(editBox.height)).toBe(34);
+  expect(Math.round(editBox.x - (addBox.x + addBox.width))).toBe(8);
+  expect(Math.round(viewport.width - (editBox.x + editBox.width))).toBe(16);
+  expectMinTouchTarget(await add.boundingBox());
+  expectMinTouchTarget(await edit.boundingBox());
+
+  // Add opens the add sheet, as the header "+" did.
+  await add.click();
+  await expect(page.locator('[data-plan-add-sheet]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-plan-add-sheet]')).toHaveCount(0);
+
+  // Edit enters Edit mode with its own header; Cancel leaves it.
+  await edit.click();
+  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+  await plan.locator('[data-plan-back-text]').click();
+  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-header-line="2"] [data-plan-edit]')).toBeVisible();
+  expectClean(network);
+});
+
+test('header: a client sees the title and subline with no Add or Edit', async ({ page }) => {
+  test.setTimeout(120_000);
+  const network = await installHarnessNetwork(page);
+  viewAsClient(network);
+  seedClientPlan(network.world, {
+    channelId: DM_CHANNEL,
+    sender: PEER,
+    fileVersionId: FILE_VERSION,
+  });
+  await openChat(page, PEER_NAME);
+  const plan = await openPlan(page, PLAN_ID);
+
+  const title = plan.locator('[data-plan-header-line="1"] h2');
+  await expect(title).toHaveText(PLAN_TITLE);
+  await expect(title).toHaveCSS('font-size', '28px');
+  const line2 = plan.locator('[data-plan-header-line="2"]');
+  await expect(line2.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
+  await expect(plan.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
+  expect(Math.round((await boxOf(line2)).height)).toBe(44);
+  expectClean(network);
+});
