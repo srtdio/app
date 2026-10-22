@@ -5,8 +5,9 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Assets multi-select starts from the round box at each card's top left: one
 // tap selects that file. While selecting, the header shows Cancel, the count
-// and Select all; on a phone Move and Delete sit in a bar at the bottom. The +
-// menu no longer offers Select. Tagged @theme for light and dark.
+// and Select all; on a phone Delete sits in a bar at the bottom (there is no
+// Move: Assets has no folders). The "New asset" menu offers no Select. Tagged
+// @theme for light and dark.
 
 const AT = Date.parse('2026-10-01T09:00:00Z');
 const NAMES = ['Logo.png', 'Lookbook.pdf', 'Reel.mp4'];
@@ -50,17 +51,16 @@ function seedAssets(network: HarnessNetwork): void {
 
 const boxes = (page: Page) => page.locator('[data-card-select]');
 
-test('one tap on a card box selects it; Cancel, Select all, Move and Delete @theme', async ({
-  page,
-}) => {
+test('one tap on a card box selects it; Cancel, Select all and Delete @theme', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   seedAssets(network);
   await page.goto('/assets');
   await expect(boxes(page)).toHaveCount(3, { timeout: 15_000 });
 
-  // The + menu offers no Select.
-  await page.getByRole('button', { name: 'Add asset' }).click();
+  // The "New asset" menu offers upload and link, and no Select.
+  await page.getByRole('button', { name: 'New asset' }).click();
   await expect(page.getByRole('menuitem', { name: 'Upload files' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Add link' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Select' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
@@ -83,12 +83,10 @@ test('one tap on a card box selects it; Cancel, Select all, Move and Delete @the
 
   const actions = page.locator('[data-select-actions]');
   await expect(actions).toBeVisible();
-  const move = actions.getByRole('button', { name: 'Move' });
   const del = actions.getByRole('button', { name: 'Delete 1' });
-  await expect(move).toBeEnabled();
   await expect(del).toBeEnabled();
-  expectMinTouchTarget(await move.boundingBox());
   expectMinTouchTarget(await del.boundingBox());
+  await expect(page.getByRole('button', { name: 'Move' })).toHaveCount(0);
 
   // Tapping another card adds it; Select all takes the rest.
   await page.getByRole('button', { name: 'Select Lookbook.pdf' }).click();

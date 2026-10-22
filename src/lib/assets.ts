@@ -344,9 +344,7 @@ export function buildTabCounts(items: AssetListItem[]): Record<AssetTab, number>
 
 /**
  * Apply the tab and the client-side name search. Search matches the display
- * label (display_name ?? filename) and ignores the folder so a query reaches
- * the whole library; folder scoping is applied by the caller only when the
- * search box is empty.
+ * label (display_name ?? filename) across the whole library.
  */
 export function filterAssets(
   items: AssetListItem[],
@@ -423,104 +421,6 @@ export function imageTileState(args: {
   if (args.failed || !args.enabled || !args.hasVersion) return 'fallback';
   if (args.url !== null) return 'image';
   return 'shimmer';
-}
-
-/** One folder row from the real folders table, shaped for navigation. */
-export interface FolderItem {
-  id: string;
-  name: string;
-  parentId: string | null;
-}
-
-/** Shape of one raw folders-table row (the subset selected below). */
-interface RawFolderRow {
-  id: string;
-  name: string;
-  parent_id: string | null;
-}
-
-/**
- * List one workspace's folders with a plain RLS-scoped SELECT (the folders
- * policy scopes to active member rows and excludes soft-deleted), mirroring
- * listAssets' Result handling: a transport/PostgREST failure surfaces as
- * { ok: false } rather than a throw.
- */
-export async function fetchFolders(
-  client: Client,
-  workspaceId: string,
-): Promise<Result<FolderItem[]>> {
-  const result = await client
-    .from('folders')
-    .select('id,name,parent_id')
-    .eq('workspace_id', workspaceId);
-  if (result.error) {
-    return { ok: false, error: { code: 'unknown', message: result.error.message } };
-  }
-  const rows = (result.data ?? []) as unknown as RawFolderRow[];
-  const data = rows.map((row) => ({ id: row.id, name: row.name, parentId: row.parent_id }));
-  return { ok: true, data };
-}
-
-/** Immediate child folders of `parentId` (null = root), sorted by name caselessly. */
-export function childFolders(folders: FolderItem[], parentId: string | null): FolderItem[] {
-  return folders
-    .filter((folder) => folder.parentId === parentId)
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-}
-
-/**
- * Depth-first flatten of the whole folder tree from the root downward, each
- * folder returned once with its depth (root children depth 0). Children at every
- * level are name-sorted caselessly via childFolders, so the order is
- * parent-before-children with siblings in name order. Powers the destination
- * list in the move sheet, where the depth drives the left indent.
- */
-export function flattenFolders(
-  folders: FolderItem[],
-): { id: string; name: string; depth: number }[] {
-  const out: { id: string; name: string; depth: number }[] = [];
-  function walk(parentId: string | null, depth: number): void {
-    for (const folder of childFolders(folders, parentId)) {
-      out.push({ id: folder.id, name: folder.name, depth });
-      walk(folder.id, depth + 1);
-    }
-  }
-  walk(null, 0);
-  return out;
-}
-
-/**
- * The root -> current trail for `folderId`, walking parent_id upward. Null (root)
- * or an unknown id returns []; a cycle stops as soon as an id repeats.
- */
-export function folderBreadcrumb(
-  folders: FolderItem[],
-  folderId: string | null,
-): { id: string; name: string }[] {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
-  const trail: { id: string; name: string }[] = [];
-  const seen = new Set<string>();
-  let current = folderId;
-  while (current !== null) {
-    if (seen.has(current)) break;
-    seen.add(current);
-    const folder = byId.get(current);
-    if (folder === undefined) return [];
-    trail.unshift({ id: folder.id, name: folder.name });
-    current = folder.parentId;
-  }
-  return trail;
-}
-
-/** How many child folders plus assets live directly inside `folderId`. */
-export function folderChildCount(
-  folders: FolderItem[],
-  items: AssetListItem[],
-  folderId: string,
-): number {
-  const folderCount = folders.filter((folder) => folder.parentId === folderId).length;
-  const assetCount = items.filter((item) => item.folderId === folderId).length;
-  return folderCount + assetCount;
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];

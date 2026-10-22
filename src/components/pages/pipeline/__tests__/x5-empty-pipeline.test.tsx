@@ -1,5 +1,5 @@
 // X5 fix 5 (FT21): an empty pipeline has a headline and, for post.create, a
-// "Create post" button; empty board columns use emptyStageMessage, not "Empty".
+// "Create your first post" button; empty board columns use emptyStageMessage, not "Empty".
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { emptyPipeline } from '@/components/pages/PipelinePage';
@@ -17,8 +17,8 @@ describe('X5 empty pipeline', () => {
     const out = renderToStaticMarkup(emptyPipeline(true));
     expect(out).toContain('No posts yet');
     expect(out).toContain('Create your first post');
-    // The header "+" owns the exact "Create post" name; no second control shares it.
-    expect(out.toLowerCase()).not.toContain('create post');
+    // The header owns the exact "New post" name; no second control shares it.
+    expect(out.toLowerCase()).not.toContain('new post');
   });
 
   it('people without post.create get the headline only', () => {

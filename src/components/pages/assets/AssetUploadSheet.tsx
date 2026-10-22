@@ -29,15 +29,11 @@ export interface PendingUpload {
 /** display_name is capped at 500 chars (mirrors the worker's validName ceiling). */
 const DISPLAY_NAME_MAX = 500;
 
-/** The three naming modes, derived from the scope and the selected file count. */
-export type UploadMode = 'folder' | 'root-single' | 'root-bulk';
+/** The two naming modes, derived from the selected file count. */
+export type UploadMode = 'root-single' | 'root-bulk';
 
-/**
- * Pick the naming mode: inside a folder every file is auto-named (no input); at
- * the root a single file takes one typed name, two or more share one base name.
- */
-export function uploadMode(inFolder: boolean, count: number): UploadMode {
-  if (inFolder) return 'folder';
+/** Pick the naming mode: a single file takes one typed name, two or more share one base name. */
+export function uploadMode(count: number): UploadMode {
   return count > 1 ? 'root-bulk' : 'root-single';
 }
 
@@ -50,25 +46,18 @@ function fitName(base: string, name: string): string {
 }
 
 interface NameArgs {
-  inFolder: boolean;
-  folderName: string | null;
   base: string;
   siblingLabels: readonly string[];
   count: number;
 }
 
 /**
- * The display_name for each of `count` files, positionally. In a folder every
- * file is "${folderName} N" continuing the folder's existing labels; at the root
- * a single file is the typed name verbatim; two or more are "${base} N"
- * continuing the root's existing labels. Every name is capped at DISPLAY_NAME_MAX.
+ * The display_name for each of `count` files, positionally. A single file is the
+ * typed name verbatim; two or more are "${base} N" continuing the library's
+ * existing labels. Every name is capped at DISPLAY_NAME_MAX.
  */
 export function computeDisplayNames(args: NameArgs): string[] {
-  const { inFolder, folderName, base, siblingLabels, count } = args;
-  if (inFolder) {
-    const folder = folderName ?? '';
-    return nextUploadNames(folder, siblingLabels, count).map((name) => fitName(folder, name));
-  }
+  const { base, siblingLabels, count } = args;
   const trimmed = base.trim();
   if (count <= 1) return [trimmed.slice(0, DISPLAY_NAME_MAX)];
   return nextUploadNames(trimmed, siblingLabels, count).map((name) => fitName(trimmed, name));
@@ -76,7 +65,6 @@ export function computeDisplayNames(args: NameArgs): string[] {
 
 /** Block copy for the name gate, or null when the names are ready to upload. */
 export function uploadNameError(mode: UploadMode, base: string): string | null {
-  if (mode === 'folder') return null;
   if (base.trim() !== '') return null;
   return mode === 'root-bulk' ? 'Name these files to upload.' : 'Name this file to upload.';
 }
@@ -238,7 +226,7 @@ interface AssetUploadSheetProps {
   onClose: () => void;
   /**
    * Per-file commit: POST one file to the asset-upload worker with its resolved
-   * display_name and destination folder, reporting its outcome. When omitted, the
+   * display_name and destination folder (always null: the library root), reporting its outcome. When omitted, the
    * sheet stays a naming surface only (no upload endpoint configured) and the
    * confirm action explains that uploading is not wired yet. `signal` aborts
    * the request in flight when the run is stopped.
@@ -260,15 +248,11 @@ interface AssetUploadSheetProps {
   onSummary?: ((summary: UploadSummary) => void) | undefined;
   /** Called once after a run in which every file succeeded, to refresh the grid. */
   onUploaded?: (() => void) | undefined;
-  /** Current scope: a folder id, or null at the library root (the default). */
-  folderId?: string | null;
-  /** The current folder's name (for auto-naming), or null at the root (the default). */
-  folderName?: string | null;
-  /** Display labels of the assets already in this scope, to continue numbering. */
+  /** Display labels of the assets already in the library, to continue numbering. */
   siblingLabels?: readonly string[];
   /**
    * Seed for the root name box in place of the first file's name (the post page
-   * passes the post title). Still editable; ignored in folder mode.
+   * passes the post title). Still editable.
    */
   defaultBaseName?: string | null;
 }
@@ -298,8 +282,6 @@ export function AssetUploadSheet({
   onToast,
   onSummary,
   onUploaded,
-  folderId = null,
-  folderName = null,
   siblingLabels = [],
   defaultBaseName = null,
 }: AssetUploadSheetProps) {
@@ -308,8 +290,8 @@ export function AssetUploadSheet({
   const [running, setRunning] = useState(false);
   // Which file of the run is going up, for the busy header.
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  // The single typed name: the file's name at the root with one file, or the
-  // shared base at the root with several. Unused in folder mode (auto-named).
+  // The single typed name: the file's name with one file, or the shared base
+  // with several.
   const [nameInput, setNameInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
@@ -395,7 +377,7 @@ export function AssetUploadSheet({
     if (accepted.length === 0) return;
     // Seed the name field the first time the queue fills (the caller's default, or
     // the first file's name), so a root upload starts with a sensible name. A name
-    // the user already typed is kept. Ignored in folder mode.
+    // the user already typed is kept.
     if (uploads.length === 0) {
       setNameInput((prev) => seedName(prev, defaultBaseName, accepted[0]!.file.name));
     }
@@ -416,8 +398,6 @@ export function AssetUploadSheet({
     });
   }
 
-  const inFolder = folderId !== null;
-
   const startRun = useCallback(
     async (targets: PendingUpload[]): Promise<void> => {
       if (onSubmit === undefined || targets.length === 0) return;
@@ -433,8 +413,6 @@ export function AssetUploadSheet({
       setProgress({ current: 0, total: targets.length });
       let reused = 0;
       const plan = buildUploadPlan(targets, {
-        inFolder: folderId !== null,
-        folderName,
         base: nameInput,
         siblingLabels,
       });
@@ -447,7 +425,7 @@ export function AssetUploadSheet({
       }));
 
       const uploadOne = stoppableUpload(
-        (item, signal) => onSubmit(item.file, item.displayName ?? '', folderId, signal),
+        (item, signal) => onSubmit(item.file, item.displayName ?? '', null, signal),
         { stopped: () => control.stopped, signal: control.controller.signal },
       );
 
@@ -520,27 +498,16 @@ export function AssetUploadSheet({
         onClose();
       }
     },
-    [
-      onSubmit,
-      onToast,
-      onSummary,
-      onUploaded,
-      onClose,
-      setStatus,
-      folderId,
-      folderName,
-      nameInput,
-      siblingLabels,
-    ],
+    [onSubmit, onToast, onSummary, onUploaded, onClose, setStatus, nameInput, siblingLabels],
   );
 
   const canCommit = onSubmit !== undefined;
   const hasFiles = uploads.length > 0;
   const count = uploads.length;
-  const mode = uploadMode(inFolder, count);
+  const mode = uploadMode(count);
   const nameError = hasFiles ? uploadNameError(mode, nameInput) : null;
   const previewNames = hasFiles
-    ? computeDisplayNames({ inFolder, folderName, base: nameInput, siblingLabels, count })
+    ? computeDisplayNames({ base: nameInput, siblingLabels, count })
     : [];
   const canUpload = canCommit && hasFiles && nameError === null && !running;
 
@@ -610,38 +577,29 @@ export function AssetUploadSheet({
           <IconUpload size={26} />
           <span className="text-sm font-medium">Choose files</span>
           <span className="text-xs text-fg-3">
-            {inFolder
-              ? `Files are named after this folder automatically.`
-              : `Name your upload before it is added to ${ROOT_LABEL}.`}
+            Name your upload before it is added to {ROOT_LABEL}.
           </span>
         </button>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {/* Naming control by mode: a folder auto-names every file; a single root
-              file takes one name; several root files share one base name. */}
-          {mode === 'folder' ? (
-            <p className="rounded-xl border border-border bg-panel-2 px-3 py-2 text-xs text-fg-2">
-              Auto-named: <span className="text-fg">{previewNames.join(', ')}</span>
-            </p>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={`${inputId}-name`} className="text-xs font-medium text-fg-2">
-                {mode === 'root-bulk' ? 'Name these files' : 'Name'}
-              </label>
-              <Input
-                id={`${inputId}-name`}
-                aria-label={mode === 'root-bulk' ? 'Base name for these files' : 'Name'}
-                value={nameInput}
-                disabled={running}
-                aria-invalid={nameError !== null}
-                onChange={(event) => setNameInput(event.target.value)}
-                className="h-11"
-              />
-              {mode === 'root-bulk' && nameInput.trim() !== '' ? (
-                <span className="truncate text-[11px] text-fg-3">{previewNames.join(', ')}</span>
-              ) : null}
-            </div>
-          )}
+          {/* One file takes one name; several share one base name. */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`${inputId}-name`} className="text-xs font-medium text-fg-2">
+              {mode === 'root-bulk' ? 'Name these files' : 'Name'}
+            </label>
+            <Input
+              id={`${inputId}-name`}
+              aria-label={mode === 'root-bulk' ? 'Base name for these files' : 'Name'}
+              value={nameInput}
+              disabled={running}
+              aria-invalid={nameError !== null}
+              onChange={(event) => setNameInput(event.target.value)}
+              className="h-11"
+            />
+            {mode === 'root-bulk' && nameInput.trim() !== '' ? (
+              <span className="truncate text-[11px] text-fg-3">{previewNames.join(', ')}</span>
+            ) : null}
+          </div>
 
           {uploads.map((item) => {
             const status = statuses[item.id] ?? { state: 'queued' };

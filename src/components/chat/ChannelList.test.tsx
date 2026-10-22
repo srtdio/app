@@ -18,6 +18,7 @@ import {
 } from '@/components/chat/ChannelList';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { IconPlus } from '@/components/ui/icons';
 import type { ChannelSummary } from '@/lib/chat-reads';
 
 function summary(over: Partial<ChannelSummary>): ChannelSummary {
@@ -80,6 +81,10 @@ function texts(tree: ReactNode): string[] {
 
 function ariaLabel(el: ReactElement): string | undefined {
   return (el.props as { 'aria-label'?: string })['aria-label'];
+}
+
+function isNewChat(el: ReactElement): boolean {
+  return (el.props as { children?: ReactNode }).children === 'New chat';
 }
 
 function content(over: {
@@ -169,13 +174,21 @@ describe('channelListContent', () => {
     expect((empties[0]!.props as { title: string }).title).toBe('No conversations yet');
   });
 
-  it('fires onNewChat from the header "+" action', () => {
+  it('fires onNewChat from the header New chat text button', () => {
     const onNewChat = vi.fn();
     const tree = content({ channels, onNewChat });
-    const buttons = findAll(tree, (el) => ariaLabel(el) === 'New chat');
+    const buttons = findAll(tree, isNewChat);
     expect(buttons).toHaveLength(1);
     (buttons[0]!.props as { onClick: () => void }).onClick();
     expect(onNewChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows New chat as visible text, not an icon-only button', () => {
+    const tree = content({ channels });
+    const button = findAll(tree, isNewChat)[0]!;
+    expect(ariaLabel(button)).toBeUndefined();
+    expect(findAll(tree, (el) => ariaLabel(el) === 'New chat')).toHaveLength(0);
+    expect(findAll(tree, (el) => el.type === IconPlus)).toHaveLength(0);
   });
 
   it('renders exactly one header and no "Chat" title text', () => {
@@ -275,7 +288,7 @@ describe('select mode', () => {
     expect(selectButton).toBeDefined();
     (selectButton!.props as { onClick: () => void }).onClick();
     expect(mode.onStart).toHaveBeenCalledTimes(1);
-    expect(findAll(tree(mode), (el) => ariaLabel(el) === 'New chat')).toHaveLength(1);
+    expect(findAll(tree(mode), isNewChat)).toHaveLength(1);
   });
 
   it('in select mode shows N selected + Cancel, checks rows, and taps toggle', () => {

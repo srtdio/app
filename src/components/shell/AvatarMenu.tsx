@@ -11,7 +11,6 @@ import {
   IconSwitch,
   IconTrash,
   IconUser,
-  IconUsers,
 } from '@/components/ui/icons';
 import { useInduction } from '@/components/induction/InductionProvider';
 import { dispatchSorted } from '@/lib/events';
@@ -46,24 +45,19 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
         }}
       />
       <MenuItem
+        icon={<IconUser size={18} />}
+        label="Profile"
+        onClick={() => go('/settings?panel=profile')}
+      />
+      <MenuItem
         icon={<IconSettings size={18} />}
         label="Settings"
         onClick={() => go('/settings')}
       />
       <MenuItem
-        icon={<IconUsers size={18} />}
-        label="Members"
-        onClick={() => go('/settings?panel=members')}
-      />
-      <MenuItem
         icon={<IconTrash size={18} />}
         label="Recently deleted"
         onClick={() => go('/deleted')}
-      />
-      <MenuItem
-        icon={<IconUser size={18} />}
-        label="Profile"
-        onClick={() => go('/settings?panel=profile')}
       />
       <MenuItem
         icon={theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}

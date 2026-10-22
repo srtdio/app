@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconCalendar, IconPipeline, IconPlus, IconX } from '@/components/ui/icons';
+import { IconCalendar, IconPipeline, IconX } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
@@ -130,12 +130,11 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                 <Button
                   variant="primary"
                   size="lg"
-                  aria-label="Create post"
                   data-induction={INDUCTION_KEYS.pipelineCreate}
-                  className="w-11 px-0"
+                  className="shrink-0 whitespace-nowrap"
                   onClick={() => dispatchSorted('sorted:create-post')}
                 >
-                  <IconPlus size={18} />
+                  New post
                 </Button>
               ),
             },

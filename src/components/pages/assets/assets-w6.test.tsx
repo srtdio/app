@@ -3,22 +3,15 @@ import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { AssetCard } from '@/components/pages/assets/AssetCard';
-import { FolderCard } from '@/components/pages/assets/FolderCard';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { assetMenuRows, copyLinkTarget } from '@/components/pages/assets/AssetActionSheet';
-import { folderMenuRows } from '@/components/pages/assets/FolderActionSheet';
 import { uploadBusyLabel, uploadSummary } from '@/components/pages/assets/AssetUploadSheet';
 import {
   ROOT_LABEL,
   assetLink,
   deleteToastLabel,
-  folderFromParams,
-  folderLink,
-  folderStackOf,
-  folderStep,
   selectAllIds,
   selectedLabel,
-  withFolderParam,
 } from '@/components/pages/assets/assets-nav';
 import { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
@@ -65,24 +58,16 @@ const cache = new PresignCache({
   fetcher: async () => new Response(null, { status: 500 }),
 });
 
-describe('1. the open folder lives in the URL; Back goes up one folder', () => {
-  it('reads and writes ?folder=', () => {
-    expect(folderFromParams(new URLSearchParams('folder=f1'))).toBe('f1');
-    expect(folderFromParams(new URLSearchParams(''))).toBeNull();
-    expect(withFolderParam(new URLSearchParams('type=image'), 'f2').toString()).toBe(
-      'type=image&folder=f2',
-    );
-    expect(withFolderParam(new URLSearchParams('folder=f2'), null).toString()).toBe('');
-  });
-
-  it('a child is a new entry; an ancestor steps Back; a deep link replaces', () => {
-    expect(folderStep([], 'a', 0)).toEqual({ kind: 'push', stack: 1 });
-    expect(folderStep(['a'], 'b', 1)).toEqual({ kind: 'push', stack: 2 });
-    expect(folderStep(['a', 'b'], 'a', 2)).toEqual({ kind: 'back', delta: 1 });
-    expect(folderStep(['a', 'b'], null, 2)).toEqual({ kind: 'back', delta: 2 });
-    expect(folderStep(['a', 'b'], null, 0)).toEqual({ kind: 'replace', stack: 0 });
-    expect(folderStackOf({ assetsFolderStack: 2 })).toBe(2);
-    expect(folderStackOf(null)).toBe(0);
+describe('1. Assets has no folder navigation', () => {
+  it('the page reads no ?folder= and renders no Folders breadcrumb', () => {
+    const navSource = read('src/components/pages/assets/assets-nav.ts');
+    expect(navSource).not.toContain('FOLDER_PARAM');
+    expect(navSource).not.toContain('folderFromParams');
+    expect(navSource).not.toContain('folderLink');
+    expect(pageSource).not.toContain('aria-label="Folders"');
+    expect(pageSource).not.toContain('fetchFolders');
+    expect(pageSource).not.toContain('MoveToFolderSheet');
+    expect(pageSource).not.toContain('No files in this folder yet');
   });
 });
 
@@ -98,7 +83,6 @@ describe('2. upload sheet is busy while uploading', () => {
 describe('3. Copy link copies a lasting in-app link', () => {
   it('is /assets?asset=<id>, never a presigned URL', () => {
     expect(assetLink('https://srtd.io/', 'a1')).toBe('https://srtd.io/assets?asset=a1');
-    expect(folderLink('https://srtd.io', 'f1')).toBe('https://srtd.io/assets?folder=f1');
     expect(copyLinkTarget(asset(), 'https://srtd.io')).toBe('https://srtd.io/assets?asset=a1');
     for (const path of [
       'src/components/pages/assets/AssetActionSheet.tsx',
@@ -110,7 +94,7 @@ describe('3. Copy link copies a lasting in-app link', () => {
 });
 
 describe('4. every card shows a visible 44px ⋯ button', () => {
-  it('on asset cards (hidden in select mode) and folder cards', () => {
+  it('on asset cards, hidden in select mode', () => {
     const card = renderToStaticMarkup(
       <AssetCard
         item={asset()}
@@ -133,26 +117,20 @@ describe('4. every card shows a visible 44px ⋯ button', () => {
       />,
     );
     expect(selecting).not.toContain('data-card-menu');
-    const folder = renderToStaticMarkup(
-      <FolderCard name="Brand" count={2} onOpen={() => {}} onManage={() => {}} />,
-    );
-    expect(folder).toContain('aria-label="More actions for Brand"');
   });
 });
 
 describe('5. menu rows in order, Delete last', () => {
-  it('file, link and folder menus', () => {
-    expect(assetMenuRows(false, true)).toEqual([
-      'primary',
-      'copy',
-      'move',
-      'rename',
-      'info',
-      'delete',
-    ]);
-    expect(assetMenuRows(true, false)).toEqual(['primary', 'copy', 'move', 'delete']);
-    expect(folderMenuRows(true)).toEqual(['open', 'copy', 'rename', 'delete']);
-    expect(folderMenuRows(false)).toEqual(['open', 'copy']);
+  it('file and link menus, with no Move to folder row', () => {
+    expect(assetMenuRows(false, true)).toEqual(['primary', 'copy', 'rename', 'info', 'delete']);
+    expect(assetMenuRows(false, false)).toEqual(['primary', 'copy', 'info', 'delete']);
+    expect(assetMenuRows(true, true)).toEqual(['primary', 'copy', 'rename', 'delete']);
+    expect(assetMenuRows(true, false)).toEqual(['primary', 'copy', 'delete']);
+    for (const isLink of [false, true]) {
+      for (const canRename of [false, true]) {
+        expect(assetMenuRows(isLink, canRename)).not.toContain('move');
+      }
+    }
   });
 });
 
@@ -185,23 +163,26 @@ describe('6. delete hides now and commits after the Undo window', () => {
 });
 
 describe('7. select mode', () => {
-  it('starts from the card box, with Cancel, a count and Select all up top and Move, Delete below', () => {
+  it('starts from the card box, with Cancel, a count and Select all up top and Delete below', () => {
     expect(selectedLabel(2)).toBe('2 selected');
     expect(selectAllIds([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 2)).toEqual(['a', 'b']);
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
     expect(menu).not.toContain('<span>Select</span>');
     expect(pageSource).toContain('onStartSelect={startSelectWith}');
-    for (const label of ['Cancel', 'Select all', 'Move', 'Delete']) {
+    for (const label of ['Cancel', 'Select all', 'Delete']) {
       expect(pageSource).toContain(label);
     }
+    expect(pageSource).not.toMatch(/>\s*Move\s*</);
     expect(pageSource).toContain('data-select-actions');
     expect(pageSource).not.toContain('Done\n');
   });
 });
 
-describe('7b. no New folder in the add menu', () => {
-  it('offers upload and link only; the page mounts no New folder sheet', () => {
+describe('7b. the "New asset" add menu', () => {
+  it('is a "New asset" text button offering upload and link only; no New folder sheet', () => {
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
+    expect(menu).toContain('New asset');
+    expect(menu).not.toContain('aria-label="Add asset"');
     expect(menu).not.toContain('New folder');
     expect(menu).toContain('<span>Upload files</span>');
     expect(menu).toContain('<span>Add link</span>');
@@ -231,15 +212,9 @@ describe('8. one upload summary toast; failures stay', () => {
 });
 
 describe('9. small fixes', () => {
-  it('root is All assets, crumbs are 44px, empty folders offer Upload, names wrap to 2 lines', () => {
+  it('the library is All assets and names wrap to 2 lines', () => {
     expect(ROOT_LABEL).toBe('All assets');
-    expect(pageSource).toContain('{ROOT_LABEL}');
-    expect(pageSource).toMatch(
-      /onClick=\{\(\) => openFolder\(null\)\}\s*className="inline-flex min-h-\[44px\]/,
-    );
-    expect(pageSource).toMatch(/data-empty-folder=""[\s\S]{0,400}Upload/);
-    const folder = renderToStaticMarkup(<FolderCard name="Brand" count={0} onOpen={() => {}} />);
-    expect(folder).toContain('line-clamp-2');
+    expect(read('src/components/pages/assets/AssetUploadSheet.tsx')).toContain('{ROOT_LABEL}');
     const card = renderToStaticMarkup(
       <AssetCard
         item={asset()}

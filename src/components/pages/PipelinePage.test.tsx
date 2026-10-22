@@ -106,6 +106,8 @@ import {
   type DateWindow,
 } from '@/lib/list-sort';
 import { SectionHeader } from '@/components/shell/SectionHeader';
+import { IconPlus } from '@/components/ui/icons';
+import { INDUCTION_KEYS } from '@/lib/induction';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
@@ -208,6 +210,10 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
   return all.filter(predicate);
 }
 
+function isNewPost(el: ReactElement): boolean {
+  return (el.props as { children?: ReactNode }).children === 'New post';
+}
+
 function texts(tree: ReactNode): string[] {
   const out: string[] = [];
   const all: ReactElement[] = [];
@@ -269,11 +275,8 @@ describe('pipelineHeader', () => {
     expect(props.weekStartDay).toBe(1);
   });
 
-  it('dispatches sorted:create-post from the "+" action', () => {
-    const button = findAll(
-      header(),
-      (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Create post',
-    );
+  it('dispatches sorted:create-post from the New post action', () => {
+    const button = findAll(header(), isNewPost);
     expect(button).toHaveLength(1);
     (button[0]!.props as { onClick: () => void }).onClick();
     expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-post');
@@ -758,11 +761,28 @@ describe('target-date window narrows every surface (fix A)', () => {
 });
 
 describe('W4 fix 3: create gating', () => {
-  it('hides the "+" Create post button unless post.create is granted', () => {
-    const label = (el: ReactElement): string | undefined =>
-      (el.props as { 'aria-label'?: string })['aria-label'];
-    expect(findAll(header(false), (el) => label(el) === 'Create post')).toHaveLength(0);
-    expect(findAll(header(true), (el) => label(el) === 'Create post')).toHaveLength(1);
+  it('hides the New post button unless post.create is granted', () => {
+    expect(findAll(header(false), isNewPost)).toHaveLength(0);
+    expect(findAll(header(true), isNewPost)).toHaveLength(1);
+  });
+
+  it('shows New post as visible text, not an icon-only button', () => {
+    const button = findAll(header(true), isNewPost)[0]!;
+    const props = button.props as {
+      'aria-label'?: string;
+      'data-induction'?: string;
+      className?: string;
+    };
+    expect(props['aria-label']).toBeUndefined();
+    expect(props['data-induction']).toBe(INDUCTION_KEYS.pipelineCreate);
+    expect(props.className).toContain('whitespace-nowrap');
+    expect(findAll(header(true), (el) => el.type === IconPlus)).toHaveLength(0);
+    expect(
+      findAll(
+        header(true),
+        (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Create post',
+      ),
+    ).toHaveLength(0);
   });
 });
 

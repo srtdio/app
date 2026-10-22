@@ -6,16 +6,11 @@ import {
   ASSET_TABS,
   buildTabCounts,
   canBulkDelete,
-  childFolders,
   countAttachments,
   deleteAssetsBatch,
   displayLabel,
-  fetchFolders,
   fileExtension,
   filterAssets,
-  flattenFolders,
-  folderBreadcrumb,
-  folderChildCount,
   formatDimensions,
   humanizeSize,
   imageTileState,
@@ -31,7 +26,6 @@ import {
   sortAssets,
   toAssetKind,
   type AssetListItem,
-  type FolderItem,
 } from '@/lib/assets';
 
 // A thenable query builder: every chained method returns itself, and awaiting it
@@ -354,117 +348,6 @@ describe('tab filtering and counts', () => {
   });
 });
 
-describe('fetchFolders', () => {
-  function folderClient(result: { data: unknown; error: { message: string } | null }): Client {
-    return { from: () => builder(result) } as unknown as Client;
-  }
-
-  it('shapes parent_id to parentId on success', async () => {
-    const client = folderClient({
-      data: [
-        { id: 'f-1', name: 'Brand', parent_id: null },
-        { id: 'f-2', name: 'Logos', parent_id: 'f-1' },
-      ],
-      error: null,
-    });
-    const result = await fetchFolders(client, 'ws-1');
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data).toEqual([
-      { id: 'f-1', name: 'Brand', parentId: null },
-      { id: 'f-2', name: 'Logos', parentId: 'f-1' },
-    ]);
-  });
-
-  it('returns an error result when the read fails', async () => {
-    const client = folderClient({ data: null, error: { message: 'boom' } });
-    const result = await fetchFolders(client, 'ws-1');
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toBe('boom');
-  });
-});
-
-describe('folder helpers', () => {
-  const folders: FolderItem[] = [
-    { id: 'f-brand', name: 'Brand', parentId: null },
-    { id: 'f-camp', name: 'campaigns', parentId: null },
-    { id: 'f-logos', name: 'Logos', parentId: 'f-brand' },
-  ];
-
-  it('lists immediate child folders, sorted by name case-insensitively', () => {
-    // 'Brand' and 'campaigns' both sit at the root; caseless sort keeps B before c.
-    expect(childFolders(folders, null).map((f) => f.id)).toEqual(['f-brand', 'f-camp']);
-    expect(childFolders(folders, 'f-brand').map((f) => f.id)).toEqual(['f-logos']);
-    expect(childFolders(folders, 'f-logos')).toEqual([]);
-  });
-
-  it('builds the root -> current breadcrumb, and is empty for root or an unknown id', () => {
-    expect(folderBreadcrumb(folders, 'f-logos')).toEqual([
-      { id: 'f-brand', name: 'Brand' },
-      { id: 'f-logos', name: 'Logos' },
-    ]);
-    expect(folderBreadcrumb(folders, null)).toEqual([]);
-    expect(folderBreadcrumb(folders, 'missing')).toEqual([]);
-  });
-
-  it('stops a cyclic parent chain instead of looping forever', () => {
-    const cyclic: FolderItem[] = [
-      { id: 'a', name: 'A', parentId: 'b' },
-      { id: 'b', name: 'B', parentId: 'a' },
-    ];
-    expect(folderBreadcrumb(cyclic, 'a')).toEqual([
-      { id: 'b', name: 'B' },
-      { id: 'a', name: 'A' },
-    ]);
-  });
-
-  it('counts child folders plus assets directly inside a folder', () => {
-    const items: AssetListItem[] = [
-      { ...base('1'), folderId: 'f-brand' },
-      { ...base('2'), folderId: 'f-brand' },
-      { ...base('3'), folderId: null },
-    ];
-    // f-brand has one child folder (f-logos) and two assets.
-    expect(folderChildCount(folders, items, 'f-brand')).toBe(3);
-    expect(folderChildCount(folders, items, 'f-camp')).toBe(0);
-  });
-});
-
-describe('flattenFolders', () => {
-  it('walks depth-first parent-before-children with per-level depth and name-sorted siblings', () => {
-    // Root siblings 'Brand' and 'campaigns' sort caselessly (B before c); each
-    // child appears immediately after its parent at the next depth.
-    const folders: FolderItem[] = [
-      { id: 'f-camp', name: 'campaigns', parentId: null },
-      { id: 'f-brand', name: 'Brand', parentId: null },
-      { id: 'f-logos', name: 'Logos', parentId: 'f-brand' },
-      { id: 'f-icons', name: 'Icons', parentId: 'f-brand' },
-      { id: 'f-q1', name: 'Q1', parentId: 'f-camp' },
-    ];
-
-    expect(flattenFolders(folders)).toEqual([
-      { id: 'f-brand', name: 'Brand', depth: 0 },
-      { id: 'f-icons', name: 'Icons', depth: 1 },
-      { id: 'f-logos', name: 'Logos', depth: 1 },
-      { id: 'f-camp', name: 'campaigns', depth: 0 },
-      { id: 'f-q1', name: 'Q1', depth: 1 },
-    ]);
-  });
-
-  it('increments depth one level per generation', () => {
-    const folders: FolderItem[] = [
-      { id: 'a', name: 'A', parentId: null },
-      { id: 'b', name: 'B', parentId: 'a' },
-      { id: 'c', name: 'C', parentId: 'b' },
-    ];
-    expect(flattenFolders(folders).map((f) => f.depth)).toEqual([0, 1, 2]);
-  });
-
-  it('is empty when there are no folders', () => {
-    expect(flattenFolders([])).toEqual([]);
-  });
-});
-
 describe('formatters', () => {
   it('humanizes sizes and placeholders missing ones', () => {
     expect(humanizeSize(null)).toBe('-');
@@ -504,7 +387,7 @@ describe('formatters', () => {
   });
 });
 
-/** A minimal AssetListItem for filter/folder fixtures. */
+/** A minimal AssetListItem for filter fixtures. */
 function base(id: string): AssetListItem {
   return {
     id,

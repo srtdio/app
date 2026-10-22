@@ -18,7 +18,7 @@ import { SelectCheck } from '@/components/ui/SelectCheck';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ActionRow, useLongPress } from '@/components/ui';
-import { IconChat, IconEllipsis, IconPlus, IconStarFilled } from '@/components/ui/icons';
+import { IconChat, IconEllipsis, IconStarFilled } from '@/components/ui/icons';
 import { IconEyeOff } from '@/components/chat/chat-icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
@@ -1093,11 +1093,10 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                   <Button
                     variant="primary"
                     size="lg"
-                    aria-label="New chat"
-                    className="w-11 px-0"
+                    className="shrink-0 whitespace-nowrap"
                     onClick={newChat}
                   >
-                    <IconPlus size={18} />
+                    New chat
                   </Button>
                 </>
               ),

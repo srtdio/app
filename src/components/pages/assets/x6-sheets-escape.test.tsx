@@ -4,9 +4,7 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NewFolderSheet } from '@/components/pages/assets/NewFolderSheet';
 import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
-import { FolderActionSheet } from '@/components/pages/assets/FolderActionSheet';
 import { AssetRenameSheet } from '@/components/pages/assets/AssetRenameSheet';
 import { AddLinkSheet, addLinkDirty } from '@/components/pages/assets/AddLinkSheet';
 import {
@@ -18,7 +16,6 @@ import { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 import { BACK_GUARD_STEP_KEY } from '@/lib/back-guard';
 import { resetHistorySteps, stepMarkerOf } from '@/lib/chat/use-history-step';
-import { DUR_BASE_MS } from '@/lib/motion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,7 +40,6 @@ const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (b) => b.textContent?.trim() === label,
   );
-const confirm = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
 const guarded = () => stepMarkerOf(window.history.state, BACK_GUARD_STEP_KEY) !== null;
 
 async function type(input: HTMLInputElement, value: string): Promise<void> {
@@ -69,41 +65,6 @@ afterEach(async () => {
   document.body.innerHTML = '';
   await settle();
   resetHistorySteps();
-});
-
-describe('X6 typed New folder name survives Back', () => {
-  it('Back asks to discard, and Keep editing keeps the typed name', async () => {
-    const onClose = vi.fn();
-    await mount(
-      <NewFolderSheet
-        open
-        onClose={onClose}
-        onSubmit={async () => ({ ok: true, folder: { id: 'f9', name: 'x', parentId: null } })}
-        onToast={() => {}}
-        onCreated={() => {}}
-      />,
-    );
-    expect(guarded()).toBe(false);
-    const input = document.querySelector<HTMLInputElement>('input');
-    if (input === null) throw new Error('no input');
-    await type(input, 'Campaign shots');
-    expect(guarded()).toBe(true);
-
-    await act(async () => {
-      window.history.back();
-      await wait(60);
-    });
-    expect(confirm()?.textContent).toContain('Discard this folder?');
-    expect(onClose).not.toHaveBeenCalled();
-
-    await act(async () => {
-      button('Keep editing')?.click();
-      await wait(DUR_BASE_MS + 40);
-    });
-    expect(confirm()).toBeNull();
-    expect(document.querySelector<HTMLInputElement>('input')?.value).toBe('Campaign shots');
-    expect(onClose).not.toHaveBeenCalled();
-  });
 });
 
 describe('X6 rename sheets open clean', () => {
@@ -189,25 +150,44 @@ describe('X6 Escape on the action sheets', () => {
     await escape();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+});
 
-  it('the folder menu backs out of its delete confirm first, then closes', async () => {
-    const onClose = vi.fn();
+describe('file menu has no Move to folder', () => {
+  it('renders Download, Copy link, Rename, Info and Delete only', async () => {
     await mount(
-      <FolderActionSheet
-        name="Brand"
-        onClose={onClose}
+      <AssetActionSheet
+        item={asset()}
+        presignEnabled={false}
+        requestDownloadUrl={async () => 'https://signed/d'}
+        canRename
+        onClose={() => {}}
+        onInfo={() => {}}
         onRename={() => {}}
-        onConfirmDelete={async () => ({ ok: true })}
+        onDelete={() => {}}
         onToast={() => {}}
       />,
     );
-    await act(async () => button('Delete folder')?.click());
-    expect(document.body.textContent).toContain('Files inside move to All assets');
-    await escape();
-    expect(onClose).not.toHaveBeenCalled();
-    expect(button('Delete folder')).toBeDefined();
-    await escape();
-    expect(onClose).toHaveBeenCalledTimes(1);
+    for (const label of ['Download', 'Copy link', 'Rename', 'Info', 'Delete']) {
+      expect(button(label), label).toBeDefined();
+    }
+    expect(button('Move to folder')).toBeUndefined();
+    expect(document.body.textContent).not.toContain('Move to folder');
+  });
+
+  it('a link menu has no Move to folder either', async () => {
+    await mount(
+      <AssetActionSheet
+        item={asset({ kind: 'link', externalUrl: 'https://example.com/deck', mimeType: null })}
+        presignEnabled={false}
+        requestDownloadUrl={async () => 'https://signed/d'}
+        onClose={() => {}}
+        onInfo={() => {}}
+        onDelete={() => {}}
+        onToast={() => {}}
+      />,
+    );
+    expect(button('Copy link')).toBeDefined();
+    expect(document.body.textContent).not.toContain('Move to folder');
   });
 });
 

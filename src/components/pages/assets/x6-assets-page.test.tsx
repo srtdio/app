@@ -1,29 +1,20 @@
 // @vitest-environment jsdom
 // X6 Assets page regressions, rendered for real in jsdom with the data reads
-// mocked: a failed folders or files read is a page load error (never a partial
-// grid), ?asset= for a gone file says so, and a folder delete waits behind Undo.
+// mocked: a failed files read is a page load error (never a partial grid),
+// ?asset= for a gone file says so, the header offers a "New asset" menu, and the
+// page has no folder UI at all.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetsPage } from '@/components/pages/AssetsPage';
-import type { AssetListItem, FolderItem } from '@/lib/assets';
+import type { AssetListItem } from '@/lib/assets';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const {
-  showToast,
-  listAssets,
-  fetchFolders,
-  deleteFolderRequest,
-  findAssetsInUse,
-  assetDelete,
-  assetDeleteMany,
-} = vi.hoisted(() => ({
+const { showToast, listAssets, findAssetsInUse, assetDelete, assetDeleteMany } = vi.hoisted(() => ({
   showToast: vi.fn<(options: unknown) => string>(() => 'toast-1'),
   listAssets: vi.fn(),
-  fetchFolders: vi.fn(),
-  deleteFolderRequest: vi.fn(),
   findAssetsInUse: vi.fn(),
   assetDelete: vi.fn(),
   assetDeleteMany: vi.fn(),
@@ -48,7 +39,6 @@ vi.mock('@/lib/assets', async (importOriginal) => {
   return {
     ...actual,
     listAssets: (...args: unknown[]) => listAssets(...args),
-    fetchFolders: (...args: unknown[]) => fetchFolders(...args),
     fetchMemberRole: async () => 'owner',
     findAssetsInUse: (...args: unknown[]) => findAssetsInUse(...args),
   };
@@ -61,14 +51,6 @@ vi.mock('@srtdio/rpc', async (importOriginal) => {
     assetDeleteMany: (...args: unknown[]) => assetDeleteMany(...args),
   };
 });
-vi.mock('@/lib/asset-upload', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    deleteFolderRequest: (...args: unknown[]) => deleteFolderRequest(...args),
-  };
-});
-
 // SortMenu reads a media query; jsdom has no matchMedia.
 window.matchMedia ??= ((query: string) => ({
   matches: false,
@@ -106,8 +88,6 @@ function asset(overrides: Partial<AssetListItem> = {}): AssetListItem {
   };
 }
 
-const BRAND: FolderItem = { id: 'f1', name: 'Brand', parentId: null };
-
 let root: Root | null = null;
 const flush = () => act(async () => new Promise((r) => setTimeout(r, 0)));
 
@@ -134,8 +114,6 @@ const button = (label: string) =>
 beforeEach(() => {
   showToast.mockClear();
   listAssets.mockReset();
-  fetchFolders.mockReset();
-  deleteFolderRequest.mockReset();
   findAssetsInUse.mockReset();
   assetDelete.mockReset();
   assetDeleteMany.mockReset();
@@ -148,35 +126,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('X6 folders read failure', () => {
-  it('shows LoadError, renders no grid, counts or empty folder line, and Retry re-reads both', async () => {
-    listAssets.mockResolvedValue({ ok: true, data: [asset()] });
-    fetchFolders.mockResolvedValueOnce({ ok: false, error: { message: 'boom' } });
-    await mount('/assets?folder=f1');
-
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      "Couldn't load your folders.",
-    );
-    // No partial read: the file in the folder is not shown as if it sat
-    // anywhere, there are no tab counts, and nothing claims the folder is empty.
-    expect(text()).not.toContain('inside-brand.png');
-    expect(document.querySelector('[role="tablist"]')).toBeNull();
-    expect(text()).not.toContain('No files in this folder yet');
-    expect(text()).not.toContain('boom');
-
-    fetchFolders.mockResolvedValueOnce({ ok: true, data: [BRAND] });
-    const assetReads = listAssets.mock.calls.length;
-    await act(async () => button('Retry')?.click());
-    await flush();
-
-    expect(listAssets.mock.calls.length).toBe(assetReads + 1);
-    expect(document.querySelector('[role="alert"]')).toBeNull();
-    expect(text()).toContain('inside-brand.png');
-  });
-
+describe('X6 files read failure', () => {
   it('a files read failure is LoadError too, never the raw error text', async () => {
     listAssets.mockResolvedValue({ ok: false, error: { message: 'permission denied for table' } });
-    fetchFolders.mockResolvedValue({ ok: true, data: [] });
     await mount();
     expect(document.querySelector('[role="alert"]')?.textContent).toContain(
       "Couldn't load your files.",
@@ -189,7 +141,6 @@ describe('X6 folders read failure', () => {
 describe('X6 ?asset= for a deleted or unknown file', () => {
   it('toasts "This file was deleted." with a Recently deleted action, on an empty library too', async () => {
     listAssets.mockResolvedValue({ ok: true, data: [] });
-    fetchFolders.mockResolvedValue({ ok: true, data: [] });
     await mount('/assets?asset=gone-1');
     const call = showToast.mock.calls.find(
       ([options]) => (options as { title?: string }).title === 'This file was deleted.',
@@ -202,38 +153,10 @@ describe('X6 ?asset= for a deleted or unknown file', () => {
 describe('X6 Recently deleted link', () => {
   it('the Assets page links to Recently deleted', async () => {
     listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
-    fetchFolders.mockResolvedValue({ ok: true, data: [] });
     await mount();
     expect(document.querySelector('[data-recently-deleted-link]')?.textContent).toBe(
       'Recently deleted',
     );
-  });
-});
-
-describe('X6 folder delete behind Undo', () => {
-  it('hides the folder, shows "Folder deleted" with Undo, and Undo never calls the worker', async () => {
-    listAssets.mockResolvedValue({ ok: true, data: [] });
-    fetchFolders.mockResolvedValue({ ok: true, data: [BRAND] });
-    await mount();
-
-    await act(async () =>
-      document.querySelector<HTMLButtonElement>('[aria-label="More actions for Brand"]')?.click(),
-    );
-    await act(async () => button('Delete folder')?.click());
-    expect(text()).toContain('Files inside move to All assets');
-    await act(async () => button('Delete')?.click());
-    await flush();
-
-    const undoToast = showToast.mock.calls.find(
-      ([options]) => (options as { title?: string }).title === 'Folder deleted',
-    )?.[0] as { action?: { label: string; onPress: () => void }; durationMs?: number };
-    expect(undoToast?.action?.label).toBe('Undo');
-    expect(undoToast?.durationMs).toBe(7000);
-    expect(document.querySelector('[aria-label="More actions for Brand"]')).toBeNull();
-
-    await act(async () => undoToast?.action?.onPress());
-    expect(document.querySelector('[aria-label="More actions for Brand"]')).not.toBeNull();
-    expect(deleteFolderRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -247,7 +170,6 @@ describe('X6 bulk delete keeps the files in use', () => {
         asset({ id: 'a3', filename: 'three.png', folderId: null }),
       ],
     });
-    fetchFolders.mockResolvedValue({ ok: true, data: [] });
     findAssetsInUse.mockResolvedValue({
       ok: true,
       data: [{ assetId: 'a1', parent: { kind: 'post', href: '/posts/p1' } }],
@@ -255,10 +177,6 @@ describe('X6 bulk delete keeps the files in use', () => {
     assetDeleteMany.mockResolvedValue({ ok: true, data: null });
     await mount();
 
-    await act(async () =>
-      document.querySelector<HTMLButtonElement>('[aria-label="Add asset"]')?.click(),
-    );
-    await act(async () => button('Select')?.click());
     for (const name of ['one.png', 'two.png', 'three.png']) {
       await act(async () =>
         document.querySelector<HTMLElement>(`[aria-label="Select ${name}"]`)?.click(),
@@ -286,5 +204,65 @@ describe('X6 bulk delete keeps the files in use', () => {
     ).toBe(true);
     expect(text()).toContain('one.png');
     expect(text()).not.toContain('two.png');
+  });
+});
+
+describe('Assets header "New asset" menu', () => {
+  it('is a visible "New asset" text button that opens Upload files and Add link', async () => {
+    listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
+    await mount();
+
+    const trigger = button('New asset');
+    expect(trigger).toBeDefined();
+    expect(trigger?.getAttribute('aria-haspopup')).toBe('menu');
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+    expect(trigger?.hasAttribute('aria-label')).toBe(false);
+    expect(trigger?.querySelector('svg')).toBeNull();
+    expect(document.querySelector('[aria-label="Add asset"]')).toBeNull();
+
+    await act(async () => trigger?.click());
+    await flush();
+
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true');
+    const items = [...document.querySelectorAll('[role="menuitem"]')].map((el) =>
+      el.textContent?.trim(),
+    );
+    expect(items).toEqual(['Upload files', 'Add link']);
+  });
+});
+
+describe('Assets has no folders', () => {
+  it('shows every file, ignores ?folder=, and renders no Folders breadcrumb', async () => {
+    listAssets.mockResolvedValue({
+      ok: true,
+      data: [
+        asset({ id: 'a1', filename: 'inside-brand.png', folderId: 'f1' }),
+        asset({ id: 'a2', filename: 'at-root.png', folderId: null }),
+      ],
+    });
+    await mount('/assets?folder=f1');
+
+    expect(text()).toContain('inside-brand.png');
+    expect(text()).toContain('at-root.png');
+    expect(document.querySelector('nav[aria-label="Folders"]')).toBeNull();
+    expect(text()).not.toContain('No files in this folder yet');
+    expect(text()).not.toContain('New folder');
+  });
+
+  it('the select bar offers Delete and no Move', async () => {
+    listAssets.mockResolvedValue({
+      ok: true,
+      data: [asset({ id: 'a1', filename: 'one.png', folderId: null })],
+    });
+    await mount();
+
+    await act(async () =>
+      document.querySelector<HTMLElement>('[aria-label="Select one.png"]')?.click(),
+    );
+
+    expect(button('Delete')).toBeDefined();
+    expect(button('Move')).toBeUndefined();
+    const labels = [...document.querySelectorAll('button')].map((b) => b.textContent ?? '');
+    expect(labels.some((label) => label.includes('Move'))).toBe(false);
   });
 });

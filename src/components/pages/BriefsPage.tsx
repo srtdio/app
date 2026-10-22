@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconBriefs, IconPlus } from '@/components/ui/icons';
+import { IconBriefs } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
 import { CreateBriefSheet, type BriefCreated } from '@/components/pages/CreateBriefSheet';
 import { dispatchSorted } from '@/lib/events';
@@ -77,12 +77,11 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
                 <Button
                   variant="primary"
                   size="lg"
-                  aria-label="Create brief"
                   data-induction={INDUCTION_KEYS.briefsNew}
-                  className="w-11 px-0"
+                  className="shrink-0 whitespace-nowrap"
                   onClick={() => dispatchSorted('sorted:create-brief')}
                 >
-                  <IconPlus size={18} />
+                  New brief
                 </Button>
               ),
             },

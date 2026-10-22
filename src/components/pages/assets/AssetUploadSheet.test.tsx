@@ -9,9 +9,8 @@ import {
 
 // The sheet body renders through a portal to document.body (no DOM under the SSR
 // test environment), so the naming behaviour is extracted into pure helpers and
-// driven directly here, mirroring NewFolderSheet's helper tests. The component
-// wires uploadMode -> which input shows, computeDisplayNames -> the auto-name
-// preview, uploadNameError -> the disabled state, and buildUploadPlan -> the per
+// driven directly here. The component wires uploadMode -> which input shows,
+// computeDisplayNames -> the numbered-name preview, uploadNameError -> the disabled state, and buildUploadPlan -> the per
 // file upload, so covering these covers the sheet's behaviour.
 
 /** A File with the given name; the bytes are irrelevant to naming. */
@@ -20,27 +19,11 @@ function fakeFile(name: string): File {
 }
 
 describe('uploadMode', () => {
-  it('auto-names in a folder, names a single root file, bases several root files', () => {
-    // Folder mode shows no name input at all (every file is auto-named).
-    expect(uploadMode(true, 1)).toBe('folder');
-    expect(uploadMode(true, 5)).toBe('folder');
-    expect(uploadMode(false, 1)).toBe('root-single');
-    expect(uploadMode(false, 2)).toBe('root-bulk');
-  });
-});
-
-describe('in a folder: auto-named, no name input', () => {
-  it('numbers files after the folder, continuing the existing labels', () => {
-    const names = computeDisplayNames({
-      inFolder: true,
-      folderName: 'Trip',
-      base: '',
-      siblingLabels: [],
-      count: 2,
-    });
-    expect(names).toEqual(['Trip 1', 'Trip 2']);
-    // No typed name is required to upload into a folder.
-    expect(uploadNameError('folder', '')).toBeNull();
+  it('names a single file, bases several files', () => {
+    expect(uploadMode(0)).toBe('root-single');
+    expect(uploadMode(1)).toBe('root-single');
+    expect(uploadMode(2)).toBe('root-bulk');
+    expect(uploadMode(5)).toBe('root-bulk');
   });
 });
 
@@ -50,8 +33,6 @@ describe('at the root with one file: one required name', () => {
     expect(uploadNameError('root-single', '   ')).not.toBeNull();
     expect(uploadNameError('root-single', 'Hero shot')).toBeNull();
     const names = computeDisplayNames({
-      inFolder: false,
-      folderName: null,
       base: 'Hero shot',
       siblingLabels: [],
       count: 1,
@@ -65,8 +46,6 @@ describe('at the root with two files: one base, numbered names', () => {
     expect(uploadNameError('root-bulk', '')).not.toBeNull();
     expect(uploadNameError('root-bulk', 'Launch')).toBeNull();
     const names = computeDisplayNames({
-      inFolder: false,
-      folderName: null,
       base: 'Launch',
       siblingLabels: [],
       count: 2,
@@ -81,12 +60,7 @@ describe('buildUploadPlan', () => {
       { id: 'p1', file: fakeFile('IMG_0001.png') },
       { id: 'p2', file: fakeFile('IMG_0002.png') },
     ];
-    const plan = buildUploadPlan(pending, {
-      inFolder: true,
-      folderName: 'Trip',
-      base: '',
-      siblingLabels: [],
-    });
+    const plan = buildUploadPlan(pending, { base: 'Trip', siblingLabels: [] });
     // The part is always sent under the original filename, never a typed name.
     expect(plan.map((item) => item.file.name)).toEqual(['IMG_0001.png', 'IMG_0002.png']);
     expect(plan.map((item) => item.displayName)).toEqual(['Trip 1', 'Trip 2']);
@@ -111,31 +85,16 @@ describe('from a post page: the name box starts as the post title', () => {
 
   it('names a single file after the post title', () => {
     const base = seedName('', TITLE, 'a.png');
-    expect(
-      computeDisplayNames({ inFolder: false, folderName: null, base, siblingLabels: [], count: 1 }),
-    ).toEqual([TITLE]);
+    expect(computeDisplayNames({ base, siblingLabels: [], count: 1 })).toEqual([TITLE]);
   });
 
   it('numbers a bulk upload from the existing max for that base', () => {
     const base = seedName('', TITLE, 'a.png');
     const names = computeDisplayNames({
-      inFolder: false,
-      folderName: null,
       base,
       siblingLabels: [`${TITLE} 1`, `${TITLE} 4`, 'Other 9', `${TITLE} (comment)`],
       count: 3,
     });
     expect(names).toEqual([`${TITLE} 5`, `${TITLE} 6`, `${TITLE} 7`]);
-  });
-
-  it('leaves folder uploads auto-named after the folder', () => {
-    const names = computeDisplayNames({
-      inFolder: true,
-      folderName: 'Trip',
-      base: seedName('', TITLE, 'a.png'),
-      siblingLabels: ['Trip 2'],
-      count: 2,
-    });
-    expect(names).toEqual(['Trip 3', 'Trip 4']);
   });
 });
