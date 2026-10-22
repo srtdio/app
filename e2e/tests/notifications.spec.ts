@@ -336,12 +336,12 @@ test('a reminder fires while the app is open: toast; its card opens the chat at 
   await expect(reminder.locator('[data-activity-menu]')).toBeVisible();
   expectMinTouchTarget(await reminder.locator('[data-activity-lead]').boundingBox());
 
-  // The tap opens the chat at that message and never marks the reminder read.
+  // The tap opens the chat at that message (the chat consumes and drops the
+  // ?message= jump at once, so the landed message is the proof) and never
+  // marks the reminder read.
   await reminder.locator('[data-activity-lead]').click();
-  await expect(page).toHaveURL(
-    new RegExp(`/chat\\?channel=${encodeURIComponent(DM_CHANNEL)}&message=${dm.id}`),
-  );
-  await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
+  await expect(page).toHaveURL(new RegExp(`/chat\\?channel=${encodeURIComponent(DM_CHANNEL)}`));
+  await expect(page.locator(`[data-msg-id="${String(dm.id)}"]`)).toBeVisible({ timeout: 8000 });
   expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toEqual([]);
   expectClean(network);
 });
