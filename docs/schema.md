@@ -709,13 +709,10 @@ System and welcome writers: workspace_create (for the creator) and member_accept
 
 Where inbox entries are shown:
 
-- Chat bell only, never Activity: mention with entity_type chat_channel, scheduled_sent, scheduled_failed, reminder.
-- Activity: everything else, including mentions on posts and briefs.
-- inbox_mark_all_read (Activity Mark all read) skips bell types: reminder, scheduled_sent, scheduled_failed, chat mentions (mention with entity_type chat_channel) and, since part 2b (20261012190000_plan_part_2b.sql), the plan alerts plan_opened, plan_deleted, plan_date_changed, plan_updated, plan_review, plan_comment (same list as BELL_ONLY_EVENT_TYPES in src/lib/inbox/bell-types.ts).
+- Notifications page shows all inbox_entries; mark all read covers every type except snoozed.
+- inbox_mark_all_read(p_workspace_id uuid, p_trace_id uuid) RETURNS void, SECURITY DEFINER (search_path=''): requires is_active_workspace_member ('workspace_member_only'); marks every unread, non-snoozed (snoozed_until IS NULL), non-deleted entry of auth.uid() in the workspace read, of every event_type; audits inbox_mark_all_read with the count when any row changed. Applied 22 Oct 2026 (20261022190000_inbox_mark_all_read_all_types.sql).
 - plan_comment and plan_review (entity_type plan_item, entity_id = item id, tier active; 20261009205500_plan_item_comments.sql): plan events use scope 'posts', scope_key = plan id.
-- plan_opened, plan_deleted, plan_date_changed and plan_updated (entity_type plan, entity_id = plan id, scope 'posts', scope_key = plan id, tier active; 20261012160000_plan_notify_plumbing.sql, 20261012163000_plan_updated_alerts.sql) via _plan_notify; payload gains plan_id and plan_title. plan_updated payload kind: slot_added, slot_removed, concept_changed, renamed. Since part 2b they are sent only for plans open to the client, except plan_deleted. Shown in the chat bell only (never Activity), with plan_review and plan_comment.
-
-Decision 3 Oct 2026 (Shubham): Activity is posts only; chat notifications live in the chat bell.
+- plan_opened, plan_deleted, plan_date_changed and plan_updated (entity_type plan, entity_id = plan id, scope 'posts', scope_key = plan id, tier active; 20261012160000_plan_notify_plumbing.sql, 20261012163000_plan_updated_alerts.sql) via _plan_notify; payload gains plan_id and plan_title. plan_updated payload kind: slot_added, slot_removed, concept_changed, renamed. Since part 2b they are sent only for plans open to the client, except plan_deleted.
 
 ### email_threads
 
