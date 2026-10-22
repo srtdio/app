@@ -149,6 +149,17 @@ describe('the bar', () => {
     expect(html).toContain('data-status-chevron=""');
   });
 
+  it('a plan title item stays on one line, never wraps', () => {
+    const html = renderToStaticMarkup(
+      <StatusTickerBar
+        bar={bar({ plans: [plan('a', 'A very long festive season launch plan'), plan('b', 'B')] })}
+      />,
+    );
+    const item = html.match(/<button[^>]*data-status-item="plan"[^>]*>/)?.[0] ?? '';
+    expect(item).toContain('whitespace-nowrap');
+    expect(html).not.toContain('line-clamp');
+  });
+
   it('no current shared plan: no plan item', () => {
     const html = renderToStaticMarkup(<StatusTickerBar bar={bar({ briefs: 2 })} />);
     expect(html).not.toContain('data-status-item="plan"');
