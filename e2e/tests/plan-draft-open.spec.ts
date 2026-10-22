@@ -442,8 +442,8 @@ test('agency: Edit mode remove hides the row at once, Discard restores it with n
   ).toHaveCount(0);
   await enterEdit(plan);
 
-  // The remove icon: a 44x44 target in the bad colour, right of the text; a
-  // tap on the row itself opens nothing while editing.
+  // The remove icon: a 44x44 target in the bad colour on the row's bottom
+  // line, at its right edge; a tap on the row itself opens nothing while editing.
   await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   const remove = wrap.locator('[data-plan-row-remove-edit]');
   await expect(remove).toBeVisible();
@@ -451,7 +451,8 @@ test('agency: Edit mode remove hides the row at once, Discard restores it with n
   const rowBox = await wrap.locator(`[data-plan-row="${lantern.id}"]`).boundingBox();
   if (removeBox === null || rowBox === null) throw new Error('boxes');
   expectMinTouchTarget(removeBox);
-  expect(removeBox.x).toBeGreaterThanOrEqual(rowBox.x + rowBox.width - 1);
+  expect(removeBox.y).toBeGreaterThanOrEqual(rowBox.y + rowBox.height - 1);
+  expect(removeBox.x + removeBox.width).toBeGreaterThanOrEqual(rowBox.x + rowBox.width - 1);
   await expect(remove).toHaveClass(/text-bad/);
   await expect(remove).toHaveAttribute('aria-label', 'Remove from plan: Lantern workshop');
   await wrap.locator(`[data-plan-row="${lantern.id}"]`).click();
