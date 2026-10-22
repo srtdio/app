@@ -301,16 +301,22 @@ test('B: Edit: reorder inside Wed by the grip, the day chip moves one to Fri, re
   };
   await reorder();
 
-  // The day chip (44px) and the remove (44x44) sit right of the text; the chip
-  // opens the day picker with the plan's days, their counts and the current
-  // day marked. Picking Fri moves the row at once (queued).
+  // The day chip (44px) and the remove (44x44) sit on the row's bottom line,
+  // the chip left and the remove right, under the title; the chip opens the
+  // day picker with the plan's days, their counts and the current day marked.
+  // Picking Fri moves the row at once (queued).
   const lanternWrap = panel.locator(`[data-plan-row-wrap="${lantern.id}"]`);
   const chip = lanternWrap.locator('[data-plan-row-day-chip]');
   const remove = lanternWrap.locator('[data-plan-row-remove-edit]');
-  expectMinTouchTarget(await chip.boundingBox());
+  const chipBox = await chip.boundingBox();
+  expectMinTouchTarget(chipBox);
   const removeBox = await remove.boundingBox();
   expect(removeBox?.width).toBe(44);
   expect(removeBox?.height).toBe(44);
+  const titleBox = await lanternWrap.locator('[data-plan-row-title]').boundingBox();
+  expect((chipBox?.x ?? 0) + (chipBox?.width ?? 0)).toBeLessThanOrEqual(removeBox?.x ?? 0);
+  expect(Math.round(chipBox?.y ?? 0)).toBe(Math.round(removeBox?.y ?? 0));
+  expect(chipBox?.y ?? 0).toBeGreaterThan((titleBox?.y ?? 0) + (titleBox?.height ?? 0));
   await expect(chip).toHaveText(/Wed 14/);
   const moveToFri = async (): Promise<void> => {
     await chip.click();
@@ -681,7 +687,7 @@ test('F2: Escape inside the panel never reaches the chat (status drawer stays op
   expectClean(network);
 });
 
-test('D: a client at 1280 sees no Edit, grip, day chip, remove, menu or hints; a tick shows its toast @desktop', async ({
+test('D: a client at 1280 sees no Edit, grip, day chip, remove, menu or hints; OK shows its toast @desktop', async ({
   page,
 }) => {
   laptopOnly(page);
@@ -699,9 +705,12 @@ test('D: a client at 1280 sees no Edit, grip, day chip, remove, menu or hints; a
   const concept = dated('Rangoli timelapse');
   await panel.locator(`[data-plan-row="${concept.id}"]`).click({ button: 'right' });
   await expect(page.locator('[data-plan-day-popover]')).toHaveCount(0);
-  const tick = panel.locator(`[data-plan-row-wrap="${concept.id}"] [data-plan-slot]`);
-  await tick.click();
-  await expect(tick).toHaveAttribute('aria-checked', 'true');
+  const wrap = panel.locator(`[data-plan-row-wrap="${concept.id}"]`);
+  await expect(wrap.locator('[data-plan-control]')).toHaveAttribute('data-plan-control', 'switch');
+  await wrap.locator('[data-plan-ok]').click();
+  const pill = wrap.locator('[data-plan-control]');
+  await expect(pill).toHaveAttribute('data-plan-control', 'pill');
+  await expect(pill).toHaveText('OK');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
   expectClean(network);
 });
@@ -751,12 +760,14 @@ for (const size of [
       // The thread stays beside the panel.
       await expect(page.locator('[data-msg-id]').first()).toBeAttached();
     }
-    // Rows fit: the tick inside the panel in view mode; in Edit the day chip
-    // and the 44x44 remove fit beside the title, the hints line never
-    // scrolls, and the title truncates.
+    // Rows fit: the PLAN line and the thumbnail inside the panel in view mode;
+    // in Edit the day chip and the 44x44 remove fit on the bottom line, the
+    // hints line never scrolls, and the title clamps to two lines.
     const wrap = panel.locator('[data-plan-row-wrap]').first();
-    const tick = await wrap.locator('[data-plan-slot]').boundingBox();
+    const tick = await wrap.locator('[data-plan-control]').boundingBox();
     expect((tick?.x ?? 0) + (tick?.width ?? 0)).toBeLessThanOrEqual(size.width);
+    const thumb = await wrap.locator('[data-plan-row-tile]').boundingBox();
+    expect((thumb?.x ?? 0) + (thumb?.width ?? 0)).toBeLessThanOrEqual(size.width);
     await enterEdit(panel);
     const remove = await wrap.locator('[data-plan-row-remove-edit]').boundingBox();
     expect(remove?.width).toBe(44);
@@ -768,7 +779,9 @@ for (const size of [
     const hints = panel.locator('[data-plan-key-hints]');
     expect(await hints.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     for (const t of await panel.locator('[data-plan-row-title]').all()) {
-      expect(await t.evaluate((el) => getComputedStyle(el).textOverflow)).toBe('ellipsis');
+      expect(
+        await t.evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-line-clamp')),
+      ).toBe('2');
     }
     // Cancel with nothing changed: straight back to view mode.
     await panel.locator('[data-plan-back-text]').click();

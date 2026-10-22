@@ -138,22 +138,23 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   const plus = plan.locator('[data-plan-add-header]');
   expectMinTouchTarget(await plus.boundingBox());
 
-  // A1: weekday and digits centred as one block in a 48x44 column.
+  // A1: one 56x56 date tile per day: an 18px weekday strip on top, the
+  // number centred below it.
   const wed = dayBlock(plan, '2026-10-14');
+  await expect(wed.locator('[data-plan-day-col]')).toHaveCount(1);
   const col = await wed.locator('[data-plan-day-col]').boundingBox();
   const weekday = await wed.locator('[data-plan-day-weekday]').boundingBox();
   const digits = await wed.locator('[data-plan-day-number]').boundingBox();
   if (col === null || weekday === null || digits === null) throw new Error('day boxes');
-  expect(col.width).toBe(48);
-  expect(col.height).toBe(44);
+  expect(col.width).toBe(56);
+  expect(col.height).toBe(56);
+  expect(Math.round(weekday.height)).toBe(18);
+  expect(weekday.y - col.y).toBeLessThanOrEqual(1.5);
+  expect(digits.y).toBeGreaterThanOrEqual(weekday.y + weekday.height - 0.5);
   for (const b of [weekday, digits]) {
     expect(Math.abs(b.x + b.width / 2 - (col.x + col.width / 2))).toBeLessThanOrEqual(1);
   }
-  const block = Math.round(digits.y + digits.height - weekday.y);
-  expect(
-    Math.abs(weekday.y - col.y - (col.y + col.height - (digits.y + digits.height))),
-  ).toBeLessThanOrEqual(1);
-  expect(block).toBe(44);
+  await expect(wed.locator('[data-plan-day-number]')).toHaveText('14');
   // An empty day: Add sits right of "Nothing planned", 44px tall.
   const add = wed.locator('[data-plan-add="2026-10-14"]');
   expectMinTouchTarget(await add.boundingBox());
@@ -255,14 +256,13 @@ test('agency: in Edit, a grip drag moves a Thu item to Wed; Save changes writes 
     (r) => r.item_id === moved.id,
   );
   expect(reviews.every((r) => r.status === 'waiting')).toBe(true);
-  // The re-read keeps the order; the tick reads waiting.
+  // The re-read keeps the order; the PLAN line reads not checked.
   await expect
     .poll(() => titlesOn(plan, '2026-10-14'))
     .toEqual(['Sweets flatlay', 'Lantern workshop']);
-  await expect(plan.locator(`[data-plan-row-wrap="${moved.id}"] [data-plan-slot]`)).toHaveAttribute(
-    'aria-checked',
-    'false',
-  );
+  const movedPlan = plan.locator(`[data-plan-row-wrap="${moved.id}"] [data-plan-slot]`);
+  await expect(movedPlan).toHaveAttribute('data-plan-slot-state', 'pending');
+  await expect(movedPlan).toHaveText('Not checked yet');
   expectClean(network);
 });
 
