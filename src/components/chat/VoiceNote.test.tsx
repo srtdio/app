@@ -220,8 +220,10 @@ describe('playback recovery', () => {
     const plays = [...(opts.plays ?? [])];
     const refreshed = [...(opts.refreshed ?? ['https://r2/new'])];
     const play = vi.fn(() => plays.shift() ?? Promise.resolve());
-    const refreshUrl = vi.fn(async (_force: boolean) => refreshed.shift() ?? null);
-    const failed = vi.fn((_failure: VoiceFailure) => {});
+    const refreshUrl = vi.fn<(force: boolean) => Promise<string | null>>(
+      async () => refreshed.shift() ?? null,
+    );
+    const failed = vi.fn<(failure: VoiceFailure) => void>();
     const recovery = createVoiceRecovery({
       player: {
         get applied() {
