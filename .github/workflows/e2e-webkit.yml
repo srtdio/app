@@ -224,7 +224,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Room for a slow apt mirror: the system-deps install alone has taken
+    # 14 minutes on some runners, which left the tests no time under 15.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -255,13 +257,34 @@ jobs:
 
       - name: Install Playwright WebKit
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps webkit
+        run: pnpm exec playwright install webkit
+
+      # The system packages come from the runner's apt mirror, which has been
+      # slow enough (about 50 KB/s) to eat the whole job. Keep the downloaded
+      # .deb files in the Actions cache so later runs install them offline.
+      - name: Cache WebKit system packages
+        id: deb-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/webkit-debs
+          key: webkit-debs-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install Playwright WebKit system dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps webkit
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs
+          mkdir -p ~/webkit-debs
+          if compgen -G "$HOME/webkit-debs/*.deb" > /dev/null; then
+            sudo cp ~/webkit-debs/*.deb /var/cache/apt/archives/
+          fi
+          pnpm exec playwright install-deps webkit
+          if [ "${{ steps.deb-cache.outputs.cache-hit }}" != 'true' ]; then
+            cp /var/cache/apt/archives/*.deb ~/webkit-debs/ 2>/dev/null || true
+          fi
 
       - name: Run WebKit e2e shard
+        timeout-minutes: 10
         env:
           SPECS: ${{ needs.changes.outputs.specs }}
           SHARD: ${{ matrix.shard }}/${{ needs.changes.outputs.shard_total }}
