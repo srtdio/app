@@ -69,7 +69,7 @@ function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
   }
 }
 
-export function ActivityPage() {
+export function NotificationsPage() {
   const navigate = useNavigate();
   const { workspaceId, workspaceKey } = useWorkspace();
   const newTrace = useNewTrace();

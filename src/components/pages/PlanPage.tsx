@@ -1,18 +1,19 @@
-// The standalone Plan page (/plans/:planId?item=:itemId[&comment=:commentId]):
-// the chat's Plan screen opened outside a chat, from an Activity plan row. The
-// item named by ?item= opens on entry and takes no history step of its own, so
-// one Back (the header's or the browser's) leaves the page. Back returns to
-// the entry below when there is one (Activity), else replaces this entry with
-// /activity (a cold deep link never strands the viewer). An unreadable plan
-// (RLS empty, deleted, another workspace, a malformed id) shows the Plan
-// screen's own "Plan not available" state, never a blank page. ?comment=
-// scrolls to and highlights that comment once the item lists it.
-// Laptop (md and up): /activity and /plans/:planId share one layout
-// (ActivityPlanLayout), so Activity stays mounted (its scroll, filters and
-// data) while the plan opens beside it as the same docked panel as in a chat,
-// and closing returns to it without a remount. A plan opened from a plan
-// replaces that entry, so Close is always one step back to Activity. Phone:
-// the plan alone, full page, as before.
+// The standalone Plan page (/plans/:planId?item=:itemId[&comment=:commentId],
+// and /plan/:planId from the Plan tab): the chat's Plan screen opened outside a
+// chat. The item named by ?item= opens on entry and takes no history step of
+// its own, so one Back (the header's or the browser's) leaves the page. Back
+// returns to the entry below when there is one, else replaces this entry with
+// the page it sits beside (a cold deep link never strands the viewer). An
+// unreadable plan (RLS empty, deleted, another workspace, a malformed id) shows
+// the Plan screen's own "Plan not available" state, never a blank page.
+// ?comment= scrolls to and highlights that comment once the item lists it.
+// Laptop (md and up): the page beside the plan and the plan route share one
+// layout (PlanBesideLayout: Notifications over /notifications and
+// /plans/:planId, the Plan tab over /plan and /plan/:planId), so that page
+// stays mounted (its scroll, filters and data) while the plan opens beside it
+// as the same docked panel as in a chat, and closing returns to it without a
+// remount. A plan opened from a plan replaces that entry, so Close is always
+// one step back to the page. Phone: the plan alone, full page, as before.
 
 import { useCallback, useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
@@ -29,7 +30,6 @@ import { IconPlan } from '@/components/ui/icons';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { readSearchJump } from '@/lib/search/jump';
 import { PLAN_NOT_AVAILABLE } from '@/components/chat/plan-card';
-import { ActivityPage } from '@/components/pages/ActivityPage';
 import { PlanScreen, PlanPage as PlanFrame } from '@/components/chat/PlanScreen';
 import { hasPreviousEntry } from '@/lib/chat/use-history-step';
 import { cn } from '@/lib/cn';
@@ -43,15 +43,20 @@ export function isPlanId(value: string | null | undefined): value is string {
   return typeof value === 'string' && UUID.test(value);
 }
 
-/** Where the page's Back goes: one entry back, else Activity in place. Pure. */
-export function planPageBack(state: unknown): { kind: 'pop' } | { kind: 'activity' } {
-  return hasPreviousEntry(state) ? { kind: 'pop' } : { kind: 'activity' };
+/** Where the page's Back goes: one entry back, else the page beside it, in place. Pure. */
+export function planPageBack(state: unknown): { kind: 'pop' } | { kind: 'fallback' } {
+  return hasPreviousEntry(state) ? { kind: 'pop' } : { kind: 'fallback' };
+}
+
+/** Whether a path is a plan route (/plans/:planId or the Plan tab's /plan/:planId). Pure. */
+export function isPlanPath(path: string): boolean {
+  return path.startsWith('/plans/') || path.startsWith('/plan/');
 }
 
 /**
  * Laptop: a plan pushed over another plan takes that plan's entry instead
- * (one step back, then a replace), so the stack holds one plan above
- * Activity. Pure.
+ * (one step back, then a replace), so the stack holds one plan above the page
+ * beside it. Pure.
  */
 export function replacesPlanEntry(input: {
   desktop: boolean;
@@ -64,25 +69,25 @@ export function replacesPlanEntry(input: {
     input.navType === 'PUSH' &&
     input.prev !== null &&
     input.prev !== input.here &&
-    input.prev.startsWith('/plans/') &&
-    input.here.startsWith('/plans/')
+    isPlanPath(input.prev) &&
+    isPlanPath(input.here)
   );
 }
 
 /**
- * The route layout over /activity and /plans/:planId: Activity in one fixed
- * place (never remounted between the two) on a laptop and on /activity, with
- * the plan route beside it. From 1180px Activity narrows by the panel's
- * width; below, the panel overlays it.
+ * The route layout over a page and its plan route (`planPattern`): the page in
+ * one fixed place (never remounted between the two) on a laptop and on the
+ * page's own route, with the plan route beside it. From 1180px the page
+ * narrows by the panel's width; below, the panel overlays it.
  */
-export function ActivityPlanLayout(): ReactElement {
-  const plan = useMatch('/plans/:planId') !== null;
+export function PlanBesideLayout(props: { page: ReactElement; planPattern: string }): ReactElement {
+  const plan = useMatch(props.planPattern) !== null;
   const desktop = useMediaQuery(LAPTOP_QUERY);
   return (
     <>
       {!plan || desktop ? (
-        <div data-activity-beside="" className={cn(plan && 'min-[1180px]:mr-[440px]')}>
-          <ActivityPage />
+        <div data-plan-beside="" className={cn(plan && 'min-[1180px]:mr-[440px]')}>
+          {props.page}
         </div>
       ) : null}
       <Outlet />
@@ -90,7 +95,9 @@ export function ActivityPlanLayout(): ReactElement {
   );
 }
 
-export function PlanPage(): ReactElement {
+/** `fallback`: where Back goes on a cold deep link (the page this plan sits beside). */
+export function PlanPage(props: { fallback: string }): ReactElement {
+  const { fallback } = props;
   const params = useParams<{ planId: string }>();
   const [search] = useSearchParams();
   const navigate = useNavigate();
@@ -129,8 +136,8 @@ export function PlanPage(): ReactElement {
 
   const close = useCallback(() => {
     if (planPageBack(window.history.state).kind === 'pop') navigate(-1);
-    else navigate('/activity', { replace: true });
-  }, [navigate]);
+    else navigate(fallback, { replace: true });
+  }, [navigate, fallback]);
 
   if (!isPlanId(planId)) {
     return (

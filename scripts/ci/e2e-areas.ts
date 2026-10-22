@@ -87,9 +87,9 @@ export const AREAS: Area[] = [
     specs: CHAT_SPECS.map(t),
   },
   {
-    // /activity and /plans/:id share ActivityPlanLayout (PlanPage.tsx).
-    name: 'activity',
-    entries: ['src/components/pages/ActivityPage.tsx', 'src/components/pages/PlanPage.tsx'],
+    // /notifications and /plans/:id share PlanBesideLayout (PlanPage.tsx).
+    name: 'notifications',
+    entries: ['src/components/pages/NotificationsPage.tsx', 'src/components/pages/PlanPage.tsx'],
     routed: true,
     specs: [
       'activity-plan',
@@ -105,6 +105,13 @@ export const AREAS: Area[] = [
       'onboarding-invited',
       'onboarding-approver',
     ].map(t),
+  },
+  {
+    // The Plan tab: /plan and /plan/:id share PlanBesideLayout (PlanPage.tsx).
+    name: 'plan-tab',
+    entries: ['src/components/pages/PlanTabPage.tsx', 'src/components/pages/PlanPage.tsx'],
+    routed: true,
+    specs: ['plan-desktop', 'plan-draft-open'].map(t),
   },
   {
     name: 'pipeline',

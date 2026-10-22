@@ -843,7 +843,7 @@ test('F7: Activity stays mounted while a plan opens and closes beside it @deskto
   const network = await installHarnessNetwork(page);
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
   await page.goto('/activity');
-  const beside = page.locator('[data-activity-beside]');
+  const beside = page.locator('[data-plan-beside]');
   await expect(beside).toBeAttached();
   await page.waitForTimeout(1500);
   // Mark Activity's node and remember its scroll.

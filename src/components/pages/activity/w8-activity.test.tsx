@@ -133,7 +133,7 @@ describe('W8 fix 5: Mark all read applies to the active chip only', () => {
 
   it('shows no Undo and no success toast: Mark all read just clears unread', () => {
     const src = readFileSync(
-      fileURLToPath(new URL('../ActivityPage.tsx', import.meta.url)),
+      fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
     expect(src).not.toContain('useUndoableAction');

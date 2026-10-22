@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/shell/AppLayout';
 import { PipelinePage } from '@/components/pages/PipelinePage';
 import { PostDetailPage } from '@/components/pages/PostDetailPage';
@@ -9,7 +9,9 @@ import { AssetsPage } from '@/components/pages/AssetsPage';
 import { RecentlyDeletedPage } from '@/components/pages/RecentlyDeletedPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { HelpPage } from '@/components/pages/HelpPage';
-import { ActivityPlanLayout, PlanPage } from '@/components/pages/PlanPage';
+import { NotificationsPage } from '@/components/pages/NotificationsPage';
+import { PlanTabPage } from '@/components/pages/PlanTabPage';
+import { PlanBesideLayout, PlanPage } from '@/components/pages/PlanPage';
 import { SignInPage } from '@/components/auth/SignInPage';
 import { AuthCallbackPage } from '@/components/auth/AuthCallbackPage';
 import { LegalPolicyPage } from '@/components/auth/LegalPolicyPage';
@@ -43,6 +45,12 @@ function WorkspaceLayout() {
   );
 }
 
+/** /activity (old links, bookmarks): Notifications in place, query string kept. */
+export function ActivityRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/notifications${search}`} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -69,10 +77,22 @@ export default function App() {
               <Route path="/briefs/:briefId" element={<BriefDetailPage />} />
               <Route path="/b/:ref" element={<BriefRefResolver />} />
               <Route path="/chat" element={<ChatPage />} />
-              {/* Activity and a plan beside it share one layout: Activity never remounts. */}
-              <Route element={<ActivityPlanLayout />}>
-                <Route path="/activity" />
-                <Route path="/plans/:planId" element={<PlanPage />} />
+              {/* Notifications and a plan beside it share one layout: it never remounts. */}
+              <Route
+                element={
+                  <PlanBesideLayout page={<NotificationsPage />} planPattern="/plans/:planId" />
+                }
+              >
+                <Route path="/notifications" />
+                <Route path="/plans/:planId" element={<PlanPage fallback="/notifications" />} />
+              </Route>
+              <Route path="/activity" element={<ActivityRedirect />} />
+              {/* The Plan tab and a plan beside it: the calendar stays mounted. */}
+              <Route
+                element={<PlanBesideLayout page={<PlanTabPage />} planPattern="/plan/:planId" />}
+              >
+                <Route path="/plan" />
+                <Route path="/plan/:planId" element={<PlanPage fallback="/plan" />} />
               </Route>
               <Route path="/assets" element={<AssetsPage />} />
               <Route path="/settings" element={<SettingsPage />} />

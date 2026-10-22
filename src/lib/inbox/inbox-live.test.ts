@@ -547,18 +547,18 @@ describe('othersRows (own already-read rows never toast or tone)', () => {
 });
 
 describe('activityToneWanted', () => {
-  it('tones for someone else’s new rows unless Activity is open', async () => {
+  it('tones for someone else’s new rows unless Notifications is open', async () => {
     const { activityToneWanted } = await import('@/lib/inbox/inbox-live');
     expect(activityToneWanted(1, '/pipeline')).toBe(true);
     expect(activityToneWanted(0, '/pipeline')).toBe(false);
-    expect(activityToneWanted(2, '/activity')).toBe(false);
+    expect(activityToneWanted(2, '/notifications')).toBe(false);
   });
 });
 
 describe('activityToneWanted in a background tab', () => {
-  it('tones even on Activity when the tab is hidden', async () => {
+  it('tones even on Notifications when the tab is hidden', async () => {
     const { activityToneWanted } = await import('@/lib/inbox/inbox-live');
-    expect(activityToneWanted(1, '/activity', true)).toBe(true);
-    expect(activityToneWanted(0, '/activity', true)).toBe(false);
+    expect(activityToneWanted(1, '/notifications', true)).toBe(true);
+    expect(activityToneWanted(0, '/notifications', true)).toBe(false);
   });
 });

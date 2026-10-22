@@ -3,7 +3,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { IconChevronDown } from '@/components/ui/icons';
 import { PRIMARY_NAV } from '@/components/shell/nav';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
-import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { dispatchSorted } from '@/lib/events';
 import { CountBadge } from '@/components/ui/CountBadge';
@@ -20,7 +19,6 @@ interface SidebarProps {
 export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
-  const { unreadCount } = useInboxStore();
   return (
     <aside className="hidden md:flex md:flex-col w-[244px] shrink-0 border-r border-border bg-panel">
       <div className="p-2.5">
@@ -52,9 +50,6 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             key={item.to}
             to={item.to}
             {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
-            {...(item.showActivityBadge === true
-              ? { 'data-induction': INDUCTION_KEYS.activityTab }
-              : {})}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-sm font-medium transition-colors',
@@ -69,12 +64,6 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
               {item.showChatBadge && total > 0 ? (
                 <CountBadge
                   count={total}
-                  className="absolute -right-2 -top-1.5 border-2 border-panel"
-                />
-              ) : null}
-              {item.showActivityBadge && unreadCount > 0 ? (
-                <CountBadge
-                  count={unreadCount}
                   className="absolute -right-2 -top-1.5 border-2 border-panel"
                 />
               ) : null}

@@ -36,6 +36,7 @@ import { useToast } from '@/components/ui/toast';
 import { Avatar } from '@/components/ui/Avatar';
 import { entityHref, mapEntry } from '@/components/pages/activity/data';
 import {
+  ACTIVITY_PATH,
   activityToneWanted,
   mentionToastFrom,
   othersRows,
@@ -150,8 +151,8 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       const newest = pickNewest(newRows);
       const href =
         enriched.count === 1 && newest !== null
-          ? (entityHref(mapEntry(newest)) ?? '/activity')
-          : '/activity';
+          ? (entityHref(mapEntry(newest)) ?? ACTIVITY_PATH)
+          : ACTIVITY_PATH;
       toast.show({
         title: spec.title,
         ...(spec.description !== undefined ? { description: spec.description } : {}),

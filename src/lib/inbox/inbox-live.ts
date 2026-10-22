@@ -452,8 +452,8 @@ export function othersRows<T extends { actor_user_id: string | null }>(
   return rows.filter((row) => row.actor_user_id !== selfId);
 }
 
-/** The Activity route prefix: new Activity rows never tone while it is on screen. */
-export const ACTIVITY_PATH = '/activity';
+/** The Notifications route prefix: new rows never tone while it is on screen. */
+export const ACTIVITY_PATH = '/notifications';
 
 /**
  * Whether new Activity rows play the shared notification tone: only when at least
