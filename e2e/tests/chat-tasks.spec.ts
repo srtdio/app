@@ -226,32 +226,17 @@ test('Close with unsaved changes asks "Discard unsaved changes?" in the page; De
   expectClean(network);
 });
 
-test('bell: an older task row opens the chat with the sheet; Back closes it; Activity has none', async ({
+test('Notifications: an older task alert opens the chat with the sheet; Back closes it', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
   seedTasks(network.world);
 
-  const activityRead = page.waitForRequest((r) => {
-    const url = decodeURIComponent(r.url());
-    return (
-      url.includes('/rest/v1/inbox_entries') &&
-      url.includes('task_due') &&
-      !url.includes('or=(event_type.in.(reminder')
-    );
-  });
-  await page.goto('/activity');
-  expect(decodeURIComponent((await activityRead).url())).toContain(
-    'not.in.(reminder,scheduled_sent,scheduled_failed',
-  );
-  await expect(page.getByText(TASK_DUE_TITLE, { exact: false })).toHaveCount(0);
-
-  await page.goto('/chat');
-  await page.locator('[data-bell-button]').click();
-  await expect(page.getByRole('dialog', { name: 'Notifications' })).toBeVisible();
-  const row = page.locator('[data-bell-row="task-due"]');
-  await expect(row).toContainText(`#10 ${TASK_DUE_TITLE}`);
-  await row.locator('[data-bell-open]').click();
+  await page.goto('/notifications');
+  const row = page.locator('[data-activity-event="task_due"]');
+  await expect(row).toContainText(`#10 ${TASK_DUE_TITLE}`, { timeout: 15_000 });
+  await expect(row.locator('[data-activity-alert-icon="task"]')).toBeVisible();
+  await row.locator('[data-activity-lead]').click();
 
   const sheet = page.getByRole('dialog', { name: 'Tasks' });
   await expect(sheet).toBeVisible({ timeout: 8000 });

@@ -1,4 +1,4 @@
-// Data access for the inbox (Activity) live layer. Every export returns a Result
+// Data access for the inbox (Notifications) live layer. Every export returns a Result
 // and never throws or returns null, so the provider can branch instead of catch.
 // These are plain RLS-scoped PostgREST selects (each member sees only their own
 // rows), NOT @srtdio/rpc procs, so no p_trace_id is involved. Enrichment is
@@ -34,15 +34,15 @@ function unique(values: string[]): string[] {
 
 /**
  * HEAD count of the caller's actionable unread: unread, not soft-deleted, and not
- * currently snoozed (no snooze, or a snooze that has already elapsed). The chat
- * bell's rows (bell-types.ts) are left out: they never show in Activity. One
- * round trip, no rows transferred.
+ * currently snoozed (no snooze, or a snooze that has already elapsed). Every row
+ * counts, the chat, plan and task alerts included: Notifications shows them all.
+ * One round trip, no rows transferred.
  */
 export async function fetchInboxUnreadCount(
   client: Client,
   params: { workspaceId: string; userId: string; nowIso: string },
 ): Promise<Result<number>> {
-  const query = client
+  const res = await client
     .from('inbox_entries')
     .select('id', { count: 'exact', head: true })
     .eq('workspace_id', params.workspaceId)
@@ -50,23 +50,21 @@ export async function fetchInboxUnreadCount(
     .is('read_at', null)
     .is('deleted_at', null)
     .or(`snoozed_until.is.null,snoozed_until.lte.${params.nowIso}`);
-  const res = await withoutBellEntries(query);
   if (res.error) return fail(`fetchInboxUnreadCount: ${res.error.message}`);
   return { ok: true, data: res.count ?? 0 };
 }
 
 /**
  * HEAD count of the caller's actionable unread mentions: identical to
- * fetchInboxUnreadCount (unread, not soft-deleted, not currently snoozed, no
- * bell rows, so chat mentions are left out) but narrowed to
- * event_type='mention': post and brief mentions only. Drives the Mentions chip
- * count. One round trip, no rows transferred.
+ * fetchInboxUnreadCount (unread, not soft-deleted, not currently snoozed) but
+ * narrowed to event_type='mention': post, brief and chat mentions alike. Drives
+ * the Mentions chip count. One round trip, no rows transferred.
  */
 export async function fetchUnreadMentionCount(
   client: Client,
   params: { workspaceId: string; userId: string; nowIso: string },
 ): Promise<Result<number>> {
-  const query = client
+  const res = await client
     .from('inbox_entries')
     .select('id', { count: 'exact', head: true })
     .eq('workspace_id', params.workspaceId)
@@ -75,31 +73,31 @@ export async function fetchUnreadMentionCount(
     .is('read_at', null)
     .is('deleted_at', null)
     .or(`snoozed_until.is.null,snoozed_until.lte.${params.nowIso}`);
-  const res = await withoutBellEntries(query);
   if (res.error) return fail(`fetchUnreadMentionCount: ${res.error.message}`);
   return { ok: true, data: res.count ?? 0 };
 }
 
-/** How many new Activity rows one poll reads to word the toast (the count is exact regardless). */
+/** How many new activity rows one poll reads to word the toast (the count is exact regardless). */
 export const SINCE_ACTIVITY_LIMIT = 50;
 
-/** How many new chat mention rows one poll reads for the bell's toast. */
+/** How many new chat mention rows one poll reads for their toast. */
 export const SINCE_MENTION_LIMIT = 10;
 
-/** One poll's new rows: Activity's and the bell's chat mentions, plus Activity's exact count. */
+/** One poll's new rows: the activity toast's and the chat mentions, plus the activity count. */
 export interface InboxSince {
-  /** Every row read, newest first (Activity rows and chat mentions). */
+  /** Every row read, newest first (activity rows and chat mentions). */
   rows: InboxRow[];
-  /** The exact number of new Activity rows, counted after the bell rows are left out. */
+  /** The exact number of new activity rows, counted after the bell rows are left out. */
   activityCount: number;
 }
 
 /**
- * The caller's inbox rows created strictly after `sinceIso`. Bell rows are
- * filtered out BEFORE the Activity cap and count, so the count is exact however
- * many arrive (the cap only bounds the rows read for wording): one Activity read
- * with an exact count, and one chat mention read for the bell's toast, in
- * parallel. Soft-deleted rows are excluded.
+ * The caller's inbox rows created strictly after `sinceIso`. The rows the bell
+ * used to own (bell-types.ts) are filtered out BEFORE the activity cap and
+ * count, so the count is exact however many arrive (the cap only bounds the
+ * rows read for wording): one activity read with an exact count, and one chat
+ * mention read for the mention toast, in parallel. Soft-deleted rows are
+ * excluded.
  */
 export async function fetchInboxSince(
   client: Client,

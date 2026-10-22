@@ -3,11 +3,13 @@ import { Chip } from '@/components/ui/Chip';
 import type { ActivityState } from '@/components/pages/activity/data';
 
 // The only chips, single-select, in this order (no separate scope row).
+// Reminders, scheduled sends and task alerts have no chip: All and Unread show them.
 const STATE_CHIPS: { key: ActivityState; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'mentions', label: 'Mentions' },
   { key: 'briefs', label: 'Briefs' },
+  { key: 'plans', label: 'Plans' },
   { key: 'snoozed', label: 'Snoozed' },
 ];
 

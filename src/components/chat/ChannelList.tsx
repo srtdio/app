@@ -53,8 +53,6 @@ import {
 } from '@/lib/chat/search';
 import { NOTES_TILE_LINE } from '@/lib/chat/notes';
 import { NotesAvatar } from '@/components/chat/NotesBits';
-import { ScheduledListSheet } from '@/components/chat/ScheduledListSheet';
-import { provideScheduledSheet } from '@/components/chat/NotificationsPanel';
 import { useSession } from '@/lib/session-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import {
@@ -65,10 +63,6 @@ import {
   type ChatLayout,
 } from '@/components/chat/chat-type';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
-
-// The bell's "Scheduled in this chat" sheet comes from the chat surface, so the
-// top-bar bell never pulls the Composer into the app shell (NotificationsPanel).
-provideScheduledSheet(ScheduledListSheet);
 
 /** Per-channel draft text lookup ('' when the chat has no draft). */
 type DraftLookup = (channelId: string) => string;
@@ -965,8 +959,6 @@ interface ChannelListContentProps extends ChannelListProps {
   nowMs?: number;
   /** Hidden-chat lookup; absent in pure tests (nothing is hidden). */
   isHidden?: HiddenLookup;
-  /** An optional slot between Select and "+"; the bell itself lives in the top bar. */
-  bell?: ReactNode;
   /** Select mode controls; absent hides the Select control. */
   select?: ChannelSelectMode;
   /** Row long-press; absent disables the row menu. */
@@ -1098,7 +1090,6 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                       Select
                     </Button>
                   ) : null}
-                  {props.bell}
                   <Button
                     variant="primary"
                     size="lg"

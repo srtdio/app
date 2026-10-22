@@ -2,15 +2,16 @@
 // on every page from app start. It renders nothing.
 //
 // - Loads the user's pending reminders (and their message previews, one IN
-//   read each) on mount, when the tab becomes visible, on every inbox poll
-//   tick and whenever a reminder is set, moved or cancelled on this device.
+//   read each) on mount, when the tab becomes visible and whenever the pending
+//   reminders may have changed (REMINDERS_CHANGED_EVENT: a reminder set, moved
+//   or cancelled on this device, and the shell's inbox poll tick).
 // - Arms ONE timeout for the next due reminder. On the minute it shows the
 //   toast "Reminder: <preview>" (tap opens the chat at that message) and plays
 //   the chime three times over about 5 s; tapping or dismissing the toast
-//   stops the chime. The bell refetches.
+//   stops the chime. The chat's Remind me reloads.
 // - Missed on open: unread 'reminder' rows created after this device's last
 //   seen moment (localStorage, try/catch) give one chime and the toast
-//   "You missed N reminders"; tapping it opens the bell.
+//   "You missed N reminders"; tapping it opens Notifications.
 // - The AudioContext is created on the first pointerdown or keydown, never
 //   before (iPhone plays on the first tap after open).
 // Every timer, listener and the AudioContext are released on unmount.
@@ -22,27 +23,23 @@ import { logger } from '@/lib/logger';
 import { readProfiles } from '@/lib/chat-reads';
 import { mentionIds } from '@/lib/chat/mentions';
 import { createChime, type Chime } from '@/lib/chat/chime';
+import { messagePreview, readChatMessages, type ChatMessagePreview } from '@/lib/inbox/alerts';
 import {
-  BELL_REFRESH_EVENT,
   REMINDERS_CHANGED_EVENT,
-  messagePreview,
-  readBellMessages,
-  readUnreadRemindersSince,
-  requestBellRefresh,
-  type BellMessage,
-} from '@/lib/chat/bell';
-import {
+  announceRemindersChanged,
   armRing,
   missedCopy,
   missedCount,
   readLastSeen,
   readPendingReminders,
   readRung,
+  readUnreadRemindersSince,
   writeLastSeen,
   writeRung,
   type ReminderRow,
 } from '@/lib/chat/reminders';
-import { BELL_OPEN_HREF, chatMessageHref } from '@/lib/inbox/bell-types';
+import { chatMessageHref } from '@/lib/inbox/bell-types';
+import { ACTIVITY_PATH } from '@/lib/inbox/inbox-live';
 import { useToast } from '@/components/ui/toast';
 import { IconAlarmClock } from '@/components/ui/icons';
 
@@ -67,7 +64,7 @@ export function isDismissOf(target: EventTarget | null, title: string): boolean 
   return button?.parentElement?.textContent?.includes(title) === true;
 }
 
-export function BellRing(props: { workspaceId: string; userId: string }): null {
+export function ReminderRing(props: { workspaceId: string; userId: string }): null {
   const { workspaceId, userId } = props;
   const toast = useToast();
   const navigate = useNavigate();
@@ -82,7 +79,7 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
     const chime: Chime = createChime();
     const rung = new Set(readRung(userId));
     let rows: ReminderRow[] = [];
-    let messages = new Map<string, BellMessage>();
+    let messages = new Map<string, ChatMessagePreview>();
     let names = new Map<string, string>();
     let cancelTimer: () => void = () => {};
     let stopWatch: () => void = () => {};
@@ -143,8 +140,9 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
           navigateRef.current(chatMessageHref(row.channel_id, row.message_id));
         },
       });
-      requestBellRefresh();
-      arm();
+      // The rung reminder is no longer pending: the chat's Remind me reloads
+      // (this ring reloads too and arms the next one).
+      announceRemindersChanged();
     };
 
     const load = async (): Promise<void> => {
@@ -153,10 +151,10 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
       const res = await readPendingReminders(supabase, { workspaceId });
       if (disposed || seq !== loadSeq) return;
       if (!res.ok) {
-        logger.warn('bell ring: reminders read failed', { error: res.error.message });
+        logger.warn('reminder ring: reminders read failed', { error: res.error.message });
         return;
       }
-      const loaded = await readBellMessages(
+      const loaded = await readChatMessages(
         supabase,
         res.data.map((r) => r.message_id),
       );
@@ -185,18 +183,10 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
       });
       if (disposed) return;
       if (!res.ok) {
-        logger.warn('bell ring: missed read failed', { error: res.error.message });
+        logger.warn('reminder ring: missed read failed', { error: res.error.message });
         return;
       }
-      const count = missedCount(
-        res.data.map((e) => ({
-          createdAt: e.createdAt,
-          readAt: e.readAt,
-          reminderId: e.reminderId,
-        })),
-        lastSeen,
-        rung,
-      );
+      const count = missedCount(res.data, lastSeen, rung);
       for (const e of res.data) if (e.reminderId !== null) rung.add(e.reminderId);
       writeRung(userId, [...rung]);
       if (count === 0) return;
@@ -211,10 +201,9 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
         onPress: () => {
           chime.stop();
           stopWatch();
-          navigateRef.current(BELL_OPEN_HREF);
+          navigateRef.current(ACTIVITY_PATH);
         },
       });
-      requestBellRefresh();
     };
 
     const markSeen = (): void => {
@@ -230,7 +219,6 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
       }
     };
     const onPageHide = (): void => markSeen();
-    const onReload = (): void => void load();
     const onRemindersChanged = (): void => void load();
 
     void checkMissed();
@@ -238,7 +226,6 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
     window.addEventListener(REMINDERS_CHANGED_EVENT, onRemindersChanged);
-    window.addEventListener(BELL_REFRESH_EVENT, onReload);
     return () => {
       disposed = true;
       cancelTimer();
@@ -248,7 +235,6 @@ export function BellRing(props: { workspaceId: string; userId: string }): null {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener(REMINDERS_CHANGED_EVENT, onRemindersChanged);
-      window.removeEventListener(BELL_REFRESH_EVENT, onReload);
     };
   }, [workspaceId, userId]);
 

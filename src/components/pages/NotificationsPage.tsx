@@ -5,25 +5,31 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHead } from '@/components/shell/PageHead';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import { IconActivity, IconAlarmClock, IconAt, IconBriefs } from '@/components/ui/icons';
+import { IconActivity, IconAlarmClock, IconAt, IconBriefs, IconPlan } from '@/components/ui/icons';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
+import { NOTIFICATIONS_TITLE } from '@/components/shell/NotificationsButton';
 import { mentionHandle } from '@/lib/chat/mentions';
+import { useViewerSide } from '@/lib/chat/viewer-role';
+import { chatMessageHref } from '@/lib/inbox/bell-types';
+import { logger } from '@/lib/logger';
 import {
   ACTIVITY_PAGE_SIZE,
   bucketActorNames,
-  entityHref,
   fetchActivityEntries,
   filterByState,
   groupDigest,
   ACTIVITY_LOAD_FAILED,
   MARKED_READ_LABEL,
+  markAllPerRow,
   markAllTargets,
   markAllEntriesRead,
   markEntryRead,
+  openAction,
+  retryFailedSend,
   snoozeEntry,
   unreadCount,
   type ActivityDirection,
@@ -76,6 +82,8 @@ export function NotificationsPage() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const { profile } = useCurrentProfile();
+  // A plan_opened alert reads "shared with you" for a client.
+  const { side } = useViewerSide(workspaceId);
   // Mentions render @username, so my own accent matches my handle (name when none).
   const selfName =
     profile != null
@@ -185,36 +193,30 @@ export function NotificationsPage() {
     );
   }, []);
 
-  // Open a thread: mark only the lead entry read (optimistic) and navigate from
-  // it. The rest stay unread, so the card stays highlighted until they are seen.
-  const handleOpenGroup = useCallback(
-    (group: ActivityItem[]) => {
-      if (workspaceId === null) return;
-      const lead = group[0];
-      if (lead === undefined) return;
-      if (lead.readAt === null) {
-        markReadLocal(lead.id);
-        void markEntryRead(supabase, lead, workspaceId, newTrace());
-      }
-      const href = entityHref(lead, workspaceKey);
-      if (href !== null) navigate(href);
-    },
-    [workspaceId, workspaceKey, newTrace, navigate, markReadLocal],
-  );
-
-  // Open a single thread entry: mark just that entry read (optimistic) and
-  // navigate from it, mirroring handleOpenGroup for one entry.
+  // Open one entry by its tap rule (openAction): mark it read (optimistic)
+  // unless it is a reminder, toast a deleted plan, then navigate to its link.
   const handleOpenEntry = useCallback(
     (entry: ActivityItem) => {
       if (workspaceId === null) return;
-      if (entry.readAt === null) {
+      const open = openAction(entry, workspaceKey);
+      if (open.markRead && entry.readAt === null) {
         markReadLocal(entry.id);
         void markEntryRead(supabase, entry, workspaceId, newTrace());
       }
-      const href = entityHref(entry, workspaceKey);
-      if (href !== null) navigate(href);
+      if (open.toast !== null) toast?.show({ title: open.toast });
+      if (open.href !== null) navigate(open.href);
     },
-    [workspaceId, workspaceKey, newTrace, navigate, markReadLocal],
+    [workspaceId, workspaceKey, newTrace, navigate, markReadLocal, toast],
+  );
+
+  // Open a thread from its lead entry: only the lead is marked read, so the
+  // rest stay unread and the card stays highlighted until they are seen.
+  const handleOpenGroup = useCallback(
+    (group: ActivityItem[]) => {
+      const lead = group[0];
+      if (lead !== undefined) handleOpenEntry(lead);
+    },
+    [handleOpenEntry],
   );
 
   const handleMarkRead = useCallback(
@@ -237,7 +239,9 @@ export function NotificationsPage() {
   // The active chip only: mark its unread, non-snoozed rows read at once and
   // write immediately; no Undo and no confirmation toast (the unread state just
   // clears). On failure the rows go back to unread with a fixed error toast.
-  // The All chip uses the workspace-wide proc (matches inbox_mark_all_read).
+  // The All chip uses the workspace-wide proc (inbox_mark_all_read) plus one
+  // inbox_mark_read per loaded row the proc skips (markAllPerRow). A failed
+  // scheduled send is never a target (markAllTargets).
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
     const targets = markAllTargets(items, state, nowMs);
@@ -248,12 +252,12 @@ export function NotificationsPage() {
     setItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
     const traceId = newTrace();
     void (async () => {
-      const results =
-        chip === 'all'
-          ? [await markAllEntriesRead(supabase, workspaceId, traceId)]
-          : await Promise.all(
-              targets.map((item) => markEntryRead(supabase, item, workspaceId, traceId)),
-            );
+      const results = await Promise.all([
+        ...(chip === 'all' ? [markAllEntriesRead(supabase, workspaceId, traceId)] : []),
+        ...(chip === 'all' ? markAllPerRow(targets) : targets).map((item) =>
+          markEntryRead(supabase, item, workspaceId, traceId),
+        ),
+      ]);
       if (results.some((result) => !result.ok)) {
         setItems((prev) =>
           prev.map((item) =>
@@ -295,12 +299,48 @@ export function NotificationsPage() {
     [workspaceId, newTrace, push],
   );
 
+  // A failed scheduled send's Retry: send it now (the proc clears the entry),
+  // or clear an entry already resolved elsewhere; then reload the feed.
+  const handleRetry = useCallback(
+    (item: ActivityItem) => {
+      if (workspaceId === null) return;
+      const traceId = newTrace();
+      void retryFailedSend(supabase, item, workspaceId, traceId).then((outcome) => {
+        if (outcome.kind === 'failed') {
+          logger.warn('notifications: retry failed', {
+            trace_id: traceId,
+            error: outcome.message,
+          });
+          if (outcome.copy !== null) toast?.show({ title: outcome.copy });
+        }
+        void loadActivity();
+        window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
+      });
+    },
+    [workspaceId, newTrace, toast, loadActivity],
+  );
+
+  // A failed scheduled send's Edit: open its chat (the composer lists the
+  // chat's scheduled messages); an entry resolved elsewhere just clears.
+  const handleEdit = useCallback(
+    (item: ActivityItem) => {
+      const alert = item.alert;
+      if (alert == null) return;
+      if (alert.stale) {
+        handleMarkRead(item);
+        return;
+      }
+      if (alert.channelId !== null) navigate(chatMessageHref(alert.channelId, null));
+    },
+    [handleMarkRead, navigate],
+  );
+
   const listLoading = workspaceId === null || (loading && items.length === 0);
 
   return (
     <>
       <PageHead
-        title="Activity"
+        title={NOTIFICATIONS_TITLE}
         actions={
           <>
             {chipUnread > 0 ? (
@@ -351,6 +391,8 @@ export function NotificationsPage() {
             title="No brief activity yet"
             description="Briefs created or closed, brief comments and posts made from a brief will appear here."
           />
+        ) : state === 'plans' ? (
+          <EmptyState icon={<IconPlan size={24} />} title="You are all caught up" />
         ) : state === 'snoozed' ? (
           <EmptyState
             icon={<IconAlarmClock size={24} />}
@@ -391,6 +433,9 @@ export function NotificationsPage() {
                         onSnooze={handleSnooze}
                         onMarkRead={handleMarkRead}
                         selfName={selfName}
+                        side={side}
+                        onRetry={handleRetry}
+                        onEdit={handleEdit}
                       />
                     );
                     // The newest card is what the induction points at (its own corners, not the padded list).

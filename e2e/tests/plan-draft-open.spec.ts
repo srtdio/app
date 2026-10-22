@@ -339,7 +339,7 @@ test('Open plan: the client OK on a client-approved row, Also in, and keep the a
   expectClean(network);
 });
 
-test('the chat bell: plan alerts as bell rows; a deleted plan only toasts; a tap opens the plan', async ({
+test('Notifications: plan alerts under Plans; a deleted plan only toasts; a tap opens the plan', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -380,35 +380,31 @@ test('the chat bell: plan alerts as bell rows; a deleted plan only toasts; a tap
       240_000,
     ),
   );
-  await page.goto('/chat');
-  const bell = page.locator('[data-bell-button]');
-  await bell.waitFor({ state: 'visible', timeout: 15_000 });
-  await bell.click();
-  await page.locator('[data-bell-skeleton]').waitFor({ state: 'detached' });
-  const section = page.locator('[data-bell-section="plans"]');
-  await expect(section).toBeVisible();
-  await expect(section.locator('[data-bell-row="plan"]')).toHaveCount(4);
-  const line = (event: string) => section.locator(`[data-bell-plan="${event}"]`);
+  await page.goto('/notifications');
+  await page.getByRole('button', { name: 'Plans', exact: true }).click();
+  const line = (event: string) => page.locator(`[data-activity-event="${event}"]`);
   await expect(line('plan_opened')).toContainText(
     `${PEER_NAME} opened ${DATED_PLAN_TITLE} for approvers`,
+    { timeout: 15_000 },
   );
+  await expect(page.locator('[data-activity-alert-icon="plan"]')).toHaveCount(4);
   await expect(line('plan_deleted')).toContainText(`${PEER_NAME} deleted ${DATED_PLAN_TITLE}`);
   await expect(line('plan_date_changed')).toContainText('Lamp lighting reel moved to Fri 16 Oct');
   await expect(line('plan_updated')).toContainText(
     `${PEER_NAME} renamed Old name to ${DATED_PLAN_TITLE}`,
   );
-  for (const open of await section.locator('[data-bell-open]').all()) {
-    expectMinTouchTarget(await open.boundingBox());
+  for (const lead of await page.locator('[data-activity-lead]').all()) {
+    expectMinTouchTarget(await lead.boundingBox());
   }
 
-  // A deleted plan's row opens nothing: it toasts and is marked read.
-  await line('plan_deleted').locator('[data-bell-open]').click();
+  // A deleted plan's card opens nothing: it toasts and is marked read.
+  await line('plan_deleted').locator('[data-activity-lead]').click();
   await expect(page.getByText('This plan was deleted')).toBeVisible();
-  await expect(page).toHaveURL(/\/chat/);
-  await expect(line('plan_deleted')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/notifications$/);
+  await expect(line('plan_deleted').locator('[aria-label="Unread"]')).toHaveCount(0);
 
   // A date change opens the plan at the item.
-  await line('plan_date_changed').locator('[data-bell-open]').click();
+  await line('plan_date_changed').locator('[data-activity-lead]').click();
   await expect(page).toHaveURL(new RegExp(`/plans/${DATED_PLAN_ID}\\?item=${concept.id}$`));
   await expect(page.locator('[data-plan-page="item"]')).toBeVisible();
   expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toHaveLength(2);

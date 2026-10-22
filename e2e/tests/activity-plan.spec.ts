@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 import {
   ACTIVITY_PLAN_COMMENT_BODY,
+  ACTIVITY_PLAN_COMMENT_ID,
   installHarnessNetwork,
   seedActivityPlanComment,
   seedActivityPlanReview,
@@ -21,13 +22,14 @@ import {
   seedClientPlan,
 } from '../fixtures/chat-data';
 
-// Plan rows live in the chat bell, never in Activity (item 12): a
-// plan_comment or plan_review row shows in the bell's Plans section with its
-// Activity wording; a tap marks it read and opens the standalone Plan page
-// (/plans/:planId?item=) with that item open, and Activity shows no plan card.
-// A cold deep link to an unreadable plan shows "Plan not available" and Back
-// lands on Activity. Runs in both colour schemes (the dark and light projects)
-// on the iPhone viewport. Linux WebKit approximates iOS WebKit.
+// Plan rows on Notifications (the bell merged into Activity): a plan_comment
+// or plan_review row is an Activity plan-item card with its Activity wording,
+// listed under All and the Plans chip; a tap marks it read and opens the
+// standalone Plan page (/plans/:planId?item=, a comment adds &comment=) with
+// that item open. A cold deep link to an unreadable plan shows "Plan not
+// available" and Back lands on Notifications. Runs in both colour schemes (the
+// dark and light projects) on the iPhone viewport. Linux WebKit approximates
+// iOS WebKit.
 
 const FILE_VERSION = '0190e100-0000-7000-8000-0000000000c1';
 const POST_TITLE = 'Monday carousel';
@@ -47,21 +49,12 @@ function viewAsClient(network: HarnessNetwork): void {
 
 const planPage = (page: Page, id: string) => page.locator(`[data-plan-page="${id}"]`);
 
-/** The Activity card whose header is `title`. */
+/** The Notifications card whose header is `title`. */
 function card(page: Page, title: string) {
   return page.locator('[data-activity-lead]').filter({ hasText: title }).first();
 }
 
-/** Open the chat bell on the Chat home and wait for its rows. */
-async function openBell(page: Page): Promise<void> {
-  await page.goto('/chat');
-  const bell = page.locator('[data-bell-button]');
-  await bell.waitFor({ state: 'visible', timeout: 15_000 });
-  await bell.click();
-  await page.locator('[data-bell-skeleton]').waitFor({ state: 'detached' });
-}
-
-test('agency: a plan_comment row is a bell row (not Activity) and opens the item', async ({
+test('agency: a plan_comment row is a Notifications card (All and Plans) and opens the item', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -72,31 +65,37 @@ test('agency: a plan_comment row is a bell row (not Activity) and opens the item
     actor: PEER,
   });
 
-  // Activity drops it through the bell split.
-  await page.goto('/activity');
-  await page.waitForTimeout(1500);
-  await expect(card(page, PLAN_CONCEPT_TITLE)).toHaveCount(0);
-  await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(0);
+  await page.goto('/notifications');
+  const row = card(page, PLAN_CONCEPT_TITLE);
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await expect(row).toContainText(`${PEER_NAME} commented`);
+  await expect(row).toContainText(ACTIVITY_PLAN_COMMENT_BODY);
+  await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(1);
 
-  await openBell(page);
-  const row = page.locator('[data-bell-row="plan"]');
-  await expect(row).toHaveCount(1);
-  await expect(page.locator('[data-bell-section="plans"]')).toBeVisible();
-  await expect(row).toContainText(`${PEER_NAME} commented on a plan item`);
-  expectMinTouchTarget(await row.locator('[data-bell-open]').boundingBox());
+  // The Plans chip lists it too.
+  await page.getByRole('button', { name: 'Plans', exact: true }).click();
+  await expect(row).toBeVisible();
+  expectMinTouchTarget(await row.boundingBox());
 
   // The tap: marked read, then the standalone page with the item open.
-  await row.locator('[data-bell-open]').click();
-  await expect(page).toHaveURL(new RegExp(`/plans/${PLAN_ID}\\?item=${PLAN_CONCEPT_ITEM}$`));
+  await row.click();
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/plans/${PLAN_ID}\\?item=${PLAN_CONCEPT_ITEM}&comment=${ACTIVITY_PLAN_COMMENT_ID}$`,
+    ),
+  );
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByRole('heading', { name: PLAN_CONCEPT_TITLE })).toBeVisible();
   await expect(item.getByText(ACTIVITY_PLAN_COMMENT_BODY)).toBeVisible();
   expectMinTouchTarget(await item.getByRole('button', { name: 'Back', exact: true }).boundingBox());
+  expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toHaveLength(1);
   expectClean(network);
 });
 
-test('client: a plan_review row is a bell row and opens the post item', async ({ page }) => {
+test('client: a plan_review row is a Notifications card and opens the post item', async ({
+  page,
+}) => {
   const network = await installHarnessNetwork(page);
   viewAsClient(network);
   seedClientPlan(network.world, {
@@ -112,15 +111,11 @@ test('client: a plan_review row is a bell row and opens the post item', async ({
     status: 'approved',
   });
 
-  await page.goto('/activity');
-  await page.waitForTimeout(1500);
-  await expect(card(page, POST_TITLE)).toHaveCount(0);
+  await page.goto('/notifications');
+  const row = card(page, POST_TITLE);
+  await expect(row).toContainText('Maya Chen approved a plan item', { timeout: 15_000 });
 
-  await openBell(page);
-  const row = page.locator('[data-bell-row="plan"]');
-  await expect(row).toContainText('Maya Chen approved a plan item');
-
-  await row.locator('[data-bell-open]').click();
+  await row.click();
   await expect(page).toHaveURL(new RegExp(`/plans/${PLAN_ID}\\?item=${PLAN_POST_ITEM}$`));
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
@@ -128,7 +123,7 @@ test('client: a plan_review row is a bell row and opens the post item', async ({
   expectClean(network);
 });
 
-test('an unreadable plan shows "Plan not available"; a cold deep link Back lands on Activity', async ({
+test('an unreadable plan shows "Plan not available"; a cold deep link Back lands on Notifications', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -139,7 +134,7 @@ test('an unreadable plan shows "Plan not available"; a cold deep link Back lands
   await expect(planPage(page, 'item')).toHaveCount(0);
 
   await plan.getByRole('button', { name: 'Back', exact: true }).click();
-  await expect(page).toHaveURL(/\/activity$/);
+  await expect(page).toHaveURL(/\/notifications$/);
   await expect(planPage(page, 'plan')).toHaveCount(0);
   expectClean(network);
 });

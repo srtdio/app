@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // One Save is ONE chat line "<Name> edited tasks" (a chevron expands its rows
-// and "Open tasks") and ONE bell row "<Name> edited tasks" labelled "Tasks".
+// and "Open tasks") and ONE Notifications alert "<Name> edited tasks" labelled
+// "Tasks".
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,8 +12,13 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 import { TaskEventLine, type TaskLineContext } from '@/components/chat/tasks/TaskEventLine';
-import { isTaskBatch, TASK_BELL_PREVIEW, taskBellLine } from '@/components/chat/NotificationsPanel';
-import { mapBellEntry, taskFieldsOf } from '@/lib/chat/bell';
+import {
+  alertKindOf,
+  isTaskBatch,
+  TASK_ALERT_LABEL,
+  taskAlertLine,
+  taskFieldsOf,
+} from '@/lib/inbox/alerts';
 import { collapseTaskRun, TASKS_SHEET_ONLY, type TaskEvent } from '@/lib/chat/tasks';
 import { x4Task } from './x4-fake-tasks';
 
@@ -89,7 +95,7 @@ describe('batch chat line', () => {
   });
 });
 
-describe('batch bell row', () => {
+describe('batch task alert', () => {
   const row = {
     id: 'i1',
     workspace_id: 'w1',
@@ -112,25 +118,17 @@ describe('batch bell row', () => {
   it('maps the payload and reads "<Name> edited tasks", labelled Tasks', () => {
     const fields = taskFieldsOf(row as never);
     expect(fields).toMatchObject({ kind: 'batch', batchId: 'B', created: 1, changed: 2 });
-    const entry = mapBellEntry(row as never);
-    expect(entry?.eventType).toBe('task_changed');
-    const view = { eventType: 'task_changed' as const, task: fields };
-    expect(isTaskBatch(view)).toBe(true);
-    expect(taskBellLine(view, 'Leo')).toBe('Leo edited tasks');
-    expect(TASK_BELL_PREVIEW).toBe('Tasks');
+    expect(alertKindOf(row.event_type)).toBe('task');
+    expect(isTaskBatch('task_changed', fields)).toBe(true);
+    expect(taskAlertLine('task_changed', fields, 'Leo')).toBe('Leo edited tasks');
+    expect(TASK_ALERT_LABEL).toBe('Tasks');
   });
 
   it('older rows still read', () => {
-    const many = {
-      eventType: 'task_changed' as const,
-      task: taskFieldsOf({ payload: { kind: 'created_many', count: 3 } } as never),
-    };
-    expect(taskBellLine(many, 'Leo')).toBe('Leo added 3 tasks');
-    const one = {
-      eventType: 'task_changed' as const,
-      task: taskFieldsOf({ payload: { kind: 'created', number: 3, title: 'Hook' } } as never),
-    };
-    expect(isTaskBatch(one)).toBe(false);
-    expect(taskBellLine(one, 'Leo')).toBe(`Leo · added ${H}3 Hook`);
+    const many = taskFieldsOf({ payload: { kind: 'created_many', count: 3 } } as never);
+    expect(taskAlertLine('task_changed', many, 'Leo')).toBe('Leo added 3 tasks');
+    const one = taskFieldsOf({ payload: { kind: 'created', number: 3, title: 'Hook' } } as never);
+    expect(isTaskBatch('task_changed', one)).toBe(false);
+    expect(taskAlertLine('task_changed', one, 'Leo')).toBe(`Leo · added ${H}3 Hook`);
   });
 });
