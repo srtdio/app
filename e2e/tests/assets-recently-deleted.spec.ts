@@ -20,6 +20,7 @@ import {
 } from '../fixtures/assets-recently-deleted';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 import { swipeStripDown, undoStrip } from '../helpers/undo-strip';
+import { undoStripCases } from '../helpers/undo-strip-cases';
 
 // Recently deleted: a delete hides the file behind an Undo toast and commits
 // when the toast ends; a delete refused with asset_in_use explains where the
@@ -305,3 +306,5 @@ test('member: only Restore, with the owner-only note @theme', async ({ page }) =
   await expect(page.getByText(/^Frees /)).toHaveCount(0);
   finish(s);
 });
+
+undoStripCases();

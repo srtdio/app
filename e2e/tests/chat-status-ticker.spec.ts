@@ -10,6 +10,7 @@ import {
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
 import type { Row } from '../fixtures/postgrest';
+import { noEntityCodesCases } from '../helpers/no-entity-codes-cases';
 
 // The chat status ticker under the thread header and its drop-down drawer:
 // the workspace's current shared plans in a chat that never shared them (one
@@ -575,3 +576,5 @@ test.describe('chat status ticker', () => {
     });
   }
 });
+
+noEntityCodesCases();
