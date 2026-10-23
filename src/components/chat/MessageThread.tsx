@@ -25,6 +25,7 @@ import { ThreadHoldTip } from '@/components/chat/ThreadHoldTip';
 import { flushSync } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { isNearBottom } from '@/lib/chat/scroll';
+import { centreDelta, holdActive, JUMP_HOLD_MS, recentreNeeded } from '@/components/chat/jump-hold';
 import {
   ALL_MENTION,
   isFormerMember,
@@ -310,7 +311,12 @@ import { applyEdit, applyReactionOp, markMessagesDeleted } from '@/lib/chat/thre
 import { generateTraceId } from '@/lib/trace';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
-import { glowTarget, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
+import {
+  glowTarget,
+  highlightNodes,
+  JUMP_SETTLE_MS,
+  SearchWordsContext,
+} from '@/components/ui/SearchHighlight';
 import { InChatSearchBar, SearchHighlightContext } from '@/components/chat/InChatSearchBar';
 import type { ThreadReadState } from '@/lib/chat/use-chat-thread';
 import {
@@ -3659,21 +3665,76 @@ function ThreadBody(
   // jump and on unmount, so no timer outlives the thread.
   const glowCleanupRef = useRef<(() => void) | null>(null);
   useEffect(() => () => glowCleanupRef.current?.(), []);
+  // The jump hold (jump-hold.ts): the jumped-to row, its offset in the list's
+  // content when last looked at, and when the hold ends. Rows above it that
+  // change height after the jump (a card resolving from its skeleton) keep it
+  // centred; a reader gesture lets go.
+  const jumpHoldRef = useRef<{ id: string; offset: number; until: number } | null>(null);
+  const jumpSettleTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (jumpSettleTimerRef.current !== null) window.clearTimeout(jumpSettleTimerRef.current);
+    },
+    [],
+  );
+  const checkJumpHold = useCallback(
+    (settle: boolean): void => {
+      const hold = jumpHoldRef.current;
+      const list = listRef.current;
+      if (hold === null || list === null) return;
+      const el = list.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(hold.id)}"]`);
+      if (
+        el == null ||
+        !holdActive({ source: sourceRef.current, now: Date.now(), until: hold.until })
+      ) {
+        jumpHoldRef.current = null;
+        return;
+      }
+      const listBox = list.getBoundingClientRect();
+      const row = el.getBoundingClientRect();
+      const offset = row.top - listBox.top + list.scrollTop;
+      const moved = offset - hold.offset;
+      hold.offset = offset;
+      if (!recentreNeeded({ moved, settle, list: listBox, row })) return;
+      const delta = centreDelta(listBox, row);
+      // Instant, before paint: the row lands where the jump meant it to.
+      programScroll((l) => {
+        l.scrollTop += delta;
+      });
+    },
+    [programScroll],
+  );
   /**
    * Scroll a loaded message to the centre and tint its row for JUMP_HIGHLIGHT_MS
    * (the shared glow: a fade after, none under reduced motion); false when it is
    * not rendered.
    */
-  const reveal = useCallback((id: string, highlightMs: number): boolean => {
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`);
-    if (el == null) return false;
-    // A jump lets go of the bottom.
-    stickRef.current = false;
-    sourceRef.current = 'program';
-    glowCleanupRef.current?.();
-    glowCleanupRef.current = highlightMs > 0 ? glowTarget(el) : null;
-    return true;
-  }, []);
+  const reveal = useCallback(
+    (id: string, highlightMs: number): boolean => {
+      const el = listRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`);
+      if (el == null) return false;
+      // A jump lets go of the bottom.
+      stickRef.current = false;
+      sourceRef.current = 'program';
+      glowCleanupRef.current?.();
+      glowCleanupRef.current = highlightMs > 0 ? glowTarget(el) : null;
+      const list = listRef.current;
+      if (list !== null) {
+        const offset =
+          el.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+        jumpHoldRef.current = { id, offset, until: Date.now() + JUMP_HOLD_MS };
+        // Once the smooth scroll should have landed, a row it left outside the
+        // list (under the header or the composer) is centred in one frame.
+        if (jumpSettleTimerRef.current !== null) window.clearTimeout(jumpSettleTimerRef.current);
+        jumpSettleTimerRef.current = window.setTimeout(() => {
+          jumpSettleTimerRef.current = null;
+          checkJumpHold(true);
+        }, JUMP_SETTLE_MS);
+      }
+      return true;
+    },
+    [checkJumpHold],
+  );
   // Jump-to: reveal at once when loaded, else page older history (capped) and
   // reveal once the page carrying it renders.
   useEffect(() => {
@@ -3792,6 +3853,7 @@ function ThreadBody(
       observerRef.current ??
       new ResizeObserver(() => {
         if (selectingRef.current) return;
+        checkJumpHold(false);
         const touchScrollAt = touchScrollAtRef.current;
         const action = sizeChangeAction({
           intent: stickRef.current,
