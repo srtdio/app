@@ -2106,6 +2106,31 @@ export function marksChipOnServer(state: ActivityState): state is ChipMarkState 
   return state === 'mentions' || state === 'briefs' || state === 'plans';
 }
 
+/** One page (up to 500) of a chip's unread, unsnoozed ids, in id order after `after`. */
+async function readChipUnreadIds(
+  client: Client,
+  input: { workspaceId: string; state: ChipMarkState; nowIso: string },
+  after: string | null,
+): Promise<Result<string[]>> {
+  const base = client
+    .from('inbox_entries')
+    .select('id')
+    .eq('workspace_id', input.workspaceId)
+    .is('read_at', null)
+    .is('deleted_at', null)
+    .or(`snoozed_until.is.null,snoozed_until.lte.${input.nowIso}`);
+  const typed =
+    input.state === 'mentions'
+      ? base.eq('event_type', MENTION_EVENT_TYPE)
+      : input.state === 'briefs'
+        ? base.eq('scope', BRIEFS_SCOPE)
+        : base.in('event_type', [...BELL_PLAN_EVENT_TYPES]);
+  const page = after !== null ? typed.gt('id', after) : typed;
+  const res = await page.order('id', { ascending: true }).limit(MARK_READ_BATCH);
+  if (res.error) return { ok: false, error: { code: 'unknown', message: res.error.message } };
+  return { ok: true, data: (res.data ?? []).map((row) => row.id) };
+}
+
 /**
  * Mark every unread row a chip matches read, loaded or not: unread, not deleted,
  * and not snoozed (or a snooze that has run out). Reads the matching ids 500 at
@@ -2117,27 +2142,17 @@ export async function markChipRead(
   client: Client,
   input: { workspaceId: string; state: ChipMarkState; traceId: string },
 ): Promise<Result<number>> {
-  const nowIso = new Date().toISOString();
+  const read = {
+    workspaceId: input.workspaceId,
+    state: input.state,
+    nowIso: new Date().toISOString(),
+  };
   let after: string | null = null;
   let sent = 0;
   for (;;) {
-    const base = client
-      .from('inbox_entries')
-      .select('id')
-      .eq('workspace_id', input.workspaceId)
-      .is('read_at', null)
-      .is('deleted_at', null)
-      .or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`);
-    const typed =
-      input.state === 'mentions'
-        ? base.eq('event_type', MENTION_EVENT_TYPE)
-        : input.state === 'briefs'
-          ? base.eq('scope', BRIEFS_SCOPE)
-          : base.in('event_type', [...BELL_PLAN_EVENT_TYPES]);
-    const page = after !== null ? typed.gt('id', after) : typed;
-    const res = await page.order('id', { ascending: true }).limit(MARK_READ_BATCH);
-    if (res.error) return { ok: false, error: { code: 'unknown', message: res.error.message } };
-    const ids = (res.data ?? []).map((row) => row.id);
+    const page: Result<string[]> = await readChipUnreadIds(client, read, after);
+    if (!page.ok) return page;
+    const ids = page.data;
     if (ids.length === 0) return { ok: true, data: sent };
     const args: Database['public']['Functions']['inbox_mark_read_ids']['Args'] = {
       p_workspace_id: input.workspaceId,
