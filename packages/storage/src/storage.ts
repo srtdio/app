@@ -771,12 +771,14 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
     const { full, short } = amzDate(now);
     const payloadHash = await sha256Hex(req.body);
 
-    const signed: Array<readonly [string, string]> = [
+    const base: Array<readonly [string, string]> = [
       ['host', this.host],
       ['x-amz-content-sha256', payloadHash],
       ['x-amz-date', full],
-      ...(req.amzHeaders ?? []),
-    ].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    ];
+    const signed = [...base, ...(req.amzHeaders ?? [])].sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    );
     const canonicalHeaders = signed.map(([name, value]) => `${name}:${value.trim()}\n`).join('');
     const signedHeaders = signed.map(([name]) => name).join(';');
 
