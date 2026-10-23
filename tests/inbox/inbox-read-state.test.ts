@@ -2,8 +2,8 @@
 // stack as the authenticated role (the path the Activity surface uses). Each
 // proc is gated on is_active_workspace_member and scoped to auth.uid(), so the
 // suite proves: a member clears only their OWN rows, a non-member is rejected,
-// mark-all clears every event type but skips snoozed rows, and snooze validates
-// its kind. Ground truth is
+// mark-all clears every event type and expired snoozes but skips live ones,
+// and snooze validates its kind. Ground truth is
 // read back through the service role.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -27,6 +27,9 @@ import {
 import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '../../packages/rpc/src/index';
 
 const INBOX_SUITE = process.env.INBOX_SUITE === '1';
+// A snooze still running at test time; an expired one is cleared by mark-all.
+const SNOOZED_FUTURE = '2099-01-01T00:00:00.000Z';
+const SNOOZE_EXPIRED = '2000-01-01T00:00:00.000Z';
 
 describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
   let env: RlsEnv;
@@ -147,7 +150,7 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
   it('inbox_mark_all_read clears unread rows but leaves snoozed ones', async () => {
     const unreadA = await insertEntry(member.id);
     const unreadB = await insertEntry(member.id);
-    const snoozed = await insertEntry(member.id, { snoozed_until: '2026-07-20T00:00:00.000Z' });
+    const snoozed = await insertEntry(member.id, { snoozed_until: SNOOZED_FUTURE });
 
     const result = await inboxMarkAllRead(clientFor(member.id), {
       p_workspace_id: ws.id,
@@ -157,6 +160,19 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
     expect((await readEntry(unreadA)).readAt).not.toBeNull();
     expect((await readEntry(unreadB)).readAt).not.toBeNull();
     expect((await readEntry(snoozed)).readAt).toBeNull();
+  });
+
+  it('inbox_mark_all_read clears a row whose snooze has run out', async () => {
+    const expired = await insertEntry(member.id, { snoozed_until: SNOOZE_EXPIRED });
+    const live = await insertEntry(member.id, { snoozed_until: SNOOZED_FUTURE });
+
+    const result = await inboxMarkAllRead(clientFor(member.id), {
+      p_workspace_id: ws.id,
+      p_trace_id: generateTraceId(),
+    });
+    expect(result.ok).toBe(true);
+    expect((await readEntry(expired)).readAt).not.toBeNull();
+    expect((await readEntry(live)).readAt).toBeNull();
   });
 
   it('inbox_mark_all_read clears every event type: chat mentions, reminders, scheduled and plan alerts', async () => {
@@ -187,18 +203,18 @@ describe.runIf(INBOX_SUITE)('inbox read-state procs', () => {
     const snoozedMention = await insertEntry(member.id, {
       event_type: 'mention',
       scope: 'people',
-      snoozed_until: '2026-07-20T00:00:00.000Z',
+      snoozed_until: SNOOZED_FUTURE,
       ...chat,
     });
     const snoozedReminder = await insertEntry(member.id, {
       event_type: 'reminder',
       scope: 'people',
-      snoozed_until: '2026-07-20T00:00:00.000Z',
+      snoozed_until: SNOOZED_FUTURE,
       ...chat,
     });
     const snoozedPlan = await insertEntry(member.id, {
       event_type: 'plan_updated',
-      snoozed_until: '2026-07-20T00:00:00.000Z',
+      snoozed_until: SNOOZED_FUTURE,
       ...plan,
     });
 
