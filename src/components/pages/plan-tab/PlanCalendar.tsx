@@ -203,10 +203,7 @@ export function PlanCalendar(props: {
             {PLAN_ITEM_LEGEND}
           </span>
           <span className="flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className={cn('h-2 w-2 rounded-sm', LOOSE_POST_CLASSES.dot)}
-            />
+            <span aria-hidden="true" className={cn('h-2 w-2 rounded-sm', LOOSE_POST_CLASSES.dot)} />
             {LOOSE_POST_LEGEND}
           </span>
         </div>

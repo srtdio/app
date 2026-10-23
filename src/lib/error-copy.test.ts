@@ -41,14 +41,17 @@ describe('errorCopy', () => {
   });
 
   it('a row_version conflict reads as someone else changed it', () => {
-    expect(errorText('save the caption', { code: 'unknown', message: 'row_version_mismatch' })).toBe(
-      "Couldn't save the caption. Someone else changed it. Refresh to see the latest.",
-    );
+    expect(
+      errorText('save the caption', { code: 'unknown', message: 'row_version_mismatch' }),
+    ).toBe("Couldn't save the caption. Someone else changed it. Refresh to see the latest.");
     expect(errorReason({ code: 'unknown', message: 'stale' })).toBe('stale');
   });
 
   it('the approved lock reads "Approved posts are locked."', () => {
-    const copy = errorCopy('approve the post', { code: 'unknown', message: 'post_approved_locked' });
+    const copy = errorCopy('approve the post', {
+      code: 'unknown',
+      message: 'post_approved_locked',
+    });
     expect(copy.text).toBe("Couldn't approve the post. Approved posts are locked.");
     expect(copy.retryable).toBe(false);
   });
@@ -57,9 +60,9 @@ describe('errorCopy', () => {
     expect(errorText('save the caption', 'caption_too_long')).toBe(
       "Couldn't save the caption. Captions can be up to 4,000 characters.",
     );
-    expect(errorText('create the brief', { code: 'invalid_payload', message: 'title_required' })).toBe(
-      "Couldn't create the brief. Add a title to save.",
-    );
+    expect(
+      errorText('create the brief', { code: 'invalid_payload', message: 'title_required' }),
+    ).toBe("Couldn't create the brief. Add a title to save.");
   });
 
   it('anything else reads "Try again." with Retry, never the raw text', () => {

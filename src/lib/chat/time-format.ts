@@ -82,11 +82,7 @@ export function formatClockTime(
  * Without `now` the year is never added (the value is read against its own
  * instant), so callers with no clock stay pure and deterministic.
  */
-export function formatShortDate(
-  createdAt: string | number,
-  timeZone: string,
-  now?: Date,
-): string {
+export function formatShortDate(createdAt: string | number, timeZone: string, now?: Date): string {
   const instant = instantOf(createdAt);
   if (instant === undefined) return '';
   return formatDay(createdAt, timeZone, now ?? instant);
