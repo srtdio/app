@@ -77,11 +77,11 @@ interface BriefCardProps {
 
 /**
  * A brief card: a leading square tile (the first image attachment, else a brief
- * icon), then title, truncated objective, status, and the due date. The title
- * is the one real link; its ::after overlay stretches over the card so the whole
- * card still opens the brief, and nothing interactive is nested inside a link.
- * The optional reference link sits above that overlay. Closing a brief lives in
- * the detail page's menu, never on the card.
+ * icon), then title, truncated objective, status, and the due date. The card's
+ * one real link is laid over the whole card (inset-0, named by the title), so
+ * the link itself is the full card tap target, and nothing interactive is nested
+ * inside a link. The optional reference link sits above it. Closing a brief
+ * lives in the detail page's menu, never on the card.
  */
 export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps) {
   const closed = isBriefClosed(brief);
@@ -94,10 +94,17 @@ export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps
         closed ? 'opacity-70' : ''
       }`}
     >
+      <Link
+        to={href}
+        aria-label={brief.title}
+        data-brief-card-link=""
+        className="absolute inset-0 rounded-xl focus:outline-none"
+      />
+
       {/* Leading square visual. The wrapper supplies the radius + overflow-hidden so
           the shared tile (which adds none of its own) clips edge-to-edge. 64px keeps
           it comfortably above the 44px touch floor without crowding a ~360px card. */}
-      <div className="w-16 shrink-0 overflow-hidden rounded-lg">
+      <div className="pointer-events-none w-16 shrink-0 overflow-hidden rounded-lg">
         {brief.thumbnailAssetVersionId !== null ? (
           <Thumbnail
             assetVersionId={brief.thumbnailAssetVersionId}
@@ -117,22 +124,22 @@ export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps
         )}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+      <div className="pointer-events-none flex min-w-0 flex-1 flex-col gap-2.5">
         <div className="flex min-w-0 items-start gap-3">
-          <Link
-            to={href}
-            className="min-w-0 flex-1 break-words text-sm font-medium leading-snug line-clamp-2 text-fg focus:outline-none after:absolute after:inset-0 after:content-['']"
+          <span
+            aria-hidden="true"
+            className="min-w-0 flex-1 break-words text-sm font-medium leading-snug line-clamp-2 text-fg"
           >
             {brief.title}
-          </Link>
+          </span>
           <BriefStatusPill status={brief.status} />
         </div>
 
         <p className="min-w-0 break-words text-sm text-fg-3 line-clamp-2">{brief.objective}</p>
 
-        {/* Above the title's stretched overlay, so a tap follows this link only. */}
+        {/* Above the card link, so a tap follows this link only. */}
         {link !== null ? (
-          <div className="relative z-10 flex min-w-0">
+          <div className="pointer-events-auto relative z-10 flex min-w-0">
             {/* Compact: the list card has no room for a picture. */}
             <LinkPreviewCard url={link.href} size="compact" className="w-full max-w-[320px]" />
           </div>

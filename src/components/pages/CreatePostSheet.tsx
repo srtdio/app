@@ -1445,14 +1445,6 @@ export function CreatePostSheet({
             {gridError('title')}
           </Field>
         </div>
-        {/* Below lg the preview opens from a chip; its row is reserved from the
-            first paint so nothing jumps when the platform resolves. At lg the
-            frame itself is the preview. */}
-        <div data-preview-chip-slot="" className="-my-2 flex min-h-[44px] items-center lg:hidden">
-          {preview !== null ? (
-            <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
-          ) : null}
-        </div>
         <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-0">
           <AttachmentsField
             workspaceId={workspaceId}
@@ -1504,6 +1496,15 @@ export function CreatePostSheet({
             </div>
             {gridError('caption')}
           </Field>
+
+          {/* Below lg the preview opens from a chip after the caption; its row is
+              reserved from the first paint so nothing jumps when the platform
+              resolves. At lg the frame itself is the preview. */}
+          <div data-preview-chip-slot="" className="-my-2 flex min-h-[44px] items-center lg:hidden">
+            {preview !== null ? (
+              <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
+            ) : null}
+          </div>
 
           <button
             type="button"

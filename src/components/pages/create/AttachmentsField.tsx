@@ -10,13 +10,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { ALLOWED_MIME_TYPES, isImageMime } from '@srtdio/storage';
 import { platformLabel } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { IconFile, IconLink, IconX } from '@/components/ui/icons';
+import { IconFile, IconImagePlus, IconLink, IconX } from '@/components/ui/icons';
 import { frameFor, type Frame, type FrameMedia } from '@/lib/platform-specs';
 import {
   COMPOSER_FRAME_MAX_HEIGHT,
@@ -193,6 +193,13 @@ export function attachmentItemList(
   });
 }
 
+/**
+ * The create sheet's frame cap: the dropzone and the media in it keep the
+ * platform ratio but never grow past this (a 4:5 frame on a tall laptop no
+ * longer runs to 870px).
+ */
+export const CREATE_FRAME_MAX_HEIGHT = 'min(60vh, 440px)';
+
 /** True for a photo, or a video with a local preview: what a frame can show. */
 export function isMediaItem(item: AttachmentItem): boolean {
   return item.kind === 'image' || item.mime?.startsWith('video/') === true;
@@ -205,9 +212,11 @@ function FramedMediaTile({
   removeLabel,
   onRemove,
   onMeasure,
+  maxHeight = COMPOSER_FRAME_MAX_HEIGHT,
 }: {
   item: AttachmentItem;
   frame: Frame;
+  maxHeight?: string;
   removeLabel: string;
   /** Absent: no remove on the frame (the tile row carries it). */
   onRemove?: () => void;
@@ -218,7 +227,7 @@ function FramedMediaTile({
   return (
     <PlatformFrame
       frame={frame}
-      maxHeight={COMPOSER_FRAME_MAX_HEIGHT}
+      maxHeight={maxHeight}
       className="rounded-xl"
       backdrop={
         src !== undefined && !video ? (
@@ -285,7 +294,9 @@ const SLIDE_GAP = 8;
  * video fills the same frame (slides swipe on the X axis, as on the post page),
  * and the line under it says how much of the first photo the platform cuts.
  * With nav, the frame shows a "1/3" counter top-right and dots at the bottom,
- * follows the index it is given, reports swipes, and takes arrow keys.
+ * follows the index it is given, reports swipes, and takes arrow keys. With
+ * dropzone (the create sheet), the empty frame holds those add buttons instead
+ * of being one big button, and the frame keeps the create sheet's cap.
  */
 export function ComposerMediaFrame({
   frame,
@@ -299,6 +310,7 @@ export function ComposerMediaFrame({
   pickDisabled = false,
   onPick,
   nav,
+  dropzone,
 }: {
   frame: Frame;
   platform: string;
@@ -313,6 +325,8 @@ export function ComposerMediaFrame({
   onPick: () => void;
   /** The create sheet: counter, dots, swipe and arrow keys; removes live on the tiles. */
   nav?: { index: number; onIndexChange: (index: number) => void };
+  /** The add buttons drawn inside the empty frame (the create sheet). */
+  dropzone?: ReactNode;
 }): ReactElement {
   const media = items
     .map((item, index) => ({ item, index }))
@@ -337,7 +351,28 @@ export function ComposerMediaFrame({
     }
   }, [hasNav, navIndex, count]);
 
+  const maxHeight = dropzone !== undefined ? CREATE_FRAME_MAX_HEIGHT : COMPOSER_FRAME_MAX_HEIGHT;
   const first = media[0]?.item;
+  if (first === undefined && dropzone !== undefined) {
+    return (
+      <div className="flex justify-center">
+        <PlatformFrame frame={frame} maxHeight={maxHeight} empty className="rounded-xl">
+          <div
+            data-dropzone=""
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-3"
+          >
+            <span
+              aria-hidden="true"
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-panel-3 text-accent"
+            >
+              <IconImagePlus size={22} />
+            </span>
+            {dropzone}
+          </div>
+        </PlatformFrame>
+      </div>
+    );
+  }
   if (first === undefined) {
     return (
       <div className="flex justify-center">
@@ -412,6 +447,7 @@ export function ComposerMediaFrame({
               <FramedMediaTile
                 item={item}
                 frame={frame}
+                maxHeight={maxHeight}
                 removeLabel={removeLabel(item)}
                 {...(nav === undefined ? { onRemove: () => onRemove(index) } : {})}
                 onMeasure={onMeasure}
@@ -857,9 +893,17 @@ export function AttachmentsField({
     setSlide(to);
   }
 
+  // Framed with no media yet: the buttons sit inside the empty frame, and Photo
+  // takes a photo or video (the frame's own picker; it waits while uploads run).
+  const dropzoneEmpty = framed && media.length === 0;
   const addButtons = (
-    <div className="flex flex-wrap gap-2">
-      <Button type="button" size="lg" onClick={() => photoInputRef.current?.click()}>
+    <div className={cn('flex flex-wrap gap-2', dropzoneEmpty && 'justify-center')}>
+      <Button
+        type="button"
+        size="lg"
+        disabled={dropzoneEmpty && pendingCount > 0}
+        onClick={() => (dropzoneEmpty ? mediaInputRef : photoInputRef).current?.click()}
+      >
         Photo
       </Button>
       <Button type="button" size="lg" onClick={() => docInputRef.current?.click()}>
@@ -890,6 +934,7 @@ export function AttachmentsField({
           pickDisabled={pendingCount > 0}
           onPick={() => mediaInputRef.current?.click()}
           nav={{ index: slideAt, onIndexChange: setSlide }}
+          dropzone={addButtons}
         />
       ) : null}
 
@@ -935,7 +980,7 @@ export function AttachmentsField({
         </div>
       ) : null}
 
-      {framed ? addButtons : null}
+      {framed && !dropzoneEmpty ? addButtons : null}
 
       {linkOpen ? (
         <div className="flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3">
