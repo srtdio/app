@@ -7,8 +7,10 @@ import {
   briefsHeader,
   briefCardList,
   briefSections,
-  briefsCountLine,
+  briefsEmptyState,
+  createdToast,
   deriveBriefGroups,
+  deriveSortedBriefs,
 } from '@/components/pages/BriefsPage';
 import { BriefCard } from '@/components/pages/BriefCard';
 import { dispatchSorted } from '@/lib/events';
@@ -69,10 +71,33 @@ function header(
 }
 
 describe('briefsHeader', () => {
-  it('uses the shared SectionHeader with no sort control', () => {
+  it('client side: the shared SectionHeader with no sort control', () => {
     const tree = header();
     expect(findAll(tree, (el) => el.type === SectionHeader)).toHaveLength(1);
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
+  });
+
+  it('agency side: the Pipeline SortMenu with Due date (default) and Recently updated', () => {
+    const onChange = vi.fn();
+    const tree = briefsHeader({
+      search: '',
+      onSearchChange: () => {},
+      filter: 'all',
+      onFilterChange: () => {},
+      canCreate: false,
+      sort: { value: 'due', onChange },
+    });
+    const menus = findAll(tree, (el) => el.type === SortMenu);
+    expect(menus).toHaveLength(1);
+    const props = menus[0]!.props as {
+      options: { value: string; label: string }[];
+      value: string;
+      onChange: (value: string) => void;
+    };
+    expect(props.options.map((o) => o.label)).toEqual(['Due date', 'Recently updated']);
+    expect(props.value).toBe('due');
+    props.onChange('updated');
+    expect(onChange).toHaveBeenCalledWith('updated');
   });
 
   it('dispatches sorted:create-brief from the New brief action', () => {
@@ -271,19 +296,18 @@ interface DayShape {
 
 interface SectionShape {
   label: string;
-  count: string;
   days: DayShape[];
 }
 
 // Walk one <section> from briefSections without rendering. Children are
-// [headerDiv, dayNodes]: the header holds an <h3> label and a <span> count, and
-// dayNodes is the flat [heading, grid, heading, grid, ...] sequence, one pair per
-// civil day, each grid holding that day's BriefCard list.
+// [headerDiv, dayNodes]: the header holds only an <h3> label (no count: counts
+// live on the chips), and dayNodes is the flat [heading, grid, heading, grid,
+// ...] sequence, one pair per civil day, each grid holding that day's BriefCard
+// list.
 function readSection(section: ReactElement): SectionShape {
   const [headerDiv, dayNodes] = (section.props as { children: [ReactElement, ReactElement[]] })
     .children;
-  const [h3, span] = (headerDiv.props as { children: ReactElement[] }).children;
-  const countParts = (span!.props as { children: (string | number)[] }).children;
+  const h3 = (headerDiv.props as { children: ReactElement }).children;
   const days: DayShape[] = [];
   for (let i = 0; i < dayNodes.length; i += 2) {
     const heading = dayNodes[i]!.props as { children: string; className: string };
@@ -295,8 +319,7 @@ function readSection(section: ReactElement): SectionShape {
     });
   }
   return {
-    label: String((h3!.props as { children: string }).children),
-    count: countParts.join(''),
+    label: String((h3.props as { children: string }).children),
     days,
   };
 }
@@ -322,7 +345,7 @@ describe('briefSections', () => {
     });
   }
 
-  it('renders a section per group with label, brief count and one card per brief', () => {
+  it('renders a section per group with label (no count) and one card per brief', () => {
     const sections = sectionsFor([
       makeBrief('a', { created_at: created('2026-07-07') }),
       makeBrief('b', { created_at: created('2026-07-06') }),
@@ -332,7 +355,6 @@ describe('briefSections', () => {
     expect(sections.map((s) => readSection(s))).toEqual([
       {
         label: 'This week',
-        count: '2 briefs',
         days: [
           { label: '7 Jul', className: DAY_HEADING_CLASS, cards: 1 },
           { label: '6 Jul', className: DAY_HEADING_CLASS, cards: 1 },
@@ -340,7 +362,6 @@ describe('briefSections', () => {
       },
       {
         label: 'June',
-        count: '1 brief',
         days: [{ label: '10 Jun', className: DAY_HEADING_CLASS, cards: 1 }],
       },
     ]);
@@ -393,12 +414,79 @@ describe('briefSections', () => {
   });
 });
 
-describe('briefsCountLine', () => {
-  it('shows the total alone when nothing is filtered out', () => {
-    expect(briefsCountLine(12, 12)).toBe('12 briefs');
+describe('briefsEmptyState', () => {
+  it('a typed search with no match: one line naming the query (the only state with Clear)', () => {
+    expect(briefsEmptyState('open', ' diwali ', 4, true)).toEqual({
+      kind: 'no-results',
+      title: 'No briefs with “diwali” in the title',
+    });
+    expect(briefsEmptyState('closed', 'x', 4, false).kind).toBe('no-results');
   });
 
-  it('uses the singular brief unit for a single brief', () => {
-    expect(briefsCountLine(1, 1)).toBe('1 brief');
+  it('client with no open briefs: the New brief state', () => {
+    expect(briefsEmptyState('open', '', 0, true)).toEqual({ kind: 'client-empty' });
+    expect(briefsEmptyState('open', '', 3, true)).toEqual({ kind: 'client-empty' });
+  });
+
+  it('agency with no briefs: the one-line state', () => {
+    expect(briefsEmptyState('open', '', 0, false)).toEqual({ kind: 'agency-empty' });
+    expect(briefsEmptyState('all', '', 0, false)).toEqual({ kind: 'agency-empty' });
+  });
+
+  it('a chip with nothing under it and no search: a heading, no Clear', () => {
+    expect(briefsEmptyState('closed', '', 2, true)).toEqual({
+      kind: 'filtered',
+      title: 'No closed briefs yet',
+    });
+    expect(briefsEmptyState('open', '', 2, false)).toEqual({
+      kind: 'filtered',
+      title: 'No open briefs right now',
+    });
+  });
+});
+
+describe('deriveSortedBriefs', () => {
+  const briefs = [
+    makeBrief('none', { target_date: null, updated_at: '2026-07-09T00:00:00Z' }),
+    makeBrief('late', { target_date: '2026-08-01', updated_at: '2026-07-01T00:00:00Z' }),
+    makeBrief('soon', { target_date: '2026-07-20', updated_at: '2026-07-02T00:00:00Z' }),
+    makeBrief('shut', {
+      status: 'closed',
+      target_date: '2026-07-10',
+      updated_at: '2026-07-08T00:00:00Z',
+    }),
+  ];
+
+  it('filters by chip, then sorts by due date (undated last)', () => {
+    expect(deriveSortedBriefs(briefs, 'open', '', 'due').map((b) => b.id)).toEqual([
+      'soon',
+      'late',
+      'none',
+    ]);
+  });
+
+  it('recently updated puts the newest edit first, keeping object references', () => {
+    const out = deriveSortedBriefs(briefs, 'all', '', 'updated');
+    expect(out.map((b) => b.id)).toEqual(['none', 'shut', 'soon', 'late']);
+    expect(out[0]).toBe(briefs[0]);
+  });
+});
+
+describe('createdToast', () => {
+  it('a lost note is an error toast with Add note, never the success style', () => {
+    const navigate = vi.fn();
+    const toast = createdToast({ briefId: 'b9', noteFailed: true }, navigate);
+    expect(toast.title).toBe('Brief created. Your note did not post.');
+    expect(toast.tone).toBe('error');
+    expect(toast.action?.label).toBe('Add note');
+    toast.action?.onPress();
+    expect(navigate).toHaveBeenCalledWith('/briefs/b9?note=1');
+  });
+
+  it('a clean create is the success toast with Open', () => {
+    const toast = createdToast({ briefId: 'b9', noteFailed: false }, vi.fn());
+    expect(toast.title).toBe('Brief created');
+    expect(toast.tone).toBe('success');
+    expect(toast.action?.label).toBe('Open');
   });
 });

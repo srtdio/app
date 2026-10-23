@@ -208,6 +208,29 @@ describe('BriefCard thumbnail tile', () => {
     const out = render(makeBrief({ status: 'closed' }), cache);
     expect(out).toContain('Closed');
   });
+
+  it('Open is the accent-soft pill with an accent dot', () => {
+    const { cache } = makeCache(null);
+    const out = render(makeBrief({ status: 'open' }), cache);
+    expect(out).toContain('data-brief-status="open"');
+    expect(out).toContain('bg-accent-soft text-accent');
+    expect(out).not.toContain('bg-good');
+  });
+
+  it('Closed is the panel-3 pill with a lock', () => {
+    const { cache } = makeCache(null);
+    const out = render(makeBrief({ status: 'closed' }), cache);
+    expect(out).toContain('data-brief-status="closed"');
+    expect(out).toContain('bg-panel-3 text-fg-2');
+    expect(out).not.toContain('bg-accent-soft');
+  });
+
+  it('title and objective wrap instead of scrolling sideways', () => {
+    const { cache } = makeCache(null);
+    const out = render(makeBrief({}), cache);
+    expect(out).toContain('min-w-0 flex-1 break-words');
+    expect(out).toContain('min-w-0 break-words text-sm text-fg-3');
+  });
 });
 
 // The image-wins rule on its own, without rendering: an image brief never grows a

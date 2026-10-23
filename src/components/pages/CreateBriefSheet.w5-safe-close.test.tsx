@@ -228,6 +228,12 @@ describe('CreateBriefSheet: Create and uploads', () => {
     await act(async () => create?.click());
     expect(briefCreate).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('Wait for 2 files to finish');
+    // Waiting is not an error: neutral text, never the error colour.
+    const notice = [...document.querySelectorAll('[role="status"]')].find((el) =>
+      el.textContent?.includes('Wait for 2 files to finish'),
+    );
+    expect(notice?.className).toContain('text-fg-3');
+    expect(notice?.className).not.toContain('text-bad');
   });
 
   it('a failed upload blocks Create with "Remove or retry the failed file"', async () => {
@@ -272,12 +278,19 @@ describe('CreateBriefSheet: fields', () => {
       'Objective*',
       'Brand requirements (optional)',
       'Format (optional)',
-      'Target date (optional)',
-      'Attachments',
-      'Note to agency (optional)',
+      'Due date (optional)',
+      'Attachments (optional)',
+      'Note to the agency (optional)',
     ]);
-    expect(document.body.textContent).toContain("Once sent, a brief can't be edited.");
+    expect(document.body.textContent).not.toContain("Once sent, a brief can't be edited.");
+    expect(document.body.textContent).not.toContain('Target date');
     expect(document.body.textContent).not.toContain('Briefs are written by approvers');
+  });
+
+  it('the Title takes focus when the sheet opens (phone and laptop)', async () => {
+    await mount();
+    await act(async () => new Promise((r) => setTimeout(r, 50)));
+    expect(document.activeElement?.id).toBe('brief-title');
   });
 
   it('Enter in Title moves focus to Objective; Title hints "next"', async () => {

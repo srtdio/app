@@ -10,7 +10,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Tag } from '@/components/ui/Tag';
 import {
   CouldntLoadCard,
   SHARED_CARD,
@@ -19,12 +18,8 @@ import {
   type ThreadCardCache,
 } from '@/components/chat/PostCard';
 import { IconBriefs } from '@/components/ui/icons';
-import {
-  briefRoute,
-  briefStatusLabel,
-  sharedBriefViews,
-  type SharedBriefView,
-} from '@/lib/chat/briefs';
+import { BriefStatusPill } from '@/components/pages/BriefCard';
+import { briefRoute, sharedBriefViews, type SharedBriefView } from '@/lib/chat/briefs';
 
 function useSharedBriefs(briefIds: string[]): {
   views: SharedBriefView[];
@@ -89,7 +84,7 @@ export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactEle
   );
 }
 
-function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement {
+export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement {
   const navigate = useNavigate();
   if (view.kind === 'unavailable') {
     return (
@@ -115,8 +110,10 @@ function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement {
         <span className="truncate text-sm font-medium text-fg" title={view.title}>
           {view.title}
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-fg-3">
-          <Tag label={briefStatusLabel(view.status)} />
+        {/* The same pill as the Briefs list and detail: Open (accent, dot) and
+            Closed (grey, lock) read clearly apart. */}
+        <span className="flex">
+          <BriefStatusPill status={view.status} />
         </span>
       </span>
     </button>

@@ -39,6 +39,12 @@ export function briefListParams(
   return next;
 }
 
+/**
+ * The brief detail param "Add note" sets (after a note failed to post on
+ * create): the detail strips it and focuses the comment box.
+ */
+export const BRIEF_NOTE_PARAM = 'note';
+
 /** Most pages one load reads (50 each), so a runaway loop can never hang the list. */
 export const BRIEF_PAGE_LIMIT = 40;
 

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { IconBriefs } from '@/components/ui/icons';
+import type { ReactElement } from 'react';
+import { IconBriefs, IconLock } from '@/components/ui/icons';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Thumbnail } from '@/components/media';
 import { formatDue } from '@/lib/display-date';
@@ -15,6 +16,34 @@ export const BRIEF_STATUS: Record<BriefStatus, BriefStatus> = { open: 'open', cl
 
 export function isBriefClosed(brief: Brief): boolean {
   return brief.status === BRIEF_STATUS.closed;
+}
+
+/**
+ * The one status pill used on the list card, the detail page and the chat brief
+ * card, so Open and Closed read the same everywhere. Open: accent-soft fill, an
+ * accent dot and "Open". Closed: panel-3 fill, a lock and "Closed". Token
+ * classes only, so light and dark follow the theme. Not interactive, no motion.
+ * Anything that is not "closed" reads as Open (the only two statuses).
+ */
+export function BriefStatusPill({ status }: { status: string }): ReactElement {
+  const closed = status === BRIEF_STATUS.closed;
+  return (
+    <span
+      data-brief-status={closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open}
+      className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-medium ${
+        closed ? 'bg-panel-3 text-fg-2' : 'bg-accent-soft text-accent'
+      }`}
+    >
+      {closed ? (
+        <span aria-hidden="true">
+          <IconLock size={12} />
+        </span>
+      ) : (
+        <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+      )}
+      {closed ? 'Closed' : 'Open'}
+    </span>
+  );
 }
 
 /**
@@ -92,20 +121,14 @@ export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps
         <div className="flex min-w-0 items-start gap-3">
           <Link
             to={href}
-            className="flex-1 text-sm font-medium leading-snug line-clamp-2 text-fg focus:outline-none after:absolute after:inset-0 after:content-['']"
+            className="min-w-0 flex-1 break-words text-sm font-medium leading-snug line-clamp-2 text-fg focus:outline-none after:absolute after:inset-0 after:content-['']"
           >
             {brief.title}
           </Link>
-          <span className="flex items-center gap-1.5 shrink-0 text-xs text-fg-3">
-            <span
-              className={`h-2 w-2 rounded-full ${closed ? 'bg-fg-3' : 'bg-good'}`}
-              aria-hidden="true"
-            />
-            {closed ? 'Closed' : 'Open'}
-          </span>
+          <BriefStatusPill status={brief.status} />
         </div>
 
-        <p className="text-sm text-fg-3 line-clamp-2">{brief.objective}</p>
+        <p className="min-w-0 break-words text-sm text-fg-3 line-clamp-2">{brief.objective}</p>
 
         {/* Above the title's stretched overlay, so a tap follows this link only. */}
         {link !== null ? (

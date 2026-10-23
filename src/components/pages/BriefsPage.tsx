@@ -8,6 +8,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
+import type { ToastOptions } from '@/components/ui/toast/types';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { IconBriefs } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
@@ -20,7 +21,16 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { entityUrlPath } from '@/lib/entityRef';
 import { filterByTitle } from '@/lib/list-sort';
+import { useSort } from '@/lib/use-sort';
 import {
+  BRIEF_SORT_DEFAULT,
+  BRIEF_SORT_OPTIONS,
+  sanitizeBriefSort,
+  sortBriefs,
+  type BriefSort,
+} from '@/lib/brief-sort';
+import {
+  BRIEF_NOTE_PARAM,
   briefListParams,
   filterBriefsByStatus,
   listWorkspaceBriefs,
@@ -53,13 +63,18 @@ interface BriefsHeaderProps {
   onFilterChange: (filter: BriefFilter) => void;
   /** Whether the viewer holds brief.create; the "+" shows only then (same gate as Topbar). */
   canCreate: boolean;
+  /**
+   * The agency-side sort (Due date / Recently updated), in the same SortMenu as
+   * Pipeline. Omitted for client approvers: their list stays grouped by time.
+   */
+  sort?: { value: BriefSort; onChange: (value: BriefSort) => void };
 }
 
 /**
- * The Briefs header chrome: the shared SectionHeader (search, accent "+" create)
- * with the All / Open / Closed chips in the filter slot. Sorting is gone: the
- * list is grouped inline by time (see {@link groupBriefsByTime}), so the header
- * carries no sort control. Pure (no hooks) so the wiring is unit-tested by
+ * The Briefs header chrome: the shared SectionHeader (search, sort for the
+ * agency side, accent create) with the All / Open / Closed chips in the filter
+ * slot. Client approvers get no sort: their list is grouped inline by time (see
+ * {@link groupBriefsByTime}). Pure (no hooks) so the wiring is unit-tested by
  * walking the returned tree.
  */
 export function briefsHeader(props: BriefsHeaderProps): ReactElement {
@@ -70,6 +85,15 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
         onChange: props.onSearchChange,
         placeholder: 'Search briefs',
       }}
+      {...(props.sort !== undefined
+        ? {
+            sort: {
+              options: BRIEF_SORT_OPTIONS,
+              value: props.sort.value,
+              onChange: props.sort.onChange,
+            },
+          }
+        : {})}
       {...(props.canCreate
         ? {
             primaryAction: {
@@ -128,30 +152,100 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
   ));
 }
 
-/** "{n} brief" / "{n} briefs" with correct singular. */
-function briefUnit(count: number): string {
-  return count === 1 ? 'brief' : 'briefs';
-}
+/** Which empty state the list shows when no card is visible. */
+export type BriefsEmpty =
+  /** A typed search matched nothing: one line + Clear (clears the search only). */
+  | { kind: 'no-results'; title: string }
+  /** A client with no open briefs: heading, line and New brief. */
+  | { kind: 'client-empty' }
+  /** The agency side with no briefs at all: one line, no heading. */
+  | { kind: 'agency-empty' }
+  /** A chip with nothing under it (no search typed): a heading only. */
+  | { kind: 'filtered'; title: string };
 
 /**
- * The summary line under the header, reflecting the chip and search: "12 briefs"
- * when everything shows, "3 of 12 briefs" when the filter narrows it.
+ * Pick the empty state. A typed search always wins and is the only state with
+ * Clear. Then a workspace with no briefs at all (client or agency copy), then
+ * the chip: Closed has its own heading; a client on Open (nothing open) gets the
+ * "No open briefs yet" state with New brief. Pure.
  */
-export function briefsCountLine(shown: number, total: number): string {
-  if (shown === total) return `${total} ${briefUnit(total)}`;
-  return `${shown} of ${total} ${briefUnit(total)}`;
-}
-
-/**
- * The zero-result heading when briefs exist but none show: a search names the
- * query; otherwise the heading names the active chip. Pure.
- */
-export function briefsNoneTitle(filter: BriefFilter, search: string): string {
+export function briefsEmptyState(
+  filter: BriefFilter,
+  search: string,
+  total: number,
+  canCreate: boolean,
+): BriefsEmpty {
   const query = search.trim();
-  if (query !== '') return `Nothing called "${query}"`;
-  if (filter === BRIEF_STATUS.open) return 'No open briefs right now';
-  if (filter === BRIEF_STATUS.closed) return 'No closed briefs yet';
-  return 'No briefs yet';
+  if (query !== '') {
+    return { kind: 'no-results', title: `No briefs with “${query}” in the title` };
+  }
+  if (total === 0) return canCreate ? { kind: 'client-empty' } : { kind: 'agency-empty' };
+  if (filter === BRIEF_STATUS.closed) return { kind: 'filtered', title: 'No closed briefs yet' };
+  if (canCreate) return { kind: 'client-empty' };
+  return { kind: 'filtered', title: 'No open briefs right now' };
+}
+
+/**
+ * The agency-side flat list: status chip, then title search, then the chosen
+ * sort. Re-narrows each surviving row back to its BriefWithThumbnail (same
+ * object reference) via an id map, as {@link deriveBriefGroups} does. Pure.
+ */
+export function deriveSortedBriefs(
+  briefs: BriefWithThumbnail[],
+  filter: BriefFilter,
+  search: string,
+  sort: BriefSort,
+): BriefWithThumbnail[] {
+  const byId = new Map(briefs.map((brief) => [brief.id, brief]));
+  const filtered = filterByTitle(filterBriefsByStatus(briefs, filter), search);
+  const narrowed = filtered.flatMap((brief) => {
+    const full = byId.get(brief.id);
+    return full !== undefined ? [full] : [];
+  });
+  return sortBriefs(narrowed, sort);
+}
+
+const LIST_CLASS = 'px-4 md:px-6 py-4 flex flex-col gap-6';
+const GRID_CLASS = 'pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3';
+
+/**
+ * The loading state: a static skeleton in the real list's shape (a section
+ * header bar, a day label, then card-shaped blocks with the 64px tile, title,
+ * objective and status pill lines), in the same container and grid, so nothing
+ * jumps when the cards arrive. Token fills only; no motion.
+ */
+export function BriefsListSkeleton(): ReactElement {
+  return (
+    <div data-testid="briefs-skeleton" aria-busy="true" className={LIST_CLASS}>
+      <section>
+        <div className="py-2">
+          <div className="h-5 w-24 rounded bg-panel-2" />
+        </div>
+        <div className="pt-3 pb-1">
+          <div className="h-4 w-14 rounded bg-panel-2" />
+        </div>
+        <div className={GRID_CLASS}>
+          {[0, 1, 2].map((key) => (
+            <div
+              key={key}
+              data-brief-card-skeleton=""
+              className="rounded-xl border border-border bg-panel p-4 flex gap-3 min-w-0"
+            >
+              <div className="w-16 shrink-0 aspect-square rounded-lg bg-panel-2" />
+              <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+                <div className="flex items-start gap-3">
+                  <div className="h-4 flex-1 rounded bg-panel-2" />
+                  <div className="h-6 w-14 shrink-0 rounded-full bg-panel-2" />
+                </div>
+                <div className="h-4 w-4/5 rounded bg-panel-2" />
+                <div className="h-3 w-16 rounded bg-panel-2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 /**
@@ -205,32 +299,105 @@ const SECTION_HEADER_CLASS = cn(
 const DAY_HEADING_CLASS = 'pt-3 pb-1 text-xs font-medium text-fg-2';
 
 /**
- * One section per time group: a sticky label + count header, then, for every
+ * One section per time group: a sticky label header, then, for every
  * civil day inside that group (newest-first, workspace zone), a day heading
  * followed by the existing card grid for that day's briefs. Pure (no hooks) so
- * the section labels, counts, day headings and per-group card wiring are
+ * the section labels, day headings and per-group card wiring are
  * unit-tested by walking the tree, mirroring briefCardList.
  */
 export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
   const { groups, timeZone, now = new Date(), ...cardDeps } = deps;
   return groups.map((group) => (
     <section key={group.key}>
+      {/* No count here: counts live on the chips only. */}
       <div className={SECTION_HEADER_CLASS}>
         <h3 className="text-sm font-semibold text-fg">{group.label}</h3>
-        <span className="text-sm text-fg-3">
-          {group.items.length} {briefUnit(group.items.length)}
-        </span>
       </div>
       {groupBriefsByDay(group.items, timeZone, now).flatMap((day) => [
         <div key={`${day.key}-label`} className={DAY_HEADING_CLASS}>
           {day.label}
         </div>,
-        <div key={day.key} className="pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div key={day.key} className={GRID_CLASS}>
           {briefCardList({ ...cardDeps, briefs: day.items })}
         </div>,
       ])}
     </section>
   ));
+}
+
+/**
+ * The toast after Create. A lost note is a partial failure: the error tone with
+ * "Add note", which opens the new brief with its comment box focused; never the
+ * success style. Pure apart from the navigate it is handed.
+ */
+export function createdToast(created: BriefCreated, navigate: (to: string) => void): ToastOptions {
+  if (created.noteFailed) {
+    return {
+      title: 'Brief created. Your note did not post.',
+      tone: 'error',
+      action: {
+        label: 'Add note',
+        onPress: () => navigate(`/briefs/${created.briefId}?${BRIEF_NOTE_PARAM}=1`),
+      },
+    };
+  }
+  return {
+    title: 'Brief created',
+    tone: 'success',
+    action: { label: 'Open', onPress: () => navigate(`/briefs/${created.briefId}`) },
+  };
+}
+
+/**
+ * Render a {@link BriefsEmpty}. Clear only on a typed search and it clears the
+ * search only (the chip stays). The agency's empty line has no heading, so it is
+ * drawn here in EmptyState's shape rather than through EmptyState's required
+ * title. Pure (no hooks).
+ */
+export function briefsEmptyView(
+  state: BriefsEmpty,
+  onClearSearch: () => void,
+  onNewBrief: () => void,
+): ReactElement {
+  const icon = <IconBriefs size={24} />;
+  switch (state.kind) {
+    case 'no-results':
+      return (
+        <EmptyState
+          icon={icon}
+          title={state.title}
+          action={
+            <Button size="lg" onClick={onClearSearch}>
+              Clear
+            </Button>
+          }
+        />
+      );
+    case 'client-empty':
+      return (
+        <EmptyState
+          icon={icon}
+          title="No open briefs yet"
+          description="Tell the agency what you need next."
+          action={
+            <Button variant="primary" size="lg" onClick={onNewBrief}>
+              New brief
+            </Button>
+          }
+        />
+      );
+    case 'agency-empty':
+      return (
+        <div className="flex flex-col items-center justify-center text-center px-6 py-14 gap-1.5 min-h-[320px]">
+          <div className="w-[54px] h-[54px] rounded-xl bg-panel-2 border border-border flex items-center justify-center text-fg-3 mb-1.5">
+            {icon}
+          </div>
+          <p className="text-fg-3 text-sm max-w-[300px]">Briefs from the client show up here.</p>
+        </div>
+      );
+    case 'filtered':
+      return <EmptyState icon={icon} title={state.title} />;
+  }
 }
 
 export function BriefsPage() {
@@ -239,6 +406,11 @@ export function BriefsPage() {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   // New brief is an approver action: the "+" shows only where the role holds brief.create.
   const canCreateBrief = useWorkspaceCapability('brief.create') === true;
+  // The agency side (no brief.create) sorts a flat list; the client keeps the
+  // time sections. Persisted per page like Pipeline; a stale value heals.
+  const { value: storedSort, setValue: setSort } = useSort<BriefSort>('briefs', BRIEF_SORT_DEFAULT);
+  const sort = sanitizeBriefSort(storedSort);
+  const showSort = !canCreateBrief;
   // The active workspace's civil calendar: the sections and the day headings are
   // read on the WORKSPACE zone and week start, never the browser's. Derived the
   // same way the Pipeline surface derives it; the helpers re-validate the zone,
@@ -322,10 +494,14 @@ export function BriefsPage() {
     [workspaceBriefs, filter, search, timeZone, weekStartDay],
   );
 
-  const shownCount = useMemo(
-    () => groups.reduce((sum, group) => sum + group.items.length, 0),
-    [groups],
+  const sortedBriefs = useMemo(
+    () => (showSort ? deriveSortedBriefs(workspaceBriefs, filter, search, sort) : []),
+    [showSort, workspaceBriefs, filter, search, sort],
   );
+
+  const shownCount = showSort
+    ? sortedBriefs.length
+    : groups.reduce((sum, group) => sum + group.items.length, 0);
 
   const hrefFor = useCallback(
     (brief: BriefWithThumbnail): string =>
@@ -340,14 +516,7 @@ export function BriefsPage() {
   function onCreated(created: BriefCreated): void {
     setCreateOpen(false);
     void loadBriefs();
-    toast?.show({
-      title: created.noteFailed
-        ? "Brief created, but your note didn't post. Add it in the comments."
-        : 'Brief created',
-      // A lost note is a partial failure: the error tone, never the success one.
-      tone: created.noteFailed ? 'error' : 'success',
-      action: { label: 'Open', onPress: () => navigate(`/briefs/${created.briefId}`) },
-    });
+    toast?.show(createdToast(created, navigate));
   }
 
   const listLoading = workspaceId === null || (loading && briefs.length === 0);
@@ -376,51 +545,29 @@ export function BriefsPage() {
         filter,
         onFilterChange: (value) => setListState(value, search),
         canCreate: canCreateBrief,
+        ...(showSort ? { sort: { value: sort, onChange: setSort } } : {}),
       })}
-
-      {!loadFailed && !listLoading ? (
-        <div className="px-4 md:px-6 pt-3 text-sm text-fg-3">
-          {briefsCountLine(shownCount, workspaceBriefs.length)}
-        </div>
-      ) : null}
 
       {loadFailed ? (
         <div className="px-4 md:px-6 mt-4">
           <LoadError title="briefs" onRetry={() => void loadBriefs()} retrying={loading} />
         </div>
       ) : listLoading ? (
-        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading briefs</div>
-      ) : workspaceBriefs.length === 0 ? (
-        <EmptyState
-          icon={<IconBriefs size={24} />}
-          title="No briefs yet"
-          description={
-            canCreateBrief
-              ? 'Tell the agency what you need next.'
-              : 'Briefs from approvers will show up here.'
-          }
-          {...(canCreateBrief
-            ? {
-                action: (
-                  <Button variant="primary" size="lg" onClick={() => setCreateOpen(true)}>
-                    Write your first brief
-                  </Button>
-                ),
-              }
-            : {})}
-        />
-      ) : groups.length === 0 ? (
-        <EmptyState
-          icon={<IconBriefs size={24} />}
-          title={briefsNoneTitle(filter, search)}
-          action={
-            <Button size="lg" onClick={() => setListState('all', '')}>
-              Clear search
-            </Button>
-          }
-        />
+        <BriefsListSkeleton />
+      ) : shownCount === 0 ? (
+        briefsEmptyView(
+          briefsEmptyState(filter, search, workspaceBriefs.length, canCreateBrief),
+          () => setListState(filter, ''),
+          () => setCreateOpen(true),
+        )
+      ) : showSort ? (
+        <div ref={listRef} className={LIST_CLASS}>
+          <div className={GRID_CLASS}>
+            {briefCardList({ briefs: sortedBriefs, cache, presignEnabled, hrefFor })}
+          </div>
+        </div>
       ) : (
-        <div ref={listRef} className="px-4 md:px-6 py-4 flex flex-col gap-6">
+        <div ref={listRef} className={LIST_CLASS}>
           {briefSections({ groups, timeZone, cache, presignEnabled, hrefFor })}
         </div>
       )}

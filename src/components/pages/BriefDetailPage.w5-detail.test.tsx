@@ -5,8 +5,8 @@
 // brief (open, gated on brief.close or brief.close_own for the creator; it
 // confirms and commits brief_close only after the Undo window) or Reopen brief
 // (closed, any member; optimistic, commits brief_reopen after the Undo window);
-// no KEY-N code anywhere; copy buttons; Created by skeleton; the approver hint
-// rule; Back pops in-app history or goes to /briefs.
+// no KEY-N code anywhere; copy buttons; Created by skeleton; no helper text;
+// Back pops in-app history or goes to /briefs.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -140,10 +140,10 @@ const menuRows = (): [string, string][] =>
   );
 const menuRow = (testId: string) =>
   document.querySelector<HTMLButtonElement>(`[role="menuitem"][data-testid="${testId}"]`);
-/** The status badge labels on the page (header and Details), deduplicated. */
+/** The status pill labels on the page (phone and desktop Details), deduplicated. */
 const statusLabels = (): string[] => [
   ...new Set(
-    [...document.querySelectorAll<HTMLElement>('span.rounded-full.border.h-7')].map(
+    [...document.querySelectorAll<HTMLElement>('[data-brief-status]')].map(
       (el) => el.textContent?.trim() ?? '',
     ),
   ),
@@ -219,7 +219,7 @@ describe('Brief detail close', () => {
     await act(async () => button('Close brief')?.click());
     const dialog = document.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain('Close this brief?');
-    expect(dialog?.textContent).toContain('It leaves Open but stays readable and commentable.');
+    expect(dialog?.textContent).toContain('Closed briefs stay readable and open to comments.');
     await act(async () =>
       [...(dialog?.querySelectorAll('button') ?? [])]
         .find((b) => b.textContent?.trim() === 'Close brief')
@@ -530,7 +530,7 @@ describe('Brief detail content', () => {
     expect(text()).not.toContain('Former member');
   });
 
-  it('hides the "Reference images from the approvers" hint for approvers', async () => {
+  it('shows no "Reference images" helper text for anyone', async () => {
     const image = {
       assetAttachmentId: 'a1',
       assetVersionId: 'v1',
@@ -546,15 +546,16 @@ describe('Brief detail content', () => {
     };
     h.getBriefGallery.mockResolvedValue({ ok: true, data: [image] });
     h.getBrief.mockResolvedValue(detail());
-    h.caps = { 'brief.create': true };
-    await mount();
-    expect(text()).toContain('gallery');
-    expect(text()).not.toContain('Reference images from the approvers');
-    act(() => root?.unmount());
-    document.body.innerHTML = '';
-    h.caps = {};
-    await mount();
-    expect(text()).toContain('Reference images from the approvers');
+    for (const caps of [{ 'brief.create': true }, {}]) {
+      h.caps = caps;
+      await mount();
+      expect(text()).toContain('gallery');
+      expect(text()).not.toContain('Reference images from the approvers');
+      expect(text()).not.toContain('read-only after creation');
+      act(() => root?.unmount());
+      root = null;
+      document.body.innerHTML = '';
+    }
   });
 
   it('the due date reads the picked day', async () => {
@@ -640,5 +641,70 @@ describe('Brief detail New post from this brief', () => {
     h.getBrief.mockResolvedValue(detail());
     await mount();
     expect(button('New post from this brief')).toBeUndefined();
+  });
+});
+
+describe('Brief detail polish', () => {
+  const phone = () => document.querySelector<HTMLElement>('[data-brief-details="phone"]');
+  const desktop = () => document.querySelector<HTMLElement>('[data-brief-details="desktop"]');
+
+  it('phone Details shows the same facts as desktop: Status, Due date, Format, Raised, Linked posts', async () => {
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    for (const section of [phone(), desktop()]) {
+      const terms = [...(section?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent);
+      expect(terms).toEqual(['Status', 'Due date', 'Format', 'Raised', 'Linked posts']);
+      expect(section?.textContent).toContain('by Asha Rao');
+      expect(section?.textContent).toContain('carousel');
+    }
+    expect(text()).not.toContain('Target date');
+  });
+
+  it('hides the Format row on both when no format is set', async () => {
+    h.getBrief.mockResolvedValue(detail({ format_requested: null }));
+    await mount();
+    for (const section of [phone(), desktop()]) {
+      const terms = [...(section?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent);
+      expect(terms).toEqual(['Status', 'Due date', 'Raised', 'Linked posts']);
+    }
+  });
+
+  it('Open is the accent pill with a dot; Closed is the grey pill with a lock and the closed line', async () => {
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    const open = document.querySelector<HTMLElement>('[data-brief-status="open"]');
+    expect(open?.className).toContain('bg-accent-soft');
+    expect(text()).not.toContain('Closed briefs stay readable and open to comments.');
+    act(() => root?.unmount());
+    document.body.innerHTML = '';
+    h.getBrief.mockResolvedValue(detail({ status: 'closed' }));
+    await mount();
+    const closed = document.querySelector<HTMLElement>('[data-brief-status="closed"]');
+    expect(closed?.className).toContain('bg-panel-3');
+    expect(closed?.querySelector('svg rect')).not.toBeNull();
+    expect(text()).toContain('Closed briefs stay readable and open to comments.');
+  });
+
+  it('one wrapping title at the post title size', async () => {
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    const titles = document.querySelectorAll('h1');
+    expect(titles).toHaveLength(1);
+    expect(titles[0]?.className).toContain('text-[28px]');
+    expect(titles[0]?.className).toContain('break-words');
+    expect(titles[0]?.className).toContain('min-w-0');
+  });
+
+  it('shows a detail-shaped skeleton while loading, never "Loading brief"', async () => {
+    h.getBrief.mockReturnValue(new Promise(() => {}));
+    await mount();
+    expect(document.querySelector('[data-testid="brief-detail-skeleton"]')).not.toBeNull();
+    expect(text()).not.toContain('Loading brief');
+  });
+
+  it('never shows the dead-end "Select a workspace" line', async () => {
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    expect(text()).not.toContain('Select a workspace to view comments.');
   });
 });
