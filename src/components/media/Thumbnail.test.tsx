@@ -184,4 +184,55 @@ describe('Thumbnail', () => {
     render({ assetVersionId: 'av1', cache, presignEnabled: false, fallback: { kind: 'glyph' } });
     expect(peekThumbnail).not.toHaveBeenCalled();
   });
+
+  it('fix 1: bodyLines 3 clamps the post tile to 3 lines; the default class is unchanged', () => {
+    const { cache } = makeCache(null);
+    const fallback: ThumbnailFallback = {
+      kind: 'post',
+      glyph: 'text',
+      label: 'Text',
+      body: 'Launch day is here',
+      layout: 'text',
+    };
+    const three = renderToStaticMarkup(
+      <Thumbnail
+        alt="alt text"
+        assetVersionId={null}
+        cache={cache}
+        presignEnabled={false}
+        fallback={fallback}
+        bodyLines={3}
+      />,
+    );
+    expect(three).toContain('class="mt-auto line-clamp-3 text-xs leading-snug text-fg-2"');
+    expect(three).not.toContain('line-clamp-4');
+    const pipeline = renderToStaticMarkup(
+      <Thumbnail
+        alt="alt text"
+        assetVersionId={null}
+        cache={cache}
+        presignEnabled={false}
+        fallback={fallback}
+      />,
+    );
+    expect(pipeline).toContain('class="mt-auto line-clamp-4 text-xs leading-snug text-fg-2"');
+    expect(pipeline).not.toContain('line-clamp-3');
+  });
+
+  it('fix 30: a caller-drawn fallbackTile replaces the fallback when there is no image', () => {
+    const { cache } = makeCache(null);
+    const out = renderToStaticMarkup(
+      <Thumbnail
+        alt="alt text"
+        assetVersionId={null}
+        cache={cache}
+        presignEnabled={true}
+        fallback={{ kind: 'glyph' }}
+        fallbackTile={<span data-custom-tile="">deck.pdf</span>}
+      />,
+    );
+    expect(out).toContain('data-custom-tile');
+    expect(out).toContain('deck.pdf');
+    expect(out).not.toContain('<img');
+  });
 });

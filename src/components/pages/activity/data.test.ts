@@ -3,22 +3,38 @@ import type { Database } from '@srtdio/schemas';
 import {
   BRIEF_REOPENED_EVENT,
   BRIEFS_SCOPE,
+  EMPTY_LINES,
+  LOADING_NOTIFICATIONS,
+  REFRESH_FAILED,
   SELF_ACTOR,
+  SNOOZE_FAILED,
   UNKNOWN_ACTOR,
   activityLine,
+  appendUnique,
   bucketActorNames,
   cardBodyLine,
   cardTitle,
   chatMentionPreview,
+  cursorAfter,
+  deletedCount,
+  deletedFilesBody,
+  deletedFilesOf,
   entityHref,
   entityKey,
   fetchActivityEntries,
+  fileKindLabel,
+  filesPhrase,
   filterByState,
   groupDigest,
   isChatMention,
   isSnoozed,
   isWelcome,
+  keysetFilter,
   mapEntry,
+  markAllTargets,
+  marksWholeInbox,
+  mergeFresh,
+  msUntilZonedMidnight,
   payloadNum,
   payloadStr,
   relativeTime,
@@ -26,7 +42,9 @@ import {
   segmentSelfMentions,
   shortLine,
   unreadCount,
+  updatesLabel,
   welcomeTitle,
+  zonedDayKey,
   WELCOME_BODY,
   type ActivityItem,
 } from '@/components/pages/activity/data';
@@ -517,6 +535,8 @@ describe('groupDigest', () => {
   const todayTs = new Date(startOfToday + 6 * 3_600_000).toISOString();
   const yesterdayTs = new Date(startOfToday - 6 * 3_600_000).toISOString();
   const olderTs = new Date(startOfToday - 3 * dayMs).toISOString();
+  // The device's own zone (tz null), as of now: the buckets above are local days.
+  const clock = { nowMs: Date.now(), tz: null };
 
   // Solo entries (no shared entity) so each is its own group and the bucket /
   // entry ordering is observed directly through the flattened groups.
@@ -533,19 +553,19 @@ describe('groupDigest', () => {
   ];
 
   it('newest: Today -> Yesterday -> Earlier, newest entry first', () => {
-    const buckets = groupDigest(items, 'newest');
+    const buckets = groupDigest(items, 'newest', clock);
     expect(buckets.map((b) => b.key)).toEqual(['today', 'yesterday', 'earlier']);
     expect(buckets[0]?.groups.flat().map((i) => i.id)).toEqual(['today-b', 'today-a']);
   });
 
   it('oldest reverses both bucket and entry order', () => {
-    const buckets = groupDigest(items, 'oldest');
+    const buckets = groupDigest(items, 'oldest', clock);
     expect(buckets.map((b) => b.key)).toEqual(['earlier', 'yesterday', 'today']);
     expect(buckets[2]?.groups.flat().map((i) => i.id)).toEqual(['today-a', 'today-b']);
   });
 
   it('drops empty buckets', () => {
-    const buckets = groupDigest([item({ createdAt: todayTs })], 'newest');
+    const buckets = groupDigest([item({ createdAt: todayTs })], 'newest', clock);
     expect(buckets.map((b) => b.key)).toEqual(['today']);
   });
 
@@ -563,7 +583,7 @@ describe('groupDigest', () => {
       entityId: 'x9',
       createdAt: new Date(startOfToday + 7 * 3_600_000).toISOString(),
     });
-    const buckets = groupDigest([a, b, c], 'newest');
+    const buckets = groupDigest([a, b, c], 'newest', clock);
     expect(buckets[0]?.groups.map((g) => g.map((i) => i.id))).toEqual([['b', 'a'], ['c']]);
   });
 });
@@ -1046,7 +1066,7 @@ describe('fetchActivityEntries enrichment', () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       const row = res.data[0]!;
-      expect(activityLine(row)).toBe('Asha deleted 3 assets');
+      expect(activityLine(row)).toBe('Asha deleted 3 files');
       expect(entityHref(row, 'key')).toBe('/assets');
     }
   });
@@ -1220,7 +1240,7 @@ describe('fetchActivityEntries enrichment', () => {
 });
 
 // A recording fake that captures every builder call so the query the loader
-// composes (event_type filter + keyset `before` + DESC order + page-size limit)
+// composes (event_type filter + (created_at, id) keyset + order + page-size limit)
 // can be asserted directly. Only inbox_entries is exercised here; the enrichment
 // joins see empty tables and degrade to null, which is fine for query assertions.
 describe('fetchActivityEntries query composition', () => {
@@ -1344,13 +1364,38 @@ describe('fetchActivityEntries query composition', () => {
   it('preserves keyset pagination alongside the event_type filter', async () => {
     const { client, calls } = recordingClient([]);
     await fetchActivityEntries(client, 'w1', {
-      before: '2026-06-14T00:00:00.000Z',
+      cursor: { createdAt: '2026-06-14T00:00:00.000Z', id: 'e9' },
       state: 'mentions',
     });
-    expect(hasCall(calls, 'lt', ['created_at', '2026-06-14T00:00:00.000Z'])).toBe(true);
+    expect(
+      hasCall(calls, 'or', [
+        'created_at.lt."2026-06-14T00:00:00.000Z",and(created_at.eq."2026-06-14T00:00:00.000Z",id.lt.e9)',
+      ]),
+    ).toBe(true);
+    expect(calls.some((c) => c.method === 'lt')).toBe(false);
     expect(hasCall(calls, 'eq', ['event_type', 'mention'])).toBe(true);
     expect(hasCall(calls, 'order', ['created_at', { ascending: false }])).toBe(true);
+    expect(hasCall(calls, 'order', ['id', { ascending: false }])).toBe(true);
     expect(hasCall(calls, 'limit', [50])).toBe(true);
+  });
+
+  it('fix 16: direction oldest orders ascending and pages with a gt keyset', async () => {
+    const { client, calls } = recordingClient([]);
+    await fetchActivityEntries(client, 'w1', {
+      direction: 'oldest',
+      cursor: { createdAt: '2026-06-14T00:00:00.000Z', id: 'e9' },
+    });
+    expect(hasCall(calls, 'order', ['created_at', { ascending: true }])).toBe(true);
+    expect(hasCall(calls, 'order', ['id', { ascending: true }])).toBe(true);
+    expect(
+      hasCall(calls, 'or', [
+        'created_at.gt."2026-06-14T00:00:00.000Z",and(created_at.eq."2026-06-14T00:00:00.000Z",id.gt.e9)',
+      ]),
+    ).toBe(true);
+    const first = recordingClient([]);
+    await fetchActivityEntries(first.client, 'w1', { direction: 'oldest' });
+    expect(hasCall(first.calls, 'order', ['created_at', { ascending: true }])).toBe(true);
+    expect(first.calls.some((c) => c.method === 'or')).toBe(false);
   });
 });
 
@@ -1488,7 +1533,7 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
     expect(entityHref(del, 'gbl')).toBeNull();
   });
 
-  it('assets_deleted: count 1 names the file, N counts; tap opens Assets', () => {
+  it('assets_deleted: "a file" for one, "N files" for more; tap opens Assets', () => {
     const one = item({
       eventType: 'assets_deleted',
       entityType: 'workspace',
@@ -1498,12 +1543,12 @@ describe('actor rows: who did what (approve, reject, park, review, deletes)', ()
       assetCount: 1,
       filenames: ['brief.pdf'],
     });
-    expect(activityLine(one)).toBe('Asha deleted brief.pdf');
+    expect(activityLine(one)).toBe('Asha deleted a file');
     const many = { ...one, assetCount: 4, filenames: ['a', 'b', 'c'] };
-    expect(activityLine(many)).toBe('Asha deleted 4 assets');
+    expect(activityLine(many)).toBe('Asha deleted 4 files');
     const agency = { ...many, actorName: 'Chitra', actorRole: 'agency' };
-    expect(activityLine(agency)).toBe('Chitra deleted 4 assets');
-    expect(activityLine({ ...one, actorName: null })).toBe('Someone deleted brief.pdf');
+    expect(activityLine(agency)).toBe('Chitra deleted 4 files');
+    expect(activityLine({ ...one, actorName: null })).toBe('Someone deleted a file');
     expect(entityHref(one)).toBe('/assets');
   });
 
@@ -2037,3 +2082,247 @@ describe('brief reopened rows', () => {
     expect(activityLine(byId.get('closed') ?? item({}))).toBe('You closed Diwali brief');
   });
 });
+
+describe('notifications fixes: pure helpers', () => {
+  it('fix 5: a bucket header counts "1 update" / "N updates"', () => {
+    expect(updatesLabel(1)).toBe('1 update');
+    expect(updatesLabel(0)).toBe('0 updates');
+    expect(updatesLabel(12)).toBe('12 updates');
+  });
+
+  it('fix 12: loading, refresh and snooze copy is fixed, plain and has no em-dash', () => {
+    expect(LOADING_NOTIFICATIONS).toBe('Loading notifications');
+    expect(REFRESH_FAILED).toBe("Couldn't refresh. Try again.");
+    expect(SNOOZE_FAILED).toBe("Couldn't snooze. Try again.");
+    for (const copy of [LOADING_NOTIFICATIONS, REFRESH_FAILED, SNOOZE_FAILED]) {
+      expect(copy).not.toContain('\u2014');
+    }
+  });
+
+  it('fix 13: each chip empty state is one positive line', () => {
+    expect(EMPTY_LINES).toEqual({
+      plans: 'Plan updates show up here.',
+      mentions: 'Mentions of you show up here.',
+      briefs: 'Brief updates show up here.',
+      snoozed: 'Snoozed updates come back here.',
+    });
+    for (const line of Object.values(EMPTY_LINES)) expect(line).not.toContain('\u2014');
+  });
+
+  it('fix 14: a snooze that has run out is unread again and a Mark all read target', () => {
+    const now = Date.parse('2026-06-14T12:00:00.000Z');
+    const expired = item({ id: 'x', snoozedUntil: '2026-06-14T11:00:00.000Z' });
+    const live = item({ id: 'y', snoozedUntil: '2026-06-14T13:00:00.000Z' });
+    expect(unreadCount([expired, live], now)).toBe(1);
+    expect(filterByState([expired, live], 'unread', now).map((i) => i.id)).toEqual(['x']);
+    for (const state of ['all', 'unread'] as const) {
+      expect(markAllTargets([expired, live], state, now).map((i) => i.id)).toEqual(['x']);
+    }
+  });
+
+  it('fix 24: a refresh failure has its own toast copy, not the load error', () => {
+    expect(REFRESH_FAILED).not.toBe("Couldn't load activity. Check your connection and try again.");
+  });
+
+  it('fix 25: a snooze failure is the fixed copy, never a raw error', () => {
+    expect(SNOOZE_FAILED).not.toMatch(/error|rpc|permission|violates/i);
+  });
+
+  it('fix 26: a failed scheduled send is an All and Unread target, not a Mentions or Briefs one', () => {
+    const now = Date.parse('2026-10-20T12:00:00.000Z');
+    const failed = mapEntry(
+      row({
+        id: 'fail',
+        event_type: 'scheduled_failed',
+        entity_type: 'chat_channel',
+        entity_id: 'c1',
+        scope: 'groups',
+        tier: 'urgent',
+        payload: { scheduled_id: 's1' },
+      }),
+    );
+    const mention = item({ id: 'm', eventType: 'mention' });
+    const brief = item({ id: 'b', entityType: 'brief', entityId: 'b1', scope: BRIEFS_SCOPE });
+    const rows = [failed, mention, brief];
+    expect(marksWholeInbox('all')).toBe(true);
+    expect(marksWholeInbox('unread')).toBe(true);
+    for (const state of ['all', 'unread'] as const) {
+      expect(markAllTargets(rows, state, now).map((i) => i.id)).toContain('fail');
+    }
+    for (const state of ['mentions', 'briefs', 'plans', 'snoozed', 'upcoming'] as const) {
+      expect(marksWholeInbox(state)).toBe(false);
+      expect(markAllTargets(rows, state, now).map((i) => i.id)).not.toContain('fail');
+    }
+    expect(markAllTargets(rows, 'mentions', now).map((i) => i.id)).toEqual(['m']);
+    expect(markAllTargets(rows, 'briefs', now).map((i) => i.id)).toEqual(['b']);
+  });
+
+  describe('fix 27: Today and Yesterday follow the workspace timezone', () => {
+    // 08:00Z on 21 Oct is 13:30 on 21 Oct in Kolkata and 01:00 on 21 Oct in Los Angeles.
+    const nowMs = Date.parse('2026-10-21T08:00:00.000Z');
+    // 19:00Z on 20 Oct is 00:30 on 21 Oct in Kolkata but 12:00 on 20 Oct in Los Angeles.
+    const at = '2026-10-20T19:00:00.000Z';
+    const solo = item({ id: 'x', entityType: null, entityId: null, createdAt: at });
+
+    it('the calendar day of an instant depends on the zone', () => {
+      expect(zonedDayKey(Date.parse(at), 'Asia/Kolkata')).toBe('2026-10-21');
+      expect(zonedDayKey(Date.parse(at), 'America/Los_Angeles')).toBe('2026-10-20');
+      expect(zonedDayKey(Date.parse(at), 'UTC')).toBe('2026-10-20');
+    });
+
+    it('one instant is Today in Kolkata and Yesterday in Los Angeles', () => {
+      const kolkata = groupDigest([solo], 'newest', { nowMs, tz: 'Asia/Kolkata' });
+      expect(kolkata.map((b) => b.key)).toEqual(['today']);
+      const la = groupDigest([solo], 'newest', { nowMs, tz: 'America/Los_Angeles' });
+      expect(la.map((b) => b.key)).toEqual(['yesterday']);
+      const older = item({
+        id: 'o',
+        entityType: null,
+        entityId: null,
+        createdAt: '2026-10-18T19:00:00.000Z',
+      });
+      expect(groupDigest([older], 'newest', { nowMs, tz: 'Asia/Kolkata' })[0]?.key).toBe('earlier');
+    });
+
+    it('an unknown zone falls back to the device zone instead of throwing', () => {
+      expect(() => groupDigest([solo], 'newest', { nowMs, tz: 'Not/AZone' })).not.toThrow();
+      expect(zonedDayKey(Date.parse(at), 'Not/AZone')).toBe(zonedDayKey(Date.parse(at), null));
+    });
+
+    it('msUntilZonedMidnight counts to the next midnight in the zone (at least one second)', () => {
+      expect(msUntilZonedMidnight(nowMs, 'Asia/Kolkata')).toBe(10.5 * 3_600_000);
+      expect(msUntilZonedMidnight(nowMs, 'America/Los_Angeles')).toBe(23 * 3_600_000);
+      expect(msUntilZonedMidnight(Date.parse('2026-10-21T00:00:00.000Z'), 'UTC')).toBe(86_400_000);
+      expect(msUntilZonedMidnight(Date.parse('2026-10-21T23:59:59.500Z'), 'UTC')).toBe(1000);
+    });
+  });
+
+  describe('fix 15 and 17: keyset paging and live merges', () => {
+    const a = item({ id: 'a', createdAt: '2026-10-20T09:00:00.000Z' });
+    const b = item({ id: 'b', createdAt: '2026-10-20T10:00:00.000Z' });
+    const c = item({ id: 'c', createdAt: '2026-10-20T11:00:00.000Z' });
+
+    it('fix 17: the keyset filter is exact, quoted, and tie-safe on id', () => {
+      const cursor = { createdAt: '2026-10-20T11:00:00.000Z', id: 'e5' };
+      expect(keysetFilter(cursor, false)).toBe(
+        'created_at.lt."2026-10-20T11:00:00.000Z",and(created_at.eq."2026-10-20T11:00:00.000Z",id.lt.e5)',
+      );
+      expect(keysetFilter(cursor, true)).toBe(
+        'created_at.gt."2026-10-20T11:00:00.000Z",and(created_at.eq."2026-10-20T11:00:00.000Z",id.gt.e5)',
+      );
+    });
+
+    it('fix 17: the cursor is the last row; appendUnique drops ids already loaded', () => {
+      expect(cursorAfter([])).toBeUndefined();
+      expect(cursorAfter([c, b])).toEqual({ createdAt: b.createdAt, id: 'b' });
+      const merged = appendUnique([c, b], [b, a]);
+      expect(merged.map((i) => i.id)).toEqual(['c', 'b', 'a']);
+    });
+
+    it('fix 15: mergeFresh replaces by id, adds new rows, never duplicates, keeps the order', () => {
+      const freshB = { ...b, readAt: '2026-10-20T12:00:00.000Z' };
+      const newest = mergeFresh([b, a], [c, freshB], 'newest');
+      expect(newest.map((i) => i.id)).toEqual(['c', 'b', 'a']);
+      expect(newest.find((i) => i.id === 'b')?.readAt).toBe('2026-10-20T12:00:00.000Z');
+      const oldest = mergeFresh([a, b], [c, freshB], 'oldest');
+      expect(oldest.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+      // A shared timestamp breaks the tie on id, in the sort's direction.
+      const twin = item({ id: 'b2', createdAt: b.createdAt });
+      expect(mergeFresh([b], [twin], 'newest').map((i) => i.id)).toEqual(['b2', 'b']);
+      expect(mergeFresh([b], [twin], 'oldest').map((i) => i.id)).toEqual(['b', 'b2']);
+    });
+  });
+
+  describe('fix 30: deleted files', () => {
+    it('deletedFilesOf reads payload.files and drops entries without a filename', () => {
+      expect(
+        deletedFilesOf({
+          files: [
+            { asset_version_id: 'v1', filename: 'deck.pdf', mime_type: 'application/pdf' },
+            { filename: 'hero.png' },
+            { asset_version_id: 'v3' },
+            'nope',
+          ],
+        }),
+      ).toEqual([
+        { assetVersionId: 'v1', filename: 'deck.pdf', mimeType: 'application/pdf' },
+        { assetVersionId: null, filename: 'hero.png', mimeType: null },
+      ]);
+      expect(deletedFilesOf({ files: 'x' })).toEqual([]);
+      expect(deletedFilesOf(null)).toEqual([]);
+      expect(deletedFilesOf({})).toEqual([]);
+    });
+
+    it('mapEntry takes names from payload.files, falling back to payload.filenames', () => {
+      const withFiles = mapEntry(
+        row({
+          event_type: 'assets_deleted',
+          entity_type: 'workspace',
+          entity_id: 'w1',
+          payload: {
+            count: 2,
+            filenames: ['old-a', 'old-b'],
+            files: [
+              { asset_version_id: 'v1', filename: 'deck.pdf', mime_type: 'application/pdf' },
+              { asset_version_id: 'v2', filename: 'hero.png', mime_type: 'image/png' },
+            ],
+          },
+        }),
+      );
+      expect(withFiles.filenames).toEqual(['deck.pdf', 'hero.png']);
+      expect(withFiles.deletedFiles?.[0]?.assetVersionId).toBe('v1');
+      const old = mapEntry(
+        row({
+          event_type: 'assets_deleted',
+          entity_type: 'workspace',
+          entity_id: 'w1',
+          payload: { count: 2, filenames: ['a.png', 'b.png'] },
+        }),
+      );
+      expect(old.filenames).toEqual(['a.png', 'b.png']);
+      expect(old.deletedFiles).toEqual([]);
+      expect(mapEntry(row({ payload: { files: [{ filename: 'x' }] } })).deletedFiles).toEqual([]);
+    });
+
+    it('the top line counts files: "a file" / "N files"', () => {
+      expect(filesPhrase(1)).toBe('a file');
+      expect(filesPhrase(3)).toBe('3 files');
+      expect(deletedCount({ assetCount: null, filenames: ['a', 'b'] })).toBe(2);
+      expect(deletedCount({ assetCount: 7, filenames: ['a'] })).toBe(7);
+      const del = item({
+        eventType: 'assets_deleted',
+        entityType: 'workspace',
+        actorName: 'Asha',
+        assetCount: 3,
+        filenames: ['a', 'b', 'c'],
+      });
+      expect(activityLine(del)).toBe('Asha deleted 3 files');
+    });
+
+    it('the body lists the other files; none for a single file', () => {
+      expect(deletedFilesBody({ assetCount: 1, filenames: ['a'] })).toBeNull();
+      expect(deletedFilesBody({ assetCount: null, filenames: ['a'] })).toBeNull();
+      expect(deletedFilesBody({ assetCount: 2, filenames: ['a', 'B'] })).toBe('Also B');
+      expect(deletedFilesBody({ assetCount: 3, filenames: ['x', 'A', 'B'] })).toBe('Also A and B');
+      expect(deletedFilesBody({ assetCount: 5, filenames: ['x', 'A', 'B'] })).toBe(
+        'Also A, B and 2 more',
+      );
+      expect(deletedFilesBody({ assetCount: 4, filenames: ['x', 'A', 'B'] })).toBe(
+        'Also A, B and 1 more',
+      );
+      expect(deletedFilesBody({ assetCount: 4, filenames: ['x'] })).toBe('Also 3 more');
+    });
+
+    it('a text tile eyebrow names the kind: PDF, IMAGE, VIDEO or FILE', () => {
+      expect(fileKindLabel({ filename: 'deck', mimeType: 'application/pdf' })).toBe('PDF');
+      expect(fileKindLabel({ filename: 'Deck.PDF', mimeType: null })).toBe('PDF');
+      expect(fileKindLabel({ filename: 'shot', mimeType: 'image/heic' })).toBe('IMAGE');
+      expect(fileKindLabel({ filename: 'hero.webp', mimeType: null })).toBe('IMAGE');
+      expect(fileKindLabel({ filename: 'clip.MOV', mimeType: null })).toBe('VIDEO');
+      expect(fileKindLabel({ filename: 'reel', mimeType: 'video/mp4' })).toBe('VIDEO');
+      expect(fileKindLabel({ filename: 'notes.txt', mimeType: 'text/plain' })).toBe('FILE');
+      expect(fileKindLabel({ filename: 'README', mimeType: null })).toBe('FILE');
+    });
+  });
+});
+

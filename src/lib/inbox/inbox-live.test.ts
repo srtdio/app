@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  POLL_CHANGE_SOURCE,
   REOPEN_VERB,
   actionKey,
   eventLabel,
@@ -9,6 +10,8 @@ import {
   splitNewRows,
   summarizeNew,
   toastFromEnriched,
+  mentionTabText,
+  unseenRows,
   type EnrichedNew,
   type InboxRow,
   type ToastUpdate,
@@ -618,3 +621,25 @@ describe('brief reopened live toast', () => {
     expect(grouped([up('a'), up('b')])).toBe('Asha Rao and 1 other reopened Diwali brief');
   });
 });
+
+describe('notifications fixes: the live layer', () => {
+  it('fix 15: the poll tags its inbox-changed event, unlike a local write', () => {
+    expect(POLL_CHANGE_SOURCE).toBe('poll');
+  });
+
+  it('fix 20: unseenRows toasts a row once, even when two overlapping ticks read it', () => {
+    const seen = new Set<string>();
+    const first = unseenRows([row({ id: 'a' }), row({ id: 'b' })], seen);
+    expect(first.map((r) => r.id)).toEqual(['a', 'b']);
+    const second = unseenRows([row({ id: 'b' }), row({ id: 'c' })], seen);
+    expect(second.map((r) => r.id)).toEqual(['c']);
+    expect(unseenRows([row({ id: 'a' })], seen)).toEqual([]);
+    expect([...seen].sort()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('fix 29: one chat mention speaks on the tab as "<Name> mentioned you"', () => {
+    expect(mentionTabText('Priya')).toBe('Priya mentioned you');
+    expect(mentionTabText(null)).toBe('Someone mentioned you');
+  });
+});
+
