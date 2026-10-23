@@ -38,9 +38,9 @@ vi.mock('@srtdio/rpc', () => ({
 }));
 
 import {
+  CREATE_POST_DISCARD_TITLE,
   CreatePostSheet,
   createPostDirty,
-  resolvedTitle,
   uploadingLabel,
 } from '@/components/pages/CreatePostSheet';
 
@@ -93,8 +93,9 @@ function button(text: string): HTMLButtonElement {
 
 const caption = (): HTMLTextAreaElement =>
   document.querySelector<HTMLTextAreaElement>('#post-caption')!;
+const title = (): HTMLInputElement => document.querySelector<HTMLInputElement>('#post-title')!;
 
-/** Unfold the "More options" row (Title, Bucket, Due date, Brief live inside it). */
+/** Unfold the "More options" row (Bucket, Due date, Brief live inside it). */
 async function openMoreOptions(): Promise<void> {
   const more = document.querySelector<HTMLButtonElement>('button[data-more-options]')!;
   if (more.getAttribute('aria-expanded') !== 'true') await act(async () => more.click());
@@ -106,7 +107,7 @@ function before(a: Element, b: Element): boolean {
 }
 
 describe('CreatePostSheet W1', () => {
-  it('fix 1: closing with a caption asks "Discard this post?"', async () => {
+  it('fix 1: closing with a caption asks "Discard changes?"', async () => {
     expect(
       createPostDirty(
         { title: '', caption: '', bucketId: '', targetDate: '', briefId: '', attachments: [] },
@@ -119,17 +120,28 @@ describe('CreatePostSheet W1', () => {
         1,
       ),
     ).toBe(true);
+    // A format picked by hand is a change too.
+    expect(
+      createPostDirty(
+        { title: '', caption: '', bucketId: '', targetDate: '', briefId: '', attachments: [] },
+        0,
+        '',
+        '',
+        true,
+      ),
+    ).toBe(true);
     await renderSheet();
     await act(async () => setValue(caption(), 'Hello'));
     await act(async () =>
       document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click(),
     );
-    expect(document.body.textContent).toContain('Discard this post?');
-    expect(document.body.textContent).toContain('Your caption and 0 files will be removed.');
+    expect(document.body.textContent).toContain(CREATE_POST_DISCARD_TITLE);
+    expect(CREATE_POST_DISCARD_TITLE).toBe('Discard changes?');
+    expect(document.body.textContent).not.toContain('will be removed');
     expect(document.body.textContent).toContain('Keep editing');
   });
 
-  it('fix 2: mid-upload Save as draft says "Uploading N files…", stays enabled, and refuses to submit', async () => {
+  it('fix 2: mid-upload Save draft says "Uploading N files…", stays enabled, and refuses to submit', async () => {
     expect(uploadingLabel(1)).toBe('Uploading 1 file…');
     await renderSheet();
     await act(async () => setValue(caption(), 'Hello'));
@@ -141,21 +153,22 @@ describe('CreatePostSheet W1', () => {
     expect(mockPostCreate).not.toHaveBeenCalled();
   });
 
-  it('fix 3: an empty form keeps Save enabled and shows the inline required error', async () => {
+  it('fix 3: an empty form keeps Save enabled and shows the inline required errors', async () => {
     await renderSheet();
-    const save = button('Save as draft');
+    const save = button('Save draft');
     expect(save.disabled).toBe(false);
     await act(async () => save.click());
+    expect(document.body.textContent).toContain('Add a title to save.');
     expect(document.body.textContent).toContain('Write a caption');
     expect(mockPostCreate).not.toHaveBeenCalled();
   });
 
-  it('fix 4: fields run Files, Format, Caption, then More options (Title, Bucket, Due date, Brief); an empty title uses the caption', async () => {
-    expect(resolvedTitle('', 'First line\nsecond')).toBe('First line');
+  it('fix 4: fields run Title, Files, Format, Caption, then More options (Bucket, Due date, Brief); the typed title is sent', async () => {
     await renderSheet();
     const files = document.querySelector('[data-attachments]')!;
     const format = document.querySelector('[data-format-row]')!;
     const more = document.querySelector('button[data-more-options]')!;
+    expect(before(title(), files)).toBe(true);
     expect(before(files, format)).toBe(true);
     expect(before(format, caption())).toBe(true);
     expect(before(caption(), more)).toBe(true);
@@ -163,25 +176,29 @@ describe('CreatePostSheet W1', () => {
       [...document.querySelectorAll('label')].map((l) =>
         (l.textContent ?? '').replace('*', '').trim(),
       );
-    // Folded: only the caption has a label.
-    expect(labels()).toEqual(['Caption']);
+    // Folded: Title and Caption have labels.
+    expect(labels()).toEqual(['Title', 'Caption']);
     await openMoreOptions();
-    expect(labels()).toEqual(['Caption', 'Title', 'Bucket', 'Due date', 'Brief']);
-    expect(document.body.textContent).not.toContain('Target date (optional)');
+    expect(labels()).toEqual(['Title', 'Caption', 'Bucket', 'Due date', 'Brief']);
+    expect(document.body.textContent).not.toContain('Target date');
     mockPostCreate.mockResolvedValue({ ok: true, data: 'p1' });
+    await act(async () => setValue(title(), 'Monsoon drop'));
     await act(async () => setValue(caption(), 'Launch day\nMore words'));
-    await act(async () => button('Save as draft').click());
+    await act(async () => button('Save draft').click());
     const args = mockPostCreate.mock.calls[0]![1] as { p_payload: Record<string, unknown> };
-    expect(args.p_payload).toMatchObject({ title: 'Launch day' });
+    expect(args.p_payload).toMatchObject({ title: 'Monsoon drop' });
   });
 
-  it('fix 4b: the footer has Cancel, Save as draft and Send for review', async () => {
+  it('fix 4b: no footer; the header has Save draft and Send for review', async () => {
     await renderSheet();
-    const draft = document.querySelector('button[data-submit="draft"]');
-    const review = document.querySelector('button[data-submit="review"]');
-    expect(draft?.textContent).toBe('Save as draft');
-    expect(review?.textContent).toContain('Send for review');
-    expect(button('Cancel')).toBeDefined();
+    const header = document.querySelector('[data-composer-header]')!;
+    const draft = header.querySelector('button[data-submit="draft"]');
+    const review = header.querySelector('button[data-submit="review"]');
+    expect(draft?.textContent).toBe('Save draft');
+    expect(review?.textContent).toBe('Send for review');
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Cancel')).toBe(
+      false,
+    );
   });
 
   it('fix 5: "+ New bucket" creates inline, selects it, and words errors plainly', async () => {
@@ -213,9 +230,9 @@ describe('CreatePostSheet W1', () => {
     expect(document.querySelector('button[aria-label="Bucket"]')?.textContent).toContain('Launch');
   });
 
-  it('fix 6: desktop focuses Caption on open; touch does not autofocus', async () => {
+  it('fix 6: Title takes focus on open, laptop and touch', async () => {
     await renderSheet();
-    expect(document.activeElement).toBe(caption());
+    expect(document.activeElement).toBe(title());
     act(() => root?.unmount());
     root = null;
     window.matchMedia = ((q: string) => ({
@@ -226,6 +243,6 @@ describe('CreatePostSheet W1', () => {
       removeListener: () => {},
     })) as never;
     await renderSheet();
-    expect(document.activeElement).not.toBe(caption());
+    expect(document.activeElement).toBe(title());
   });
 });

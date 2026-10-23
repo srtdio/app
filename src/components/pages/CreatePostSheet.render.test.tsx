@@ -78,12 +78,6 @@ function formatPill(): string {
   return document.querySelector('[data-format-pill]')?.textContent ?? '';
 }
 
-async function openMoreOptions(): Promise<void> {
-  const more = document.querySelector<HTMLButtonElement>('button[data-more-options]');
-  if (more === null) throw new Error('no More options row');
-  if (more.getAttribute('aria-expanded') !== 'true') await act(async () => more.click());
-}
-
 async function openFormats(): Promise<string[]> {
   await act(async () => formatTrigger().click());
   return [...document.querySelectorAll('[role="option"]')].map((o) => o.textContent ?? '');
@@ -125,13 +119,14 @@ describe('CreatePostSheet', () => {
       error: { code: 'unknown', message: 'invalid_format' },
     });
     await renderSheet('tiktok');
-    await openMoreOptions();
+    // Title sits first, outside More options.
+    expect(document.querySelector('#post-title')).not.toBeNull();
     await act(async () => {
       setValue(document.querySelector<HTMLInputElement>('#post-title')!, 'Launch');
       setValue(document.querySelector<HTMLTextAreaElement>('#post-caption')!, 'Caption');
     });
     const save = [...document.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Save as draft',
+      (b) => b.textContent === 'Save draft',
     );
     await act(async () => save!.click());
 

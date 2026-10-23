@@ -647,6 +647,15 @@ export function titleFromCaption(caption: string): string {
   return (space > 40 ? cut.slice(0, space) : cut).trimEnd();
 }
 
+/**
+ * The first-post step's title: the one typed (the field is optional there),
+ * else the caption's first line, since the server needs one. Only the
+ * onboarding step falls back; the full New post sheet requires a title.
+ */
+export function presetTitle(title: string, caption: string): string {
+  return title.trim() !== '' ? title.trim() : titleFromCaption(caption);
+}
+
 /** Automatic retries after the first failed upload attempt. */
 export const UPLOAD_RETRIES = 3;
 

@@ -19,6 +19,7 @@ import {
   placeLabel,
   placeRoute,
   presetPrimaryFor,
+  presetTitle,
   progressOf,
   resolveGuide,
   skippedStepId,
@@ -672,6 +673,12 @@ describe('the first post', () => {
     const title = titleFromCaption(long);
     expect(title.length).toBeLessThanOrEqual(80);
     expect(title.endsWith('word')).toBe(true);
+  });
+
+  it('first-post step: a typed title wins; blank keeps the caption first line', () => {
+    expect(presetTitle('  Monsoon drop  ', 'Diwali drop\nmore')).toBe('Monsoon drop');
+    expect(presetTitle('', 'Diwali drop\nmore')).toBe('Diwali drop');
+    expect(presetTitle('   ', 'Diwali drop')).toBe('Diwali drop');
   });
 
   it('retries three times, then gives a plain reason', async () => {

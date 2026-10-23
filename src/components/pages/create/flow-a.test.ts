@@ -21,9 +21,14 @@ import {
 } from '@/components/pages/create/AttachmentsField';
 import {
   CAPTION_LIMITS,
+  CAPTION_MAX,
+  TITLE_COUNTER_FROM,
+  TITLE_MAX,
   captionCounterText,
   captionOverLimit,
+  captionTooLong,
   groupDigits,
+  titleCounterVisible,
 } from '@/components/pages/create/caption-limits';
 import {
   BUCKET_SAVE_FAILED,
@@ -189,6 +194,17 @@ describe('Post flow A helpers', () => {
     expect(captionCounterText(100000, 63206)).toBe('100,000 / 63,206');
     expect(captionOverLimit(280, 280)).toBe(false);
     expect(captionOverLimit(281, 280)).toBe(true);
+  });
+
+  it('the 4,000 caption cap and the 200 title cap with its counter from 180', () => {
+    expect(CAPTION_MAX).toBe(4000);
+    expect(captionCounterText(142, CAPTION_MAX)).toBe('142 / 4,000');
+    expect(captionTooLong('a'.repeat(4000))).toBe(false);
+    expect(captionTooLong('a'.repeat(4001))).toBe(true);
+    expect(TITLE_MAX).toBe(200);
+    expect(TITLE_COUNTER_FROM).toBe(180);
+    expect(titleCounterVisible('a'.repeat(179))).toBe(false);
+    expect(titleCounterVisible('a'.repeat(180))).toBe(true);
   });
 
   it('fix 41: save errors are plain words, never the raw server text', () => {

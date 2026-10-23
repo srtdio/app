@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, ReactElement } from 'react';
+import type { KeyboardEvent, MutableRefObject, ReactElement } from 'react';
+import { useInRouterContext, useNavigate, type NavigateFunction } from 'react-router-dom';
 import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -13,8 +14,8 @@ import {
   type SelectOption,
 } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { IconChevronDown, IconSend } from '@/components/ui/icons';
+import { IconChevronDown } from '@/components/ui/icons';
+import { COMPOSER_DISCARD_TITLE, ComposerSheet } from '@/components/pages/create/ComposerSheet';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import {
   AttachmentsField,
@@ -38,25 +39,35 @@ import {
   untouchedDefaultFormat,
 } from '@/components/pages/create/file-kind';
 import {
-  CAPTION_LIMITS,
+  CAPTION_MAX,
+  TITLE_MAX,
   captionCounterText,
   captionOverLimit,
+  captionTooLong,
+  titleCounterVisible,
 } from '@/components/pages/create/caption-limits';
 import { createSheetErrorMessage } from '@/components/pages/create/errors';
-import { errorText, REASON_COPY } from '@/lib/error-copy';
+import { errorReason, errorText, REASON_COPY } from '@/lib/error-copy';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
 import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import { useWorkspace } from '@/lib/workspace-context';
 import { BUCKET_NAME_MAX, createBucket, listBuckets, type BucketOption } from '@/lib/buckets';
-import { postCreate, gallerySet, stageTransition, type Client, type Result } from '@srtdio/rpc';
+import {
+  postCreate,
+  postSoftDelete,
+  gallerySet,
+  stageTransition,
+  type Client,
+  type Result,
+} from '@srtdio/rpc';
 import { PresetMediaField, uploadLocalFile } from '@/components/induction/PresetMediaField';
 import {
   dispatchInductionRefresh,
   formatNeedsMedia,
   INDUCTION_KEYS,
-  titleFromCaption,
+  presetTitle,
   type PostSheetPreset,
 } from '@/lib/induction';
 import { FIRST_POST_SAMPLE } from '@/lib/induction-copy';
@@ -82,7 +93,7 @@ import type { Json } from '@srtdio/schemas';
 interface CreatePostSheetProps {
   open: boolean;
   workspaceId: string | null;
-  /** Seeds the target date when the sheet opens ('YYYY-MM-DD'); default blank. */
+  /** Seeds the due date when the sheet opens ('YYYY-MM-DD'); default blank. */
   initialTargetDate?: string;
   onClose: () => void;
   /** Preselects this brief and opens More options (New post from this brief). */
@@ -94,8 +105,9 @@ interface CreatePostSheetProps {
   onCreated: (postId: string, outcome?: CreatedOutcome) => void;
   /**
    * An induction post step: owner, bucket, origin and brief stay out, the title
-   * comes from the caption, media is required when the format needs it, and the
-   * primary is Send for review or Save as draft. Absent: the full sheet.
+   * is optional (blank, it comes from the caption), media is required when the
+   * format needs it, and the primary is Send for review or Save as draft.
+   * Absent: the full sheet.
    */
   preset?: PostSheetPreset;
 }
@@ -106,7 +118,7 @@ export interface CreatedOutcome {
   path: string;
 }
 
-/** Which footer button saved: Save as draft or Send for review. */
+/** Which header button saved: Save draft or Send for review. */
 export type SubmitMode = 'draft' | 'review';
 
 /** The bottom strip after the sheet closes. Pure. */
@@ -125,15 +137,22 @@ export function createdPostPath(
     : `/posts/${postId}`;
 }
 
-/** The line above the footer while a file failed. */
+/** The line at the top of the form while a file failed. */
 export const FAILED_UPLOAD_FOOTER = "Retry or remove the file that didn't upload.";
 
 /** The folded row under the caption and its sub-line. */
 export const MORE_OPTIONS_LABEL = 'More options';
-export const MORE_OPTIONS_HINT = 'Title, bucket, due date, brief';
+export const MORE_OPTIONS_HINT = 'Bucket, due date, brief';
 
-/** The Title helper inside More options. */
-export const TITLE_HELPER = "Left blank, it uses the caption's first line.";
+/** The Title field's placeholder (full sheet and the first-post step). */
+export const TITLE_PLACEHOLDER = 'e.g. Monsoon drop, part one';
+
+/** The header's two save buttons. */
+export const SAVE_DRAFT_LABEL = 'Save draft';
+export const SEND_FOR_REVIEW_LABEL = 'Send for review';
+
+/** How long the "Saved as draft" strip offers Undo. */
+export const DRAFT_UNDO_MS = 4000;
 
 /** The Brief helper inside More options. */
 export const BRIEF_HELPER = 'Open briefs in this workspace.';
@@ -257,20 +276,13 @@ type OriginValue = 'none' | 'brief';
 /** The Bucket select's last option: opens the inline new bucket form. */
 export const NEW_BUCKET_VALUE = '__new_bucket__';
 
-/** The discard confirm for a dirty sheet: every close path and Cancel share it. Pure. */
-export function createPostDiscard(files: number): { title: string; message: string } {
-  return {
-    title: 'Discard this post?',
-    message: `Your caption and ${files} ${files === 1 ? 'file' : 'files'} will be removed.`,
-  };
-}
-
-/** The discard confirm with no files counted. */
-export const CREATE_POST_DISCARD = createPostDiscard(0);
+/** The discard confirm every close path asks on a changed sheet (no line under it). */
+export const CREATE_POST_DISCARD_TITLE = COMPOSER_DISCARD_TITLE;
 
 /**
- * Whether closing would lose work: any field with content, or any file (done,
- * uploading or failed). A brief the sheet opened with is not work. Pure.
+ * Whether closing would lose work: any field with content, any file (done,
+ * uploading or failed), or a format picked by hand. A brief or due date the
+ * sheet opened with is not work. Pure.
  */
 export function createPostDirty(
   form: Pick<
@@ -280,8 +292,10 @@ export function createPostDirty(
   pendingUploads: number,
   initialTargetDate = '',
   initialBriefId = '',
+  formatChanged = false,
 ): boolean {
   return (
+    formatChanged ||
     form.title.trim() !== '' ||
     form.caption.trim() !== '' ||
     form.bucketId !== '' ||
@@ -302,13 +316,38 @@ export function waitForUploadsMessage(count: number): string {
   return `Wait for ${count} ${count === 1 ? 'file' : 'files'} to finish`;
 }
 
-/** Each missing required field's inline error. The format is always set, so only the caption. Pure. */
+/**
+ * Each field's inline error before a save: a blank title, a missing caption, a
+ * caption past 4,000 characters. The format is always set. Pure.
+ */
 export function requiredFieldErrors(
-  form: Pick<CreateFormState, 'caption' | 'format'>,
+  form: Pick<CreateFormState, 'title' | 'caption' | 'format'>,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
+  if (form.title.trim() === '') errors.title = REASON_COPY.title_required;
   if (form.caption.trim() === '') errors.caption = 'Write a caption';
+  else if (captionTooLong(form.caption)) errors.caption = REASON_COPY.caption_too_long;
   return errors;
+}
+
+/**
+ * A save the server refused for a field (caption_too_long, title_required),
+ * read through the shared error copy: the field and its line, else null. Pure.
+ */
+export function serverFieldError(
+  error: unknown,
+): { key: 'title' | 'caption'; text: string } | null {
+  const reason = errorReason(error);
+  if (reason === 'caption_too_long') return { key: 'caption', text: REASON_COPY.caption_too_long };
+  if (reason === 'title_required') return { key: 'title', text: REASON_COPY.title_required };
+  return null;
+}
+
+/** The first field with an error, in the form's order (Title, then Caption). Pure. */
+export function firstErrorField(errors: Record<string, string>): 'title' | 'caption' | null {
+  if (errors.title !== undefined) return 'title';
+  if (errors.caption !== undefined) return 'caption';
+  return null;
 }
 
 /**
@@ -333,12 +372,39 @@ export function clearFieldError(
   return next;
 }
 
-/** The title sent: the typed one, else the caption's first line (80 chars max). Pure. */
-export function resolvedTitle(title: string, caption: string): string {
-  return title.trim() !== '' ? title : titleFromCaption(caption);
+export interface UndoSavedDraftDeps {
+  postId: string;
+  /** post_soft_delete through the rpc helper (trace id included). */
+  softDelete: (postId: string) => Promise<Result<unknown>>;
+  /** Back to Pipeline once the post is gone; null outside a router. */
+  navigate: ((path: string) => void) | null;
+  /** Lists refresh. */
+  onDeleted: () => void;
+  onFailed: (error: unknown) => void;
 }
 
-/** Whether this device is touch first (no autofocus there, so no keyboard jumps up). */
+/**
+ * The "Saved as draft" strip's Undo: soft delete the new post, then go back to
+ * Pipeline. A refusal stays on the post and reports it. Never throws.
+ */
+export async function undoSavedDraft(deps: UndoSavedDraftDeps): Promise<boolean> {
+  let result: Result<unknown>;
+  try {
+    result = await deps.softDelete(deps.postId);
+  } catch (error) {
+    deps.onFailed(error);
+    return false;
+  }
+  if (!result.ok) {
+    deps.onFailed(result.error);
+    return false;
+  }
+  deps.onDeleted();
+  deps.navigate?.('/pipeline');
+  return true;
+}
+
+/** Whether this device is touch first (Cmd/Ctrl+Enter is a laptop shortcut). */
 function isTouchDevice(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -367,7 +433,7 @@ export interface CreateFormState {
 export function initialCreateState(opts: {
   defaultFormat: string;
   currentUserId: string | null;
-  /** Prefilled target date (Plan opens the sheet on a day); default blank. */
+  /** Prefilled due date (Plan opens the sheet on a day); default blank. */
   targetDate?: string;
 }): CreateFormState {
   return {
@@ -566,13 +632,15 @@ export function CreatePostSheet({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // Full sheet: which button is saving, the post row once created (the
-  // duplicate guard: a retry re-attaches to it), and the Cancel confirm.
+  // Full sheet: which button is saving, and the post row once created (the
+  // duplicate guard: a retry re-attaches to it).
   const [submitMode, setSubmitMode] = useState<SubmitMode | null>(null);
   const createdPostId = useRef<string | null>(null);
   // A second tap in the same frame (before Saving… renders) is ignored.
   const submitLock = useRef(false);
-  const [cancelConfirm, setCancelConfirm] = useState(false);
+  // The router's navigate (for the draft strip's Undo); null outside a router.
+  const navRef = useRef<NavigateFunction | null>(null);
+  const inRouter = useInRouterContext();
   // Full sheet: the folded More options row, and Format following the first
   // file until the person picks one themselves.
   const [moreOpen, setMoreOpen] = useState(initialBriefId !== undefined);
@@ -594,6 +662,10 @@ export function CreatePostSheet({
   const [newBucketBusy, setNewBucketBusy] = useState(false);
   const [newBucketError, setNewBucketError] = useState<string | null>(null);
   const captionRef = useRef<HTMLTextAreaElement>(null);
+  // The shared Input takes no ref: the Title input is read off its wrapper.
+  const titleWrapRef = useRef<HTMLDivElement>(null);
+  const titleInput = (): HTMLInputElement | null =>
+    titleWrapRef.current?.querySelector('input') ?? null;
   const toast = useOptionalToast();
   const uploads = useRef(new Map<File, Promise<UploadOutcome>>());
   // The soft file prompt: version ids of attached files the format does not
@@ -702,7 +774,6 @@ export function CreatePostSheet({
     setSubmitMode(null);
     createdPostId.current = null;
     submitLock.current = false;
-    setCancelConfirm(false);
     setMoreOpen(initialBriefId !== undefined);
     formatTouched.current = false;
     setFormatSource(null);
@@ -725,13 +796,8 @@ export function CreatePostSheet({
     setNewBucketError(null);
   }, [open, initialTargetDate, initialBriefId]);
 
-  // Desktop: the caption takes focus on open. Touch: nothing autofocuses.
+  // The full sheet: Title takes focus on open, phone and laptop (ComposerSheet's initialFocus).
   const hasPreset = preset !== undefined;
-  useEffect(() => {
-    if (!open || hasPreset || isTouchDevice()) return;
-    const raf = requestAnimationFrame(() => captionRef.current?.focus());
-    return () => cancelAnimationFrame(raf);
-  }, [open, hasPreset]);
 
   // The wait line goes once every file has finished.
   useEffect(() => {
@@ -840,18 +906,8 @@ export function CreatePostSheet({
       pendingUploads + failedUploads,
       initialTargetDate ?? '',
       initialBriefId ?? '',
+      formatTouched.current,
     );
-  const discard = createPostDiscard(form.attachments.length + pendingUploads + failedUploads);
-
-  /** Footer Cancel: the same discard confirm as X, backdrop, Escape and Back. */
-  function requestCancel(): void {
-    if (submitting) return;
-    if (dirty) {
-      setCancelConfirm(true);
-      return;
-    }
-    onClose();
-  }
 
   const canSubmit =
     preset !== undefined
@@ -969,8 +1025,14 @@ export function CreatePostSheet({
     const items = form.attachments;
     let postId = savedDraftId;
     if (postId === null) {
+      if (captionTooLong(form.caption)) {
+        setSubmitting(false);
+        setFieldErrors({ caption: REASON_COPY.caption_too_long });
+        return;
+      }
       const built = buildPostCreatePayload({
-        title: titleFromCaption(form.caption),
+        // Optional here: blank keeps the caption's first line (the server needs one).
+        title: presetTitle(form.title, form.caption),
         caption: form.caption,
         format: form.format,
         ownerUserId: '',
@@ -996,7 +1058,9 @@ export function CreatePostSheet({
       });
       if (!result.ok) {
         setSubmitting(false);
-        setSubmitError(postCreateErrorMessage(result.message, workspacePlatform));
+        const field = serverFieldError(result.message);
+        if (field !== null) setFieldErrors({ [field.key]: field.text });
+        else setSubmitError(postCreateErrorMessage(result.message, workspacePlatform));
         return;
       }
       postId = result.postId;
@@ -1049,12 +1113,12 @@ export function CreatePostSheet({
     const missing = requiredFieldErrors(form);
     if (Object.keys(missing).length > 0) {
       setFieldErrors(missing);
-      focusField(captionRef.current);
+      focusErrorField(missing);
       return;
     }
 
     const built = buildPostCreatePayload({
-      title: resolvedTitle(form.title, form.caption),
+      title: form.title,
       caption: form.caption,
       format: form.format,
       ownerUserId: form.ownerUserId,
@@ -1065,8 +1129,9 @@ export function CreatePostSheet({
     });
     if (!built.ok) {
       setFieldErrors(built.errors);
-      // The failing field may sit inside the folded More options.
-      if (built.errors.caption === undefined) setMoreOpen(true);
+      if (firstErrorField(built.errors) !== null) focusErrorField(built.errors);
+      // Any other failing field sits inside the folded More options.
+      else setMoreOpen(true);
       return;
     }
 
@@ -1098,7 +1163,15 @@ export function CreatePostSheet({
       submitLock.current = false;
       setSubmitting(false);
       setSubmitMode(null);
-      setSubmitError(postCreateErrorMessage(result.message, workspacePlatform));
+      // A field the server refused (caption_too_long, title_required) shows on that field.
+      const field = serverFieldError(result.message);
+      if (field !== null) {
+        const errors = { [field.key]: field.text };
+        setFieldErrors(errors);
+        focusErrorField(errors);
+      } else {
+        setSubmitError(postCreateErrorMessage(result.message, workspacePlatform));
+      }
       return;
     }
 
@@ -1125,8 +1198,41 @@ export function CreatePostSheet({
     setSubmitting(false);
     setSubmitMode(null);
     dispatchInductionRefresh();
-    toast?.show({ title: createdStripTitle(mode), kind: 'undo' });
-    onCreated(result.postId, { stage: mode, path });
+    const savedId = result.postId;
+    toast?.show({
+      title: createdStripTitle(mode),
+      kind: 'undo',
+      durationMs: DRAFT_UNDO_MS,
+      // A draft can be taken back: Undo deletes it and returns to Pipeline.
+      ...(mode === 'draft'
+        ? { action: { label: 'Undo', onPress: () => void undoDraft(savedId) } }
+        : {}),
+    });
+    onCreated(savedId, { stage: mode, path });
+  }
+
+  /** The draft strip's Undo. Runs after the sheet has gone, so it reads only stable values. */
+  function undoDraft(postId: string): Promise<boolean> {
+    const navigate = navRef.current;
+    return undoSavedDraft({
+      postId,
+      softDelete: (id) => postSoftDelete(supabase, { p_post_id: id, p_trace_id: newTrace() }),
+      navigate: navigate !== null ? (path) => navigate(path) : null,
+      onDeleted: dispatchWorkspaceDataChanged,
+      onFailed: (error) => {
+        logger.warn('undo new draft failed', {
+          error: String((error as { message?: unknown } | null)?.message ?? error),
+        });
+        toast?.show({ title: errorText('delete the post', error), tone: 'error' });
+      },
+    });
+  }
+
+  /** Focus the first field with an error (Title, then Caption). */
+  function focusErrorField(errors: Record<string, string>): void {
+    const first = firstErrorField(errors);
+    if (first === 'title') focusField(titleInput());
+    else if (first === 'caption') focusField(captionRef.current);
   }
 
   const preview = draftPreview({
@@ -1179,88 +1285,70 @@ export function CreatePostSheet({
     </>
   );
 
-  const fullFooter = (
-    <div className="flex w-full min-w-0 flex-col gap-2">
-      {failedUploads > 0 ? (
-        <p data-upload-failed-footer="" role="status" className="text-xs text-bad">
-          {FAILED_UPLOAD_FOOTER}
-        </p>
-      ) : uploadWait && pendingUploads > 0 ? (
-        <p data-upload-wait="" role="status" className="text-[11px] text-fg-2">
-          {waitForUploadsMessage(pendingUploads)}
-        </p>
-      ) : null}
-      <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
-        <Button
-          size="lg"
-          variant="ghost"
-          className="shrink-0 px-2.5 sm:px-4"
-          onClick={requestCancel}
-          disabled={submitting}
-        >
-          Cancel
-        </Button>
-        <span className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2.5">
-          <Button
-            size="lg"
-            className="shrink-0 px-2.5 sm:px-4"
-            data-submit="draft"
-            onClick={() => void handleSubmit('draft')}
-            disabled={!canSubmit}
-            aria-busy={pendingUploads > 0}
-          >
-            {submitMode === 'draft' ? (
-              'Saving…'
-            ) : pendingUploads > 0 ? (
-              <>
-                <span
-                  aria-hidden="true"
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
-                />
-                {uploadingLabel(pendingUploads)}
-              </>
-            ) : (
-              'Save as draft'
-            )}
-          </Button>
-          <Button
-            variant="primary"
-            size="lg"
-            className="shrink-0 px-2.5 sm:px-4"
-            data-submit="review"
-            onClick={() => void handleSubmit('review')}
-            disabled={!canSubmit}
-          >
-            {submitMode === 'review' ? (
-              'Saving…'
-            ) : (
-              <>
-                <IconSend size={16} />
-                Send for review
-              </>
-            )}
-          </Button>
-        </span>
-      </div>
-    </div>
+  const headerActions = (
+    <>
+      <Button
+        size="lg"
+        variant="ghost"
+        className="shrink-0 px-2.5 sm:px-4"
+        data-submit="draft"
+        onClick={() => void handleSubmit('draft')}
+        disabled={!canSubmit}
+        aria-busy={pendingUploads > 0}
+      >
+        {submitMode === 'draft' ? (
+          'Saving…'
+        ) : pendingUploads > 0 ? (
+          <>
+            <span
+              aria-hidden="true"
+              className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+            />
+            {uploadingLabel(pendingUploads)}
+          </>
+        ) : (
+          SAVE_DRAFT_LABEL
+        )}
+      </Button>
+      <Button
+        variant="primary"
+        size="lg"
+        className="shrink-0 px-2.5 sm:px-4"
+        data-submit="review"
+        onClick={() => void handleSubmit('review')}
+        disabled={!canSubmit}
+      >
+        {submitMode === 'review' ? 'Saving…' : SEND_FOR_REVIEW_LABEL}
+      </Button>
+    </>
   );
 
-  const captionLimit = workspacePlatform !== null ? CAPTION_LIMITS[workspacePlatform] : null;
   const captionCount = form.caption.length;
+  const captionOver = captionOverLimit(captionCount, CAPTION_MAX);
 
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      wide
-      title="New post"
-      dirty={dirty}
-      discard={discard}
-      busy={preset === undefined && submitting}
-      busyLabel="Saving…"
-      footer={preset !== undefined ? presetFooter : fullFooter}
-    >
-      {preset !== undefined ? (
+  const overlays = (
+    <>
+      {inRouter ? <NavigateBridge navRef={navRef} /> : null}
+      {preview !== null ? (
+        <PlatformPreviewPanel
+          open={open && previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          {...preview}
+        />
+      ) : null}
+      {open && activePrompt !== null ? (
+        <FilePromptSheet
+          prompt={activePrompt}
+          onKeep={() => setPromptIds([])}
+          onRemove={removePrompted}
+        />
+      ) : null}
+    </>
+  );
+
+  if (preset !== undefined) {
+    return (
+      <Sheet open={open} onClose={onClose} wide title="New post" footer={presetFooter}>
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-start lg:gap-6">
           <div className="flex flex-col gap-4 overflow-x-hidden">
             {preview !== null ? (
@@ -1281,6 +1369,7 @@ export function CreatePostSheet({
               onShareChange={setShare}
               onMediaBusyChange={setMediaBusy}
               captionError={gridError('caption')}
+              titleError={gridError('title')}
             />
             {submitError !== null ? (
               <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
@@ -1301,233 +1390,251 @@ export function CreatePostSheet({
             </aside>
           ) : null}
         </div>
-      ) : (
-        <div
-          data-create-layout=""
-          onKeyDown={onFormKeyDown}
-          className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6"
-        >
-          {/* Below lg the preview opens from a chip; its row is reserved from the
-              first paint so nothing jumps when the platform resolves. At lg the
-              frame itself is the preview. */}
-          <div data-preview-chip-slot="" className="-my-2 flex min-h-[44px] items-center lg:hidden">
-            {preview !== null ? (
-              <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
+        {overlays}
+      </Sheet>
+    );
+  }
+
+  return (
+    <ComposerSheet
+      open={open}
+      onClose={onClose}
+      title="New post"
+      actions={headerActions}
+      dirty={dirty}
+      busy={submitting}
+      initialFocus={titleInput}
+    >
+      <div
+        data-create-layout=""
+        onKeyDown={onFormKeyDown}
+        className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6"
+      >
+        {failedUploads > 0 ? (
+          <p data-upload-failed-footer="" role="status" className="text-xs text-bad lg:col-span-2">
+            {FAILED_UPLOAD_FOOTER}
+          </p>
+        ) : uploadWait && pendingUploads > 0 ? (
+          <p data-upload-wait="" role="status" className="text-[11px] text-fg-2 lg:col-span-2">
+            {waitForUploadsMessage(pendingUploads)}
+          </p>
+        ) : null}
+        <div ref={titleWrapRef} className="min-w-0 lg:col-span-2">
+          <Field label="Title" htmlFor="post-title" required>
+            <Input
+              id="post-title"
+              value={form.title}
+              maxLength={TITLE_MAX}
+              aria-invalid={fieldErrors.title !== undefined ? true : undefined}
+              {...(titleCounterVisible(form.title)
+                ? { 'aria-describedby': 'post-title-count' }
+                : {})}
+              onChange={(event) => patchField('title', { title: event.target.value })}
+              placeholder={TITLE_PLACEHOLDER}
+              className="aria-[invalid=true]:border-bad"
+            />
+            {titleCounterVisible(form.title) ? (
+              <p
+                id="post-title-count"
+                data-title-count=""
+                className="mt-1.5 text-right text-[11px] tabular-nums text-fg-3"
+              >
+                {captionCounterText(form.title.length, TITLE_MAX)}
+              </p>
             ) : null}
-          </div>
-          <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-0">
-            <AttachmentsField
-              workspaceId={workspaceId}
-              value={form.attachments}
-              onChange={onAttachmentsChange}
-              onPendingChange={setPendingUploads}
-              onFailedChange={setFailedUploads}
-              onPickDone={onPickDone}
-              frame={
-                workspacePlatform !== null
-                  ? { platform: workspacePlatform, format: form.format }
-                  : null
-              }
-            />
-          </div>
-          <div className="flex min-w-0 flex-col gap-4">
-            <FormatRow
-              platform={workspacePlatform}
-              format={form.format}
-              source={formatSource}
-              options={formatOptions}
-              onChange={onFormatChange}
-            />
+            {gridError('title')}
+          </Field>
+        </div>
+        {/* Below lg the preview opens from a chip; its row is reserved from the
+            first paint so nothing jumps when the platform resolves. At lg the
+            frame itself is the preview. */}
+        <div data-preview-chip-slot="" className="-my-2 flex min-h-[44px] items-center lg:hidden">
+          {preview !== null ? (
+            <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
+          ) : null}
+        </div>
+        <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-0">
+          <AttachmentsField
+            workspaceId={workspaceId}
+            value={form.attachments}
+            onChange={onAttachmentsChange}
+            onPendingChange={setPendingUploads}
+            onFailedChange={setFailedUploads}
+            onPickDone={onPickDone}
+            frame={
+              workspacePlatform !== null
+                ? { platform: workspacePlatform, format: form.format }
+                : null
+            }
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-4">
+          <FormatRow
+            platform={workspacePlatform}
+            format={form.format}
+            source={formatSource}
+            options={formatOptions}
+            onChange={onFormatChange}
+          />
 
-            <Field label="Caption" htmlFor="post-caption" required>
-              <div className="relative">
-                <Textarea
-                  ref={captionRef}
-                  id="post-caption"
-                  autoGrow
-                  value={form.caption}
-                  aria-invalid={fieldErrors.caption !== undefined ? true : undefined}
-                  aria-describedby="post-caption-count"
-                  onChange={(event) => patchField('caption', { caption: event.target.value })}
-                  placeholder="Write the caption"
-                  className="pb-7"
-                />
-                {captionLimit !== null ? (
-                  <span
-                    id="post-caption-count"
-                    data-caption-count=""
-                    {...(captionOverLimit(captionCount, captionLimit) ? { 'data-over': '' } : {})}
-                    className={cn(
-                      'pointer-events-none absolute bottom-2 right-3 text-[11px] tabular-nums',
-                      captionOverLimit(captionCount, captionLimit) ? 'text-bad' : 'text-fg-3',
-                    )}
-                  >
-                    {captionCounterText(captionCount, captionLimit)}
-                  </span>
-                ) : null}
-              </div>
-              {gridError('caption')}
-            </Field>
-
-            <button
-              type="button"
-              data-more-options=""
-              aria-expanded={moreOpen}
-              aria-controls="post-more-options"
-              onClick={() => setMoreOpen((prev) => !prev)}
-              className="flex min-h-[44px] w-full items-center gap-3 rounded-md border border-border bg-panel-2 px-3 py-2 text-left transition-colors hover:bg-panel-3"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
-                <span className="block truncate text-[13px] text-fg-3">{MORE_OPTIONS_HINT}</span>
-              </span>
-              <IconChevronDown
-                size={16}
-                className={cn(
-                  'shrink-0 text-fg-3 transition-transform motion-reduce:transition-none',
-                  moreOpen && 'rotate-180',
-                )}
+          <Field label="Caption" htmlFor="post-caption" required>
+            <div className="relative">
+              <Textarea
+                ref={captionRef}
+                id="post-caption"
+                autoGrow
+                value={form.caption}
+                aria-invalid={fieldErrors.caption !== undefined ? true : undefined}
+                aria-describedby="post-caption-count"
+                onChange={(event) => patchField('caption', { caption: event.target.value })}
+                placeholder="Write the caption"
+                className="pb-7 aria-[invalid=true]:border-bad"
               />
-            </button>
+              <span
+                id="post-caption-count"
+                data-caption-count=""
+                {...(captionOver ? { 'data-over': '' } : {})}
+                className={cn(
+                  'pointer-events-none absolute bottom-2 right-3 text-[11px] tabular-nums',
+                  captionOver ? 'text-bad' : 'text-fg-3',
+                )}
+              >
+                {captionCounterText(captionCount, CAPTION_MAX)}
+              </span>
+            </div>
+            {gridError('caption')}
+          </Field>
 
-            {moreOpen ? (
-              <div id="post-more-options" className="flex flex-col gap-4">
-                <Field label="Title" htmlFor="post-title" hint={TITLE_HELPER}>
-                  <Input
-                    id="post-title"
-                    value={form.title}
-                    onChange={(event) => patchField('title', { title: event.target.value })}
-                    placeholder="Post title"
-                  />
-                  {gridError('title')}
-                </Field>
+          <button
+            type="button"
+            data-more-options=""
+            aria-expanded={moreOpen}
+            aria-controls="post-more-options"
+            onClick={() => setMoreOpen((prev) => !prev)}
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-md border border-border bg-panel-2 px-3 py-2 text-left transition-colors hover:bg-panel-3"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
+              <span className="block truncate text-[13px] text-fg-3">{MORE_OPTIONS_HINT}</span>
+            </span>
+            <IconChevronDown
+              size={16}
+              className={cn(
+                'shrink-0 text-fg-3 transition-transform motion-reduce:transition-none',
+                moreOpen && 'rotate-180',
+              )}
+            />
+          </button>
 
-                <Field label="Bucket">
-                  <Select
-                    label="Bucket"
-                    value={form.bucketId}
-                    options={bucketOptions}
-                    onChange={onBucketChange}
-                    placeholder="No bucket"
-                  />
-                  {newBucketOpen ? (
-                    <div
-                      data-new-bucket=""
-                      className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3"
-                    >
-                      <Input
-                        aria-label="New bucket name"
-                        placeholder="Bucket name"
-                        value={newBucketName}
-                        maxLength={BUCKET_NAME_MAX}
+          {moreOpen ? (
+            <div id="post-more-options" className="flex flex-col gap-4">
+              <Field label="Bucket">
+                <Select
+                  label="Bucket"
+                  value={form.bucketId}
+                  options={bucketOptions}
+                  onChange={onBucketChange}
+                  placeholder="No bucket"
+                />
+                {newBucketOpen ? (
+                  <div
+                    data-new-bucket=""
+                    className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3"
+                  >
+                    <Input
+                      aria-label="New bucket name"
+                      placeholder="Bucket name"
+                      value={newBucketName}
+                      maxLength={BUCKET_NAME_MAX}
+                      disabled={newBucketBusy}
+                      onChange={(event) => {
+                        setNewBucketName(event.target.value);
+                        setNewBucketError(null);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void submitNewBucket();
+                        }
+                      }}
+                    />
+                    {newBucketError !== null ? (
+                      <p role="alert" className="text-xs text-bad">
+                        {newBucketError}
+                      </p>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="lg"
+                        variant="primary"
                         disabled={newBucketBusy}
-                        onChange={(event) => {
-                          setNewBucketName(event.target.value);
+                        onClick={() => void submitNewBucket()}
+                      >
+                        {newBucketBusy ? 'Creating…' : 'Create'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="lg"
+                        variant="ghost"
+                        disabled={newBucketBusy}
+                        onClick={() => {
+                          setNewBucketOpen(false);
+                          setNewBucketName('');
                           setNewBucketError(null);
                         }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void submitNewBucket();
-                          }
-                        }}
-                      />
-                      {newBucketError !== null ? (
-                        <p role="alert" className="text-xs text-bad">
-                          {newBucketError}
-                        </p>
-                      ) : null}
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="lg"
-                          variant="primary"
-                          disabled={newBucketBusy}
-                          onClick={() => void submitNewBucket()}
-                        >
-                          {newBucketBusy ? 'Creating…' : 'Create'}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="lg"
-                          variant="ghost"
-                          disabled={newBucketBusy}
-                          onClick={() => {
-                            setNewBucketOpen(false);
-                            setNewBucketName('');
-                            setNewBucketError(null);
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
+                      >
+                        Cancel
+                      </Button>
                     </div>
-                  ) : null}
-                </Field>
+                  </div>
+                ) : null}
+              </Field>
 
-                <Field label="Due date">
-                  <DatePicker
-                    label="Due date"
-                    value={form.targetDate}
-                    disablePast
-                    actions
-                    onChange={(value) => patchField('targetDate', { targetDate: value })}
-                  />
-                  {gridError('targetDate')}
-                </Field>
+              <Field label="Due date">
+                <DatePicker
+                  label="Due date"
+                  value={form.targetDate}
+                  disablePast
+                  actions
+                  onChange={(value) => patchField('targetDate', { targetDate: value })}
+                />
+                {gridError('targetDate')}
+              </Field>
 
-                <Field label="Brief" hint={BRIEF_HELPER}>
-                  <Select
-                    label="Brief"
-                    value={form.briefId}
-                    options={briefOptions}
-                    onChange={(value) => patchField('briefId', { briefId: value })}
-                    placeholder="No brief"
-                  />
-                  {gridError('briefId')}
-                </Field>
-              </div>
-            ) : null}
+              <Field label="Brief" hint={BRIEF_HELPER}>
+                <Select
+                  label="Brief"
+                  value={form.briefId}
+                  options={briefOptions}
+                  onChange={(value) => patchField('briefId', { briefId: value })}
+                  placeholder="No brief"
+                />
+                {gridError('briefId')}
+              </Field>
+            </div>
+          ) : null}
 
-            {submitError !== null ? (
-              <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
-                {submitError}
-              </div>
-            ) : null}
-          </div>
+          {submitError !== null ? (
+            <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+              {submitError}
+            </div>
+          ) : null}
         </div>
-      )}
-      {preview !== null ? (
-        <PlatformPreviewPanel
-          open={open && previewOpen}
-          onClose={() => setPreviewOpen(false)}
-          {...preview}
-        />
-      ) : null}
-      {open && activePrompt !== null ? (
-        <FilePromptSheet
-          prompt={activePrompt}
-          onKeep={() => setPromptIds([])}
-          onRemove={removePrompted}
-        />
-      ) : null}
-      {open && cancelConfirm ? (
-        <ConfirmDialog
-          title={discard.title}
-          message={discard.message}
-          confirmLabel="Discard"
-          cancelLabel="Keep editing"
-          destructive
-          onConfirm={() => {
-            setCancelConfirm(false);
-            onClose();
-          }}
-          onCancel={() => setCancelConfirm(false)}
-        />
-      ) : null}
-    </Sheet>
+      </div>
+      {overlays}
+    </ComposerSheet>
   );
+}
+
+/** Hands the router's navigate to the sheet (rendered only inside a router). */
+function NavigateBridge({ navRef }: { navRef: MutableRefObject<NavigateFunction | null> }): null {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navRef.current = navigate;
+  }, [navigate, navRef]);
+  return null;
 }
 
 /**
@@ -1617,11 +1724,12 @@ export function FormatRow({
 }
 
 /**
- * The preset's fields: caption, format, an optional target date, media, and the
- * share toggle. With fillOnTap the person never types: a tap on the caption
- * fills the sample caption, on Format picks Single image (where the platform
- * has it), on the photo field attaches the sample photo, and each tells the
- * guide to move on. The target date stays empty.
+ * The preset's fields: an optional title (blank, the caption's first line is
+ * used), caption, format, an optional due date, media, and the share toggle.
+ * With fillOnTap the person never types: a tap on the caption fills the sample
+ * caption, on Format picks Single image (where the platform has it), on the
+ * photo field attaches the sample photo, and each tells the guide to move on.
+ * The title and due date stay empty.
  */
 function PresetFields(props: {
   preset: PostSheetPreset;
@@ -1636,6 +1744,7 @@ function PresetFields(props: {
   onShareChange: (value: boolean) => void;
   onMediaBusyChange: (busy: boolean) => void;
   captionError: ReactElement | null;
+  titleError: ReactElement | null;
 }): ReactElement {
   const { preset, form, patch } = props;
   // Select renders its own trigger and option rows (inline, no portal), so the
@@ -1682,6 +1791,17 @@ function PresetFields(props: {
   }, [singleIndex]);
   return (
     <>
+      <Field label="Title (optional)" htmlFor="post-title">
+        <Input
+          id="post-title"
+          value={form.title}
+          maxLength={TITLE_MAX}
+          onChange={(event) => patch({ title: event.target.value })}
+          placeholder={TITLE_PLACEHOLDER}
+        />
+        {props.titleError}
+      </Field>
+
       <Field label="Caption" htmlFor="post-caption" required>
         <Textarea
           ref={captionRef}
@@ -1708,9 +1828,9 @@ function PresetFields(props: {
           </Field>
         </div>
         <div className="min-w-0">
-          <Field label="Target date (optional)">
+          <Field label="Due date (optional)">
             <DatePicker
-              label="Target date"
+              label="Due date"
               value={form.targetDate}
               onChange={(value) => patch({ targetDate: value })}
             />

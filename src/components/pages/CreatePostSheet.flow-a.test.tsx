@@ -81,13 +81,12 @@ vi.mock('@/components/ui/toast', async (orig) => ({
 
 import {
   BRIEF_HELPER,
+  CREATE_POST_DISCARD_TITLE,
   CreatePostSheet,
   FAILED_UPLOAD_FOOTER,
   MORE_OPTIONS_HINT,
   MORE_OPTIONS_LABEL,
-  TITLE_HELPER,
   clearFieldError,
-  createPostDiscard,
   createdPostPath,
   createdStripTitle,
   formatSourceLine,
@@ -161,6 +160,9 @@ function buttonByText(text: string): HTMLButtonElement | undefined {
 
 const caption = (): HTMLTextAreaElement =>
   document.querySelector<HTMLTextAreaElement>('#post-caption')!;
+const titleField = (): HTMLInputElement => document.querySelector<HTMLInputElement>('#post-title')!;
+const closeButton = (): HTMLButtonElement =>
+  document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!;
 const draftButton = (): HTMLButtonElement =>
   document.querySelector<HTMLButtonElement>('button[data-submit="draft"]')!;
 const reviewButton = (): HTMLButtonElement =>
@@ -173,6 +175,16 @@ const text = (): string => document.body.textContent ?? '';
 
 async function typeCaption(value: string): Promise<void> {
   await act(async () => setValue(caption(), value));
+}
+
+async function typeTitle(value: string): Promise<void> {
+  await act(async () => setValue(titleField(), value));
+}
+
+/** The two required fields, filled: Title, then the caption. */
+async function fillRequired(captionText: string): Promise<void> {
+  await typeTitle('Monsoon drop');
+  await typeCaption(captionText);
 }
 
 async function openMoreOptions(): Promise<void> {
@@ -206,27 +218,28 @@ const doc = (id: string): AttachmentItem => ({
 });
 
 describe('CreatePostSheet flow A', () => {
-  it('fix 10: Files, Format, Caption, then More options (Title, Bucket, Due date, Brief)', async () => {
+  it('fix 10: Title, Files, Format, Caption, then More options (Bucket, Due date, Brief)', async () => {
     await renderSheet();
     const files = document.querySelector('[data-attachments]')!;
     const format = document.querySelector('[data-format-row]')!;
+    expect(before(titleField(), files)).toBe(true);
     expect(before(files, format)).toBe(true);
     expect(before(format, caption())).toBe(true);
     expect(before(caption(), moreButton())).toBe(true);
     expect(moreButton().textContent).toContain(MORE_OPTIONS_LABEL);
-    expect(moreButton().textContent).toContain('Title, bucket, due date, brief');
-    expect(MORE_OPTIONS_HINT).toBe('Title, bucket, due date, brief');
+    expect(moreButton().textContent).toContain('Bucket, due date, brief');
+    expect(MORE_OPTIONS_HINT).toBe('Bucket, due date, brief');
     expect(moreButton().getAttribute('aria-expanded')).toBe('false');
-    expect(document.querySelector('#post-title')).toBeNull();
+    // Title is always visible, never folded.
+    expect(document.querySelector('#post-title')).not.toBeNull();
 
     await openMoreOptions();
     expect(moreButton().getAttribute('aria-expanded')).toBe('true');
     const labels = [...document.querySelectorAll('#post-more-options label')].map((l) =>
       (l.textContent ?? '').trim(),
     );
-    expect(labels).toEqual(['Title', 'Bucket', 'Due date', 'Brief']);
-    expect(TITLE_HELPER).toBe("Left blank, it uses the caption's first line.");
-    expect(text()).toContain(TITLE_HELPER);
+    expect(labels).toEqual(['Bucket', 'Due date', 'Brief']);
+    expect(text()).not.toContain("Left blank, it uses the caption's first line.");
   });
 
   it('fix 11: the first video sets Reel with "Set from your video" and the soft prompt stays quiet', async () => {
@@ -264,35 +277,41 @@ describe('CreatePostSheet flow A', () => {
     expect(sourceLine()).toBe('');
   });
 
-  it('fix 14: a failed file disables Save as draft and Send for review and says so', async () => {
+  it('fix 14: a failed file disables Save draft and Send for review and says so at the top of the form', async () => {
     await renderSheet();
     await typeCaption('Hello');
     expect(draftButton().disabled).toBe(false);
     await act(async () => h.captured.onFailedChange?.(1));
     expect(draftButton().disabled).toBe(true);
     expect(reviewButton().disabled).toBe(true);
-    expect(document.querySelector('[data-upload-failed-footer]')?.textContent).toBe(
-      FAILED_UPLOAD_FOOTER,
-    );
+    const line = document.querySelector('[data-upload-failed-footer]')!;
+    expect(line.textContent).toBe(FAILED_UPLOAD_FOOTER);
+    // The first thing in the form, above Title.
+    expect(document.querySelector('[data-create-layout]')?.firstElementChild).toBe(line);
+    expect(before(line, titleField())).toBe(true);
     expect(FAILED_UPLOAD_FOOTER).toBe("Retry or remove the file that didn't upload.");
     await act(async () => h.captured.onFailedChange?.(0));
     expect(draftButton().disabled).toBe(false);
     expect(reviewButton().disabled).toBe(false);
   });
 
-  it('fix 15: the caption counter uses the platform limit and marks going over', async () => {
+  it('fix 15: the caption counter counts against 4,000 on every platform and marks going over', async () => {
     h.platform = 'x';
     await renderSheet();
     const counter = (): HTMLElement => document.querySelector<HTMLElement>('[data-caption-count]')!;
-    expect(counter().textContent).toBe('0 / 280');
+    expect(counter().textContent).toBe('0 / 4,000');
     await typeCaption('Hello');
-    expect(counter().textContent).toBe('5 / 280');
+    expect(counter().textContent).toBe('5 / 4,000');
     expect(counter().hasAttribute('data-over')).toBe(false);
-    await typeCaption('a'.repeat(281));
-    expect(counter().textContent).toBe('281 / 280');
+    await typeCaption('a'.repeat(4001));
+    expect(counter().textContent).toBe('4,001 / 4,000');
     expect(counter().hasAttribute('data-over')).toBe(true);
-    // Over the limit still saves.
+    // The button stays tappable; the tap refuses with the line.
     expect(draftButton().disabled).toBe(false);
+    await typeTitle('Monsoon drop');
+    await act(async () => draftButton().click());
+    expect(h.postCreate).not.toHaveBeenCalled();
+    expect(text()).toContain('Captions can be up to 4,000 characters.');
   });
 
   it('fix 16: a missing caption shows "Write a caption", focuses it, and typing clears it at once', async () => {
@@ -303,6 +322,7 @@ describe('CreatePostSheet flow A', () => {
     expect(clearFieldError(same, 'caption')).toBe(same);
 
     await renderSheet();
+    await typeTitle('Monsoon drop');
     caption().blur();
     await act(async () => draftButton().click());
     expect(text()).toContain('Write a caption');
@@ -316,10 +336,10 @@ describe('CreatePostSheet flow A', () => {
 
   it('fix 17: Send for review creates the post, then moves it to review', async () => {
     await renderSheet();
-    expect(buttonByText('Cancel')).toBeDefined();
-    expect(draftButton().textContent).toBe('Save as draft');
+    expect(buttonByText('Cancel')).toBeUndefined();
+    expect(draftButton().textContent).toBe('Save draft');
     expect(reviewButton().textContent).toBe('Send for review');
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => reviewButton().click());
     expect(h.postCreate).toHaveBeenCalledTimes(1);
     expect(h.stage).toHaveBeenCalledTimes(1);
@@ -333,37 +353,33 @@ describe('CreatePostSheet flow A', () => {
     );
   });
 
-  it('fix 17: Save as draft never moves the post', async () => {
+  it('fix 17: Save draft never moves the post', async () => {
     await renderSheet();
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => draftButton().click());
     expect(h.postCreate).toHaveBeenCalledTimes(1);
     expect(h.stage).not.toHaveBeenCalled();
   });
 
-  it('fix 18: the discard copy counts the files', () => {
-    expect(createPostDiscard(2)).toEqual({
-      title: 'Discard this post?',
-      message: 'Your caption and 2 files will be removed.',
-    });
-    expect(createPostDiscard(1).message).toBe('Your caption and 1 file will be removed.');
+  it('fix 18: the discard question is "Discard changes?"', () => {
+    expect(CREATE_POST_DISCARD_TITLE).toBe('Discard changes?');
   });
 
-  it('fix 18: Cancel on a clean sheet closes without asking', async () => {
+  it('fix 18: X on a clean sheet closes without asking', async () => {
     await renderSheet();
-    await act(async () => buttonByText('Cancel')!.click());
+    await act(async () => closeButton().click());
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(text()).not.toContain('Discard this post?');
+    expect(text()).not.toContain('Discard changes?');
   });
 
-  it('fix 18: Cancel on a dirty sheet asks, with Keep editing and Discard', async () => {
+  it('fix 18: X on a changed sheet asks, with Keep editing and Discard', async () => {
     await renderSheet();
     await typeCaption('Draft words');
     await act(async () => h.captured.onChange?.([doc('d1'), doc('d2')]));
-    await act(async () => buttonByText('Cancel')!.click());
+    await act(async () => closeButton().click());
     expect(onClose).not.toHaveBeenCalled();
-    expect(text()).toContain('Discard this post?');
-    expect(text()).toContain('Your caption and 2 files will be removed.');
+    expect(text()).toContain('Discard changes?');
+    expect(document.querySelector('[data-confirm-message]')).toBeNull();
     expect(buttonByText('Keep editing')).toBeDefined();
     await act(async () => buttonByText('Discard')!.click());
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -372,7 +388,7 @@ describe('CreatePostSheet flow A', () => {
   it('fix 19: the pressed button says "Saving…" while the save runs', async () => {
     h.postCreate.mockImplementation(() => new Promise(() => {}));
     await renderSheet();
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => draftButton().click());
     expect(draftButton().textContent).toBe('Saving…');
     expect(draftButton().disabled).toBe(true);
@@ -415,7 +431,7 @@ describe('CreatePostSheet flow A', () => {
       .mockResolvedValueOnce({ ok: false, error: { code: 'unknown', message: 'gallery blew up' } })
       .mockResolvedValue({ ok: true, data: 'g' });
     await renderSheet();
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => h.captured.onChange?.([doc('d1')]));
     await act(async () => draftButton().click());
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(
@@ -469,7 +485,7 @@ describe('CreatePostSheet flow A', () => {
       'Festive drop',
     );
     // The brief it opened with is not work to lose.
-    await act(async () => buttonByText('Cancel')!.click());
+    await act(async () => closeButton().click());
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -485,17 +501,22 @@ describe('CreatePostSheet flow A', () => {
     h.workspaceKey = 'KITE';
     h.number = 12;
     await renderSheet();
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => draftButton().click());
     expect(h.toastShow).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Saved as draft', kind: 'undo' }),
+      expect.objectContaining({
+        title: 'Saved as draft',
+        kind: 'undo',
+        durationMs: 4000,
+        action: expect.objectContaining({ label: 'Undo' }),
+      }),
     );
     expect(onCreated).toHaveBeenCalledWith('p1', { stage: 'draft', path: '/p/kite-12' });
   });
 
   it('fix 24: sent for review without a workspace key lands on /posts/:id', async () => {
     await renderSheet();
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => reviewButton().click());
     expect(h.toastShow).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Sent for review', kind: 'undo' }),
@@ -515,7 +536,7 @@ describe('CreatePostSheet flow A', () => {
       error: { code: 'unknown', message: 'relation "posts" does not exist' },
     });
     await renderSheet();
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => draftButton().click());
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(
       "Couldn't save the post. Try again.",
@@ -534,15 +555,15 @@ describe('CreatePostSheet flow A', () => {
   });
 
   it('extra: requiredFieldErrors no longer returns a format error', () => {
-    expect(requiredFieldErrors({ caption: '', format: '' })).toEqual({
+    expect(requiredFieldErrors({ title: 'T', caption: '', format: '' })).toEqual({
       caption: 'Write a caption',
     });
-    expect(requiredFieldErrors({ caption: 'Hi', format: '' })).toEqual({});
+    expect(requiredFieldErrors({ title: 'T', caption: 'Hi', format: '' })).toEqual({});
   });
 
   it('extra: Cmd/Ctrl+Enter in the full sheet sends for review', async () => {
     await renderSheet();
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => {
       caption().dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
@@ -554,7 +575,7 @@ describe('CreatePostSheet flow A', () => {
 
   it('extra: plain Enter in the caption does not submit', async () => {
     await renderSheet();
-    await typeCaption('Launch day');
+    await fillRequired('Launch day');
     await act(async () => {
       caption().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     });
