@@ -16,7 +16,6 @@ import {
   ASK_CHANGES_PLACEHOLDER,
   askChangesSteps,
 } from '@/components/chat/PlanItemScreen';
-import { PLAN_UNDO_MS } from '@/components/chat/plan-card';
 import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
 
 const dir = fileURLToPath(new URL('..', import.meta.url));
@@ -76,30 +75,35 @@ describe('Not OK on a row: the item screen asks changes at once', () => {
   });
 });
 
-describe('FT52: plan undo toasts use useUndoableAction (4s on the plan screens, countdown)', () => {
+describe('FT52: plan undo toasts use useUndoableAction (the 4s bottom strip)', () => {
   it('the item screen defers a move that resets nothing; the Plan screen defers an OK', () => {
-    expect(UNDO_WINDOW_MS).toBe(7000);
-    expect(PLAN_UNDO_MS).toBe(4000);
+    expect(UNDO_WINDOW_MS).toBe(4000);
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain("import { useUndoableAction } from '@/lib/use-undoable-action';");
-    expect(item).toContain('useUndoableAction({ durationMs: PLAN_UNDO_MS })');
+    expect(item).toContain('useUndoableAction()');
+    expect(item).not.toContain('PLAN_UNDO_MS');
     expect(item).toMatch(/if \(spec\.undo\) \{[\s\S]*?undoable\.run\(\{\s*label: spec\.title,/);
     expect(item).not.toContain('SLOT_UNDO_MS');
     expect(item).not.toContain('moveBack');
     const screen = read('PlanScreen.tsx');
     expect(screen).toContain("import { useUndoableAction } from '@/lib/use-undoable-action';");
-    expect(screen).toContain('useUndoableAction({ durationMs: PLAN_UNDO_MS })');
+    expect(screen).toContain('useUndoableAction()');
+    expect(screen).not.toContain('PLAN_UNDO_MS');
     expect(screen).toMatch(/undoable\.run\(\{\s*label: slotApprovedToast\(dayHeader\),/);
     expect(screen).not.toContain('SLOT_UNDO_MS');
     expect(screen).not.toContain('label: SLOT_UNDO');
-    // useUndoableAction's toast carries the countdown.
+    expect(read('plan-card.ts')).not.toContain('PLAN_UNDO_MS');
+    // useUndoableAction's toast is the bottom strip over the one shared window;
+    // no countdown and no per-caller window option.
     const hook = readFileSync(
       fileURLToPath(new URL('../../../lib/use-undoable-action.ts', import.meta.url)),
       'utf8',
     );
-    expect(hook).toContain('countdown: true');
-    // The window is an option; UNDO_WINDOW_MS (7s) stays the default elsewhere.
-    expect(hook).toContain('const durationMs = options?.durationMs ?? UNDO_WINDOW_MS;');
-    expect(hook).toMatch(/action: \{ label: 'Undo'[^\n]*\n\s*durationMs,\n/);
+    expect(hook).toContain('export const UNDO_WINDOW_MS = 4000;');
+    expect(hook).toContain("kind: 'undo',");
+    expect(hook).toContain('durationMs: UNDO_WINDOW_MS,');
+    expect(hook).not.toContain('countdown');
+    expect(hook).not.toContain('options?.durationMs');
+    expect(hook).toContain('export function useUndoableAction(): {');
   });
 });

@@ -33,10 +33,16 @@ import { createBrief, type Client } from '../../packages/briefs/src/index';
 const BRIEFS_SUITE = process.env.BRIEFS_SUITE === '1';
 
 describe('briefs are read-only: no update surface', () => {
-  it('the package exports create/close/read and nothing update-shaped', () => {
+  it('the package exports create/close/reopen/read and nothing update-shaped', () => {
     const names = Object.keys(briefs);
     expect(names).toEqual(
-      expect.arrayContaining(['createBrief', 'closeBrief', 'listBriefs', 'getBrief']),
+      expect.arrayContaining([
+        'createBrief',
+        'closeBrief',
+        'reopenBrief',
+        'listBriefs',
+        'getBrief',
+      ]),
     );
     for (const name of names) {
       expect(name.toLowerCase()).not.toMatch(/update|patch|edit/);

@@ -75,7 +75,7 @@ async function show(post: PostCardRow): Promise<void> {
   await act(async () => {
     root!.render(
       <MemoryRouter>
-        <SharedPostCardList views={views} side="agency" workspaceKey="gbl" timeZone="UTC" />
+        <SharedPostCardList views={views} side="agency" timeZone="UTC" />
       </MemoryRouter>,
     );
   });
@@ -126,8 +126,10 @@ describe('A1: a video-only Reel shows media in its 9:16 frame', () => {
     expect(img?.getAttribute('src')).toBe(THUMB);
     expect(document.querySelector('[data-card-video]')).toBeNull();
     expect(document.querySelector('[data-card-play]')).not.toBeNull();
-    // The cover is the card's media, so the KEY rides the media, not the title.
+    // No KEY-N code anywhere on the card: not on the media, not by the title.
     expect(document.querySelector('[data-card-ref]')).toBeNull();
+    expect(document.querySelector('[data-card-pill-ref]')).toBeNull();
+    expect(document.body.textContent ?? '').not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
   it('with no thumbnail (older video): the video itself at its first frame', async () => {
@@ -169,11 +171,13 @@ describe('A1: a video-only Reel shows media in its 9:16 frame', () => {
 });
 
 describe('A3: a media-optional format has a frame only when media is attached', () => {
-  it('an X thread with no media: no frame, the KEY sits inline', async () => {
+  it('an X thread with no media: no frame, the title alone (no KEY-N code)', async () => {
     await show(cardRow({ platform: 'x', format: 'thread' }));
     expect(frameEl()).toBeNull();
     expect(document.querySelector('[data-card-media]')).toBeNull();
-    expect(document.querySelector('[data-card-ref]')).not.toBeNull();
+    expect(document.querySelector('[data-card-ref]')).toBeNull();
+    expect(document.querySelector('[data-card-title]')).not.toBeNull();
+    expect(document.body.textContent ?? '').not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
   it('an X thread with a photo: framed', async () => {

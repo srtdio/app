@@ -21,7 +21,7 @@ import { useEffect } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
-import { ApproveConfirm, approveRef, approveTargetDate } from '@/components/ui/ApproveConfirm';
+import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { cn } from '@/lib/cn';
 import { useWorkspace } from '@/lib/workspace-context';
 import { StageDot, moveBlockedReason, stageLabel } from '@/components/pages/pipeline/stage-meta';
@@ -70,13 +70,13 @@ export interface MoveSheetProps {
 
 /**
  * Gates the page's move handler behind the approve confirm and resolves the
- * confirm's KEY-N and target date from data already loaded (the post row and
+ * confirm's target date from data already loaded (the post row and
  * the workspace context). No read of its own; slide count is not loaded on the
  * pipeline, so the confirm leaves that clause out.
  */
 export function MoveSheet(props: MoveSheetProps): ReactElement | null {
   const { onMove, busy = false } = props;
-  const { workspaceKey, workspaces, workspaceId, workspaceName } = useWorkspace();
+  const { workspaces, workspaceId, workspaceName } = useWorkspace();
   const { gate, state } = useApproveGate(onMove);
   const postId = props.post?.id ?? null;
   // A closed or re-targeted sheet forgets its confirm.
@@ -94,7 +94,6 @@ export function MoveSheet(props: MoveSheetProps): ReactElement | null {
       {...props}
       gate={gate}
       gateState={state}
-      refLabel={props.post !== null ? approveRef(workspaceKey, props.post.number) : ''}
       targetDate={props.post !== null ? approveTargetDate(props.post.target_date, timeZone) : ''}
       brand={workspaceName}
     />
@@ -104,8 +103,6 @@ export function MoveSheet(props: MoveSheetProps): ReactElement | null {
 export interface MoveSheetViewProps extends Omit<MoveSheetProps, 'onMove'> {
   gate: ApproveGate;
   gateState: GateState;
-  /** KEY-N for the approve confirm. */
-  refLabel: string;
   /** Short target date for the approve confirm; empty leaves the clause out. */
   targetDate: string;
   /** The workspace's brand name for the on-behalf line; null falls back to "the approvers". */
@@ -133,7 +130,6 @@ export function MoveSheetView({
   busy = false,
   gate,
   gateState,
-  refLabel,
   targetDate,
   role,
   brand = null,
@@ -157,7 +153,7 @@ export function MoveSheetView({
       footer={
         confirming ? (
           <ApproveConfirm
-            refLabel={refLabel}
+            postTitle={post.title}
             mediaCount={null}
             targetDate={targetDate}
             busy={busy || gateState.sent}

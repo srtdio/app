@@ -1760,11 +1760,12 @@ describe('post references', () => {
     return found;
   }
 
-  it('a reply to a card message renders the KEY chip instead of the quote; a tap jumps to the card', () => {
+  it('a reply to a card message renders the post chip instead of the quote; a tap jumps to the card', () => {
     const onOpenCard = vi.fn();
     const target = chipTargetFor(reply, parentIndexOf([card, reply]));
     expect(target).toEqual({ cardMessageId: 'card', postId: 'p1' });
-    const chip = bubbleChip(target, POST, { workspaceKey: 'gbl', onOpenCard });
+    const chip = bubbleChip(target, POST, { onOpenCard });
+    expect(chip).not.toHaveProperty('workspaceKey');
     const root = bubbleWith(reply, chip);
     expect(types(root)).toContain(PostRefChip);
     expect(types(root)).not.toContain(ReplyQuoteBox);
@@ -1778,7 +1779,7 @@ describe('post references', () => {
 
   it('a live row whose chip post is still being read keeps the plain quote (the chip comes later)', () => {
     const target = chipTargetFor(reply, parentIndexOf([card]));
-    const chip = bubbleChip(target, undefined, { workspaceKey: 'gbl', onOpenCard: vi.fn() });
+    const chip = bubbleChip(target, undefined, { onOpenCard: vi.fn() });
     expect(chip).toBeUndefined();
     const root = bubbleWith(reply, chip);
     expect(types(root)).not.toContain(PostRefChip);
@@ -1793,11 +1794,10 @@ describe('post references', () => {
   });
 
   it('keeps the quote for a plain parent or a post the viewer cannot see', () => {
-    const plain = bubbleChip(null, undefined, { workspaceKey: 'gbl', onOpenCard: vi.fn() });
+    const plain = bubbleChip(null, undefined, { onOpenCard: vi.fn() });
     expect(plain).toBeUndefined();
     expect(types(bubbleWith(reply, plain))).toContain(ReplyQuoteBox);
     const hidden = bubbleChip({ postId: 'p1', cardMessageId: 'card' }, null, {
-      workspaceKey: null,
       onOpenCard: vi.fn(),
     });
     expect(types(bubbleWith(reply, hidden))).toContain(ReplyQuoteBox);
@@ -1965,7 +1965,6 @@ describe('post references after audit', () => {
       for (const m of onScreen) {
         const target = chipTargetFor(m, index);
         const chip = bubbleChip(target, target !== null ? step.lookup(target.postId) : null, {
-          workspaceKey: 'gbl',
           onOpenCard: () => {},
         });
         list.set(
@@ -2785,7 +2784,7 @@ describe('D8: WhatsApp multi-select', () => {
 
   it('F6: while selecting, cards get no talkAbout, so a hold on a card only toggles the row', () => {
     const talk = vi.fn();
-    const refs = { onTalkAbout: talk, onOpenThread: noop };
+    const refs = { onTalkAbout: talk };
     expect(cardRefsFor('m1', selectable(noop), refs).onTalkAbout).toBeUndefined();
     expect(cardRefsFor('m1', undefined, refs).onTalkAbout).toBe(talk);
     // The card inside the row renders without its own hold handlers.

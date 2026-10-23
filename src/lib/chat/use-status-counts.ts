@@ -12,7 +12,8 @@
 // reviews and stages, never one per plan); outside a chat a local cache does
 // the same. RLS decides what comes back, so a team plan never reaches a
 // client. No realtime: a round refetches on PLAN_CHANGED_EVENT,
-// POST_CHANGED_EVENT and a tab returning after more than a minute,
+// POST_CHANGED_EVENT, WORKSPACE_DATA_CHANGED_EVENT (a brief closed or reopened)
+// and a tab returning after more than a minute,
 // single-flight (a trigger mid-round runs exactly one more). Plans shared live
 // into the loaded thread are added from its messages (the bar's filter still
 // keeps only current shared ones).
@@ -34,6 +35,7 @@ import {
 import { chatKey, openCache, type ChatKey } from '@/lib/chat/open-cache';
 import { currentPlanWindow } from '@/lib/chat/status-bar';
 import { supabase } from '@/lib/supabase';
+import { WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
 
 /** Open briefs a round lists (newest first). */
 export const OPEN_BRIEFS_LIMIT = 100;
@@ -433,10 +435,12 @@ export function useStatusCounts(params: {
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener(PLAN_CHANGED_EVENT, refetch);
     window.addEventListener(POST_CHANGED_EVENT, refetch);
+    window.addEventListener(WORKSPACE_DATA_CHANGED_EVENT, refetch);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener(PLAN_CHANGED_EVENT, refetch);
       window.removeEventListener(POST_CHANGED_EVENT, refetch);
+      window.removeEventListener(WORKSPACE_DATA_CHANGED_EVENT, refetch);
       runner.dispose();
       runnerRef.current = null;
     };

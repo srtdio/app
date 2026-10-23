@@ -1,6 +1,6 @@
 // The thread view's frame: full screen over the chat on the opaque canvas
 // token (no blur, no translucency), a 56px header with "Close" on the left and
-// the thread's "KEY title" centred on one line, then the thread's list and its
+// the thread's post title centred on one line, then the thread's list and its
 // composer (the caller's). Close and Escape (while the view has focus) close
 // it. Motion: opacity only, 150ms in and out, instant under
 // prefers-reduced-motion; nothing translates, scales or rotates. The header
@@ -19,11 +19,6 @@ const THREAD_VIEW_FADE_MS = 150;
 
 /** Users who asked for less motion: the view appears and goes at once. */
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-
-/** The header's centre line: "KEY title", the KEY left out until the workspace key is known. */
-export function threadViewTitle(refLabel: string | null, title: string): string {
-  return refLabel !== null ? `${refLabel} ${title}` : title;
-}
 
 /**
  * Whether a keydown in the view closes it: Escape, not already handled, while

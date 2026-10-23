@@ -412,8 +412,6 @@ export const SLOT_REMOVED_TOAST = 'Slot approval removed';
 export const SLOT_FAILED = "Couldn't update this slot. Try again.";
 export const SLOT_POST_NOT_READY = "This post isn't ready yet.";
 export const SLOT_UNDO = 'Undo';
-/** The plan screens' Undo window (a row's OK, an item move); 7s stays elsewhere. */
-export const PLAN_UNDO_MS = 4_000;
 /** The post item header's subtitle. */
 export const SLOT_APPROVED_LABEL = 'Slot approved';
 export const SLOT_PENDING_LABEL = 'Slot pending';

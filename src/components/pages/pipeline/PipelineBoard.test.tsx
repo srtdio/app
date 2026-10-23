@@ -383,7 +383,6 @@ function sheet(h: ReturnType<typeof harness>, posts: PipelinePost[]): ReactEleme
     post: pendingPost(groupByStage(posts, STAGES), h.state().pendingId),
     gate: h.gate,
     gateState: h.state(),
-    workspaceKey: 'gbl',
     timeZone: 'UTC',
     onBehalf: false,
   });
@@ -445,16 +444,22 @@ describe('PipelineBoard approve confirm (drop)', () => {
     }
   });
 
-  it('T6: the confirm names KEY-N and the target date when set, never slides', () => {
+  it('T6: the confirm names the post title and the target date when set, never slides', () => {
     const h = harness();
     const dated = { ...review, number: 9, target_date: '2026-10-02T06:30:00Z' };
     drop(board(h, [dated]), 'approved', 'review:p1');
     expect(confirmOf(sheet(h, [dated]))).toMatchObject({
-      refLabel: 'GBL-9',
+      postTitle: 'Post p1',
       mediaCount: null,
       targetDate: 'Oct 2',
     });
     expect(confirmOf(sheet(h, [review])).targetDate).toBe('');
+    // The sheet title is the format alone and the confirm never shows a KEY-N code.
+    const el = sheet(h, [dated]);
+    expect((el?.props as { title: string }).title).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
+    const html = renderToStaticMarkup((el?.props as { footer: ReactElement }).footer);
+    expect(html).toContain('Approve Post p1, for Oct 2?');
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
   it('T7: an agency approve confirm adds the on-behalf line; a client one does not', () => {
@@ -465,7 +470,6 @@ describe('PipelineBoard approve confirm (drop)', () => {
         post: pendingPost(groupByStage([review], STAGES), h.state().pendingId),
         gate: h.gate,
         gateState: h.state(),
-        workspaceKey: 'gbl',
         timeZone: 'UTC',
         onBehalf,
       });
@@ -601,7 +605,6 @@ describe('W4 board fixes', () => {
       post: makePost('p1', 'review'),
       gate,
       gateState: state,
-      workspaceKey: 'GBL',
       timeZone: 'UTC',
       onBehalf: false,
     })!;

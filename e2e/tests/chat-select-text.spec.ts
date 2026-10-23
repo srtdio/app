@@ -291,7 +291,7 @@ test.describe('iPhone', () => {
     await expect(row).toBeVisible();
     await hold(page, bubbleWith(page, line));
     await menu(page).locator('[data-menu-item="delete"]').click();
-    // X7 FT39: a text message deletes behind a 7s Undo instead of the confirm.
+    // X7 FT39: a text message deletes behind a 4s Undo instead of the confirm.
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
     await expect(page.locator('[data-selection-bar]')).toHaveCount(0);

@@ -1,7 +1,7 @@
 // The Plan row's PLAN and POST lines: the pure helpers behind them (which
 // control a row gets, its state and copy, the POST stage line, the header's
 // two counts), the OK | Not OK switch and the decided pill, and the 4s plan
-// Undo window on both plan screens.
+// Undo window on both plan screens (the shared UNDO_WINDOW_MS).
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +18,6 @@ import {
   PLAN_NOT_CHECKED_LABEL,
   PLAN_NOT_OK_LABEL,
   PLAN_OK_LABEL,
-  PLAN_UNDO_MS,
   POST_LINE_LABEL,
   POST_NOT_MADE_LABEL,
   countPercent,
@@ -299,19 +298,20 @@ describe('the PLAN switch and the decided pill', () => {
   });
 });
 
-describe('the plan Undo window (4s)', () => {
-  it('PLAN_UNDO_MS is 4000; the hook default stays UNDO_WINDOW_MS (7000)', () => {
-    expect(PLAN_UNDO_MS).toBe(4000);
-    expect(UNDO_WINDOW_MS).toBe(7000);
+describe('the plan Undo window (4s, the shared default)', () => {
+  it('UNDO_WINDOW_MS is 4000; plan-card no longer has its own window', async () => {
+    expect(UNDO_WINDOW_MS).toBe(4000);
+    expect(Object.keys(await import('@/components/chat/plan-card'))).not.toContain('PLAN_UNDO_MS');
+    expect(read('plan-card.ts')).not.toContain('PLAN_UNDO_MS');
   });
 
-  it('both plan screens pass it to useUndoableAction', () => {
+  it('both plan screens call useUndoableAction() with no options', () => {
     for (const name of ['PlanScreen.tsx', 'PlanItemScreen.tsx']) {
       const src = read(name);
-      expect(src).toContain('useUndoableAction({ durationMs: PLAN_UNDO_MS })');
-      expect(src).not.toContain('useUndoableAction()');
+      expect(src).toContain('useUndoableAction()');
+      expect(src).not.toContain('useUndoableAction({');
+      expect(src).not.toContain('PLAN_UNDO_MS');
       expect(src).not.toContain('SLOT_UNDO_MS');
     }
-    expect(read('plan-card.ts')).toContain('export const PLAN_UNDO_MS = 4_000;');
   });
 });

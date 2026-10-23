@@ -39,6 +39,7 @@ import {
   detailRows,
   friendlyCommentError,
   isVideoItem,
+  postSubject,
   reelLabel,
   runStageChange,
   sheetActions,
@@ -54,7 +55,6 @@ import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import { formatShortDate } from '@/lib/chat/time-format';
 import { actsOnBehalfOfClient, type ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
-import { formatEntityRef } from '@/lib/entityRef';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -121,15 +121,8 @@ export const ACTION_LINK = `${ACTION_BASE} text-accent hover:bg-panel-2`;
 export const ACTION_SOFT = `${ACTION_BASE} bg-accent-soft text-accent hover:bg-panel-2`;
 
 /** The sheet's talk-about label. */
-export function talkAboutLabel(refLabel: string): string {
-  return `Talk about ${refLabel}`;
-}
-
-/** The reference shown for the post: KEY-N, or a plain fallback before the key resolves. */
-export function sheetRef(workspaceKey: string | null, number: number): string {
-  return workspaceKey !== null && workspaceKey !== ''
-    ? formatEntityRef(workspaceKey, number)
-    : `Post ${number}`;
+export function talkAboutLabel(): string {
+  return 'Talk about this post';
 }
 
 /** The emphasis each action takes: the first action is filled, the rest quieter. */
@@ -410,7 +403,8 @@ export function PostSheetDetails(props: {
 export interface PostSheetActionsProps {
   set: SheetActionSet;
   mode: SheetMode;
-  refLabel: string;
+  /** How the confirm names the post (postSubject of its title). */
+  subject: string;
   approverName: string | null;
   /** The approver's role: an agency-side approver's pill adds "on behalf of client". */
   approverRole?: string | null;
@@ -447,7 +441,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
   let content: ReactElement;
   if (mode.kind === 'confirm') {
     const copy = confirmCopy(mode.confirm, {
-      ref: props.refLabel,
+      subject: props.subject,
       mediaCount: props.mediaCount,
       targetDate: props.targetDate,
     });
@@ -513,7 +507,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
             onClick={() => props.onAction(action)}
             className={actionClass(action, index === 0)}
           >
-            {actionLabel(action, props.refLabel)}
+            {actionLabel(action)}
           </button>
         ))}
         {props.onTalkAbout !== undefined ? (
@@ -523,7 +517,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
             onClick={props.onTalkAbout}
             className={ACTION_SOFT}
           >
-            {talkAboutLabel(props.refLabel)}
+            {talkAboutLabel()}
           </button>
         ) : null}
         {set.hint !== null ? (
@@ -549,12 +543,11 @@ export interface PostSheetProps {
   onClose: () => void;
   view: PostView;
   side: ViewerSide;
-  workspaceKey: string | null;
   timeZone: string;
   cache: PresignCache;
   deps: PresignDeps;
   presignEnabled: boolean;
-  /** "Talk about <KEY>": brings the post into the conversation, then the sheet closes. */
+  /** "Talk about this post": brings the post into the conversation, then the sheet closes. */
   onTalkAbout?: () => void;
 }
 
@@ -607,7 +600,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     setViewer(null);
   }, [open]);
 
-  const ref = sheetRef(props.workspaceKey, post.number);
+  const subject = postSubject(post.title);
   const set = sheetActions(side, post, timeZone);
   const targetDate = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
   const items = gallery.status === 'ready' ? gallery.items : [];
@@ -652,7 +645,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
         toast: (title) => toast.show({ title }),
         close: onClose,
       },
-      { kind: mode.confirm, postId: view.postId, ref, traceId: newTrace() },
+      { kind: mode.confirm, postId: view.postId, traceId: newTrace() },
     ).then((message) => {
       setBusy(false);
       if (message !== null) setError(message);
@@ -671,7 +664,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     });
     if (!result.ok) return { ok: false, error: friendlyCommentError(result.error.code) };
     onClose();
-    toast.show({ title: commentToast(ref) });
+    toast.show({ title: commentToast() });
     return { ok: true };
   };
 
@@ -686,13 +679,13 @@ export function PostSheet(props: PostSheetProps): ReactElement {
       <Sheet
         open={open}
         onClose={closeSheet}
-        title={sheetTitle(ref, post.format)}
+        title={sheetTitle(post.format)}
         footer={
           <PostSheetActions
             set={set}
             brand={brand}
             mode={mode}
-            refLabel={ref}
+            subject={subject}
             approverName={view.approverName}
             approverRole={view.approverRole ?? null}
             onBehalf={actsOnBehalfOfClient(side)}
@@ -720,7 +713,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
         <div data-post-sheet={view.postId} className="flex flex-col gap-4">
           {commenting ? (
             <div data-sheet-composer="" className="flex flex-col gap-3">
-              <h3 className="text-[15px] font-semibold text-fg">Comment on {ref}</h3>
+              <h3 className="text-[15px] font-semibold text-fg">Comment on {subject}</h3>
               <SlotComposer onSubmit={onSubmitPoints} canAttach={false} />
             </div>
           ) : (

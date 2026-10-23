@@ -183,7 +183,7 @@ describe('8 / 9 / 10. reason sheet dirty, Back, delete', () => {
     expect(PAGE.match(/navigate\('\/pipeline'\)/g)).toHaveLength(1);
   });
 
-  it('FT14: delete is a 7s undoable ("Post deleted"), leaves as the commit starts, honest copy', () => {
+  it('FT14: delete is a 4s undoable ("Post deleted"), leaves as the commit starts, honest copy', () => {
     const body = PAGE.slice(
       PAGE.indexOf('async function handleDeletePost'),
       PAGE.indexOf('const applyPostUpdate'),

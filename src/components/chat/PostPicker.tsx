@@ -42,7 +42,6 @@ import { IconBriefs, IconCheck, IconPipeline, IconSearch } from '@/components/ui
 import { stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { fetchMemberRole } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
-import { formatEntityRef } from '@/lib/entityRef';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { logger } from '@/lib/logger';
 import { useSession } from '@/lib/session-context';
@@ -591,7 +590,6 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   const rowProps: PostRowContext = {
     selected: props.selected,
     onToggle: props.onToggle,
-    workspaceKey,
     timeZone,
     sharedPostIds: props.sharedPostIds,
     excludePostIds: props.excludePostIds,
@@ -718,7 +716,6 @@ export function PostPicker(props: PostPickerProps): ReactElement {
               error={briefError}
               selected={props.selectedBriefs}
               onToggle={props.onToggleBrief}
-              workspaceKey={workspaceKey}
               timeZone={timeZone}
             />
           </>
@@ -753,7 +750,6 @@ export function InlinePickerPanel(props: {
 export interface PostRowContext {
   selected: readonly PostCardFields[];
   onToggle: (post: PostCardFields) => void;
-  workspaceKey: string | null;
   timeZone: string;
   sharedPostIds?: ReadonlySet<string> | undefined;
   /** Post ids whose rows are not rendered (already in the plan being added to). */
@@ -888,7 +884,7 @@ export function SearchResultsView(
   );
 }
 
-/** One post row: 48px cover, KEY · title, format · date, stage or "in this chat". */
+/** One post row: 48px cover, title, format · date, stage or "in this chat". */
 export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): ReactElement | null {
   const { post } = props;
   if (props.excludePostIds?.has(post.id) === true) return null;
@@ -911,14 +907,6 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
         <PostCover cover={props.cover !== undefined ? props.cover(post.id) : null} />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 items-baseline gap-1.5">
-            {props.workspaceKey !== null ? (
-              <>
-                <span className="shrink-0 font-mono text-xs tabular-nums text-fg-3">
-                  {formatEntityRef(props.workspaceKey, post.number)}
-                </span>
-                <span className="shrink-0 text-xs text-fg-3">·</span>
-              </>
-            ) : null}
             <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-fg">
               {post.title}
             </span>
@@ -948,7 +936,6 @@ function BriefPickerList(props: {
   error: string | null;
   selected: readonly BriefCardFields[];
   onToggle: (brief: BriefCardFields) => void;
-  workspaceKey: string | null;
   timeZone: string;
 }): ReactElement {
   if (props.loading) {
@@ -991,11 +978,6 @@ function BriefPickerList(props: {
                   <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-fg">
                     {brief.title}
                   </span>
-                  {props.workspaceKey !== null ? (
-                    <span className="shrink-0 font-mono text-xs tabular-nums text-fg-3">
-                      {formatEntityRef(props.workspaceKey, brief.number)}
-                    </span>
-                  ) : null}
                   <Tag
                     label={briefStatusLabel(brief.status)}
                     tone={brief.status === 'closed' ? 'neutral' : 'good'}

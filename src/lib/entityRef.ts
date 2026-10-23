@@ -33,14 +33,6 @@ export function parseEntityRef(raw: string): EntityRef | null {
 }
 
 /**
- * Format a key and number as a display reference: "KEY-N", uppercase, no leading
- * zeros on the number.
- */
-export function formatEntityRef(key: string, number: number): string {
-  return `${key.toUpperCase()}-${number}`;
-}
-
-/**
  * Build the canonical in-app path for a post or brief reference: "/p/key-n" for a
  * post, "/b/key-n" for a brief, with the key lowercased and no leading zeros.
  */

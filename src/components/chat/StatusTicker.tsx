@@ -905,7 +905,6 @@ export function ChatStatus(props: {
         postId={postSheet?.id ?? null}
         open={postSheet?.open === true}
         side={props.drawer.side}
-        workspaceKey={props.drawer.workspaceKey}
         timeZone={props.drawer.timeZone}
         onClose={() => setPostSheet((prev) => (prev !== null ? { ...prev, open: false } : prev))}
       />

@@ -1,5 +1,5 @@
 // The approve confirm block outside chat: the same question, consequence line,
-// Back and green "Approve KEY-N" pair the chat post sheet swaps into its footer
+// Back and green "Approve" pair the chat post sheet swaps into its footer
 // (decision 20 and 22). The copy comes from the chat sheet's own confirmCopy so
 // the two never drift. The chat block itself is not exported on its own (it is
 // one branch of PostSheetActions, bound to the chat action set), so the markup
@@ -9,10 +9,9 @@
 // translateY axis, exactly as the chat confirm does.
 
 import type { ReactElement } from 'react';
-import { confirmCopy } from '@/components/chat/post-sheet';
+import { confirmCopy, postSubject } from '@/components/chat/post-sheet';
 import { formatShortDate } from '@/lib/chat/time-format';
 import { cn } from '@/lib/cn';
-import { formatEntityRef } from '@/lib/entityRef';
 
 /** 48px buttons, mirroring the chat post sheet's ACTION_BASE. */
 const ACTION_BASE =
@@ -21,21 +20,14 @@ const ACTION_BASE =
 const ACTION_GOOD = `${ACTION_BASE} bg-good text-white hover:opacity-90`;
 const ACTION_GHOST = `${ACTION_BASE} border border-border bg-panel text-fg hover:bg-panel-2`;
 
-/** KEY-N for the confirm, or a plain fallback before the key resolves (as the chat sheet). */
-export function approveRef(workspaceKey: string | null, number: number): string {
-  return workspaceKey !== null && workspaceKey !== ''
-    ? formatEntityRef(workspaceKey, number)
-    : `Post ${number}`;
-}
-
 /** The target date as the chat confirm prints it ("Oct 2"); empty when not set. */
 export function approveTargetDate(targetDate: string | null, timeZone: string): string {
   return targetDate !== null ? formatShortDate(targetDate, timeZone) : '';
 }
 
 export interface ApproveConfirmProps {
-  /** KEY-N (see approveRef). */
-  refLabel: string;
+  /** The post's title; the question names it ("this post" when empty). */
+  postTitle: string | null;
   /** Slides on the post; null when the screen has not loaded it (the clause is left out). */
   mediaCount: number | null;
   /** Short target date; empty when not set or not loaded (the clause is left out). */
@@ -48,10 +40,10 @@ export interface ApproveConfirmProps {
   onConfirm: () => void;
 }
 
-/** "Approve KEY-N, all N slides, for Oct 2?", its consequence, then Back and Approve. */
+/** "Approve <Title>, all N slides, for Oct 2?", its consequence, then Back and Approve. */
 export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
   const copy = confirmCopy('approve', {
-    ref: props.refLabel,
+    subject: postSubject(props.postTitle),
     mediaCount: props.mediaCount ?? 0,
     targetDate: props.targetDate,
   });

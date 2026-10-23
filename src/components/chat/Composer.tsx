@@ -53,7 +53,7 @@ import { insertAtCaret } from '@/lib/chat/emoji-list';
 import { PostPicker, warmPostPicker } from '@/components/chat/PostPicker';
 import { MentionPicker, stepActive } from '@/components/chat/MentionPicker';
 import { PendingChip } from '@/components/chat/PendingChip';
-import { PostRefThumb, postRefKey, type PostRefPost } from '@/components/chat/PostRefChip';
+import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
   ReplyQuoteBox,
   type QuoteMedia,
@@ -459,30 +459,22 @@ const PICKER_WARM_DELAY_MS = 600;
 const HASH = String.fromCharCode(35);
 
 /**
- * The composer placeholder: "Message about KEY-N" while About is up, else a
+ * The composer placeholder: "Message about this post" while About is up, else a
  * nudge towards the hash post picker ("Reply, ..." while a reply draft is up).
  */
-export function composerPlaceholder(
-  aboutRef: string | null,
-  replying = false,
-  editing = false,
-): string {
+export function composerPlaceholder(about: boolean, replying = false, editing = false): string {
   if (editing) return EDIT_PLACEHOLDER;
-  if (aboutRef !== null) return `Message about ${aboutRef}`;
+  if (about) return 'Message about this post';
   return `${replying ? 'Reply' : 'Message'}, or ${HASH} for a post`;
 }
 
 /**
  * The About bar: the reply bar's grammar (3px accent rule, panel-3 box) with a
- * 32px thumbnail, "About KEY-N" in accent over the title, and a 44px close.
+ * 32px thumbnail, "About" in accent over the title, and a 44px close.
  * With no post yet (its read is in flight) it is a skeleton: "About", a title
  * placeholder and the same close, at the same height. No motion.
  */
-export function AboutBar(props: {
-  post: PostRefPost | null;
-  refLabel: string | null;
-  onCancel: () => void;
-}): ReactElement {
+export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void }): ReactElement {
   const post = props.post;
   return (
     <div
@@ -500,9 +492,7 @@ export function AboutBar(props: {
         <span aria-hidden="true" className="h-8 w-8 shrink-0 rounded-md bg-panel-2" />
       )}
       <span className="flex min-w-0 flex-1 flex-col py-1">
-        <span className="truncate text-xs font-medium text-accent">
-          {post !== null && props.refLabel !== null ? `About ${props.refLabel}` : 'About'}
-        </span>
+        <span className="truncate text-xs font-medium text-accent">About</span>
         {post !== null ? (
           <span className="truncate text-xs text-fg-2">{post.title}</span>
         ) : (
@@ -1924,8 +1914,6 @@ export function Composer(props: ComposerProps): ReactElement {
     props.onBringPost?.(post.id);
   }
 
-  const aboutRef = props.about != null ? postRefKey(workspaceKey, props.about.number) : null;
-
   const bars = composerBars({
     editing: editing !== undefined,
     reply: props.reply != null,
@@ -1977,6 +1965,7 @@ export function Composer(props: ComposerProps): ReactElement {
       <form
         ref={formRef}
         onSubmit={submit}
+        data-undo-anchor=""
         className="relative flex flex-col gap-2 border-t border-border bg-panel px-3 py-2.5"
       >
         {mentionRows.length > 0 ? (
@@ -2010,11 +1999,7 @@ export function Composer(props: ComposerProps): ReactElement {
         ) : null}
 
         {bars.about && props.about !== undefined ? (
-          <AboutBar
-            post={props.about}
-            refLabel={aboutRef}
-            onCancel={() => props.onCancelAbout?.()}
-          />
+          <AboutBar post={props.about} onCancel={() => props.onCancelAbout?.()} />
         ) : null}
 
         {bars.reply && props.reply != null ? (
@@ -2238,7 +2223,11 @@ export function Composer(props: ComposerProps): ReactElement {
                     ? ''
                     : props.placeholder !== undefined && editing === undefined
                       ? props.placeholder
-                      : composerPlaceholder(aboutRef, props.reply != null, editing !== undefined)
+                      : composerPlaceholder(
+                          props.about != null,
+                          props.reply != null,
+                          editing !== undefined,
+                        )
                 }
                 rows={1}
                 compact

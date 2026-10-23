@@ -10,7 +10,10 @@ export function BottomTabs() {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 flex border-t border-border bg-panel pb-[env(safe-area-inset-bottom)]">
+    <nav
+      data-undo-anchor=""
+      className="md:hidden fixed bottom-0 inset-x-0 z-30 flex border-t border-border bg-panel pb-[env(safe-area-inset-bottom)]"
+    >
       {PRIMARY_NAV.map((item) => (
         <NavLink
           key={item.to}

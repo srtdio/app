@@ -1,4 +1,4 @@
-// The KEY chip a message carries when it replies to a card message outside the
+// The post chip a message carries when it replies to a card message outside the
 // card's thread, plus the thread-level batch that feeds every chip, the thread
 // chips and titles, and the About bar.
 // The batch is ONE readPostCards call per distinct set of new post ids per
@@ -14,7 +14,6 @@ import { IconPipeline } from '@/components/ui/icons';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { cn } from '@/lib/cn';
-import { formatEntityRef } from '@/lib/entityRef';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import type { Result } from '@srtdio/posts';
@@ -130,13 +129,6 @@ export function useChipBatch(ids: readonly string[]): ChipLookup {
   );
 }
 
-/** KEY-N, or null before the workspace key resolves. */
-export function postRefKey(workspaceKey: string | null, number: number): string | null {
-  return workspaceKey !== null && workspaceKey !== ''
-    ? formatEntityRef(workspaceKey, number)
-    : null;
-}
-
 /**
  * A post's cover as a small thumbnail (round for chips, rounded for bars; the
  * 20px thread chip thumbnail at a 5px radius).
@@ -178,24 +170,22 @@ export function PostRefThumb(props: {
 }
 
 /**
- * The chip itself: a 24px pill (18px round thumb, KEY in mono accent, title
- * truncated) inside a 44px-tall tap target. Tapping jumps to the card. The own
+ * The chip itself: a 24px pill (18px round thumb, the post title truncated)
+ * inside a 44px-tall tap target; never a KEY-N code. Tapping jumps to the card. The own
  * bubble's content overrides restyle it like the quote.
  */
 export function PostRefChip(props: {
   post: PostRefPost;
-  workspaceKey: string | null;
   onTap: () => void;
   className?: string;
 }): ReactElement {
   const { post } = props;
-  const ref = postRefKey(props.workspaceKey, post.number);
   return (
     <button
       type="button"
       data-post-ref={post.id}
       data-msg-link=""
-      aria-label={`Go to the card about ${ref ?? post.title}`}
+      aria-label={`Go to the card about ${post.title}`}
       onClick={(e) => {
         e.stopPropagation();
         props.onTap();
@@ -204,11 +194,6 @@ export function PostRefChip(props: {
     >
       <span className="inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-panel-3 pl-[3px] pr-2.5">
         <PostRefThumb assetVersionId={post.thumbnailAssetVersionId} size={18} round />
-        {ref !== null ? (
-          <span data-post-ref-key="" className="shrink-0 font-mono text-xs font-medium text-accent">
-            {ref}
-          </span>
-        ) : null}
         <span className="min-w-0 truncate text-xs text-fg-2">{post.title}</span>
       </span>
     </button>

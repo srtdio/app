@@ -223,7 +223,7 @@ describe('loadRecentEntries', () => {
     expect(entries.map((e) => [e.type, e.title])).toEqual([
       ['post', 'Monday carousel'],
       ['group', 'Launch crew'],
-      ['post', 'GBL-2'],
+      ['post', 'Untitled post'],
       ['person', 'Priya Raman'],
       ['person', 'Sam Okafor'],
       ['task', 'Cut the teaser'],
@@ -234,6 +234,36 @@ describe('loadRecentEntries', () => {
       path: `/chat?channel=group__${WS}__g1`,
     });
     expect(entries.find((e) => e.id === PEER)?.target).toEqual({ person: PEER });
+  });
+
+  it('an untitled post or brief reads "Untitled post" / "Untitled brief", never a KEY-N code', async () => {
+    const { client } = fakeClient({
+      posts: [{ id: 'p9', title: '   ', number: 9 }],
+      briefs: [
+        { id: 'b4', title: '', number: 4 },
+        { id: 'b5', title: 'Diwali brief', number: 5 },
+      ],
+    });
+    const entries = await loadRecentEntries({
+      client,
+      workspaceId: WS,
+      workspaceKey: 'GBL',
+      userId: ME,
+      items: [
+        { type: 'post', id: 'p9', openedAt: 3 },
+        { type: 'brief', id: 'b4', openedAt: 2 },
+        { type: 'brief', id: 'b5', openedAt: 1 },
+      ],
+    });
+    expect(entries.map((e) => [e.type, e.title])).toEqual([
+      ['post', 'Untitled post'],
+      ['brief', 'Untitled brief'],
+      ['brief', 'Diwali brief'],
+    ]);
+    for (const e of entries) expect(e.title).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
+    // The link still uses the short /p and /b path.
+    expect(entries[0]?.target).toEqual({ path: '/p/gbl-9' });
+    expect(entries[1]?.target).toEqual({ path: '/b/gbl-4' });
   });
 
   it('a person who left drops; a failed read drops that type silently', async () => {

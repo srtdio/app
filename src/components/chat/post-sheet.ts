@@ -74,11 +74,11 @@ export function sheetActions(
   return { actions: ['open_post'], hint: null, approvedPill: false };
 }
 
-/** The button label for an action; approve names the post. */
-export function actionLabel(action: SheetAction, ref: string): string {
+/** The button label for an action. */
+export function actionLabel(action: SheetAction): string {
   switch (action) {
     case 'approve':
-      return `Approve ${ref}`;
+      return 'Approve';
     case 'comment':
       return 'Comment on this post';
     case 'open_post':
@@ -110,6 +110,15 @@ function slidesPhrase(count: number): string {
   return count === 1 ? '1 slide' : `all ${count} slides`;
 }
 
+/**
+ * How confirm copy names a post: its title, or "this post" when it has none.
+ * Never a KEY-N code (codes are not shown in the UI).
+ */
+export function postSubject(title: string | null | undefined): string {
+  const trimmed = (title ?? '').trim();
+  return trimmed !== '' ? trimmed : 'this post';
+}
+
 /** The confirm block's question and its consequence line. */
 export interface ConfirmCopy {
   question: string;
@@ -118,15 +127,16 @@ export interface ConfirmCopy {
 }
 
 /**
- * The confirm copy. Approve: "Approve KEY, all N slides, for Oct 2?" followed by
- * the logged-approval line; the slide and date clauses drop out when there is no
- * media or no target date. Send for review says what leaving draft means.
+ * The confirm copy. Approve: "Approve <Title>, all N slides, for Oct 2?" followed
+ * by the logged-approval line; the slide and date clauses drop out when there is
+ * no media or no target date. Send for review says what leaving draft means.
+ * `subject` is the post's name as postSubject gives it.
  */
 export function confirmCopy(
   kind: ConfirmKind,
-  args: { ref: string; mediaCount: number; targetDate: string },
+  args: { subject: string; mediaCount: number; targetDate: string },
 ): ConfirmCopy {
-  const clauses = [args.ref];
+  const clauses = [args.subject];
   const slides = slidesPhrase(args.mediaCount);
   if (slides !== '') clauses.push(slides);
   if (args.targetDate !== '') clauses.push(`for ${args.targetDate}`);
@@ -135,11 +145,11 @@ export function confirmCopy(
     return {
       question: `Approve ${subject}?`,
       detail: 'This is logged as your approval and the creators are notified.',
-      confirmLabel: `Approve ${args.ref}`,
+      confirmLabel: 'Approve',
     };
   }
   return {
-    question: `Send ${args.ref} to the approvers for review?`,
+    question: `Send ${args.subject} to the approvers for review?`,
     detail:
       'It leaves draft, and approvers can approve it or comment, or you can approve on their behalf.',
     confirmLabel: 'Send for review',
@@ -151,14 +161,14 @@ export function confirmTarget(kind: ConfirmKind): StageTransitionInput['toStage'
   return kind === 'approve' ? 'approved' : 'review';
 }
 
-/** The success toast: "KEY approved" / "KEY sent for review". */
-export function successToast(kind: ConfirmKind, ref: string): string {
-  return kind === 'approve' ? `${ref} approved` : `${ref} sent for review`;
+/** The success toast: "Post approved" / "Post sent for review". */
+export function successToast(kind: ConfirmKind): string {
+  return kind === 'approve' ? 'Post approved' : 'Post sent for review';
 }
 
 /** The toast after a client comment lands. */
-export function commentToast(ref: string): string {
-  return `Comment added to ${ref}`;
+export function commentToast(): string {
+  return 'Comment added';
 }
 
 /** Copy for a failed comment_batch_create; unknown codes keep the generic line. */
@@ -207,9 +217,9 @@ export function stripCounter(index: number, count: number): string {
   return `${index + 1} / ${count}`;
 }
 
-/** The sheet title: "KEY · Format". */
-export function sheetTitle(ref: string, format: string): string {
-  return `${ref} · ${formatLabel(format)}`;
+/** The sheet title: the format ("Carousel"); the body already shows the post title. */
+export function sheetTitle(format: string): string {
+  return formatLabel(format);
 }
 
 /** Title-case a stage value for its chip. */
@@ -297,7 +307,7 @@ export interface StageChangeDeps {
  */
 export async function runStageChange(
   deps: StageChangeDeps,
-  args: { kind: ConfirmKind; postId: string; ref: string; traceId: string },
+  args: { kind: ConfirmKind; postId: string; traceId: string },
 ): Promise<string | null> {
   let result: Result<string>;
   try {
@@ -312,6 +322,6 @@ export async function runStageChange(
   if (!result.ok) return friendlyTransitionError(result.error);
   dispatchPostChanged(deps.target, args.postId);
   deps.close();
-  deps.toast(successToast(args.kind, args.ref));
+  deps.toast(successToast(args.kind));
   return null;
 }

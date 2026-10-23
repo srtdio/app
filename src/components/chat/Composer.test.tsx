@@ -39,7 +39,6 @@ import { createOutboxSender, runSend, type SendOutcome } from '@/lib/chat/send-f
 import { canSendAttachmentMessage, type MessageAttachment } from '@/lib/chat/attachments';
 import { stripHashToken } from '@/lib/chat/post-refs';
 import { IconButton } from '@/components/ui/IconButton';
-import { postRefKey } from '@/components/chat/PostRefChip';
 import { getDraft, resetDrafts, setDraft } from '@/lib/chat/drafts';
 import { runEdit } from '@/lib/chat/delete-flow';
 import type { Client } from '@srtdio/rpc';
@@ -341,56 +340,47 @@ describe('About bar', () => {
     return find((node.props as { children?: ReactNode }).children, match);
   }
 
-  it('renders the reply bar grammar: accent rule, 32px thumb, "About KEY" over the title', () => {
-    const html = renderToStaticMarkup(
-      <AboutBar post={post} refLabel="GBL-14" onCancel={() => {}} />,
-    );
+  it('renders the reply bar grammar: accent rule, 32px thumb, "About" over the title', () => {
+    const html = renderToStaticMarkup(<AboutBar post={post} onCancel={() => {}} />);
     expect(html).toContain('w-[3px]');
     expect(html).toContain('bg-accent');
     expect(html).toContain('h-8 w-8');
-    expect(html).toMatch(/text-accent[^>]*>About GBL-14</);
+    expect(html).toMatch(/text-accent[^>]*>About</);
     expect(html).toContain('Launch teaser');
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
     expect(html).toContain('aria-label="Close about"');
   });
 
   it('its X cancels', () => {
     const onCancel = vi.fn();
-    const close = find(
-      AboutBar({ post, refLabel: 'GBL-14', onCancel }),
-      (el) => el.type === IconButton,
-    );
+    const close = find(AboutBar({ post, onCancel }), (el) => el.type === IconButton);
     (close?.props as { onClick: () => void }).onClick();
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it('the placeholder follows About, and mentions the hash otherwise', () => {
     // default
-    expect(composerPlaceholder(null)).toBe(`Message, or ${HASH} for a post`);
+    expect(composerPlaceholder(false)).toBe(`Message, or ${HASH} for a post`);
     // reply draft, no About
-    expect(composerPlaceholder(null, true)).toBe(`Reply, or ${HASH} for a post`);
-    // About visible (with or without a reply draft)
-    expect(composerPlaceholder('GBL-14')).toBe('Message about GBL-14');
-    expect(composerPlaceholder('GBL-14', true)).toBe('Message about GBL-14');
-    // workspaceKey null: postRefKey yields no ref, so the default applies
-    expect(composerPlaceholder(postRefKey(null, 14))).toBe(`Message, or ${HASH} for a post`);
+    expect(composerPlaceholder(false, true)).toBe(`Reply, or ${HASH} for a post`);
+    // About visible (with or without a reply draft): never a KEY-N code
+    expect(composerPlaceholder(true)).toBe('Message about this post');
+    expect(composerPlaceholder(true, true)).toBe('Message about this post');
   });
 });
 
 describe('About bar while its post loads (F14)', () => {
-  it('is a skeleton with the same close: no KEY, a title placeholder', () => {
-    const html = renderToStaticMarkup(
-      <AboutBar post={null} refLabel="GBL-14" onCancel={() => {}} />,
-    );
+  it('is a skeleton with the same close: "About", a title placeholder', () => {
+    const html = renderToStaticMarkup(<AboutBar post={null} onCancel={() => {}} />);
     expect(html).toContain('data-about-loading');
     expect(html).toMatch(/text-accent[^>]*>About</);
-    expect(html).not.toContain('GBL-14');
     expect(html).toContain('h-3 w-28');
     expect(html).toContain('aria-label="Close about"');
   });
 
   it('can be cancelled while loading', () => {
     const onCancel = vi.fn();
-    const root = AboutBar({ post: null, refLabel: null, onCancel });
+    const root = AboutBar({ post: null, onCancel });
     const stack: ReactNode[] = [root];
     let close: ReactElement | null = null;
     while (stack.length > 0 && close === null) {
@@ -448,7 +438,7 @@ describe('editing mode', () => {
   });
 
   it('the placeholder reads "Edit message" and the hash picker is off while editing', () => {
-    expect(composerPlaceholder('GBL-14', true, true)).toBe(EDIT_PLACEHOLDER);
+    expect(composerPlaceholder(true, true, true)).toBe(EDIT_PLACEHOLDER);
     expect(EDIT_PLACEHOLDER).toBe('Edit message');
     // The composer passes enabled: false while editing.
     expect(hashPickerQuery({ enabled: false, dismissed: false, text: `${HASH}la`, caret: 3 })).toBe(
@@ -513,9 +503,7 @@ describe('D7/F10: only the textarea and search inputs stay selectable', () => {
   const NO_SELECT = ['select-none', '[-webkit-touch-callout:none]'];
 
   it('the About chip and the reply bar carry select-none and no callout', () => {
-    const about = renderToStaticMarkup(
-      <AboutBar post={null} refLabel={null} onCancel={() => {}} />,
-    );
+    const about = renderToStaticMarkup(<AboutBar post={null} onCancel={() => {}} />);
     const reply = renderToStaticMarkup(
       <ReplyBar
         reply={{ authorName: 'Ann', quote: { id: 'm1', authorUserId: 'a', preview: 'hi' } }}

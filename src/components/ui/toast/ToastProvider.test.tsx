@@ -209,15 +209,118 @@ describe('createToastStore', () => {
     store.dispose();
   });
 
-  it('countdown carries the duration onto the toast only when it auto-dismisses', () => {
+  it('carries kind through show(); a card has none and no countdown field', () => {
     const store = createToastStore();
-    store.show({ title: 'A', durationMs: 7000, countdown: true });
-    store.show({ title: 'B', durationMs: null, countdown: true });
-    store.show({ title: 'C', durationMs: 7000 });
-    const [c, b, a] = store.getSnapshot();
-    expect(a!.countdownMs).toBe(7000);
-    expect(b!.countdownMs).toBeUndefined();
-    expect(c!.countdownMs).toBeUndefined();
+    store.show({ title: 'Card', durationMs: 4000 });
+    store.show({ title: 'Strip', durationMs: 4000, kind: 'undo' });
+    const [strip, card] = store.getSnapshot();
+    expect(strip!.kind).toBe('undo');
+    expect('kind' in card!).toBe(false);
+    for (const t of [strip!, card!]) {
+      expect('countdown' in t).toBe(false);
+      expect('countdownMs' in t).toBe(false);
+    }
+    store.dispose();
+  });
+
+  it('an undo strip expires (accept) at its durationMs, like a card', () => {
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    store.show({ title: 'Deleted', durationMs: 4000, kind: 'undo', onExpire });
+    vi.advanceTimersByTime(3999);
+    expect(onExpire).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(EXIT_MS);
+    expect(store.getSnapshot()).toHaveLength(0);
+    store.dispose();
+  });
+
+  it('a second undo strip replaces the first: first onExpire once, first leaving, second live', () => {
+    const store = createToastStore();
+    const first = vi.fn();
+    const second = vi.fn();
+    const a = store.show({ title: 'First', durationMs: 4000, kind: 'undo', onExpire: first });
+    const b = store.show({ title: 'Second', durationMs: 4000, kind: 'undo', onExpire: second });
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+    const byId = (id: string) => store.getSnapshot().find((t) => t.id === id);
+    expect(byId(a)!.leaving).toBe(true);
+    expect(byId(b)!.leaving).toBe(false);
+    // The first's own timer never fires its onExpire again.
+    vi.advanceTimersByTime(EXIT_MS);
+    expect(byId(a)).toBeUndefined();
+    expect(byId(b)!.leaving).toBe(false);
+    vi.advanceTimersByTime(4000);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('only one live strip at a time across many shows', () => {
+    const store = createToastStore();
+    const expires = [vi.fn(), vi.fn(), vi.fn()];
+    for (const [i, onExpire] of expires.entries()) {
+      store.show({ title: `s${i}`, durationMs: 0, kind: 'undo', onExpire });
+    }
+    const live = store.getSnapshot().filter((t) => t.kind === 'undo' && !t.leaving);
+    expect(live.map((t) => t.title)).toEqual(['s2']);
+    expect(expires[0]).toHaveBeenCalledTimes(1);
+    expect(expires[1]).toHaveBeenCalledTimes(1);
+    expect(expires[2]).not.toHaveBeenCalled();
+    store.dispose();
+  });
+
+  it('a strip leaves cards alone, and an undone strip is not accepted by the next', () => {
+    const store = createToastStore();
+    const cardExpire = vi.fn();
+    const undone = vi.fn();
+    const onPress = vi.fn();
+    store.show({ title: 'Card', durationMs: 0, onExpire: cardExpire });
+    const a = store.show({
+      title: 'First',
+      durationMs: 4000,
+      kind: 'undo',
+      action: { label: 'Undo', onPress },
+      onExpire: undone,
+    });
+    store.act(a);
+    store.show({ title: 'Second', durationMs: 4000, kind: 'undo' });
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(undone).not.toHaveBeenCalled();
+    const card = store.getSnapshot().find((t) => t.title === 'Card');
+    expect(card!.leaving).toBe(false);
+    expect(cardExpire).not.toHaveBeenCalled();
+    store.dispose();
+  });
+
+  it('the card cap never counts the strip, and cards never push the strip out', () => {
+    const store = createToastStore();
+    const stripExpire = vi.fn();
+    store.show({ title: 'Strip', durationMs: 0, kind: 'undo', onExpire: stripExpire });
+    for (let i = 1; i <= MAX_VISIBLE; i += 1) store.show({ title: `c${i}`, durationMs: 0 });
+    let snap = store.getSnapshot();
+    expect(snap.filter((t) => t.kind !== 'undo')).toHaveLength(MAX_VISIBLE);
+    expect(snap.filter((t) => t.kind === 'undo')).toHaveLength(1);
+    expect(stripExpire).not.toHaveBeenCalled();
+    // One more card drops the oldest card, not the strip.
+    store.show({ title: `c${MAX_VISIBLE + 1}`, durationMs: 0 });
+    snap = store.getSnapshot();
+    const cards = snap.filter((t) => t.kind !== 'undo');
+    expect(cards).toHaveLength(MAX_VISIBLE);
+    expect(cards.map((t) => t.title)).not.toContain('c1');
+    expect(snap.find((t) => t.kind === 'undo')!.leaving).toBe(false);
+    expect(stripExpire).not.toHaveBeenCalled();
+    store.dispose();
+  });
+
+  it('a new strip does not push a card past the cap', () => {
+    const store = createToastStore();
+    const cardExpires = Array.from({ length: MAX_VISIBLE }, () => vi.fn());
+    for (const onExpire of cardExpires) store.show({ title: 'c', durationMs: 0, onExpire });
+    store.show({ title: 'Strip', durationMs: 0, kind: 'undo' });
+    expect(store.getSnapshot().filter((t) => t.kind !== 'undo')).toHaveLength(MAX_VISIBLE);
+    for (const fn of cardExpires) expect(fn).not.toHaveBeenCalled();
     store.dispose();
   });
 });

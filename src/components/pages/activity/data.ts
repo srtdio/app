@@ -129,12 +129,19 @@ export function payloadNum(p: unknown, key: string): number | null {
 }
 
 /**
+ * The display event type of a brief reopen. brief_reopen writes event_type
+ * 'system' with payload.kind 'brief_reopened' (no constraint change); mapEntry
+ * lifts it to this type so it reads, groups and links like brief_closed.
+ */
+export const BRIEF_REOPENED_EVENT = 'brief_reopened';
+
+/**
  * The event_type values the app knows (the canonical DB list). A row whose
  * event_type is outside this set still renders a generic line (never blank), but
  * we log it loudly once so app<->DB drift is visible instead of silent. This is
  * the runtime companion to the DB<->app parity test.
  */
-const KNOWN_EVENT_TYPES = new Set<string>(INBOX_EVENT_TYPES);
+const KNOWN_EVENT_TYPES = new Set<string>([...INBOX_EVENT_TYPES, BRIEF_REOPENED_EVENT]);
 const warnedUnknownEventTypes = new Set<string>();
 
 /** Log (once per value) any event_type the canonical app list does not know. */
@@ -166,6 +173,13 @@ export type ActivityState =
   | 'plans'
   | 'upcoming'
   | 'snoozed';
+
+/** The display event type of a row: a 'system' brief reopen is BRIEF_REOPENED_EVENT. */
+function displayEventType(row: InboxEntryRow, payload: unknown): string {
+  return row.event_type === 'system' && payloadStr(payload, 'kind') === BRIEF_REOPENED_EVENT
+    ? BRIEF_REOPENED_EVENT
+    : row.event_type;
+}
 
 /** The inbox scope every brief event is written with (brief comments, mentions,
  *  brief created / closed, posts created from a brief). */
@@ -369,6 +383,7 @@ export const ROW_ACTOR_EVENTS: ReadonlySet<string> = new Set([
   'brief_post_created',
   'brief_created',
   'brief_closed',
+  BRIEF_REOPENED_EVENT,
 ]);
 
 /** The actor id a row names: actor_user_id where the writer stamps it, else the payload's. */
@@ -381,8 +396,9 @@ function rowActorId(row: InboxEntryRow, payload: unknown): string | null {
   ) {
     return own;
   }
-  // A brief_closed row never falls back to payload.created_by: that is the creator.
-  if (row.event_type === 'brief_closed') return own;
+  // A brief_closed or reopen row never falls back to payload.created_by: that is the creator.
+  const display = displayEventType(row, payload);
+  if (display === 'brief_closed' || display === BRIEF_REOPENED_EVENT) return own;
   if (ROW_ACTOR_EVENTS.has(row.event_type)) return own ?? payloadStr(payload, 'created_by');
   return own ?? payloadStr(payload, 'created_by') ?? payloadStr(payload, 'invited_by');
 }
@@ -457,7 +473,7 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
-    eventType: row.event_type,
+    eventType: displayEventType(row, payload),
     entityType: row.entity_type,
     entityId: row.entity_id,
     scope: row.scope,
@@ -677,6 +693,8 @@ export function activityLine(item: ActivityItem): string {
         : item.title !== null
           ? `Brief ${item.title} closed`
           : 'A brief was closed';
+    case BRIEF_REOPENED_EVENT:
+      return `${who ?? UNKNOWN_ACTOR} reopened ${target}`;
     case 'asset_uploaded':
       return who !== null ? `${who} uploaded an asset` : 'New asset uploaded';
     case 'asset_version_added':
@@ -734,6 +752,8 @@ export function shortLine(item: ActivityItem, parts: { name?: boolean } = {}): s
       return 'Brief created';
     case 'brief_closed':
       return 'Brief closed';
+    case BRIEF_REOPENED_EVENT:
+      return 'Brief reopened';
     case 'brief_post_created':
       return item.fromBriefTitle !== null && item.fromBriefTitle !== undefined
         ? `Created from ${item.fromBriefTitle}`

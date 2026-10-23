@@ -23,7 +23,6 @@ import { useToast } from '@/components/ui/toast';
 import { MARK_TONE } from '@/components/chat/MarkBits';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { useThumbnail } from '@/components/media/use-thumbnail';
-import { formatEntityRef } from '@/lib/entityRef';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -58,8 +57,8 @@ import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 /** The marks section body when posts are listed but no mark is open. */
 export const NO_OPEN_MARKS = 'No open marks';
 
-/** The 44px cover of an open post (lazy, same presign path as the cards); KEY tile without one. */
-function OpenPostThumb(props: { assetVersionId: string | null; monogram: string | null }) {
+/** The 44px cover of an open post (lazy, same presign path as the cards); a post glyph without one. */
+function OpenPostThumb(props: { assetVersionId: string | null }) {
   const thumb = useThumbnail<HTMLSpanElement>({
     assetVersionId: props.assetVersionId,
     cache: sharedCardPresignCache(),
@@ -70,7 +69,7 @@ function OpenPostThumb(props: { assetVersionId: string | null; monogram: string 
       ref={thumb.ref}
       aria-hidden="true"
       data-open-post-thumb=""
-      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md bg-panel-3 font-mono text-[11px] font-semibold text-fg-3"
+      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md bg-panel-3 text-fg-3"
     >
       {thumb.url !== null && !thumb.failed ? (
         <img
@@ -80,8 +79,6 @@ function OpenPostThumb(props: { assetVersionId: string | null; monogram: string 
           onError={thumb.onError}
           className="h-full w-full object-cover"
         />
-      ) : props.monogram !== null ? (
-        props.monogram
       ) : (
         <IconPipeline size={16} />
       )}
@@ -95,17 +92,12 @@ export const NOT_SHARED_HERE = 'not shared here yet';
 /** The two text lines of an open post row; target_date is a timestamptz, shown in the workspace zone. Pure. */
 export function openPostLines(
   post: OpenPostRow,
-  workspaceKey: string | null,
   shared: boolean,
   timeZone: string,
 ): { title: string; meta: string } {
-  const ref =
-    workspaceKey !== null && workspaceKey !== ''
-      ? formatEntityRef(workspaceKey, post.number)
-      : null;
   const date = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
   return {
-    title: ref !== null ? `${ref} · ${post.title}` : post.title,
+    title: post.title,
     meta: [formatLabel(post.format), date, shared ? IN_THIS_CHAT : NOT_SHARED_HERE]
       .filter((part) => part !== '')
       .join(' · '),
@@ -115,24 +107,19 @@ export function openPostLines(
 /** One 64px open post row. Hook-free (the thumb is its own component), so tests walk it. */
 export function OpenPostSheetRow(props: {
   post: OpenPostRow;
-  workspaceKey: string | null;
   shared: boolean;
   /** The workspace IANA zone the target date renders in. */
   timeZone: string;
   onJump: () => void;
   onShare: () => void;
 }): ReactElement {
-  const lines = openPostLines(props.post, props.workspaceKey, props.shared, props.timeZone);
-  const key =
-    props.workspaceKey !== null && props.workspaceKey !== ''
-      ? props.workspaceKey.toUpperCase()
-      : null;
+  const lines = openPostLines(props.post, props.shared, props.timeZone);
   return (
     <li
       data-open-post={props.post.id}
       className="flex h-16 items-center gap-3 border-b border-border px-2 last:border-b-0"
     >
-      <OpenPostThumb assetVersionId={props.post.thumbnailAssetVersionId} monogram={key} />
+      <OpenPostThumb assetVersionId={props.post.thumbnailAssetVersionId} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-sm font-medium text-fg">{lines.title}</span>
         <span className="truncate text-xs text-fg-3">{lines.meta}</span>
@@ -155,7 +142,6 @@ export interface OpenPostsSection {
   heading: string;
   /** Rows, or null while unread / after a failed read (the section is left out). */
   posts: OpenPostRow[] | null;
-  workspaceKey: string | null;
   /** Posts that have a card in the loaded thread. */
   sharedIds: ReadonlySet<string>;
   onJump: (postId: string) => void;
@@ -173,7 +159,6 @@ export function OpenPostsList(props: OpenPostsSection & { timeZone: string }): R
           <OpenPostSheetRow
             key={post.id}
             post={post}
-            workspaceKey={props.workspaceKey}
             shared={props.sharedIds.has(post.id)}
             timeZone={props.timeZone}
             onJump={() => props.onJump(post.id)}

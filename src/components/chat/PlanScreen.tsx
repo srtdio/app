@@ -10,7 +10,7 @@
 // "Also in") with the thumbnail (56x56) on the right, then two lines: PLAN
 // (the viewer's check of the slot) and POST (the post's stage). PLAN is the
 // OK | Not OK switch while undecided and a solid pill once decided (tap to
-// change). OK is optimistic behind a 4s Undo toast with a countdown
+// change). OK is optimistic behind a 4s Undo strip
 // (useUndoableAction; the write goes when the toast ends, never after Undo);
 // Not OK opens the Item screen with the note box open. One view: a Draft plan
 // shows the team side (agency only, writable), an Open plan the client side
@@ -164,7 +164,6 @@ import {
   PLAN_LINE_LABEL,
   PLAN_NOT_OK_LABEL,
   PLAN_OK_LABEL,
-  PLAN_UNDO_MS,
   POST_LINE_LABEL,
   postLine,
   slotApprovedToast,
@@ -995,7 +994,7 @@ export function PlanScreen(props: {
   const { session } = useSession();
   const me = session?.user.id ?? null;
   const toast = useToast();
-  const undoable = useUndoableAction({ durationMs: PLAN_UNDO_MS });
+  const undoable = useUndoableAction();
   const planId = props.planId;
   const sentInChannelId = props.chat?.channelId;
   const { read, reload } = useScreenRead<PlanScreenData>(
@@ -1389,8 +1388,8 @@ export function PlanScreen(props: {
     if (primary.kind === 'send') void sendHere();
   };
 
-  // PLAN (view mode). OK is optimistic behind a 4s Undo toast with a
-  // countdown: the write goes when the toast ends (or the screen is left),
+  // PLAN (view mode). OK is optimistic behind a 4s Undo strip: the
+  // write goes when the toast ends (or the screen is left),
   // never after Undo; a failed write reverts with its copy. Not OK opens the
   // Item screen with the note box open: Send writes 'changes', closing writes
   // nothing.

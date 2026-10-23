@@ -17,7 +17,7 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Chat delete with a file purges it for good (chat_message_delete, then the
 // asset-upload Worker's POST /purge-chat), a text-only delete goes behind a
-// 7s Undo (X7 FT39), and Settings > Workspace lets the owner delete the workspace after
+// 4s Undo (X7 FT39), and Settings > Workspace lets the owner delete the workspace after
 // typing its name. Tagged @theme: runs light and dark. Linux WebKit
 // approximates iOS WebKit; it is not iOS.
 
@@ -132,7 +132,7 @@ test.describe('chat delete with a file', () => {
     expectClean(network, errors);
   });
 
-  test('a text-only message deletes behind a 7s Undo (no confirm) and never purges', async ({
+  test('a text-only message deletes behind a 4s Undo (no confirm) and never purges', async ({
     page,
   }) => {
     const { network, recorder, errors } = await setup(page, ({ world }) => {

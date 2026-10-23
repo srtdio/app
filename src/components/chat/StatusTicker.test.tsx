@@ -279,7 +279,6 @@ describe('the drawer list', () => {
       keys: ['commitments', 'pending'] as const,
       side: 'agency' as const,
       timeZone: 'UTC',
-      workspaceKey: null,
       plans: [],
       posts: { heading: 'Posts waiting on approvers', rows: [], count: 0 },
       briefs: { rows: [], count: 0 },
@@ -495,7 +494,6 @@ describe('post rows never fail silently', () => {
           keys: ['posts'],
           side: 'agency',
           timeZone: 'UTC',
-          workspaceKey: null,
           plans: [],
           posts: { heading: 'Posts waiting on approvers', rows: [post], count: 1 },
           briefs: { rows: [], count: 0 },
@@ -528,6 +526,57 @@ describe('post rows never fail silently', () => {
     expect(busy).toContain('bg-panel-2');
     expect(busy).toContain('animate-pulse');
     expect(busy.match(/min-h-\[44px\]/g)?.length).toBe(idle.match(/min-h-\[44px\]/g)?.length);
+  });
+
+  it('post and brief rows name their titles only, never a KEY-N code', () => {
+    const post = {
+      id: 'p1',
+      number: 12,
+      title: 'Launch teaser',
+      format: 'carousel',
+      target_date: null,
+      stage_entered_at: '2026-10-01T00:00:00Z',
+      thumbnailAssetVersionId: null,
+    };
+    const brief = {
+      id: 'b1',
+      number: 7,
+      title: 'Diwali brief',
+      created_at: '2026-10-01T00:00:00Z',
+    };
+    function Probe(): ReactElement {
+      return StatusDrawerList({
+        keys: ['posts', 'briefs'],
+        side: 'agency',
+        timeZone: 'UTC',
+        plans: [],
+        posts: { heading: 'Posts waiting on approvers', rows: [post], count: 1 },
+        briefs: { rows: [brief], count: 1 },
+        marks: new Map(),
+        messageFor: () => undefined,
+        profiles: new Map(),
+        onOpenPlan: () => {},
+        onOpenPlanItem: () => {},
+        onOpenPost: () => {},
+        onOpenBrief: () => {},
+        onSeeAllBriefs: () => {},
+        onJumpMark: () => {},
+        onSeeAllMarks: () => {},
+        open: true,
+        postsExpanded: false,
+        onExpandPosts: () => {},
+        busyPostId: null,
+      });
+    }
+    const html = renderToStaticMarkup(
+      <ToastProvider>
+        <Probe />
+      </ToastProvider>,
+    );
+    expect(html).toContain('Launch teaser');
+    expect(html).toContain('Diwali brief');
+    expect(html).toContain('data-status-brief="b1"');
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 });
 

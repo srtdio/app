@@ -22,7 +22,7 @@ import {
   ThreadChipRow,
   threadChipLabel,
 } from '@/components/chat/ThreadRail';
-import { escapeCloses, threadViewTitle } from '@/components/chat/ThreadView';
+import * as threadView from '@/components/chat/ThreadView';
 import { SeenLine } from '@/components/chat/ReadingLayer';
 import { PresignCache } from '@/lib/asset-presign';
 import type { ChatProfile } from '@/lib/chat-reads';
@@ -254,23 +254,24 @@ describe('rail plans over the rendered list', () => {
 });
 
 describe('thread controls', () => {
-  it('the chip: 28px, radius 14, panel, 20px thumb, "KEY title · N replies", 44px target', () => {
+  it('the chip: 28px, radius 14, panel, 20px thumb, "title · N replies", 44px target', () => {
     const post = { id: 'p1', number: 12, title: 'Monday carousel', thumbnailAssetVersionId: null };
-    const out = html(
-      <ThreadChipRow post={post} workspaceKey="gbl" count={4} coarse onOpen={() => {}} />,
-    );
+    const out = html(<ThreadChipRow post={post} count={4} coarse onOpen={() => {}} />);
     expect(out).toContain('h-7');
     expect(out).toContain('rounded-[14px]');
     expect(out).toContain('bg-panel');
     expect(out).toContain('h-5 w-5');
     expect(out).toContain('rounded-[5px]');
     expect(out).toContain('min-h-[44px]');
-    expect(out).toContain('GBL-12');
+    expect(out).toContain('Monday carousel');
+    expect(out).not.toContain('GBL-12');
+    expect(out).toContain('aria-label="Open the thread about Monday carousel"');
     expect(out).toContain('· 4 replies');
     expect(out).toContain('data-rail="elbow"');
     expect(out).toContain('select-none [-webkit-touch-callout:none]');
     // A timed-out count paints without it.
-    expect(threadChipLabel({ refLabel: 'GBL-12', title: 'x', count: null }).count).toBeNull();
+    expect(threadChipLabel({ title: 'x', count: null })).toEqual({ title: 'x', count: null });
+    expect(threadChipLabel({ title: 'x', count: 4 }).title).toBe('x');
   });
 
   it('"N replies": 44px, 13px semibold accent, own side right', () => {
@@ -332,17 +333,16 @@ describe('thread controls', () => {
 });
 
 describe('thread view frame', () => {
-  it('the title is "KEY title"', () => {
-    expect(threadViewTitle('GBL-12', 'Monday carousel')).toBe('GBL-12 Monday carousel');
-    expect(threadViewTitle(null, 'Monday carousel')).toBe('Monday carousel');
+  it('the title is the post title alone: no KEY-N title helper', () => {
+    expect('threadViewTitle' in threadView).toBe(false);
   });
 
   it('Escape closes unless handled, a menu is open, or the thread is selecting', () => {
     const base = { key: 'Escape', defaultPrevented: false, overlayOpen: false, selecting: false };
-    expect(escapeCloses(base)).toBe(true);
-    expect(escapeCloses({ ...base, key: 'Enter' })).toBe(false);
-    expect(escapeCloses({ ...base, defaultPrevented: true })).toBe(false);
-    expect(escapeCloses({ ...base, overlayOpen: true })).toBe(false);
-    expect(escapeCloses({ ...base, selecting: true })).toBe(false);
+    expect(threadView.escapeCloses(base)).toBe(true);
+    expect(threadView.escapeCloses({ ...base, key: 'Enter' })).toBe(false);
+    expect(threadView.escapeCloses({ ...base, defaultPrevented: true })).toBe(false);
+    expect(threadView.escapeCloses({ ...base, overlayOpen: true })).toBe(false);
+    expect(threadView.escapeCloses({ ...base, selecting: true })).toBe(false);
   });
 });

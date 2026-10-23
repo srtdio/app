@@ -11,13 +11,15 @@ import {
   createBrief,
   getBrief,
   listBriefs,
+  reopenBrief,
   BRIEFS_PAGE_SIZE,
 } from '../../packages/briefs/src/index';
-import { briefClose, briefCreate, commentCreate } from '../../packages/rpc/src/index';
+import { briefClose, briefCreate, briefReopen, commentCreate } from '../../packages/rpc/src/index';
 
 vi.mock('../../packages/rpc/src/index', () => ({
   briefCreate: vi.fn(),
   briefClose: vi.fn(),
+  briefReopen: vi.fn(),
   commentCreate: vi.fn(),
 }));
 
@@ -116,6 +118,7 @@ function mockClient(resultByTable: Record<string, MockResult>): {
 beforeEach(() => {
   vi.mocked(briefCreate).mockReset();
   vi.mocked(briefClose).mockReset();
+  vi.mocked(briefReopen).mockReset();
   vi.mocked(commentCreate).mockReset();
 });
 
@@ -231,6 +234,30 @@ describe('closeBrief', () => {
       p_brief_id: 'brief-1',
       p_trace_id: 'trace-1',
     });
+  });
+});
+
+describe('reopenBrief', () => {
+  it('forwards the brief id and trace id to brief_reopen', async () => {
+    vi.mocked(briefReopen).mockResolvedValue({ ok: true, data: undefined });
+
+    const result = await reopenBrief(noClient, { briefId: 'brief-1' }, 'trace-1');
+
+    expect(result).toEqual({ ok: true, data: undefined });
+    expect(vi.mocked(briefReopen)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(briefReopen)).toHaveBeenCalledWith(noClient, {
+      p_brief_id: 'brief-1',
+      p_trace_id: 'trace-1',
+    });
+    expect(vi.mocked(briefClose)).not.toHaveBeenCalled();
+  });
+
+  it('passes a domain error through unchanged (the page owns the copy)', async () => {
+    for (const code of ['invalid_payload', 'workspace_member_only', 'unknown'] as const) {
+      vi.mocked(briefReopen).mockResolvedValueOnce({ ok: false, error: { code, message: code } });
+      const result = await reopenBrief(noClient, { briefId: 'brief-1' }, 'trace-1');
+      expect(result).toEqual({ ok: false, error: { code, message: code } });
+    }
   });
 });
 

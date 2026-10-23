@@ -12,7 +12,7 @@
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
-import { PostRefThumb, postRefKey, type PostRefPost } from '@/components/chat/PostRefChip';
+import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
 import { replyCountLabel } from '@/lib/chat/thread-rail';
 
 /** The rail's ink: the stronger border token. */
@@ -104,13 +104,15 @@ function preventDefault(event: { preventDefault: () => void }): void {
   event.preventDefault();
 }
 
-/** A thread chip's line: "KEY title · N replies" (the count only when it is known). */
-export function threadChipLabel(input: {
-  refLabel: string | null;
+/** A thread chip's two parts: the post title and its reply count. */
+export interface ThreadChipLabel {
   title: string;
-  count: number | null;
-}): { head: string | null; title: string; count: string | null } {
-  return { head: input.refLabel, title: input.title, count: replyCountLabel(input.count) };
+  count: string | null;
+}
+
+/** A thread chip's line: "title · N replies" (the count only when it is known). */
+export function threadChipLabel(input: { title: string; count: number | null }): ThreadChipLabel {
+  return { title: input.title, count: replyCountLabel(input.count) };
 }
 
 /** The touch callout and text selection stay off every thread control (the rows' guard). */
@@ -123,20 +125,18 @@ function guardProps(coarse: boolean): {
 /**
  * The chip heading a run whose root card is not right above it (not loaded,
  * or the run was broken): 28px tall, radius 14, panel fill, 20px thumbnail at
- * a 5px radius, "KEY title · N replies" at 12px, inside a 44px target at the
+ * a 5px radius, "title · N replies" at 12px, inside a 44px target at the
  * member indent (30px). The rail's top joins its left edge. Tap opens the
  * thread. No motion.
  */
 export function ThreadChipRow(props: {
   post: PostRefPost | null;
-  workspaceKey: string | null;
   count: number | null;
   coarse: boolean;
   onOpen: () => void;
 }): ReactElement {
   const { post } = props;
   const label = threadChipLabel({
-    refLabel: post !== null ? postRefKey(props.workspaceKey, post.number) : null,
     title: post?.title ?? 'Shared post',
     count: props.count,
   });
@@ -151,7 +151,7 @@ export function ThreadChipRow(props: {
         <button
           type="button"
           data-thread-open="chip"
-          aria-label={`Open the thread about ${label.head ?? label.title}`}
+          aria-label={`Open the thread about ${label.title}`}
           onClick={props.onOpen}
           className={cn(
             'flex min-h-[44px] min-w-0 max-w-full items-center rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
@@ -160,9 +160,6 @@ export function ThreadChipRow(props: {
         >
           <span className="inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-[14px] bg-panel pl-1 pr-2.5 text-xs">
             <PostRefThumb assetVersionId={post?.thumbnailAssetVersionId ?? null} size={20} />
-            {label.head !== null ? (
-              <span className="shrink-0 font-mono font-medium text-accent">{label.head}</span>
-            ) : null}
             <span className="min-w-0 truncate text-fg-2">{label.title}</span>
             {label.count !== null ? (
               <span data-thread-chip-count="" className="shrink-0 text-fg-3">

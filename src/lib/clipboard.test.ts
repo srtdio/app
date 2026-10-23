@@ -45,7 +45,7 @@ describe('copy call sites', () => {
     'src/components/pages/assets/AssetActionSheet.tsx',
     'src/components/pages/assets/AssetLightbox.tsx',
     'src/components/support/ContactSheet.tsx',
-    'src/components/refs/EntityRefChip.tsx',
+    'src/components/pages/BriefDetailPage.tsx',
     'src/components/pages/pcs/PostActionSheet.tsx',
     'src/components/chat/PaintLog.tsx',
   ];

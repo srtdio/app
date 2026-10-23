@@ -4,14 +4,14 @@ import type { ToastApi, ToastOptions } from '@/components/ui/toast/types';
 import { logger } from '@/lib/logger';
 
 /** How long an Undo toast stays up before the action commits. The single source. */
-export const UNDO_WINDOW_MS = 7000;
+export const UNDO_WINDOW_MS = 4000;
 
 export interface UndoableAction {
   /** Toast title, e.g. "Post deleted". Also forms the default failure copy. */
   label: string;
   /** The failure toast's title when the commit fails. Default: undoFailureTitle(label). */
   failure?: string;
-  /** The real write. Runs at most once: on expire, X, or flush; never after Undo. */
+  /** The real write. Runs at most once: on expire, swipe, replace, or flush; never after Undo. */
   commit: () => Promise<void> | void;
   /** Put the optimistic UI back. Runs on Undo and when commit fails. */
   revert?: () => void;
@@ -39,6 +39,7 @@ const PARTICIPLE_VERB: Readonly<Record<string, string>> = {
   marked: 'mark',
   hidden: 'hide',
   closed: 'close',
+  reopened: 'reopen',
   cleared: 'clear',
   sent: 'send',
   pinned: 'pin',
@@ -72,19 +73,16 @@ export function undoFailureTitle(label: string): string {
 
 /**
  * Deferred commit behind an Undo toast. The caller applies its optimistic UI,
- * then calls run(); the toast shows "Undo" with a countdown. Undo reverts and
- * the commit never runs; expiry or closing the toast commits once. Pending
+ * then calls run(); the bottom strip shows "Undo" for UNDO_WINDOW_MS. Undo
+ * reverts and the commit never runs; expiry, a swipe down, or a newer strip
+ * replacing it commits once. Pending
  * commits flush immediately on unmount, on visibilitychange to hidden, and on
  * pagehide, so navigating away never loses them.
  */
-export function useUndoableAction(options?: {
-  /** The toast's window before the commit. Default UNDO_WINDOW_MS. */
-  durationMs?: number;
-}): {
+export function useUndoableAction(): {
   run: (action: UndoableAction) => void;
   flush: () => void;
 } {
-  const durationMs = options?.durationMs ?? UNDO_WINDOW_MS;
   const toast = useOptionalToast();
   const toastRef = useRef<ToastApi | null>(toast);
   toastRef.current = toast;
@@ -135,12 +133,12 @@ export function useUndoableAction(options?: {
         title: action.label,
         ...(action.tone !== undefined ? { tone: action.tone } : {}),
         action: { label: 'Undo', onPress: () => undo(entry) },
-        durationMs,
-        countdown: true,
+        durationMs: UNDO_WINDOW_MS,
+        kind: 'undo',
         onExpire: () => commit(entry),
       });
     },
-    [commit, undo, durationMs],
+    [commit, undo],
   );
 
   useEffect(() => {

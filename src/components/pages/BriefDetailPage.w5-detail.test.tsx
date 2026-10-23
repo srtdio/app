@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 // W5 Brief detail: a load failure shows LoadError ("Couldn't load this brief.")
 // with Retry and never the server's text, and Retry re-reads; not-found is its
-// own state; Close lives only in the header ⋯ menu, gated on brief.close or
-// brief.close_own for the creator, confirms, and commits brief_close only after
-// the Undo window; copy buttons; Created by skeleton; the approver hint rule;
-// Back pops in-app history or goes to /briefs.
+// own state; the header ⋯ menu is on every brief: Copy link always, Close
+// brief (open, gated on brief.close or brief.close_own for the creator; it
+// confirms and commits brief_close only after the Undo window) or Reopen brief
+// (closed, any member; optimistic, commits brief_reopen after the Undo window);
+// no KEY-N code anywhere; copy buttons; Created by skeleton; the approver hint
+// rule; Back pops in-app history or goes to /briefs.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -13,8 +15,13 @@ import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import {
   BriefDetailPage,
   briefBackTarget,
+  briefCopyLink,
   canCloseBrief,
+  reopenErrorCopy,
 } from '@/components/pages/BriefDetailPage';
+import { WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
+import { plainError } from '@/lib/error-copy';
+import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -22,6 +29,7 @@ const h = vi.hoisted(() => ({
   getBrief: vi.fn(),
   getBriefGallery: vi.fn(),
   briefClose: vi.fn(),
+  reopenBrief: vi.fn(),
   caps: {} as Record<string, boolean>,
   members: { loading: false },
   viewer: 'u1',
@@ -30,6 +38,7 @@ const h = vi.hoisted(() => ({
 vi.mock('@srtdio/briefs', () => ({
   getBrief: (...args: unknown[]) => h.getBrief(...args),
   getBriefGallery: (...args: unknown[]) => h.getBriefGallery(...args),
+  reopenBrief: (...args: unknown[]) => h.reopenBrief(...args),
 }));
 vi.mock('@srtdio/rpc', () => ({ briefClose: (...args: unknown[]) => h.briefClose(...args) }));
 vi.mock('@/lib/supabase', () => ({
@@ -58,7 +67,6 @@ vi.mock('@/components/pages/pcs/use-post-members', () => ({
 }));
 vi.mock('@/components/comments/Comments', () => ({ Comments: () => <div>comments</div> }));
 vi.mock('@/components/pages/pcs/PostGallery', () => ({ PostGallery: () => <div>gallery</div> }));
-vi.mock('@/components/refs/EntityRefChip', () => ({ EntityRefChip: () => null }));
 
 function detail(over: Record<string, unknown> = {}) {
   return {
@@ -122,16 +130,45 @@ const button = (label: string) =>
     (b) => b.textContent?.trim() === label,
   );
 
+/** Open the header ⋯ menu. */
+async function openMenu(): Promise<void> {
+  await act(async () => byLabel('Brief actions')?.click());
+}
+/** The open menu's rows as [data-testid, label], in order. */
+const menuRows = (): [string, string][] =>
+  [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].map(
+    (el): [string, string] => [el.dataset.testid ?? '', el.textContent?.trim() ?? ''],
+  );
+const menuRow = (testId: string) =>
+  document.querySelector<HTMLButtonElement>(`[role="menuitem"][data-testid="${testId}"]`);
+/** The status badge labels on the page (header and Details), deduplicated. */
+const statusLabels = (): string[] => [
+  ...new Set(
+    [...document.querySelectorAll<HTMLElement>('span.rounded-full.border.h-7')].map(
+      (el) => el.textContent?.trim() ?? '',
+    ),
+  ),
+];
+/** Let a commit's promise chain run (works under fake timers: microtasks only). */
+const settle = () =>
+  act(async () => {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  });
+/** A KEY-N code such as "ACME-3". */
+const CODE = /\b[A-Z]{2,}-\d+\b/;
+
 beforeEach(() => {
   h.getBrief.mockReset();
   h.getBriefGallery.mockReset().mockResolvedValue({ ok: true, data: [] });
   h.briefClose.mockReset().mockResolvedValue({ ok: true, data: null });
+  h.reopenBrief.mockReset().mockResolvedValue({ ok: true, data: undefined });
   h.caps = {};
   h.members.loading = false;
   h.viewer = 'u1';
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root?.unmount());
   root = null;
   document.body.innerHTML = '';
@@ -163,11 +200,15 @@ describe('Brief detail load failure', () => {
 });
 
 describe('Brief detail close', () => {
-  it('no ⋯ menu and no Close anywhere without a close capability', async () => {
+  it('without a close capability the ⋯ menu offers Copy link only, no Close anywhere', async () => {
     h.getBrief.mockResolvedValue(detail());
     await mount();
-    expect(byLabel('Brief actions')).toBeNull();
+    expect(byLabel('Brief actions')).not.toBeNull();
     expect(button('Close brief')).toBeUndefined();
+    await openMenu();
+    expect(menuRows()).toEqual([['brief-menu-copy-link', 'Copy link']]);
+    expect(button('Close brief')).toBeUndefined();
+    expect(button('Reopen brief')).toBeUndefined();
   });
 
   it('brief.close: Close is in the ⋯ menu, confirms, then closes behind Undo', async () => {
@@ -212,16 +253,19 @@ describe('Brief detail close', () => {
     expect(h.briefClose.mock.calls[0]?.[1]).toEqual({ p_brief_id: 'b1', p_trace_id: 'trace-1' });
   });
 
-  it('brief.close_own shows the menu only to the creator', async () => {
+  it('brief.close_own offers Close brief only to the creator', async () => {
     h.caps = { 'brief.close_own': true };
     h.getBrief.mockResolvedValue(detail({ created_by: 'u1' }));
     await mount();
-    expect(byLabel('Brief actions')).not.toBeNull();
+    await openMenu();
+    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-close']);
     act(() => root?.unmount());
     document.body.innerHTML = '';
     h.viewer = 'u2';
     await mount();
-    expect(byLabel('Brief actions')).toBeNull();
+    expect(byLabel('Brief actions')).not.toBeNull();
+    await openMenu();
+    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link']);
   });
 
   it('canCloseBrief: close, or close_own for the creator only', () => {
@@ -230,6 +274,222 @@ describe('Brief detail close', () => {
     expect(canCloseBrief(false, true, 'u9', 'u1')).toBe(false);
     expect(canCloseBrief(null, null, 'u1', 'u1')).toBe(false);
     expect(canCloseBrief(false, true, 'u1', null)).toBe(false);
+  });
+});
+
+describe('Brief detail ⋯ menu rows', () => {
+  it('an open brief with close rights: Copy link, then Close brief', async () => {
+    h.caps = { 'brief.close': true };
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    await openMenu();
+    expect(document.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe(
+      'Brief actions',
+    );
+    expect(menuRows()).toEqual([
+      ['brief-menu-copy-link', 'Copy link'],
+      ['brief-menu-close', 'Close brief'],
+    ]);
+    expect(menuRow('brief-menu-reopen')).toBeNull();
+  });
+
+  it('an open brief without close rights: Copy link only', async () => {
+    h.getBrief.mockResolvedValue(detail({ created_by: 'u9' }));
+    await mount();
+    await openMenu();
+    expect(menuRows()).toEqual([['brief-menu-copy-link', 'Copy link']]);
+  });
+
+  it('a closed brief, member without close rights: Copy link, then Reopen brief', async () => {
+    h.getBrief.mockResolvedValue(detail({ status: 'closed', created_by: 'u9' }));
+    await mount();
+    await openMenu();
+    expect(menuRows()).toEqual([
+      ['brief-menu-copy-link', 'Copy link'],
+      ['brief-menu-reopen', 'Reopen brief'],
+    ]);
+    expect(menuRow('brief-menu-close')).toBeNull();
+  });
+
+  it('a closed brief never offers Close brief, even with close rights', async () => {
+    h.caps = { 'brief.close': true, 'brief.close_own': true };
+    h.getBrief.mockResolvedValue(detail({ status: 'closed' }));
+    await mount();
+    await openMenu();
+    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-reopen']);
+  });
+
+  it('every row is a 44px menu item and picking one closes the menu', async () => {
+    h.getBrief.mockResolvedValue(detail({ status: 'closed' }));
+    await mount();
+    await openMenu();
+    for (const el of document.querySelectorAll<HTMLElement>('[role="menuitem"]')) {
+      expect(el.className).toContain('min-h-[44px]');
+    }
+    await act(async () => menuRow('brief-menu-copy-link')?.click());
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+});
+
+describe('Brief detail Copy link', () => {
+  it('copies the briefCopyLink output and says "Link copied"', async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    await openMenu();
+    await act(async () => menuRow('brief-menu-copy-link')?.click());
+    await flush();
+    const expected = briefCopyLink(window.location.origin, 'ACME', 3, 'b1');
+    expect(expected).toBe(`${window.location.origin}/b/acme-3`);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith(expected);
+    expect(text()).toContain('Link copied');
+    expect(text()).not.toContain('Link copied.');
+  });
+
+  it('says "Couldn\'t copy" when the clipboard refuses', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn(async () => Promise.reject(new Error('denied'))) },
+      configurable: true,
+    });
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    await openMenu();
+    await act(async () => menuRow('brief-menu-copy-link')?.click());
+    await flush();
+    expect(text()).toContain("Couldn't copy");
+    expect(text()).not.toContain('Link copied');
+  });
+
+  it('briefCopyLink: the /b/key-n link, or /briefs/:id without a workspace key', () => {
+    expect(briefCopyLink('https://app.example', 'ACME', 3, 'b1')).toBe(
+      'https://app.example/b/acme-3',
+    );
+    expect(briefCopyLink('https://app.example', null, 3, 'b1')).toBe(
+      'https://app.example/briefs/b1',
+    );
+  });
+});
+
+describe('Brief detail reopen', () => {
+  async function reopen(): Promise<void> {
+    await openMenu();
+    await act(async () => menuRow('brief-menu-reopen')?.click());
+  }
+
+  it('flips to Open at once with a "Brief reopened" Undo, before any write', async () => {
+    h.getBrief.mockResolvedValue(detail({ status: 'closed', created_by: 'u9' }));
+    await mount();
+    expect(statusLabels()).toEqual(['Closed']);
+    await reopen();
+    expect(statusLabels()).toEqual(['Open']);
+    expect(text()).toContain('Brief reopened');
+    expect(button('Undo')).toBeDefined();
+    expect(h.reopenBrief).not.toHaveBeenCalled();
+    // Now open: the menu offers no Reopen (and no Close without rights).
+    await openMenu();
+    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link']);
+  });
+
+  it('Undo puts Closed back and reopenBrief is never called', async () => {
+    h.getBrief.mockResolvedValue(detail({ status: 'closed', created_by: 'u9' }));
+    await mount();
+    vi.useFakeTimers();
+    await reopen();
+    expect(statusLabels()).toEqual(['Open']);
+    await act(async () => button('Undo')?.click());
+    expect(statusLabels()).toEqual(['Closed']);
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS * 2);
+    });
+    expect(h.reopenBrief).not.toHaveBeenCalled();
+    // Leaving the page flushes nothing: the undone reopen is settled.
+    act(() => root?.unmount());
+    root = null;
+    expect(h.reopenBrief).not.toHaveBeenCalled();
+  });
+
+  it('commits reopenBrief once the 4000 ms window passes, not at 3999 ms', async () => {
+    h.getBrief
+      .mockResolvedValueOnce(detail({ status: 'closed', created_by: 'u9' }))
+      .mockResolvedValue(detail({ status: 'open', created_by: 'u9' }));
+    await mount();
+    expect(UNDO_WINDOW_MS).toBe(4000);
+    const changed = vi.fn();
+    window.addEventListener(WORKSPACE_DATA_CHANGED_EVENT, changed);
+    try {
+      vi.useFakeTimers();
+      await reopen();
+      act(() => {
+        vi.advanceTimersByTime(3999);
+      });
+      expect(h.reopenBrief).not.toHaveBeenCalled();
+      expect(changed).not.toHaveBeenCalled();
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(h.reopenBrief).toHaveBeenCalledTimes(1);
+      expect(h.reopenBrief.mock.calls[0]?.[1]).toEqual({ briefId: 'b1' });
+      expect(h.reopenBrief.mock.calls[0]?.[2]).toBe('trace-1');
+      await settle();
+      expect(changed).toHaveBeenCalledTimes(1);
+      // The page re-reads the brief after the commit.
+      expect(h.getBrief).toHaveBeenCalledTimes(2);
+      expect(statusLabels()).toEqual(['Open']);
+    } finally {
+      window.removeEventListener(WORKSPACE_DATA_CHANGED_EVENT, changed);
+    }
+  });
+
+  it('a refused reopen puts Closed back and says so in plain words', async () => {
+    h.reopenBrief.mockResolvedValue({
+      ok: false,
+      error: { code: 'invalid_payload', message: 'invalid_payload' },
+    });
+    h.getBrief.mockResolvedValue(detail({ status: 'closed', created_by: 'u9' }));
+    await mount();
+    vi.useFakeTimers();
+    await reopen();
+    await act(async () => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+    await settle();
+    expect(h.reopenBrief).toHaveBeenCalledTimes(1);
+    expect(statusLabels()).toEqual(['Closed']);
+    expect(text()).toContain('This brief is already open.');
+  });
+
+  it('reopenErrorCopy: invalid_payload reads as already open, the rest via plainError', () => {
+    expect(reopenErrorCopy({ code: 'invalid_payload', message: 'x' })).toBe(
+      'This brief is already open.',
+    );
+    const member = { code: 'workspace_member_only', message: 'workspace_member_only' } as const;
+    expect(reopenErrorCopy(member)).toBe(plainError(member));
+    expect(reopenErrorCopy(member)).not.toBe('This brief is already open.');
+  });
+});
+
+describe('Brief detail shows no KEY-N code', () => {
+  it('an open brief: no code in the page text or the menu', async () => {
+    h.caps = { 'brief.close': true };
+    h.getBrief.mockResolvedValue(detail({ number: 3 }));
+    await mount();
+    expect(text()).toContain('Festive drop');
+    expect(text()).not.toContain('ACME-3');
+    expect(text()).not.toMatch(CODE);
+    await openMenu();
+    expect(text()).not.toMatch(CODE);
+  });
+
+  it('a closed brief: no code either', async () => {
+    h.getBrief.mockResolvedValue(detail({ status: 'closed', number: 42 }));
+    await mount();
+    expect(text()).not.toMatch(CODE);
+    const labels = [...document.querySelectorAll('[aria-label]')].map(
+      (el) => el.getAttribute('aria-label') ?? '',
+    );
+    for (const label of labels) expect(label).not.toMatch(CODE);
   });
 });
 

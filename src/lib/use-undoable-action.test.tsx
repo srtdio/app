@@ -9,19 +9,29 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 // A fake toast surface: records each show() so the test can press Undo, the X
-// (onExpire), or let it expire by hand.
+// (onExpire), or let it expire by hand. `mode.real` swaps in the real provider
+// (set before mount) for the timing tests.
 const shown: ToastOptions[] = [];
 const dismiss = vi.fn();
-vi.mock('@/components/ui/toast', () => ({
-  useOptionalToast: () => ({
-    show: (options: ToastOptions) => {
-      shown.push(options);
-      return String(shown.length);
-    },
-    dismiss,
-  }),
-}));
+const mode = vi.hoisted(() => ({ real: false }));
+vi.mock('@/components/ui/toast', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/ui/toast')>();
+  return {
+    ...actual,
+    useOptionalToast: () =>
+      mode.real
+        ? actual.useOptionalToast()
+        : {
+            show: (options: ToastOptions) => {
+              shown.push(options);
+              return String(shown.length);
+            },
+            dismiss,
+          },
+  };
+});
 
+import { ToastProvider } from '@/components/ui/toast';
 import {
   UNDO_WINDOW_MS,
   undoFailureTitle,
@@ -36,12 +46,6 @@ let api: ReturnType<typeof useUndoableAction> | null = null;
 
 function Probe(): ReactElement {
   api = useUndoableAction();
-  return <div />;
-}
-
-// The plan screens pass their own window (PLAN_UNDO_MS).
-function WindowProbe(props: { durationMs: number }): ReactElement {
-  api = useUndoableAction({ durationMs: props.durationMs });
   return <div />;
 }
 
@@ -73,26 +77,24 @@ afterEach(() => {
 });
 
 describe('useUndoableAction', () => {
-  it('shows an Undo toast with a countdown over UNDO_WINDOW_MS', () => {
+  it('shows an Undo strip (kind undo) over UNDO_WINDOW_MS (4000), no countdown', () => {
     const toast = run({ label: 'Post deleted', commit: vi.fn() });
-    expect(UNDO_WINDOW_MS).toBe(7000);
+    expect(UNDO_WINDOW_MS).toBe(4000);
     expect(toast.title).toBe('Post deleted');
     expect(toast.action?.label).toBe('Undo');
     expect(toast.durationMs).toBe(UNDO_WINDOW_MS);
-    expect(toast.countdown).toBe(true);
+    expect(toast.kind).toBe('undo');
+    expect('countdown' in toast).toBe(false);
+    expect('countdownMs' in toast).toBe(false);
   });
 
-  it('the default window stays 7000ms; a durationMs option reaches the toast', async () => {
-    expect(run({ label: 'Default', commit: vi.fn() }).durationMs).toBe(7000);
-    await act(async () => root?.render(<WindowProbe durationMs={4000} />));
-    const toast = run({ label: 'Slot approved', commit: vi.fn() });
-    expect(toast.durationMs).toBe(4000);
-    expect(toast.countdown).toBe(true);
-    expect(toast.action?.label).toBe('Undo');
+  it('takes no options: every caller gets the same 4000ms window', () => {
+    expect(useUndoableAction.length).toBe(0);
+    expect(run({ label: 'Slot approved', commit: vi.fn() }).durationMs).toBe(4000);
+    expect(run({ label: 'Moved to Review', commit: vi.fn() }).kind).toBe('undo');
   });
 
-  it('with a durationMs option the commit still waits for the toast to end', async () => {
-    await act(async () => root?.render(<WindowProbe durationMs={4000} />));
+  it('the commit waits for the toast to end', async () => {
     const commit = vi.fn();
     const toast = run({ label: 'Slot approved', commit });
     expect(commit).not.toHaveBeenCalled();
@@ -198,5 +200,72 @@ describe('useUndoableAction', () => {
     root = null;
     await flushPromises();
     expect(commit).not.toHaveBeenCalled();
+  });
+});
+
+describe('useUndoableAction with the real toast store', () => {
+  beforeEach(async () => {
+    act(() => root?.unmount());
+    root = null;
+    mode.real = true;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () =>
+      root?.render(
+        <ToastProvider>
+          <Probe />
+        </ToastProvider>,
+      ),
+    );
+  });
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    root = null;
+    vi.useRealTimers();
+    mode.real = false;
+  });
+
+  it('commits at 4000ms, not before', async () => {
+    const commit = vi.fn();
+    act(() => api?.run({ label: 'Post deleted', commit }));
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS - 1);
+    });
+    expect(commit).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await flushPromises();
+    expect(commit).toHaveBeenCalledTimes(1);
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('a second action commits the first at once (one strip at a time)', async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    act(() => api?.run({ label: 'Post deleted', commit: first }));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    act(() => api?.run({ label: 'Moved to Parked', commit: second }));
+    await flushPromises();
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(UNDO_WINDOW_MS - 1);
+    });
+    expect(second).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await flushPromises();
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
   });
 });
