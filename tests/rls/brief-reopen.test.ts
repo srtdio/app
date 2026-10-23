@@ -101,13 +101,13 @@ describe.runIf(RLS_SUITE)('brief_reopen', () => {
   }
 
   async function brief(briefId: string): Promise<BriefRow> {
-    const res = await g
+    const res = await admin
       .from('briefs')
       .select('status, closed_at, closed_by, row_version, title, number')
       .eq('id', briefId)
       .single();
     if (res.error) throw new Error(`brief read failed: ${res.error.message}`);
-    return res.data as BriefRow;
+    return res.data as unknown as BriefRow;
   }
 
   /** Service-role ground truth: every brief_reopened row for one brief. */
