@@ -5,7 +5,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostCard } from '@/components/pages/PostCard';
-import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
+import { BOARD_CAP, StageEmpty } from '@/components/pages/pipeline/stage-meta';
 import { readShown, writeShown } from '@/components/pages/pipeline/pipeline-query';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { CoverLookup } from '@/lib/chat/post-covers';
@@ -35,6 +35,8 @@ export interface PipelineFeedProps {
   viewer?: CardViewer;
   /** Each post's first photo or video, so its card takes the platform frame. */
   covers?: CoverLookup;
+  /** post.create granted: an empty stage also offers New post. */
+  canCreate?: boolean;
 }
 
 /**
@@ -57,7 +59,7 @@ function FeedCard({
   return (
     <div
       data-post-id={post.id}
-      className="rounded-lg"
+      className="h-full min-w-0 rounded-lg"
       onPointerDown={(event) => handlers.onPointerDown(event)}
       onPointerMove={(event) => handlers.onPointerMove(event)}
       onPointerUp={() => handlers.onPointerUp()}
@@ -115,7 +117,7 @@ function cardGrid(
  * Mobile feed: one flat 2-column grid over the active stage's posts, capped at
  * BOARD_CAP with an in-place Show more control that reveals another page rather
  * than navigating away. The 'all' tab shows every post; a single-stage tab shows
- * just that stage, or the EmptyState when it holds nothing. The shown count is
+ * just that stage, or the stage's one-line empty state when it holds nothing. The shown count is
  * keyed by the filter query (shownKey) in sessionStorage: a new tab or filter
  * starts at the cap, and Back to the same filters restores the same depth.
  */
@@ -130,6 +132,7 @@ export function PipelineFeed({
   timeZone = 'UTC',
   viewer,
   covers,
+  canCreate = false,
 }: PipelineFeedProps): ReactElement {
   const depthKey = shownKey ?? null;
   const [shown, setShown] = useState(() =>
@@ -151,10 +154,11 @@ export function PipelineFeed({
   return (
     <div className="px-4 py-4">
       {list.length === 0 ? (
-        <EmptyState
-          icon={<IconPipeline size={22} />}
-          title={activeStage === 'all' ? 'No posts yet' : emptyStageMessage(activeStage as Stage)}
-        />
+        activeStage === 'all' ? (
+          <EmptyState icon={<IconPipeline size={22} />} title="No posts yet" />
+        ) : (
+          <StageEmpty stage={activeStage as Stage} canCreate={canCreate} />
+        )
       ) : (
         <>
           {cardGrid(

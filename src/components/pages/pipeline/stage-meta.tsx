@@ -4,8 +4,12 @@
 
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
-import { roleMayTarget } from '@/components/pages/pcs/stage-actions';
-import { canTransition } from '@srtdio/posts';
+import { dispatchSorted } from '@/lib/events';
+import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { IconPipeline } from '@/components/ui/icons';
+import { canRoleMove, roleMayTarget } from '@/components/pages/pcs/stage-actions';
+import { STAGE_TRANSITIONS } from '@srtdio/posts';
 import type { Stage } from '@srtdio/posts';
 
 /** Cards shown before the Show more control (mobile feed) and per kanban column. */
@@ -39,27 +43,85 @@ export function StageDot({ stage }: { stage: Stage }): ReactElement {
   return <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', STAGE_DOT[stage])} />;
 }
 
-/** Empty-stage copy for the single-stage feed view. */
+/**
+ * The one line an empty stage shows (phone feed, laptop column and laptop
+ * single-stage grid alike). No heading.
+ */
+const EMPTY_STAGE_LINE: Record<Stage, string> = {
+  draft: 'New posts start here.',
+  review: 'Posts sent for review show up here.',
+  approved: 'Approved posts show up here.',
+  parked: 'Posts set aside for later show up here.',
+  rejected: 'Posts sent back for changes show up here.',
+};
+
+/** Empty-stage copy: one line per stage. */
 export function emptyStageMessage(stage: Stage): string {
-  return `Nothing in ${stageLabel(stage)}. Posts land here when moved.`;
+  return EMPTY_STAGE_LINE[stage];
 }
 
-/** The stage-matrix line for a row the transition map blocks: "Not allowed from Review". */
-export function notAllowedFrom(from: Stage): string {
-  return `Not allowed from ${stageLabel(from)}`;
+/** A blocked drop on Approved for a role that may not approve. */
+export const APPROVE_ROLE_BLOCKED = 'Only approvers can approve.';
+
+/** "Review", "Review or Parked", "Approved, Rejected or Parked". Pure. */
+export function joinOr(labels: readonly string[]): string {
+  if (labels.length <= 1) return labels[0] ?? '';
+  return `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`;
 }
 
-/** The role line for a row the stage map allows but this role may not trigger. */
-export const ROLE_BLOCKED_REASON = 'Not available for your role';
+/** The stages this role may move a post into from `from`, in transition-map order. */
+export function allowedTargets(role: string | null, from: Stage): Stage[] {
+  return (STAGE_TRANSITIONS[from] as readonly Stage[]).filter((to) => canRoleMove(role, from, to));
+}
 
 /**
- * Why a move from `from` to `to` is blocked for this role. The stage map is
- * read first: a target the map does not allow from here says "Not allowed from
- * {stage}" whatever the role; a legal target this role may not trigger keeps
- * the role reason. Null when the move is allowed.
+ * Why a drop from `from` onto `to` is blocked for this role, or null when the
+ * move is allowed (or is a drop back onto its own stage). A role that may not
+ * approve dropping on Approved: "Only approvers can approve." Otherwise the
+ * moves this role has from here: "Draft posts can move to Review or Parked."
+ * Null too when the role has no move at all (its cards are not draggable).
  */
 export function moveBlockedReason(role: string | null, from: Stage, to: Stage): string | null {
-  if (!canTransition(from, to)) return notAllowedFrom(from);
-  if (!roleMayTarget(role, to)) return ROLE_BLOCKED_REASON;
-  return null;
+  if (from === to || canRoleMove(role, from, to)) return null;
+  if (to === 'approved' && !roleMayTarget(role, 'approved')) return APPROVE_ROLE_BLOCKED;
+  const allowed = allowedTargets(role, from);
+  if (allowed.length === 0) return null;
+  return `${stageLabel(from)} posts can move to ${joinOr(allowed.map(stageLabel))}.`;
+}
+
+/**
+ * An empty stage, the same on the phone feed and the laptop board: the shared
+ * EmptyState with the pipeline icon and the stage's one line, no heading
+ * beside it. People who may create posts also get New post (it opens the
+ * create sheet). Hookless, so the tree is unit tested by walking it.
+ */
+export function StageEmpty({
+  stage,
+  canCreate = false,
+}: {
+  stage: Stage;
+  canCreate?: boolean;
+}): ReactElement {
+  return (
+    <div data-stage-empty={stage}>
+      <EmptyState
+        icon={<IconPipeline size={22} />}
+        title={emptyStageMessage(stage)}
+        {...(canCreate
+          ? {
+              action: (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  data-stage-empty-create=""
+                  onClick={() => dispatchSorted('sorted:create-post')}
+                >
+                  New post
+                </Button>
+              ),
+            }
+          : {})}
+      />
+    </div>
+  );
 }

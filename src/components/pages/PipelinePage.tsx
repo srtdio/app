@@ -24,6 +24,7 @@ import {
   needsConfirm,
   type ConfirmTarget,
 } from '@/components/pages/pipeline/StageMoveConfirm';
+import type { MoveOptions } from '@/components/pages/pipeline/approve-gate';
 import {
   hasAllowedMove,
   firstNameOf,
@@ -62,7 +63,7 @@ import {
   readMemberRole,
   type RoleStatus,
 } from '@/components/pages/pipeline/member-role';
-import { canRoleMove, roleMayTarget } from '@/components/pages/pcs/stage-actions';
+import { canRoleMove } from '@/components/pages/pcs/stage-actions';
 import {
   DATE_WINDOW_DEFAULT,
   POST_SORT_DEFAULT,
@@ -75,6 +76,8 @@ import {
   type PostSort,
 } from '@/lib/list-sort';
 import { groupByStage, stageColumns } from '@/lib/post-board';
+import { frameFor } from '@/lib/platform-specs';
+import { cn } from '@/lib/cn';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Stage } from '@srtdio/posts';
 import { errorCopy, errorText, type ErrorCopy } from '@/lib/error-copy';
@@ -108,6 +111,11 @@ interface PipelineHeaderProps {
   counts: Record<string, number>;
   /** post.create granted: only then does the header carry the "+" create button. */
   canCreate: boolean;
+  /**
+   * The post.create read is still in flight: the New post button's space is
+   * held (an invisible, inert copy) so the header does not jump when it lands.
+   */
+  createPending?: boolean;
   /** Approvers never see the Draft chip. */
   hideDraft?: boolean;
 }
@@ -173,7 +181,25 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
               ),
             },
           }
-        : {})}
+        : props.createPending === true
+          ? {
+              primaryAction: {
+                node: (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    disabled
+                    data-create-placeholder=""
+                    className="invisible shrink-0 whitespace-nowrap"
+                  >
+                    New post
+                  </Button>
+                ),
+              },
+            }
+          : {})}
     >
       <StageRow hideDraft={hideDraft}>
         <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
@@ -306,9 +332,90 @@ const COVER_BATCH = 100;
 
 /** Skeleton cards: one board page's worth. */
 const SKELETON_CARDS = BOARD_CAP;
+/** Kanban skeleton: one column per stage, two cards each. */
+const SKELETON_COLUMNS = STAGES.length;
+const SKELETON_COLUMN_CARDS = 2;
 
-/** Card-shaped placeholders while the first read is in flight. */
-export function postsSkeleton(isDesktop: boolean): ReactElement {
+/** What the loading skeleton mirrors: the real view and the card's picture frame. */
+export interface SkeletonView {
+  /** The laptop All view: the kanban columns, not a grid. */
+  kanban?: boolean;
+  /** The picture frame ratio (w / h) from the workspace platform; null: square. */
+  ratio?: number | null;
+  /** Kanban columns to draw (a client has no Draft column). Default: every stage. */
+  columns?: number;
+}
+
+/** The skeleton picture frame: the workspace platform's single-image frame. Pure. */
+export function skeletonRatio(platform: string | null | undefined): number | null {
+  if (platform === null || platform === undefined) return null;
+  return frameFor(platform, 'single_image', null)?.ratio ?? null;
+}
+
+/** One skeleton card in the real card's shape: picture, two title lines, the meta row. */
+function skeletonCard(index: number, ratio: number | null): ReactElement {
+  return (
+    <div
+      key={index}
+      aria-hidden="true"
+      data-skeleton-card=""
+      className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel motion-safe:animate-pulse"
+    >
+      <div
+        className={cn('bg-panel-2', ratio === null && 'aspect-square')}
+        {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
+      />
+      <div className="flex flex-col gap-1.5 p-3">
+        <div className="flex min-h-[2.75em] flex-col justify-center gap-1.5 text-sm leading-snug">
+          <div className="h-3.5 w-3/4 rounded bg-panel-3" />
+          <div className="h-3.5 w-1/2 rounded bg-panel-3" />
+        </div>
+        <div className="flex h-5 items-center">
+          <div className="h-3 w-1/3 rounded bg-panel-3" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Card-shaped placeholders while the first read is in flight, in the real
+ * view's layout: the kanban columns on the laptop All view, the full-width grid
+ * on a laptop stage view, the 2-column grid on a phone. Each card takes the
+ * workspace platform's frame, so nothing reshapes when the posts land.
+ */
+export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): ReactElement {
+  const ratio = view.ratio ?? null;
+  const columns = view.columns ?? SKELETON_COLUMNS;
+  if (isDesktop && view.kanban === true) {
+    return (
+      <div
+        data-guide-wait=""
+        data-posts-skeleton="kanban"
+        role="status"
+        aria-busy="true"
+        className="flex min-h-0 gap-3 overflow-x-hidden px-4 py-4 md:px-6"
+      >
+        <span className="sr-only">Loading posts</span>
+        {Array.from({ length: columns }, (_unused, column) => (
+          <div
+            key={column}
+            aria-hidden="true"
+            className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2"
+          >
+            <div className="flex h-11 items-center gap-2 border-b border-border px-3">
+              <div className="h-3 w-1/3 rounded bg-panel-3" />
+            </div>
+            <div className="flex flex-col gap-2 p-2">
+              {Array.from({ length: SKELETON_COLUMN_CARDS }, (_card, index) =>
+                skeletonCard(index, ratio),
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div
       data-guide-wait=""
@@ -322,19 +429,7 @@ export function postsSkeleton(isDesktop: boolean): ReactElement {
       }
     >
       <span className="sr-only">Loading posts</span>
-      {Array.from({ length: SKELETON_CARDS }, (_unused, index) => (
-        <div
-          key={index}
-          aria-hidden="true"
-          className="flex flex-col overflow-hidden rounded-lg border border-border bg-panel motion-safe:animate-pulse"
-        >
-          <div className="aspect-square bg-panel-2" />
-          <div className="flex flex-col gap-2 p-3">
-            <div className="h-3.5 w-3/4 rounded bg-panel-3" />
-            <div className="h-3 w-1/2 rounded bg-panel-3" />
-          </div>
-        </div>
-      ))}
+      {Array.from({ length: SKELETON_CARDS }, (_unused, index) => skeletonCard(index, ratio))}
     </div>
   );
 }
@@ -392,10 +487,14 @@ export interface PipelineSurfaceProps {
   /** The active workspace key, threaded into every card for its pretty /p link. */
   workspaceKey: string | null;
   onViewAll: (stage: Stage) => void;
-  onMovePost: (postId: string, toStage: Stage) => void;
+  onMovePost: (postId: string, toStage: Stage, options?: MoveOptions) => void;
   onLongPressPost: (post: PipelinePost) => void;
   /** The viewer's workspace role: filters the board's drop targets. */
   role: string | null;
+  /** The role read has landed: only then are board cards draggable. Default true. */
+  roleReady?: boolean;
+  /** post.create granted: an empty stage also offers New post. */
+  canCreate?: boolean;
   /** A desktop drop onto a column the post cannot move to: toast the reason. */
   onBlockedMove: (reason: string) => void;
   /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
@@ -408,16 +507,28 @@ export interface PipelineSurfaceProps {
   covers?: CoverLookup;
 }
 
+/** Clients never see Draft: no Draft chip, and no Draft column on the board. Pure. */
+export function boardStages(stage: string, role: string | null): Stage[] {
+  const columns = stageColumns(STAGES, stage);
+  return isClient(role) ? columns.filter((s) => s !== 'draft') : columns;
+}
+
+/** The chip a client lands on when the URL names Draft (which they never see). Pure. */
+export function visibleStage(stage: string, role: string | null): string {
+  return isClient(role) && stage === 'draft' ? INITIAL_STAGE : stage;
+}
+
 /**
  * Pick the body surface for the active chip: the desktop kanban or the mobile
  * feed. Pure (no hooks; the components it returns own their own state) so the
  * branch is unit-tested by walking the element.
  */
 export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
+  const canCreate = props.canCreate === true;
   if (props.isDesktop) {
     return (
       <PipelineBoard
-        stages={stageColumns(STAGES, props.stage)}
+        stages={boardStages(props.stage, props.role)}
         grouped={props.grouped}
         cap={props.stage === ALL_KEY ? BOARD_CAP : null}
         cache={props.cache}
@@ -428,6 +539,8 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
         role={props.role}
         onOpenMove={props.onLongPressPost}
         onBlockedMove={props.onBlockedMove}
+        roleReady={props.roleReady !== false}
+        canCreate={canCreate}
         {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
         {...(props.covers !== undefined ? { covers: props.covers } : {})}
       />
@@ -442,6 +555,7 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
       workspaceKey={props.workspaceKey}
       onLongPressPost={props.onLongPressPost}
       shownKey={props.shownKey}
+      canCreate={canCreate}
       {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
       {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
       {...(props.covers !== undefined ? { covers: props.covers } : {})}
@@ -500,7 +614,7 @@ export function undatedHint(label: string, count: number, onShow: () => void): R
  * Heal a persisted sort the trimmed menu no longer lists. Live workspaces stored
  * 'newest'/'title' from the old five-option menu; those map back to the
  * default. A value the menu lists passes through ('oldest' is listed again, as
- * "Oldest first" by last update). The store itself is left
+ * "Least recently updated"). The store itself is left
  * untouched, so the first user pick (onSortChange = setSort) overwrites it.
  */
 export function sanitizePostSort(sort: string): PostSort {
@@ -513,17 +627,12 @@ export function sanitizePostSort(sort: string): PostSort {
  */
 export const INITIAL_STAGE = 'review';
 
-/** Moves that wait out an Undo window before the proc is sent. */
-export function isUndoableMove(toStage: Stage): boolean {
-  return toStage === 'rejected' || toStage === 'parked';
-}
-
-/** The Undo toast title: "Moved to Rejected", "Moved to Parked". */
+/** The Undo toast title every move shows: "Moved to Review", "Moved to Approved". */
 export function undoMoveLabel(toStage: Stage): string {
   return `Moved to ${stageLabel(toStage)}`;
 }
 
-/** {@link runMovePost}'s deps plus the Undo runner (useUndoableAction's run). */
+/** {@link MovePostDeps} plus the Undo runner (useUndoableAction's run). */
 export interface UndoableMoveDeps extends MovePostDeps {
   run: (action: UndoableAction) => void;
   /**
@@ -536,17 +645,21 @@ export interface UndoableMoveDeps extends MovePostDeps {
 }
 
 /**
- * A move to Rejected or Parked: flip the post locally at once, close the sheet,
- * and hand the proc call to the Undo toast. Undo puts the post back and nothing
- * is sent; the window running out (or the toast closing) sends stage_transition
- * once. A failed send puts the post back and toasts the friendly error. The
- * in-flight guard holds from the flip until the send settles or Undo.
+ * The single move handler, for every move (the move sheet, the long-press and
+ * the board drop): flip the post locally at once, close the sheet, and hand the
+ * proc call to the "Moved to {Stage}" Undo toast. Undo puts the post back and
+ * nothing is sent; the window running out (or the toast closing) sends
+ * stage_transition once, with the on-behalf approver for an agency approve. A
+ * failed send puts the post back and toasts the friendly error. The in-flight
+ * guard holds from the flip until the send settles or Undo, so a double fire is
+ * dropped. A move the stage map or the role does not allow never flips.
  */
 export function runUndoableMove(
   deps: UndoableMoveDeps,
   postId: string,
   toStage: Stage,
   reason: string | null = null,
+  options: MoveOptions = {},
 ): void {
   if (deps.inFlight.has(postId)) {
     return;
@@ -567,7 +680,8 @@ export function runUndoableMove(
     setStage(fromStage);
     deps.inFlight.delete(postId);
   };
-  const retryMove = (): void => runUndoableMove(deps, postId, toStage, reason);
+  const retryMove = (): void => runUndoableMove(deps, postId, toStage, reason, options);
+  const onBehalfOf = toStage === 'approved' ? options.onBehalfOf : undefined;
   deps.inFlight.add(postId);
   setStage(toStage);
   deps.onClose();
@@ -580,6 +694,7 @@ export function runUndoableMove(
           postId,
           toStage,
           ...(traceId !== undefined ? { traceId } : {}),
+          ...(onBehalfOf !== undefined && onBehalfOf !== '' ? { onBehalfOf } : {}),
         });
         if (!result.ok) {
           revert();
@@ -610,7 +725,7 @@ export function runUndoableMove(
   });
 }
 
-/** Everything {@link runMovePost} needs, so the page wires it and tests drive it directly. */
+/** Everything a move needs, so the page wires it and tests drive it directly. */
 export interface MovePostDeps {
   client: Client;
   posts: PipelinePost[];
@@ -625,57 +740,6 @@ export interface MovePostDeps {
   role: string | null;
 }
 
-/**
- * The single move handler: AWAIT the stage_transition proc, then on success flip
- * the post's local stage (the page's useMemo re-groups it into the new column /
- * section) and toast; on failure leave the post where it was and toast a friendly
- * error. A per-post in-flight guard drops a double fire (a slow network can't
- * double-submit). Command, not query: it mutates state and toasts, returns nothing.
- */
-export async function runMovePost(
-  deps: MovePostDeps,
-  postId: string,
-  toStage: Stage,
-): Promise<void> {
-  if (deps.inFlight.has(postId)) {
-    return;
-  }
-  const target = deps.posts.find((post) => post.id === postId);
-  if (target === undefined) {
-    return;
-  }
-  // A target this role may never trigger (a client parking or sending back to
-  // review) never reaches the proc; legality from the stage stays the proc's.
-  if (!roleMayTarget(deps.role, toStage)) {
-    return;
-  }
-  const retryMove = (): void => void runMovePost(deps, postId, toStage);
-  deps.inFlight.add(postId);
-  try {
-    const result = await stageTransition(deps.client, { postId, toStage });
-    if (!result.ok) {
-      const copy = moveErrorCopy(result.error);
-      deps.toast(copy.text, moveFailure(copy, retryMove));
-      return;
-    }
-    deps.setPosts((prev) =>
-      prev.map((post) => (post.id === postId ? { ...post, stage: toStage } : post)),
-    );
-    deps.onClose();
-    deps.toast(`"${target.title}" moved to ${stageLabel(toStage)}`);
-  } catch (error) {
-    // Transport-level failure (network / RPC throw, not a domain Result): without
-    // this the throw surfaced nothing to the user. No optimistic flip is applied
-    // (the local stage update runs only after a successful proc), so the board is
-    // already consistent and there is nothing to revert. The finally below still
-    // clears the in-flight guard, exactly as on the success and domain-error paths.
-    const copy = moveErrorCopy(error);
-    deps.toast(copy.text, moveFailure(copy, retryMove));
-  } finally {
-    deps.inFlight.delete(postId);
-  }
-}
-
 export function PipelinePage() {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
@@ -684,7 +748,7 @@ export function PipelinePage() {
   // ?view=plan link included: only the pipeline's own keys are read).
   const [params, setParams] = useSearchParams();
   const query = useMemo(() => parsePipelineQuery(params, INITIAL_STAGE), [params]);
-  const { stage, search, dateWindow, customRange } = query;
+  const { stage: queryStage, search, dateWindow, customRange } = query;
   // Patches compose through a ref: the sort control's Apply sets the range and
   // the window back to back, before the URL re-renders the page.
   const latestQuery = useRef(query);
@@ -715,7 +779,8 @@ export function PipelinePage() {
     [updateQuery],
   );
   const shownKey = showMoreKey(pipelineQueryParams(query, INITIAL_STAGE).toString());
-  const canCreate = useWorkspaceCapability('post.create') === true;
+  const createCapability = useWorkspaceCapability('post.create');
+  const canCreate = createCapability === true;
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
   // Sanitize the persisted sort: a live workspace may hold a value the trimmed
   // menu no longer lists ('newest'/'title'). Fall back to the default for the
@@ -747,9 +812,6 @@ export function PipelinePage() {
   } | null>(null);
   // "Show them": the date filter key whose undated posts were added back.
   const [undatedShownFor, setUndatedShownFor] = useState<string | null>(null);
-  // Reactive mirror of the in-flight guard for the open move sheet: the guard
-  // itself is a ref (no re-render), so this state drives the sheet's busy prop.
-  const [movingId, setMovingId] = useState<string | null>(null);
   // Pipeline toasts ride the shared ui/toast surface; a ref keeps push stable.
   const toastApi = useOptionalToast();
   const toastRef = useRef(toastApi);
@@ -776,6 +838,8 @@ export function PipelinePage() {
   const [roleStatus, setRoleStatus] = useState<RoleStatus>('loading');
   const [roleAttempt, setRoleAttempt] = useState(0);
   const retryRole = useCallback((): void => setRoleAttempt((n) => n + 1), []);
+  // Clients never see Draft: a ?stage=draft link opens Review for them.
+  const stage = visibleStage(queryStage, role);
   // Per-post in-flight guard for the move handler (a ref so a re-render never
   // resets it mid-flight); shared by the desktop drop and mobile sheet paths.
   const inFlight = useRef<Set<string>>(new Set());
@@ -948,47 +1012,24 @@ export function PipelinePage() {
       void requestPostCovers(supabase, workspaceId, ids.slice(i, i + COVER_BATCH));
     }
   }, [workspaceId, coverKey]);
+  // While the role loads, review cards hold their status line's height.
+  const rolePending = roleStatus === 'loading';
   const viewer = useMemo<CardViewer>(
-    () => ({ role, approverFirstNames: people.approverFirstNames }),
-    [role, people.approverFirstNames],
+    () => ({ role, approverFirstNames: people.approverFirstNames, pending: rolePending }),
+    [role, people.approverFirstNames, rolePending],
   );
 
-  // Single source for the move: both the desktop drop and the mobile sheet call
-  // this, which awaits the proc then re-groups on success (see runMovePost).
+  // Single source for the move: the desktop drop and the mobile sheet both call
+  // this. Every move flips at once and sends after the "Moved to {Stage}" Undo
+  // window (see runUndoableMove, the authority for firing the proc once).
   const movePost = useCallback(
-    (postId: string, toStage: Stage, reason: string | null = null): void => {
-      // Mirror runMovePost's in-flight guard so the busy bookkeeping only runs for
-      // a move we actually start; a double-fire is dropped here (and again inside
-      // runMovePost, which stays the authority for firing the proc once).
-      if (inFlight.current.has(postId)) {
-        return;
-      }
-      // Rejected and Parked flip now and send after the Undo window.
-      if (isUndoableMove(toStage)) {
-        runUndoableMove(
-          {
-            client: supabase,
-            posts,
-            inFlight: inFlight.current,
-            setPosts,
-            onClose: () => setMovePostTarget(null),
-            toast: push,
-            role,
-            run: runUndoable,
-            newTraceId: generateTraceId,
-            postReason: (id, body, traceId) =>
-              workspaceId === null
-                ? Promise.resolve({ ok: false })
-                : postStageReason(supabase, { workspaceId, postId: id, body, traceId, role }),
-          },
-          postId,
-          toStage,
-          reason,
-        );
-        return;
-      }
-      setMovingId(postId);
-      void runMovePost(
+    (
+      postId: string,
+      toStage: Stage,
+      reason: string | null = null,
+      options: MoveOptions = {},
+    ): void => {
+      runUndoableMove(
         {
           client: supabase,
           posts,
@@ -997,40 +1038,44 @@ export function PipelinePage() {
           onClose: () => setMovePostTarget(null),
           toast: push,
           role,
+          run: runUndoable,
+          newTraceId: generateTraceId,
+          postReason: (id, body, traceId) =>
+            workspaceId === null
+              ? Promise.resolve({ ok: false })
+              : postStageReason(supabase, { workspaceId, postId: id, body, traceId, role }),
         },
         postId,
         toStage,
-      ).finally(() => {
-        setMovingId((current) => (current === postId ? null : current));
-      });
+        reason,
+        options,
+      );
     },
     [posts, push, role, runUndoable, workspaceId],
   );
 
-  // Every move asks the same question first: Reject and Park always confirm
-  // (move sheet, long-press, board drag); Send for review from Draft confirms
-  // from the move sheet. Everything else (Approve has its own confirm) moves.
-  const requestMove = useCallback(
-    (postId: string, toStage: Stage, fromSheet: boolean): void => {
+  // From the move sheet, Reject and Park ask first, and so does Send for review
+  // from Draft; Approve has its own confirm in the sheet. Everything else moves.
+  const requestSheetMove = useCallback(
+    (postId: string, toStage: Stage, options?: MoveOptions): void => {
       const post = shownPosts.find((p) => p.id === postId);
       if (post === undefined) return;
-      if (needsConfirm(post.stage as Stage, toStage, fromSheet)) {
+      if (needsConfirm(post.stage as Stage, toStage, true)) {
         if (!canRoleMove(role, post.stage as Stage, toStage)) return;
         setMovePostTarget(null);
         setConfirmMove({ post, to: toStage });
         return;
       }
-      movePost(postId, toStage);
+      movePost(postId, toStage, null, options);
     },
     [shownPosts, movePost, role],
   );
-  const requestSheetMove = useCallback(
-    (postId: string, toStage: Stage): void => requestMove(postId, toStage, true),
-    [requestMove],
-  );
+  // A board drop moves at once with no confirm; only a drop on Approved asks,
+  // through the board's own approve (or on-behalf) sheet, before it lands here.
   const requestBoardMove = useCallback(
-    (postId: string, toStage: Stage): void => requestMove(postId, toStage, false),
-    [requestMove],
+    (postId: string, toStage: Stage, options?: MoveOptions): void =>
+      movePost(postId, toStage, null, options),
+    [movePost],
   );
   // A long-press on a card this viewer cannot move does nothing.
   const openMove = useCallback(
@@ -1068,6 +1113,7 @@ export function PipelinePage() {
         onStageChange: setStage,
         counts,
         canCreate,
+        createPending: createCapability === null,
         hideDraft: isClient(role),
       })}
 
@@ -1087,7 +1133,11 @@ export function PipelinePage() {
       {live && postsFailed
         ? postsLoadError(() => void loadPosts(), postsLoading)
         : boardLoading
-          ? postsSkeleton(isDesktop)
+          ? postsSkeleton(isDesktop, {
+              kanban: stage === ALL_KEY,
+              ratio: skeletonRatio(activeWorkspace?.platform),
+              columns: boardStages(stage, role).length,
+            })
           : pipelineEmpty
             ? emptyPipeline(canCreate)
             : showFilteredEmpty
@@ -1104,6 +1154,8 @@ export function PipelinePage() {
                   onMovePost: requestBoardMove,
                   onLongPressPost: openMove,
                   role,
+                  roleReady: roleStatus === 'ready',
+                  canCreate,
                   onBlockedMove,
                   shownKey,
                   timeZone,
@@ -1114,7 +1166,6 @@ export function PipelinePage() {
       <MoveSheet
         open={movePostTarget !== null}
         post={movePostTarget}
-        busy={movePostTarget !== null && movingId === movePostTarget.id}
         onClose={() => setMovePostTarget(null)}
         onMove={requestSheetMove}
         role={role}

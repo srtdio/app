@@ -1,6 +1,6 @@
-// X5 fix 1 (FT20), revised by post flow C fix 3: the move button is a ⋯ circle
-// on the picture's top-right corner (a 44px tap area outside the thumbnail
-// tile and outside the text body), so the title gets the full card width.
+// X5 fix 1 (FT20), revised by Pipeline polish: the move button is a plain ⋯
+// glyph at the right end of the due row (a 44px tap area that never grows the
+// row), off the picture.
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -47,35 +47,37 @@ class DOMParserLike {
   }
 }
 
-describe('X5 PostCard move button placement (post flow C fix 3: the ⋯ on the picture corner)', () => {
-  it('the carousel card keeps the move button out of the thumbnail and the text body', () => {
+describe('X5 PostCard move button placement (the ⋯ at the right end of the due row)', () => {
+  it('the carousel card keeps the move button off the picture; the badge stays on it', () => {
     const out = card('carousel');
     const thumb = section(out, 'data-post-card-thumb');
     expect(thumb).toContain('aria-label="Carousel"');
     expect(thumb).not.toContain('data-post-card-move');
-    // The carousel badge moves to the left corner, clear of the ⋯.
     const badge = /<span[^>]*aria-label="Carousel"[^>]*>/.exec(out)?.[0] ?? '';
     expect(badge).toContain('left-1.5');
-    expect(badge).not.toContain('right-1.5');
-    // The text body no longer holds the button: the title gets the full width.
-    const body = section(out, 'data-post-card-body');
-    expect(body).not.toContain('data-post-card-move');
-    expect(out).toContain('data-post-card-move');
+    // The ⋯ lives in the meta (due) row of the body.
+    const meta = section(out, 'data-post-card-meta');
+    expect(meta).toContain('data-post-card-move');
   });
 
-  it('the button is a 44px tap area pinned to the top-right corner above the open overlay', () => {
+  it('the button is a plain 18px ⋯ in a 44px tap area that keeps the row height', () => {
     const out = card('single_image');
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(button).toContain('h-11');
     expect(button).toContain('w-11');
-    expect(button).toContain('absolute');
-    expect(button).toContain('right-0');
-    expect(button).toContain('top-0');
+    // Negative margins: the 44px target overflows a 20px row without growing it.
+    expect(button).toContain('-my-3');
+    expect(button).toContain('ml-auto');
     expect(button).toContain('z-10');
-    expect(button).toContain('rounded-full');
+    expect(button).toContain('text-fg-3');
+    expect(button).not.toContain('bg-');
     expect(button).toContain('aria-label="Move post Post title"');
-    // It sits between the picture and the text block, never inside the body.
-    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-post-card-thumb'));
-    expect(out.indexOf('data-post-card-move')).toBeLessThan(out.indexOf('data-post-card-body'));
+    const meta = /<div[^>]*data-post-card-meta=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(meta).toContain('h-5');
+    const glyph = /<button[^>]*data-post-card-move=""[^>]*>(<svg[^>]*>)/.exec(out)?.[1] ?? '';
+    expect(glyph).toContain('width="18"');
+    expect(glyph).toContain('height="18"');
+    // It sits after the picture, inside the body.
+    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-post-card-body'));
   });
 });

@@ -1,8 +1,8 @@
 // The Pipeline's ask-first sheet for the moves that confirm before they run:
 // Reject (with an optional reason that goes to the comments), Park, and
 // Draft -> Send for review from the move sheet. One surface for the move
-// sheet, the long-press and the board drag, so Reject and Park never happen
-// instantly. Confirm hands the reason up; the page runs the move behind the
+// sheet and the long-press (a board drag moves at once, behind the same Undo
+// strip). Confirm hands the reason up; the page runs the move behind the
 // 4 second Undo strip. The shared Sheet slides on the Y axis only.
 
 import { useEffect, useId, useState } from 'react';
@@ -61,8 +61,8 @@ export function stageConfirmCopy(
 }
 
 /**
- * Whether a Pipeline move asks first. Reject and Park always do (move sheet,
- * long-press, board drag); Draft -> review does from the move sheet only.
+ * Whether a move sheet move asks first. Reject and Park always do; Draft ->
+ * review does from the move sheet only (fromSheet). The board drag never asks.
  */
 export function needsConfirm(from: Stage, to: Stage, fromSheet: boolean): to is ConfirmTarget {
   if (to === 'rejected' || to === 'parked') return true;

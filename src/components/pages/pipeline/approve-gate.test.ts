@@ -4,15 +4,18 @@ import {
   GATE_IDLE,
   createApproveGate,
   type GateState,
+  type MoveOptions,
 } from '@/components/pages/pipeline/approve-gate';
+
+type Move = (postId: string, toStage: Stage, options?: MoveOptions) => void;
 
 function harness(): {
   gate: ReturnType<typeof createApproveGate>;
-  move: ReturnType<typeof vi.fn<(postId: string, toStage: Stage) => void>>;
+  move: ReturnType<typeof vi.fn<Move>>;
   state: () => GateState;
 } {
   let state = GATE_IDLE;
-  const move = vi.fn<(postId: string, toStage: Stage) => void>();
+  const move = vi.fn<Move>();
   const gate = createApproveGate({
     move,
     read: () => state,
@@ -66,6 +69,24 @@ describe('approve gate', () => {
       h.gate.request('p1', stage);
       expect(h.move).toHaveBeenCalledWith('p1', stage);
       expect(h.state()).toEqual(GATE_IDLE);
+    }
+  });
+
+  it('T6: an on-behalf confirm carries the picked approver into the move', () => {
+    const h = harness();
+    h.gate.request('p1', 'approved');
+    h.gate.confirm('u-client');
+    expect(h.move).toHaveBeenCalledOnce();
+    expect(h.move).toHaveBeenCalledWith('p1', 'approved', { onBehalfOf: 'u-client' });
+  });
+
+  it('T7: a click event or an empty id passed to confirm reads as no approver', () => {
+    for (const arg of [{ type: 'click' }, '', undefined]) {
+      const h = harness();
+      h.gate.request('p1', 'approved');
+      h.gate.confirm(arg);
+      expect(h.move).toHaveBeenCalledWith('p1', 'approved');
+      expect(h.move.mock.calls[0]).toHaveLength(2);
     }
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { PostCard } from '@/components/pages/PostCard';
+import { PostCard, cardDue } from '@/components/pages/PostCard';
 import type { PostCardProps } from '@/components/pages/PostCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PipelinePost } from '@srtdio/posts';
@@ -149,7 +149,7 @@ describe('PostCard thumbnail frame', () => {
     expect(out).toContain('<svg');
   });
 
-  it('(structural) the meta line is a single row: format glyph only, no platform mark, no two-pill stack', () => {
+  it('(structural) the meta line is a single fixed-height row with no format glyph and no platform mark', () => {
     const { cache } = makeCache(null);
     const out = render({
       post: makePost({ platform: 'instagram', format: 'single_image', target_date: null }),
@@ -157,13 +157,14 @@ describe('PostCard thumbnail frame', () => {
       presignEnabled: true,
     });
     // One non-wrapping meta row replaces the old two-chip stack.
-    expect(out).toContain('flex min-w-0 items-center gap-1.5');
+    const meta = /<div[^>]*data-post-card-meta=""[^>]*>(.*?)<\/div>/.exec(out);
+    expect(meta?.[0]).toContain('flex h-5 min-w-0 items-center gap-1.5');
     expect(out).not.toContain('flex-wrap');
     expect(out).not.toContain('min-w-0 shrink truncate');
     // The workspace has one platform: the card carries no platform mark.
     expect(out).not.toContain('aria-label="instagram"');
-    // A format glyph (svg) sits on the row.
-    expect(out).toContain('<svg');
+    // The format shows once, on the picture: the meta row holds no glyph.
+    expect(meta?.[1] ?? '').not.toContain('<svg');
     // The card root can shrink to its track and clips any residual overflow.
     expect(out).toContain('min-w-0');
     expect(out).toContain('overflow-hidden');
@@ -171,11 +172,16 @@ describe('PostCard thumbnail frame', () => {
 
   it('renders the target date on the meta line when present', () => {
     const { cache } = makeCache(null);
-    const out = render({
-      post: makePost({ target_date: '2026-03-15', format: 'single_image' }),
-      cache,
-      presignEnabled: true,
-    });
+    const out = renderToStaticMarkup(
+      <MemoryRouter>
+        <PostCard
+          post={makePost({ target_date: '2026-03-15', format: 'single_image' })}
+          cache={cache}
+          presignEnabled
+          now={new Date('2026-03-01T00:00:00Z')}
+        />
+      </MemoryRouter>,
+    );
     expect(out).toContain('tabular-nums');
     // The due line reads "Due {d MMM}", day first, no year.
     expect(out).toContain('Due 15 Mar');
@@ -282,5 +288,136 @@ describe('pipeline card shows no KEY-N code', () => {
         expect(out).not.toMatch(/aria-label="[^"]*\b[A-Z]{2,}-\d+\b/);
       }
     }
+  });
+});
+
+describe('E: Pipeline card polish', () => {
+  function renderWith(props: Partial<PostCardProps> & Pick<PostCardProps, 'post'>): string {
+    const { cache } = makeCache(null);
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <PostCard cache={cache} presignEnabled={false} {...props} />
+      </MemoryRouter>,
+    );
+  }
+  const NOW = new Date('2026-10-23T12:00:00Z');
+
+  it('the ⋯ is a plain glyph at the right end of the due row, never on the picture', () => {
+    const out = renderWith({
+      post: makePost({ target_date: '2026-11-02', format: 'carousel' }),
+      onMove: () => {},
+      now: NOW,
+    });
+    const metaAt = out.indexOf('data-post-card-meta');
+    const dueAt = out.indexOf('data-post-card-due');
+    const moveAt = out.indexOf('data-post-card-move');
+    expect(metaAt).toBeGreaterThan(-1);
+    expect(dueAt).toBeGreaterThan(metaAt);
+    // The ⋯ comes after the due text, pushed to the row's right end.
+    expect(moveAt).toBeGreaterThan(dueAt);
+    const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(button).toContain('ml-auto');
+    expect(button).toContain('h-11 w-11');
+    expect(button).toContain('-my-3');
+    expect(button).toContain('text-fg-3');
+    expect(button).not.toMatch(/\bbg-/);
+    // Nothing of it on the picture; the carousel badge stays there.
+    const thumb = out.slice(
+      out.indexOf('data-post-card-thumb'),
+      out.indexOf('data-post-card-body'),
+    );
+    expect(thumb).not.toContain('data-post-card-move');
+    expect(thumb).toContain('aria-label="Carousel"');
+  });
+
+  it('a past due date reads overdue in the bad tone, on one line that never wraps', () => {
+    expect(cardDue('2026-10-12', 'review', 'UTC', NOW)).toEqual({
+      text: 'Overdue · 12 Oct',
+      overdue: true,
+    });
+    expect(cardDue('2026-05-20', 'draft', 'UTC', NOW)).toEqual({
+      text: 'Overdue 5 months',
+      overdue: true,
+    });
+    // Today and ahead stay a due line; an approved post is done, never overdue.
+    expect(cardDue('2026-10-23', 'review', 'UTC', NOW)).toEqual({
+      text: 'Due 23 Oct',
+      overdue: false,
+    });
+    expect(cardDue('2026-11-02', 'review', 'UTC', NOW)).toEqual({
+      text: 'Due 2 Nov',
+      overdue: false,
+    });
+    expect(cardDue('2026-10-12', 'approved', 'UTC', NOW).overdue).toBe(false);
+
+    const out = renderWith({
+      post: makePost({ stage: 'review', target_date: '2026-10-12' }),
+      now: NOW,
+    });
+    const due = /<span[^>]*data-post-card-due="overdue"[^>]*>([^<]*)<\/span>/.exec(out);
+    expect(due?.[1]).toBe('Overdue · 12 Oct');
+    expect(due?.[0]).toContain('text-bad');
+    expect(due?.[0]).toContain('truncate');
+    expect(due?.[0]).toContain('whitespace-nowrap');
+    const upcoming = renderWith({ post: makePost({ target_date: '2026-11-02' }), now: NOW });
+    expect(upcoming).not.toContain('text-bad');
+  });
+
+  it('the review status line reads "With approvers · 4 months ago"', () => {
+    const out = renderWith({
+      post: makePost({ stage: 'review', stage_entered_at: '2026-06-15T12:00:00Z' }),
+      viewer: { role: 'agency', approverFirstNames: ['Meera', 'Arjun'] },
+      now: NOW,
+    });
+    expect(out).toContain('With approvers · 4 months ago');
+  });
+
+  it('every card fills its grid cell and the title holds two lines', () => {
+    const out = renderWith({ post: makePost({}) });
+    expect(out).toContain('relative flex h-full min-w-0 flex-col');
+    const title = /<div[^>]*data-post-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(title).toContain('line-clamp-2');
+    expect(title).toContain('min-h-[2.75em]');
+    const body = /<div[^>]*data-post-card-body=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(body).toContain('flex-1');
+  });
+
+  it('in a kanban column the card never repeats the stage name or its dot', () => {
+    const viewer = { role: 'agency', approverFirstNames: [] };
+    for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected']) {
+      const out = renderWith({
+        post: makePost({ stage }),
+        inColumn: true,
+        showStage: true,
+        viewer,
+      });
+      expect(out).not.toContain('data-post-card-stage');
+      expect(out).not.toContain(`bg-stage-${stage}`);
+    }
+    // Outside a column the review status line keeps its dot.
+    const free = renderWith({ post: makePost({ stage: 'review' }), viewer });
+    expect(free).toContain('bg-stage-review');
+  });
+
+  it('a review card holds its status line height while the role loads', () => {
+    const pending = renderWith({
+      post: makePost({ stage: 'review' }),
+      viewer: { role: null, approverFirstNames: [], pending: true },
+    });
+    expect(pending).toMatch(
+      /<div aria-hidden="true" data-post-card-status-pending="" class="h-4"><\/div>/,
+    );
+    const status = renderWith({
+      post: makePost({ stage: 'review' }),
+      viewer: { role: 'agency', approverFirstNames: [] },
+    });
+    expect(status).toContain('data-post-card-status="with"');
+    expect(status).not.toContain('data-post-card-status-pending');
+    // Only review cards carry a status line, so only they reserve one.
+    const draft = renderWith({
+      post: makePost({ stage: 'draft' }),
+      viewer: { role: null, approverFirstNames: [], pending: true },
+    });
+    expect(draft).not.toContain('data-post-card-status-pending');
   });
 });

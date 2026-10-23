@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import type { DragEvent, ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
+import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
 import { Sheet } from '@/components/ui/Sheet';
 import { PostCard } from '@/components/pages/PostCard';
 import {
   StageDot,
-  emptyStageMessage,
+  StageEmpty,
   moveBlockedReason,
   stageLabel,
 } from '@/components/pages/pipeline/stage-meta';
@@ -14,13 +15,15 @@ import {
   useApproveGate,
   type ApproveGate,
   type GateState,
+  type MoveFn,
 } from '@/components/pages/pipeline/approve-gate';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { CoverLookup } from '@/lib/chat/post-covers';
-import type { CardViewer } from '@/components/pages/pipeline/card-status';
+import { hasAllowedMove, type CardViewer } from '@/components/pages/pipeline/card-status';
 import { useWorkspace } from '@/lib/workspace-context';
 import { isAgencySide } from '@/components/pages/pcs/roles';
-import { canRoleMove, onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
+import { canRoleMove } from '@/components/pages/pcs/stage-actions';
+import { useWorkspaceApprovers } from '@/components/pages/pcs/use-approvers';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
 export interface PipelineBoardProps {
@@ -36,10 +39,21 @@ export interface PipelineBoardProps {
   workspaceKey?: string | null;
   /** Foot control on an overflowing column; the page decides what it switches to. */
   onViewAll: (stage: Stage) => void;
-  /** A confirmed, legal drop calls up to the page's single move handler. */
-  onMovePost: (postId: string, toStage: Stage) => void;
+  /**
+   * A legal drop calls up to the page's single move handler at once; a drop on
+   * Approved does so only after the approve (or on-behalf) sheet confirms, with
+   * the picked approver.
+   */
+  onMovePost: MoveFn;
   /** The viewer's workspace role: a client may only drop into Approved / Rejected. */
   role: string | null;
+  /**
+   * The role read has landed. Until then no card is draggable, so a drop never
+   * bounces silently. Default true.
+   */
+  roleReady?: boolean;
+  /** post.create granted: an empty stage also offers New post. */
+  canCreate?: boolean;
   /** A card's Move button asks the page to open the move sheet for that post. */
   onOpenMove?: (post: PipelinePost) => void;
   /** A drop onto a column the post cannot move to: the page toasts the reason. */
@@ -99,7 +113,7 @@ function onColumnDragLeave(event: DragEvent<HTMLDivElement>): void {
 function onColumnDrop(
   event: DragEvent<HTMLDivElement>,
   toStage: Stage,
-  onMovePost: (postId: string, toStage: Stage) => void,
+  onMovePost: MoveFn,
   role: string | null,
   onBlockedMove?: (reason: string) => void,
 ): void {
@@ -111,11 +125,10 @@ function onColumnDrop(
     return;
   }
   // Bounce an illegal drop with no state change; a drop back onto its own column
-  // is silent, any other names the reason from the stage map (the same mirror
-  // the move sheet uses).
+  // is silent, any other says where this post can go ("Draft posts can move to
+  // Review or Parked.") or that only approvers approve.
   if (!canRoleMove(role, fromStage as Stage, toStage)) {
-    const reason =
-      fromStage === toStage ? null : moveBlockedReason(role, fromStage as Stage, toStage);
+    const reason = moveBlockedReason(role, fromStage as Stage, toStage);
     if (reason !== null) onBlockedMove?.(reason);
     return;
   }
@@ -123,15 +136,18 @@ function onColumnDrop(
 }
 
 /**
- * The board with its approve gate: a legal drop into Approved opens the shared
- * approve confirm and only Confirm calls the page's move handler; every other
- * legal drop moves at once, as before. The confirm's post title and target date come
- * from the dropped post's row already in `grouped` and the workspace context;
- * no read of its own, and slide count (not loaded here) is left out.
+ * The board with its approve gate: a legal drop into Approved opens the approve
+ * sheet and only its Approve calls the page's move handler; every other legal
+ * drop moves at once (the page toasts "Moved to {Stage}" with Undo). An
+ * agency-side role gets the on-behalf sheet (pick the approver, carried into
+ * the move); a client gets the plain approve confirm. The confirm's post and
+ * target date come from the dropped post's row already in `grouped` and the
+ * workspace context; slide count (not loaded here) is left out.
  */
 export function PipelineBoard(props: PipelineBoardProps): ReactElement {
   const { gate, state } = useApproveGate(props.onMovePost);
   const { workspaces, workspaceId, workspaceName } = useWorkspace();
+  const approvers = useWorkspaceApprovers(workspaceId);
   const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
   const pending = pendingPost(props.grouped, state.pendingId);
   // The last confirmed-or-cancelled post stays rendered so the sheet plays its
@@ -140,17 +156,27 @@ export function PipelineBoard(props: PipelineBoardProps): ReactElement {
   useEffect(() => {
     if (pending !== null) setShown(pending);
   }, [pending]);
+  const open = state.pendingId !== null && !state.sent;
   return (
     <>
       <PipelineBoardView {...props} timeZone={timeZone} onMovePost={gate.request} />
-      <BoardApproveConfirm
-        post={pending ?? shown}
-        gate={gate}
-        gateState={state}
-        timeZone={timeZone}
-        onBehalf={isAgencySide(props.role)}
-        brand={workspaceName}
-      />
+      {isAgencySide(props.role) ? (
+        <OnBehalfApproveSheet
+          open={open}
+          approvers={approvers}
+          brand={workspaceName}
+          busy={state.sent}
+          onCancel={gate.cancel}
+          onConfirm={(onBehalfOf) => gate.confirm(onBehalfOf)}
+        />
+      ) : (
+        <BoardApproveConfirm
+          post={pending ?? shown}
+          gate={gate}
+          gateState={state}
+          timeZone={timeZone}
+        />
+      )}
     </>
   );
 }
@@ -168,15 +194,13 @@ export function pendingPost(
   return null;
 }
 
-/** The approve confirm's title after a board drag. */
-export const BOARD_APPROVE_TITLE = 'Approve this post?';
-
 /**
- * The drop's approve confirm: the shared Sheet (translateY axis) with the post's
- * title and the chat-matching confirm in its footer. Open while a post waits on
- * a confirm; Confirm sends once and closes (the page toasts the result, as for
- * any drop); Back, the close button, the backdrop and Escape send nothing.
- * Hookless, so the tree is unit tested by walking it.
+ * A client's approve confirm after a drop on Approved: the shared Sheet
+ * (translateY axis) titled with the post, and the chat-matching confirm in its
+ * body asking the question once ("Approve this post, for 2 Oct?"), so the
+ * title is never repeated. Confirm sends once and closes; Back, the close
+ * button, the backdrop and Escape send nothing. Hookless, so the tree is unit
+ * tested by walking it.
  */
 export function BoardApproveConfirm(props: {
   /** The post to name: the pending one, or the last one while the sheet exits. */
@@ -184,10 +208,6 @@ export function BoardApproveConfirm(props: {
   gate: ApproveGate;
   gateState: GateState;
   timeZone: string;
-  /** Agency side: the confirm adds the on-behalf-of-client line. */
-  onBehalf: boolean;
-  /** The workspace's brand name; null falls back to "the approvers". */
-  brand?: string | null;
 }): ReactElement | null {
   const { post, gate, gateState } = props;
   if (post === null) return null;
@@ -195,29 +215,16 @@ export function BoardApproveConfirm(props: {
     <Sheet
       open={gateState.pendingId !== null && !gateState.sent}
       onClose={gate.cancel}
-      title={BOARD_APPROVE_TITLE}
-      footer={
-        <ApproveConfirm
-          postTitle={post.title}
-          mediaCount={null}
-          targetDate={approveTargetDate(post.target_date, props.timeZone)}
-          busy={gateState.sent}
-          onBack={gate.cancel}
-          onConfirm={gate.confirm}
-        />
-      }
+      title={post.title}
     >
-      <p
-        data-approve-title=""
-        className="line-clamp-2 text-sm font-medium text-fg [overflow-wrap:anywhere]"
-      >
-        {post.title}
-      </p>
-      {props.onBehalf ? (
-        <p data-approve-on-behalf="" className="mt-2 text-sm text-fg-2">
-          {onBehalfConfirmLine(props.brand)}
-        </p>
-      ) : null}
+      <ApproveConfirm
+        postTitle={null}
+        mediaCount={null}
+        targetDate={approveTargetDate(post.target_date, props.timeZone)}
+        busy={gateState.sent}
+        onBack={gate.cancel}
+        onConfirm={() => gate.confirm()}
+      />
     </Sheet>
   );
 }
@@ -225,10 +232,12 @@ export function BoardApproveConfirm(props: {
 /**
  * Desktop kanban: one fixed-width column per stage (a single-stage view renders
  * the full-width {@link SingleStageGrid} instead) in the locked STAGE order,
- * horizontally scrolled. Cards are native-draggable items and columns are drop
- * targets; a drop onto a legal target for the viewer's role (canRoleMove) calls up to the page's move
- * handler, an illegal drop bounces. No DnD library, native events only, and no
- * stageTransition call lives here. Capped columns surface a View all control at
+ * horizontally scrolled. Cards are native-draggable items (once the role is
+ * known, and only when the role has a move) and columns are drop targets; a
+ * drop onto a legal target for the viewer's role (canRoleMove) calls up to the
+ * page's move handler, an illegal drop bounces with its reason. Cards in a
+ * column never repeat the column's stage name or dot. No DnD library, native
+ * events only, and no stageTransition call lives here. Capped columns surface a View all control at
  * the foot. Hookless (drag affordance toggles classes on the event target and the
  * payload rides dataTransfer) so the structure stays unit-testable by walking the
  * returned tree.
@@ -248,6 +257,8 @@ export function PipelineBoardView({
   timeZone = 'UTC',
   viewer,
   covers,
+  roleReady = true,
+  canCreate = false,
 }: PipelineBoardProps): ReactElement {
   const only = stages.length === 1 ? stages[0] : undefined;
   if (only !== undefined) {
@@ -259,6 +270,7 @@ export function PipelineBoardView({
       presignEnabled,
       workspaceKey,
       timeZone,
+      canCreate,
       ...(onOpenMove !== undefined ? { onOpenMove } : {}),
       ...(viewer !== undefined ? { viewer } : {}),
       ...(covers !== undefined ? { covers } : {}),
@@ -292,37 +304,37 @@ export function PipelineBoardView({
               <span className="ml-auto text-xs tabular-nums text-fg-3">{all.length}</span>
             </div>
             {all.length === 0 ? (
-              <div
-                data-column-empty=""
-                className="flex min-h-[160px] items-center justify-center px-3 py-6 text-center text-sm text-fg-3"
-              >
-                {emptyStageMessage(stage)}
-              </div>
+              <div data-column-empty="">{StageEmpty({ stage, canCreate })}</div>
             ) : (
               <div className="flex flex-col gap-2 p-2">
-                {shown.map((post) => (
-                  <div
-                    key={post.id}
-                    data-drag-item
-                    data-post-id={post.id}
-                    draggable
-                    onDragStart={(event) => onCardDragStart(event, post)}
-                    onDragEnd={onCardDragEnd}
-                    className="rounded-lg"
-                  >
-                    <PostCard
-                      post={post}
-                      cache={cache}
-                      presignEnabled={presignEnabled}
-                      workspaceKey={workspaceKey}
-                      showStage
-                      timeZone={timeZone}
-                      {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
-                      {...(viewer !== undefined ? { viewer } : {})}
-                      {...(covers !== undefined ? { cover: covers(post.id) } : {})}
-                    />
-                  </div>
-                ))}
+                {shown.map((post) => {
+                  // No drag until the role is known, and none for a card this
+                  // role cannot move anywhere.
+                  const draggable = roleReady && hasAllowedMove(role, post.stage as Stage);
+                  return (
+                    <div
+                      key={post.id}
+                      data-drag-item
+                      data-post-id={post.id}
+                      draggable={draggable}
+                      onDragStart={(event) => onCardDragStart(event, post)}
+                      onDragEnd={onCardDragEnd}
+                      className="rounded-lg"
+                    >
+                      <PostCard
+                        post={post}
+                        cache={cache}
+                        presignEnabled={presignEnabled}
+                        workspaceKey={workspaceKey}
+                        inColumn
+                        timeZone={timeZone}
+                        {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
+                        {...(viewer !== undefined ? { viewer } : {})}
+                        {...(covers !== undefined ? { cover: covers(post.id) } : {})}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
             {overflow ? (
@@ -359,6 +371,7 @@ function SingleStageGrid({
   presignEnabled,
   workspaceKey,
   timeZone,
+  canCreate,
   onOpenMove,
   viewer,
   covers,
@@ -369,18 +382,15 @@ function SingleStageGrid({
   presignEnabled: boolean;
   workspaceKey: string | null;
   timeZone: string;
+  canCreate: boolean;
   onOpenMove?: (post: PipelinePost) => void;
   viewer?: CardViewer;
   covers?: CoverLookup;
 }): ReactElement {
   if (posts.length === 0) {
     return (
-      <div
-        data-board-grid
-        data-stage={stage}
-        className="flex min-h-[160px] items-center justify-center px-4 py-6 text-center text-sm text-fg-3 md:px-6"
-      >
-        {emptyStageMessage(stage)}
+      <div data-board-grid data-stage={stage} className="px-4 md:px-6">
+        {StageEmpty({ stage, canCreate })}
       </div>
     );
   }
@@ -391,7 +401,7 @@ function SingleStageGrid({
       className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 px-4 py-4 md:px-6"
     >
       {posts.map((post) => (
-        <div key={post.id} data-post-id={post.id} className="min-w-0 rounded-lg">
+        <div key={post.id} data-post-id={post.id} className="h-full min-w-0 rounded-lg">
           <PostCard
             post={post}
             cache={cache}

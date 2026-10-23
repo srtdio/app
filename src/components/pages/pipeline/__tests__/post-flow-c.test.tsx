@@ -44,10 +44,8 @@ import {
   stageConfirmCopy,
   type ConfirmTarget,
 } from '@/components/pages/pipeline/StageMoveConfirm';
-import {
-  BOARD_APPROVE_TITLE,
-  BoardApproveConfirm,
-} from '@/components/pages/pipeline/PipelineBoard';
+import { BoardApproveConfirm } from '@/components/pages/pipeline/PipelineBoard';
+import { Sheet } from '@/components/ui/Sheet';
 import {
   PipelineDateControl,
   PipelineSortControl,
@@ -208,14 +206,22 @@ describe('post flow C: Pipeline card', () => {
     expect(card({ post: x5Post({ stage: 'review' }) })).not.toContain('data-post-card-status');
   });
 
-  it('fix 3: the ⋯ sits on the picture corner, outside the body, and hides when the viewer has no move', () => {
+  it('fix 3: the ⋯ ends the due row, off the picture, and hides when the viewer has no move', () => {
     const out = card({ post: x5Post({ stage: 'review' }), onMove: () => {} });
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(button).toContain('aria-label="Move post Post title"');
-    expect(button).toContain('absolute right-0 top-0');
-    const bodyAt = out.indexOf('data-post-card-body');
-    expect(out.indexOf('data-post-card-move')).toBeLessThan(bodyAt);
-    expect(out.slice(bodyAt)).not.toContain('<button');
+    expect(button).toContain('ml-auto');
+    expect(button).not.toContain('absolute');
+    const metaAt = out.indexOf('data-post-card-meta');
+    expect(metaAt).toBeGreaterThan(out.indexOf('data-post-card-body'));
+    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(metaAt);
+    // Nothing of the move control sits on the picture.
+    const thumb = out.slice(
+      out.indexOf('data-post-card-thumb'),
+      out.indexOf('data-post-card-body'),
+    );
+    expect(thumb).not.toContain('data-post-card-move');
+    expect(thumb).not.toContain('bg-overlay-badge-hover');
     // The title takes the full width and clamps at two lines.
     const title = /<div[^>]*data-post-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(title).toContain('line-clamp-2');
@@ -251,7 +257,7 @@ describe('post flow C: Pipeline card', () => {
     const out = card({
       post: x5Post({ target_date: '2026-03-15T02:00:00Z' }),
       timeZone: 'UTC',
-      now,
+      now: new Date('2026-03-01T00:00:00Z'),
     });
     expect(out).toMatch(/<span[^>]*data-post-card-due=""[^>]*>Due 15 Mar<\/span>/);
     expect(out).not.toContain('2026');
@@ -362,7 +368,11 @@ describe('post flow C: header, count and filters', () => {
     const sortRows = all(sortControlBody({ order: 'updated', onOrderChange: () => {} })).filter(
       (el) => (el.props as { role?: string }).role === 'menuitemradio',
     );
-    expect(sortRows.map(text)).toEqual(['Newest first', 'Oldest first', 'Due soonest first']);
+    expect(sortRows.map(text)).toEqual([
+      'Recently updated',
+      'Least recently updated',
+      'Due soonest first',
+    ]);
     for (const row of sortRows) {
       const className = (row.props as { className: string }).className;
       expect(className).toContain('min-h-[44px]');
@@ -401,7 +411,7 @@ describe('post flow C: header, count and filters', () => {
     );
     expect(sortTrigger).toContain('h-11');
     expect(sortTrigger).not.toContain('md:h-9');
-    expect(sortTrigger).toContain('Oldest first');
+    expect(sortTrigger).toContain('Least recently updated');
     const dateTrigger = (dateWindow: 'any' | 'week'): string =>
       renderToStaticMarkup(
         <PipelineDateControl
@@ -488,7 +498,8 @@ describe('post flow C: move sheet and confirms', () => {
 
     // The sheet: titled by the post, one row per action, helpers under labels.
     const tree = sheet('draft', 'agency', ['Meera', 'Arjun']);
-    expect((tree.props as { title: string }).title).toBe('Spring drop');
+    const moveSheet = all(tree).find((el) => el.type === Sheet)!;
+    expect((moveSheet.props as { title: string }).title).toBe('Spring drop');
     const rows = all(tree).filter((el) => 'data-move-action' in (el.props as object));
     const targets = rows.map((row) => (row.props as Record<string, unknown>)['data-move-action']);
     expect(targets).toEqual(['review', 'parked']);
@@ -572,8 +583,7 @@ describe('post flow C: move sheet and confirms', () => {
     (park.button('Park').props as { onClick: () => void }).onClick();
     expect(park.onConfirm).toHaveBeenCalledWith('p1', 'parked', null);
 
-    // A board drag into Approved asks "Approve this post?".
-    expect(BOARD_APPROVE_TITLE).toBe('Approve this post?');
+    // A client's board drag into Approved names the post in the header and asks once.
     let state = GATE_IDLE;
     const gate = createApproveGate({
       move: () => {},
@@ -588,9 +598,10 @@ describe('post flow C: move sheet and confirms', () => {
       gate,
       gateState: state,
       timeZone: 'UTC',
-      onBehalf: false,
     })!;
-    expect((board.props as { title: string }).title).toBe(BOARD_APPROVE_TITLE);
+    expect((board.props as { title: string }).title).toBe('Post title');
+    const body = (board.props as { children: ReactNode }).children;
+    expect(renderToStaticMarkup(<>{body}</>)).toContain('Approve this post?');
   });
 });
 
