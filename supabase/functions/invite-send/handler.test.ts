@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { createClient } from '@supabase/supabase-js';
+import type { MailDomainResult } from './mail-domain.ts';
 import {
   firstName,
   handleInviteSend,
@@ -26,7 +27,8 @@ function query(result: { data: unknown; error: unknown }) {
   return chain;
 }
 
-function setup(checkError: string | null) {
+function setup(checkError: string | null, mail: MailDomainResult = 'ok') {
+  const checkMailDomain = vi.fn(async (_domain: string): Promise<MailDomainResult> => mail);
   const createUser = vi.fn(async () => ({ data: { user: { id: 'new-user' } }, error: null }));
   const listUsers = vi.fn(async () => ({ data: { users: [] }, error: null }));
   const callerRpc = vi.fn(async (fn: string) =>
@@ -48,7 +50,9 @@ function setup(checkError: string | null) {
     deps: {
       env: (name: string) => ENV[name],
       createClient: factory as unknown as typeof createClient,
+      checkMailDomain,
     },
+    checkMailDomain,
     createUser,
     listUsers,
     callerRpc,
@@ -70,7 +74,7 @@ function request(body: unknown): Request {
 
 describe('invite-send member_invite_check pre-flight', () => {
   it.each([
-    ['free_mail_client', 400],
+    ['invalid_payload', 400],
     ['client_domain_mismatch', 409],
     ['forbidden_role', 403],
   ])('a failing check (%s) creates no auth user and no invite', async (code, status) => {
@@ -405,4 +409,93 @@ describe('invite-send email delivery', () => {
     const subject = await sentSubject({ data: null, error: { message: 'boom' } }, 'agency');
     expect(subject).toBe("You're invited to Acme on Sorted");
   });
+});
+
+describe('invite-send email legitimacy checks', () => {
+  function expectNothingProvisioned(s: ReturnType<typeof setup>) {
+    expect(s.callerRpc).not.toHaveBeenCalled();
+    expect(s.listUsers).not.toHaveBeenCalled();
+    expect(s.createUser).not.toHaveBeenCalled();
+    expect(s.admin.from).not.toHaveBeenCalled();
+  }
+
+  it.each(['admin', 'agency', 'client'])(
+    'refuses a throwaway domain (%s) with disposable_email and creates nothing',
+    async (role) => {
+      const s = setup(null);
+      const res = await handleInviteSend(
+        request({ workspace_id: WORKSPACE_ID, email: 'x@Mailinator.com', role }),
+        s.deps,
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'disposable_email', trace_id: 'trace-1' });
+      expect(s.checkMailDomain).not.toHaveBeenCalled();
+      expectNothingProvisioned(s);
+    },
+  );
+
+  it('refuses a sub-domain of a throwaway domain', async () => {
+    const s = setup(null);
+    const res = await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: 'x@inbox.mailinator.com', role: 'agency' }),
+      s.deps,
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('disposable_email');
+    expectNothingProvisioned(s);
+  });
+
+  it('refuses a domain with no mail records with email_domain_unreachable', async () => {
+    const s = setup(null, 'no_mail');
+    const res = await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: 'name@gmial.con', role: 'client' }),
+      s.deps,
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'email_domain_unreachable', trace_id: 'trace-1' });
+    expect(s.checkMailDomain).toHaveBeenCalledWith('gmial.con');
+    expectNothingProvisioned(s);
+  });
+
+  it('goes on when the lookup is unknown, with a warning', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const s = setup(null, 'unknown');
+    s.admin.from.mockImplementation(() => {
+      throw new Error('stop after member_invite');
+    });
+    await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: 'person@brand.com', role: 'agency' }),
+      s.deps,
+    );
+    expect(warnSpy).toHaveBeenCalledWith('trace-1', 'mail_domain_lookup_unknown', 'brand.com');
+    expect(s.callerRpc.mock.calls.map((c) => c[0])).toEqual([
+      'member_invite_check',
+      'member_invite',
+    ]);
+    expect(s.createUser).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it.each(['tester@test.srtd.io', 'tester@sample.srtd.io', 'me@srtd.io'])(
+    'skips the mail lookup for %s',
+    async (email) => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const s = setup(null, 'no_mail');
+      s.admin.from.mockImplementation(() => {
+        throw new Error('stop after member_invite');
+      });
+      await handleInviteSend(
+        request({ workspace_id: WORKSPACE_ID, email, role: 'agency' }),
+        s.deps,
+      );
+      expect(s.checkMailDomain).not.toHaveBeenCalled();
+      expect(s.callerRpc.mock.calls.map((c) => c[0])).toEqual([
+        'member_invite_check',
+        'member_invite',
+      ]);
+      errorSpy.mockRestore();
+    },
+  );
 });
