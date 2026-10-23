@@ -230,3 +230,149 @@ describe('fetchPdfStream', () => {
     });
   });
 });
+
+describe('fast file links', () => {
+  const NOW = Date.UTC(2026, 9, 23, 8, 0, 0);
+  const DAY = 24 * 60 * 60 * 1000;
+
+  function keyResponse(expiresAtMs: number): Response {
+    return new Response(
+      JSON.stringify({ key: 'user.123.mac', expires_at: new Date(expiresAtMs).toISOString() }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
+
+  function linkDeps(over: Partial<PresignDeps> = {}) {
+    const calls: string[] = [];
+    const deps = baseDeps({
+      fileBase: 'https://srtd.io',
+      fetcher: async (input) => {
+        calls.push(String(input));
+        return String(input).endsWith('/link-key')
+          ? keyResponse(NOW + 2 * DAY)
+          : okResponse('https://acct.r2.cloudflarestorage.com/b/k');
+      },
+      ...over,
+    });
+    return { deps, calls };
+  }
+
+  it('builds file URLs from one link-key request shared by every file', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    try {
+      const { deps, calls } = linkDeps();
+      const cache = new PresignCache(deps);
+      const [a, b, t] = await Promise.all([
+        cache.resolve('v-a'),
+        cache.resolve('v-b'),
+        cache.thumbnail('v-a'),
+      ]);
+      expect(calls).toEqual(['https://worker.test/read/link-key']);
+      expect(a.url).toBe('https://srtd.io/f/v-a/full?k=user.123.mac');
+      expect(b.url).toBe('https://srtd.io/f/v-b/full?k=user.123.mac');
+      expect(t?.url).toBe('https://srtd.io/f/v-a/thumb?k=user.123.mac');
+      // Once held, links paint synchronously with no request.
+      expect(cache.peekThumbnail('v-z')?.url).toBe('https://srtd.io/f/v-z/thumb?k=user.123.mac');
+      expect(calls).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('adds dl=1 for a download link', async () => {
+    const { deps } = linkDeps();
+    const link = await new PresignCache(deps).freshUrl('v-a', 'attachment');
+    expect(link.url).toBe('https://srtd.io/f/v-a/full?k=user.123.mac&dl=1');
+  });
+
+  it('keeps the transcriber on a storage URL (it refuses any other host)', async () => {
+    const { deps } = linkDeps();
+    const link = await new PresignCache(deps).storageUrl('v-a');
+    expect(link.url).toBe('https://acct.r2.cloudflarestorage.com/b/k');
+  });
+
+  it('reuses a stored key with more than a day left, and renews one with less', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    try {
+      const fresh = { key: 'stored.1.m', expiresAt: NOW + DAY + 60_000 };
+      const cacheA = new PresignCache(
+        linkDeps({ linkKeyStore: { load: () => fresh, save: () => undefined } }).deps,
+      );
+      expect(cacheA.peek('v')?.url).toBe('https://srtd.io/f/v/full?k=stored.1.m');
+
+      const stale = { key: 'stored.1.m', expiresAt: NOW + DAY - 60_000 };
+      const cacheB = new PresignCache(
+        linkDeps({ linkKeyStore: { load: () => stale, save: () => undefined } }).deps,
+      );
+      expect(cacheB.peek('v')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('falls back to per-file presigns when the link key cannot be had', async () => {
+    const { deps } = linkDeps({
+      fetcher: async (input) =>
+        String(input).endsWith('/link-key')
+          ? new Response('nope', { status: 500 })
+          : okResponse('https://acct.r2.cloudflarestorage.com/b/k'),
+    });
+    const link = await new PresignCache(deps).resolve('v-a');
+    expect(link.url).toBe('https://acct.r2.cloudflarestorage.com/b/k');
+  });
+
+  it('a refresh drops the held key and mints a new one', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    try {
+      const saved: Array<unknown> = [];
+      const { deps, calls } = linkDeps({
+        linkKeyStore: { load: () => null, save: (k) => saved.push(k) },
+      });
+      const cache = new PresignCache(deps);
+      await cache.resolve('v-a');
+      await cache.refresh('v-a');
+      expect(calls.filter((c) => c.endsWith('/link-key'))).toHaveLength(2);
+      expect(saved).toContain(null);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the per-file path when no file base is set', async () => {
+    const calls: string[] = [];
+    const cache = new PresignCache(
+      baseDeps({
+        fetcher: async (input) => {
+          calls.push(String(input));
+          return okResponse('https://signed/x');
+        },
+      }),
+    );
+    expect((await cache.resolve('v')).url).toBe('https://signed/x');
+    expect(calls).toEqual(['https://worker.test/read']);
+  });
+});
+
+describe('fast file links after a failed link key', () => {
+  it('asks for the key once, then uses the per-file path without asking per file', async () => {
+    const calls: string[] = [];
+    const cache = new PresignCache(
+      baseDeps({
+        fileBase: 'https://srtd.io',
+        fetcher: async (input) => {
+          calls.push(String(input));
+          return String(input).endsWith('/link-key')
+            ? new Response('nope', { status: 500 })
+            : okResponse('https://acct.r2.cloudflarestorage.com/b/k');
+        },
+      }),
+    );
+    await cache.resolve('v-a');
+    await cache.resolve('v-b');
+    await cache.resolve('v-c');
+    expect(calls.filter((c) => c.endsWith('/link-key'))).toHaveLength(1);
+  });
+});

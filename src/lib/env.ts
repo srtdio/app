@@ -13,6 +13,10 @@ export const envSchema = z.object({
   // versions. Optional - when unset, asset thumbnails and downloads degrade
   // gracefully (the library still lists and filters).
   VITE_ASSET_READ_URL: optionalUrl,
+  // Origin serving fast file links (the asset-read Worker's /f/* route), no
+  // trailing slash. Optional - on srtd.io and its test sites it defaults to
+  // https://srtd.io; elsewhere (local dev) the per-file presign path is used.
+  VITE_FILE_BASE_URL: optionalUrl,
   // Asset-upload Worker URL: accepts multipart {file, workspace_id} + Bearer JWT
   // and stores the asset. Optional - when unset, the Assets add menu still opens
   // the sheet but the commit path stays disabled (naming only).

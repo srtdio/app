@@ -36,8 +36,8 @@ function render(props: {
 }
 
 describe('Thumbnail', () => {
-  it('(a) renders an <img object-cover> when a version is present and presign is enabled', () => {
-    const { cache, peek } = makeCache('https://cdn.example/thumb.jpg');
+  it('(a) renders an <img object-cover> of the small copy when a version is present and presign is enabled', () => {
+    const { cache, peekThumbnail } = makeCache(null, 'https://cdn.example/thumb.jpg');
     const out = render({
       assetVersionId: 'av1',
       cache,
@@ -47,7 +47,23 @@ describe('Thumbnail', () => {
     expect(out).toContain('<img');
     expect(out).toContain('https://cdn.example/thumb.jpg');
     expect(out).toContain('object-cover');
-    expect(peek).toHaveBeenCalledWith('av1');
+    expect(peekThumbnail).toHaveBeenCalledWith('av1');
+  });
+
+  it('(a2) never loads the full-size original over a known small copy, even when its link is known', () => {
+    const { cache, resolve } = makeCache(
+      'https://srtd.io/f/av1/full?k=key',
+      'https://srtd.io/f/av1/thumb?k=key',
+    );
+    const out = render({
+      assetVersionId: 'av1',
+      cache,
+      presignEnabled: true,
+      fallback: { kind: 'glyph' },
+    });
+    expect(out).toContain('https://srtd.io/f/av1/thumb?k=key');
+    expect(out).not.toContain('https://srtd.io/f/av1/full');
+    expect(resolve).not.toHaveBeenCalled();
   });
 
   it('(b) renders a link fallback with its domain label', () => {

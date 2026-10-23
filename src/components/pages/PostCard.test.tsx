@@ -67,8 +67,13 @@ function render(props: Pick<PostCardProps, 'post' | 'cache' | 'presignEnabled'>)
 }
 
 describe('PostCard thumbnail frame', () => {
-  it('(a) renders the presigned image when a thumbnail version is present and presign is enabled', () => {
-    const { cache, peek } = makeCache('https://cdn.example/thumb.jpg');
+  it('(a) renders the small copy when a thumbnail version is present and presign is enabled', () => {
+    const { cache: base } = makeCache('https://cdn.example/full.jpg');
+    const peekThumbnail = vi.fn(() => ({
+      url: 'https://cdn.example/thumb.jpg',
+      expiresAt: Date.now() + 3_600_000,
+    }));
+    const cache = { ...base, peekThumbnail } as unknown as PresignCache;
     const out = render({
       post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
       cache,
@@ -76,8 +81,9 @@ describe('PostCard thumbnail frame', () => {
     });
     expect(out).toContain('<img');
     expect(out).toContain('https://cdn.example/thumb.jpg');
+    expect(out).not.toContain('full.jpg');
     expect(out).toContain('object-cover');
-    expect(peek).toHaveBeenCalledWith('av1');
+    expect(peekThumbnail).toHaveBeenCalledWith('av1');
   });
 
   it('(b) the imageless text tile shows the caption, falling back to the title when blank', () => {

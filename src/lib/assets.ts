@@ -199,21 +199,23 @@ export async function listAssets(
   client: Client,
   workspaceId: string,
 ): Promise<Result<AssetListItem[]>> {
-  const assetsResult = await client
-    .from('assets')
-    .select(ASSET_SELECT)
-    .eq('workspace_id', workspaceId)
-    .is('deleted_at', null)
-    .order('uploaded_at', { ascending: false });
+  // The two reads are independent: run them together (one round trip of wait).
+  const [assetsResult, attachmentsResult] = await Promise.all([
+    client
+      .from('assets')
+      .select(ASSET_SELECT)
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null)
+      .order('uploaded_at', { ascending: false }),
+    client
+      .from('asset_attachments')
+      .select('asset_id')
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null),
+  ]);
   if (assetsResult.error) {
     return { ok: false, error: { code: 'unknown', message: assetsResult.error.message } };
   }
-
-  const attachmentsResult = await client
-    .from('asset_attachments')
-    .select('asset_id')
-    .eq('workspace_id', workspaceId)
-    .is('deleted_at', null);
   if (attachmentsResult.error) {
     return { ok: false, error: { code: 'unknown', message: attachmentsResult.error.message } };
   }

@@ -4895,7 +4895,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       if (only === undefined) return;
       void transcribeVoiceNote({
         messageId: message.id,
-        fetchAudio: async () => (await presignCache.resolve(only.assetId)).url,
+        // The transcriber fetches the audio from storage itself: a storage URL.
+        fetchAudio: async () => (await presignCache.storageUrl(only.assetId)).url,
         transcribe,
       });
     },

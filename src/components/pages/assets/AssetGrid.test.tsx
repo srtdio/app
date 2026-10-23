@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AssetGrid } from '@/components/pages/assets/AssetGrid';
+import { ASSET_GRID_PAGE, AssetGrid } from '@/components/pages/assets/AssetGrid';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 
@@ -76,5 +76,40 @@ describe('AssetGrid select mode', () => {
     expect(out).toContain('aria-label="View one.pdf"');
     expect(out).not.toContain('aria-pressed');
     expect(out).not.toContain('Select one.pdf');
+  });
+});
+
+describe('AssetGrid first screenful', () => {
+  it('draws the first page of cards only, with a marker to draw more', () => {
+    const many = Array.from({ length: ASSET_GRID_PAGE + 25 }, (_, i) =>
+      makeAsset(`m${i}`, `file-${i}.pdf`),
+    );
+    const out = renderToStaticMarkup(
+      <AssetGrid
+        items={many}
+        presignEnabled={false}
+        cache={cache}
+        onOpen={vi.fn()}
+        onLongPress={vi.fn()}
+      />,
+    );
+    expect(out).toContain(`file-${ASSET_GRID_PAGE - 1}.pdf`);
+    expect(out).not.toContain(`file-${ASSET_GRID_PAGE}.pdf`);
+    expect(out).toContain('data-asset-grid-more');
+  });
+
+  it('draws every card and no marker when they fit in one page', () => {
+    const out = renderToStaticMarkup(
+      <AssetGrid
+        items={items}
+        presignEnabled={false}
+        cache={cache}
+        onOpen={vi.fn()}
+        onLongPress={vi.fn()}
+      />,
+    );
+    expect(out).toContain('one.pdf');
+    expect(out).toContain('two.pdf');
+    expect(out).not.toContain('data-asset-grid-more');
   });
 });

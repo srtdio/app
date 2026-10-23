@@ -15,6 +15,15 @@
 // thumbnail rendition (404 'no_rendition' is cached as absent for the session)
 // and a PDF's bytes streamed through the Worker. The viewer never reuses a
 // cached link: freshUrl and pdf ask the Worker again on every open.
+//
+// Fast file links (fileBase set): instead of one presign request per file, the
+// cache asks asset-read once a day for a link key (POST {endpoint}/link-key)
+// and builds every picture, video and download URL itself:
+//   {fileBase}/f/{version}/{thumb|full}?k={key}[&dl=1]
+// Those URLs are served through Cloudflare's edge cache with the caller's
+// membership checked live on every request, and they stay identical all day so
+// the browser reuses what it downloaded. If the key cannot be had, every call
+// falls back to the per-file presign path below, unchanged.
 
 import { staticAsset } from '@/lib/static-assets';
 
@@ -31,6 +40,84 @@ export interface PresignDeps {
   getAccessToken: () => Promise<string | null>;
   /** Trace-propagating fetch (the app's fetchWithTrace), injected by the caller. */
   fetcher: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  /**
+   * Origin that serves fast file links (srtd.io/f/*), no trailing slash; null or
+   * absent keeps the per-file presign path.
+   */
+  fileBase?: string | null;
+  /** Where the day's link key outlives the page; null keeps it in memory only. */
+  linkKeyStore?: LinkKeyStore | null;
+}
+
+/** A day-long link key for fast file links, with its expiry in epoch ms. */
+export interface StoredLinkKey {
+  key: string;
+  expiresAt: number;
+}
+
+/** Keeps the link key across app restarts (cleared on sign-out). */
+export interface LinkKeyStore {
+  load(): StoredLinkKey | null;
+  save(key: StoredLinkKey | null): void;
+}
+
+/**
+ * A link key is good for the rest of its UTC day plus the next one; mint a new
+ * one once less than a day is left, so a new day's URLs are used from its start.
+ */
+const LINK_KEY_RENEW_BEFORE_MS = 24 * 60 * 60 * 1000;
+/** How long a failed link-key request leaves the per-file path in charge. */
+const LINK_KEY_RETRY_PAUSE_MS = 60_000;
+
+/** True when a stored link key still has more than a day to run. Pure. */
+export function isFreshLinkKey(key: StoredLinkKey | null, nowMs: number): key is StoredLinkKey {
+  return key !== null && key.expiresAt - nowMs > LINK_KEY_RENEW_BEFORE_MS;
+}
+
+/** The link-key endpoint next to the asset-read endpoint. Pure. */
+export function linkKeyEndpoint(endpoint: string): string {
+  return `${endpoint.replace(/\/+$/, '')}/link-key`;
+}
+
+/** A fast file URL. Pure. */
+export function fileLinkUrl(input: {
+  fileBase: string;
+  assetVersionId: string;
+  kind: 'thumb' | 'full';
+  key: string;
+  download?: boolean;
+}): string {
+  const base = input.fileBase.replace(/\/+$/, '');
+  const query = `k=${encodeURIComponent(input.key)}${input.download === true ? '&dl=1' : ''}`;
+  return `${base}/f/${encodeURIComponent(input.assetVersionId)}/${input.kind}?${query}`;
+}
+
+/** Mint the day's link key from asset-read. Throws PresignError on any failure. */
+export async function requestLinkKey(deps: PresignDeps): Promise<StoredLinkKey> {
+  if (deps.endpoint === null || deps.endpoint === '') {
+    throw new PresignError('Asset read endpoint is not configured.', 'unconfigured');
+  }
+  const token = await deps.getAccessToken();
+  if (token === null || token === '') {
+    throw new PresignError('No active session.', 'unauthenticated');
+  }
+  const response = await deps.fetcher(linkKeyEndpoint(deps.endpoint), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+    body: '{}',
+  });
+  if (!response.ok) {
+    throw new PresignError(`Link key failed with status ${response.status}.`, 'request_failed');
+  }
+  const body = (await response.json()) as { key?: unknown; expires_at?: unknown };
+  if (typeof body.key !== 'string' || typeof body.expires_at !== 'string') {
+    throw new PresignError('Link key response was malformed.', 'request_failed');
+  }
+  const expiresAt = Date.parse(body.expires_at);
+  if (Number.isNaN(expiresAt)) {
+    throw new PresignError('Link key response was malformed.', 'request_failed');
+  }
+  return { key: body.key, expiresAt };
 }
 
 export class PresignError extends Error {
@@ -195,6 +282,11 @@ export class PresignCache {
   /** Versions asset-read answered 'no_rendition' for: absent for the session. */
   private readonly noThumbnail = new Set<string>();
   private active = 0;
+  /** The day's link key for fast file links, when in use. */
+  private linkKey: StoredLinkKey | null = null;
+  private linkKeyInflight: Promise<StoredLinkKey> | null = null;
+  /** After a failed link-key request, the per-file path is used until then. */
+  private linkKeyRetryAt = 0;
 
   constructor(
     private readonly deps: PresignDeps,
@@ -202,6 +294,10 @@ export class PresignCache {
     private readonly refreshSkewMs = DEFAULT_REFRESH_SKEW_MS,
     private readonly thumbStore: ThumbnailUrlStore | null = null,
   ) {
+    if (this.fileLinksEnabled()) {
+      const stored = deps.linkKeyStore?.load() ?? null;
+      if (isFreshLinkKey(stored, Date.now())) this.linkKey = stored;
+    }
     if (thumbStore === null) return;
     const now = Date.now();
     for (const [versionId, url] of thumbStore.load()) {
@@ -213,6 +309,8 @@ export class PresignCache {
   peek(assetVersionId: string): PresignedUrl | null {
     const fixed = staticAsset(assetVersionId);
     if (fixed !== undefined) return { url: fixed.full, expiresAt: Date.now() + STATIC_TTL_MS };
+    const linked = this.peekFileLink(assetVersionId, 'full');
+    if (linked !== null) return linked;
     const hit = this.cache.get(assetVersionId);
     if (hit !== undefined && Date.now() < hit.expiresAt - this.refreshSkewMs) return hit;
     return null;
@@ -230,6 +328,20 @@ export class PresignCache {
     }
     if (this.noThumbnail.has(assetVersionId)) return Promise.resolve(null);
     const cached = this.peekThumbnail(assetVersionId);
+    if (cached !== null) return Promise.resolve(cached);
+    // Fast file links: the small copy's URL is built here, no request per file.
+    // A version without one answers 404 and the picture falls back on its error.
+    if (this.fileLinksEnabled()) {
+      return this.withFileLink(assetVersionId, 'thumb', () =>
+        this.presignThumbnail(assetVersionId),
+      );
+    }
+    return this.presignThumbnail(assetVersionId);
+  }
+
+  /** The per-file thumbnail presign (the path before fast file links). */
+  private presignThumbnail(assetVersionId: string): Promise<PresignedUrl | null> {
+    const cached = this.legacyThumbnail(assetVersionId);
     if (cached !== null) return Promise.resolve(cached);
     const existing = this.thumbInflight.get(assetVersionId);
     if (existing !== undefined) return existing;
@@ -254,6 +366,14 @@ export class PresignCache {
     const fixedThumb = staticAsset(assetVersionId);
     if (fixedThumb !== undefined)
       return { url: fixedThumb.thumb, expiresAt: Date.now() + STATIC_TTL_MS };
+    if (this.noThumbnail.has(assetVersionId)) return null;
+    const linked = this.peekFileLink(assetVersionId, 'thumb');
+    if (linked !== null) return linked;
+    return this.legacyThumbnail(assetVersionId);
+  }
+
+  /** A still-valid presigned thumbnail from the per-file path, or null. */
+  private legacyThumbnail(assetVersionId: string): PresignedUrl | null {
     const hit = this.thumbCache.get(assetVersionId);
     if (hit !== undefined && Date.now() < hit.expiresAt - this.refreshSkewMs) return hit;
     return null;
@@ -264,7 +384,24 @@ export class PresignCache {
     assetVersionId: string,
     disposition: 'inline' | 'attachment' = 'inline',
   ): Promise<PresignedUrl> {
+    if (this.fileLinksEnabled()) {
+      return this.withFileLink(
+        assetVersionId,
+        'full',
+        () => requestPresignedUrl(this.deps, assetVersionId, disposition),
+        disposition === 'attachment',
+      );
+    }
     return requestPresignedUrl(this.deps, assetVersionId, disposition);
+  }
+
+  /**
+   * A presigned storage URL, always minted per file (never a fast file link).
+   * For server-side readers that only accept the storage host: the voice-note
+   * transcriber fetches the audio itself and refuses any other host.
+   */
+  storageUrl(assetVersionId: string): Promise<PresignedUrl> {
+    return requestPresignedUrl(this.deps, assetVersionId);
   }
 
   /** A PDF's bytes through the Worker, fresh on every call. */
@@ -276,7 +413,18 @@ export class PresignCache {
   resolve(assetVersionId: string): Promise<PresignedUrl> {
     const cached = this.peek(assetVersionId);
     if (cached !== null) return Promise.resolve(cached);
+    if (this.fileLinksEnabled()) {
+      return this.withFileLink(assetVersionId, 'full', () => this.presignFull(assetVersionId));
+    }
+    return this.presignFull(assetVersionId);
+  }
 
+  /** The per-file presign (the path before fast file links). */
+  private presignFull(assetVersionId: string): Promise<PresignedUrl> {
+    const hit = this.cache.get(assetVersionId);
+    if (hit !== undefined && Date.now() < hit.expiresAt - this.refreshSkewMs) {
+      return Promise.resolve(hit);
+    }
     const existing = this.inflight.get(assetVersionId);
     if (existing !== undefined) return existing;
 
@@ -298,7 +446,92 @@ export class PresignCache {
    */
   refresh(assetVersionId: string): Promise<PresignedUrl> {
     this.cache.delete(assetVersionId);
+    // A failed playback may mean the link key itself was refused: mint a new one.
+    if (this.fileLinksEnabled()) this.dropLinkKey();
     return this.resolve(assetVersionId);
+  }
+
+  /** Whether fast file links are configured. */
+  private fileLinksEnabled(): boolean {
+    const base = this.deps.fileBase ?? null;
+    return base !== null && base !== '' && this.deps.endpoint !== null && this.deps.endpoint !== '';
+  }
+
+  /** A fast file URL from the held link key, or null when none is held. */
+  private peekFileLink(assetVersionId: string, kind: 'thumb' | 'full'): PresignedUrl | null {
+    if (!this.fileLinksEnabled()) return null;
+    const key = this.linkKey;
+    if (!isFreshLinkKey(key, Date.now())) return null;
+    return {
+      url: fileLinkUrl({ fileBase: this.deps.fileBase ?? '', assetVersionId, kind, key: key.key }),
+      expiresAt: key.expiresAt,
+    };
+  }
+
+  /**
+   * Build a fast file URL once the day's link key is held (minting it on first
+   * use; concurrent callers share one request). When the key cannot be had,
+   * fall back to the per-file presign path so pictures still load.
+   */
+  private async withFileLink<T extends PresignedUrl | null>(
+    assetVersionId: string,
+    kind: 'thumb' | 'full',
+    fallback: () => Promise<T>,
+    download = false,
+  ): Promise<PresignedUrl | T> {
+    let key: StoredLinkKey;
+    try {
+      key = await this.currentLinkKey();
+    } catch (error) {
+      if (error instanceof PresignError && error.code === 'unauthenticated') throw error;
+      return fallback();
+    }
+    return {
+      url: fileLinkUrl({
+        fileBase: this.deps.fileBase ?? '',
+        assetVersionId,
+        kind,
+        key: key.key,
+        download,
+      }),
+      expiresAt: key.expiresAt,
+    };
+  }
+
+  /** The held link key when fresh, else one new request shared by every caller. */
+  private currentLinkKey(): Promise<StoredLinkKey> {
+    const held = this.linkKey;
+    if (isFreshLinkKey(held, Date.now())) return Promise.resolve(held);
+    if (this.linkKeyInflight !== null) return this.linkKeyInflight;
+    // A recent failure: do not ask again per file (that would double every
+    // request); the per-file path carries on until the pause ends.
+    if (Date.now() < this.linkKeyRetryAt) {
+      return Promise.reject(new PresignError('Link key paused after a failure.', 'request_failed'));
+    }
+    const promise = requestLinkKey(this.deps)
+      .then((key) => {
+        this.linkKey = key;
+        this.linkKeyRetryAt = 0;
+        this.deps.linkKeyStore?.save(key);
+        return key;
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof PresignError && error.code === 'unauthenticated')) {
+          this.linkKeyRetryAt = Date.now() + LINK_KEY_RETRY_PAUSE_MS;
+        }
+        throw error;
+      })
+      .finally(() => {
+        this.linkKeyInflight = null;
+      });
+    this.linkKeyInflight = promise;
+    return promise;
+  }
+
+  /** Forget the held link key (here and on the device). */
+  private dropLinkKey(): void {
+    this.linkKey = null;
+    this.deps.linkKeyStore?.save(null);
   }
 
   /** Run `fn` once a concurrency slot is free, releasing it (and the next waiter) after. */
