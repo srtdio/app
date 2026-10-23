@@ -5,7 +5,11 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { customRangeLabel, sortControlBody } from '@/components/pages/pipeline/PipelineSortControl';
+import {
+  customRangeLabel,
+  dateControlBody,
+  sortControlBody,
+} from '@/components/pages/pipeline/PipelineSortControl';
 import {
   PipelineDateRangeCalendar,
   dayAriaLabel,
@@ -34,16 +38,16 @@ afterEach(() => {
 });
 
 describe('X5 sort control and calendar a11y', () => {
-  it('the sort body is a menu of menuitemradio rows', () => {
-    const body = sortControlBody({
-      order: POST_SORT_DEFAULT,
-      onOrderChange: () => {},
+  it('the sort body and the date filter body are each a menu of menuitemradio rows', () => {
+    const body = sortControlBody({ order: POST_SORT_DEFAULT, onOrderChange: () => {} });
+    expect((body.props as { role?: string }).role).toBe('menu');
+    const date = dateControlBody({
       dateWindow: 'any',
       onDateWindowChange: () => {},
       customRange: null,
       onCustomOpen: () => {},
     });
-    expect((body.props as { role?: string }).role).toBe('menu');
+    expect((date.props as { role?: string }).role).toBe('menu');
   });
 
   it('the custom range label uses "to", never an en dash', () => {

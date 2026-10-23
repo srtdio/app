@@ -481,8 +481,9 @@ export function undatedHint(label: string, count: number, onShow: () => void): R
 
 /**
  * Heal a persisted sort the trimmed menu no longer lists. Live workspaces stored
- * 'newest'/'oldest'/'title' from the old five-option menu; those map back to the
- * default. A value the menu still lists passes through. The store itself is left
+ * 'newest'/'title' from the old five-option menu; those map back to the
+ * default. A value the menu lists passes through ('oldest' is listed again, as
+ * "Oldest first" by last update). The store itself is left
  * untouched, so the first user pick (onSortChange = setSort) overwrites it.
  */
 export function sanitizePostSort(sort: string): PostSort {

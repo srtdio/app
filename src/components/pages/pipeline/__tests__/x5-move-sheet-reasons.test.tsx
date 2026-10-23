@@ -1,5 +1,6 @@
-// X5 fix 3 (FT18): stage-matrix rows say "Not allowed from {stage}"; role rows
-// keep the role reason; an unknown role is busy; a failed role read says
+// X5 fix 3 (FT18), revised by post flow C fix 39: the sheet lists only the
+// allowed moves (no blocked rows); moveBlockedReason still words a blocked
+// board drop; an unknown role shows no actions; a failed role read says
 // "Couldn't check your access." with Retry, never the role line.
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
@@ -55,14 +56,23 @@ function sheet(overrides: Partial<MoveSheetViewProps>): ReactElement {
 }
 
 function rows(tree: ReactElement): ReactElement[] {
-  return all(tree).filter((el) => el.type === 'button' && 'aria-disabled' in (el.props as object));
+  return all(tree).filter(
+    (el) => el.type === 'button' && 'data-move-action' in (el.props as object),
+  );
+}
+
+function actionOf(row: ReactElement): string {
+  return (row.props as { 'data-move-action': string })['data-move-action'];
 }
 
 describe('X5 move sheet reasons and role states', () => {
-  it('owner moving a Review post: the Draft row says "Not allowed from Review"', () => {
-    const draft = rows(sheet({})).find((row) => text(row).startsWith('Draft'))!;
-    expect(text(draft)).toContain('Not allowed from Review');
-    expect((draft.props as { disabled: boolean }).disabled).toBe(true);
+  it('owner moving a Review post: no Draft row and no blocked-reason rows (allowed moves only)', () => {
+    const tree = sheet({});
+    const list = rows(tree);
+    expect(list.map(actionOf)).toEqual(['approved', 'parked', 'rejected']);
+    expect(list.some((row) => text(row).startsWith('Draft'))).toBe(false);
+    expect(all(tree).some((el) => text(el).includes('Not allowed from'))).toBe(false);
+    for (const row of list) expect((row.props as { disabled?: boolean }).disabled).toBeFalsy();
   });
 
   it('a row the map allows but the role does not keeps the role reason', () => {
@@ -72,14 +82,13 @@ describe('X5 move sheet reasons and role states', () => {
     expect(moveBlockedReason(null, 'draft', 'approved')).toBe('Not allowed from Draft');
   });
 
-  it('while the role is unknown every row is busy and none blames the role', () => {
-    const tree = sheet({ role: null, roleStatus: 'loading' });
+  it('while the role is unknown no action shows and none blames the role', () => {
+    // Even a role that would allow moves lists none until the read is ready.
+    const tree = sheet({ role: 'owner', roleStatus: 'loading' });
     const all_ = all(tree);
     expect(all_.some((el) => text(el) === ROLE_READ_PENDING)).toBe(true);
-    for (const row of rows(tree)) {
-      expect((row.props as { disabled: boolean }).disabled).toBe(true);
-      expect(text(row)).not.toContain(ROLE_BLOCKED_REASON);
-    }
+    expect(rows(tree)).toHaveLength(0);
+    expect(all_.some((el) => text(el).includes(ROLE_BLOCKED_REASON))).toBe(false);
   });
 
   it('a failed role read shows the plain line and a Retry that re-reads', () => {

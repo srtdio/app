@@ -67,7 +67,6 @@ vi.mock('@/lib/workspace-context', () => ({
 import {
   INITIAL_STAGE,
   MOVE_FALLBACK_MESSAGE,
-  dateFilterChip,
   filteredEmpty,
   isUndoableMove,
   moveErrorMessage,
@@ -88,8 +87,10 @@ import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
+  PipelineDateControl,
   PipelineSortControl,
   customRangeLabel,
+  dateControlBody,
   sortControlBody,
 } from '@/components/pages/pipeline/PipelineSortControl';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
@@ -244,32 +245,36 @@ function header(canCreate = true): ReactElement {
 }
 
 describe('pipelineHeader', () => {
-  it('uses the shared SectionHeader with the consolidated sort node (no raw SortMenu)', () => {
+  it('uses the shared SectionHeader with the sort and date controls (no raw SortMenu)', () => {
     const tree = header();
     expect(findAll(tree, (el) => el.type === SectionHeader)).toHaveLength(1);
     // The header now hands SectionHeader a node, not the declarative SortMenu.
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === PipelineSortControl)).toHaveLength(1);
+    expect(findAll(tree, (el) => el.type === PipelineDateControl)).toHaveLength(1);
   });
 
-  it('passes the sort to SectionHeader as a { node } (PipelineSortControl)', () => {
+  it('passes the sort to SectionHeader as a { node } holding the date and sort buttons', () => {
     const headers = findAll(header(), (el) => el.type === SectionHeader);
     expect(headers).toHaveLength(1);
     const sort = (headers[0]!.props as { sort: { node?: ReactElement } }).sort;
     expect(sort.node).toBeDefined();
-    expect((sort.node as ReactElement).type).toBe(PipelineSortControl);
+    const inner = findAll(sort.node, (el) => el !== sort.node).map((el) => el.type);
+    // The date filter sits before Sort, each its own button.
+    expect(inner).toEqual([PipelineDateControl, PipelineSortControl]);
   });
 
-  it('wires the active order and date-window state through to the control', () => {
-    const controls = findAll(header(), (el) => el.type === PipelineSortControl);
-    expect(controls).toHaveLength(1);
-    const props = controls[0]!.props as {
-      order: string;
+  it('wires the active order to Sort and the date-window state to the date control', () => {
+    const sortControls = findAll(header(), (el) => el.type === PipelineSortControl);
+    expect(sortControls).toHaveLength(1);
+    expect((sortControls[0]!.props as { order: string }).order).toBe('updated');
+    const dateControls = findAll(header(), (el) => el.type === PipelineDateControl);
+    expect(dateControls).toHaveLength(1);
+    const props = dateControls[0]!.props as {
       dateWindow: string;
       customRange: unknown;
       weekStartDay: number;
     };
-    expect(props.order).toBe('updated');
     expect(props.dateWindow).toBe('any');
     expect(props.customRange).toBeNull();
     expect(props.weekStartDay).toBe(1);
@@ -417,17 +422,16 @@ describe('honest post counter (fix 3)', () => {
 });
 
 describe('moveErrorMessage', () => {
-  it('maps proc codes to friendly copy without leaking the raw code', () => {
-    expect(moveErrorMessage('invalid_stage_transition')).toBe(
-      'That move is not allowed from this stage.',
-    );
-    expect(moveErrorMessage('forbidden_role')).toBe(
-      'You do not have permission to move this post.',
-    );
-    expect(moveErrorMessage('workspace_member_only')).toBe(
-      'You do not have permission to move this post.',
-    );
-    expect(moveErrorMessage('unknown')).toBe('Could not move the post. Please try again.');
+  it('maps every proc code to the one plain line without leaking the raw code', () => {
+    for (const code of [
+      'invalid_stage_transition',
+      'forbidden_role',
+      'workspace_member_only',
+      'unknown',
+    ] as const) {
+      expect(moveErrorMessage(code)).toBe("Couldn't move the post. Try again.");
+      expect(moveErrorMessage(code)).not.toContain(code);
+    }
   });
 });
 
@@ -526,14 +530,16 @@ describe('runMovePost', () => {
 
 describe('persisted sort sanitization (fix 1)', () => {
   it('heals a stale stored value the trimmed menu no longer lists', () => {
-    // Live workspaces stored 'newest'/'oldest'/'title' before the trim.
+    // Live workspaces stored 'newest'/'title' before the trim.
     expect(sanitizePostSort('newest')).toBe(POST_SORT_DEFAULT);
-    expect(sanitizePostSort('oldest')).toBe(POST_SORT_DEFAULT);
     expect(sanitizePostSort('title')).toBe(POST_SORT_DEFAULT);
+    expect(sanitizePostSort('')).toBe(POST_SORT_DEFAULT);
   });
 
   it('passes a still-listed value through untouched', () => {
     expect(sanitizePostSort('updated')).toBe('updated');
+    // 'oldest' is listed again ("Oldest first").
+    expect(sanitizePostSort('oldest')).toBe('oldest');
     expect(sanitizePostSort('target')).toBe('target');
   });
 
@@ -561,7 +567,13 @@ describe('persisted sort sanitization (fix 1)', () => {
   });
 });
 
-describe('PipelineSortControl (consolidated sort + date window)', () => {
+interface ShellParts {
+  trigger: ReactElement;
+  body: ReactElement;
+  extra?: ReactNode;
+}
+
+describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
   // The first string child of a radio row is its visible label (the check span
   // and trailing icon carry no text).
   function rowLabel(button: ReactElement): string {
@@ -573,19 +585,14 @@ describe('PipelineSortControl (consolidated sort + date window)', () => {
     }
     return '';
   }
-  function groupRows(group: ReactElement): ReactElement[] {
-    return findAll(group, (el) => (el.props as { role?: string }).role === 'menuitemradio');
-  }
-  function groupsByLabel(tree: ReactNode): Record<string, ReactElement> {
-    const found = findAll(tree, (el) => (el.props as { role?: string }).role === 'group');
-    const out: Record<string, ReactElement> = {};
-    for (const g of found) out[(g.props as { 'aria-label': string })['aria-label']] = g;
-    return out;
+  function menuRows(tree: ReactNode): ReactElement[] {
+    return findAll(tree, (el) => (el.props as { role?: string }).role === 'menuitemradio');
   }
   function body(over: Partial<Parameters<typeof sortControlBody>[0]> = {}): ReactElement {
-    return sortControlBody({
-      order: 'updated',
-      onOrderChange: () => {},
+    return sortControlBody({ order: 'updated', onOrderChange: () => {}, ...over });
+  }
+  function dateBody(over: Partial<Parameters<typeof dateControlBody>[0]> = {}): ReactElement {
+    return dateControlBody({
       dateWindow: 'any',
       onDateWindowChange: () => {},
       customRange: null,
@@ -593,41 +600,62 @@ describe('PipelineSortControl (consolidated sort + date window)', () => {
       ...over,
     });
   }
+  /** The shell's parts: the controls render MenuShell, which holds them as props. */
+  function shell(tree: ReactElement): ShellParts {
+    return tree.props as ShellParts;
+  }
+  function dateControl(over: Partial<Parameters<typeof PipelineDateControl>[0]> = {}) {
+    return PipelineDateControl({
+      dateWindow: 'any',
+      onDateWindowChange: () => {},
+      customRange: null,
+      onCustomRangeChange: () => {},
+      weekStartDay: 1,
+      ...over,
+    });
+  }
 
-  it('offers two labelled groups: Order and Target date', () => {
-    expect(Object.keys(groupsByLabel(body())).sort()).toEqual(['Order', 'Target date']);
+  it('Sort holds only the order: no groups, no date rows', () => {
+    const groups = findAll(body(), (el) => (el.props as { role?: string }).role === 'group');
+    expect(groups).toEqual([]);
+    expect(menuRows(body()).map(rowLabel)).not.toContain('This week');
   });
 
-  it('Order lists exactly Recently updated and Target date and fires onOrderChange', () => {
+  it('Sort lists Newest first, Oldest first and Due soonest first and fires onOrderChange', () => {
     let picked: string | null = null;
-    const g = groupsByLabel(
+    const rows = menuRows(
       body({
         onOrderChange: (o) => {
           picked = o;
         },
       }),
     );
-    const rows = groupRows(g.Order!);
-    expect(rows.map(rowLabel)).toEqual(['Recently updated', 'Target date']);
+    expect(rows.map(rowLabel)).toEqual(['Newest first', 'Oldest first', 'Due soonest first']);
     (rows[1]!.props as { onClick: () => void }).onClick();
+    expect(picked).toBe('oldest');
+    (rows[2]!.props as { onClick: () => void }).onClick();
     expect(picked).toBe('target');
   });
 
-  it('Target date lists Any time/This week/This month plus a Custom row', () => {
-    const rows = groupRows(groupsByLabel(body())['Target date']!);
-    expect(rows.map(rowLabel)).toEqual(['Any time', 'This week', 'This month', 'Custom…']);
+  it('the date filter lists Any time/This week/This month plus a Custom row', () => {
+    expect(menuRows(dateBody()).map(rowLabel)).toEqual([
+      'Any time',
+      'This week',
+      'This month',
+      'Custom…',
+    ]);
   });
 
   it('fires onDateWindowChange from a preset row', () => {
     let picked: string | null = null;
-    const g = groupsByLabel(
-      body({
+    const rows = menuRows(
+      dateBody({
         onDateWindowChange: (w) => {
           picked = w;
         },
       }),
     );
-    const week = groupRows(g['Target date']!).find((r) => rowLabel(r) === 'This week')!;
+    const week = rows.find((r) => rowLabel(r) === 'This week')!;
     (week.props as { onClick: () => void }).onClick();
     expect(picked).toBe('week');
   });
@@ -641,22 +669,30 @@ describe('PipelineSortControl (consolidated sort + date window)', () => {
   it('tapping the Custom row opens the calendar (flips the calendar-open state)', () => {
     hookState.reset();
     hookState.overrides[0] = true; // force the popover open so the body renders
-    const tree = PipelineSortControl({
-      order: 'updated',
-      onOrderChange: () => {},
-      dateWindow: 'any',
-      onDateWindowChange: () => {},
-      customRange: null,
-      onCustomRangeChange: () => {},
-      weekStartDay: 1,
-    });
-    const custom = findAll(
-      tree,
-      (el) => (el.props as { role?: string }).role === 'menuitemradio',
-    ).find((r) => rowLabel(r) === 'Custom…')!;
+    const tree = dateControl();
+    const custom = menuRows(shell(tree).body).find((r) => rowLabel(r) === 'Custom…')!;
     (custom.props as { onClick: () => void }).onClick();
     // index 1 is the calendar-open useState; tapping Custom sets it true.
     expect(hookState.calls[1]).toEqual([true]);
+  });
+
+  it('picking an order or a preset closes its own menu', () => {
+    hookState.reset();
+    let order: string | null = null;
+    const sortTree = PipelineSortControl({
+      order: 'updated',
+      onOrderChange: (o) => {
+        order = o;
+      },
+    });
+    const oldest = menuRows(shell(sortTree).body).find((r) => rowLabel(r) === 'Oldest first')!;
+    (oldest.props as { onClick: () => void }).onClick();
+    expect(order).toBe('oldest');
+    expect(hookState.calls[0]).toEqual([false]);
+    hookState.reset();
+    const week = menuRows(shell(dateControl()).body).find((r) => rowLabel(r) === 'This week')!;
+    (week.props as { onClick: () => void }).onClick();
+    expect(hookState.calls[0]).toEqual([false]);
   });
 
   it('applying a range fires onCustomRangeChange and switches the window to custom', () => {
@@ -664,20 +700,15 @@ describe('PipelineSortControl (consolidated sort + date window)', () => {
     hookState.overrides[1] = true; // calendar open
     let range: { start: string; end: string } | null = null;
     let chosen: string | null = null;
-    const tree = PipelineSortControl({
-      order: 'updated',
-      onOrderChange: () => {},
-      dateWindow: 'any',
+    const tree = dateControl({
       onDateWindowChange: (w) => {
         chosen = w;
       },
-      customRange: null,
       onCustomRangeChange: (r) => {
         range = r;
       },
-      weekStartDay: 1,
     });
-    const calendars = findAll(tree, (el) => el.type === PipelineDateRangeCalendar);
+    const calendars = findAll(shell(tree).extra, (el) => el.type === PipelineDateRangeCalendar);
     expect(calendars).toHaveLength(1);
     const cal = calendars[0]!.props as {
       open: boolean;
@@ -689,22 +720,13 @@ describe('PipelineSortControl (consolidated sort + date window)', () => {
     expect(chosen).toBe('custom');
   });
 
-  it('W4 fix 9: applying a custom range closes the sort sheet too, not just the calendar', () => {
+  it('W4 fix 9: applying a custom range closes the date sheet too, not just the calendar', () => {
     hookState.reset();
     hookState.overrides[0] = true; // sheet/popover open
     hookState.overrides[1] = true; // calendar open
-    const tree = PipelineSortControl({
-      order: 'updated',
-      onOrderChange: () => {},
-      dateWindow: 'any',
-      onDateWindowChange: () => {},
-      customRange: null,
-      onCustomRangeChange: () => {},
-      weekStartDay: 1,
-    });
-    const cal = findAll(tree, (el) => el.type === PipelineDateRangeCalendar)[0]!.props as {
-      onApply: (r: { start: string; end: string }) => void;
-    };
+    const tree = dateControl();
+    const calendar = findAll(shell(tree).extra, (el) => el.type === PipelineDateRangeCalendar)[0]!;
+    const cal = calendar.props as { onApply: (r: { start: string; end: string }) => void };
     cal.onApply({ start: '2026-06-24', end: '2026-06-27' });
     expect(hookState.calls[1]).toEqual([false]);
     expect(hookState.calls[0]).toEqual([false]);
@@ -799,22 +821,12 @@ describe('W4 fix 4: filtered empty state', () => {
   });
 });
 
-describe('W4 fix 6: date filter chip', () => {
-  it('shows the range and a 44px X that clears it', () => {
-    const onClear = vi.fn();
-    const tree = dateFilterChip('24 Jun – 27 Jun', onClear);
-    expect(texts(tree)).toContain('24 Jun – 27 Jun');
-    const x = findAll(
-      tree,
-      (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Clear date filter',
-    )[0]!;
-    const className = (x.props as { className: string }).className;
-    expect(className).toContain('h-11');
-    expect(className).toContain('w-11');
-    // No responsive hide: the chip shows on phones too.
-    expect((tree.props as { className: string }).className).not.toMatch(/\bhidden\b/);
-    (x.props as { onClick: () => void }).onClick();
-    expect(onClear).toHaveBeenCalledTimes(1);
+describe('W4 fix 6 (revised): the date filter is its own button, no chip under the header', () => {
+  it('the page no longer renders a date chip with a Clear date filter X', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toContain('dateFilterChip');
+    expect(src).not.toContain('Clear date filter');
+    expect(src).toContain('PipelineDateControl');
   });
 });
 

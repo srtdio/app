@@ -1,6 +1,6 @@
-// X5 fix 1 (FT20): the Move button leaves the thumbnail and sits at the card's
-// right edge, centred on the text block. Nothing but the format/carousel labels
-// overlays the thumbnail.
+// X5 fix 1 (FT20), revised by post flow C fix 3: the move button is a ⋯ circle
+// on the picture's top-right corner (a 44px tap area outside the thumbnail
+// tile and outside the text body), so the title gets the full card width.
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -47,26 +47,35 @@ class DOMParserLike {
   }
 }
 
-describe('X5 PostCard move button placement', () => {
-  it('the carousel card keeps the Move button out of the thumbnail', () => {
+describe('X5 PostCard move button placement (post flow C fix 3: the ⋯ on the picture corner)', () => {
+  it('the carousel card keeps the move button out of the thumbnail and the text body', () => {
     const out = card('carousel');
     const thumb = section(out, 'data-post-card-thumb');
     expect(thumb).toContain('aria-label="Carousel"');
     expect(thumb).not.toContain('data-post-card-move');
+    // The carousel badge moves to the left corner, clear of the ⋯.
+    const badge = /<span[^>]*aria-label="Carousel"[^>]*>/.exec(out)?.[0] ?? '';
+    expect(badge).toContain('left-1.5');
+    expect(badge).not.toContain('right-1.5');
+    // The text body no longer holds the button: the title gets the full width.
     const body = section(out, 'data-post-card-body');
-    expect(body).toContain('data-post-card-move');
+    expect(body).not.toContain('data-post-card-move');
+    expect(out).toContain('data-post-card-move');
   });
 
-  it('the button is 44px, secondary, centred, and never absolutely placed on the tile', () => {
+  it('the button is a 44px tap area pinned to the top-right corner above the open overlay', () => {
     const out = card('single_image');
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(button).toContain('h-11');
     expect(button).toContain('w-11');
-    expect(button).toContain('self-center');
-    expect(button).toContain('border-border');
-    expect(button).not.toContain('absolute');
-    expect(button).not.toContain('left-1.5');
-    // It comes after the text block, at the card's trailing edge.
-    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-post-card-title'));
+    expect(button).toContain('absolute');
+    expect(button).toContain('right-0');
+    expect(button).toContain('top-0');
+    expect(button).toContain('z-10');
+    expect(button).toContain('rounded-full');
+    expect(button).toContain('aria-label="Move post Post title"');
+    // It sits between the picture and the text block, never inside the body.
+    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-post-card-thumb'));
+    expect(out.indexOf('data-post-card-move')).toBeLessThan(out.indexOf('data-post-card-body'));
   });
 });

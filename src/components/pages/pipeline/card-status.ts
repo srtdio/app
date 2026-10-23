@@ -61,7 +61,9 @@ export function joinNames(names: readonly string[]): string {
 /** The Send for review helper: "{approver names} get it to approve." */
 export function sendForReviewHelper(approverFirstNames: readonly string[]): string {
   const names = joinNames(approverFirstNames);
-  return `${names !== '' ? names : 'Approvers'} get it to approve.`;
+  if (names === '') return 'Approvers get it to approve.';
+  const one = approverFirstNames.filter((name) => name !== '').length === 1;
+  return `${names} ${one ? 'gets' : 'get'} it to approve.`;
 }
 
 /** The reject confirm body: "{creator first name} gets it back to rework. You can send a reason." */

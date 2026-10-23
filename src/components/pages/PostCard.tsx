@@ -295,8 +295,8 @@ export function PostCard({
       {canMove && onMove !== undefined ? (
         // On the picture's top-right corner, above the Open post overlay (z-10)
         // so a tap moves, not opens. Pointer down stops here so the feed's
-        // long-press never arms under it. The carousel badge sits under it, so
-        // it moves to the left corner when the ⋯ shows.
+        // long-press never arms under it. The carousel badge sits on the left
+        // corner so the two never overlap.
         <button
           type="button"
           aria-label={`Move post ${post.title}`}
