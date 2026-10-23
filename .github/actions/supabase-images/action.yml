@@ -1,18 +1,21 @@
 name: Supabase images cache
 description: >-
   Restore or save the local Supabase stack's Docker images so DB suites skip
-  the registry pull. Run with mode restore before the suite and mode save after
-  it (only when restore missed).
+  the registry pull. Run mode start right after checkout (restores the tarball
+  and loads it in the background), mode wait right before the suite (joins the
+  load), and mode save after it (only when wait reported no hit).
 
 inputs:
   mode:
-    description: restore | save
+    description: start | wait | save
     required: true
 
 outputs:
   cache-hit:
-    description: "'true' when restore found and loaded the cached images"
-    value: ${{ steps.restore.outputs.cache-hit == 'true' && steps.load.outcome == 'success' }}
+    description: >-
+      start: 'true' when the tarball was restored and the background load began.
+      wait: 'true' only when the background load finished with status 0.
+    value: ${{ (inputs.mode == 'start' && steps.restore.outputs.cache-hit == 'true') || (inputs.mode == 'wait' && steps.wait.outputs.cache-hit == 'true') }}
 
 runs:
   using: composite
@@ -28,24 +31,64 @@ runs:
 
     - name: Restore image tarball
       id: restore
-      if: inputs.mode == 'restore'
+      if: inputs.mode == 'start'
       uses: actions/cache/restore@v4
       with:
         path: ${{ steps.key.outputs.path }}
         key: ${{ steps.key.outputs.key }}
 
-    - name: Load images
-      id: load
-      if: inputs.mode == 'restore' && steps.restore.outputs.cache-hit == 'true'
-      # A corrupt tarball falls back to a normal registry pull.
+    # Detached so the load outlives this step and overlaps install + typecheck.
+    # The exit code lands in the status file atomically; the started marker
+    # tells mode wait there is something to join.
+    - name: Start background load
+      if: inputs.mode == 'start' && steps.restore.outputs.cache-hit == 'true'
       continue-on-error: true
       shell: bash
       run: |
         set -euo pipefail
-        start=$(date +%s)
-        zstd -dc "${{ steps.key.outputs.path }}" | docker load
-        rm -f "${{ steps.key.outputs.path }}"
-        echo "[images] docker load $(( $(date +%s) - start ))s"
+        status="${RUNNER_TEMP}/supabase-images.status"
+        log="${RUNNER_TEMP}/supabase-images.log"
+        rm -f "$status" "$log"
+        nohup setsid bash -c '
+          set -o pipefail
+          start=$(date +%s)
+          zstd -dc "$1" | docker load
+          rc=$?
+          rm -f "$1"
+          echo "[images] docker load $(( $(date +%s) - start ))s, exit $rc"
+          echo "$rc" > "$2.tmp" && mv "$2.tmp" "$2"
+        ' _ "${{ steps.key.outputs.path }}" "$status" > "$log" 2>&1 < /dev/null &
+        touch "${RUNNER_TEMP}/supabase-images.started"
+        echo "[images] background load started"
+
+    # Never fails the job: any miss, error or timeout reports cache-hit=false
+    # and the suite pulls images from the registry as before.
+    - name: Wait for background load
+      id: wait
+      if: inputs.mode == 'wait'
+      continue-on-error: true
+      shell: bash
+      run: |
+        status="${RUNNER_TEMP}/supabase-images.status"
+        log="${RUNNER_TEMP}/supabase-images.log"
+        if [ ! -f "${RUNNER_TEMP}/supabase-images.started" ]; then
+          echo "cache-hit=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        waited=0
+        while [ ! -f "$status" ] && [ "$waited" -lt 240 ]; do
+          sleep 2
+          waited=$(( waited + 2 ))
+        done
+        echo "[images] waited ${waited}s"
+        cat "$log" 2>/dev/null || true
+        rc=$(cat "$status" 2>/dev/null || echo timeout)
+        if [ "$rc" = "0" ]; then
+          echo "cache-hit=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "[images] background load failed, falling back to pull"
+          echo "cache-hit=false" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Export images
       id: export
