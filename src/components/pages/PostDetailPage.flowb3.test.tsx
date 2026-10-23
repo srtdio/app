@@ -5,11 +5,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 
 // Post flow B regressions on the post screen, part 3a: 30 (approver row:
 // Comment, Reject, Approve, one row per breakpoint), 31 (no primary Approve for
-// creators; "Approve for {brand}" in the ⋯ sheet), 33 (the creator's one main
-// button and the single open count), 37 (approved lock and banner), 40 (reject
+// creators; "Approve on their behalf" in the ⋯ sheet), 33 (the creator's one
+// main button, never blocked by open comments, and the single open count), 37 (approved lock and banner), 40 (reject
 // confirm copy), 41 (plain-words errors, once, where tapped). Heavy children
 // (gallery, comments, action sheet) are stubbed and their props captured.
 
@@ -192,13 +193,16 @@ vi.mock('@/components/preview/PlatformPreviewPanel', () => ({
 }));
 
 import {
+  APPROVE_ON_BEHALF_LABEL,
   APPROVED_LOCKED_COPY,
   PostDetailPage,
+  SENT_AGAIN_TOAST,
   UNKNOWN_ERROR_COPY,
   approvedByLine,
   postActionErrorCopy,
   rejectConfirmBody,
   sendAgainErrorCopy,
+  sendAnywayTitle,
 } from '@/components/pages/PostDetailPage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -214,12 +218,22 @@ async function settle(): Promise<void> {
   }
 }
 
-async function render(): Promise<void> {
+async function render(withToasts = false): Promise<void> {
+  const page = (
+    <MemoryRouter initialEntries={['/posts/p1']}>
+      <PostDetailPage postId="p1" />
+    </MemoryRouter>
+  );
   await act(async () => {
     root?.render(
-      <MemoryRouter initialEntries={['/posts/p1']}>
-        <PostDetailPage postId="p1" />
-      </MemoryRouter>,
+      withToasts ? (
+        <ToastProvider>
+          {page}
+          <ToastViewport />
+        </ToastProvider>
+      ) : (
+        page
+      ),
     );
   });
   await settle();
@@ -318,14 +332,16 @@ describe('30. approver row: Comment, Reject, Approve', () => {
 });
 
 describe('31. creators never get a primary Approve', () => {
-  it('"Approve for Kite and Co" sits in the ⋯ sheet and opens the on-behalf approve confirm', async () => {
+  it('"Approve on their behalf" (never "Approve for {brand}", even with a workspace name) sits in the ⋯ sheet and opens the on-behalf approve confirm', async () => {
     await render();
     expect(buttonsIn('[data-decision-row]').map((b) => b.textContent?.trim())).toEqual([
       'Send for review again',
     ]);
     expect(byText('Approve')).toBeUndefined();
     const rows = h.actionSheetProps?.moveRows ?? [];
-    expect(rows.map((r) => r.label)).toEqual(['Approve for Kite and Co', 'Reject', 'Park']);
+    expect(rows.map((r) => r.label)).toEqual(['Approve on their behalf', 'Reject', 'Park']);
+    expect(APPROVE_ON_BEHALF_LABEL).toBe('Approve on their behalf');
+    expect(rows.some((r) => r.label.startsWith('Approve for'))).toBe(false);
 
     await act(async () => {
       rows[0]?.onPick();
@@ -340,34 +356,86 @@ describe('31. creators never get a primary Approve', () => {
 });
 
 describe("33. the creator's one main button and the single open count", () => {
-  it('disabled with "Resolve 2 open comments first." until all are resolved, then sends post_ready_notify', async () => {
+  it('open comments never disable it or add a helper line; the chip reads the same count', async () => {
     h.counts = { open: 2, resolved: 1 };
     await render();
     const main = document.querySelector<HTMLButtonElement>('[data-decision-main]');
     expect(main?.textContent?.trim()).toBe('Send for review again');
-    expect(main?.disabled).toBe(true);
-    expect(document.querySelector('[data-decision-helper]')?.textContent).toBe(
-      'Resolve 2 open comments first.',
-    );
+    expect(main?.disabled).toBe(false);
+    expect(document.querySelector('[data-decision-helper]')).toBeNull();
+    expect(text()).not.toContain('Resolve');
     // The chip reads the same count.
     expect(document.querySelector('[data-open-comments-chip]')?.textContent).toContain(
       '2 open comments',
     );
     // The separate bottom notice is gone.
     expect(text()).not.toContain("Tell approvers it's ready");
+  });
 
-    h.counts = { open: 0, resolved: 3 };
+  it('with open comments a tap asks first: plural title, Cancel sends nothing', async () => {
+    h.counts = { open: 2, resolved: 0 };
+    await render();
+    await click(document.querySelector('[data-decision-main]'));
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog?.querySelector('h2')?.textContent).toBe(
+      '2 comments are still open. Send anyway?',
+    );
+    expect(byText('Send anyway', dialog!)).toBeDefined();
+    await click(byText('Cancel', dialog!));
     await act(async () => {
-      h.commentsProps?.onCountsChange?.(h.counts);
+      await new Promise((r) => setTimeout(r, 250));
     });
     await settle();
-    const live = document.querySelector<HTMLButtonElement>('[data-decision-main]');
-    expect(live?.disabled).toBe(false);
-    expect(document.querySelector('[data-decision-helper]')).toBeNull();
-    expect(document.querySelector('[data-open-comments-chip]')).toBeNull();
-    await click(live);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(runPostReadyNotify).not.toHaveBeenCalled();
+  });
+
+  it('singular title; "Send anyway" calls post_ready_notify once and shows the success copy', async () => {
+    h.counts = { open: 1, resolved: 0 };
+    await render(true);
+    await click(document.querySelector('[data-decision-main]'));
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog?.querySelector('h2')?.textContent).toBe('1 comment is still open. Send anyway?');
+    expect(runPostReadyNotify).not.toHaveBeenCalled();
+    await click(byText('Send anyway', dialog!));
     expect(runPostReadyNotify).toHaveBeenCalledOnce();
     expect(runPostReadyNotify.mock.calls[0]?.[1]).toEqual({ postId: 'p1', traceId: 'trace-1' });
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(text()).toContain('Sent for review again.');
+    expect(SENT_AGAIN_TOAST).toBe('Sent for review again.');
+    expect(sendAnywayTitle(1)).toBe('1 comment is still open. Send anyway?');
+    expect(sendAnywayTitle(3)).toBe('3 comments are still open. Send anyway?');
+  });
+
+  it('with 0 open it sends straight away, no confirm', async () => {
+    h.counts = { open: 0, resolved: 3 };
+    await render();
+    const live = document.querySelector<HTMLButtonElement>('[data-decision-main]');
+    expect(live?.disabled).toBe(false);
+    expect(document.querySelector('[data-open-comments-chip]')).toBeNull();
+    await click(live);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(runPostReadyNotify).toHaveBeenCalledOnce();
+    expect(runPostReadyNotify.mock.calls[0]?.[1]).toEqual({ postId: 'p1', traceId: 'trace-1' });
+  });
+
+  it('disabled only while the send is in flight', async () => {
+    let finish: (v: unknown) => void = () => {};
+    runPostReadyNotify.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await render();
+    await click(document.querySelector('[data-decision-main]'));
+    expect(document.querySelector<HTMLButtonElement>('[data-decision-main]')?.disabled).toBe(true);
+    await act(async () => {
+      finish({ ok: true, data: undefined });
+    });
+    await settle();
+    expect(document.querySelector<HTMLButtonElement>('[data-decision-main]')?.disabled).toBe(false);
+    expect(runPostReadyNotify).toHaveBeenCalledOnce();
   });
 
   it('a draft offers "Send for review" as the one main button', async () => {
@@ -389,7 +457,9 @@ describe("33. the creator's one main button and the single open count", () => {
     await click(document.querySelector('[data-decision-main]'));
     expect(count(text(), UNKNOWN_ERROR_COPY)).toBe(1);
     expect(text()).not.toContain('some raw text');
-    expect(sendAgainErrorCopy('checkpoints_open')).toBe('Resolve every open comment first.');
+    // Open comments no longer block the proc; a stray checkpoints_open falls to
+    // the unknown copy.
+    expect(sendAgainErrorCopy('checkpoints_open')).toBe(UNKNOWN_ERROR_COPY);
   });
 });
 
@@ -413,6 +483,13 @@ describe('37. approved posts are locked', () => {
     // Banner under the title and details.
     const details = document.querySelector('[data-post-details]');
     expect(details!.compareDocumentPosition(banner!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('an approver on an approved post still sees Reject', async () => {
+    h.stage = 'approved';
+    h.role = 'client';
+    await render();
+    expect(buttonsIn('[data-decision-row]').map((b) => b.textContent?.trim())).toContain('Reject');
   });
 
   it('a draft keeps every edit path and shows no banner', async () => {

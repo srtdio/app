@@ -97,27 +97,40 @@ export function friendlyPointFreezeError(
  *  4.5:1 or more) under the accent-fg ink token. Shared with the strip chips. */
 export const RESOLVED_FILL_CLASS = 'border-good bg-[var(--good-solid)] text-accent-fg';
 
+/** The hollow "resolved, not yet confirmed" circle: the good outline and ink over
+ *  a transparent body, so it reads as done-by-the-creator but still awaiting the
+ *  approver's Confirm. Tokens only; shared with the strip chips. */
+export const RESOLVED_HOLLOW_CLASS = 'border-good bg-transparent text-good';
+
 /** The tick circle. The check enters/leaves via opacity/translateY only, per the
  *  motion tokens; the fill flips instantly (colour is state, not motion). An
  *  unconfirmed circle reads in the good family already: a green outline over a
  *  soft green fill, with the check kept visible at reduced emphasis (never
  *  transparent, so it survives the dark panel). When `live` (the actor's turn) a
  *  soft green halo ring is added so the circle reads as the one thing to act on;
- *  the passive indicator gets the same colours but no halo. */
-export function tickCircle(done: boolean, live = false): ReactElement {
+ *  the passive indicator gets the same colours but no halo. `hollow` (a resolved
+ *  point the approver has not confirmed yet) swaps the soft fill for the hollow
+ *  treatment with the check at full emphasis; it only applies while not `done`. */
+export function tickCircle(done: boolean, live = false, hollow = false): ReactElement {
+  const isHollow = hollow && !done;
   return (
     <span
+      data-tick={done ? 'filled' : isHollow ? 'hollow' : 'open'}
       className={cn(
         'flex h-7 w-7 items-center justify-center rounded-full border',
-        done ? RESOLVED_FILL_CLASS : 'border-good bg-good-soft text-good',
-        live && !done ? 'ring-2 ring-good-soft' : '',
+        done
+          ? RESOLVED_FILL_CLASS
+          : isHollow
+            ? RESOLVED_HOLLOW_CLASS
+            : 'border-good bg-good-soft text-good',
+        live && !done && !isHollow ? 'ring-2 ring-good-soft' : '',
       )}
     >
       <span
         className={cn(
           // axis: opacity + translateY only (no translateX, rotate, scale)
           'transition-[opacity,transform] duration-fast ease-enter',
-          done ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-60',
+          done || isHollow ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-60',
         )}
       >
         <IconCheck size={14} />

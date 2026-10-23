@@ -94,7 +94,6 @@ import {
   decisionBarSpace,
   PostDecisionBar,
   PostDecisionRow,
-  resolveFirstHelper,
   SEND_AGAIN_LABEL,
   type DecisionModel,
 } from '@/components/pages/pcs/PostDecisionBar';
@@ -189,8 +188,6 @@ export function postActionErrorCopy(error: unknown): string {
  */
 export function sendAgainErrorCopy(message: string | null): string {
   switch (message) {
-    case 'checkpoints_open':
-      return 'Resolve every open comment first.';
     case 'invalid_stage':
       return 'This post is not in review anymore.';
     case 'forbidden_role':
@@ -203,11 +200,22 @@ export function sendAgainErrorCopy(message: string | null): string {
 /** Flow B 33: the toast after a landed "Send for review again". */
 export const SENT_AGAIN_TOAST = 'Sent for review again.';
 
-/** Flow B 31: the creator's on-behalf approve row in the ⋯ sheet. */
-export function approveForLabel(brand: string | null | undefined): string {
-  const name = brand?.trim() ?? '';
-  return name !== '' ? `Approve for ${name}` : 'Approve on their behalf';
+/**
+ * Flow B 31: the creator's on-behalf approve row in the ⋯ sheet. Always
+ * "Approve on their behalf", whatever the workspace is called.
+ */
+export const APPROVE_ON_BEHALF_LABEL = 'Approve on their behalf';
+
+/**
+ * Flow B 33: the confirm before "Send for review again" while comments are
+ * still open. Open comments never block the send; they only ask first.
+ */
+export function sendAnywayTitle(openCount: number): string {
+  return openCount === 1
+    ? '1 comment is still open. Send anyway?'
+    : `${openCount} comments are still open. Send anyway?`;
 }
+export const SEND_ANYWAY_LABEL = 'Send anyway';
 
 /** Flow B 40: the reject confirm's reason field label, helper and body. */
 export const REJECT_REASON_LABEL = 'Reason (optional)';
@@ -610,6 +618,8 @@ export function PostDetailPage({
   const [approveError, setApproveError] = useState<string | null>(null);
   // Flow B 33: "Send for review again" (post_ready_notify) in flight.
   const [notifying, setNotifying] = useState(false);
+  // Flow B 33: the "{n} comments are still open. Send anyway?" confirm.
+  const [confirmSendAnyway, setConfirmSendAnyway] = useState(false);
 
   // Reject / park (W2): the confirm's target and reason, then the stage shown
   // optimistically while the Undo window runs. The move is sent only when the
@@ -671,7 +681,8 @@ export function PostDetailPage({
   const handleCommentCounts = useCallback((counts: CommentCounts) => setCommentCounts(counts), []);
   // The page's ONE open-comment count: the open-comments chip under the title
   // (flow B 29), the Comments header, and the creator's "Send for review
-  // again" gate ("Resolve {n} open comments first.") all read this value.
+  // again" confirm ("{n} comments are still open. Send anyway?") all read
+  // this value. Open comments never disable the send.
   const openCount = Math.max(0, commentCounts.open);
 
   // Pin annotation state (F5): the placed point drives the pin composer, sibling
@@ -1789,7 +1800,18 @@ export function PostDetailPage({
 
   // Flow B 33: the creator's "Send for review again" tells the approvers
   // through the existing post_ready_notify wrapper. A refusal shows once, in
-  // plain words, in the decision row / bar that was tapped.
+  // plain words, in the decision row / bar that was tapped. With comments still
+  // open the tap asks first ("Send anyway?"); with none it sends straight away.
+  function requestSendForReviewAgain(): void {
+    if (notifying) return;
+    if (openCount > 0) {
+      setActionError(null);
+      setConfirmSendAnyway(true);
+      return;
+    }
+    void sendForReviewAgain();
+  }
+
   async function sendForReviewAgain(): Promise<void> {
     if (postId === undefined || notifying) return;
     const sentFor = postId;
@@ -1890,7 +1912,8 @@ export function PostDetailPage({
 
   // Flow B 30 / 33: the decision row's model. Approvers: Comment (review),
   // Reject, Approve. Creators: one main button; in review it is "Send for
-  // review again", live once every comment is resolved. Their other moves sit
+  // review again", disabled only while the send is in flight (open comments
+  // ask first, they never block). Their other moves sit
   // in the ⋯ sheet (moveRows below).
   const reviewMove = stageActions.find((action) => action.to === 'review') ?? null;
   const decisionModel: DecisionModel | null = readOnly
@@ -1908,9 +1931,9 @@ export function PostDetailPage({
         ? {
             kind: 'creator',
             label: SEND_AGAIN_LABEL,
-            disabled: openCount > 0 || notifying,
-            helper: resolveFirstHelper(openCount),
-            onPress: () => void sendForReviewAgain(),
+            disabled: notifying,
+            helper: null,
+            onPress: requestSendForReviewAgain,
           }
         : agencySide && reviewMove !== null
           ? {
@@ -1923,8 +1946,8 @@ export function PostDetailPage({
           : null;
   const decisionBusy = transitioning || notifying;
 
-  // Flow B 31: the creator's other moves, as rows in the ⋯ sheet. "Approve for
-  // {brand}" opens the existing on-behalf approve confirm; Park and Reject open
+  // Flow B 31: the creator's other moves, as rows in the ⋯ sheet. "Approve on
+  // their behalf" opens the existing on-behalf approve confirm; Park and Reject open
   // their reason confirms.
   const moveRows: PostMoveRow[] =
     agencySide && !readOnly
@@ -1935,7 +1958,7 @@ export function PostDetailPage({
               return {
                 key: 'approved',
                 icon: <IconCheck size={18} />,
-                label: approveForLabel(workspaceName),
+                label: APPROVE_ON_BEHALF_LABEL,
                 onPick: () => pickStage('approved'),
               };
             }
@@ -2495,6 +2518,20 @@ export function PostDetailPage({
             }
           : {})}
       />
+
+      {confirmSendAnyway ? (
+        <ConfirmDialog
+          title={sendAnywayTitle(openCount)}
+          message=""
+          confirmLabel={SEND_ANYWAY_LABEL}
+          cancelLabel="Cancel"
+          onConfirm={() => {
+            setConfirmSendAnyway(false);
+            void sendForReviewAgain();
+          }}
+          onCancel={() => setConfirmSendAnyway(false)}
+        />
+      ) : null}
 
       {confirmCaptionDiscard ? (
         <ConfirmDialog

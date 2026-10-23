@@ -164,8 +164,28 @@ describe('checkpointChips', () => {
     }
   });
 
-  it('applies the two visible states their circle treatment (no third look)', () => {
+  it('resolved chips: hollow tick until confirmed, filled once confirmed', () => {
     const chips = checkpointChips(rows); // ordered 1(open), 2(resolved), 3(resolved, accepted)
+    const circleClass = (chip: ReactElement): string => {
+      const inner = elements(chip).find((el) =>
+        ((el.props as { className?: string }).className ?? '').includes('rounded-full'),
+      );
+      return (inner?.props as { className?: string }).className ?? '';
+    };
+    expect(circleClass(chips[0]!)).toContain('bg-panel-2');
+    expect(circleClass(chips[1]!)).toContain('bg-transparent');
+    expect(circleClass(chips[1]!)).toContain('border-good');
+    expect(circleClass(chips[1]!)).toContain('text-good');
+    expect(circleClass(chips[2]!)).toContain('bg-[var(--good-solid)]');
+    expect(chipCircleClass('resolved', false)).not.toContain('good-solid');
+  });
+
+  it('applies the two visible states their circle treatment (open vs resolved)', () => {
+    const chips = checkpointChips([
+      row('a', 1, null, null),
+      row('b', 2, 't', 't'),
+      row('c', 3, 't', 't'),
+    ]);
     const circleClass = (chip: ReactElement): string => {
       const inner = elements(chip).find((el) =>
         ((el.props as { className?: string }).className ?? '').includes('rounded-full'),

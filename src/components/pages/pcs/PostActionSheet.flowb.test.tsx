@@ -78,26 +78,26 @@ function rowNamed(label: string): HTMLButtonElement | undefined {
   );
 }
 
-describe('31. Approve for {brand} lives in the ⋯ sheet', () => {
+describe('31. Approve on their behalf lives in the ⋯ sheet', () => {
   it('leads with the creator moves, closes, then hands off', async () => {
     const onPick = vi.fn();
     const onClose = vi.fn();
     await render(
       [
-        { key: 'approved', icon: null, label: 'Approve for Kite and Co', onPick },
+        { key: 'approved', icon: null, label: 'Approve on their behalf', onPick },
         { key: 'rejected', icon: null, label: 'Reject', danger: true, onPick: vi.fn() },
         { key: 'parked', icon: null, label: 'Park', onPick: vi.fn() },
       ],
       onClose,
     );
     expect(rowLabels().slice(0, 4)).toEqual([
-      'Approve for Kite and Co',
+      'Approve on their behalf',
       'Reject',
       'Park',
       'Send to chat',
     ]);
     await act(async () => {
-      rowNamed('Approve for Kite and Co')?.click();
+      rowNamed('Approve on their behalf')?.click();
     });
     expect(onClose).toHaveBeenCalled();
     expect(onPick).toHaveBeenCalledOnce();
@@ -106,7 +106,7 @@ describe('31. Approve for {brand} lives in the ⋯ sheet', () => {
   it('shows no move rows when the page passes none (approvers)', async () => {
     await render([]);
     expect(rowLabels()[0]).toBe('Send to chat');
-    expect(rowLabels()).not.toContain('Approve for Kite and Co');
+    expect(rowLabels()).not.toContain('Approve on their behalf');
   });
 });
 

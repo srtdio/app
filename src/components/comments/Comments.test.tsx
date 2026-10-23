@@ -48,6 +48,7 @@ import {
   runCreateCommentBatch,
   runDeleteComment,
   runEditComment,
+  showCheckpointConfirm,
   showCheckpointNotDone,
   tickFilled,
   tickInteractive,
@@ -379,14 +380,25 @@ describe('checkpoint state + feed controls', () => {
     expect(tickInteractive('resolved', false)).toBe(false);
   });
 
-  it('never gives a client a live tick (no confirm step)', () => {
+  it('never gives a client the Resolve tick (the client gets Confirm instead)', () => {
     expect(tickInteractive('open', true)).toBe(false);
     expect(tickInteractive('resolved', true)).toBe(false);
   });
 
-  it('fills the tick once resolved, for either side', () => {
-    expect(tickFilled('open')).toBe(false);
-    expect(tickFilled('resolved')).toBe(true);
+  it('fills the tick only once resolved AND confirmed, for either side', () => {
+    expect(tickFilled('open', false)).toBe(false);
+    expect(tickFilled('open', true)).toBe(false);
+    expect(tickFilled('resolved', false)).toBe(false);
+    expect(tickFilled('resolved', true)).toBe(true);
+  });
+
+  it('shows Confirm only to a client on a resolved, unconfirmed point', () => {
+    expect(showCheckpointConfirm('resolved', true, false)).toBe(true);
+    expect(showCheckpointConfirm('resolved', true, true)).toBe(false);
+    expect(showCheckpointConfirm('open', true, false)).toBe(false);
+    for (const state of ['open', 'resolved'] as const) {
+      expect(showCheckpointConfirm(state, false, false)).toBe(false);
+    }
   });
 
   it('shows the client "Not done" only on a resolved point, never to an agency member', () => {

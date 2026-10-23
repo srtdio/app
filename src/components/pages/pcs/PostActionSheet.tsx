@@ -45,8 +45,8 @@ import { MOVE_ROW_LABEL, PostSheetPlanRowsContext } from '@/components/chat/Plan
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 
 /**
- * One stage move offered in the sheet (flow B 31): the creator's Approve for
- * {brand}, Park and Reject. The page owns the move (its confirm, Undo and
+ * One stage move offered in the sheet (flow B 31): the creator's Approve on
+ * their behalf, Park and Reject. The page owns the move (its confirm, Undo and
  * errors); the sheet closes, then hands off.
  */
 export interface PostMoveRow {

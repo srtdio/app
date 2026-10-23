@@ -5,7 +5,7 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Agency acts on behalf of client. The harness viewer (ME) is the workspace
 // owner, an agency-side role: on a post in review the post's ⋯ sheet offers
-// "Approve for {brand}" (flow B 31: creators never get a primary Approve) with
+// "Approve on their behalf" (flow B 31: creators never get a primary Approve) with
 // the two-step confirm plus the on-behalf line, and Activity names who
 // approved with "on behalf of client". The real app tree runs against fixture
 // data in both colour schemes; Linux WebKit approximates iOS WebKit, it is not iOS.
@@ -33,10 +33,10 @@ test('PCS: agency approves with the on-behalf line in the confirm', async ({ pag
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
   await more.click();
   const sheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
-  // Approve for {brand}, Reject and Park sit in the ⋯ sheet.
+  // Approve on their behalf, Reject and Park sit in the ⋯ sheet.
   await expect(sheet.getByRole('button', { name: /Reject/ })).toBeVisible();
   await expect(sheet.getByRole('button', { name: /Park/ })).toBeVisible();
-  await sheet.getByRole('button', { name: /Approve for Harness Studio/ }).click();
+  await sheet.getByRole('button', { name: /Approve on their behalf/ }).click();
 
   const line = page.locator('[data-approve-on-behalf]');
   await expect(line).toHaveText('You are approving on behalf of Harness Studio.');

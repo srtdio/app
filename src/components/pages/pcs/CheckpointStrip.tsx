@@ -12,7 +12,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { commentDomId } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
-import { RESOLVED_FILL_CLASS } from '@/components/pages/pcs/checkpoint-controls';
+import {
+  RESOLVED_FILL_CLASS,
+  RESOLVED_HOLLOW_CLASS,
+} from '@/components/pages/pcs/checkpoint-controls';
 import { IconCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
@@ -59,10 +62,13 @@ export function chipState(row: Pick<CheckpointChipRow, 'resolved_at'>): ChipStat
 }
 
 /** The visible circle's treatment per state, from design tokens only so light and
- *  dark parity is automatic: resolved fills with the shared success fill and its
- *  on-colour ink token; open uses the muted panel treatment. */
-export function chipCircleClass(state: ChipState): string {
-  return state === 'resolved' ? RESOLVED_FILL_CLASS : 'border-border bg-panel-2 text-fg-3';
+ *  dark parity is automatic: a resolved chip the approver has confirmed fills with
+ *  the shared success fill and its on-colour ink token; a resolved chip not yet
+ *  confirmed is the shared hollow tick (same word, no fill); open uses the muted
+ *  panel treatment. `confirmed` defaults to true (the filled look). */
+export function chipCircleClass(state: ChipState, confirmed = true): string {
+  if (state === 'open') return 'border-border bg-panel-2 text-fg-3';
+  return confirmed ? RESOLVED_FILL_CLASS : RESOLVED_HOLLOW_CLASS;
 }
 
 /** A copy sorted by ledger_seq ascending. The query already orders; this keeps
@@ -93,7 +99,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
           aria-hidden
           className={cn(
             'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-xs font-semibold tabular-nums',
-            chipCircleClass(state),
+            chipCircleClass(state, row.accepted_at !== null),
           )}
         >
           {state === 'open' ? seq : <IconCheck size={14} />}

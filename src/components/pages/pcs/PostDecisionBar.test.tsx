@@ -7,7 +7,6 @@ import {
   decisionBarSpace,
   PostDecisionBar,
   PostDecisionRow,
-  resolveFirstHelper,
   SEND_AGAIN_LABEL,
   type DecisionModel,
 } from '@/components/pages/pcs/PostDecisionBar';
@@ -109,36 +108,32 @@ describe('30. approver row: Comment, Reject, Approve, same on phone and laptop',
 });
 
 describe('33. creator: one main button', () => {
-  it('"Send for review again" is disabled with "Resolve {n} open comments first." until all are resolved', () => {
+  it('"Send for review again" is live with no helper line; disabled only while busy (open comments never block)', () => {
     const onPress = vi.fn();
-    const blocked: DecisionModel = {
+    const model: DecisionModel = {
       kind: 'creator',
       label: SEND_AGAIN_LABEL,
-      disabled: true,
-      helper: resolveFirstHelper(2),
+      disabled: false,
+      helper: null,
       onPress,
     };
-    const tree = PostDecisionBar({ model: blocked, busy: false, error: null });
+    const tree = PostDecisionBar({ model, busy: false, error: null });
     const row = buttons(tree);
     expect(row).toHaveLength(1);
     expect(label(row[0]!)).toBe('Send for review again');
     expect(row[0]?.props.variant).toBe('primary');
-    expect(row[0]?.props.disabled).toBe(true);
-    const helper = all(tree).find((el) => el.props['data-decision-helper'] === '');
-    expect(helper?.props.children).toBe('Resolve 2 open comments first.');
-    expect(resolveFirstHelper(1)).toBe('Resolve 1 open comment first.');
-    expect(resolveFirstHelper(0)).toBeNull();
-
-    const live = buttons(
-      PostDecisionRow({
-        model: { ...blocked, disabled: false, helper: null },
-        busy: false,
-        error: null,
-      }),
-    );
-    expect(live[0]?.props.disabled).toBe(false);
-    (live[0]?.props.onClick as () => void)();
+    expect(row[0]?.props.disabled).toBe(false);
+    expect(all(tree).find((el) => el.props['data-decision-helper'] === '')).toBeUndefined();
+    expect(
+      all(tree).some(
+        (el) => typeof el.props.children === 'string' && /Resolve/.test(el.props.children),
+      ),
+    ).toBe(false);
+    (row[0]?.props.onClick as () => void)();
     expect(onPress).toHaveBeenCalledOnce();
+
+    const inFlight = buttons(PostDecisionRow({ model, busy: true, error: null }));
+    expect(inFlight[0]?.props.disabled).toBe(true);
   });
 
   it('never offers a primary Approve to a creator (31: it lives in the ⋯ sheet)', () => {

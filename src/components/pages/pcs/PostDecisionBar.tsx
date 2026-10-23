@@ -6,8 +6,8 @@
 //
 // Approvers in review: Comment, Reject (plain, bad ink), Approve (the one
 // primary), in that order everywhere. Creators: one main button ("Send for
-// review", or "Send for review again" behind its helper); their other moves
-// (Approve for {brand}, Park, Reject) live in the post's ⋯ sheet. A failed tap
+// review", or "Send for review again"); their other moves (Approve on their
+// behalf, Park, Reject) live in the post's ⋯ sheet. A failed tap
 // shows its plain-words error here, once. Hookless, so the tree is unit tested
 // by walking it. The page reserves room under its content so the bar never
 // covers the comment composer.
@@ -27,12 +27,6 @@ export const COMMENT_LABEL = 'Comment';
 
 /** The creator's main button in review (flow B 33). */
 export const SEND_AGAIN_LABEL = 'Send for review again';
-
-/** Flow B 33: "Resolve 1 open comment first." / "Resolve {n} open comments first."; null at 0. */
-export function resolveFirstHelper(openCount: number): string | null {
-  if (openCount <= 0) return null;
-  return `Resolve ${openCount} open ${openCount === 1 ? 'comment' : 'comments'} first.`;
-}
 
 /**
  * The approver row order (flow B 30): Reject first, Approve last, anything
@@ -58,7 +52,10 @@ export type DecisionModel =
       kind: 'creator';
       label: string;
       disabled: boolean;
-      /** The line under the button ("Resolve 2 open comments first."), or null. */
+      /**
+       * A quiet line under the button, or null. "Send for review again" never
+       * carries one: open comments ask to confirm, they never block (flow B 33).
+       */
       helper: string | null;
       onPress: () => void;
     };

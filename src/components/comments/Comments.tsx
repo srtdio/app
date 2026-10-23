@@ -42,7 +42,7 @@ import type {
   CreateCommentInput,
   Result,
 } from '@srtdio/comments';
-import { commentResolve, DOMAIN_ERROR_CODES } from '@srtdio/rpc';
+import { checkpointAccept, commentResolve, DOMAIN_ERROR_CODES } from '@srtdio/rpc';
 import type { DomainErrorCode } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 import { classifyAttachment, type MessageAttachment } from '@/lib/chat/attachments';
@@ -535,15 +535,38 @@ export function tickInteractive(state: CheckpointState, isClient: boolean): bool
   return !isClient && state === 'open';
 }
 
-/** The passive tick fills once the point is resolved, for either side. */
-export function tickFilled(state: CheckpointState): boolean {
-  return state === 'resolved';
+/** True once the approver has confirmed the point (accepted_at set). Confirmed
+ *  requires resolved, so an agency reopen (resolved_at back to null) never reads
+ *  as confirmed even with a stale accepted stamp. Pure. */
+export function checkpointConfirmed(row: Pick<CommentRow, 'resolved_at' | 'accepted_at'>): boolean {
+  return row.resolved_at !== null && row.accepted_at !== null;
+}
+
+/** The passive tick fills only once the point is resolved AND confirmed by the
+ *  approver; a resolved point awaiting the Confirm shows the hollow tick. The
+ *  state word stays "Resolved" either way. */
+export function tickFilled(state: CheckpointState, confirmed: boolean): boolean {
+  return state === 'resolved' && confirmed;
+}
+
+/** The approver's one-tap "Confirm" shows only to a client on a resolved point
+ *  they have not confirmed yet. The creator never sees it. */
+export function showCheckpointConfirm(
+  state: CheckpointState,
+  isClient: boolean,
+  confirmed: boolean,
+): boolean {
+  return isClient && state === 'resolved' && !confirmed;
 }
 
 /** "Not done" (the client un-resolves, then must say why) shows only to a client
- *  on a resolved point. An agency member never sees it. */
-export function showCheckpointNotDone(state: CheckpointState, isClient: boolean): boolean {
-  return isClient && state === 'resolved';
+ *  on a resolved point not yet confirmed. An agency member never sees it. */
+export function showCheckpointNotDone(
+  state: CheckpointState,
+  isClient: boolean,
+  confirmed = false,
+): boolean {
+  return isClient && state === 'resolved' && !confirmed;
 }
 
 /** The pushback reason prompt. Un-resolving without saying why is the failure
@@ -1355,6 +1378,70 @@ export function Comments({
     });
   }
 
+  // Flip one checkpoint's accepted_at in place (paged list + always-loaded
+  // checkpoints) so a Confirm, its Undo, or a revert paints at once.
+  function patchAcceptedAt(commentId: string, acceptedAt: string | null): void {
+    const patch = (rows: CommentRow[]): CommentRow[] =>
+      rows.some((row) => row.id === commentId)
+        ? rows.map((row) => (row.id === commentId ? { ...row, accepted_at: acceptedAt } : row))
+        : rows;
+    setComments(patch);
+    setCheckpoints(patch);
+  }
+
+  // The existing checkpoint_accept RPC (accepted=true confirms, accepted=false
+  // withdraws), always with an explicit trace. True when the write landed.
+  async function sendAccept(comment: CommentRow, accepted: boolean): Promise<boolean> {
+    const result = await checkpointAccept(supabase, {
+      p_comment_id: comment.id,
+      p_accepted: accepted,
+      p_trace_id: newTrace(),
+    });
+    return result.ok;
+  }
+
+  // The approver's one-tap Confirm on a resolved checkpoint. Same shape as the
+  // creator's one-tap Resolve: the tick fills at once (optimistic) while the RPC
+  // runs, and the bottom strip shows "Confirmed" + "Undo" for UNDO_WINDOW_MS.
+  // Undo empties the tick and sends accepted=false once the first write settles.
+  // A failure on either leg reverts and shows the one inline line, once.
+  function handleConfirm(comment: CommentRow): void {
+    const prior = comment.accepted_at;
+    const optimistic = new Date().toISOString();
+    setRowError(null);
+    patchAcceptedAt(comment.id, optimistic);
+    const sent = sendAccept(comment, true).catch(() => false);
+    let undone = false;
+    const stripId =
+      toast?.show({
+        title: 'Confirmed',
+        action: {
+          label: 'Undo',
+          onPress: () => {
+            undone = true;
+            patchAcceptedAt(comment.id, prior);
+            void sent.then(async (landed) => {
+              if (!landed) return;
+              const withdrawn = await sendAccept(comment, false).catch(() => false);
+              if (!mounted.current) return;
+              if (!withdrawn) {
+                patchAcceptedAt(comment.id, optimistic);
+                setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+              }
+            });
+          },
+        },
+        durationMs: UNDO_WINDOW_MS,
+        kind: 'undo',
+      }) ?? null;
+    void sent.then((landed) => {
+      if (!mounted.current || undone || landed) return;
+      if (stripId !== null) toast?.dismiss(stripId);
+      patchAcceptedAt(comment.id, prior);
+      setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+    });
+  }
+
   async function handleCopy(comment: CommentRow): Promise<void> {
     const ok = await copyText(commentCopyText(comment.body, handleOf));
     setCopyFailed(!ok);
@@ -1808,9 +1895,11 @@ export function Comments({
             const state = checkpointState(comment);
             const label = checkpointStateLabel(state);
             const live = !tombstone && tickInteractive(state, isClient);
-            const filled = tickFilled(state);
+            const confirmed = checkpointConfirmed(comment);
+            const filled = tickFilled(state, confirmed);
+            const confirmable = !tombstone && showCheckpointConfirm(state, isClient, confirmed);
             const busy = resolvingId === comment.id;
-            const notDone = !tombstone && showCheckpointNotDone(state, isClient);
+            const notDone = !tombstone && showCheckpointNotDone(state, isClient, confirmed);
             const editing = editingId === comment.id;
             // Author-only edit/delete, hidden once the point is frozen (confirmed or
             // locked); Copy stays on every live point. The proc re-checks auth.uid().
@@ -1984,12 +2073,28 @@ export function Comments({
                         {tickCircle(false, true)}
                         <span>Resolve</span>
                       </button>
+                    ) : confirmable ? (
+                      // The approver's one-tap Confirm on a resolved point: the
+                      // hollow tick plus the word, one 44px target. Hidden once
+                      // confirmed; the row word stays "Resolved" either way.
+                      <button
+                        type="button"
+                        aria-label={`Confirm checkpoint ${seq}`}
+                        data-checkpoint-confirm=""
+                        onClick={() => handleConfirm(comment)}
+                        // axis: background-color on hover only; the tick fill motion
+                        // (opacity + translateY) lives inside tickCircle.
+                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md px-1.5 text-sm font-medium text-good transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        {tickCircle(false, false, true)}
+                        <span>Confirm</span>
+                      </button>
                     ) : (
                       <span
                         aria-hidden
                         className="ml-auto flex h-11 w-11 items-center justify-center"
                       >
-                        {tickCircle(filled)}
+                        {tickCircle(filled, false, state === 'resolved')}
                       </span>
                     )}
                   </div>
