@@ -112,6 +112,9 @@ export function eventVerb(item: VerbSource): string | null {
       return 'created';
     case 'brief_closed':
       return 'closed';
+    // brief_reopen's 'system' row, lifted to this type by mapEntry.
+    case 'brief_reopened':
+      return REOPEN_VERB;
     case 'asset_uploaded':
       return 'uploaded an asset';
     case 'asset_version_added':
@@ -146,12 +149,18 @@ export function actionKey(item: VerbSource): string {
 /** The send-for-review verb: it wraps the title ("sent {title} for review"). */
 export const REVIEW_VERB = 'sent for review';
 
-/** "{verb} on {title}", or "sent {title} for review"; `times` adds the repeat count. */
+/** The brief reopen verb: it takes the title directly ("reopened {title}"). */
+export const REOPEN_VERB = 'reopened';
+
+/**
+ * "{verb} on {title}", "sent {title} for review", or "reopened {title}"; `times`
+ * adds the repeat count.
+ */
 function verbOnTitle(verb: string, title: string, times?: number): string {
   const repeat = times !== undefined ? ` ${times} times` : '';
-  return verb === REVIEW_VERB
-    ? `sent ${title} for review${repeat}`
-    : `${verb}${repeat} on ${title}`;
+  if (verb === REVIEW_VERB) return `sent ${title} for review${repeat}`;
+  if (verb === REOPEN_VERB) return `reopened ${title}${repeat}`;
+  return `${verb}${repeat} on ${title}`;
 }
 
 /** "1 other" / "N others". */
@@ -287,6 +296,8 @@ export function eventLabel(
       return 'New brief';
     case 'brief_closed':
       return 'Brief closed';
+    case 'brief_reopened':
+      return 'Brief reopened';
     case 'comment_resolved':
       return 'Comment resolved';
     case 'asset_uploaded':

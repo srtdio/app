@@ -190,7 +190,7 @@ export function PostActionSheet({
   async function handleCopyLink(): Promise<void> {
     const link = postCopyLink(window.location.origin, workspaceKey, postNumber, postId);
     const ok = await copyText(link);
-    onToast(ok ? 'Link copied.' : COPY_FAILED);
+    onToast(ok ? 'Link copied' : COPY_FAILED);
     close();
   }
 

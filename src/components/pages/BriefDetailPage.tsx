@@ -17,7 +17,6 @@ import { IconBriefs, IconChevronLeft, IconCopy, IconMore } from '@/components/ui
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
-import { EntityRefChip } from '@/components/refs/EntityRefChip';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
@@ -30,6 +29,8 @@ import { env } from '@/lib/env';
 import type { PresignDeps } from '@/lib/asset-presign';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
+import { entityUrlPath } from '@/lib/entityRef';
+import { dispatchWorkspaceDataChanged } from '@/lib/events';
 import { civilDate } from '@/lib/list-sort';
 import { formatCivilDay, formatRaisedDay } from '@/lib/brief-groups';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
@@ -41,8 +42,8 @@ import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { cn } from '@/lib/cn';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
-import { getBrief, getBriefGallery } from '@srtdio/briefs';
-import type { BriefGalleryItem, BriefWithLinkedCount } from '@srtdio/briefs';
+import { getBrief, getBriefGallery, reopenBrief } from '@srtdio/briefs';
+import type { BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
 import { briefClose } from '@srtdio/rpc';
 
 // Status badge styling. Open reads as the active/good state, Closed as muted;
@@ -162,10 +163,70 @@ function CopyHeading({ label, onCopy }: { label: string; onCopy: () => void }): 
   );
 }
 
-/** The header ⋯ menu: one action today, Close brief. Escape or a tap outside closes it. */
-function BriefActionsMenu({ onCloseBrief }: { onCloseBrief: () => void }): ReactElement {
+/**
+ * A failed reopen in plain words: invalid_payload means the brief is no longer
+ * closed (someone reopened it first); anything else reads through plainError
+ * (workspace_member_only, offline, a timeout). Pure.
+ */
+export function reopenErrorCopy(error: DomainError): string {
+  return error.code === 'invalid_payload' ? 'This brief is already open.' : plainError(error);
+}
+
+/**
+ * The absolute link Copy link puts on the clipboard: the pretty /b/KEY-N link
+ * on the current origin, or the classic /briefs/:id route when the workspace
+ * key is unavailable. Pure.
+ */
+export function briefCopyLink(
+  origin: string,
+  workspaceKey: string | null,
+  briefNumber: number,
+  briefId: string,
+): string {
+  const path =
+    workspaceKey !== null
+      ? entityUrlPath('brief', workspaceKey, briefNumber)
+      : `/briefs/${briefId}`;
+  return origin + path;
+}
+
+const MENU_ROW =
+  'flex min-h-[44px] w-full items-center rounded-md px-3 text-left text-sm text-fg-2 transition-colors duration-fast hover:bg-panel-2 hover:text-fg';
+
+interface BriefMenuRow {
+  label: string;
+  testId: string;
+  onSelect: () => void;
+}
+
+/**
+ * The header ⋯ menu, on every brief for every member: Copy link, then Close
+ * brief (open, and the viewer may close) or Reopen brief (closed, any member).
+ * Escape or a tap outside closes it.
+ */
+function BriefActionsMenu({
+  closed,
+  canClose,
+  onCopyLink,
+  onCloseBrief,
+  onReopenBrief,
+}: {
+  closed: boolean;
+  canClose: boolean;
+  onCopyLink: () => void;
+  onCloseBrief: () => void;
+  onReopenBrief: () => void;
+}): ReactElement {
   const [open, setOpen] = useState(false);
   useEscapeLayer(open, () => setOpen(false));
+  const rows: BriefMenuRow[] = [
+    { label: 'Copy link', testId: 'brief-menu-copy-link', onSelect: onCopyLink },
+  ];
+  if (closed) {
+    rows.push({ label: 'Reopen brief', testId: 'brief-menu-reopen', onSelect: onReopenBrief });
+  } else if (canClose) {
+    rows.push({ label: 'Close brief', testId: 'brief-menu-close', onSelect: onCloseBrief });
+  }
   return (
     <div className="relative shrink-0">
       <IconButton
@@ -181,17 +242,22 @@ function BriefActionsMenu({ onCloseBrief }: { onCloseBrief: () => void }): React
           <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
           <div className={cn('absolute right-0 top-full z-50 mt-1.5 w-52', popoverClass(true))}>
             <div role="menu" aria-label="Brief actions" className="flex flex-col">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  onCloseBrief();
-                }}
-                className="flex min-h-[44px] w-full items-center rounded-md px-3 text-left text-sm text-fg-2 transition-colors duration-fast hover:bg-panel-2 hover:text-fg"
-              >
-                Close brief
-              </button>
+              {rows.map((row, index) => (
+                <div key={row.testId} className={index > 0 ? 'border-t border-border' : undefined}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid={row.testId}
+                    onClick={() => {
+                      setOpen(false);
+                      row.onSelect();
+                    }}
+                    className={MENU_ROW}
+                  >
+                    {row.label}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </>
@@ -355,9 +421,44 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           toast?.show({ title: plainError(result.error) });
           return;
         }
+        // Lists and counts that read on mount (Briefs, the chat status drawer)
+        // re-read, so a commit flushed by navigating away still lands there.
+        dispatchWorkspaceDataChanged();
         await load(true);
       },
     });
+  }
+
+  // Reopen straight away behind the same Undo: the badge flips to Open at once,
+  // Undo puts Closed back, and brief_reopen runs only once the window passes.
+  // Any active member may reopen (the proc's rule; no capability check here). A
+  // failed reopen restores Closed and says so in plain words.
+  function reopenWithUndo(): void {
+    if (briefId === undefined || detail === null) return;
+    const before = detail.brief.status;
+    const setStatus = (status: string): void =>
+      setDetail((prev) => (prev === null ? prev : { ...prev, brief: { ...prev.brief, status } }));
+    setStatus(BRIEF_STATUS.open);
+    runUndoable({
+      label: 'Brief reopened',
+      revert: () => setStatus(before),
+      commit: async () => {
+        const result = await reopenBrief(supabase, { briefId }, newTrace());
+        if (!result.ok) {
+          setStatus(before);
+          toast?.show({ title: reopenErrorCopy(result.error) });
+          return;
+        }
+        dispatchWorkspaceDataChanged();
+        await load(true);
+      },
+    });
+  }
+
+  function copyLink(): void {
+    if (briefId === undefined || detail === null) return;
+    const link = briefCopyLink(window.location.origin, workspaceKey, detail.brief.number, briefId);
+    void copyText(link).then((ok) => push(ok ? 'Link copied' : COPY_FAILED));
   }
 
   async function copy(text: string): Promise<void> {
@@ -425,7 +526,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const closed = isBriefClosed(brief);
   const links = briefExternalLinks(brief.reference_links, gallery);
   const mediaItems = briefMediaItems(gallery);
-  const showClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
+  const canClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
   const hasBrand = brief.brand_requirements !== null && brief.brand_requirements.trim() !== '';
   const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
   const authorLabel = briefAuthorLabel(
@@ -453,16 +554,14 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           <Highlight text={brief.title} />
         </h1>
         <div className="flex-1 md:hidden" />
-        {workspaceKey !== null ? (
-          <EntityRefChip
-            kind="brief"
-            entityKey={workspaceKey}
-            number={brief.number}
-            onCopied={() => push('Link copied')}
-          />
-        ) : null}
         <span className="hidden md:inline-flex">{statusBadge}</span>
-        {showClose ? <BriefActionsMenu onCloseBrief={() => setConfirmingClose(true)} /> : null}
+        <BriefActionsMenu
+          closed={closed}
+          canClose={canClose}
+          onCopyLink={copyLink}
+          onCloseBrief={() => setConfirmingClose(true)}
+          onReopenBrief={reopenWithUndo}
+        />
       </div>
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">

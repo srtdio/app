@@ -164,6 +164,14 @@ export function briefClose(
   return callProc(client, 'brief_close', args);
 }
 
+export type BriefReopenArgs = ProcArgs<'brief_reopen'>;
+export function briefReopen(
+  client: Client,
+  args: BriefReopenArgs,
+): Promise<Result<ProcReturns<'brief_reopen'>>> {
+  return callProc(client, 'brief_reopen', args);
+}
+
 export type AssetDeleteArgs = ProcArgs<'asset_delete'>;
 export function assetDelete(
   client: Client,

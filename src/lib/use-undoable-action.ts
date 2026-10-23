@@ -39,6 +39,7 @@ const PARTICIPLE_VERB: Readonly<Record<string, string>> = {
   marked: 'mark',
   hidden: 'hide',
   closed: 'close',
+  reopened: 'reopen',
   cleared: 'clear',
   sent: 'send',
   pinned: 'pin',
