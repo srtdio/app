@@ -8,21 +8,11 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, writeFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { rlsEnvFile, type RlsEnv } from '../../packages/test-utils/rls';
+import { SUPABASE_EXCLUDE } from '../../packages/test-utils/supabase-exclude';
 
 // Non-essential containers excluded: they are unused by RLS tests and some
 // cannot start under a restricted sandbox (edge-runtime rlimits).
-const EXCLUDE = [
-  'edge-runtime',
-  'studio',
-  'imgproxy',
-  'storage-api',
-  'realtime',
-  'vector',
-  'logflare',
-  'supavisor',
-  'mailpit',
-  'postgres-meta',
-].join(',');
+const EXCLUDE = SUPABASE_EXCLUDE;
 
 const supabaseBin = resolve(process.cwd(), 'node_modules/.bin/supabase');
 
@@ -55,6 +45,11 @@ function parseEnv(envOutput: string): RlsEnv {
 
 // Whether this process started the stack (and so must stop it on teardown).
 let startedHere = false;
+
+/** One timing line for CI logs; stdout, not console. */
+function logTiming(label: string, since: number): void {
+  process.stdout.write(`[setup] ${label} ${((performance.now() - since) / 1000).toFixed(1)}s\n`);
+}
 
 /** The CLI's registry override (viper INTERNAL_IMAGE_REGISTRY, SUPABASE_ env prefix). */
 const REGISTRY_ENV = 'SUPABASE_INTERNAL_IMAGE_REGISTRY';
@@ -116,6 +111,7 @@ function startWithRetry(): void {
 }
 
 export async function setup(): Promise<void> {
+  const setupAt = performance.now();
   // `supabase start` needs a config; create one on the fly if absent. The
   // generated config is local-only dev infra and is intentionally not committed.
   if (!existsSync(resolve(process.cwd(), 'supabase/config.toml'))) {
@@ -127,12 +123,17 @@ export async function setup(): Promise<void> {
   }
 
   if (!isRunning()) {
+    const startAt = performance.now();
+    process.stdout.write('[setup] supabase start begin\n');
     startWithRetry();
+    logTiming('supabase start', startAt);
     startedHere = true;
   }
 
   const env = parseEnv(supabase(['status', '-o', 'env']));
   writeFileSync(rlsEnvFile, JSON.stringify(env), 'utf8');
+  // `supabase start` applies supabase/migrations/, so this is post-migrations.
+  logTiming('total', setupAt);
 }
 
 export async function teardown(): Promise<void> {
