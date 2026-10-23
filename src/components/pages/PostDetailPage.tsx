@@ -16,20 +16,20 @@ import type { CommentAnnotation } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
-import {
-  PCS_TAB_PARAM,
-  parsePcsTab,
-  pcsTabPanelClass,
-  pcsTabPanelId,
-  withPcsTab,
-} from '@/components/pages/pcs/PcsTabs';
-import type { PcsTab } from '@/components/pages/pcs/PcsTabs';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconChevronLeft, IconChevronRight, IconCopy, IconPipeline } from '@/components/ui/icons';
+import {
+  IconBriefs,
+  IconCalendar,
+  IconChat,
+  IconChevronDown,
+  IconChevronLeft,
+  IconCopy,
+  IconPipeline,
+} from '@/components/ui/icons';
 import { PlatformPreviewPanel, PreviewChip } from '@/components/preview/PlatformPreviewPanel';
-import { PostGallery } from '@/components/pages/pcs/PostGallery';
+import { galleryFrame, PostGallery } from '@/components/pages/pcs/PostGallery';
 import { CaptionView, firstHighlightCommentId } from '@/components/pages/pcs/CaptionView';
 import type { CaptionAnnotationView } from '@/components/pages/pcs/CaptionView';
 import {
@@ -45,8 +45,10 @@ import type { CheckpointCounts } from '@/components/pages/pcs/CheckpointStrip';
 import { PostReadyNotice } from '@/components/pages/pcs/PostReadyNotice';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
 import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
-import { VersionPill } from '@/components/pages/pcs/VersionPill';
-import { VersionHistorySheet } from '@/components/pages/pcs/VersionHistorySheet';
+import {
+  VersionHistorySheet,
+  type VersionThumbs,
+} from '@/components/pages/pcs/VersionHistorySheet';
 import { ReadOnlyVersionView } from '@/components/pages/pcs/ReadOnlyVersionView';
 import { CompareVersionsView } from '@/components/pages/pcs/CompareVersionsView';
 import {
@@ -76,10 +78,12 @@ import { IconPencil, IconMoreVertical } from '@/components/pages/pcs/post-icons'
 import { PostActionSheet } from '@/components/pages/pcs/PostActionSheet';
 import {
   append,
+  galleryWriteErrorCopy,
   insertAfter,
   moveLeft,
   moveRight,
   removeAt,
+  replaceAt,
 } from '@/components/pages/pcs/gallery-transforms';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { LoadError } from '@/components/ui/LoadError';
@@ -88,7 +92,7 @@ import { plainError } from '@/lib/error-copy';
 import { isTouchDevice } from '@/lib/modal-focus';
 import { PostDecisionBar, DECISION_BAR_SPACE_PX } from '@/components/pages/pcs/PostDecisionBar';
 import { runStageMoveCommit, showWhenVisible } from '@/components/pages/pcs/stage-move-commit';
-import { formatPostTargetDate } from '@/components/pages/pcs/post-date';
+import { formatPostDueLabel } from '@/components/pages/pcs/post-date';
 import {
   CAPTION_TIP_TEXT,
   captionTipDismissed,
@@ -118,9 +122,16 @@ import {
 import type { GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
 import { friendlyTransitionError } from '@/lib/post-transition-errors';
 import { createComment } from '@srtdio/comments';
+import { getBrief } from '@srtdio/briefs';
 import type { Json } from '@srtdio/schemas';
 import { postSoftDelete, stageTransition } from '@srtdio/rpc';
 import type { DomainError } from '@srtdio/rpc';
+
+/** Where an upload run lands in the gallery (#26 adds Replace). */
+type AddTarget =
+  | { mode: 'append' }
+  | { mode: 'insertAfter'; index: number }
+  | { mode: 'replace'; index: number };
 
 // A refused RPC carries a DomainError ({ code, message }); a thrown transport
 // error does not, and goes to plainError instead.
@@ -150,12 +161,6 @@ function snapshotCaption(snapshot: Json | null): string | null {
   return typeof caption === 'string' ? caption : null;
 }
 
-// Title-case a single workflow stage for display. Stage values come from
-// @srtdio/posts; this is presentation only.
-function stageLabel(stage: Stage): string {
-  return stage.charAt(0).toUpperCase() + stage.slice(1);
-}
-
 // Split a title into everything-but-the-last-word and the last word, so the body
 // title can keep the trailing edit pencil glued to the final word (wrapped in a
 // nowrap span) instead of letting the glyph wrap onto its own line.
@@ -164,20 +169,6 @@ function splitLastWord(title: string): { head: string; last: string } {
   const last = words.pop() ?? title;
   return { head: words.join(' '), last };
 }
-
-// Soft-filled stage pill styling per stage, from existing theme tokens so
-// light/dark parity is automatic. draft/review resolve to soft fills
-// (panel-3 / accent-soft are concrete tokens). approved/parked/rejected fall
-// back to the stage's coloured border + text: the good/warn/bad tokens are bare
-// hex CSS vars, so Tailwind's `/opacity` modifier cannot mint a soft tint from
-// them and there is no good-soft/warn-soft/bad-soft token to substitute.
-const STAGE_PILL: Record<Stage, string> = {
-  draft: 'bg-panel-3 text-fg-2',
-  review: 'bg-accent-soft text-accent',
-  approved: 'border border-good text-good',
-  parked: 'border border-warn text-warn',
-  rejected: 'border border-bad text-bad',
-};
 
 // The header status-dot fill per stage, reusing the SAME per-stage colour the
 // pill carries (draft dim, review accent, approved good, parked warn, rejected
@@ -190,15 +181,58 @@ const STAGE_DOT: Record<Stage, string> = {
   rejected: 'bg-bad',
 };
 
-// Display label per stage for the pill (distinct from stageLabel, which the
-// read-only status line reuses).
-const STAGE_PILL_LABEL: Record<Stage, string> = {
-  draft: 'Draft',
-  review: 'In review',
-  approved: 'Approved',
-  parked: 'Parked',
-  rejected: 'Rejected',
-};
+/** The comments section's id: the open-comments chip scrolls here. */
+export const COMMENTS_SECTION_ID = 'post-comments';
+
+/** Flow B 29: the chip under the title, "1 open comment" / "{n} open comments". */
+export function openCommentsLabel(count: number): string {
+  return `${count} open ${count === 1 ? 'comment' : 'comments'}`;
+}
+
+/**
+ * Flow B 29: scroll the comments section into view, smooth unless the viewer
+ * asked for reduced motion. Best-effort: a missing node is a no-op.
+ */
+export function scrollToCommentsSection(doc: Document = document): void {
+  const node = doc.getElementById(COMMENTS_SECTION_ID);
+  if (node === null) return;
+  const view = doc.defaultView;
+  const reduce =
+    view !== null &&
+    typeof view.matchMedia === 'function' &&
+    view.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  node.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+}
+
+/**
+ * Flow B 34: the page grid, shared by the skeleton and the loaded page so the
+ * first paint never jumps. Below lg (phone, tablet portrait) one column: head
+ * (title, details, chip), media, body (caption, comments). lg and up: the
+ * picture on the left (at most 520px, the frame keeps the platform shape), the
+ * head and body stacked on the right; page at most 1120px, centred. Embedded
+ * (inside another screen) always stays one column.
+ */
+export function postPageGrid(embedded: boolean): {
+  page: string;
+  head: string;
+  media: string;
+  body: string;
+} {
+  if (embedded) {
+    return {
+      page: 'grid grid-cols-1 gap-4 px-4 md:px-6 pt-4 pb-6',
+      head: 'min-w-0',
+      media: 'min-w-0',
+      body: 'min-w-0',
+    };
+  }
+  return {
+    page: 'mx-auto grid w-full max-w-[1120px] grid-cols-1 gap-4 px-4 md:px-6 pt-4 pb-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:gap-x-8',
+    head: 'min-w-0 lg:col-start-2 lg:row-start-1',
+    media: 'min-w-0 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:self-start',
+    body: 'min-w-0 lg:col-start-2 lg:row-start-2',
+  };
+}
 
 /**
  * The stage rail buttons. Hookless so the tree is unit tested by walking it.
@@ -421,40 +455,25 @@ export function PostDetailPage({
     if (handledCommentParam.current === comment) return;
     handledCommentParam.current = comment;
     setFocusCommentId(comment);
-    // The focused comment lives in the Feedback tab, so the same replace that
-    // strips 'comment' lands the mobile layout on that tab (desktop shows both
-    // columns regardless).
-    const next = withPcsTab(searchParams, 'feedback');
+    // Strip 'comment' in place (replace): the deep link never adds a history entry.
+    const next = new URLSearchParams(searchParams);
     next.delete('comment');
     setSearchParams(next, { replace: true });
   }, [embedded, searchParams, setSearchParams]);
 
-  // Mobile PCS tab (F-layout): below md the post/comment split becomes two
-  // tabs whose active value lives in ?tab= so the back button restores the
-  // previous tab. Desktop keeps both columns and never touches the param.
-  const activeTab = parsePcsTab(searchParams.get(PCS_TAB_PARAM));
+  // The sticky phone decision bar shows below md; md and up keep the stage
+  // card inline (the laptop two-column layout itself switches at lg).
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  // enteredTab trails activeTab by one frame so the freshly shown panel starts
-  // at opacity-0/translate-y-1 and transitions to rest (the Sheet enter
-  // pattern). Equal values mean the swap motion has settled.
-  const [enteredTab, setEnteredTab] = useState<PcsTab>(activeTab);
-  useEffect(() => {
-    if (enteredTab === activeTab) return;
-    const raf = requestAnimationFrame(() => setEnteredTab(activeTab));
-    return () => cancelAnimationFrame(raf);
-  }, [activeTab, enteredTab]);
-
-  // A cross-link whose target sat in the hidden tab: the flash is parked here
-  // until the tab switch has rendered, then fired by the effect below.
-  const [pendingFlash, setPendingFlash] = useState<{ tab: PcsTab; elementId: string } | null>(null);
-  useEffect(() => {
-    if (pendingFlash === null || activeTab !== pendingFlash.tab) return;
-    flashNode(pendingFlash.elementId);
-    setPendingFlash(null);
-  }, [pendingFlash, activeTab]);
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  // Flow B 25 / 36: the gallery read is part of the first paint. galleryLoaded
+  // flips once the first read settles (either way); a failed read keeps
+  // galleryLoadError so the page shows "Couldn't load the pictures." with Retry,
+  // never the empty gallery.
+  const [galleryLoaded, setGalleryLoaded] = useState(false);
+  const [galleryLoadError, setGalleryLoadError] = useState(false);
+  const [galleryRetrying, setGalleryRetrying] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   // FT3: a failed load shows ui/LoadError with Retry; the raw message is logged, never shown.
@@ -521,7 +540,7 @@ export function PostDetailPage({
   const [composerError, setComposerError] = useState<string | null>(null);
 
   // Checkpoint counts lifted from CheckpointStrip's one fetch (no duplicate
-  // read): they drive the header "X of N" chip and the Feedback tab badge.
+  // read): they drive the page's single openCount (see below).
   const [checkpointCounts, setCheckpointCounts] = useState<CheckpointCounts>({
     resolved: 0,
     total: 0,
@@ -531,6 +550,10 @@ export function PostDetailPage({
     [],
   );
   const bumpCommentsRefresh = useCallback(() => setCommentsRefresh((n) => n + 1), []);
+  // The page's ONE open-comment count: the open-comments chip under the title
+  // (flow B 29), PostReadyNotice, and the decision row's "Resolve {n} open
+  // comments first." all read this value.
+  const openCount = Math.max(0, checkpointCounts.total - checkpointCounts.resolved);
 
   // Pin annotation state (F5): the placed point drives the pin composer, sibling
   // to the caption composer above. Posting mirrors the caption write path.
@@ -545,6 +568,8 @@ export function PostDetailPage({
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const [role, setRole] = useState<string | null>(null);
+  // Flow B 25: the role gates which buttons show, so it is part of the first paint.
+  const [roleLoaded, setRoleLoaded] = useState(false);
   const {
     options: memberOptions,
     loading: membersLoading,
@@ -559,6 +584,12 @@ export function PostDetailPage({
   // chip (mirrors PostDetailsSheet). A failure leaves the list empty: the chip
   // simply does not render, no spinner, no flash.
   const [buckets, setBuckets] = useState<BucketOption[]>([]);
+  const [bucketsLoaded, setBucketsLoaded] = useState(false);
+  // The post's brief name for the details row; briefLoaded settles once the
+  // read for the current brief_id lands (or there is no brief). A failure
+  // simply omits the brief from the row.
+  const [briefName, setBriefName] = useState<string | null>(null);
+  const [briefLoadedFor, setBriefLoadedFor] = useState<string | null | undefined>(undefined);
   // F8 post action sheet (Send to chat / Copy link / Download all images). Live
   // PCS only; the trigger is suppressed in read-only mode below.
   const [ownActionsOpen, setOwnActionsOpen] = useState(false);
@@ -586,9 +617,9 @@ export function PostDetailPage({
   // Gallery slide-action state: the open sheet's slide index, the per-run upload
   // target (append vs insert-after), and the version ids collected during a run.
   const [slideIndex, setSlideIndex] = useState<number | null>(null);
-  const [addTarget, setAddTarget] = useState<
-    { mode: 'append' } | { mode: 'insertAfter'; index: number } | null
-  >(null);
+  const [addTarget, setAddTarget] = useState<AddTarget | null>(null);
+  // #26: the one inline line the gallery tools row shows after a failed write.
+  const [galleryError, setGalleryError] = useState<string | null>(null);
   const uploadedVersionIds = useRef<string[]>([]);
   // Root library labels, read when the upload sheet opens, so a bulk upload named
   // after the post continues numbering past "<title> N" already in the library.
@@ -649,12 +680,18 @@ export function PostDetailPage({
   useEffect(() => {
     if (workspaceId === null || userId === null) {
       setRole(null);
+      setRoleLoaded(true);
       return;
     }
     let cancelled = false;
-    void fetchMemberRole(supabase, workspaceId, userId).then((next) => {
-      if (!cancelled) setRole(next);
-    });
+    setRoleLoaded(false);
+    void fetchMemberRole(supabase, workspaceId, userId)
+      .catch(() => null)
+      .then((next) => {
+        if (cancelled) return;
+        setRole(next);
+        setRoleLoaded(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -663,12 +700,18 @@ export function PostDetailPage({
   useEffect(() => {
     if (workspaceId === null) {
       setBuckets([]);
+      setBucketsLoaded(true);
       return;
     }
     let cancelled = false;
-    void listBuckets(supabase, workspaceId).then((result) => {
-      if (!cancelled && result.ok) setBuckets(result.data);
-    });
+    setBucketsLoaded(false);
+    void listBuckets(supabase, workspaceId)
+      .catch(() => ({ ok: false as const }))
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok) setBuckets(result.data);
+        setBucketsLoaded(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -750,31 +793,86 @@ export function PostDetailPage({
   }, [load]);
 
   // The gallery is a separate read (asset_attachments has no FK back to posts, so
-  // it cannot ride getPost's embed) and is non-critical: a failure or an absent
-  // post simply leaves the grid empty rather than blocking the page. Extracted so
-  // a gallery_set write can refresh it (load(true) only refreshes the post).
+  // it cannot ride getPost's embed). Flow B 36: a failed read is NOT an empty
+  // gallery; it sets galleryLoadError (the page shows "Couldn't load the pictures."
+  // with Retry) and keeps the last good list. Extracted so a gallery_set write
+  // and Retry can refresh it (load(true) only refreshes the post).
   const reloadGallery = useCallback(async (): Promise<void> => {
     if (postId === undefined) {
       setGallery([]);
+      setGalleryLoadError(false);
       return;
     }
-    const result = await getPostGallery(supabase, postId);
-    setGallery(result.ok ? result.data : []);
+    const result = await getPostGallery(supabase, postId).catch(() => null);
+    if (result !== null && result.ok) {
+      setGallery(result.data);
+      setGalleryLoadError(false);
+    } else {
+      logger.warn('post page: gallery load failed', {
+        error: result === null ? 'thrown' : result.error.message,
+      });
+      setGalleryLoadError(true);
+    }
   }, [postId]);
+
+  const retryGallery = useCallback(async (): Promise<void> => {
+    setGalleryRetrying(true);
+    await reloadGallery();
+    setGalleryRetrying(false);
+  }, [reloadGallery]);
 
   useEffect(() => {
     if (postId === undefined) {
       setGallery([]);
+      setGalleryLoadError(false);
+      setGalleryLoaded(true);
       return;
     }
     let active = true;
-    void getPostGallery(supabase, postId).then((result) => {
-      if (active) setGallery(result.ok ? result.data : []);
-    });
+    setGalleryLoaded(false);
+    void getPostGallery(supabase, postId)
+      .catch(() => null)
+      .then((result) => {
+        if (!active) return;
+        if (result !== null && result.ok) {
+          setGallery(result.data);
+          setGalleryLoadError(false);
+        } else {
+          logger.warn('post page: gallery load failed', {
+            error: result === null ? 'thrown' : result.error.message,
+          });
+          setGallery([]);
+          setGalleryLoadError(true);
+        }
+        setGalleryLoaded(true);
+      });
     return () => {
       active = false;
     };
   }, [postId]);
+
+  // The brief name for the details row, read once per brief_id. No brief (or
+  // no post yet) settles at once; a failed read just omits the brief.
+  const briefId = detail?.post.brief_id ?? null;
+  useEffect(() => {
+    if (briefId === null) {
+      setBriefName(null);
+      setBriefLoadedFor(null);
+      return;
+    }
+    let active = true;
+    void getBrief(supabase, briefId)
+      .catch(() => null)
+      .then((result) => {
+        if (!active) return;
+        setBriefName(result !== null && result.ok ? (result.data?.brief.title ?? null) : null);
+        setBriefLoadedFor(briefId);
+      });
+    return () => {
+      active = false;
+    };
+  }, [briefId]);
+  const briefLoaded = briefLoadedFor === briefId;
 
   // The current version is the highest version_number; annotations made on any
   // other version are stale. Computed here so the reads stay untouched.
@@ -825,7 +923,18 @@ export function PostDetailPage({
   // A host-owned open (the plan item's header button) while the sheet cannot
   // mount (loading, not found, an old version) closes again at once, so the
   // sheet never pops open later on its own.
-  const sheetMountable = !loading && !notFound && !loadError && detail !== null && !readOnly;
+  // Flow B 25: one correct first paint. The skeleton stays until the post, the
+  // gallery, the viewer's role, the members (owner name) and the buckets (and
+  // the brief name, when the post has one) have all settled; then the page
+  // paints once. Silent refreshes after that never flip back to the skeleton.
+  const firstPaintPending =
+    loading ||
+    (!loadError &&
+      !notFound &&
+      detail !== null &&
+      !(galleryLoaded && roleLoaded && !membersLoading && bucketsLoaded && briefLoaded));
+  const sheetMountable =
+    !firstPaintPending && !notFound && !loadError && detail !== null && !readOnly;
   useEffect(() => {
     if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);
   }, [actionsOpenProp, sheetMountable, onActionsOpenChange]);
@@ -933,16 +1042,10 @@ export function PostDetailPage({
     setComposer({ start, end, quote });
   }, []);
 
-  // Scroll to (and briefly flash) a DOM node by id, switching to the tab that
-  // hosts it first when the mobile layout has it hidden. Desktop flashes
-  // directly (both columns visible) so cross-links never touch the URL there.
-  // Embedded shows both panels stacked, so it always flashes in place.
-  function flashTo(tab: PcsTab, elementId: string): void {
-    if (!embedded && !isDesktop && activeTab !== tab) {
-      setSearchParams(withPcsTab(searchParams, tab));
-      setPendingFlash({ tab, elementId });
-      return;
-    }
+  // Scroll to (and briefly flash) a DOM node by id. Every section is on the one
+  // page, so a pin, highlight or chip tap never touches the URL and never adds
+  // a browser history entry.
+  function flashTo(elementId: string): void {
     flashNode(elementId);
   }
 
@@ -1338,23 +1441,26 @@ export function PostDetailPage({
   // tap lands before the state re-renders), so two full-list writes never
   // overlap and the second never overwrites the first with a stale order.
   const commitGallery = useCallback(
-    async (ids: string[]): Promise<void> => {
-      if (postId === undefined || gallerySavingRef.current) return;
+    async (ids: string[]): Promise<boolean> => {
+      if (postId === undefined || gallerySavingRef.current) return false;
       gallerySavingRef.current = true;
       setGallerySaving(true);
+      setGalleryError(null);
       try {
         const result = await gallerySet(supabase, { postId, assetVersionIds: ids }, newTrace());
         if (!result.ok) {
-          push('Could not update the gallery. Please try again.');
-          return;
+          // #26: shown once, inline in the tools row (no toast on top).
+          setGalleryError(galleryWriteErrorCopy(result.error));
+          return false;
         }
         await Promise.all([load(true), reloadGallery()]);
+        return true;
       } finally {
         gallerySavingRef.current = false;
         setGallerySaving(false);
       }
     },
-    [postId, newTrace, load, reloadGallery, push],
+    [postId, newTrace, load, reloadGallery],
   );
 
   const orderedIds = useMemo(() => gallery.map((item) => item.assetVersionId), [gallery]);
@@ -1383,7 +1489,7 @@ export function PostDetailPage({
     // state. The stage is never touched here.
     void commitGallery(removeAt(orderedIds, index));
   }
-  function openAdd(target: { mode: 'append' } | { mode: 'insertAfter'; index: number }): void {
+  function openAdd(target: AddTarget): void {
     uploadedVersionIds.current = [];
     setAddTarget(target);
   }
@@ -1430,7 +1536,11 @@ export function PostDetailPage({
     setAddTarget(null);
     if (versionIds.length === 0 || target === null) return;
     let ids = orderedIds;
-    if (target.mode === 'append') {
+    if (target.mode === 'replace') {
+      // #26 Replace: the first upload takes the slide's place, one save.
+      const [first] = versionIds;
+      if (first !== undefined) ids = replaceAt(ids, target.index, first);
+    } else if (target.mode === 'append') {
       for (const versionId of versionIds) ids = append(ids, versionId);
     } else {
       let at = target.index;
@@ -1448,35 +1558,46 @@ export function PostDetailPage({
     </IconButton>
   );
 
-  if (loading) {
+  // Flow B 34: the skeleton uses the loaded page's own grid, so nothing jumps
+  // when the content paints.
+  const grid = postPageGrid(embedded);
+
+  if (firstPaintPending) {
     return (
       <>
         {embedded ? null : (
           <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
             {backButton}
+            <div aria-hidden className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="h-4 w-32 animate-pulse rounded bg-panel-3" />
+            </div>
+            <div aria-hidden className="h-11 w-11 shrink-0" />
           </div>
         )}
-        {/* N12: a skeleton of the page's own shapes (title, meta line, media,
-            caption) from the existing tokens, with a screen-reader label. */}
-        <div aria-busy="true" className="flex flex-col gap-4 px-4 md:px-6 pt-4">
+        {/* N12: a skeleton of the page's own shapes (title, details row, media,
+            caption, comments) from the existing tokens, with a screen-reader
+            label. Flow B 25: it stays until every first-paint read settles. */}
+        <div aria-busy="true" data-post-skeleton="" className={grid.page}>
           <span className="sr-only">Loading post</span>
-          <div aria-hidden className="flex items-center gap-2">
-            <div className="h-7 w-16 animate-pulse rounded-full bg-panel-3" />
-            <div className="h-4 w-28 animate-pulse rounded bg-panel-3" />
+          <div aria-hidden className={cn(grid.head, 'flex flex-col gap-3')}>
+            <div className="h-8 w-3/4 animate-pulse rounded bg-panel-3" />
+            <div className="flex min-h-[44px] items-center gap-2">
+              <div className="h-5 w-5 animate-pulse rounded-full bg-panel-3" />
+              <div className="h-3 w-24 animate-pulse rounded bg-panel-3" />
+              <div className="h-3 w-16 animate-pulse rounded bg-panel-3" />
+              <div className="h-3 w-20 animate-pulse rounded bg-panel-3" />
+            </div>
           </div>
-          <div aria-hidden className="h-8 w-3/4 animate-pulse rounded bg-panel-3" />
-          <div aria-hidden className="flex items-center gap-2">
-            <div className="h-6 w-6 animate-pulse rounded-full bg-panel-3" />
-            <div className="h-3 w-32 animate-pulse rounded bg-panel-3" />
+          <div aria-hidden className={grid.media}>
+            <div className="aspect-[4/5] w-full animate-pulse rounded-xl bg-panel-3" />
           </div>
-          <div
-            aria-hidden
-            className="aspect-[4/5] w-full max-w-md animate-pulse rounded-xl bg-panel-3"
-          />
-          <div aria-hidden className="rounded-xl border border-border bg-panel-2 p-4">
-            <div className="h-3 w-full animate-pulse rounded bg-panel-3" />
-            <div className="mt-2 h-3 w-5/6 animate-pulse rounded bg-panel-3" />
-            <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
+          <div aria-hidden className={cn(grid.body, 'flex flex-col gap-6')}>
+            <div className="rounded-xl border border-border bg-panel-2 p-4">
+              <div className="h-3 w-full animate-pulse rounded bg-panel-3" />
+              <div className="mt-2 h-3 w-5/6 animate-pulse rounded bg-panel-3" />
+              <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
+            </div>
+            <div className="h-24 animate-pulse rounded-xl bg-panel-2" />
           </div>
         </div>
       </>
@@ -1522,6 +1643,13 @@ export function PostDetailPage({
 
   const post = detail.post;
   const currentStage = optimisticStage ?? (post.stage as Stage);
+  // #35: version pictures (sheet rows, old-version view), platform-shaped.
+  const versionThumbs: VersionThumbs = {
+    gallery,
+    cache,
+    presignEnabled,
+    ratio: galleryFrame(post.platform, post.format, gallery, {})?.ratio ?? 4 / 5,
+  };
   const stageActions = visibleStageActions(currentStage, role);
   const ownerInfo = resolveOwner(post.owner_user_id, post.legacy_author_name);
   const bucket = buckets.find((b) => b.id === post.bucket_id) ?? null;
@@ -1550,6 +1678,73 @@ export function PostDetailPage({
   );
   const approveTimeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
+  // Flow B 28: the details row parts, each only when it has a value. Platform
+  // and format always have one, and this is the one place they show (27).
+  const ownerKnown =
+    ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
+  const dueLabel =
+    post.target_date !== null ? formatPostDueLabel(post.target_date, approveTimeZone) : null;
+  const detailsEditable = agencySide && !readOnly;
+  const detailsParts = (
+    <>
+      {ownerKnown ? (
+        <span data-detail="owner" className="inline-flex min-w-0 items-center gap-1.5">
+          <Avatar
+            name={ownerInfo.name}
+            size="sm"
+            {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
+          />
+          <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
+        </span>
+      ) : null}
+      {dueLabel !== null ? (
+        <span data-detail="due" className="inline-flex items-center gap-1.5 tabular-nums">
+          <IconCalendar size={15} />
+          {dueLabel}
+        </span>
+      ) : null}
+      {bucket !== null ? (
+        <span data-detail="bucket" className="inline-flex min-w-0 items-center gap-1.5">
+          <span
+            aria-hidden
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: bucket.colorHex }}
+          />
+          <span className="truncate">{bucket.name}</span>
+        </span>
+      ) : null}
+      {briefName !== null ? (
+        <span data-detail="brief" className="inline-flex min-w-0 items-center gap-1.5">
+          <IconBriefs size={15} />
+          <span className="truncate">{briefName}</span>
+        </span>
+      ) : null}
+      <span data-detail="platform" className="text-fg-3">
+        {platformLabel(post.platform)} · {formatLabel(post.format)}
+      </span>
+    </>
+  );
+
+  // Flow B 29: "{n} open comments" under the title while in review; a tap
+  // scrolls to the comments. Hidden at 0.
+  const openCommentsChip =
+    currentStage === 'review' && openCount > 0 && !readOnly ? (
+      <div>
+        <button
+          type="button"
+          data-open-comments-chip=""
+          onClick={() => scrollToCommentsSection()}
+          className="group inline-flex min-h-[44px] items-center focus:outline-none"
+        >
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-warn-soft px-3 text-[13px] font-semibold text-[color:var(--warn-ink)] group-focus-visible:ring-2 group-focus-visible:ring-accent">
+            <IconChat size={15} />
+            {openCommentsLabel(openCount)}
+            <IconChevronDown size={15} />
+          </span>
+        </button>
+      </div>
+    ) : null;
+
   // The helper line above the stage buttons, or null.
   const stageHelper =
     currentStage === 'review' && clientRole
@@ -1570,24 +1765,20 @@ export function PostDetailPage({
   // bottom of the Post tab. One conditional render, so the role=alert error
   // never duplicates.
   const phoneLayout = !isDesktop && !embedded;
-  const stageSection = (
-    <section className="rounded-xl border border-border bg-panel-2 p-4">
-      {stageHelper !== null ? <p className="mb-3 text-sm text-fg-2">{stageHelper}</p> : null}
-      {stageActions.length > 0 ? (
-        stageButtons
-      ) : (
-        <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
-      )}
-      {stageError}
-    </section>
-  );
+  // Flow B 27: the stage shows once, in the top bar; with no moves to offer
+  // (and nothing to say) the card is not rendered at all.
+  const stageSection =
+    stageHelper !== null || stageActions.length > 0 || actionError !== null ? (
+      <section className="rounded-xl border border-border bg-panel-2 p-4">
+        {stageHelper !== null ? <p className="mb-3 text-sm text-fg-2">{stageHelper}</p> : null}
+        {stageActions.length > 0 ? stageButtons : null}
+        {stageError}
+      </section>
+    ) : null;
   const phoneStageNotes =
-    stageHelper !== null || actionError !== null || stageActions.length === 0 ? (
+    stageHelper !== null || actionError !== null ? (
       <section className="rounded-xl border border-border bg-panel-2 p-4">
         {stageHelper !== null ? <p className="text-sm text-fg-2">{stageHelper}</p> : null}
-        {stageActions.length === 0 ? (
-          <p className="text-sm text-fg-3">Status: {stageLabel(currentStage)}.</p>
-        ) : null}
         {stageError}
       </section>
     ) : null;
@@ -1625,142 +1816,17 @@ export function PostDetailPage({
         </div>
       )}
 
-      <div className="flex flex-col gap-3 px-4 md:px-6 pt-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {bucket !== null ? (
-            agencySide ? (
-              <button
-                type="button"
-                onClick={() => setShowDetails(true)}
-                className="group -my-2 inline-flex min-h-[44px] items-center rounded-full focus:outline-none"
-              >
-                <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg transition-colors group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent">
-                  <span
-                    aria-hidden
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: bucket.colorHex }}
-                  />
-                  {bucket.name}
-                </span>
-              </button>
-            ) : (
-              <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg">
-                <span
-                  aria-hidden
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: bucket.colorHex }}
-                />
-                {bucket.name}
-              </span>
-            )
-          ) : null}
-          <span
-            className={`inline-flex h-7 items-center rounded-full px-2.5 text-xs font-semibold ${STAGE_PILL[currentStage]}`}
-          >
-            {STAGE_PILL_LABEL[currentStage]}
-          </span>
-          <span className="text-sm text-fg-2">
-            {platformLabel(post.platform)} · {formatLabel(post.format)}
-          </span>
-          <PreviewChip platform={post.platform} onClick={() => setPreviewOpen(true)} />
+      {/* An old version or a compare: the title stays (one h1), every write
+          affordance is gone. */}
+      {readOnly ? (
+        <div className={cn(grid.page, 'pb-0')}>
+          <div className={grid.head}>
+            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+              <Highlight text={post.title} />
+            </h1>
+          </div>
         </div>
-
-        {agencySide && !readOnly ? (
-          editingTitle ? (
-            <div className="flex flex-col gap-2">
-              <input
-                autoFocus
-                aria-label="Post title"
-                value={titleDraft}
-                disabled={savingMeta}
-                onChange={(event) => setTitleDraft(event.target.value)}
-                onBlur={onTitleBlur}
-                onKeyDown={onTitleKeyDown}
-                className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
-              />
-              {isTouchDevice() ? (
-                // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
-                // visible. pointerdown is swallowed so the input's blur-save never
-                // runs ahead of (or instead of) the tapped button.
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    disabled={savingMeta}
-                    onPointerDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      suppressTitleBlur.current = true;
-                      void saveTitle();
-                    }}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    disabled={savingMeta}
-                    onPointerDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      suppressTitleBlur.current = true;
-                      setEditingTitle(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <h2 className="text-[28px] font-semibold leading-tight tracking-tight">
-              {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
-              <span className="whitespace-nowrap">
-                <Highlight text={titleLast} />
-                <button
-                  type="button"
-                  aria-label="Edit title"
-                  onClick={openTitleEditor}
-                  className="ml-1 inline-flex h-11 w-11 items-center justify-center align-top focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-panel-3 text-fg-3 transition-colors hover:text-fg-2">
-                    <IconPencil size={17} />
-                  </span>
-                </button>
-              </span>
-            </h2>
-          )
-        ) : (
-          <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-            <Highlight text={post.title} />
-          </h1>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setShowDetails(true)}
-          disabled={readOnly}
-          className="flex min-h-[44px] max-w-full flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none"
-        >
-          <Avatar
-            name={ownerInfo.name}
-            size="sm"
-            {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
-          />
-          <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
-          <span aria-hidden className="text-fg-3">
-            ·
-          </span>
-          <span className="tabular-nums">
-            {post.target_date !== null
-              ? formatPostTargetDate(post.target_date, approveTimeZone)
-              : 'No date'}
-          </span>
-          {!readOnly ? (
-            <span className="text-fg-3">
-              <IconChevronRight size={16} />
-            </span>
-          ) : null}
-        </button>
-      </div>
+      ) : null}
 
       {comparing && compareFrom !== null && compareTo !== null ? (
         <CompareVersionsView
@@ -1778,268 +1844,364 @@ export function PostDetailPage({
           currentVersionNumber={currentVersionNumber}
           caption={viewingSnapshot?.caption ?? null}
           imageCount={viewingSnapshot?.galleryVersionIds.length ?? 0}
+          galleryVersionIds={viewingSnapshot?.galleryVersionIds ?? []}
+          thumbs={versionThumbs}
           onBack={() => setViewingVersionId(null)}
         />
       ) : (
-        <div
-          className={
-            embedded
-              ? 'px-4 md:px-6 py-6 grid grid-cols-1 gap-6'
-              : 'px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6'
-          }
-        >
-          <div
-            id={pcsTabPanelId('post')}
-            className={cn(embedded ? undefined : 'md:col-span-2', pcsTabPanelClass(true, true))}
-          >
-            <section>
-              <PostGallery
-                items={gallery}
-                cache={cache}
-                deps={deps}
-                presignEnabled={presignEnabled}
-                pinOverlay={(item) => (
-                  <PinOverlay
-                    pins={pinsByAttachment[item.assetAttachmentId] ?? []}
-                    onPinClick={(commentId) => flashTo('feedback', `comment-${commentId}`)}
-                  />
-                )}
-                frame={{
-                  platform: post.platform,
-                  format: post.format,
-                  platformLabel: platformLabel(post.platform),
-                }}
-                pinsFor={(item) => pinsByAttachment[item.assetAttachmentId] ?? []}
-                onPinClick={(commentId) => flashTo('feedback', `comment-${commentId}`)}
-                onRequestPin={handleRequestPin}
-                onPlacePin={handlePlacePin}
-                pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
-                onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
-                onAddSlide={agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined}
-                onMakeFirst={agencySide && !readOnly ? handleMakeFirst : undefined}
-                onMoveLeft={agencySide && !readOnly ? handleMoveLeft : undefined}
-                onMoveRight={agencySide && !readOnly ? handleMoveRight : undefined}
-                onMakeLast={agencySide && !readOnly ? handleMakeLast : undefined}
-                onAddAfter={
-                  agencySide && !readOnly
-                    ? (index: number) => openAdd({ mode: 'insertAfter', index })
-                    : undefined
-                }
-                onRemove={agencySide && !readOnly ? handleRemove : undefined}
-                saving={gallerySaving}
-              />
-              {gallerySaving ? (
-                <p aria-live="polite" className="mt-2.5 text-xs text-fg-3">
-                  Saving…
-                </p>
-              ) : null}
-              {pinError !== null ? (
-                <div
-                  role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-                >
-                  {pinError}
-                </div>
-              ) : null}
-            </section>
-
-            {/* The caption block reads like the post (mock P1): the workspace
-                as the author row, then platform · format · v{n}, Edit at the
-                right, the caption text below. */}
-            <section
-              data-caption-block=""
-              className="rounded-xl border border-border bg-panel-2 p-4"
-            >
-              <div className="flex items-center gap-3">
-                <Avatar name={workspaceName ?? ''} size="md" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-fg">
-                    {workspaceName ?? ''}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-fg-3">
-                    <span>
-                      {platformLabel(post.platform)} · {formatLabel(post.format)}
-                    </span>
-                    {currentVersionNumber !== null ? (
-                      <>
-                        <span aria-hidden>·</span>
-                        <VersionPill
-                          versionNumber={currentVersionNumber}
-                          onClick={() => setHistoryOpen(true)}
-                        />
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-                {hasCaption && !editingCaption ? (
-                  <IconButton
-                    label="Copy caption"
-                    onClick={() => {
-                      void copyText(post.caption ?? '').then((ok) =>
-                        push(ok ? 'Caption copied' : COPY_FAILED),
-                      );
-                    }}
-                  >
-                    <IconCopy size={18} />
-                  </IconButton>
-                ) : null}
-                {agencySide && !editingCaption && !readOnly ? (
-                  <button
-                    type="button"
-                    data-caption-edit=""
-                    onClick={openCaptionEditor}
-                    className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  >
-                    <IconPencil size={15} />
-                    Edit
-                  </button>
-                ) : null}
-              </div>
-              {editingCaption ? (
-                <div className="mt-3 flex flex-col gap-2">
-                  <Textarea
-                    autoFocus
-                    autoGrow
-                    aria-label="Caption"
-                    value={captionDraft}
-                    disabled={captionSaving}
-                    onChange={(event) => setCaptionDraft(event.target.value)}
-                  />
-                  {captionError !== null ? (
-                    <div role="alert" className="text-sm text-bad">
-                      {captionError}
-                    </div>
-                  ) : null}
+        <div className={grid.page}>
+          <div className={cn(grid.head, 'flex flex-col gap-3')}>
+          {agencySide && !readOnly ? (
+            editingTitle ? (
+              <div className="flex flex-col gap-2">
+                <input
+                  autoFocus
+                  aria-label="Post title"
+                  value={titleDraft}
+                  disabled={savingMeta}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onBlur={onTitleBlur}
+                  onKeyDown={onTitleKeyDown}
+                  className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
+                />
+                {isTouchDevice() ? (
+                  // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
+                  // visible. pointerdown is swallowed so the input's blur-save never
+                  // runs ahead of (or instead of) the tapped button.
                   <div className="flex items-center gap-2">
                     <Button
                       variant="primary"
                       size="lg"
-                      disabled={captionSaving}
-                      onClick={() => void saveCaption()}
+                      disabled={savingMeta}
+                      onPointerDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        suppressTitleBlur.current = true;
+                        void saveTitle();
+                      }}
                     >
-                      {captionSaving ? 'Saving' : captionSaveLabel(currentVersionNumber)}
+                      Save
                     </Button>
                     <Button
                       variant="ghost"
                       size="lg"
-                      disabled={captionSaving}
-                      onClick={cancelCaptionEdit}
+                      disabled={savingMeta}
+                      onPointerDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        suppressTitleBlur.current = true;
+                        setEditingTitle(false);
+                      }}
                     >
                       Cancel
                     </Button>
-                    <span className="ml-auto text-xs tabular-nums text-fg-3">
-                      {captionDraft.trim().length}/5000
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+                {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
+                <span className="whitespace-nowrap">
+                  <Highlight text={titleLast} />
+                  <button
+                    type="button"
+                    aria-label="Edit title"
+                    onClick={openTitleEditor}
+                    className="ml-1 inline-flex h-11 w-11 items-center justify-center align-top focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-panel-3 text-fg-3 transition-colors hover:text-fg-2">
+                      <IconPencil size={17} />
                     </span>
-                  </div>
-                  {captionSaveNote(currentVersionNumber) !== null ? (
-                    <p className="text-xs text-fg-3">{captionSaveNote(currentVersionNumber)}</p>
-                  ) : null}
-                </div>
-              ) : hasCaption ? (
-                <>
-                  <div className="mt-3" data-induction={INDUCTION_KEYS.postCaptionText}>
-                    <CaptionView
-                      caption={post.caption ?? ''}
-                      annotations={highlights}
-                      onHighlightClick={(commentId) => flashTo('feedback', `comment-${commentId}`)}
-                      onAnnotate={handleAnnotate}
-                    />
-                  </div>
-                  {captionTipOpen ? (
-                    <div
-                      data-caption-tip=""
-                      className="mt-2 flex items-center gap-2 text-xs text-fg-3"
-                    >
-                      <span>{CAPTION_TIP_TEXT}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCaptionTipOpen(false);
-                          dismissCaptionTip(userId);
-                        }}
-                        className="ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-xs font-medium text-accent transition-colors hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                      >
-                        Got it
-                      </button>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
-              )}
-              {annotateError !== null ? (
-                <div
-                  role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-                >
-                  {annotateError}
-                </div>
-              ) : null}
-            </section>
+                  </button>
+                </span>
+              </h1>
+            )
+          ) : (
+            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+              <Highlight text={post.title} />
+            </h1>
+          )}
 
-            {phoneLayout ? phoneStageNotes : null}
+          {/* Flow B 28: the visible details row. Owner, due date, bucket,
+              brief, platform and format, each only when it has a value;
+              creators tap it (Edit) to open the details sheet. */}
+          <div className="flex flex-wrap items-center gap-x-2">
+            {detailsEditable ? (
+              <button
+                type="button"
+                data-post-details=""
+                onClick={() => setShowDetails(true)}
+                className="-mx-1 flex min-h-[44px] max-w-full flex-wrap items-center gap-x-3.5 gap-y-1.5 rounded-lg px-1 py-1 text-left text-[13px] text-fg-2 transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                {detailsParts}
+                <span className="font-medium text-accent">Edit</span>
+              </button>
+            ) : (
+              <div
+                data-post-details=""
+                className="flex min-h-[44px] max-w-full flex-wrap items-center gap-x-3.5 gap-y-1.5 py-1 text-[13px] text-fg-2"
+              >
+                {detailsParts}
+              </div>
+            )}
+            <PreviewChip platform={post.platform} onClick={() => setPreviewOpen(true)} />
+          </div>
+          {/* DECISION ROW SLOT (flow B 34, 3a): on md and up (and embedded)
+              the approver / creator decision row renders here, under the
+              details and above the open-comments chip and the caption. Below
+              md the buttons live in the sticky PostDecisionBar instead. */}
+          {phoneLayout ? null : stageSection}
+          {openCommentsChip}
           </div>
 
-          <aside
-            id={pcsTabPanelId('feedback')}
-            className={cn(
-              embedded
-                ? undefined
-                : 'md:sticky md:top-14 md:max-h-[calc(100vh-3.5rem)] md:self-start md:overflow-y-auto',
-              pcsTabPanelClass(true, true),
+          <div className={cn(grid.media, 'flex flex-col gap-3')}>
+          <section>
+            {/* Flow B 36: a failed gallery read is never shown as an empty
+                gallery: "Couldn't load the pictures." with Retry instead. */}
+            {galleryLoadError ? (
+              <LoadError
+                title="the pictures"
+                retrying={galleryRetrying}
+                onRetry={() => void retryGallery()}
+              />
+            ) : (
+            <PostGallery
+              items={gallery}
+              cache={cache}
+              deps={deps}
+              presignEnabled={presignEnabled}
+              pinOverlay={(item) => (
+                <PinOverlay
+                  pins={pinsByAttachment[item.assetAttachmentId] ?? []}
+                  onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
+                />
+              )}
+              frame={{
+                platform: post.platform,
+                format: post.format,
+                platformLabel: platformLabel(post.platform),
+              }}
+              pinsFor={(item) => pinsByAttachment[item.assetAttachmentId] ?? []}
+              onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
+              onRequestPin={handleRequestPin}
+              onPlacePin={handlePlacePin}
+              pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
+              onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
+              onAddSlide={agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined}
+              onMakeFirst={agencySide && !readOnly ? handleMakeFirst : undefined}
+              onMoveLeft={agencySide && !readOnly ? handleMoveLeft : undefined}
+              onMoveRight={agencySide && !readOnly ? handleMoveRight : undefined}
+              onMakeLast={agencySide && !readOnly ? handleMakeLast : undefined}
+              onAddAfter={
+                agencySide && !readOnly
+                  ? (index: number) => openAdd({ mode: 'insertAfter', index })
+                  : undefined
+              }
+              onRemove={agencySide && !readOnly ? handleRemove : undefined}
+              saving={gallerySaving}
+              tools={{
+                // #26: creators edit on draft / review / parked / rejected only.
+                canEdit: agencySide && !readOnly && currentStage !== 'approved',
+                versionNumber: currentVersionNumber,
+                error: galleryError,
+                onVersions: () => setHistoryOpen(true),
+                onAdd: () => openAdd({ mode: 'append' }),
+                onReplace: (index) => openAdd({ mode: 'replace', index }),
+                onSaveOrder: commitGallery,
+              }}
+            />
             )}
-          >
-            {phoneLayout ? null : stageSection}
+            {gallerySaving ? (
+              <p aria-live="polite" className="mt-2.5 text-xs text-fg-3">
+                Saving…
+              </p>
+            ) : null}
+            {pinError !== null ? (
+              <div
+                role="alert"
+                className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+              >
+                {pinError}
+              </div>
+            ) : null}
+          </section>
 
-            {/* Comments own their header row ("Comments", the open-count chip,
-                Open / All); the checkpoint strip sits under it, only when
-                there are checkpoints (it renders nothing otherwise). */}
-            <section className="rounded-xl border border-border bg-panel-2 p-4">
-              {workspaceId !== null && postId !== undefined ? (
-                <div data-induction={INDUCTION_KEYS.postCommentComposer}>
-                  <Comments
-                    workspaceId={workspaceId}
-                    entityType="post"
-                    entityId={postId}
-                    annotationsByCommentId={annotationsByCommentId}
-                    onAnnotationChipClick={(commentId) =>
-                      flashTo('post', `caption-mark-${commentId}`)
-                    }
-                    refreshSignal={commentsRefresh}
-                    focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
-                    viewerIsClient={clientRole}
-                    guideReplyCommentId={firstHighlightCommentId(post.caption ?? '', highlights)}
-                    showHeader
-                    belowHeader={
-                      <CheckpointStrip
-                        workspaceId={workspaceId}
-                        postId={postId}
-                        viewerIsClient={clientRole}
-                        refreshSignal={commentsRefresh}
-                        onCounts={handleCheckpointCounts}
-                      />
-                    }
+          </div>
+
+          <div className={cn(grid.body, 'flex flex-col gap-6')}>
+          {/* The caption block reads like the post (mock P1): the workspace
+              as the author row, Edit at the right, the caption text below.
+              Flow B 27: platform and format live once, in the details row;
+              the version button lives in the gallery tools row. */}
+          <section
+            data-caption-block=""
+            className="rounded-xl border border-border bg-panel-2 p-4"
+          >
+            <div className="flex items-center gap-3">
+              <Avatar name={workspaceName ?? ''} size="md" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-fg">
+                  {workspaceName ?? ''}
+                </div>
+              </div>
+              {hasCaption && !editingCaption ? (
+                <IconButton
+                  label="Copy caption"
+                  onClick={() => {
+                    void copyText(post.caption ?? '').then((ok) =>
+                      push(ok ? 'Caption copied' : COPY_FAILED),
+                    );
+                  }}
+                >
+                  <IconCopy size={18} />
+                </IconButton>
+              ) : null}
+              {agencySide && !editingCaption && !readOnly ? (
+                <button
+                  type="button"
+                  data-caption-edit=""
+                  onClick={openCaptionEditor}
+                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <IconPencil size={15} />
+                  Edit
+                </button>
+              ) : null}
+            </div>
+            {editingCaption ? (
+              <div className="mt-3 flex flex-col gap-2">
+                <Textarea
+                  autoFocus
+                  autoGrow
+                  aria-label="Caption"
+                  value={captionDraft}
+                  disabled={captionSaving}
+                  onChange={(event) => setCaptionDraft(event.target.value)}
+                />
+                {captionError !== null ? (
+                  <div role="alert" className="text-sm text-bad">
+                    {captionError}
+                  </div>
+                ) : null}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    disabled={captionSaving}
+                    onClick={() => void saveCaption()}
+                  >
+                    {captionSaving ? 'Saving' : captionSaveLabel(currentVersionNumber)}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    disabled={captionSaving}
+                    onClick={cancelCaptionEdit}
+                  >
+                    Cancel
+                  </Button>
+                  <span className="ml-auto text-xs tabular-nums text-fg-3">
+                    {captionDraft.trim().length}/5000
+                  </span>
+                </div>
+                {captionSaveNote(currentVersionNumber) !== null ? (
+                  <p className="text-xs text-fg-3">{captionSaveNote(currentVersionNumber)}</p>
+                ) : null}
+              </div>
+            ) : hasCaption ? (
+              <>
+                <div className="mt-3" data-induction={INDUCTION_KEYS.postCaptionText}>
+                  <CaptionView
+                    caption={post.caption ?? ''}
+                    annotations={highlights}
+                    onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
+                    onAnnotate={handleAnnotate}
                   />
                 </div>
-              ) : (
-                <div className="px-4 py-8 text-center text-sm text-fg-3">
-                  Select a workspace to view comments.
-                </div>
-              )}
-            </section>
-
-            {workspaceId !== null && postId !== undefined ? (
-              <PostReadyNotice
-                workspaceId={workspaceId}
-                postId={postId}
-                postStage={currentStage}
-                viewerIsClient={clientRole}
-                openCount={checkpointCounts.total - checkpointCounts.resolved}
-                refreshSignal={commentsRefresh}
-                onMutated={bumpCommentsRefresh}
-              />
+                {captionTipOpen ? (
+                  <div
+                    data-caption-tip=""
+                    className="mt-2 flex items-center gap-2 text-xs text-fg-3"
+                  >
+                    <span>{CAPTION_TIP_TEXT}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCaptionTipOpen(false);
+                        dismissCaptionTip(userId);
+                      }}
+                      className="ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-xs font-medium text-accent transition-colors hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      Got it
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
+            )}
+            {annotateError !== null ? (
+              <div
+                role="alert"
+                className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+              >
+                {annotateError}
+              </div>
             ) : null}
-          </aside>
+          </section>
+
+            {phoneLayout ? phoneStageNotes : null}
+
+          {/* Comments own their header row ("Comments", the open-count chip,
+              Open / All); the checkpoint strip sits under it, only when
+              there are checkpoints (it renders nothing otherwise). */}
+          <section
+            id={COMMENTS_SECTION_ID}
+            className="scroll-mt-16 rounded-xl border border-border bg-panel-2 p-4"
+          >
+            {workspaceId !== null && postId !== undefined ? (
+              <div data-induction={INDUCTION_KEYS.postCommentComposer}>
+                <Comments
+                  workspaceId={workspaceId}
+                  entityType="post"
+                  entityId={postId}
+                  annotationsByCommentId={annotationsByCommentId}
+                  onAnnotationChipClick={(commentId) =>
+                    flashTo(`caption-mark-${commentId}`)
+                  }
+                  refreshSignal={commentsRefresh}
+                  focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
+                  viewerIsClient={clientRole}
+                  guideReplyCommentId={firstHighlightCommentId(post.caption ?? '', highlights)}
+                  showHeader
+                  belowHeader={
+                    <CheckpointStrip
+                      workspaceId={workspaceId}
+                      postId={postId}
+                      viewerIsClient={clientRole}
+                      refreshSignal={commentsRefresh}
+                      onCounts={handleCheckpointCounts}
+                    />
+                  }
+                />
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-center text-sm text-fg-3">
+                Select a workspace to view comments.
+              </div>
+            )}
+          </section>
+
+          {workspaceId !== null && postId !== undefined ? (
+            <PostReadyNotice
+              workspaceId={workspaceId}
+              postId={postId}
+              postStage={currentStage}
+              viewerIsClient={clientRole}
+              openCount={openCount}
+              refreshSignal={commentsRefresh}
+              onMutated={bumpCommentsRefresh}
+            />
+          ) : null}
+          </div>
         </div>
       )}
 
@@ -2213,6 +2375,7 @@ export function PostDetailPage({
         versions={versionViews}
         currentVersionNumber={currentVersionNumber}
         resolveAuthor={resolveAuthorName}
+        thumbs={versionThumbs}
         onSelectVersion={(id) => {
           setCompareIds(null);
           setViewingVersionId(id);

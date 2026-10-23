@@ -6,6 +6,7 @@ process.env.TZ = 'America/Los_Angeles';
 
 import { describe, expect, it } from 'vitest';
 import {
+  formatPostDueLabel,
   formatPostTargetDate,
   targetDateFromInput,
   targetDateInputValue,
@@ -45,5 +46,13 @@ describe('the details sheet date input reads and writes the workspace-zone day',
       expect(targetDateInputValue(stored, zone)).toBe('2026-10-20');
       expect(formatPostTargetDate(stored, zone)).toBe('Oct 20, 2026');
     }
+  });
+});
+
+describe('formatPostDueLabel (flow B 28)', () => {
+  it('reads "Due 28 Oct" in the workspace zone, no year', () => {
+    expect(formatPostDueLabel('2026-10-28T06:30:00.000Z', 'Asia/Kolkata')).toBe('Due 28 Oct');
+    expect(formatPostDueLabel(INSTANT, 'Asia/Kolkata')).toBe('Due 20 Oct');
+    expect(formatPostDueLabel(INSTANT, 'America/Los_Angeles')).toBe('Due 19 Oct');
   });
 });

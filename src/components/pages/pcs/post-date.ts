@@ -25,6 +25,22 @@ export function formatPostTargetDate(value: string, timeZone: string): string {
   return `${read('month')} ${read('day')}, ${read('year')}`;
 }
 
+/**
+ * The details row's due label: "Due 28 Oct" for an instant, read in `timeZone`
+ * (day then short month, no year). Unparseable input renders as "Due {value}".
+ */
+export function formatPostDueLabel(value: string, timeZone: string): string {
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return `Due ${value}`;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: safeTimeZone(timeZone),
+    month: 'short',
+    day: 'numeric',
+  }).formatToParts(instant);
+  const read = (type: string): string => parts.find((part) => part.type === type)?.value ?? '';
+  return `Due ${read('day')} ${read('month')}`;
+}
+
 /** The YYYY-MM-DD a native date input shows for a stored date, in the workspace zone. */
 export function targetDateInputValue(value: string | null, timeZone: string): string {
   return civilDayOf(value, timeZone) ?? '';

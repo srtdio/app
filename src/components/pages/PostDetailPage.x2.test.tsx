@@ -37,11 +37,12 @@ function walk(node: ReactNode, out: ReactElement[] = []): ReactElement[] {
 }
 
 describe('1. caption block (mock P1)', () => {
-  it('reads like the post: workspace row, platform · format · vN, a text Edit with pencil', () => {
-    const block = PAGE.slice(PAGE.indexOf('data-caption-block=""'));
+  it('reads like the post: workspace row and a text Edit with pencil (flow B 27: no platform line, no vN)', () => {
+    const start = PAGE.indexOf('data-caption-block=""');
+    const block = PAGE.slice(start, PAGE.indexOf('data-caption-edit=""', start) + 40);
     expect(block).toContain('<Avatar name={workspaceName ?? \'\'} size="md" />');
-    expect(block).toContain('{platformLabel(post.platform)} · {formatLabel(post.format)}');
-    expect(block).toContain('<VersionPill');
+    expect(block).not.toContain('{formatLabel(post.format)}');
+    expect(block).not.toContain('<VersionPill');
     expect(block).toContain('data-caption-edit=""');
     expect(block).toContain('<IconPencil size={15} />\n                    Edit');
     // The uppercase eyebrow and the select hint are gone.
@@ -212,7 +213,10 @@ describe('11. FN7 / FN9 / FN11 copy', () => {
 
 describe('13 / 14. skeleton and load error', () => {
   it('Loading post is a skeleton with a screen-reader label, never bare text', () => {
-    const paint = PAGE.slice(PAGE.indexOf('if (loading) {'), PAGE.indexOf('if (loadError) {'));
+    const paint = PAGE.slice(
+      PAGE.indexOf('if (firstPaintPending) {'),
+      PAGE.indexOf('if (loadError) {'),
+    );
     expect(paint).toContain('aria-busy="true"');
     expect(paint).toContain('<span className="sr-only">Loading post</span>');
     expect(paint).toContain('animate-pulse');
@@ -229,14 +233,12 @@ describe('13 / 14. skeleton and load error', () => {
 });
 
 describe('15. FB8 workspace-zone date', () => {
-  it('the owner / date line and the details sheet read the day in the workspace zone', () => {
-    expect(PAGE).toContain('formatPostTargetDate(post.target_date, approveTimeZone)');
+  it('the details row and the details sheet read the day in the workspace zone', () => {
+    expect(PAGE).toContain('formatPostDueLabel(post.target_date, approveTimeZone)');
     expect(PAGE).not.toContain('toLocaleDateString');
     expect(PAGE).toContain('timeZone={approveTimeZone}');
     expect(DETAILS).toContain('targetDateInputValue(targetDate, timeZone)');
-    expect(DETAILS).toContain(
-      'onChangeTargetDate(targetDateFromInput(event.target.value, timeZone))',
-    );
+    expect(DETAILS).toContain('onChangeTargetDate(targetDateFromInput(dateDraft, timeZone));');
     expect(DETAILS).not.toContain('toISOString().slice(0, 10)');
   });
 });

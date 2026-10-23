@@ -251,10 +251,11 @@ describe('PostDetailPage embedded', () => {
       fileURLToPath(new URL('./PostDetailPage.tsx', import.meta.url)),
       'utf8',
     );
-    // Exactly two writes: the ?comment= strip and the flashTo tab switch.
-    expect(src.match(/setSearchParams\(/g)).toHaveLength(2);
+    // Exactly one write: the ?comment= strip (replace). Pin / highlight taps
+    // never touch the URL (flow B: no tabs, no history entries).
+    expect(src.match(/setSearchParams\(/g)).toHaveLength(1);
+    expect(src).toContain('setSearchParams(next, { replace: true });');
     expect(src).toMatch(/useEffect\(\(\) => \{\n\s+if \(embedded\) return;\n\s+const comment/);
-    expect(src).toContain('if (!embedded && !isDesktop && activeTab !== tab) {');
     // Every hard navigation to the pipeline goes through leave().
     expect(src.match(/navigate\('\/pipeline'\)/g)).toHaveLength(1);
   });
@@ -268,7 +269,9 @@ describe('PostDetailPage embedded', () => {
     expect(src).toContain('onActionsOpenChange?.(next);');
     expect(src).toContain('{...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}');
     // A host open while the sheet cannot mount closes at once (never pops open later).
-    expect(src).toContain('!loading && !notFound && !loadError && detail !== null && !readOnly;');
+    expect(src).toContain(
+      '!firstPaintPending && !notFound && !loadError && detail !== null && !readOnly;',
+    );
     expect(src).toContain(
       'if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);',
     );
