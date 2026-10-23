@@ -52,7 +52,6 @@ import {
 } from '@/components/chat/plan-card';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
-import { formatEntityRef } from '@/lib/entityRef';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/cn';
@@ -114,7 +113,6 @@ export interface StatusDrawerData {
   keys: readonly StatusKey[];
   side: ViewerSide;
   timeZone: string;
-  workspaceKey: string | null;
   /** The workspace's current shared plans, ending soonest first (the bar's set). */
   plans: readonly PlanBundle[];
   posts: { heading: string; rows: readonly OpenPostRow[]; count: number };
@@ -571,7 +569,7 @@ export function StatusDrawerList(
             String(props.posts.count),
             <>
               {shown.map((post) => {
-                const lines = openPostLines(post, props.workspaceKey, false, props.timeZone);
+                const lines = openPostLines(post, false, props.timeZone);
                 const busy = props.busyPostId === post.id;
                 return (
                   <button
@@ -618,13 +616,6 @@ export function StatusDrawerList(
                   <span className={DATE_COL}>{drawerDay(brief.created_at, props.timeZone)}</span>
                   <span className="min-w-0 flex-1">
                     <span className={ROW_TITLE}>{brief.title}</span>
-                    {props.workspaceKey !== null &&
-                    props.workspaceKey !== '' &&
-                    brief.number !== null ? (
-                      <span className={ROW_SUB}>
-                        {formatEntityRef(props.workspaceKey, brief.number)}
-                      </span>
-                    ) : null}
                   </span>
                   <Chevron />
                 </button>
@@ -764,7 +755,6 @@ export function DrawerPostSheet(props: {
   postId: string | null;
   open: boolean;
   side: ViewerSide;
-  workspaceKey: string | null;
   timeZone: string;
   onClose: () => void;
 }): ReactElement | null {
@@ -784,7 +774,6 @@ export function DrawerPostSheet(props: {
       onClose={props.onClose}
       view={view}
       side={props.side}
-      workspaceKey={props.workspaceKey}
       timeZone={props.timeZone}
       cache={sharedCardPresignCache()}
       deps={sheetPresignDeps}

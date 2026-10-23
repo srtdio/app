@@ -14,7 +14,7 @@ import type { Client } from '@srtdio/rpc';
 import { abortable, readMentionProfiles } from '@/lib/chat-reads';
 import { isNotesChannelId, notesChannelId } from '@/lib/chat/notes';
 import { resolveBriefIdByNumber, resolvePostIdByNumber } from '@/lib/entity-resolve';
-import { entityUrlPath, formatEntityRef, parseEntityRef } from '@/lib/entityRef';
+import { entityUrlPath, parseEntityRef } from '@/lib/entityRef';
 import { SIGNOUT_EVENT } from '@/lib/events';
 import { chatMessageHref, chatTaskHref, planHref } from '@/lib/inbox/bell-types';
 
@@ -358,11 +358,10 @@ export async function loadRecentEntries(params: {
     }
     return `/${kind === 'post' ? 'posts' : 'briefs'}/${str(row, 'id')}`;
   };
-  const entityTitle = (row: Row): string => {
+  // The title, never a KEY-N code; an untitled row reads "Untitled post/brief".
+  const entityTitle = (kind: 'post' | 'brief', row: Row): string => {
     const title = str(row, 'title').trim();
-    const n = num(row, 'number');
-    if (title !== '' || params.workspaceKey === null || n === null) return title;
-    return formatEntityRef(params.workspaceKey, n);
+    return title !== '' ? title : `Untitled ${kind}`;
   };
 
   const reads: Promise<void>[] = [];
@@ -381,7 +380,7 @@ export async function loadRecentEntries(params: {
       signal,
     );
     for (const r of rows)
-      put('post', str(r, 'id'), entityTitle(r), { path: entityPath('post', r) });
+      put('post', str(r, 'id'), entityTitle('post', r), { path: entityPath('post', r) });
   });
   when('brief', async (ids) => {
     const rows = await readRows(
@@ -394,7 +393,7 @@ export async function loadRecentEntries(params: {
       signal,
     );
     for (const r of rows) {
-      put('brief', str(r, 'id'), entityTitle(r), { path: entityPath('brief', r) });
+      put('brief', str(r, 'id'), entityTitle('brief', r), { path: entityPath('brief', r) });
     }
   });
   when('plan', async (ids) => {

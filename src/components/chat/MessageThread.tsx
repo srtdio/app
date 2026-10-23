@@ -155,7 +155,7 @@ import {
   type LightboxImage,
 } from '@/components/ui/ImageLightbox';
 import { SharedPostCards } from '@/components/chat/PostCard';
-import { ThreadViewFrame, threadViewTitle } from '@/components/chat/ThreadView';
+import { ThreadViewFrame } from '@/components/chat/ThreadView';
 import {
   RailElbow,
   RailThrough,
@@ -166,7 +166,6 @@ import {
 } from '@/components/chat/ThreadRail';
 import {
   PostRefChip,
-  postRefKey,
   useChipBatch,
   type PostRefPost,
 } from '@/components/chat/PostRefChip';
@@ -840,7 +839,7 @@ export function threadLightbox(
 }
 
 /**
- * A bubble's KEY chip when it replies to a card message outside that card's
+ * A bubble's post chip when it replies to a card message outside that card's
  * thread (a card that is itself a reply heads no thread) and the post is in
  * the thread's batch. A reply without a chip keeps its quote: a plain parent,
  * a post the viewer cannot see, or (a live row only; page rows wait for their
@@ -849,7 +848,6 @@ export function threadLightbox(
 export type BubbleChip = {
   kind: 'chip';
   post: PostRefPost;
-  workspaceKey: string | null;
   onTap: () => void;
 };
 
@@ -860,8 +858,6 @@ export interface BubblePostRefs {
   onTalkAbout?: ((postId: string, messageId: string) => void) | undefined;
   /** Inside the gesture that ends a Talk about: focus the composer (decision 128). */
   onTalkAboutFocus?: (() => void) | undefined;
-  /** Tap on a root card's KEY: open that card's thread. */
-  onOpenThread?: ((messageId: string) => void) | undefined;
 }
 
 /**
@@ -884,7 +880,6 @@ export function bubbleChip(
   target: { postId: string; cardMessageId: string } | null,
   post: PostRefPost | null | undefined,
   context: {
-    workspaceKey: string | null;
     onOpenCard: (cardMessageId: string) => void;
   },
 ): BubbleChip | undefined {
@@ -892,7 +887,6 @@ export function bubbleChip(
   return {
     kind: 'chip',
     post,
-    workspaceKey: context.workspaceKey,
     onTap: () => context.onOpenCard(target.cardMessageId),
   };
 }
@@ -972,14 +966,11 @@ export function cardRefsFor(
   messageId: string;
   onTalkAbout: BubblePostRefs['onTalkAbout'];
   onTalkAboutFocus: BubblePostRefs['onTalkAboutFocus'];
-  onOpenThread: (() => void) | undefined;
 } {
-  const open = postRefs?.onOpenThread;
   return {
     messageId,
     onTalkAbout: selection === undefined ? postRefs?.onTalkAbout : undefined,
     onTalkAboutFocus: selection === undefined ? postRefs?.onTalkAboutFocus : undefined,
-    onOpenThread: open !== undefined ? () => open(messageId) : undefined,
   };
 }
 
@@ -2092,7 +2083,7 @@ export function MessageBubble(props: {
   selectingText?: boolean;
   /** Tap on an album tile: open the thread's image viewer at that index. */
   onOpenImage?: (index: number) => void;
-  /** The KEY chip and the cards' talk-about / thread hooks. */
+  /** The post chip and the cards' talk-about / thread hooks. */
   postRefs?: BubblePostRefs | undefined;
   /** A member of a card's thread: the rail stands in for its quote and chip (selection too). */
   threadMember?: boolean | undefined;
@@ -2370,7 +2361,6 @@ export function MessageBubble(props: {
               {threadMember ? null : chip?.kind === 'chip' && !parentDeleted ? (
                 <PostRefChip
                   post={chip.post}
-                  workspaceKey={chip.workspaceKey}
                   onTap={chip.onTap}
                   className={album ? 'mx-[9px]' : '-mb-1.5 -mt-2'}
                 />
@@ -3289,7 +3279,6 @@ interface ThreadBodyThreads {
   countOf: (rootId: string) => number | null;
   /** The post a root's chip names (null: not visible). */
   postOf: (rootId: string) => PostRefPost | null;
-  workspaceKey: string | null;
   onOpen: (rootId: string) => void;
   /** The thread view: its root card (indented 29px, with the separator under it). */
   viewRootId?: string | undefined;
@@ -3368,13 +3357,11 @@ function ThreadBody(
     /** quiet: a search jump whose message is gone opens the chat with no toast. */
     jumpRequest: { id: string; seq: number; quiet?: boolean } | null;
     onEnsureLoaded?: (messageId: string) => Promise<FindOlderOutcome>;
-    /** A message's KEY chip (undefined keeps its quote). */
+    /** A message's post chip (undefined keeps its quote). */
     chipFor?: (message: ThreadMessage) => BubbleChip | undefined;
     onTalkAbout?: (postId: string, messageId: string) => void;
     /** Inside the gesture that ends a Talk about: focus the composer. */
     onTalkAboutFocus?: () => void;
-    /** Tap on a root card's KEY: open its thread. */
-    onOpenThread?: (messageId: string) => void;
     /** The thread view: a "Load older" row at the top instead of scroll-to-top paging. */
     loadOlderRow?: boolean;
     /** Which list's older-page outcome to read (older-page-status.ts); absent: never failed. */
@@ -4094,7 +4081,6 @@ function ThreadBody(
                   {threads !== undefined && chipRoot !== null ? (
                     <ThreadChipRow
                       post={threads.postOf(chipRoot)}
-                      workspaceKey={threads.workspaceKey}
                       count={threads.countOf(chipRoot)}
                       coarse={coarsePointer}
                       onOpen={() => openThread(chipRoot)}
@@ -4160,7 +4146,6 @@ function ThreadBody(
                         chip: props.chipFor?.(row.message),
                         onTalkAbout: props.onTalkAbout,
                         onTalkAboutFocus: props.onTalkAboutFocus,
-                        onOpenThread: rootCard ? props.onOpenThread : undefined,
                       }}
                       threadMember={memberOf?.(row.message) != null}
                       rail={rowRail}
@@ -4777,7 +4762,7 @@ export function withoutDiscarded(
 }
 
 /**
- * Whether a menu Delete goes behind a 7s Undo (FT39) instead of the confirm:
+ * Whether a menu Delete goes behind a 4s Undo (FT39) instead of the confirm:
  * a single message with no files (text, links, shared cards). A message with
  * files keeps the confirm. Pure.
  */
@@ -4933,7 +4918,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const gateRef = useRef<PageGate | null>(null);
   // Bumped when a page row's hydration wait runs out, so it goes on without it.
   const [hydrationTick, setHydrationTick] = useState(0);
-  const { workspaceKey, workspaceId } = useWorkspace();
+  const { workspaceId } = useWorkspace();
   const toast = useToast();
   const marks = props.marks ?? NO_MARKS;
   // The chat's task list (never in Personal notes; only where the chat page
@@ -5198,7 +5183,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     threadView.update((rows) => markMessagesDeleted(rows, ids));
     if (result.toast !== undefined) toast.show({ title: result.toast });
   };
-  // FT39: a text-only message deletes behind a 7s Undo. It reads as a
+  // FT39: a text-only message deletes behind a 4s Undo. It reads as a
   // tombstone here at once; the delete for everyone runs through the same
   // path as the confirm once the window ends (or the chat is left). Undo, or a
   // refused delete, brings the row back.
@@ -5752,12 +5737,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const chipFor = (message: ThreadMessage): BubbleChip | undefined => {
     const target = chipTargetFor(message, gatedIndex);
     return bubbleChip(target, target !== null ? postRef(target.postId) : null, {
-      workspaceKey,
       onOpenCard: jumpTo,
     });
   };
   /**
-   * Open a card's thread (its KEY, "N replies", a chip): full screen once the
+   * Open a card's thread ("N replies", a chip): full screen once the
    * root and the first page are in; a failed read toasts and nothing moves.
    * Opens at 0 replies too (the root and the composer).
    */
@@ -5814,7 +5798,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     memberOf,
     countOf,
     postOf: threadPostOf,
-    workspaceKey,
     onOpen: openThread,
   };
   // The open thread: its root, then its replies oldest first (the chat's loaded
@@ -5823,10 +5806,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const viewPostId =
     viewRoot !== undefined && isRootCard(viewRoot) ? viewRoot.sharedPostIds[0] : undefined;
   const viewPost = viewPostId !== undefined ? (postRef(viewPostId) ?? null) : null;
-  const viewTitle = threadViewTitle(
-    viewPost !== null ? postRefKey(workspaceKey, viewPost.number) : null,
-    viewPost?.title ?? 'Shared post',
-  );
+  const viewTitle = viewPost?.title ?? 'Shared post';
   // The view's count: the chat's own when it has the root loaded (or the
   // counts read's), else the view's rows once it has read them all.
   const viewCount = ((): number | null => {
@@ -5848,7 +5828,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               : null,
           countOf: () => viewCount,
           postOf: threadPostOf,
-          workspaceKey,
           onOpen: openThread,
           viewRootId: view.rootId,
         }
@@ -6215,7 +6194,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                 : [],
             side: viewerSide.side,
             timeZone: props.timeZone,
-            workspaceKey,
             plans: statusOpenPlans,
             posts: {
               heading: openPostsHeading(viewerSide.side),
@@ -6256,7 +6234,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           chipFor={chipFor}
           onTalkAbout={talkAbout}
           onTalkAboutFocus={() => focusComposerInput(composerInputRef.current)}
-          onOpenThread={openThread}
           threads={mainThreads}
           loading={bodyLoading}
           {...(channelId !== undefined ? { olderKey: channelOlderKey(channelId) } : {})}
@@ -6380,7 +6357,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           openPosts={{
             heading: openPostsHeading(viewerSide.side),
             posts: openPosts.posts,
-            workspaceKey,
             sharedIds: sharedInChat,
             onJump: (postId) => {
               setMarksOpen(false);

@@ -13,8 +13,8 @@
 // Tapping a card opens its PostSheet (media, facts, the viewer's action) instead
 // of navigating; the sheet portals above the thread. Holding a card (450 ms,
 // 10 px) brings its post into the conversation (onTalkAbout) and the click that
-// ends the hold is swallowed, so the sheet does not open; the KEY on a card
-// opens the card's thread (onOpenThread).
+// ends the hold is swallowed, so the sheet does not open. No card shows a
+// KEY-N code.
 
 import {
   createContext,
@@ -66,7 +66,6 @@ import {
   useChatLayout,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { formatEntityRef } from '@/lib/entityRef';
 import { env } from '@/lib/env';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { supabase } from '@/lib/supabase';
@@ -478,8 +477,6 @@ export interface CardRefActions {
    * the sheet's tap): focus the composer there, where iOS opens the keyboard.
    */
   onTalkAboutFocus?: (() => void) | undefined;
-  /** Tap on a card's KEY: open the card message's thread. */
-  onOpenThread?: (() => void) | undefined;
 }
 
 export function SharedPostCards({
@@ -487,16 +484,14 @@ export function SharedPostCards({
   messageId,
   onTalkAbout,
   onTalkAboutFocus,
-  onOpenThread,
 }: {
   postIds: string[];
   /** The card message's id, handed to onTalkAbout. */
   messageId?: string;
   onTalkAbout?: ((postId: string, messageId: string) => void) | undefined;
   onTalkAboutFocus?: (() => void) | undefined;
-  onOpenThread?: (() => void) | undefined;
 }): ReactElement | null {
-  const { workspaceId, workspaceKey, workspaces, workspaceName } = useWorkspace();
+  const { workspaceId, workspaces, workspaceName } = useWorkspace();
   const { side, ready, known } = useSettledViewerSide(workspaceId);
   const { views, loading, failed, cache } = useSharedPosts(postIds);
   const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
@@ -518,7 +513,6 @@ export function SharedPostCards({
       onRetry={(ids) => cache?.retry({ postIds: ids })}
       side={side}
       sideKnown={known}
-      workspaceKey={workspaceKey}
       timeZone={timeZone}
       brand={workspaceName ?? null}
       onTalkAbout={
@@ -527,7 +521,6 @@ export function SharedPostCards({
           : undefined
       }
       onTalkAboutFocus={onTalkAboutFocus}
-      onOpenThread={onOpenThread}
     />
   );
 }
@@ -556,7 +549,6 @@ export interface CardContext {
   side: ViewerSide;
   /** The side read has answered; false after its 5s cap: no footer is painted. */
   sideKnown?: boolean;
-  workspaceKey: string | null;
   timeZone: string;
   /** The workspace's brand name for "on behalf of <Brand>"; null falls back. */
   brand?: string | null;
@@ -576,7 +568,6 @@ export function SharedPostCardList(
     views,
     onTalkAbout,
     onTalkAboutFocus,
-    onOpenThread,
     failed = [],
     onRetry,
     ...context
@@ -599,7 +590,6 @@ export function SharedPostCardList(
             {...context}
             {...(onTalkAbout !== undefined ? { onTalkAbout: () => onTalkAbout(view.postId) } : {})}
             {...(onTalkAboutFocus !== undefined ? { onTalkAboutFocus } : {})}
-            {...(onOpenThread !== undefined ? { onOpenThread } : {})}
           />
         ),
       )}
@@ -622,13 +612,6 @@ export const CARD_SKELETON = 'h-[118px] w-[240px] rounded-lg border border-borde
 /** A small pill laid over the cover image. */
 const MEDIA_PILL =
   'inline-flex h-5 items-center gap-1 rounded-md bg-panel px-1.5 text-[11px] font-medium text-fg';
-
-/** The KEY-N reference, or null before the workspace key resolves. */
-function entityRef(workspaceKey: string | null, number: number): string | null {
-  return workspaceKey !== null && workspaceKey !== ''
-    ? formatEntityRef(workspaceKey, number)
-    : null;
-}
 
 /**
  * The card's tap and Enter key: both open its sheet, neither navigates (the sheet
@@ -721,67 +704,14 @@ export function talkAboutThenFocus(
   };
 }
 
-/**
- * A tap on a card's KEY. The KEY sits inside the card, so a hold that starts on
- * it is the card's hold: the release click reads (and so clears) the card's
- * suppression flag and does nothing else. A plain tap opens the card's thread.
- * Never reaches the card's own click (which would open the sheet). Pure.
- */
-export function keyTapHandler(
-  onOpenThread: () => void,
-  consumeHold: () => boolean,
-): (e: { stopPropagation: () => void }) => void {
-  return (e) => {
-    e.stopPropagation();
-    if (consumeHold()) return;
-    onOpenThread();
-  };
-}
-
-/** The small KEY pill on a card; a button (44px hit area) when it opens the thread. */
-function CardRef(props: {
-  label: string;
-  className: string;
-  /** The inline KEY (no cover) carries data-card-ref; the cover pill data-card-pill-ref. */
-  inline: boolean;
-  onTap?: ((e: { stopPropagation: () => void }) => void) | undefined;
-}): ReactElement {
-  const onTap = props.onTap;
-  const marker = props.inline ? { 'data-card-ref': '' } : { 'data-card-pill-ref': '' };
-  if (onTap === undefined) {
-    return (
-      <span {...marker} className={props.className}>
-        {props.label}
-      </span>
-    );
-  }
-  return (
-    <button
-      type="button"
-      {...marker}
-      aria-label={`Open the thread about ${props.label}`}
-      onClick={onTap}
-      onKeyDown={(e) => e.stopPropagation()}
-      className={cn(
-        props.className,
-        "before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']",
-      )}
-    >
-      {props.label}
-    </button>
-  );
-}
-
 export function PostCardItem(
   props: { view: Extract<SharedPostView, { kind: 'post' }> } & CardContext & {
       onTalkAbout?: () => void;
       onTalkAboutFocus?: () => void;
-      onOpenThread?: () => void;
     },
 ): ReactElement {
-  const { view, side, workspaceKey, timeZone } = props;
+  const { view, side, timeZone } = props;
   const { post } = view;
-  const ref = entityRef(workspaceKey, post.number);
   const approver = approverLabel(view.approverName, view.approverRole, props.brand ?? null);
   const footer = approvedWithoutName(
     cardFooter(post, approver, side, timeZone),
@@ -815,11 +745,6 @@ export function PostCardItem(
     setSheetMounted(true);
     setSheetOpen(true);
   }, hold.consumeClickSuppression);
-  const onOpenThread = props.onOpenThread;
-  const keyTap =
-    onOpenThread !== undefined
-      ? keyTapHandler(onOpenThread, hold.consumeClickSuppression)
-      : undefined;
   return (
     <>
       <div
@@ -870,7 +795,7 @@ export function PostCardItem(
         className={cn(POST_CARD, 'cursor-pointer transition-colors hover:bg-panel-2')}
       >
         {media !== null && frame !== null ? (
-          <CardMedia post={post} frame={frame} media={media} entityRef={ref} onKeyTap={keyTap} />
+          <CardMedia post={post} frame={frame} media={media} />
         ) : null}
         <div className="flex flex-col gap-1.5 px-3 py-2.5">
           <span
@@ -878,14 +803,6 @@ export function PostCardItem(
             className={cn('line-clamp-2 text-fg', sized(POST_CARD_TITLE_TYPE, layout))}
             title={post.title}
           >
-            {media === null && ref !== null ? (
-              <CardRef
-                label={ref}
-                className="relative mr-1.5 font-mono text-fg-3"
-                inline
-                onTap={keyTap}
-              />
-            ) : null}
             {post.title}
           </span>
           <span className={cn('flex items-center gap-1.5 text-fg-3', POST_CARD_META_TYPE)}>
@@ -921,7 +838,6 @@ export function PostCardItem(
             onClose={() => setSheetOpen(false)}
             view={view}
             side={side}
-            workspaceKey={workspaceKey}
             timeZone={timeZone}
             cache={sharedCardPresignCache()}
             deps={appPresignDeps}
@@ -983,8 +899,6 @@ interface CardMediaProps {
   post: PostCardRow;
   frame: Frame;
   media: CardFirstMedia;
-  entityRef: string | null;
-  onKeyTap?: ((e: { stopPropagation: () => void }) => void) | undefined;
 }
 
 /** The first photo or video in the post's platform frame. */
@@ -1118,7 +1032,7 @@ function CardMediaBox(
     children: ReactNode;
   },
 ): ReactElement {
-  const { post, frame, entityRef: ref } = props;
+  const { post, frame } = props;
   const pills = mediaPills(post);
   return (
     <div
@@ -1134,14 +1048,6 @@ function CardMediaBox(
       >
         {props.children}
       </PlatformFrame>
-      {ref !== null ? (
-        <CardRef
-          label={ref}
-          className={cn(MEDIA_PILL, 'absolute left-2 top-2 font-mono')}
-          inline={false}
-          onTap={props.onKeyTap}
-        />
-      ) : null}
       <span className={cn(MEDIA_PILL, 'absolute right-2 top-2')}>{formatLabel(post.format)}</span>
       {pills.slides !== null || pills.video !== null ? (
         <span className="absolute bottom-2 right-2 flex gap-1">

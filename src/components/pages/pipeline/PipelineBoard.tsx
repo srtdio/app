@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { DragEvent, ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
-import { ApproveConfirm, approveRef, approveTargetDate } from '@/components/ui/ApproveConfirm';
+import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { Sheet } from '@/components/ui/Sheet';
 import { sheetTitle } from '@/components/chat/post-sheet';
 import { PostCard } from '@/components/pages/PostCard';
@@ -120,7 +120,7 @@ function onColumnDrop(
 /**
  * The board with its approve gate: a legal drop into Approved opens the shared
  * approve confirm and only Confirm calls the page's move handler; every other
- * legal drop moves at once, as before. The confirm's KEY-N and target date come
+ * legal drop moves at once, as before. The confirm's post title and target date come
  * from the dropped post's row already in `grouped` and the workspace context;
  * no read of its own, and slide count (not loaded here) is left out.
  */
@@ -142,7 +142,6 @@ export function PipelineBoard(props: PipelineBoardProps): ReactElement {
         post={pending ?? shown}
         gate={gate}
         gateState={state}
-        workspaceKey={props.workspaceKey ?? null}
         timeZone={timeZone}
         onBehalf={isAgencySide(props.role)}
         brand={workspaceName}
@@ -176,7 +175,6 @@ export function BoardApproveConfirm(props: {
   post: PipelinePost | null;
   gate: ApproveGate;
   gateState: GateState;
-  workspaceKey: string | null;
   timeZone: string;
   /** Agency side: the confirm adds the on-behalf-of-client line. */
   onBehalf: boolean;
@@ -185,15 +183,14 @@ export function BoardApproveConfirm(props: {
 }): ReactElement | null {
   const { post, gate, gateState } = props;
   if (post === null) return null;
-  const refLabel = approveRef(props.workspaceKey, post.number);
   return (
     <Sheet
       open={gateState.pendingId !== null && !gateState.sent}
       onClose={gate.cancel}
-      title={sheetTitle(refLabel, post.format)}
+      title={sheetTitle(post.format)}
       footer={
         <ApproveConfirm
-          refLabel={refLabel}
+          postTitle={post.title}
           mediaCount={null}
           targetDate={approveTargetDate(post.target_date, props.timeZone)}
           busy={gateState.sent}

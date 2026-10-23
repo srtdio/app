@@ -3,7 +3,7 @@ import { appPresignCache } from '@/lib/shared-presign';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { ApproveConfirm, approveRef, approveTargetDate } from '@/components/ui/ApproveConfirm';
+import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { Sheet } from '@/components/ui/Sheet';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
@@ -253,7 +253,6 @@ function markApproveConfirm(el: HTMLParagraphElement | null): void {
 export function PcsApproveConfirm(props: {
   gate: ApproveGate;
   gateState: GateState;
-  refLabel: string;
   format: string;
   title: string;
   /** Slides in the loaded gallery; null leaves the clause out. */
@@ -271,10 +270,10 @@ export function PcsApproveConfirm(props: {
     <Sheet
       open={gateState.pendingId !== null}
       onClose={gate.cancel}
-      title={sheetTitle(props.refLabel, props.format)}
+      title={sheetTitle(props.format)}
       footer={
         <ApproveConfirm
-          refLabel={props.refLabel}
+          postTitle={props.title}
           mediaCount={props.mediaCount}
           targetDate={props.targetDate}
           error={props.error}
@@ -2157,7 +2156,6 @@ export function PostDetailPage({
       <PcsApproveConfirm
         gate={approveGate}
         gateState={approveState}
-        refLabel={approveRef(workspaceKey, post.number)}
         format={post.format}
         title={post.title}
         mediaCount={gallery.length > 0 ? gallery.length : null}
