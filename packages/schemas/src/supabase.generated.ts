@@ -9742,6 +9742,10 @@ export type Database = {
         Args: { p_member_id: string; p_trace_id: string }
         Returns: string
       }
+      member_role_set: {
+        Args: { p_member_id: string; p_role: string; p_trace_id: string }
+        Returns: string
+      }
       notes_channel_ensure: {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: string

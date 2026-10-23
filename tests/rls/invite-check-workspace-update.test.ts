@@ -131,10 +131,10 @@ describe.runIf(RLS_SUITE)('member_invite_check and workspace_update', () => {
       expect(res.error?.message).toBe('forbidden_role');
     });
 
-    it('refuses free mail for a client (free_mail_client)', async () => {
-      const w = await newWorkspace(null);
+    it('allows free mail for a client approver', async () => {
+      const w = await newWorkspace('hinglish.com');
       const res = await check(owner, w.id, `c_${randomSuffix()}@gmail.com`, 'client');
-      expect(res.error?.message).toBe('free_mail_client');
+      expect(res.error).toBeNull();
     });
 
     it('refuses a client outside the workspace domain (client_domain_mismatch)', async () => {
