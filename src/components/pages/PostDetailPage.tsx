@@ -1205,7 +1205,7 @@ export function PostDetailPage({
     else navigate('/pipeline');
   }
 
-  // Soft-delete the whole post (FT14): a 7s Undo window ("Post deleted"), then
+  // Soft-delete the whole post (FT14): a 4s Undo window ("Post deleted"), then
   // the proc (which re-checks post.delete). The page leaves as the commit
   // starts, so the write lands behind the navigation; a refusal is reported
   // through the app-wide toast, which outlives the page, with Open to return.
