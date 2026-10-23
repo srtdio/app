@@ -187,32 +187,59 @@ export function emailDomain(email: string): string {
         .toLowerCase();
 }
 
-/**
- * The client's domain label for copy: workspaces.client_domain when set, else
- * the brand word of the first approver's known email, else ''.
- */
-export function clientDomainLabel(
-  clientDomain: string | null,
-  approvers: readonly MemberEntry[],
-): string {
-  if (clientDomain !== null && clientDomain !== '') return clientDomain;
-  const email = approvers
-    .map((m) => m.email)
-    .find((e): e is string => e !== null && emailDomain(e) !== '');
-  return email !== undefined ? domainBrandWord(emailDomain(email)) : '';
+/** The client's domain label for copy: workspaces.client_domain, else ''. */
+export function clientDomainLabel(clientDomain: string | null): string {
+  return clientDomain ?? '';
 }
-
-/** Inline copy when an approver invite uses a free mail address. */
-export const FREE_MAIL_APPROVER_MESSAGE =
-  'Approvers need a work email, like name@theirbrand.com. Free emails like Gmail or Yahoo are not allowed.';
 
 /** Inline copy when the invitee has an account whose email was never confirmed. */
 export const UNCONFIRMED_ACCOUNT_MESSAGE =
   'This email has an account that was never confirmed. Ask them to open the confirmation email from Sorted, then send the invite again.';
 
-/** Toast copy when an approver invite is outside the workspace's client domain. */
+/** Inline copy when an approver address is outside the workspace's client domain. */
 export function clientDomainMismatchMessage(domainLabel: string): string {
   return domainLabel === ''
-    ? 'One brand per workspace. Every approver needs the same company address.'
-    : `One brand per workspace. Every approver needs a ${domainLabel} address.`;
+    ? "Couldn't send the invite. Try again."
+    : `Use a ${domainLabel} email, or a personal one like Gmail.`;
+}
+
+/** invite_delivery_list statuses; only 'bounced' changes what the list shows. */
+export type InviteDeliveryStatus =
+  | 'queued'
+  | 'sent'
+  | 'delivered'
+  | 'bounced'
+  | 'complained'
+  | 'failed';
+
+const DELIVERY_STATUSES: readonly string[] = [
+  'queued',
+  'sent',
+  'delivered',
+  'bounced',
+  'complained',
+  'failed',
+];
+
+function isDeliveryRow(
+  value: unknown,
+): value is { member_id: string; status: InviteDeliveryStatus } {
+  if (typeof value !== 'object' || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.member_id === 'string' &&
+    typeof row.status === 'string' &&
+    DELIVERY_STATUSES.includes(row.status)
+  );
+}
+
+/** member_id -> latest delivery status, from one invite_delivery_list read (rows as returned). */
+export function deliveryByMember(data: unknown): Map<string, InviteDeliveryStatus> {
+  const rows = Array.isArray(data) ? data.filter(isDeliveryRow) : [];
+  return new Map(rows.map((row) => [row.member_id, row.status]));
+}
+
+/** The pending row's "Not delivered" pill shows only for a bounced invite email. */
+export function isUndelivered(status: InviteDeliveryStatus | undefined): boolean {
+  return status === 'bounced';
 }
