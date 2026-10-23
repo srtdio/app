@@ -3709,29 +3709,32 @@ function ThreadBody(
    * (the shared glow: a fade after, none under reduced motion); false when it is
    * not rendered.
    */
-  const reveal = useCallback((id: string, highlightMs: number): boolean => {
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`);
-    if (el == null) return false;
-    // A jump lets go of the bottom.
-    stickRef.current = false;
-    sourceRef.current = 'program';
-    glowCleanupRef.current?.();
-    glowCleanupRef.current = highlightMs > 0 ? glowTarget(el) : null;
-    const list = listRef.current;
-    if (list !== null) {
-      const offset =
-        el.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
-      jumpHoldRef.current = { id, offset, until: Date.now() + JUMP_HOLD_MS };
-      // Once the smooth scroll should have landed, a row it left outside the
-      // list (under the header or the composer) is centred in one frame.
-      if (jumpSettleTimerRef.current !== null) window.clearTimeout(jumpSettleTimerRef.current);
-      jumpSettleTimerRef.current = window.setTimeout(() => {
-        jumpSettleTimerRef.current = null;
-        checkJumpHold(true);
-      }, JUMP_SETTLE_MS);
-    }
-    return true;
-  }, [checkJumpHold]);
+  const reveal = useCallback(
+    (id: string, highlightMs: number): boolean => {
+      const el = listRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`);
+      if (el == null) return false;
+      // A jump lets go of the bottom.
+      stickRef.current = false;
+      sourceRef.current = 'program';
+      glowCleanupRef.current?.();
+      glowCleanupRef.current = highlightMs > 0 ? glowTarget(el) : null;
+      const list = listRef.current;
+      if (list !== null) {
+        const offset =
+          el.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+        jumpHoldRef.current = { id, offset, until: Date.now() + JUMP_HOLD_MS };
+        // Once the smooth scroll should have landed, a row it left outside the
+        // list (under the header or the composer) is centred in one frame.
+        if (jumpSettleTimerRef.current !== null) window.clearTimeout(jumpSettleTimerRef.current);
+        jumpSettleTimerRef.current = window.setTimeout(() => {
+          jumpSettleTimerRef.current = null;
+          checkJumpHold(true);
+        }, JUMP_SETTLE_MS);
+      }
+      return true;
+    },
+    [checkJumpHold],
+  );
   // Jump-to: reveal at once when loaded, else page older history (capped) and
   // reveal once the page carrying it renders.
   useEffect(() => {
