@@ -93,6 +93,13 @@ jobs:
       - uses: actions/checkout@v4
         if: env.RUN == 'true'
 
+      - name: Start Supabase images load
+        id: supabase-images-start
+        if: env.RUN == 'true'
+        uses: ./.github/actions/supabase-images
+        with:
+          mode: start
+
       - uses: pnpm/action-setup@v4
         if: env.RUN == 'true'
 
@@ -110,12 +117,12 @@ jobs:
         if: env.RUN == 'true'
         run: pnpm exec tsc -p tests/workspace/tsconfig.json --noEmit
 
-      - name: Restore Supabase images
+      - name: Wait for Supabase images
         id: supabase-images
         if: env.RUN == 'true'
         uses: ./.github/actions/supabase-images
         with:
-          mode: restore
+          mode: wait
 
       - name: Run workspace invite suite
         if: env.RUN == 'true'
