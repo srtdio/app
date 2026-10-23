@@ -4,7 +4,12 @@
 // storage just means no cache), entries are capped, and both are wiped on
 // sign-out so the next person on this device starts clean.
 
-import type { PresignedUrl, ThumbnailUrlStore } from '@/lib/asset-presign';
+import type {
+  LinkKeyStore,
+  PresignedUrl,
+  StoredLinkKey,
+  ThumbnailUrlStore,
+} from '@/lib/asset-presign';
 import { SIGNOUT_EVENT } from '@/lib/events';
 
 /** Most entries a cache keeps; the newest win. */
@@ -12,6 +17,7 @@ export const LOCAL_CACHE_MAX_ENTRIES = 600;
 
 export const THUMB_URLS_KEY = 'sorted:thumb-urls:v1';
 export const POST_COVERS_KEY = 'sorted:post-covers:v1';
+export const LINK_KEY_KEY = 'sorted:file-link-key:v1';
 
 function storage(): Storage | null {
   try {
@@ -74,6 +80,7 @@ export function clearLocalCaches(): void {
   try {
     store.removeItem(THUMB_URLS_KEY);
     store.removeItem(POST_COVERS_KEY);
+    store.removeItem(LINK_KEY_KEY);
   } catch {
     // Nothing to clear when storage is blocked.
   }
@@ -106,5 +113,44 @@ export const localThumbnailUrlStore: ThumbnailUrlStore = {
       THUMB_URLS_KEY,
       entries.filter(([, url]) => url.expiresAt > now),
     );
+  },
+};
+
+/** Parse a stored link key; anything malformed is no key. Pure. */
+export function parseLinkKey(raw: string | null): StoredLinkKey | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const v = parsed as { key?: unknown; expiresAt?: unknown };
+    return typeof v.key === 'string' && v.key !== '' && typeof v.expiresAt === 'number'
+      ? { key: v.key, expiresAt: v.expiresAt }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The day's file link key, kept on this device (wiped on sign-out). */
+export const localLinkKeyStore: LinkKeyStore = {
+  load: () => {
+    clearLocalCachesOnSignOut();
+    const store = storage();
+    if (store === null) return null;
+    try {
+      return parseLinkKey(store.getItem(LINK_KEY_KEY));
+    } catch {
+      return null;
+    }
+  },
+  save: (key) => {
+    const store = storage();
+    if (store === null) return;
+    try {
+      if (key === null) store.removeItem(LINK_KEY_KEY);
+      else store.setItem(LINK_KEY_KEY, JSON.stringify(key));
+    } catch {
+      // Full or blocked storage: the key is minted again next time.
+    }
   },
 };

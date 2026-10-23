@@ -59,8 +59,13 @@ function render(item: AssetListItem, cache: PresignCache, presignEnabled: boolea
 }
 
 describe('AssetCard thumbnail', () => {
-  it('renders the presigned image for an image asset', () => {
-    const { cache, peek } = makeCache('https://cdn.example/photo.jpg');
+  it('renders the small copy for an image asset, never the full-size original', () => {
+    const { cache: base } = makeCache('https://cdn.example/photo-full.jpg');
+    const peekThumbnail = vi.fn(() => ({
+      url: 'https://cdn.example/photo.jpg',
+      expiresAt: Date.now() + 3_600_000,
+    }));
+    const cache = { ...base, peekThumbnail } as unknown as PresignCache;
     const out = render(
       makeAsset({ kind: 'image', filename: 'photo.png', mimeType: 'image/png' }),
       cache,
@@ -68,8 +73,9 @@ describe('AssetCard thumbnail', () => {
     );
     expect(out).toContain('<img');
     expect(out).toContain('https://cdn.example/photo.jpg');
+    expect(out).not.toContain('photo-full.jpg');
     expect(out).toContain('object-cover');
-    expect(peek).toHaveBeenCalledWith('av1');
+    expect(peekThumbnail).toHaveBeenCalledWith('av1');
   });
 
   it('renders the link domain fallback for a link asset', () => {

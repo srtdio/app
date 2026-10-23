@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { IconFile, IconLink } from '@/components/ui/icons';
 import { formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
@@ -13,7 +6,6 @@ import { imageTileState } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
 import { useThumbnail } from './use-thumbnail';
 import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
-import { IMAGE_THUMBNAIL_MAX_WIDTH } from '@/lib/files/thumbnail';
 
 /**
  * What the non-image tile should be. Unifies AssetCard's link/file Fallback with
@@ -124,12 +116,11 @@ function FallbackTile({ fallback }: { fallback: ThumbnailFallback }) {
  * adds no inner rounding or outer padding: the caller's card supplies overflow-hidden
  * and the radius, so the tile is edge-to-edge and never looks inset or floated.
  *
- * Fast first paint: the version's small stored copy (a few KB, and its URL kept
- * on the device) paints first, on the first frame when it is already known. A
- * tile wider than the small copy can fill sharply also loads the original and
- * fades it in over the small copy once it has loaded (opacity only, no
- * movement), so the picture appears at once and then sharpens. A version with
- * no small copy loads the original as before.
+ * Fast first paint: the version's small stored copy (a few KB) paints first,
+ * on the first frame when it is already known. A tile only ever shows the small
+ * copy, even where it is slightly soft (decided 20 Oct 2026: grids never pull
+ * the full-size original). The original loads only for a version with no small
+ * copy, or when the small copy fails to load.
  */
 export function Thumbnail({
   assetVersionId,
@@ -150,12 +141,8 @@ export function Thumbnail({
   const stored = useStoredThumbnail(versionId, cache, active && near);
   const [smallFailed, setSmallFailed] = useState<string | null>(null);
   const smallUrl = smallFailed === versionId ? null : (stored.url ?? knownSmall);
-  const sharpNeeded = useNeedsSharp(boxRef, active);
-  // An original already signed this session is used too: it is the sharpest
-  // picture and most likely already in the browser's cache.
-  const knownOriginal = active && cache.peek(versionId) !== null;
-  const wantOriginal =
-    active && (sharpNeeded || knownOriginal || stored.missing || smallFailed === versionId);
+  // The original loads only when there is no small copy to show.
+  const wantOriginal = active && (stored.missing || smallFailed === versionId);
   const original = useThumbnail<HTMLSpanElement>({
     assetVersionId: wantOriginal ? assetVersionId : null,
     cache,
@@ -231,24 +218,4 @@ export function Thumbnail({
       {children}
     </div>
   );
-}
-
-/**
- * True when the tile is wider (in device pixels) than the small copy can fill
- * sharply, so the original should load over it. Measured once before paint.
- */
-// A layout effect in the browser (measured before paint), a plain effect in SSR
-// and static renders, where it never runs either way.
-const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
-
-function useNeedsSharp(ref: RefObject<HTMLElement>, active: boolean): boolean {
-  const [needs, setNeeds] = useState(false);
-  useBeforePaint(() => {
-    if (!active) return;
-    const el = ref.current;
-    if (el === null || typeof window === 'undefined') return;
-    const ratio = window.devicePixelRatio || 1;
-    setNeeds(el.getBoundingClientRect().width * ratio > IMAGE_THUMBNAIL_MAX_WIDTH);
-  }, [ref, active]);
-  return needs;
 }

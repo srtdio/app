@@ -603,6 +603,10 @@ function PdfPage(props: {
           alt=""
           aria-hidden="true"
           onLoad={onPreviewLoad}
+          // A file with no small copy answers 404: show nothing until the page draws.
+          onError={(event) => {
+            event.currentTarget.style.visibility = 'hidden';
+          }}
           className="absolute inset-0 h-full w-full object-contain object-top"
         />
       ) : name !== undefined ? (

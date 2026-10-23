@@ -143,6 +143,32 @@ describe('listAssets states', () => {
     if (result.ok) expect(result.data).toEqual([]);
   });
 
+  it('starts the attachment read without waiting for the assets read', async () => {
+    const started: string[] = [];
+    let releaseAssets: () => void = () => undefined;
+    const assetsGate = new Promise<void>((done) => {
+      releaseAssets = done;
+    });
+    const client = {
+      from: (table: string) => {
+        started.push(table);
+        const b: Record<string, unknown> = {};
+        for (const method of ['select', 'eq', 'is', 'order']) b[method] = () => b;
+        b.then = (resolve: (v: unknown) => unknown) =>
+          (table === 'assets' ? assetsGate : Promise.resolve())
+            .then(() => ({ data: [], error: null }))
+            .then(resolve);
+        return b;
+      },
+    } as unknown as Client;
+    const pending = listAssets(client, 'ws-1');
+    await Promise.resolve();
+    expect(started).toEqual(['assets', 'asset_attachments']);
+    releaseAssets();
+    const result = await pending;
+    expect(result.ok).toBe(true);
+  });
+
   it('shapes rows with kind and live attachment counts', async () => {
     const client = makeClient({
       assets: {

@@ -42,14 +42,19 @@ function makeCache(peekUrl: string | null) {
     peekUrl !== null ? { url: peekUrl, expiresAt: Date.now() + 3_600_000 } : null,
   );
   const resolve = vi.fn(async () => ({ url: 'resolved', expiresAt: Date.now() + 3_600_000 }));
+  // Tiles paint the small copy only (never the full-size original).
+  const peekThumbnail = vi.fn(() =>
+    peekUrl !== null ? { url: peekUrl, expiresAt: Date.now() + 3_600_000 } : null,
+  );
   return {
     cache: {
       peek,
       resolve,
-      peekThumbnail: () => null,
+      peekThumbnail,
       thumbnail: async () => null,
     } as unknown as PresignCache,
     peek,
+    peekThumbnail,
     resolve,
   };
 }
@@ -63,13 +68,13 @@ function render(brief: BriefWithThumbnail, cache: PresignCache, presignEnabled =
 }
 
 describe('BriefCard thumbnail tile', () => {
-  it('renders the presigned image when thumbnailAssetVersionId is present', () => {
-    const { cache, peek } = makeCache('https://cdn.example/thumb.jpg');
+  it('renders the small copy when thumbnailAssetVersionId is present', () => {
+    const { cache, peekThumbnail } = makeCache('https://cdn.example/thumb.jpg');
     const out = render(makeBrief({ thumbnailAssetVersionId: 'av1' }), cache);
     expect(out).toContain('<img');
     expect(out).toContain('https://cdn.example/thumb.jpg');
     expect(out).toContain('object-cover');
-    expect(peek).toHaveBeenCalledWith('av1');
+    expect(peekThumbnail).toHaveBeenCalledWith('av1');
   });
 
   // One case per known reference_links shape: bare string[], [{ url }], and the ETL
