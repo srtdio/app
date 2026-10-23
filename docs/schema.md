@@ -302,7 +302,7 @@ PK (comment_id, user_id, emoji). Fields: workspace_id FK, emoji 1 to 32, created
 
 ## 4. Briefs
 
-Client writes the brief; it lands in the Briefs section and can be linked to a post (origin=brief). Read-only after creation. Open or Closed.
+Client writes the brief; it lands in the Briefs section and can be linked to a post (origin=brief). Read-only after creation. Open or Closed, any member can reopen.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -704,6 +704,8 @@ PK (id, created_at). Partitions: 2026_05, 2026_06, 2026_07. actor_user_id is set
 inbox_mark_read_events(p_workspace_id uuid, p_event_types text[], p_trace_id uuid) RETURNS void, SECURITY DEFINER (search_path=''; EXECUTE to authenticated only): requires is_active_workspace_member ('workspace_member_only') and p_trace_id; marks the caller's unread, non-deleted entries in the workspace whose event_type is in p_event_types read; no-op for an empty list; audits inbox_mark_read_events with the count when any row changed. Recorded in 20261003130000_chat_scheduled_send.sql.
 
 Own-action rows and brief activity (20261018140000): inbox_self_entry(p_workspace_id, p_event_type, p_entity_type, p_entity_id, p_scope, p_scope_key, p_payload) SECURITY DEFINER (search_path='', no EXECUTE for public/anon/authenticated/service_role) inserts one row for auth.uid() with actor_user_id = auth.uid() and read_at = now(). Called by stage_transition, post_soft_delete, comment_create, comment_batch_create, comment_resolve (resolve), checkpoint_ask, checkpoint_send_back, post_ready_notify, brief_create, brief_close, asset_delete, asset_delete_many and post_create (brief only), so the person who acted always gets their own already-read row, even with no other member; it skips onboarding sample posts and briefs listed in induction_sample_rows (20261018150000). brief_create, brief comments, mentions and resolves reach every active member (clients included). brief_close writes brief_closed (payload title, number, actor_role) to every other active member. post_create with brief_id writes brief_post_created (entity_type post, scope briefs, scope_key brief id, payload post_title, post_number, brief_id, brief_title, brief_number) to owner/admin/agency and roles with pipeline.view_all_stages. audit_log_write is EXECUTE owner-only (20261018130000).
+
+brief_reopen(p_brief_id, p_trace_id) (20261023013000): any active member; closed -> open (closed_at, closed_by NULL, row_version +1); notifies all other members via a system inbox entry kind brief_reopened (payload title, number, actor_role) plus the actor's own row; audit brief_reopen; EXECUTE authenticated only.
 
 System and welcome writers: workspace_create (for the creator) and member_accept (for the invitee) each write one event_type system row via inbox_entry_create: entity_type workspace, entity_id = workspace id, scope everything, tier ambient, payload {kind: welcome, workspace_name, platform}. brief_create writes brief_created rows (see Briefs).
 

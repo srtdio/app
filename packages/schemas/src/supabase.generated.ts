@@ -9010,6 +9010,10 @@ export type Database = {
         Args: { p_payload: Json; p_trace_id: string; p_workspace_id: string }
         Returns: string
       }
+      brief_reopen: {
+        Args: { p_brief_id: string; p_trace_id: string }
+        Returns: undefined
+      }
       chat_attachment_readable: {
         Args: { p_asset_version_id: string; p_user_id: string }
         Returns: boolean
