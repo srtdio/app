@@ -36,19 +36,24 @@ const INITIALS_TYPE: Record<NonNullable<AvatarProps['size']>, string> = {
   hero: 'text-3xl',
 };
 
-const PALETTE = ['#5e6ad2', '#3e7d54', '#b8772b', '#c2392b', '#7a5ea8', '#2b8a9e'];
+// Token-driven fills (--avatar-1..6 in index.css, light and dark), each 4.5:1 or
+// more under the white initials. Full class names so Tailwind's scan keeps them.
+const PALETTE = [
+  'bg-avatar-1',
+  'bg-avatar-2',
+  'bg-avatar-3',
+  'bg-avatar-4',
+  'bg-avatar-5',
+  'bg-avatar-6',
+] as const;
 
-/**
- * The deterministic tone for a key, drawn from the shared avatar palette. Exported
- * so other tinted surfaces (e.g. the activity thumbnail tile) reuse the exact same
- * hash + palette instead of duplicating raw colors.
- */
-function colorFor(name: string): string {
+/** The deterministic fill class for a name, drawn from the avatar palette. */
+export function avatarFillFor(name: string): string {
   let sum = 0;
   for (let i = 0; i < name.length; i += 1) {
     sum += name.charCodeAt(i);
   }
-  return PALETTE[sum % PALETTE.length] ?? '#5e6ad2';
+  return PALETTE[sum % PALETTE.length] ?? 'bg-avatar-1';
 }
 
 function initialsFor(name: string): string {
@@ -100,8 +105,8 @@ function AvatarFace({ name, src, size = 'md', shape = 'circle' }: Omit<AvatarPro
   if (name !== undefined && name.length > 0) {
     return (
       <div
-        style={{ ...style, backgroundColor: colorFor(name) }}
-        className={cn(box, 'text-white font-medium', INITIALS_TYPE[size])}
+        style={style}
+        className={cn(box, avatarFillFor(name), 'text-white font-medium', INITIALS_TYPE[size])}
       >
         {initialsFor(name)}
       </div>

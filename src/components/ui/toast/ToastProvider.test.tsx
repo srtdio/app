@@ -40,6 +40,17 @@ describe('createToastStore', () => {
     store.dispose();
   });
 
+  it('defaults to 4000ms, matching the undo window', () => {
+    expect(DEFAULT_DURATION_MS).toBe(4000);
+  });
+
+  it('keeps the error tone on the shown toast', () => {
+    const store = createToastStore();
+    store.show({ title: "Couldn't move the post. You're offline.", tone: 'error' });
+    expect(store.getSnapshot()[0]!.tone).toBe('error');
+    store.dispose();
+  });
+
   it('uses the default duration when none is given', () => {
     const store = createToastStore();
     store.show({ title: 'Default' });

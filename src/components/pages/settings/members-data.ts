@@ -6,6 +6,8 @@
 import type { Database } from '@srtdio/schemas';
 import type { DomainErrorCode } from '@srtdio/rpc';
 import type { ChatProfile } from '@/lib/chat-reads';
+import { browserTimeZone } from '@/lib/chat/time-format';
+import { formatDay } from '@/lib/display-date';
 
 export type WorkspaceMemberRow = Database['public']['Tables']['workspace_members']['Row'];
 
@@ -140,12 +142,12 @@ export function memberRemoveErrorMessage(code: DomainErrorCode): string {
   }
 }
 
-/** Format accepted_at for the "joined" column; null when never accepted. */
-export function formatJoined(acceptedAt: string | null): string | null {
+/** Format accepted_at for the "joined" column with the app day format ("23 Oct",
+ *  the year only outside now's year; browser zone); null when never accepted. */
+export function formatJoined(acceptedAt: string | null, now: Date = new Date()): string | null {
   if (acceptedAt === null) return null;
-  const date = new Date(acceptedAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const day = formatDay(acceptedAt, browserTimeZone(), now);
+  return day === '' ? null : day;
 }
 
 /** The client's brand word in a domain, mirroring public.domain_brand_word. */

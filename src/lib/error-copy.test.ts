@@ -1,80 +1,87 @@
-import { describe, expect, it } from 'vitest';
-import { GENERIC_ERROR, plainError } from '@/lib/error-copy';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { errorCopy, errorReason, errorText, REASON_COPY } from './error-copy';
 
-const RAW_TEXTS = [
-  'PGRST301: JWT expired',
-  'permission denied for table posts',
-  'relation "public.secret_table" does not exist',
-  'new row violates row-level security policy for table "posts"',
-  'duplicate key value violates unique constraint "posts_pkey"',
-  "TypeError: Cannot read properties of undefined (reading 'id')",
-  'rpc 500 internal',
-  '<html><body>502 Bad Gateway</body></html>',
-];
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
-describe('plainError', () => {
-  it('maps the known domain codes to plain sentences', () => {
-    expect(plainError('forbidden_role')).toBe("You don't have permission to do that.");
-    expect(plainError('invalid_payload')).toBe(
-      "Something in that request wasn't right. Check it and try again.",
-    );
-    expect(plainError('not authenticated')).toBe('Your session has ended. Sign in again.');
-    expect(plainError('not_authenticated')).toBe('Your session has ended. Sign in again.');
-    expect(plainError('network_failure')).toBe(
-      "You're offline or the connection dropped. Check your network and try again.",
-    );
-    expect(plainError('timeout')).toBe('That took too long. Try again.');
+describe('errorCopy', () => {
+  it('offline: a fetch TypeError reads "You\'re offline." with Retry', () => {
+    const copy = errorCopy('move the post', new TypeError('Failed to fetch'));
+    expect(copy.text).toBe("Couldn't move the post. You're offline.");
+    expect(copy.retryable).toBe(true);
   });
 
-  it('reads a DomainError or PostgREST error object by its code, then its message', () => {
-    expect(plainError({ code: 'forbidden_role', message: 'nope' })).toBe(
-      "You don't have permission to do that.",
-    );
-    expect(plainError({ code: 'unknown', message: 'forbidden_role' })).toBe(
-      "You don't have permission to do that.",
-    );
-    const statementTimeout = {
-      code: '57014',
-      message: 'canceling statement due to statement timeout',
-    };
-    expect(plainError(statementTimeout)).toBe('That took too long. Try again.');
+  it('offline: the browser saying offline wins over an unknown error', () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    expect(errorCopy('post the reply', { code: 'unknown', message: 'boom' })).toEqual({
+      reason: 'offline',
+      text: "Couldn't post the reply. You're offline.",
+      retryable: true,
+    });
   });
 
-  it('reads the transport failures a phone meets from an Error', () => {
-    expect(plainError(new TypeError('Failed to fetch'))).toBe(
-      "You're offline or the connection dropped. Check your network and try again.",
-    );
-    expect(plainError(new TypeError('Load failed'))).toBe(
-      "You're offline or the connection dropped. Check your network and try again.",
-    );
-    const abort = new Error('The operation was aborted.');
-    abort.name = 'AbortError';
-    expect(plainError(abort)).toBe('That took too long. Try again.');
+  it('offline: a transport message on a DomainError', () => {
+    expect(errorReason({ code: 'unknown', message: 'TypeError: Load failed' })).toBe('offline');
   });
 
-  it('never returns raw PostgREST or exception text', () => {
-    for (const raw of RAW_TEXTS) {
-      for (const input of [raw, new Error(raw), { code: 'PGRST301', message: raw }]) {
-        const out = plainError(input);
-        expect(out).toBe(GENERIC_ERROR);
-        expect(out).not.toContain(raw);
-      }
+  it('forbidden_role and workspace_member_only read as no access, no Retry', () => {
+    for (const code of ['forbidden_role', 'workspace_member_only']) {
+      const copy = errorCopy('resolve the checkpoint', { code, message: code });
+      expect(copy.text).toBe("Couldn't resolve the checkpoint. You don't have access to do this.");
+      expect(copy.retryable).toBe(false);
     }
-    expect(plainError(undefined)).toBe(GENERIC_ERROR);
-    expect(plainError(null)).toBe(GENERIC_ERROR);
-    expect(plainError(42)).toBe(GENERIC_ERROR);
-    expect(plainError('')).toBe(GENERIC_ERROR);
   });
 
-  it('every sentence is plain: no em-dash, no code, no stack', () => {
-    const all = new Set<string>();
-    for (const input of ['forbidden_role', 'invalid_payload', 'timeout', 'network_failure', 'x']) {
-      all.add(plainError(input));
-    }
-    for (const sentence of all) {
-      expect(sentence).not.toContain('—');
-      expect(sentence).not.toMatch(/_|PGRST|\bat\s+\w+\s*\(/);
-      expect(sentence.endsWith('.')).toBe(true);
-    }
+  it('not_found reads "It was deleted."', () => {
+    expect(errorText('save the caption', { code: 'unknown', message: 'post_not_found' })).toBe(
+      "Couldn't save the caption. It was deleted.",
+    );
+    expect(errorCopy('save the caption', 'not_found').retryable).toBe(false);
+  });
+
+  it('a row_version conflict reads as someone else changed it', () => {
+    expect(
+      errorText('save the caption', { code: 'unknown', message: 'row_version_mismatch' }),
+    ).toBe("Couldn't save the caption. Someone else changed it. Refresh to see the latest.");
+    expect(errorReason({ code: 'unknown', message: 'stale' })).toBe('stale');
+  });
+
+  it('the approved lock reads "Approved posts are locked."', () => {
+    const copy = errorCopy('approve the post', {
+      code: 'unknown',
+      message: 'post_approved_locked',
+    });
+    expect(copy.text).toBe("Couldn't approve the post. Approved posts are locked.");
+    expect(copy.retryable).toBe(false);
+  });
+
+  it('caption_too_long and title_required have their own lines', () => {
+    expect(errorText('save the caption', 'caption_too_long')).toBe(
+      "Couldn't save the caption. Captions can be up to 4,000 characters.",
+    );
+    expect(
+      errorText('create the brief', { code: 'invalid_payload', message: 'title_required' }),
+    ).toBe("Couldn't create the brief. Add a title to save.");
+  });
+
+  it('anything else reads "Try again." with Retry, never the raw text', () => {
+    const copy = errorCopy('create the brief', new Error('duplicate key value violates "x"'));
+    expect(copy.text).toBe("Couldn't create the brief. Try again.");
+    expect(copy.retryable).toBe(true);
+    expect(errorCopy('move the post', undefined).reason).toBe('unknown');
+  });
+
+  it('keeps the approved reason lines verbatim', () => {
+    expect(REASON_COPY).toEqual({
+      offline: "You're offline.",
+      forbidden: "You don't have access to do this.",
+      not_found: 'It was deleted.',
+      stale: 'Someone else changed it. Refresh to see the latest.',
+      approved_locked: 'Approved posts are locked.',
+      caption_too_long: 'Captions can be up to 4,000 characters.',
+      title_required: 'Add a title to save.',
+      unknown: 'Try again.',
+    });
   });
 });

@@ -47,15 +47,15 @@ describe('formatRelativeTime', () => {
   });
 
   it('falls back to a short calendar date two calendar days out and beyond', () => {
-    expect(formatRelativeTime(ago(36 * HOUR + 1), now, 'UTC')).toBe('Jun 20');
-    expect(formatRelativeTime(ago(2 * DAY), now, 'UTC')).toBe('Jun 20');
-    expect(formatRelativeTime(ago(10 * DAY), now, 'UTC')).toBe('Jun 12');
+    expect(formatRelativeTime(ago(36 * HOUR + 1), now, 'UTC')).toBe('20 Jun');
+    expect(formatRelativeTime(ago(2 * DAY), now, 'UTC')).toBe('20 Jun');
+    expect(formatRelativeTime(ago(10 * DAY), now, 'UTC')).toBe('12 Jun');
   });
 
   it('reads the calendar date in the workspace zone, not the browser zone', () => {
-    // 2026-06-19T22:30Z is still Jun 19 in Los Angeles but already Jun 20 in Mumbai.
+    // 2026-06-19T22:30Z is still 19 Jun in Los Angeles but already 20 Jun in Mumbai.
     const ts = Date.parse('2026-06-19T22:30:00Z');
-    expect(formatRelativeTime(ts, now, 'America/Los_Angeles')).toBe('Jun 19');
-    expect(formatRelativeTime(ts, now, 'Asia/Kolkata')).toBe('Jun 20');
+    expect(formatRelativeTime(ts, now, 'America/Los_Angeles')).toBe('19 Jun');
+    expect(formatRelativeTime(ts, now, 'Asia/Kolkata')).toBe('20 Jun');
   });
 });

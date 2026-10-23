@@ -98,7 +98,6 @@ import {
   type DecisionModel,
 } from '@/components/pages/pcs/PostDecisionBar';
 import { runStageMoveCommit, showWhenVisible } from '@/components/pages/pcs/stage-move-commit';
-import { formatPostDueLabel } from '@/components/pages/pcs/post-date';
 import {
   CAPTION_TIP_TEXT,
   captionTipDismissed,
@@ -117,7 +116,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { safeTimeZone } from '@/lib/chat/time-format';
+import { formatDay, formatDue } from '@/lib/display-date';
 import {
   annotationCreate,
   getPost,
@@ -128,6 +127,7 @@ import {
 } from '@srtdio/posts';
 import type { GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
 import { friendlyTransitionError } from '@/lib/post-transition-errors';
+import { errorText } from '@/lib/error-copy';
 import { createComment } from '@srtdio/comments';
 import { getBrief } from '@srtdio/briefs';
 import type { Json } from '@srtdio/schemas';
@@ -151,54 +151,41 @@ function isDomainError(error: unknown): error is DomainError {
   );
 }
 
-/** Flow B 41: the one line for a failure we have no plain words for. */
-export const UNKNOWN_ERROR_COPY = "Couldn't do that. Try again.";
-/** Flow B 37: the approved lock (post_approved_locked) in plain words. */
-export const APPROVED_LOCKED_COPY = "Approved posts can't be edited.";
-
 /**
- * Flow B 37 / 41: a failed stage move or edit on this page in plain words.
- * The approved lock and the stage proc's known refusals get their own line;
- * anything else (a thrown transport error included) the unknown line. Never
- * the raw text. Pure.
+ * Flow B 37 / 41: a failed stage move or edit on this page in plain words,
+ * "Couldn't {action}. {reason}". The approved lock and the stage proc's known
+ * refusals get their own reason; anything else (a thrown transport error
+ * included) the retry line. Never the raw text. Pure.
  */
-export function postActionErrorCopy(error: unknown): string {
-  if (isDomainError(error)) {
-    if (error.message.includes(POST_APPROVED_LOCKED)) {
-      return APPROVED_LOCKED_COPY;
-    }
+export function postActionErrorCopy(error: unknown, action = 'move the post'): string {
+  if (isDomainError(error) && !error.message.includes(POST_APPROVED_LOCKED)) {
     if (
       error.code === 'forbidden_role' ||
       error.code === 'invalid_stage_transition' ||
       error.code === 'workspace_member_only'
     ) {
-      return friendlyTransitionError(error);
+      return friendlyTransitionError(error, action);
     }
-    return UNKNOWN_ERROR_COPY;
   }
-  if (error instanceof Error && error.message.includes(POST_APPROVED_LOCKED)) {
-    return APPROVED_LOCKED_COPY;
-  }
-  return UNKNOWN_ERROR_COPY;
+  return errorText(action, error);
 }
+
+/** The action a failed "Send for review again" names. */
+const SEND_AGAIN_ACTION = 'send the post for review';
 
 /**
  * Flow B 33 / 41: a failed "Send for review again" (post_ready_notify) in plain
  * words, from the proc's raised message. Pure.
  */
 export function sendAgainErrorCopy(message: string | null): string {
-  switch (message) {
-    case 'invalid_stage':
-      return 'This post is not in review anymore.';
-    case 'forbidden_role':
-      return 'You do not have permission to make this change.';
-    default:
-      return UNKNOWN_ERROR_COPY;
+  if (message === 'invalid_stage') {
+    return `Couldn't ${SEND_AGAIN_ACTION}. It isn't in review anymore.`;
   }
+  return errorText(SEND_AGAIN_ACTION, message);
 }
 
 /** Flow B 33: the toast after a landed "Send for review again". */
-export const SENT_AGAIN_TOAST = 'Sent for review again.';
+export const SENT_AGAIN_TOAST = 'Sent for review again';
 
 /**
  * Flow B 31: the creator's on-behalf approve row in the ⋯ sheet. Always
@@ -229,19 +216,16 @@ export function rejectConfirmBody(creatorName: string | null): string {
 export const APPROVED_LOCK_LINE =
   "Approved posts can't be edited. To change it, park it first, then send it for review again.";
 
-/** "21 Oct": the approval day in the workspace zone, or '' for a bad instant. Pure. */
-export function approvedDayLabel(approvedAt: string, timeZone: string): string {
-  const instant = new Date(approvedAt);
-  if (Number.isNaN(instant.getTime())) return '';
-  // en-US parts ("Sep", never en-GB's "Sept"), assembled day first.
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: safeTimeZone(timeZone),
-    day: 'numeric',
-    month: 'short',
-  }).formatToParts(instant);
-  const day = parts.find((part) => part.type === 'day')?.value ?? '';
-  const month = parts.find((part) => part.type === 'month')?.value ?? '';
-  return day !== '' && month !== '' ? `${day} ${month}` : '';
+/**
+ * "21 Oct" ("4 Jan 2027" outside now's year): the approval day in the
+ * workspace zone via the app formatter, or '' for a bad instant.
+ */
+export function approvedDayLabel(
+  approvedAt: string,
+  timeZone: string,
+  now: Date = new Date(),
+): string {
+  return formatDay(approvedAt, timeZone, now);
 }
 
 /**
@@ -648,6 +632,10 @@ export function PostDetailPage({
   toastRef.current = toastApi;
   const push = useCallback((message: string): void => {
     toastRef.current?.show({ title: message });
+  }, []);
+  // A failure toast: the error tone (bad-solid), never the neutral card.
+  const pushError = useCallback((message: string): void => {
+    toastRef.current?.show({ title: message, tone: 'error' });
   }, []);
 
   // Caption annotation state: the pending selection drives the composer, and a
@@ -1252,7 +1240,7 @@ export function PostDetailPage({
       setAnnotating(false);
       setComposer(null);
       setAnnotateError(
-        'Could not anchor the comment to the caption. It was posted as a plain comment.',
+        "Couldn't anchor the comment to the caption. It was posted as a plain comment.",
       );
       dispatchInductionDid(INDUCTION_KEYS.postCommentPost);
       setCommentsRefresh((n) => n + 1);
@@ -1315,7 +1303,7 @@ export function PostDetailPage({
     if (!annotationResult.ok) {
       setPinSubmitting(false);
       setPinComposer(null);
-      setPinError('Could not anchor the comment to the image. It was posted as a plain comment.');
+      setPinError("Couldn't anchor the comment to the image. It was posted as a plain comment.");
       setCommentsRefresh((n) => n + 1);
       return;
     }
@@ -1344,7 +1332,10 @@ export function PostDetailPage({
     });
     if (!result.ok) {
       setTransitioning(false);
-      const message = postActionErrorCopy(result.error);
+      const message = postActionErrorCopy(
+        result.error,
+        to === 'approved' ? 'approve the post' : 'move the post',
+      );
       if (to === 'approved') setApproveError(message);
       else setActionError(message);
       return false;
@@ -1468,6 +1459,7 @@ export function PostDetailPage({
         showWhenVisible(document, () => {
           toastRef.current?.show({
             title: `Couldn't delete ${postTitle}. It's still there.`,
+            tone: 'error',
             action: { label: 'Open', onPress: () => navigate(`/posts/${deletedId}`) },
           });
         });
@@ -1487,12 +1479,12 @@ export function PostDetailPage({
       const result = await postUpdate(supabase, { postId, ...patch }, newTrace());
       setSavingMeta(false);
       if (!result.ok) {
-        push(postActionErrorCopy(result.error));
+        pushError(postActionErrorCopy(result.error, 'save the details'));
         return;
       }
       await load(true);
     },
-    [postId, newTrace, load, push],
+    [postId, newTrace, load, pushError],
   );
 
   // Title is internal: a trimmed, changed value writes via post_update (no new
@@ -1559,7 +1551,7 @@ export function PostDetailPage({
     const result = await postCaptionUpdate(supabase, { postId, caption: value }, newTrace());
     setCaptionSaving(false);
     if (!result.ok) {
-      setCaptionError(postActionErrorCopy(result.error));
+      setCaptionError(postActionErrorCopy(result.error, 'save the caption'));
       return;
     }
     setEditingCaption(false);
@@ -1842,7 +1834,7 @@ export function PostDetailPage({
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
   const dueLabel =
-    post.target_date !== null ? formatPostDueLabel(post.target_date, approveTimeZone) : null;
+    post.target_date !== null ? formatDue(post.target_date, approveTimeZone, new Date()) : null;
   const detailsEditable = agencySide && !readOnly;
   const detailsParts = (
     <>
@@ -2054,7 +2046,13 @@ export function PostDetailPage({
               className={`h-[7px] w-[7px] shrink-0 rounded-full ${STAGE_DOT[currentStage]}`}
             />
             <span className="truncate text-[15px] font-semibold">
-              {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date())}
+              {postStatusLine(
+                currentStage,
+                post.updated_at,
+                post.stage_entered_at,
+                new Date(),
+                approveTimeZone,
+              )}
             </span>
           </div>
           {!readOnly ? (
@@ -2302,9 +2300,10 @@ export function PostDetailPage({
                   <IconButton
                     label="Copy caption"
                     onClick={() => {
-                      void copyText(post.caption ?? '').then((ok) =>
-                        push(ok ? 'Caption copied' : COPY_FAILED),
-                      );
+                      void copyText(post.caption ?? '').then((ok) => {
+                        if (ok) push('Caption copied');
+                        else pushError(COPY_FAILED);
+                      });
                     }}
                   >
                     <IconCopy size={18} />
@@ -2344,7 +2343,7 @@ export function PostDetailPage({
                       disabled={captionSaving}
                       onClick={() => void saveCaption()}
                     >
-                      {captionSaving ? 'Saving' : captionSaveLabel(currentVersionNumber)}
+                      {captionSaving ? 'Saving…' : captionSaveLabel(currentVersionNumber)}
                     </Button>
                     <Button
                       variant="ghost"

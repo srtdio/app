@@ -2,10 +2,12 @@
 // as the fallback when the workspace has none).
 // Every formatter takes an explicit IANA zone and hands it to
 // Intl.DateTimeFormat, the same approach src/lib/list-sort.ts (civilDate) and
-// src/lib/brief-groups.ts (formatRaisedDay) use for briefs. Dates use 'en-US'
+// src/lib/display-date.ts (the app day formatter) use. Dates use 'en-US'
 // as the reference locale so the output is identical whatever the browser's
 // locale, with parts re-assembled by type so part order never drifts between
 // engines; the chat clock time (formatClockTime) follows the device locale.
+
+import { formatDay } from '@/lib/display-date';
 
 /**
  * The browser's IANA zone, the fallback when the workspace has none (a viewer's
@@ -74,19 +76,16 @@ export function formatClockTime(
 }
 
 /**
- * A short calendar date in the workspace zone, e.g. "Jun 20", for conversation
- * cards once a relative reading stops being useful.
+ * A short calendar date in the workspace zone, e.g. "20 Jun" ("4 Jan 2027" once
+ * the year is not `now`'s), for conversation cards once a relative reading stops
+ * being useful. The app's one day formatter ({@link formatDay}) does the work.
+ * Without `now` the year is never added (the value is read against its own
+ * instant), so callers with no clock stay pure and deterministic.
  */
-export function formatShortDate(createdAt: string | number, timeZone: string): string {
+export function formatShortDate(createdAt: string | number, timeZone: string, now?: Date): string {
   const instant = instantOf(createdAt);
   if (instant === undefined) return '';
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: safeTimeZone(timeZone),
-    month: 'short',
-    day: 'numeric',
-  }).formatToParts(instant);
-  const read = (type: string): string => parts.find((part) => part.type === type)?.value ?? '';
-  return `${read('month')} ${read('day')}`;
+  return formatDay(createdAt, timeZone, now ?? instant);
 }
 
 const SHORT_MONTHS = [
@@ -105,7 +104,7 @@ const SHORT_MONTHS = [
 ] as const;
 
 /**
- * A calendar DATE column (YYYY-MM-DD) in the same "Oct 2" style as
+ * A calendar DATE column (YYYY-MM-DD) in the same "2 Oct" style as
  * {@link formatShortDate}, read straight off the string so no timezone can shift
  * the day. Anything that is not a valid YYYY-MM-DD renders as an empty string.
  */
@@ -115,5 +114,5 @@ export function formatShortDateOnly(isoDate: string): string {
   const month = SHORT_MONTHS[Number(match[2]) - 1];
   const day = Number(match[3]);
   if (month === undefined || day < 1 || day > 31) return '';
-  return `${month} ${day}`;
+  return `${day} ${month}`;
 }

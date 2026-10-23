@@ -109,12 +109,14 @@ describe('ApproveConfirm', () => {
     expect(back).toContain('h-12');
     expect(back).toContain('border-border bg-panel text-fg');
     expect(approve).toContain('h-12');
-    expect(approve).toContain('bg-good');
+    expect(approve).toContain('bg-good-solid');
     expect(`${back} ${approve}`).not.toMatch(/#[0-9a-f]{3,6}|dark:/i);
   });
 
-  it('formats the target date as the chat sheet does', () => {
-    expect(approveTargetDate(null, 'UTC')).toBe('');
-    expect(approveTargetDate('2026-10-02T06:30:00Z', 'Asia/Kolkata')).toBe('Oct 2');
+  it('formats the target date with the app day format', () => {
+    const now = new Date('2026-10-23T12:00:00Z');
+    expect(approveTargetDate(null, 'UTC', now)).toBe('');
+    expect(approveTargetDate('2026-10-02T06:30:00Z', 'Asia/Kolkata', now)).toBe('2 Oct');
+    expect(approveTargetDate('2027-01-04T06:30:00Z', 'Asia/Kolkata', now)).toBe('4 Jan 2027');
   });
 });

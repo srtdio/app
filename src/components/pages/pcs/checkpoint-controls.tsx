@@ -7,7 +7,7 @@ import type { ReactElement } from 'react';
 import { IconCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { CommentResolveArgs, DomainError } from '@srtdio/rpc';
-import { NOT_FOUND_COPY } from '@/components/comments/comment-errors';
+import { errorText } from '@/lib/error-copy';
 
 /** The proc trims and caps the note at 500 chars; the input mirrors the cap. */
 export const MAX_NOTE_CHARS = 500;
@@ -38,12 +38,9 @@ export function buildResolveArgs(input: {
 export function friendlyResolveError(error: DomainError): string {
   switch (error.code) {
     case 'invalid_payload':
-      return `Could not save. Notes are limited to ${MAX_NOTE_CHARS} characters.`;
-    case 'forbidden_role':
-    case 'workspace_member_only':
-      return 'You do not have permission to make this change.';
+      return `Couldn't save the note. Notes can be up to ${MAX_NOTE_CHARS} characters.`;
     default:
-      return 'Something went wrong. Please try again.';
+      return errorText('resolve the checkpoint', error);
   }
 }
 
@@ -59,7 +56,7 @@ export function friendlyAcceptError(error: DomainError): string {
     case 'workspace_member_only':
       return 'Only approvers can confirm a checkpoint.';
     default:
-      return 'Something went wrong. Please try again.';
+      return errorText('confirm the checkpoint', error);
   }
 }
 
@@ -80,16 +77,8 @@ export function friendlyPointFreezeError(
       ? 'This point is confirmed. It can no longer be deleted.'
       : 'This point is confirmed. It can no longer be edited.';
   }
-  if (/not[_ ]found/i.test(error.message)) return NOT_FOUND_COPY;
-  switch (error.code) {
-    case 'invalid_payload':
-      return 'Points are limited to 50 words.';
-    case 'forbidden_role':
-    case 'workspace_member_only':
-      return 'You do not have permission to make this change.';
-    default:
-      return 'Something went wrong. Please try again.';
-  }
+  if (error.code === 'invalid_payload') return 'Points are limited to 50 words.';
+  return errorText(`${action} the point`, error);
 }
 
 /** The filled "resolved" circle: tokens only, never a literal colour. The fill is

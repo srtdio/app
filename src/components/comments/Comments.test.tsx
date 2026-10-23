@@ -892,12 +892,13 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
     expect(pointWordCount(fiftyOne)).toBeGreaterThan(POINT_WORD_CAP);
   });
 
-  it('shows the edit clock time on comments and points ("edited 2:14 pm")', () => {
+  it('shows the edit time on comments and points ("edited 1 Mar, 2:14 PM")', () => {
     const edited = new Date(2026, 2, 1, 14, 14);
     const now = new Date(2026, 2, 1, 18, 0);
-    expect(editedTime(edited.toISOString(), now)).toBe('2:14 pm');
-    expect(pointEditedMarker(edited.toISOString(), now)).toBe('edited 2:14 pm');
-    expect(editedTime(new Date(2026, 2, 1, 0, 5).toISOString(), now)).toBe('12:05 am');
+    expect(editedTime(edited.toISOString(), now)).toBe('1 Mar, 2:14 PM');
+    expect(pointEditedMarker(edited.toISOString(), now)).toBe('edited 1 Mar, 2:14 PM');
+    expect(editedTime(new Date(2026, 2, 1, 0, 5).toISOString(), now)).toBe('1 Mar, 12:05 AM');
+    expect(editedTime('garbage', now)).toBe('');
   });
 
   it('hides a pending delete optimistically (tombstone when replies remain)', () => {
@@ -949,6 +950,16 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
       expect(msg).toBe('This post is approved. Points are locked.');
       expect(msg).not.toContain('—');
     }
+    // Anything else reads through the shared "Couldn't {action}. {reason}" line.
+    const open = { accepted_at: null, closed_at: null };
+    const forbidden: DomainError = { code: 'forbidden_role', message: 'forbidden_role' };
+    expect(friendlyPointFreezeError(forbidden, open, 'edit')).toBe(
+      "Couldn't edit the point. You don't have access to do this.",
+    );
+    const boom: DomainError = { code: 'unknown', message: 'boom' };
+    expect(friendlyPointFreezeError(boom, open, 'delete')).toBe(
+      "Couldn't delete the point. Try again.",
+    );
   });
 });
 

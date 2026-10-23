@@ -76,7 +76,8 @@ import {
 } from '@/lib/list-sort';
 import { groupByStage, stageColumns } from '@/lib/post-board';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
-import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts';
+import type { Client, PipelinePost, Stage } from '@srtdio/posts';
+import { errorCopy, errorText, type ErrorCopy } from '@/lib/error-copy';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
@@ -214,22 +215,38 @@ function StageRow({
   );
 }
 
-/**
- * Friendly copy for an unmapped domain code OR a transport-level throw (network /
- * RPC failure with no Result). Shared by {@link moveErrorMessage}'s default and the
- * catch in {@link runMovePost} so both paths surface the same retry line.
- */
-export const MOVE_FALLBACK_MESSAGE = "Couldn't move the post. Try again.";
+/** The action every failed move names: "Couldn't move the post. {reason}". */
+const MOVE_ACTION = 'move the post';
+
+/** The retry line for a failure with no plain reason (an unmapped code). */
+export const MOVE_FALLBACK_MESSAGE = errorText(MOVE_ACTION, null);
 
 /**
- * Map a proc domain error to friendly copy: every code (invalid_stage_transition,
- * forbidden_role, ...) and every transport error reads the same plain line. Raw
- * server text never reaches the user.
+ * Map a failed move (a proc DomainError, a bare code, or a transport throw) to
+ * the shared copy: "Couldn't move the post. You're offline." with Retry, no
+ * access, deleted, or the retry line. Raw server text never reaches the user.
  */
-export function moveErrorMessage(code: DomainErrorCode): string {
-  // The code goes to the log only.
-  logger.warn('pipeline: move refused', { code });
-  return MOVE_FALLBACK_MESSAGE;
+export function moveErrorCopy(error: unknown): ErrorCopy {
+  const copy = errorCopy(MOVE_ACTION, error);
+  // The reason goes to the log; the raw text never reaches the toast.
+  logger.warn('pipeline: move refused', { reason: copy.reason });
+  return copy;
+}
+
+/** As {@link moveErrorCopy}, the line only. */
+export function moveErrorMessage(error: unknown): string {
+  return moveErrorCopy(error).text;
+}
+
+/** A failure toast: the error tone, with Retry only when the reason is retryable. */
+export interface MoveToastFailure {
+  retry?: () => void;
+}
+
+// The failure options for a move that did not land: Retry re-runs it when
+// trying again could help (offline, unknown), never for a refusal.
+function moveFailure(copy: ErrorCopy, retry: () => void): MoveToastFailure {
+  return copy.retryable ? { retry } : {};
 }
 
 /**
@@ -550,6 +567,7 @@ export function runUndoableMove(
     setStage(fromStage);
     deps.inFlight.delete(postId);
   };
+  const retryMove = (): void => runUndoableMove(deps, postId, toStage, reason);
   deps.inFlight.add(postId);
   setStage(toStage);
   deps.onClose();
@@ -565,12 +583,14 @@ export function runUndoableMove(
         });
         if (!result.ok) {
           revert();
-          deps.toast(moveErrorMessage(result.error.code));
+          const copy = moveErrorCopy(result.error);
+          deps.toast(copy.text, moveFailure(copy, retryMove));
           return;
         }
-      } catch {
+      } catch (error) {
         revert();
-        deps.toast(MOVE_FALLBACK_MESSAGE);
+        const copy = moveErrorCopy(error);
+        deps.toast(copy.text, moveFailure(copy, retryMove));
         return;
       }
       deps.inFlight.delete(postId);
@@ -582,7 +602,8 @@ export function runUndoableMove(
         } catch {
           posted = false;
         }
-        if (!posted) deps.toast(reasonFailureTitle(toStage));
+        // A partial failure: the move stands, the reason did not post.
+        if (!posted) deps.toast(reasonFailureTitle(toStage), {});
       }
     },
     revert,
@@ -598,7 +619,8 @@ export interface MovePostDeps {
   setPosts: (updater: (prev: PipelinePost[]) => PipelinePost[]) => void;
   /** Close the move sheet (no-op on the desktop drag path). */
   onClose: () => void;
-  toast: (message: string) => void;
+  /** Toast a line; `failure` marks it a failure (error tone, optional Retry). */
+  toast: (message: string, failure?: MoveToastFailure) => void;
   /** The viewer's workspace role: a move this role may not make never reaches the proc. */
   role: string | null;
 }
@@ -627,11 +649,13 @@ export async function runMovePost(
   if (!roleMayTarget(deps.role, toStage)) {
     return;
   }
+  const retryMove = (): void => void runMovePost(deps, postId, toStage);
   deps.inFlight.add(postId);
   try {
     const result = await stageTransition(deps.client, { postId, toStage });
     if (!result.ok) {
-      deps.toast(moveErrorMessage(result.error.code));
+      const copy = moveErrorCopy(result.error);
+      deps.toast(copy.text, moveFailure(copy, retryMove));
       return;
     }
     deps.setPosts((prev) =>
@@ -639,13 +663,14 @@ export async function runMovePost(
     );
     deps.onClose();
     deps.toast(`"${target.title}" moved to ${stageLabel(toStage)}`);
-  } catch {
+  } catch (error) {
     // Transport-level failure (network / RPC throw, not a domain Result): without
     // this the throw surfaced nothing to the user. No optimistic flip is applied
     // (the local stage update runs only after a successful proc), so the board is
     // already consistent and there is nothing to revert. The finally below still
     // clears the in-flight guard, exactly as on the success and domain-error paths.
-    deps.toast(MOVE_FALLBACK_MESSAGE);
+    const copy = moveErrorCopy(error);
+    deps.toast(copy.text, moveFailure(copy, retryMove));
   } finally {
     deps.inFlight.delete(postId);
   }
@@ -729,8 +754,14 @@ export function PipelinePage() {
   const toastApi = useOptionalToast();
   const toastRef = useRef(toastApi);
   toastRef.current = toastApi;
-  const push = useCallback((message: string): void => {
-    toastRef.current?.show({ title: message });
+  // A failure rides the error tone (bad-solid), with Retry when it can help.
+  const push = useCallback((message: string, failure?: MoveToastFailure): void => {
+    const retry = failure?.retry;
+    toastRef.current?.show({
+      title: message,
+      ...(failure !== undefined ? { tone: 'error' as const } : {}),
+      ...(retry !== undefined ? { action: { label: 'Retry', onPress: retry } } : {}),
+    });
   }, []);
   const { run: runUndoable } = useUndoableAction();
   // A post step of the induction opens the sheet with its preset.
@@ -828,7 +859,7 @@ export function PipelinePage() {
   const onBlockedMove = useCallback(
     (reason: string): void => {
       if (roleStatus === 'ready') push(reason);
-      else if (roleStatus === 'error') push(ROLE_READ_ERROR);
+      else if (roleStatus === 'error') push(ROLE_READ_ERROR, {});
     },
     [push, roleStatus],
   );

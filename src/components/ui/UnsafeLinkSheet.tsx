@@ -134,7 +134,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         </div>
         <p
           data-unsafe-url=""
-          className="break-all rounded-[10px] border border-border bg-panel-2 px-2.5 py-2 font-mono text-xs text-fg"
+          className="break-all rounded-lg border border-border bg-panel-2 px-2.5 py-2 font-mono text-xs text-fg"
         >
           {url}
         </p>

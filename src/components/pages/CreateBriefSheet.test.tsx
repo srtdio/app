@@ -7,7 +7,6 @@ import {
   type BuildBriefPayloadInput,
   type SubmitCreateBriefDeps,
 } from '@/components/pages/CreateBriefSheet';
-import { GENERIC_ERROR } from '@/lib/error-copy';
 import type { Client, Result } from '@srtdio/rpc';
 import type { CommentResult } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
@@ -147,7 +146,7 @@ describe('submitCreateBrief', () => {
       createComment,
     });
     const result = await submitCreateBrief(d);
-    expect(result).toEqual({ ok: false, message: GENERIC_ERROR });
+    expect(result).toEqual({ ok: false, message: "Couldn't create the brief. Try again." });
     expect(createComment).not.toHaveBeenCalled();
   });
 });

@@ -38,7 +38,7 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-scrim p-4 sm:items-center"
       onClick={(event) => {
         if (event.target === event.currentTarget) onKeep();
       }}

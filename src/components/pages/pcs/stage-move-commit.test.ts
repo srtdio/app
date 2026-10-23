@@ -97,8 +97,11 @@ describe('runStageMoveCommit', () => {
     });
     await expect(runStageMoveCommit(deps)).resolves.toBeUndefined();
     expect(show).toHaveBeenCalledTimes(1);
-    const [options] = show.mock.calls[0] as [{ title: string; action?: { label: string } }];
+    const [options] = show.mock.calls[0] as [
+      { title: string; tone?: string; action?: { label: string } },
+    ];
     expect(options.title).toBe("Couldn't reject Diwali teaser. It's still in review.");
+    expect(options.tone).toBe('error');
     expect(options.action?.label).toBe('Open');
     expect(deps.revert).not.toHaveBeenCalled();
     expect(deps.setInlineError).not.toHaveBeenCalled();

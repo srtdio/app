@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 /** A toast's tint. */
-export type ToastTone = 'success';
+export type ToastTone = 'success' | 'error';
 
 /** A toast's surface. Omitted: the top card. */
 export type ToastKind = 'undo';
@@ -23,11 +23,15 @@ export interface ToastOptions {
   onPress?: () => void;
   /** A trailing 44px action button (e.g. Undo). */
   action?: ToastAction;
-  /** 'success' tints the card with the success tokens. Omitted: neutral. */
+  /**
+   * 'success' tints the card with the success tokens; 'error' fills it with
+   * bad-solid under white ink and an alert icon, for any failure or partial
+   * failure. Omitted: neutral.
+   */
   tone?: ToastTone;
   /**
    * Auto-dismiss delay in milliseconds. Omitted falls back to the default
-   * (5000ms). `0` or `null` makes the toast sticky (no auto-dismiss).
+   * (4000ms). `0` or `null` makes the toast sticky (no auto-dismiss).
    */
   durationMs?: number | null;
   /**

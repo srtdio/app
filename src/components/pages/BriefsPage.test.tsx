@@ -228,7 +228,7 @@ describe('deriveBriefGroups', () => {
 
   it('renders one section per time bucket with correct labels and counts', () => {
     const groups = deriveBriefGroups(briefs, 'all', '', NOW, CAL);
-    expect(groups.map((g) => g.label)).toEqual(['This Week', 'Last Week', 'June', 'May']);
+    expect(groups.map((g) => g.label)).toEqual(['This week', 'Last week', 'June', 'May']);
     expect(groups.map((g) => g.items.length)).toEqual([2, 1, 1, 1]);
     expect(groups.map((g) => g.key)).toEqual(['w0', 'w1', 'm-2026-06', 'm-2026-05']);
   });
@@ -241,7 +241,7 @@ describe('deriveBriefGroups', () => {
 
   it('lets the status chip change section counts (Closed drops the open This Week brief)', () => {
     const groups = deriveBriefGroups(briefs, 'closed', '', NOW, CAL);
-    expect(groups.map((g) => g.label)).toEqual(['This Week']);
+    expect(groups.map((g) => g.label)).toEqual(['This week']);
     expect(groups[0]!.items.map((b) => b.id)).toEqual(['closed']);
   });
 
@@ -255,11 +255,11 @@ describe('deriveBriefGroups', () => {
     // 19:00Z on Sunday 2026-07-05 is already Monday the 6th in Mumbai, so the
     // same instant opens This Week there and closes Last Week in London.
     const brief = [makeBrief('edge', { created_at: '2026-07-05T19:00:00Z' })];
-    expect(deriveBriefGroups(brief, 'all', '', NOW, CAL)[0]!.label).toBe('This Week');
+    expect(deriveBriefGroups(brief, 'all', '', NOW, CAL)[0]!.label).toBe('This week');
     expect(
       deriveBriefGroups(brief, 'all', '', NOW, { timeZone: 'Europe/London', weekStartDay: 1 })[0]!
         .label,
-    ).toBe('Last Week');
+    ).toBe('Last week');
   });
 });
 
@@ -315,6 +315,7 @@ describe('briefSections', () => {
     return briefSections({
       groups: deriveBriefGroups(briefs, 'all', '', NOW, CAL),
       timeZone: CAL.timeZone,
+      now: NOW,
       cache,
       presignEnabled: true,
       hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
@@ -330,17 +331,17 @@ describe('briefSections', () => {
     expect(sections).toHaveLength(2);
     expect(sections.map((s) => readSection(s))).toEqual([
       {
-        label: 'This Week',
+        label: 'This week',
         count: '2 briefs',
         days: [
-          { label: 'Tuesday 7 Jul', className: DAY_HEADING_CLASS, cards: 1 },
-          { label: 'Monday 6 Jul', className: DAY_HEADING_CLASS, cards: 1 },
+          { label: '7 Jul', className: DAY_HEADING_CLASS, cards: 1 },
+          { label: '6 Jul', className: DAY_HEADING_CLASS, cards: 1 },
         ],
       },
       {
         label: 'June',
         count: '1 brief',
-        days: [{ label: 'Wednesday 10 Jun', className: DAY_HEADING_CLASS, cards: 1 }],
+        days: [{ label: '10 Jun', className: DAY_HEADING_CLASS, cards: 1 }],
       },
     ]);
     const firstCard = (
@@ -360,7 +361,7 @@ describe('briefSections', () => {
     ]);
     expect(sections).toHaveLength(1);
     const { days } = readSection(sections[0]!);
-    expect(days.map((d) => d.label)).toEqual(['Wednesday 8 Jul', 'Monday 6 Jul']);
+    expect(days.map((d) => d.label)).toEqual(['8 Jul', '6 Jul']);
     expect(days.map((d) => d.cards)).toEqual([2, 1]);
   });
 
@@ -370,7 +371,7 @@ describe('briefSections', () => {
       makeBrief('b', { created_at: created('2026-07-07', '06:00') }),
     ]);
     const { days } = readSection(sections[0]!);
-    expect(days).toEqual([{ label: 'Tuesday 7 Jul', className: DAY_HEADING_CLASS, cards: 2 }]);
+    expect(days).toEqual([{ label: '7 Jul', className: DAY_HEADING_CLASS, cards: 2 }]);
   });
 
   it('reads the day heading in the workspace zone, not the browser zone', () => {
@@ -378,16 +379,17 @@ describe('briefSections', () => {
     const groups = deriveBriefGroups(briefs, 'all', '', NOW, CAL);
     const shared = {
       groups,
+      now: NOW,
       cache,
       presignEnabled: true,
       hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
     };
     expect(
       readSection(briefSections({ ...shared, timeZone: 'Asia/Kolkata' })[0]!).days[0]!.label,
-    ).toBe('Wednesday 8 Jul');
+    ).toBe('8 Jul');
     expect(
       readSection(briefSections({ ...shared, timeZone: 'Europe/London' })[0]!).days[0]!.label,
-    ).toBe('Tuesday 7 Jul');
+    ).toBe('7 Jul');
   });
 });
 

@@ -14,11 +14,8 @@ import { IconChevronRight } from '@/components/ui/icons';
 import { supabase } from '@/lib/supabase';
 import { listBuckets, type BucketOption } from '@/lib/buckets';
 import type { MemberOption } from '@/components/chat/member-picker';
-import {
-  formatPostTargetDate,
-  targetDateFromInput,
-  targetDateInputValue,
-} from '@/components/pages/pcs/post-date';
+import { targetDateFromInput, targetDateInputValue } from '@/components/pages/pcs/post-date';
+import { formatDay } from '@/lib/display-date';
 
 interface PostDetailsSheetProps {
   open: boolean;
@@ -54,7 +51,7 @@ interface PostDetailsSheetProps {
 /** The stored date as a day in the workspace zone, for read display. */
 function formatDate(value: string | null, timeZone: string): string {
   if (value === null) return 'No date';
-  return formatPostTargetDate(value, timeZone);
+  return formatDay(value, timeZone, new Date());
 }
 
 function originLabel(origin: string): string {

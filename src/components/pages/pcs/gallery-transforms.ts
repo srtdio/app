@@ -6,6 +6,7 @@
 // [], so removing the final image is allowed and leaves the post with no artwork.
 
 import type { GalleryItem } from '@srtdio/posts';
+import { errorText } from '@/lib/error-copy';
 
 /** Swap the item at `index` with the one before it. Out of range is a no-op. */
 export function moveLeft(ids: readonly string[], index: number): string[] {
@@ -92,14 +93,11 @@ export function dropIndex(from: number, dx: number, step: number, count: number)
 export const POST_APPROVED_LOCKED = 'post_approved_locked';
 
 /**
- * The one inline line a failed gallery write shows in the tools row: the
- * approved lock gets its own copy, anything else the generic retry line. Pure.
+ * The one inline line a failed gallery write shows in the tools row:
+ * "Couldn't update the gallery. {reason}", the approved lock included. Pure.
  */
 export function galleryWriteErrorCopy(error: { code: string; message: string }): string {
-  if (error.code === POST_APPROVED_LOCKED || error.message.includes(POST_APPROVED_LOCKED)) {
-    return "Approved posts can't be edited.";
-  }
-  return "Couldn't do that. Try again.";
+  return errorText('update the gallery', error);
 }
 
 /**

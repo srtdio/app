@@ -408,7 +408,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           onClick={() => void submit()}
         >
           {submitting
-            ? 'Sending'
+            ? 'Sending…'
             : sendLabel(Math.max(1, filledCount(slots.map((slot) => slot.body))))}
         </Button>
       </div>

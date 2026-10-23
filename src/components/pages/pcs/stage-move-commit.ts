@@ -14,7 +14,11 @@ import type { Stage } from '@srtdio/posts';
 
 /** The slice of the app-wide ToastApi this commit needs. */
 export interface StageMoveToast {
-  show: (options: { title: string; action?: { label: string; onPress: () => void } }) => unknown;
+  show: (options: {
+    title: string;
+    tone?: 'error';
+    action?: { label: string; onPress: () => void };
+  }) => unknown;
 }
 
 /** The slice of `document` the hidden-page hold needs (tests pass a fake). */
@@ -101,7 +105,7 @@ export async function runStageMoveCommit(deps: StageMoveCommitDeps): Promise<voi
     }
     const title = stageMoveFailureTitle(deps.to, deps.postTitle, deps.fromStage);
     showWhenVisible(deps.doc, () => {
-      deps.toast?.show({ title, action: openAction });
+      deps.toast?.show({ title, tone: 'error', action: openAction });
     });
   };
 
@@ -129,7 +133,7 @@ export async function runStageMoveCommit(deps: StageMoveCommitDeps): Promise<voi
       deps.log('post page: stage reason comment failed', { to: deps.to });
       const title = reasonFailureTitle(deps.to);
       showWhenVisible(deps.doc, () => {
-        deps.toast?.show({ title, action: openAction });
+        deps.toast?.show({ title, tone: 'error', action: openAction });
       });
     }
   }

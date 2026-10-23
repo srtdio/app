@@ -127,7 +127,7 @@ export function Sheet({
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-50 flex items-end bg-black/45 transition-opacity duration-base sm:items-center sm:justify-center',
+        'fixed inset-0 z-50 flex items-end bg-scrim transition-opacity duration-base sm:items-center sm:justify-center',
         entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
       )}
       onClick={onOverlayClick}

@@ -56,16 +56,11 @@ const ASPECT: Record<NonNullable<ThumbnailProps['aspect']>, string> = {
 /** The glyph/label/caption tile shown when there is no usable image preview. */
 function FallbackTile({ fallback }: { fallback: ThumbnailFallback }) {
   if (fallback.kind === 'post') {
-    const eyebrow = (
-      <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-fg-3">
-        {formatIcon(fallback.glyph, 13)}
-        {fallback.label}
-      </span>
-    );
+    // A plain tile on the Thumbnail's own bg-panel-3: the format icon and the
+    // body snippet, no decorative gradient and no uppercase format label.
     if (fallback.layout === 'media') {
       return (
-        <div className="relative flex h-full w-full flex-col items-center justify-center gap-2.5 bg-gradient-to-br from-panel-2 to-panel-3 p-3 text-center">
-          <span className="absolute left-3 top-3">{eyebrow}</span>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 p-3 text-center">
           <span className="text-fg-3">{formatIcon(fallback.glyph, 26)}</span>
           {fallback.body !== null ? (
             <p className="line-clamp-2 text-xs leading-snug text-fg-2">{fallback.body}</p>
@@ -74,8 +69,8 @@ function FallbackTile({ fallback }: { fallback: ThumbnailFallback }) {
       );
     }
     return (
-      <div className="flex h-full w-full flex-col bg-gradient-to-br from-panel-2 to-panel-3 p-3">
-        {eyebrow}
+      <div className="flex h-full w-full flex-col p-3">
+        <span className="text-fg-3">{formatIcon(fallback.glyph, 16)}</span>
         {fallback.body !== null ? (
           <p className="mt-auto line-clamp-4 text-xs leading-snug text-fg-2">{fallback.body}</p>
         ) : null}
@@ -103,7 +98,7 @@ function FallbackTile({ fallback }: { fallback: ThumbnailFallback }) {
   return (
     <div className="flex flex-col items-center gap-1 text-fg-2">
       <IconFile size={24} />
-      {ext !== '' ? <span className="text-[11px] font-medium tabular-nums">{ext}</span> : null}
+      {ext !== '' ? <span className="text-xs font-medium tabular-nums">{ext}</span> : null}
     </div>
   );
 }

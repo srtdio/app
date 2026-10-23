@@ -226,7 +226,7 @@ export function CommentComposer({
 
       {tooLong ? (
         <p role="alert" className="text-xs text-bad">
-          Comments must be at most {MAX_BODY.toLocaleString()} characters.
+          Comments must be at most {MAX_BODY.toLocaleString('en-US')} characters.
         </p>
       ) : null}
 
@@ -267,7 +267,7 @@ export function CommentComposer({
           disabled={!canSubmit}
           onClick={() => void submit()}
         >
-          {submitting ? 'Posting' : submitLabel}
+          {submitting ? 'Posting…' : submitLabel}
         </Button>
       </div>
 

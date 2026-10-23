@@ -451,14 +451,14 @@ describe('PipelineBoard approve confirm (drop)', () => {
     expect(confirmOf(sheet(h, [dated]))).toMatchObject({
       postTitle: 'Post p1',
       mediaCount: null,
-      targetDate: 'Oct 2',
+      targetDate: '2 Oct',
     });
     expect(confirmOf(sheet(h, [review])).targetDate).toBe('');
     // The sheet title is the format alone and the confirm never shows a KEY-N code.
     const el = sheet(h, [dated]);
     expect((el?.props as { title: string }).title).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
     const html = renderToStaticMarkup((el?.props as { footer: ReactElement }).footer);
-    expect(html).toContain('Approve Post p1, for Oct 2?');
+    expect(html).toContain('Approve Post p1, for 2 Oct?');
     expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 

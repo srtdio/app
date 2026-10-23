@@ -13,7 +13,7 @@ import {
   type AttachmentItem,
 } from '@/components/pages/create/AttachmentsField';
 import { supabase } from '@/lib/supabase';
-import { plainError } from '@/lib/error-copy';
+import { errorText } from '@/lib/error-copy';
 import { isTouchDevice } from '@/lib/modal-focus';
 import { useNewTrace } from '@/lib/trace-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
@@ -156,7 +156,7 @@ export async function submitCreateBrief(
     p_trace_id: deps.newTrace(),
   });
   // Plain copy only: the server's own text never reaches the sheet.
-  if (!created.ok) return { ok: false, message: plainError(created.error) };
+  if (!created.ok) return { ok: false, message: errorText('create the brief', created.error) };
 
   const comment = deps.initialComment.trim();
   let noteFailed = false;
@@ -346,7 +346,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
 
   function fieldError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-[11px] text-bad">{fieldErrors[key]}</p>
+      <p className="mt-1.5 text-xs text-bad">{fieldErrors[key]}</p>
     ) : null;
   }
 
@@ -424,7 +424,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             autoGrow
             value={form.brandRequirements}
             onChange={(event) => patch({ brandRequirements: event.target.value })}
-            placeholder="Colours, tone, logo use, words to avoid"
+            placeholder="Colors, tone, logo use, words to avoid"
           />
         </Field>
 
@@ -461,7 +461,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             />
           </div>
           {uploadNotice !== null ? (
-            <p role="status" className="mt-1.5 text-[11px] text-bad">
+            <p role="status" className="mt-1.5 text-xs text-bad">
               {uploadNotice}
             </p>
           ) : null}

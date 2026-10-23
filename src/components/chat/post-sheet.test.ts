@@ -89,7 +89,7 @@ describe('sheetActions', () => {
   it('agency in review: approve on their behalf, open in pipeline; elsewhere open in pipeline', () => {
     const review = sheetActions('agency', row({ stage: 'review' }), TZ);
     expect(review.actions).toEqual(['approve', 'open_pipeline']);
-    expect(review.hint).toBe('Waiting on approvers since Sep 20');
+    expect(review.hint).toBe('Waiting on approvers since 20 Sep');
     for (const stage of ['approved', 'parked', 'rejected']) {
       const set = sheetActions('agency', row({ stage }), TZ);
       expect(set.actions).toEqual(['open_pipeline']);
@@ -230,7 +230,10 @@ describe('labels and copy', () => {
 
   it('comment errors map to plain copy', () => {
     expect(friendlyCommentError('invalid_stage')).toBe('Comments open once the post is in review.');
-    expect(friendlyCommentError('mystery')).toBe('Could not add the comment. Please try again.');
+    expect(friendlyCommentError('mystery')).toBe("Couldn't add the comment. Try again.");
+    expect(friendlyCommentError('forbidden_role')).toBe(
+      "Couldn't add the comment. You don't have access to do this.",
+    );
   });
 
   it('no user-facing copy carries an em-dash', () => {
@@ -282,7 +285,7 @@ describe('detailRows', () => {
   it('target date, then format with the slide count past one', () => {
     const rows = detailRows(row({ mediaCount: 4 }), null, TZ);
     expect(rows.map((r) => r.key)).toEqual(['target', 'format']);
-    expect(rows[0]).toMatchObject({ label: 'Target date', value: 'Oct 2' });
+    expect(rows[0]).toMatchObject({ label: 'Target date', value: '2 Oct' });
     expect(rows[1]?.value).toMatch(/ · 4 slides$/);
     expect(detailRows(row({ mediaCount: 1 }), null, TZ)[1]?.value).not.toContain('slides');
   });
@@ -299,12 +302,12 @@ describe('detailRows', () => {
     );
     const approved = rows.find((r) => r.key === 'approved');
     expect(approved?.label).toBe('Approved');
-    expect(approved?.value).toMatch(/^Asha · Oct 1 /);
+    expect(approved?.value).toMatch(/^Asha · 1 Oct /);
   });
 
   it('approved with no approver: the date it entered approved', () => {
     const rows = detailRows(row({ stage: 'approved' }), null, TZ);
-    expect(rows.find((r) => r.key === 'approved')?.value).toBe('Sep 20');
+    expect(rows.find((r) => r.key === 'approved')?.value).toBe('20 Sep');
   });
 
   it('not approved and no approver: no approval row', () => {
@@ -363,7 +366,7 @@ describe('runStageChange', () => {
       postId: 'p1',
       traceId: 't',
     });
-    expect(error).toBe('You do not have permission to make this change.');
+    expect(error).toBe("Couldn't approve the post. You don't have access to do this.");
     expect(deps.transition).toHaveBeenCalledTimes(1);
     expect(events).toEqual([]);
     expect(deps.close).not.toHaveBeenCalled();
@@ -378,7 +381,7 @@ describe('runStageChange', () => {
       postId: 'p1',
       traceId: 't',
     });
-    expect(error).toBe('Something went wrong. Please try again.');
+    expect(error).toBe("Couldn't approve the post. Try again.");
     expect(deps.close).not.toHaveBeenCalled();
   });
 

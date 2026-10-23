@@ -191,7 +191,7 @@ describe('E11: approved card with no loaded approver name', () => {
       null,
       'UTC',
     );
-    expect(footer.state).toMatch(/^Approved · Sep 30 \d{1,2}:05/);
+    expect(footer.state).toMatch(/^Approved · 30 Sep \d{1,2}:05/);
     const named = { state: 'Approved by Ana', action: 'Open' };
     expect(approvedWithoutName(named, { stage: 'approved', approved_at: 'x' }, 'Ana', 'UTC')).toBe(
       named,

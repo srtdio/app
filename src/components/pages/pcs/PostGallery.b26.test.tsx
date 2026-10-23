@@ -164,12 +164,12 @@ describe('#26 gallery tools row', () => {
 
   it('shows the error once, inline, with the approved-lock copy', () => {
     const copy = galleryWriteErrorCopy({ code: 'unknown', message: 'post_approved_locked' });
-    expect(copy).toBe("Approved posts can't be edited.");
+    expect(copy).toBe("Couldn't update the gallery. Approved posts are locked.");
     expect(galleryWriteErrorCopy({ code: 'unknown', message: 'boom' })).toBe(
-      "Couldn't do that. Try again.",
+      "Couldn't update the gallery. Try again.",
     );
     const html = renderToStaticMarkup(galleryToolsRow(toolsModel({ error: copy })));
-    expect(html.split('Approved posts can&#x27;t be edited.')).toHaveLength(2);
+    expect(html.split('Approved posts are locked.')).toHaveLength(2);
     // The page drops the toast so the line never shows twice.
     expect(PAGE).not.toContain("push('Could not update the gallery. Please try again.')");
     expect(PAGE).toContain('setGalleryError(galleryWriteErrorCopy(result.error));');

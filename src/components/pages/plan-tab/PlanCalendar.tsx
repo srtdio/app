@@ -203,10 +203,7 @@ export function PlanCalendar(props: {
             {PLAN_ITEM_LEGEND}
           </span>
           <span className="flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className={cn('h-2 w-2 rounded-[2px]', LOOSE_POST_CLASSES.dot)}
-            />
+            <span aria-hidden="true" className={cn('h-2 w-2 rounded-sm', LOOSE_POST_CLASSES.dot)} />
             {LOOSE_POST_LEGEND}
           </span>
         </div>
@@ -430,7 +427,7 @@ function MonthGrid(props: {
 /** An entry's tone classes: its plan's soft colour and round dot, or the neutral square. */
 function entryLook(entry: CalendarEntry): { soft: string; dot: string } {
   if (entry.kind === 'post')
-    return { soft: LOOSE_POST_CLASSES.soft, dot: cn(LOOSE_POST_CLASSES.dot, 'rounded-[2px]') };
+    return { soft: LOOSE_POST_CLASSES.soft, dot: cn(LOOSE_POST_CLASSES.dot, 'rounded-sm') };
   const tone = PLAN_TONE_CLASSES[entry.tone];
   return { soft: tone.soft, dot: cn(tone.dot, 'rounded-full') };
 }

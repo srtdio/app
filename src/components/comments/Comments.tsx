@@ -26,11 +26,13 @@ import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { relativeLong, relativeShort, shortDate } from '@/lib/relative-time';
+import { browserTimeZone } from '@/lib/chat/time-format';
+import { formatAgo, formatDateTime } from '@/lib/display-date';
 import { UNDO_WINDOW_MS, useUndoableAction } from '@/lib/use-undoable-action';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { friendlyCommentError } from '@/components/comments/comment-errors';
+import { errorText } from '@/lib/error-copy';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { supabase } from '@/lib/supabase';
@@ -139,7 +141,9 @@ export interface CommentCounts {
 }
 
 /** The one failure copy for a one-tap Resolve (or its Undo) that did not land. */
-export const RESOLVE_FAILED_COPY = "Couldn't do that. Try again.";
+export const RESOLVE_FAILED_COPY = errorText('resolve the checkpoint', null);
+/** The one failure copy for a one-tap Confirm (or its Undo) that did not land. */
+export const CONFIRM_FAILED_COPY = errorText('confirm the checkpoint', null);
 
 /** The Comments header line: "{n} open · {m} resolved". Pure. */
 /** A checkpoint's live state as the comments list shows it (optimistic taps included). */
@@ -255,12 +259,13 @@ export function annotationChip(
   );
 }
 
-// Format a stored timestamp as a localized date and time. Falls back to the raw
-// value if it is somehow unparseable so nothing is silently dropped.
+// Format a stored timestamp with the app formatter ("23 Oct, 2:14 PM", browser
+// zone: comments carry no workspace zone). Falls back to the raw value if it is
+// somehow unparseable so nothing is silently dropped.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return formatDateTime(value, browserTimeZone(), new Date());
 }
 
 // ---------------------------------------------------------------------------
@@ -695,15 +700,10 @@ export function pointActions(
   return base;
 }
 
-/** The clock time of an edit: "2:14 pm" on the same day, else the calendar date
- *  ("Jun 11"). Unparseable input yields '' so nothing raw is shown. */
+/** When an edit happened, via the app formatter: "1 Mar, 2:14 PM" (browser
+ *  zone). Unparseable input yields '' so nothing raw is shown. */
 export function editedTime(ts: string, now: Date): string {
-  const date = new Date(ts);
-  if (Number.isNaN(date.getTime())) return '';
-  if (date.toDateString() !== now.toDateString()) return shortDate(ts, now);
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${hours % 12 === 0 ? 12 : hours % 12}:${minutes} ${hours < 12 ? 'am' : 'pm'}`;
+  return formatDateTime(ts, browserTimeZone(), now);
 }
 
 /** The "edited <time>" marker shared by comments and ledger points, or null when
@@ -1216,7 +1216,10 @@ export function Comments({
         traceId: newTrace(),
       }),
     );
-    if (!result.ok) return { ok: false, error: friendlyCommentError(result.error) };
+    if (!result.ok) {
+      const action = options.parentCommentId !== null ? 'post the reply' : 'post the comment';
+      return { ok: false, error: friendlyCommentError(result.error, action) };
+    }
     const parentId = options.parentCommentId;
     if (parentId !== null) replyDrafts.delete(draftKey(parentId));
     // The guide's reply landed: it moves on even if a phone lost the tap.
@@ -1253,7 +1256,9 @@ export function Comments({
       points,
       traceId: newTrace(),
     });
-    if (!result.ok) return { ok: false, error: friendlyCommentError(result.error) };
+    if (!result.ok) {
+      return { ok: false, error: friendlyCommentError(result.error, 'add the checkpoints') };
+    }
     await loadPage(0);
     return { ok: true };
   }
@@ -1281,7 +1286,7 @@ export function Comments({
         id: commentId,
         message: isPoint
           ? friendlyPointFreezeError(result.error, target, 'edit')
-          : friendlyCommentError(result.error),
+          : friendlyCommentError(result.error, 'edit the comment'),
       });
       return;
     }
@@ -1314,7 +1319,7 @@ export function Comments({
             id: commentId,
             message: isPoint
               ? friendlyPointFreezeError(result.error, target, 'delete')
-              : friendlyCommentError(result.error),
+              : friendlyCommentError(result.error, 'delete the comment'),
           });
           return;
         }
@@ -1334,7 +1339,13 @@ export function Comments({
     const result = await resolveComment(supabase, { commentId: comment.id, resolved }, newTrace());
     setResolvingId((current) => (current === comment.id ? null : current));
     if (!result.ok) {
-      setRowError({ id: comment.id, message: friendlyCommentError(result.error) });
+      setRowError({
+        id: comment.id,
+        message: friendlyCommentError(
+          result.error,
+          resolved ? 'resolve the thread' : 'reopen the thread',
+        ),
+      });
       return;
     }
     await loadPage(0);
@@ -1458,7 +1469,7 @@ export function Comments({
               if (!mounted.current) return;
               if (!withdrawn) {
                 patchAcceptedAt(comment.id, optimistic);
-                setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+                setRowError({ id: comment.id, message: CONFIRM_FAILED_COPY });
               }
             });
           },
@@ -1470,7 +1481,7 @@ export function Comments({
       if (!mounted.current || undone || landed) return;
       if (stripId !== null) toast?.dismiss(stripId);
       patchAcceptedAt(comment.id, prior);
-      setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+      setRowError({ id: comment.id, message: CONFIRM_FAILED_COPY });
     });
   }
 
@@ -1708,7 +1719,7 @@ export function Comments({
             ·
           </span>
           <span className="shrink-0 text-xs text-fg-3 tabular-nums">
-            {relativeLong(comment.created_at, new Date())}
+            {formatAgo(comment.created_at, new Date())}
           </span>
           {!editing && pointMenuMode(actions) === 'menu' ? (
             <div className="relative ml-auto shrink-0">
@@ -1841,7 +1852,7 @@ export function Comments({
                 isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
               }
             >
-              {isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}
+              {isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}
             </Button>
           ) : null}
           {!tombstone ? copyControl(comment) : null}
@@ -2080,7 +2091,7 @@ export function Comments({
                       {label.text}
                     </span>
                     <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-fg-3">
-                      {relativeShort(comment.created_at, new Date())}
+                      {formatAgo(comment.created_at, new Date())}
                     </span>
                     {!tombstone ? (
                       <Button
@@ -2141,7 +2152,7 @@ export function Comments({
                         disabled={busy}
                         onClick={() => void handleCheckpointNotDone(comment)}
                       >
-                        {busy ? 'Saving' : 'Not done'}
+                        {busy ? 'Saving…' : 'Not done'}
                       </QuietTextButton>
                     </div>
                   ) : null}

@@ -70,6 +70,19 @@
   --overlay-surface: rgba(244, 245, 246, 0.12);
   --overlay-line: rgba(244, 245, 246, 0.14);
   --overlay-dot: rgba(244, 245, 246, 0.4);
+  /* Small badges laid over a picture (slide count, play glyph, card menu):
+     a translucent black under overlay-fg ink, constant across themes because
+     the picture under it does not flip. */
+  --overlay-badge: rgba(0, 0, 0, 0.5);
+  --overlay-badge-hover: rgba(0, 0, 0, 0.6);
+  /* Initials avatar fills under white ink: every tone is 4.5:1 or more against
+     white (4.7, 4.9, 5.0, 5.4, 5.3, 5.4). */
+  --avatar-1: #5e6ad2;
+  --avatar-2: #3e7d54;
+  --avatar-3: #9a6420;
+  --avatar-4: #c2392b;
+  --avatar-5: #7a5ea8;
+  --avatar-6: #237484;
   /* Motion token scale. Theme-invariant, so it lives only on :root and both
      light and dark inherit it (parity for free). Durations pair with the two
      easing curves below: ease-enter for entrances, ease-exit for every exit. */
@@ -147,6 +160,16 @@
   --overlay-surface: rgba(244, 245, 246, 0.12);
   --overlay-line: rgba(244, 245, 246, 0.14);
   --overlay-dot: rgba(244, 245, 246, 0.4);
+  --overlay-badge: rgba(0, 0, 0, 0.5);
+  --overlay-badge-hover: rgba(0, 0, 0, 0.6);
+  /* Avatar fills keep white initials at 4.5:1 or more on dark panels too, so
+     the light values hold (4.7, 4.9, 5.0, 5.4, 5.3, 5.4). */
+  --avatar-1: #5e6ad2;
+  --avatar-2: #3e7d54;
+  --avatar-3: #9a6420;
+  --avatar-4: #c2392b;
+  --avatar-5: #7a5ea8;
+  --avatar-6: #237484;
   --shadow-panel-left: -12px 0 24px -12px rgba(0, 0, 0, 0.55);
   /* Brighter amber so the hairline reads on dark panels; the pill keeps its
      dark ink (10:1). */
@@ -184,6 +207,10 @@
   body {
     color: var(--fg);
     touch-action: manipulation;
+    /* A long unbroken string (a pasted link) wraps instead of pushing the page
+       sideways. Inherited; break-word, never anywhere, so min-content sizing
+       of flex and grid children is unchanged. */
+    overflow-wrap: break-word;
     font-family:
       'Inter',
       -apple-system,

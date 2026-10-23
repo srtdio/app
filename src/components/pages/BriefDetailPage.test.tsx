@@ -8,25 +8,27 @@ import {
 import type { BriefGalleryItem } from '@srtdio/briefs';
 
 // The Details "Raised" row: the day the brief was raised in the WORKSPACE zone,
-// carrying its four-digit year, e.g. "Tuesday 22 Sep 2026".
+// in the app day format ("22 Sep", the year only outside now's year).
 describe('briefRaisedLabel', () => {
-  it('renders the raised day with the year in the workspace zone', () => {
-    expect(briefRaisedLabel('2026-09-22T12:00:00Z', 'Asia/Kolkata')).toBe('Tuesday 22 Sep 2026');
+  const now = new Date('2026-10-23T12:00:00Z');
+
+  it('renders the raised day in the workspace zone, no year in the current year', () => {
+    expect(briefRaisedLabel('2026-09-22T12:00:00Z', 'Asia/Kolkata', now)).toBe('22 Sep');
   });
 
   it('reads day AND year in the workspace zone, not the browser zone', () => {
     // 19:00Z on 31 Dec 2025 is already 1 Jan 2026 in Mumbai; London still reads
     // the old year, so the year must come from the same zoned reading as the day.
-    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Asia/Kolkata')).toBe('Thursday 1 Jan 2026');
-    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Europe/London')).toBe('Wednesday 31 Dec 2025');
+    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Asia/Kolkata', now)).toBe('1 Jan');
+    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Europe/London', now)).toBe('31 Dec 2025');
   });
 
-  it('degrades an unknown zone to UTC instead of throwing', () => {
-    expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Not/AZone')).toBe('Wednesday 31 Dec 2025');
+  it('never throws on an unknown zone', () => {
+    expect(() => briefRaisedLabel('2025-12-31T19:00:00Z', 'Not/AZone', now)).not.toThrow();
   });
 
   it('returns an unparseable created_at unchanged', () => {
-    expect(briefRaisedLabel('not-a-date', 'Asia/Kolkata')).toBe('not-a-date');
+    expect(briefRaisedLabel('not-a-date', 'Asia/Kolkata', now)).toBe('not-a-date');
   });
 });
 

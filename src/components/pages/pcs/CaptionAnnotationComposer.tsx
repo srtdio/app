@@ -90,7 +90,7 @@ export function CaptionAnnotationComposer({
             disabled={!canPost}
             onClick={() => void onSubmit(body)}
           >
-            {submitting ? 'Posting' : 'Post'}
+            {submitting ? 'Posting…' : 'Post'}
           </Button>
         </>
       }

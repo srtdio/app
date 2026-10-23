@@ -423,13 +423,14 @@ describe('honest post counter (fix 3)', () => {
 
 describe('moveErrorMessage', () => {
   it('maps every proc code to the one plain line without leaking the raw code', () => {
-    for (const code of [
-      'invalid_stage_transition',
-      'forbidden_role',
-      'workspace_member_only',
-      'unknown',
-    ] as const) {
+    for (const code of ['invalid_stage_transition', 'unknown'] as const) {
       expect(moveErrorMessage(code)).toBe("Couldn't move the post. Try again.");
+      expect(moveErrorMessage(code)).not.toContain(code);
+    }
+    for (const code of ['forbidden_role', 'workspace_member_only'] as const) {
+      expect(moveErrorMessage(code)).toBe(
+        "Couldn't move the post. You don't have access to do this.",
+      );
       expect(moveErrorMessage(code)).not.toContain(code);
     }
   });
@@ -507,6 +508,48 @@ describe('runMovePost', () => {
     expect(h.toasts).toEqual([MOVE_FALLBACK_MESSAGE]);
     // The double-fire guard cleared on failure exactly as on success.
     expect(h.deps.inFlight.has('p1')).toBe(false);
+  });
+
+  it('offline: a fetch failure toasts "Couldn\'t move the post. You\'re offline." with Retry', async () => {
+    stMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const h = harness([makePost('p1', 'draft')]);
+    const failures: Array<{ message: string; retry: boolean }> = [];
+    const deps: MovePostDeps = {
+      ...h.deps,
+      toast: (message, failure) => failures.push({ message, retry: failure?.retry !== undefined }),
+    };
+
+    await runMovePost(deps, 'p1', 'review');
+
+    expect(failures).toEqual([{ message: "Couldn't move the post. You're offline.", retry: true }]);
+  });
+
+  it('a refusal toasts as a failure with no Retry', async () => {
+    stMock.mockResolvedValue({
+      ok: false,
+      error: { code: 'forbidden_role', message: 'forbidden_role' },
+    } satisfies Result<string>);
+    const h = harness([makePost('p1', 'draft')]);
+    const failures: Array<{ message: string; failed: boolean; retry: boolean }> = [];
+    const deps: MovePostDeps = {
+      ...h.deps,
+      toast: (message, failure) =>
+        failures.push({
+          message,
+          failed: failure !== undefined,
+          retry: failure?.retry !== undefined,
+        }),
+    };
+
+    await runMovePost(deps, 'p1', 'review');
+
+    expect(failures).toEqual([
+      {
+        message: "Couldn't move the post. You don't have access to do this.",
+        failed: true,
+        retry: false,
+      },
+    ]);
   });
 
   it('double-fire guard: two rapid calls for the same post fire the proc once', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRaisedDay, groupBriefsByDay, groupBriefsByTime } from '@/lib/brief-groups';
+import { groupBriefsByDay, groupBriefsByTime } from '@/lib/brief-groups';
 
 // The workspace calendar every case is read on: Mumbai, weeks opening Monday.
 // Passing it explicitly is the point of the change - nothing below depends on
@@ -32,7 +32,7 @@ describe('groupBriefsByTime', () => {
     const monday = { ...at('2026-07-06', '00:00'), id: 'mon' };
     const sunday = { ...at('2026-07-05', '23:00'), id: 'sun' };
     const groups = groupBriefsByTime([sunday, monday], NOW, CAL);
-    expect(groups.map((g) => g.label)).toEqual(['This Week', 'Last Week']);
+    expect(groups.map((g) => g.label)).toEqual(['This week', 'Last week']);
     expect(groups[0]!.key).toBe('w0');
     expect(groups[0]!.items.map((i) => i.id)).toEqual(['mon']);
     expect(groups[1]!.key).toBe('w1');
@@ -46,7 +46,7 @@ describe('groupBriefsByTime', () => {
       at('2026-07-05'), // Sun, last week (edge)
       at('2026-06-29'), // Mon, last week (edge, opens prev week)
     ];
-    expect(labels(NOW, items)).toEqual(['This Week', 'Last Week']);
+    expect(labels(NOW, items)).toEqual(['This week', 'Last week']);
     const groups = groupBriefsByTime(items, NOW, CAL);
     expect(groups[0]!.items).toHaveLength(2);
     expect(groups[1]!.items).toHaveLength(2);
@@ -56,7 +56,7 @@ describe('groupBriefsByTime', () => {
     const items = [at('2026-07-01'), at('2026-06-30'), at('2026-06-29')];
     const groups = groupBriefsByTime(items, NOW, CAL);
     expect(groups).toHaveLength(1);
-    expect(groups[0]!.label).toBe('Last Week');
+    expect(groups[0]!.label).toBe('Last week');
     expect(groups[0]!.items).toHaveLength(3);
   });
 
@@ -68,7 +68,7 @@ describe('groupBriefsByTime', () => {
       at('2026-06-10'), // June (before the last-week window)
     ];
     const groups = groupBriefsByTime(items, NOW, CAL);
-    expect(groups.map((g) => g.label)).toEqual(['This Week', 'June', 'May', 'April']);
+    expect(groups.map((g) => g.label)).toEqual(['This week', 'June', 'May', 'April']);
     expect(groups.map((g) => g.key)).toEqual(['w0', 'm-2026-06', 'm-2026-05', 'm-2026-04']);
   });
 
@@ -98,19 +98,19 @@ describe('groupBriefsByTime', () => {
     // therefore Last Week in London and This Week in Mumbai.
     const brief = { created_at: '2026-09-20T19:00:00Z' };
     const now = new Date('2026-09-25T12:00:00Z');
-    expect(groupBriefsByTime([brief], now, CAL)[0]!.label).toBe('This Week');
+    expect(groupBriefsByTime([brief], now, CAL)[0]!.label).toBe('This week');
     expect(
       groupBriefsByTime([brief], now, { timeZone: 'Europe/London', weekStartDay: 1 })[0]!.label,
-    ).toBe('Last Week');
+    ).toBe('Last week');
   });
 
   it('honours a Sunday week start (weekStartDay 0 pulls Sunday into This Week)', () => {
     // Sunday 2026-07-05 closes the previous week when weeks open on Monday, and
     // OPENS the current one when they open on Sunday.
     const sunday = [at('2026-07-05')];
-    expect(groupBriefsByTime(sunday, NOW, CAL)[0]!.label).toBe('Last Week');
+    expect(groupBriefsByTime(sunday, NOW, CAL)[0]!.label).toBe('Last week');
     expect(groupBriefsByTime(sunday, NOW, { timeZone: ZONE, weekStartDay: 0 })[0]!.label).toBe(
-      'This Week',
+      'This week',
     );
   });
 
@@ -119,32 +119,24 @@ describe('groupBriefsByTime', () => {
     const now = new Date('2026-09-25T12:00:00Z');
     const bad = groupBriefsByTime([brief], now, { timeZone: 'Not/AZone', weekStartDay: 1 });
     // UTC reads the instant as Sunday 20 Sep, exactly like London does here.
-    expect(bad.map((g) => g.label)).toEqual(['Last Week']);
-  });
-});
-
-describe('formatRaisedDay', () => {
-  it('formats a stored timestamp as "Weekday D Mon" in the workspace zone', () => {
-    expect(formatRaisedDay('2026-09-22T12:00:00Z', ZONE)).toBe('Tuesday 22 Sep');
-  });
-
-  it('reads the day in the given zone, so one instant can be two days', () => {
-    expect(formatRaisedDay('2026-09-22T19:00:00Z', ZONE)).toBe('Wednesday 23 Sep');
-    expect(formatRaisedDay('2026-09-22T19:00:00Z', 'Europe/London')).toBe('Tuesday 22 Sep');
-  });
-
-  it('degrades an unknown zone to UTC instead of throwing', () => {
-    expect(formatRaisedDay('2026-09-22T19:00:00Z', 'Not/AZone')).toBe('Tuesday 22 Sep');
-  });
-
-  it('returns an unparseable timestamp unchanged', () => {
-    expect(formatRaisedDay('not-a-date', ZONE)).toBe('not-a-date');
+    expect(bad.map((g) => g.label)).toEqual(['Last week']);
   });
 });
 
 describe('groupBriefsByDay', () => {
   it('returns no groups for empty input', () => {
-    expect(groupBriefsByDay([], ZONE)).toEqual([]);
+    expect(groupBriefsByDay([], ZONE, NOW)).toEqual([]);
+  });
+
+  it('labels the day with the app day format, the year only outside now', () => {
+    expect(groupBriefsByDay([at('2026-09-22')], ZONE, NOW)[0]!.label).toBe('22 Sep');
+    expect(groupBriefsByDay([at('2025-09-22')], ZONE, NOW)[0]!.label).toBe('22 Sep 2025');
+  });
+
+  it('shows an unparseable timestamp as stored', () => {
+    expect(groupBriefsByDay([{ created_at: 'not-a-date' }], ZONE, NOW)[0]!.label).toBe(
+      'not-a-date',
+    );
   });
 
   it('collapses briefs raised on the same workspace day into one group', () => {
@@ -152,10 +144,10 @@ describe('groupBriefsByDay', () => {
       { ...at('2026-09-22', '18:00'), id: 'a' },
       { ...at('2026-09-22', '09:00'), id: 'b' },
     ];
-    const groups = groupBriefsByDay(items, ZONE);
+    const groups = groupBriefsByDay(items, ZONE, NOW);
     expect(groups).toHaveLength(1);
     expect(groups[0]!.key).toBe('d-2026-09-22');
-    expect(groups[0]!.label).toBe('Tuesday 22 Sep');
+    expect(groups[0]!.label).toBe('22 Sep');
     expect(groups[0]!.items.map((i) => i.id)).toEqual(['a', 'b']);
   });
 
@@ -164,22 +156,22 @@ describe('groupBriefsByDay', () => {
       { ...at('2026-09-23', '10:00'), id: 'newer' },
       { ...at('2026-09-22', '10:00'), id: 'older' },
     ];
-    const groups = groupBriefsByDay(items, ZONE);
+    const groups = groupBriefsByDay(items, ZONE, NOW);
     expect(groups.map((g) => g.key)).toEqual(['d-2026-09-23', 'd-2026-09-22']);
-    expect(groups.map((g) => g.label)).toEqual(['Wednesday 23 Sep', 'Tuesday 22 Sep']);
+    expect(groups.map((g) => g.label)).toEqual(['23 Sep', '22 Sep']);
     expect(groups.map((g) => g.items.map((i) => i.id))).toEqual([['newer'], ['older']]);
   });
 
   it('buckets by the workspace civil day, so the same instant can change group', () => {
     const items = [{ created_at: '2026-09-22T19:00:00Z', id: 'x' }];
-    expect(groupBriefsByDay(items, ZONE)[0]!.key).toBe('d-2026-09-23');
-    expect(groupBriefsByDay(items, ZONE)[0]!.label).toBe('Wednesday 23 Sep');
-    expect(groupBriefsByDay(items, 'Europe/London')[0]!.key).toBe('d-2026-09-22');
-    expect(groupBriefsByDay(items, 'Europe/London')[0]!.label).toBe('Tuesday 22 Sep');
+    expect(groupBriefsByDay(items, ZONE, NOW)[0]!.key).toBe('d-2026-09-23');
+    expect(groupBriefsByDay(items, ZONE, NOW)[0]!.label).toBe('23 Sep');
+    expect(groupBriefsByDay(items, 'Europe/London', NOW)[0]!.key).toBe('d-2026-09-22');
+    expect(groupBriefsByDay(items, 'Europe/London', NOW)[0]!.label).toBe('22 Sep');
   });
 
   it('degrades an unknown zone to UTC instead of throwing', () => {
     const items = [{ created_at: '2026-09-22T19:00:00Z', id: 'x' }];
-    expect(groupBriefsByDay(items, 'Not/AZone')[0]!.label).toBe('Tuesday 22 Sep');
+    expect(groupBriefsByDay(items, 'Not/AZone', NOW)[0]!.label).toBe('22 Sep');
   });
 });

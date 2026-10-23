@@ -157,14 +157,14 @@ describe('caption quote inside the comment (item 3)', () => {
     expect(quote).toBeGreaterThan(-1);
     expect(quote).toBeLessThan(body);
     expect(SRC).toContain('data-comment-role=""');
-    expect(SRC).toContain('relativeLong(comment.created_at, new Date())');
+    expect(SRC).toContain('formatAgo(comment.created_at, new Date())');
   });
 });
 
 describe('action row and composer (items 3, 4)', () => {
   it('Reply, Resolve/Reopen and Copy are visible on every thread; the kebab holds only Edit / Delete', () => {
     expect(SRC).toContain('{!tombstone ? copyControl(comment) : null}');
-    expect(SRC).toContain("{isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}");
+    expect(SRC).toContain("{isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}");
     expect(SRC).toContain('{isReply && actions.canCopy ? (');
     expect(SRC).toContain("{copyFailed ? COPY_FAILED : 'Copied'}");
     expect(SRC).not.toContain("'Comment copied'");

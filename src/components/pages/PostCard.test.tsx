@@ -97,11 +97,13 @@ describe('PostCard thumbnail frame', () => {
       cache,
       presignEnabled: true,
     });
-    // The format-aware tile carries the body snippet (the caption) and the glyph
-    // eyebrow, never an <img>.
+    // The plain format tile carries the body snippet (the caption) and the
+    // format icon, never an <img> and never an uppercase format label.
     expect(withCaption).toContain('Launch day is here');
     expect(withCaption).toContain('<svg');
     expect(withCaption).not.toContain('<img');
+    expect(withCaption).not.toContain('uppercase');
+    expect(withCaption).not.toContain('bg-gradient-to-br');
 
     // A blank caption falls back to the title as the body, so the tile is never
     // a lone glyph for a titled post.

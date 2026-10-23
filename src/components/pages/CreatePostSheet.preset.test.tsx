@@ -359,6 +359,9 @@ describe('preset helpers', () => {
         savedDraft: false,
       }),
     ).toBe('Save as draft');
+    expect(presetPrimaryLabel({ preset: SEND, submitting: true, savedDraft: false })).toBe(
+      'Sending…',
+    );
   });
 
   it('needs a caption, and media when the format needs it', () => {
