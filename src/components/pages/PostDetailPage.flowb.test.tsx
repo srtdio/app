@@ -476,7 +476,10 @@ describe('pin and highlight taps never push history', () => {
 
   it('the dead tab code is gone (no ?tab= writes)', () => {
     const src = readFileSync(
-      fileURLToPath(new URL('./PostDetailPage.tsx', import.meta.url)),
+      fileURLToPath(import.meta.url).replace(
+        /PostDetailPage\.flowb3?\.test\.tsx$/,
+        'PostDetailPage.tsx',
+      ),
       'utf8',
     );
     expect(src).not.toContain('PcsTabs');

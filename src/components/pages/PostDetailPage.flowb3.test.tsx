@@ -440,7 +440,10 @@ describe('37. approved posts are locked', () => {
 
   it('the caption save maps the lock through the same copy', () => {
     const src = readFileSync(
-      fileURLToPath(new URL('./PostDetailPage.tsx', import.meta.url)),
+      fileURLToPath(import.meta.url).replace(
+        /PostDetailPage\.flowb3?\.test\.tsx$/,
+        'PostDetailPage.tsx',
+      ),
       'utf8',
     );
     expect(src).toContain('setCaptionError(postActionErrorCopy(result.error));');

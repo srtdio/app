@@ -158,7 +158,8 @@ describe('#26 gallery tools row', () => {
   });
 
   it('the page computes canEdit from the stage (never on approved)', () => {
-    expect(PAGE).toContain("canEdit: agencySide && !readOnly && currentStage !== 'approved',");
+    expect(PAGE).toContain('const canEditContent = agencySide && !readOnly && !approvedLocked;');
+    expect(PAGE).toContain('canEdit: canEditContent,');
   });
 
   it('shows the error once, inline, with the approved-lock copy', () => {
