@@ -302,11 +302,14 @@ describe('Briefs zero-result headings', () => {
 });
 
 describe('Briefs list cards', () => {
-  it('the title is a real link, no role=link wrapper, no buttons inside a link, no Close', async () => {
+  it('the card is one real link named by the title, no role=link wrapper, no buttons inside a link, no Close', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b7', { number: 7 })] });
     await mount();
-    const link = [...document.querySelectorAll('a')].find((a) => a.textContent === 'Brief b7');
+    const link = [...document.querySelectorAll('a')].find(
+      (a) => a.getAttribute('aria-label') === 'Brief b7',
+    );
     expect(link?.getAttribute('href')).toBe('/b/acme-7');
+    expect(link?.hasAttribute('data-brief-card-link')).toBe(true);
     expect(document.querySelector('[role="link"]')).toBeNull();
     expect(document.querySelector('a button, [role="link"] button')).toBeNull();
     expect(button('Close')).toBeUndefined();
