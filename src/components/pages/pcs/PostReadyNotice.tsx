@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { formatAgo } from '@/lib/display-date';
+import { errorText } from '@/lib/error-copy';
 import { supabase } from '@/lib/supabase';
 import { personName, resolvePeople } from '@/lib/people-names';
 import { useNewTrace } from '@/lib/trace-context';

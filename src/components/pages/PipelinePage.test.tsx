@@ -423,13 +423,14 @@ describe('honest post counter (fix 3)', () => {
 
 describe('moveErrorMessage', () => {
   it('maps every proc code to the one plain line without leaking the raw code', () => {
-    for (const code of [
-      'invalid_stage_transition',
-      'forbidden_role',
-      'workspace_member_only',
-      'unknown',
-    ] as const) {
+    for (const code of ['invalid_stage_transition', 'unknown'] as const) {
       expect(moveErrorMessage(code)).toBe("Couldn't move the post. Try again.");
+      expect(moveErrorMessage(code)).not.toContain(code);
+    }
+    for (const code of ['forbidden_role', 'workspace_member_only'] as const) {
+      expect(moveErrorMessage(code)).toBe(
+        "Couldn't move the post. You don't have access to do this.",
+      );
       expect(moveErrorMessage(code)).not.toContain(code);
     }
   });

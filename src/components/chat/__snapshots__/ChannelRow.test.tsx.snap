@@ -4,7 +4,7 @@ exports[`chat home tile > Groups wide: 100 tall row, 76px rounded-square photo, 
 {
   "classes": [
     "flex h-[76px] w-[76px] shrink-0 [&amp;&gt;*]:!h-[76px] [&amp;&gt;*]:!w-[76px] [&amp;&gt;*]:!rounded-[18px] [&amp;&gt;*]:!text-xl",
-    "rounded-full inline-flex items-center justify-center select-none text-white font-medium text-sm",
+    "rounded-full inline-flex items-center justify-center select-none bg-avatar-4 text-white font-medium text-sm",
     "flex min-w-0 flex-1 flex-col gap-1",
     "flex min-w-0 items-baseline gap-2",
     "flex min-w-0 flex-1",
@@ -21,7 +21,7 @@ exports[`chat home tile > People square: 168 tall centred column, 72px disc, 1-l
 {
   "classes": [
     "flex h-[72px] w-[72px] shrink-0 [&amp;&gt;*]:!h-[72px] [&amp;&gt;*]:!w-[72px] [&amp;&gt;*]:!text-xl",
-    "rounded-full inline-flex items-center justify-center select-none text-white font-medium text-sm",
+    "rounded-full inline-flex items-center justify-center select-none bg-avatar-2 text-white font-medium text-sm",
     "mt-1.5 flex w-full min-w-0 justify-center",
     "min-w-0 truncate text-fg text-[15px] leading-[20px] font-semibold",
     "mt-0.5 flex w-full min-w-0 justify-center",
