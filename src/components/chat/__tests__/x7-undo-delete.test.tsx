@@ -1,4 +1,4 @@
-// X7 fix 5 (FT39): deleting a single text message goes behind a 7s Undo (the
+// X7 fix 5 (FT39): deleting a single text message goes behind a 4s Undo (the
 // row reads as a tombstone at once; the delete for everyone runs after the
 // window through the existing delete path); a message with files keeps the
 // confirm. The commit is bound to its chat, so a flush after the chat was left
@@ -64,7 +64,7 @@ describe('X7 FT39: delete a text message, then Undo', () => {
         msg({ attachments: [{ assetId: 'a1', name: 'photo.jpg', mime: 'image/jpeg' }] }),
       ),
     ).toBe(false);
-    expect(UNDO_WINDOW_MS).toBe(7000);
+    expect(UNDO_WINDOW_MS).toBe(4000);
     expect(MESSAGE_DELETED_UNDO).toBe('Message deleted');
   });
 

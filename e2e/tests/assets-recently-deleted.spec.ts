@@ -19,6 +19,7 @@ import {
   type DeletedRoutes,
 } from '../fixtures/assets-recently-deleted';
 import { expectMinTouchTarget } from '../helpers/touch-target';
+import { swipeStripDown, undoStrip } from '../helpers/undo-strip';
 
 // Recently deleted: a delete hides the file behind an Undo toast and commits
 // when the toast ends; a delete refused with asset_in_use explains where the
@@ -84,13 +85,12 @@ async function deleteFromViewer(page: Page, name: string): Promise<void> {
   await expect(viewer).toHaveCount(0);
 }
 
-/** The shell's Undo toast for a one-file delete. */
-const undoToast = (page: Page): Locator =>
-  page.locator('[role="status"][aria-live="polite"] > div').filter({ hasText: 'File deleted' });
+/** The shell's bottom Undo strip for a one-file delete. */
+const undoToast = (page: Page): Locator => undoStrip(page, 'File deleted');
 
-/** End the Undo window early: the toast's X accepts, so the delete commits. */
+/** End the Undo window early: a swipe down accepts, so the delete commits. */
 async function commitDelete(page: Page): Promise<void> {
-  await undoToast(page).getByRole('button', { name: 'Dismiss notification' }).click();
+  await swipeStripDown(page, undoToast(page));
 }
 
 const deletedRow = (page: Page, name: string): Locator =>

@@ -19,13 +19,14 @@ import {
   seedClientPlanWithDraft,
 } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
+import { swipeStripDown, undoStrip } from '../helpers/undo-strip';
 
 // Plan week list and slot approval: one list grouped by day (empty days read
 // "Nothing planned", one date tile per day), a PLAN line per row (the OK | Not
 // OK switch while undecided, a solid pill once decided; client side for a
 // client, team side for the agency, read-only text for the agency on an Open
 // plan), an optimistic OK behind a 4s Undo toast (X3 / FT52: the write goes
-// when the toast ends or is closed, never after Undo), Not OK opening the item
+// when the strip ends or is swiped away, never after Undo), Not OK opening the item
 // with the note box focused, a draft row without a PLAN line for a client, the
 // post item's "Slot approved" header and its overflow (the post view's own
 // sheet), and the delete confirm naming the plan. Runs in both colour schemes
@@ -153,19 +154,15 @@ test('client: week list, OK with Undo, counts, slot header, overflow, reopen the
   await expect(undo).toHaveText('Undo');
   // The fixture's post item has no plan day, so the toast names none.
   await expect(page.getByText(/^Slot approved( · \w{3} \d{1,2} \w{3})?$/)).toBeVisible();
-  // L5: the success-tinted toast with Undo at its right end (the 4s countdown
-  // bar under the card is the only thing after it).
-  const success = page.locator('[data-toast-tone="success"]');
-  await expect(success).toBeVisible();
-  await expect(success.locator('[data-toast-action]')).toHaveText('Undo');
-  await expect(success.locator('[data-toast-countdown]')).toHaveCount(1);
+  // The Undo strip at the bottom: label left, Undo its last child; no X and
+  // no countdown bar.
+  const strip = undoStrip(page, /Slot approved/);
+  await expect(strip).toBeVisible();
+  await expect(strip.locator('[data-toast-action]')).toHaveText('Undo');
+  await expect(strip.getByRole('button', { name: 'Dismiss notification' })).toHaveCount(0);
+  await expect(strip.locator('[data-toast-countdown]')).toHaveCount(0);
   expect(
-    await success.evaluate((el) =>
-      [...el.children]
-        .filter((c) => !c.hasAttribute('data-toast-countdown'))
-        .at(-1)
-        ?.hasAttribute('data-toast-action'),
-    ),
+    await strip.evaluate((el) => [...el.children].at(-1)?.hasAttribute('data-toast-action')),
   ).toBe(true);
   expectMinTouchTarget(await undo.boundingBox());
   expect(reviews()).toEqual([]);
@@ -191,11 +188,11 @@ test('client: week list, OK with Undo, counts, slot header, overflow, reopen the
   ).toEqual([]);
   expect(post?.stage).toBe(stage);
 
-  // OK again and close the toast: closing commits at once (one write), then
-  // the post item's header reads "Slot approved".
+  // OK again and swipe the strip down: the swipe accepts, so it commits at
+  // once (one write), then the post item's header reads "Slot approved".
   await ok.click();
   await expect(box).toHaveAttribute('data-plan-control', 'pill');
-  await page.getByRole('button', { name: 'Dismiss notification' }).first().click();
+  await swipeStripDown(page, undoStrip(page, /Slot approved/));
   await expect.poll(() => reviews()[0]?.status).toBe('approved');
   expect(reviews()).toEqual([
     expect.objectContaining({ item_id: PLAN_POST_ITEM, side: 'client', status: 'approved' }),

@@ -127,29 +127,24 @@ describe('Toast', () => {
     expect(cls(Toast({ toast: base, onDismiss: () => {} }))).toContain('border-border bg-panel');
   });
 
-  it('countdown renders a 3px bar (border track, accent fill) that empties linearly', () => {
-    const tree = Toast({ toast: { ...base, countdownMs: 7000 }, onDismiss: () => {} });
-    const bar = findAll(
-      tree,
-      (el) => (el.props as Record<string, unknown>)['data-toast-countdown'] === '',
+  it('renders no countdown bar, with or without an action', () => {
+    const countdowns = (tree: ReactNode): ReactElement[] =>
+      findAll(tree, (el) => {
+        const props = el.props as Record<string, unknown>;
+        const cls = typeof props.className === 'string' ? props.className : '';
+        return props['data-toast-countdown'] === '' || cls.includes('sorted-toast-countdown');
+      });
+    expect(countdowns(Toast({ toast: base, onDismiss: () => {} }))).toHaveLength(0);
+    const withAction = Toast({
+      toast: { ...base, action: { label: 'Undo', onPress: () => {} } },
+      onDismiss: () => {},
+    });
+    expect(countdowns(withAction)).toHaveLength(0);
+    // The action is the card's last child: nothing (no bar) follows it.
+    const kids = (withAction.props as { children: ReactNode[] }).children.filter(
+      (c): c is ReactElement => typeof c === 'object' && c !== null && 'props' in c,
     );
-    expect(bar).toHaveLength(1);
-    const track = bar[0]!.props as { className: string; children: ReactElement };
-    expect(track.className).toContain('h-[3px]');
-    expect(track.className).toContain('bg-border');
-    const fill = track.children.props as { className: string; style: Record<string, string> };
-    expect(fill.className).toContain('bg-accent');
-    // Reduced motion: no animation (static bar); otherwise linear over the duration.
-    expect(fill.className).toContain('motion-safe:[animation:sorted-toast-countdown');
-    expect(fill.className).toContain('_linear_');
-    expect(fill.style['--toast-countdown-ms']).toBe('7000ms');
-  });
-
-  it('renders no countdown bar by default', () => {
-    const tree = Toast({ toast: base, onDismiss: () => {} });
-    expect(
-      findAll(tree, (el) => (el.props as Record<string, unknown>)['data-toast-countdown'] === ''),
-    ).toHaveLength(0);
+    expect((kids[kids.length - 1]!.props as Record<string, unknown>)['data-toast-action']).toBe('');
   });
 
   it('with onAction, the action button calls it and not onDismiss', () => {
