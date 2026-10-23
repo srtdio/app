@@ -2,9 +2,9 @@
 // W5 Briefs list: a load failure shows LoadError ("Couldn't load briefs.") with
 // Retry and never the server's text, and Retry re-runs the same workspace read;
 // the read is workspace-scoped and paged on the server; the chip defaults to
-// Open and lives in the URL with the search; empty states; the count line
-// follows the filter; cards carry a real title link with no buttons nested in
-// a role=link, and no Close.
+// Open and lives in the URL with the search; empty states (Clear only with a
+// typed search); agency sort; the loading skeleton; cards carry a real title
+// link with no buttons nested in a role=link, and no Close.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -13,6 +13,19 @@ import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { BriefsPage } from '@/components/pages/BriefsPage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom has no matchMedia; the agency-side SortMenu reads it. A phone-width stub.
+if (typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  });
+}
 
 const { listBriefs, capability } = vi.hoisted(() => ({
   listBriefs: vi.fn(),
@@ -150,18 +163,18 @@ describe('Briefs list read', () => {
     expect(listBriefs).toHaveBeenCalledTimes(2);
     expect(listBriefs.mock.calls[0]?.[1]).toEqual({ workspaceId: 'w1', limit: 50, offset: 0 });
     expect(listBriefs.mock.calls[1]?.[1]).toEqual({ workspaceId: 'w1', limit: 50, offset: 50 });
-    expect(text()).toContain('51 briefs');
+    expect(text()).toContain('Brief p51');
   });
 });
 
 describe('Briefs list filter and search', () => {
-  it('defaults to Open and the count line reflects it ("2 of 3 briefs")', async () => {
+  it('defaults to Open, with no total count line', async () => {
     listBriefs.mockResolvedValue({
       ok: true,
       data: [brief('b1'), brief('b2'), brief('b3', { status: 'closed' })],
     });
     await mount();
-    expect(text()).toContain('2 of 3 briefs');
+    expect(text()).not.toContain('2 of 3 briefs');
     expect(text()).toContain('Brief b1');
     expect(text()).not.toContain('Brief b3');
   });
@@ -172,65 +185,88 @@ describe('Briefs list filter and search', () => {
       data: [brief('b1', { title: 'Launch reel' }), brief('b2', { status: 'closed' })],
     });
     await mount('/briefs?status=closed&q=zzz');
-    expect(text()).toContain('Nothing called "zzz"');
-    // The empty state's text button, not the search field's own X (aria-label "Clear search").
-    const clear = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent?.trim() === 'Clear search',
-    );
-    await act(async () => clear?.click());
-    expect(location).toBe('/briefs?status=all');
-    expect(text()).toContain('Launch reel');
-    expect(text()).toContain('2 briefs');
+    expect(text()).toContain('No briefs with “zzz” in the title');
+    // Clear clears the search only: the Closed chip stays.
+    await act(async () => clearText()?.click());
+    expect(location).toBe('/briefs?status=closed');
+    expect(text()).toContain('Brief b2');
+    expect(text()).not.toContain('Launch reel');
   });
 
-  it('truly empty with brief.create: "Write your first brief"', async () => {
+  it('client with no briefs: "No open briefs yet" with New brief (same label as the header)', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [] });
     await mount();
-    expect(button('Write your first brief')).toBeDefined();
+    expect(text()).toContain('No open briefs yet');
+    expect(text()).toContain('Tell the agency what you need next.');
+    const newBriefs = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
+      (b) => b.textContent?.trim() === 'New brief',
+    );
+    expect(newBriefs).toHaveLength(2);
+    expect(clearText()).toBeUndefined();
   });
 
-  it('truly empty without brief.create: no create button', async () => {
+  it('agency with no briefs: one line, no heading, no create button', async () => {
     capability.create = false;
     listBriefs.mockResolvedValue({ ok: true, data: [] });
     await mount();
-    expect(button('Write your first brief')).toBeUndefined();
-    expect(text()).toContain('No briefs yet');
+    expect(button('New brief')).toBeUndefined();
+    expect(text()).toContain('Briefs from the client show up here.');
+    expect(text()).not.toContain('No briefs yet');
+    expect(text()).not.toContain('No open briefs yet');
   });
 });
 
-// The empty state's own "Clear search" text button (not the header X, which
-// carries the same aria-label and renders only while the search is non-empty).
-const clearSearchText = () =>
+describe('Briefs sort and loading', () => {
+  it('agency side gets the Sort control; the client side does not', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
+    capability.create = false;
+    await mount();
+    expect(button('Sort')).toBeDefined();
+    act(() => root?.unmount());
+    document.body.innerHTML = '';
+    capability.create = true;
+    await mount();
+    expect(button('Sort')).toBeUndefined();
+  });
+
+  it('shows a list-shaped skeleton while loading, never "Loading briefs"', async () => {
+    listBriefs.mockReturnValue(new Promise(() => {}));
+    await mount();
+    expect(document.querySelector('[data-testid="briefs-skeleton"]')).not.toBeNull();
+    expect(document.querySelectorAll('[data-brief-card-skeleton]').length).toBeGreaterThan(0);
+    expect(text()).not.toContain('Loading briefs');
+  });
+});
+
+// The empty state's own "Clear" text button (not the header X, whose
+// aria-label is "Clear search").
+const clearText = () =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (b) => b.textContent?.trim() === 'Clear search',
+    (b) => b.textContent?.trim() === 'Clear',
   );
 
 describe('Briefs zero-result headings', () => {
-  it('Open chip, empty search, no open briefs: "No open briefs right now" with Clear search', async () => {
+  it('client, Open chip, no open briefs, no search: "No open briefs yet" and no Clear', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { status: 'closed' })] });
     await mount();
-    expect(text()).toContain('0 of 1 brief');
-    expect(text()).toContain('No open briefs right now');
-    expect(text()).not.toContain('No matches');
-    expect(clearSearchText()).toBeDefined();
-    await act(async () => clearSearchText()?.click());
-    expect(location).toBe('/briefs?status=all');
+    expect(text()).toContain('No open briefs yet');
+    expect(clearText()).toBeUndefined();
   });
 
-  it('Closed chip, empty search, no closed briefs: "No closed briefs yet" with Clear search', async () => {
+  it('Closed chip, empty search, no closed briefs: "No closed briefs yet" and no Clear', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
     await mount('/briefs?status=closed');
     expect(text()).toContain('No closed briefs yet');
-    expect(text()).not.toContain('No matches');
-    expect(clearSearchText()).toBeDefined();
+    expect(clearText()).toBeUndefined();
   });
 
-  it('non-empty search, zero results: names the query with Clear search', async () => {
+  it('non-empty search, zero results: names the query with Clear', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { title: 'Launch reel' })] });
     await mount('/briefs?q=diwali');
-    expect(text()).toContain('Nothing called "diwali"');
-    expect(text()).not.toContain('No open briefs right now');
-    expect(clearSearchText()).toBeDefined();
+    expect(text()).toContain('No briefs with “diwali” in the title');
+    expect(clearText()).toBeDefined();
+    await act(async () => clearText()?.click());
+    expect(location).toBe('/briefs');
   });
 
   it('each zero state renders the same markup in light and dark mode', async () => {
@@ -238,10 +274,14 @@ describe('Briefs zero-result headings', () => {
       {
         path: '/briefs',
         data: [brief('b1', { status: 'closed' })],
-        heading: 'No open briefs right now',
+        heading: 'No open briefs yet',
       },
       { path: '/briefs?status=closed', data: [brief('b1')], heading: 'No closed briefs yet' },
-      { path: '/briefs?q=diwali', data: [brief('b1')], heading: 'Nothing called "diwali"' },
+      {
+        path: '/briefs?q=diwali',
+        data: [brief('b1')],
+        heading: 'No briefs with “diwali” in the title',
+      },
     ];
     for (const item of cases) {
       const markup: string[] = [];

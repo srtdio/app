@@ -14,7 +14,6 @@ import {
 } from '@/components/pages/create/AttachmentsField';
 import { supabase } from '@/lib/supabase';
 import { errorText } from '@/lib/error-copy';
-import { isTouchDevice } from '@/lib/modal-focus';
 import { useNewTrace } from '@/lib/trace-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
@@ -283,10 +282,10 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     }
   }, [uploadNotice, pendingUploads, failedUploads]);
 
-  // Desktop: the Title takes focus once the sheet has settled its own focus.
-  // Touch: nothing is focused, so no keyboard covers the sheet.
+  // The Title takes focus once the sheet has settled its own focus, on phone
+  // and laptop alike, so typing can start at once.
   useEffect(() => {
-    if (!open || isTouchDevice()) return;
+    if (!open) return;
     let raf = 0;
     const timer = setTimeout(() => {
       raf = requestAnimationFrame(() => document.getElementById('brief-title')?.focus());
@@ -386,8 +385,6 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       }
     >
       <div className="flex flex-col gap-4 overflow-x-hidden">
-        <p className="text-xs text-fg-3">Once sent, a brief can&apos;t be edited.</p>
-
         <Field label="Title" htmlFor="brief-title" required>
           <Input
             id="brief-title"
@@ -441,9 +438,9 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           </div>
 
           <div className="min-w-0">
-            <Field label="Target date (optional)">
+            <Field label="Due date (optional)">
               <DatePicker
-                label="Target date"
+                label="Due date"
                 value={form.targetDate}
                 onChange={(value) => patch({ targetDate: value })}
               />
@@ -451,7 +448,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           </div>
         </div>
 
-        <Field label="Attachments">
+        <Field label="Attachments (optional)">
           <div ref={attachmentsRef}>
             <AttachmentsField
               workspaceId={workspaceId}
@@ -461,13 +458,18 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             />
           </div>
           {uploadNotice !== null ? (
-            <p role="status" className="mt-1.5 text-xs text-bad">
+            // Waiting on uploads is not an error: neutral text. A failed file
+            // still reads in the error colour.
+            <p
+              role="status"
+              className={`mt-1.5 text-xs ${pendingUploads > 0 ? 'text-fg-3' : 'text-bad'}`}
+            >
               {uploadNotice}
             </p>
           ) : null}
         </Field>
 
-        <Field label="Note to agency (optional)" htmlFor="brief-initial-comment">
+        <Field label="Note to the agency (optional)" htmlFor="brief-initial-comment">
           <Textarea
             id="brief-initial-comment"
             autoGrow

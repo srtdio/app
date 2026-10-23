@@ -16,7 +16,8 @@ import { useOptionalToast } from '@/components/ui/toast';
 import { IconBriefs, IconChevronLeft, IconCopy, IconMore } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
-import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
+import { BRIEF_STATUS, BriefStatusPill, isBriefClosed } from '@/components/pages/BriefCard';
+import { BRIEF_NOTE_PARAM } from '@/lib/brief-list';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
@@ -45,17 +46,64 @@ import { getBrief, getBriefGallery, reopenBrief } from '@srtdio/briefs';
 import type { BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
 import { briefClose } from '@srtdio/rpc';
 
-// Status badge styling. Open reads as the active/good state, Closed as muted;
-// both use theme tokens so light/dark parity is automatic. The status values
-// themselves come from BRIEF_STATUS (pinned to the @srtdio/briefs type), never
-// inline literals.
-const STATUS_BADGE: Record<string, string> = {
-  [BRIEF_STATUS.open]: 'border-good text-good',
-  [BRIEF_STATUS.closed]: 'border-border text-fg-3',
-};
+// The line under a closed brief's title (and in the Close confirm).
+export const CLOSED_BRIEF_LINE = 'Closed briefs stay readable and open to comments.';
 
-function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+// The brief title matches the post title on the same screen size (Post detail
+// uses this exact size on phone and desktop). It wraps, never scrolls sideways.
+export const BRIEF_TITLE_CLASS =
+  'min-w-0 break-words text-[28px] font-semibold leading-tight tracking-tight text-fg';
+
+/**
+ * The comment box inside the Comments section, for "Add note" (the note failed
+ * to post on create). Comments renders it after its own read, so the caller
+ * retries for a short while. Returns whether it focused.
+ */
+export function focusCommentBox(root: HTMLElement | null): boolean {
+  const box = root?.querySelector<HTMLElement>('[aria-label="Comment body"]') ?? null;
+  if (box === null) return false;
+  box.scrollIntoView({ block: 'center' });
+  box.focus();
+  return true;
+}
+
+/**
+ * The loading state: a static skeleton in the loaded page's shape (title,
+ * Details rows, Objective lines; the Details column on desktop), in the same
+ * containers, so nothing jumps when the brief arrives. Token fills, no motion.
+ */
+export function BriefDetailSkeleton(): ReactElement {
+  const row = (key: number) => (
+    <div key={key} className="flex flex-col gap-1">
+      <div className="h-4 w-16 rounded bg-panel-2" />
+      <div className="h-4 w-20 rounded bg-panel-2" />
+    </div>
+  );
+  return (
+    <div
+      data-testid="brief-detail-skeleton"
+      aria-busy="true"
+      className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6"
+    >
+      <div className="md:col-span-2 flex flex-col gap-6">
+        <div className="h-8 w-3/4 rounded bg-panel-2" />
+        <div className="md:hidden">
+          <div className="mb-2 h-3 w-14 rounded bg-panel-2" />
+          <div className="grid grid-cols-2 gap-3">{[0, 1, 2, 3].map(row)}</div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="mb-1 h-3 w-20 rounded bg-panel-2" />
+          <div className="h-4 w-full rounded bg-panel-2" />
+          <div className="h-4 w-11/12 rounded bg-panel-2" />
+          <div className="h-4 w-2/3 rounded bg-panel-2" />
+        </div>
+      </div>
+      <aside className="hidden md:flex flex-col gap-3">
+        <div className="mb-2 h-3 w-14 rounded bg-panel-2" />
+        {[0, 1, 2, 3, 4].map(row)}
+      </aside>
+    </div>
+  );
 }
 
 /**
@@ -278,7 +326,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const viewerId = session?.user.id ?? null;
   const canCloseAny = useWorkspaceCapability('brief.close');
   const canCloseOwn = useWorkspaceCapability('brief.close_own');
-  // Approvers write briefs, so the "from the approvers" hint is for everyone else.
+  // Approvers write briefs; only the other side starts a post from one.
   const isApprover = useWorkspaceCapability('brief.create') === true;
   // Creators (they make posts, not briefs) start a post from an open brief.
   const canCreatePost = useWorkspaceCapability('post.create') === true;
@@ -323,6 +371,18 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     next.delete('comment');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  // "Add note" from the create toast (?note=1): captured, stripped, then the
+  // comment box is focused once Comments has rendered it.
+  const [wantsNote, setWantsNote] = useState(false);
+  useEffect(() => {
+    if (searchParams.get(BRIEF_NOTE_PARAM) === null) return;
+    setWantsNote(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete(BRIEF_NOTE_PARAM);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const commentsRef = useRef<HTMLElement>(null);
 
   const [detail, setDetail] = useState<BriefWithLinkedCount | null>(null);
   const [gallery, setGallery] = useState<BriefGalleryItem[]>([]);
@@ -381,6 +441,25 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   useEffect(() => {
     void load();
   }, [load]);
+
+  // "Add note": once the brief is on screen, focus the comment box. Comments
+  // renders it after its own read, so try for up to 3s, then give up quietly.
+  const detailReady = detail !== null;
+  useEffect(() => {
+    if (!wantsNote || !detailReady) return;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = (): void => {
+      if (focusCommentBox(commentsRef.current) || tries >= 30) {
+        setWantsNote(false);
+        return;
+      }
+      tries += 1;
+      timer = setTimeout(attempt, 100);
+    };
+    attempt();
+    return () => clearTimeout(timer);
+  }, [wantsNote, detailReady]);
 
   // The reference gallery is a separate read (asset_attachments has no FK back to
   // briefs, so it cannot ride getBrief's read) and is non-critical: a failure or
@@ -486,7 +565,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     return (
       <>
         {bareHeader}
-        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading brief</div>
+        <BriefDetailSkeleton />
       </>
     );
   }
@@ -533,26 +612,55 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     (id) => memberById.get(id) ?? null,
     membersLoaded,
   );
-  const statusBadge = (
-    <span
-      className={`shrink-0 inline-flex items-center rounded-full border px-3 h-7 text-xs font-medium ${
-        STATUS_BADGE[brief.status] ?? 'border-border text-fg-3'
-      }`}
-    >
-      {statusLabel(brief.status)}
-    </span>
+  // One Details list, the same facts on phone and desktop: Status, Due date,
+  // Format (only when set), Raised (day and by whom), Linked posts. Phone lays
+  // it out two across; desktop stacks it in the side column.
+  const detailsList = (
+    <dl className="grid grid-cols-2 gap-3 text-sm md:flex md:flex-col">
+      <div className="flex min-w-0 flex-col items-start gap-1">
+        <dt className="text-fg-3">Status</dt>
+        <dd>
+          <BriefStatusPill status={brief.status} />
+        </dd>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1">
+        <dt className="text-fg-3">Due date</dt>
+        <dd className="tabular-nums text-fg">{briefDueDateLabel(brief.target_date)}</dd>
+      </div>
+      {hasFormat ? (
+        <div className="flex min-w-0 flex-col gap-1">
+          <dt className="text-fg-3">Format</dt>
+          <dd className="break-words text-fg">{brief.format_requested}</dd>
+        </div>
+      ) : null}
+      <div className="flex min-w-0 flex-col gap-1">
+        <dt className="text-fg-3">Raised</dt>
+        <dd className="min-w-0 break-words text-fg">
+          <span className="tabular-nums">{briefRaisedLabel(brief.created_at, timeZone)}</span>
+          {authorLabel === '' && membersLoading ? (
+            <span
+              data-testid="created-by-skeleton"
+              aria-label="Loading"
+              className="mt-1 block h-4 w-28 rounded bg-panel-3"
+            />
+          ) : authorLabel !== '' ? (
+            <span className="block">by {authorLabel}</span>
+          ) : null}
+        </dd>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1">
+        <dt className="text-fg-3">Linked posts</dt>
+        <dd className="tabular-nums text-fg">{detail.linked_posts_count}</dd>
+      </div>
+    </dl>
   );
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
-        {/* Phone: the title gets its own line below; the bar keeps the chevron. */}
-        <h1 className="hidden md:block min-w-0 flex-1 text-[15px] font-semibold truncate">
-          <Highlight text={brief.title} />
-        </h1>
-        <div className="flex-1 md:hidden" />
-        <span className="hidden md:inline-flex">{statusBadge}</span>
+        {/* The title has its own wrapping line below on every screen size. */}
+        <div className="flex-1" />
         <BriefActionsMenu
           closed={closed}
           canClose={canClose}
@@ -563,13 +671,16 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
       </div>
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 flex flex-col gap-6">
+        <div className="md:col-span-2 flex min-w-0 flex-col gap-6">
           {/* Phone order: title, Details, Objective, Brand requirements,
               Attachments, Comments. md:order-none hands desktop back its DOM
               order (gallery first), unchanged. */}
-          <h2 className="md:hidden text-[22px] font-semibold leading-tight tracking-tight text-fg">
-            <Highlight text={brief.title} />
-          </h2>
+          <div className="flex min-w-0 flex-col gap-2">
+            <h1 className={BRIEF_TITLE_CLASS}>
+              <Highlight text={brief.title} />
+            </h1>
+            {closed ? <p className="text-sm text-fg-3">{CLOSED_BRIEF_LINE}</p> : null}
+          </div>
 
           {canCreatePost && !isApprover && !closed && briefId !== undefined ? (
             <div>
@@ -585,32 +696,13 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             </div>
           ) : null}
 
-          <section className="order-1 md:hidden">
+          <section data-brief-details="phone" className="order-1 md:hidden">
             <div className={`${SECTION_LABEL} mb-2`}>Details</div>
-            <dl className="grid grid-cols-3 gap-3 text-sm">
-              <div className="flex min-w-0 flex-col gap-1">
-                <dt className="text-fg-3">Due date</dt>
-                <dd className="tabular-nums">{briefDueDateLabel(brief.target_date)}</dd>
-              </div>
-              <div className="flex min-w-0 flex-col gap-1">
-                <dt className="text-fg-3">Format</dt>
-                <dd className="truncate">{hasFormat ? brief.format_requested : 'Any'}</dd>
-              </div>
-              <div className="flex min-w-0 flex-col items-start gap-1">
-                <dt className="text-fg-3">Status</dt>
-                <dd>{statusBadge}</dd>
-              </div>
-            </dl>
+            {detailsList}
           </section>
 
           {mediaItems.length > 0 ? (
             <section className="order-4 md:order-none">
-              {!isApprover ? (
-                <p className="mb-3 text-sm text-fg-3">
-                  Reference images from the approvers. Tap for full screen or download. Briefs are
-                  read-only after creation.
-                </p>
-              ) : null}
               <PostGallery
                 items={mediaItems}
                 cache={cache}
@@ -623,31 +715,31 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             </section>
           ) : null}
 
-          <section className="order-2 md:order-none">
+          <section className="order-2 min-w-0 md:order-none">
             <CopyHeading label="Objective" onCopy={() => void copy(brief.objective)} />
-            <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
               <Highlight text={brief.objective} />
             </p>
           </section>
 
           {hasBrand ? (
-            <section className="order-3 md:order-none">
+            <section className="order-3 min-w-0 md:order-none">
               <CopyHeading
                 label="Brand requirements"
                 onCopy={() => void copy(brief.brand_requirements ?? '')}
               />
-              <p className="text-sm leading-relaxed whitespace-pre-wrap text-fg">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
                 {brief.brand_requirements}
               </p>
             </section>
           ) : null}
 
           {links.length > 0 ? (
-            <section className="order-4 md:order-none">
+            <section className="order-4 min-w-0 md:order-none">
               <div className={`${SECTION_LABEL} mb-2`}>Reference links</div>
-              <ul className="flex flex-col gap-2">
+              <ul className="flex min-w-0 flex-col gap-2">
                 {links.map((link, index) => (
-                  <li key={link.href}>
+                  <li key={link.href} className="min-w-0 break-words">
                     {/* The first link gets the preview card; the rest stay buttons. */}
                     {index === 0 ? (
                       <LinkPreviewCard url={link.href} className="w-full max-w-[420px]" />
@@ -667,60 +759,24 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             </section>
           ) : null}
 
-          <section className="order-5 md:order-none">
-            <div className={`${SECTION_LABEL} mb-2`}>Comments</div>
-            {workspaceId !== null && briefId !== undefined ? (
+          {/* No workspace: nothing at all, never a dead-end line. */}
+          {workspaceId !== null && briefId !== undefined ? (
+            <section ref={commentsRef} className="order-5 min-w-0 md:order-none">
+              <div className={`${SECTION_LABEL} mb-2`}>Comments</div>
               <Comments
                 workspaceId={workspaceId}
                 entityType="brief"
                 entityId={briefId}
                 focusCommentId={focusCommentId}
               />
-            ) : (
-              <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
-                Select a workspace to view comments.
-              </div>
-            )}
-          </section>
+            </section>
+          ) : null}
         </div>
 
-        <aside className="hidden md:flex flex-col gap-6">
-          <section>
+        <aside className="hidden md:flex min-w-0 flex-col gap-6">
+          <section data-brief-details="desktop">
             <div className={`${SECTION_LABEL} mb-2`}>Details</div>
-            <dl className="flex flex-col gap-3 text-sm">
-              {hasFormat ? (
-                <div className="flex flex-col gap-1">
-                  <dt className="text-fg-3">Format requested</dt>
-                  <dd className="text-fg">{brief.format_requested}</dd>
-                </div>
-              ) : null}
-              <div className="flex flex-col gap-1">
-                <dt className="text-fg-3">Raised</dt>
-                <dd className="tabular-nums">{briefRaisedLabel(brief.created_at, timeZone)}</dd>
-              </div>
-              <div className="flex flex-col gap-1">
-                <dt className="text-fg-3">Target date</dt>
-                <dd className="tabular-nums">{briefDueDateLabel(brief.target_date)}</dd>
-              </div>
-              <div className="flex flex-col gap-1">
-                <dt className="text-fg-3">Linked posts</dt>
-                <dd className="tabular-nums">{detail.linked_posts_count}</dd>
-              </div>
-              <div className="flex flex-col gap-1">
-                <dt className="text-fg-3">Created by</dt>
-                <dd className="break-all">
-                  {authorLabel === '' && membersLoading ? (
-                    <span
-                      data-testid="created-by-skeleton"
-                      aria-label="Loading"
-                      className="block h-4 w-28 rounded bg-panel-3"
-                    />
-                  ) : (
-                    authorLabel
-                  )}
-                </dd>
-              </div>
-            </dl>
+            {detailsList}
           </section>
         </aside>
       </div>
@@ -728,7 +784,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
       {confirmingClose ? (
         <ConfirmDialog
           title="Close this brief?"
-          message="It leaves Open but stays readable and commentable."
+          message={CLOSED_BRIEF_LINE}
           confirmLabel="Close brief"
           onConfirm={closeWithUndo}
           onCancel={() => setConfirmingClose(false)}
