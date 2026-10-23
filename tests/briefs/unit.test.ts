@@ -14,12 +14,7 @@ import {
   reopenBrief,
   BRIEFS_PAGE_SIZE,
 } from '../../packages/briefs/src/index';
-import {
-  briefClose,
-  briefCreate,
-  briefReopen,
-  commentCreate,
-} from '../../packages/rpc/src/index';
+import { briefClose, briefCreate, briefReopen, commentCreate } from '../../packages/rpc/src/index';
 
 vi.mock('../../packages/rpc/src/index', () => ({
   briefCreate: vi.fn(),

@@ -564,14 +564,7 @@ export function SharedPostCardList(
   } & CardContext &
     CardRefActions,
 ): ReactElement {
-  const {
-    views,
-    onTalkAbout,
-    onTalkAboutFocus,
-    failed = [],
-    onRetry,
-    ...context
-  } = props;
+  const { views, onTalkAbout, onTalkAboutFocus, failed = [], onRetry, ...context } = props;
   const failedIds = new Set(failed);
   return (
     <div

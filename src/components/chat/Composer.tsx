@@ -474,10 +474,7 @@ export function composerPlaceholder(about: boolean, replying = false, editing = 
  * With no post yet (its read is in flight) it is a skeleton: "About", a title
  * placeholder and the same close, at the same height. No motion.
  */
-export function AboutBar(props: {
-  post: PostRefPost | null;
-  onCancel: () => void;
-}): ReactElement {
+export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void }): ReactElement {
   const post = props.post;
   return (
     <div
@@ -2002,10 +1999,7 @@ export function Composer(props: ComposerProps): ReactElement {
         ) : null}
 
         {bars.about && props.about !== undefined ? (
-          <AboutBar
-            post={props.about}
-            onCancel={() => props.onCancelAbout?.()}
-          />
+          <AboutBar post={props.about} onCancel={() => props.onCancelAbout?.()} />
         ) : null}
 
         {bars.reply && props.reply != null ? (

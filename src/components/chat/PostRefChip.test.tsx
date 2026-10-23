@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PostCardRow } from '../../../packages/posts/src/reads';
-import {
-  CHIP_BATCH_TIMEOUT_MS,
-  PostRefChip,
-  createChipBatch,
-} from '@/components/chat/PostRefChip';
+import { CHIP_BATCH_TIMEOUT_MS, PostRefChip, createChipBatch } from '@/components/chat/PostRefChip';
 import { aboutState, chipPostIds, parentIndexOf } from '@/lib/chat/post-refs';
 import type { ThreadMessage } from '@/lib/chat/thread';
 

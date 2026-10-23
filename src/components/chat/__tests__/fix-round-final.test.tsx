@@ -288,12 +288,7 @@ describe('E11 + T5: card footer and the failed card', () => {
 
   it('while the viewer side is not known the card paints no footer', () => {
     const unknown = renderToStaticMarkup(
-      <SharedPostCardList
-        views={[view]}
-        side="unknown"
-        sideKnown={false}
-        timeZone="UTC"
-      />,
+      <SharedPostCardList views={[view]} side="unknown" sideKnown={false} timeZone="UTC" />,
     );
     expect(unknown).not.toContain('data-card-footer');
     const known = renderToStaticMarkup(

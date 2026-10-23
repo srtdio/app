@@ -196,7 +196,16 @@ describe('UndoStrip', () => {
     const anchor = document.createElement('nav');
     anchor.setAttribute(UNDO_ANCHOR_ATTR, '');
     anchor.getBoundingClientRect = () =>
-      ({ top: 700, bottom: 768, left: 0, right: 390, width: 390, height: 68, x: 0, y: 700 }) as DOMRect;
+      ({
+        top: 700,
+        bottom: 768,
+        left: 0,
+        right: 390,
+        width: 390,
+        height: 68,
+        x: 0,
+        y: 700,
+      }) as DOMRect;
     document.body.appendChild(anchor);
     render(<UndoStrip toast={undoToast} onAccept={() => {}} onAction={() => {}} />);
     const expected = stripBottomPx([700], window.innerHeight);

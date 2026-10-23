@@ -164,11 +164,7 @@ import {
   RepliesSeparatorRow,
   ThreadChipRow,
 } from '@/components/chat/ThreadRail';
-import {
-  PostRefChip,
-  useChipBatch,
-  type PostRefPost,
-} from '@/components/chat/PostRefChip';
+import { PostRefChip, useChipBatch, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
   BanGlyph,
   MessageActionMenu,

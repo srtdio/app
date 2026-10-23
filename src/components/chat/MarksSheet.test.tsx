@@ -227,9 +227,7 @@ describe('Open tab posts section', () => {
     const post = openPost({ target_date: '2026-10-02T20:30:00+00:00' });
     expect(openPostLines(post, true, 'UTC').meta).toBe('Carousel · Oct 2 · in this chat');
     // 20:30 UTC is already Oct 3 in Kolkata.
-    expect(openPostLines(post, true, 'Asia/Kolkata').meta).toBe(
-      'Carousel · Oct 3 · in this chat',
-    );
+    expect(openPostLines(post, true, 'Asia/Kolkata').meta).toBe('Carousel · Oct 3 · in this chat');
     const html = renderToStaticMarkup(
       <OpenPostSheetRow
         post={post}

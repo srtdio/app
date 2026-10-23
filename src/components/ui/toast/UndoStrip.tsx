@@ -50,7 +50,9 @@ function measureAnchorTops(): number[] {
 }
 
 function isPhone(): boolean {
-  return typeof window.matchMedia !== 'function' || !window.matchMedia('(min-width: 768px)').matches;
+  return (
+    typeof window.matchMedia !== 'function' || !window.matchMedia('(min-width: 768px)').matches
+  );
 }
 
 interface UndoStripProps {

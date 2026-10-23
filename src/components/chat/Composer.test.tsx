@@ -353,10 +353,7 @@ describe('About bar', () => {
 
   it('its X cancels', () => {
     const onCancel = vi.fn();
-    const close = find(
-      AboutBar({ post, onCancel }),
-      (el) => el.type === IconButton,
-    );
+    const close = find(AboutBar({ post, onCancel }), (el) => el.type === IconButton);
     (close?.props as { onClick: () => void }).onClick();
     expect(onCancel).toHaveBeenCalledTimes(1);
   });

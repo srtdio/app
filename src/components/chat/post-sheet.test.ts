@@ -150,8 +150,9 @@ describe('labels and copy', () => {
     expect(postSubject('   ')).toBe('this post');
     expect(postSubject(null)).toBe('this post');
     expect(postSubject(undefined)).toBe('this post');
-    expect(confirmCopy('approve', { subject: postSubject(null), mediaCount: 0, targetDate: '' }))
-      .toMatchObject({ question: 'Approve this post?', confirmLabel: 'Approve' });
+    expect(
+      confirmCopy('approve', { subject: postSubject(null), mediaCount: 0, targetDate: '' }),
+    ).toMatchObject({ question: 'Approve this post?', confirmLabel: 'Approve' });
   });
 
   it('no label, confirm or toast carries a KEY-N code', () => {
