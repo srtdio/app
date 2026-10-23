@@ -468,6 +468,17 @@ describe('CreatePostSheet flow A', () => {
     expect(slot()!.querySelector('button')?.textContent).toBe('Instagram preview');
   });
 
+  it('field order: Title, media, Caption, then the preview pill', async () => {
+    await renderSheet();
+    const slot = document.querySelector<HTMLElement>('[data-preview-chip-slot]')!;
+    const media = document.querySelector('[data-attachments]')!;
+    expect(before(titleField(), media)).toBe(true);
+    expect(before(media, caption())).toBe(true);
+    expect(before(caption(), slot)).toBe(true);
+    expect(before(slot, moreButton())).toBe(true);
+    expect(slot.querySelector('button')?.textContent).toBe('Instagram preview');
+  });
+
   it('fix 22: the brief list is this workspace, open only, with its helper', async () => {
     await renderSheet();
     expect(h.listBriefs).toHaveBeenCalledWith(supabase, { workspaceId: 'ws-1', status: 'open' });

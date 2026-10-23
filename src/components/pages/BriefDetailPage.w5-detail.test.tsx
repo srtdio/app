@@ -5,8 +5,9 @@
 // brief (open, gated on brief.close or brief.close_own for the creator; it
 // confirms and commits brief_close only after the Undo window) or Reopen brief
 // (closed, any member; optimistic, commits brief_reopen after the Undo window);
-// no KEY-N code anywhere; copy buttons; Created by skeleton; no helper text;
-// Back pops in-app history or goes to /briefs.
+// no KEY-N code anywhere; Copy brief in the menu (no copy icons on section
+// labels); Created by skeleton; no helper text; Back pops in-app history or goes
+// to /briefs; the top bar status line; details as two lines; linked posts.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -16,7 +17,12 @@ import {
   BriefDetailPage,
   briefBackTarget,
   briefCopyLink,
+  briefCopyText,
+  briefFormatLabel,
+  briefStatusLine,
   canCloseBrief,
+  linkedPostsFor,
+  LINKED_POSTS_SCAN,
   reopenErrorCopy,
 } from '@/components/pages/BriefDetailPage';
 import { WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
@@ -29,6 +35,7 @@ const h = vi.hoisted(() => ({
   getBriefGallery: vi.fn(),
   briefClose: vi.fn(),
   reopenBrief: vi.fn(),
+  listPosts: vi.fn(),
   caps: {} as Record<string, boolean>,
   members: { loading: false },
   viewer: 'u1',
@@ -40,6 +47,10 @@ vi.mock('@srtdio/briefs', () => ({
   reopenBrief: (...args: unknown[]) => h.reopenBrief(...args),
 }));
 vi.mock('@srtdio/rpc', () => ({ briefClose: (...args: unknown[]) => h.briefClose(...args) }));
+vi.mock('@srtdio/posts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@srtdio/posts')>()),
+  listPosts: (...args: unknown[]) => h.listPosts(...args),
+}));
 vi.mock('@/lib/supabase', () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
 }));
@@ -161,6 +172,7 @@ beforeEach(() => {
   h.getBriefGallery.mockReset().mockResolvedValue({ ok: true, data: [] });
   h.briefClose.mockReset().mockResolvedValue({ ok: true, data: null });
   h.reopenBrief.mockReset().mockResolvedValue({ ok: true, data: undefined });
+  h.listPosts.mockReset().mockResolvedValue({ ok: true, data: [] });
   h.caps = {};
   h.members.loading = false;
   h.viewer = 'u1';
@@ -205,7 +217,10 @@ describe('Brief detail close', () => {
     expect(byLabel('Brief actions')).not.toBeNull();
     expect(button('Close brief')).toBeUndefined();
     await openMenu();
-    expect(menuRows()).toEqual([['brief-menu-copy-link', 'Copy link']]);
+    expect(menuRows()).toEqual([
+      ['brief-menu-copy-link', 'Copy link'],
+      ['brief-menu-copy-brief', 'Copy brief'],
+    ]);
     expect(button('Close brief')).toBeUndefined();
     expect(button('Reopen brief')).toBeUndefined();
   });
@@ -257,14 +272,18 @@ describe('Brief detail close', () => {
     h.getBrief.mockResolvedValue(detail({ created_by: 'u1' }));
     await mount();
     await openMenu();
-    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-close']);
+    expect(menuRows().map(([id]) => id)).toEqual([
+      'brief-menu-copy-link',
+      'brief-menu-copy-brief',
+      'brief-menu-close',
+    ]);
     act(() => root?.unmount());
     document.body.innerHTML = '';
     h.viewer = 'u2';
     await mount();
     expect(byLabel('Brief actions')).not.toBeNull();
     await openMenu();
-    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link']);
+    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-copy-brief']);
   });
 
   it('canCloseBrief: close, or close_own for the creator only', () => {
@@ -277,7 +296,7 @@ describe('Brief detail close', () => {
 });
 
 describe('Brief detail ⋯ menu rows', () => {
-  it('an open brief with close rights: Copy link, then Close brief', async () => {
+  it('an open brief with close rights: Copy link, Copy brief, then Close brief', async () => {
     h.caps = { 'brief.close': true };
     h.getBrief.mockResolvedValue(detail());
     await mount();
@@ -287,24 +306,29 @@ describe('Brief detail ⋯ menu rows', () => {
     );
     expect(menuRows()).toEqual([
       ['brief-menu-copy-link', 'Copy link'],
+      ['brief-menu-copy-brief', 'Copy brief'],
       ['brief-menu-close', 'Close brief'],
     ]);
     expect(menuRow('brief-menu-reopen')).toBeNull();
   });
 
-  it('an open brief without close rights: Copy link only', async () => {
+  it('an open brief without close rights: Copy link and Copy brief only', async () => {
     h.getBrief.mockResolvedValue(detail({ created_by: 'u9' }));
     await mount();
     await openMenu();
-    expect(menuRows()).toEqual([['brief-menu-copy-link', 'Copy link']]);
+    expect(menuRows()).toEqual([
+      ['brief-menu-copy-link', 'Copy link'],
+      ['brief-menu-copy-brief', 'Copy brief'],
+    ]);
   });
 
-  it('a closed brief, member without close rights: Copy link, then Reopen brief', async () => {
+  it('a closed brief, member without close rights: Copy link, Copy brief, then Reopen brief', async () => {
     h.getBrief.mockResolvedValue(detail({ status: 'closed', created_by: 'u9' }));
     await mount();
     await openMenu();
     expect(menuRows()).toEqual([
       ['brief-menu-copy-link', 'Copy link'],
+      ['brief-menu-copy-brief', 'Copy brief'],
       ['brief-menu-reopen', 'Reopen brief'],
     ]);
     expect(menuRow('brief-menu-close')).toBeNull();
@@ -315,7 +339,11 @@ describe('Brief detail ⋯ menu rows', () => {
     h.getBrief.mockResolvedValue(detail({ status: 'closed' }));
     await mount();
     await openMenu();
-    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-reopen']);
+    expect(menuRows().map(([id]) => id)).toEqual([
+      'brief-menu-copy-link',
+      'brief-menu-copy-brief',
+      'brief-menu-reopen',
+    ]);
   });
 
   it('every row is a 44px menu item and picking one closes the menu', async () => {
@@ -388,7 +416,7 @@ describe('Brief detail reopen', () => {
     expect(h.reopenBrief).not.toHaveBeenCalled();
     // Now open: the menu offers no Reopen (and no Close without rights).
     await openMenu();
-    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link']);
+    expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-copy-brief']);
   });
 
   it('Undo puts Closed back and reopenBrief is never called', async () => {
@@ -495,31 +523,39 @@ describe('Brief detail shows no KEY-N code', () => {
 });
 
 describe('Brief detail content', () => {
-  it('copies the objective and brand requirements with 44px buttons', async () => {
+  it('section labels carry no copy icons; Copy brief in the ⋯ menu copies title and sections', async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     h.getBrief.mockResolvedValue(detail());
     await mount();
-    const copyObjective = byLabel('Copy objective');
-    expect(copyObjective?.className).toContain('h-11 w-11');
-    await act(async () => copyObjective?.click());
+    expect(byLabel('Copy objective')).toBeNull();
+    expect(byLabel('Copy brand requirements')).toBeNull();
+    await openMenu();
+    await act(async () => menuRow('brief-menu-copy-brief')?.click());
     await flush();
-    expect(writeText).toHaveBeenCalledWith('Build hype for the drop');
+    expect(writeText).toHaveBeenCalledWith(
+      'Festive drop\n\nObjective\nBuild hype for the drop\n\nBrand requirements\nGold logo only',
+    );
     expect(text()).toContain('Copied');
-    await act(async () => byLabel('Copy brand requirements')?.click());
-    expect(writeText).toHaveBeenCalledWith('Gold logo only');
   });
 
-  it('says "Couldn\'t copy" when the clipboard refuses', async () => {
+  it('Copy brief says "Couldn\'t copy" when the clipboard refuses', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText: vi.fn(async () => Promise.reject(new Error('denied'))) },
       configurable: true,
     });
     h.getBrief.mockResolvedValue(detail());
     await mount();
-    await act(async () => byLabel('Copy objective')?.click());
+    await openMenu();
+    await act(async () => menuRow('brief-menu-copy-brief')?.click());
     await flush();
     expect(text()).toContain("Couldn't copy");
+  });
+
+  it('briefCopyText leaves out an empty brand requirements section', () => {
+    expect(briefCopyText({ title: 'T', objective: 'O', brand_requirements: '  ' })).toBe(
+      'T\n\nObjective\nO',
+    );
   });
 
   it('Created by shows a skeleton until members load, never "Former member" early', async () => {
@@ -619,12 +655,35 @@ describe('Brief detail New post from this brief', () => {
     );
   });
 
+  it('phone: the action sits in a fixed bar above the tab bar; desktop: in the top bar', async () => {
+    h.caps = { 'post.create': true, 'brief.create': false };
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    const bar = document.querySelector<HTMLElement>('[data-brief-action-bar]');
+    expect(bar?.className).toContain('fixed');
+    expect(bar?.className).toContain('md:hidden');
+    expect(bar?.className).toContain('bottom-[calc(56px+env(safe-area-inset-bottom))]');
+    expect(bar?.querySelector('[data-new-post-from-brief="bar"]')?.textContent).toBe(
+      'New post from this brief',
+    );
+    const top = document.querySelector<HTMLElement>('[data-new-post-from-brief="top"]');
+    expect(top?.className).toContain('hidden');
+    expect(top?.className).toContain('md:inline-flex');
+    expect(top?.parentElement?.querySelector('button[aria-label="Brief actions"]')).not.toBeNull();
+    // The old full-width block under the title is gone.
+    expect(document.querySelectorAll('[data-new-post-from-brief]')).toHaveLength(2);
+    expect(
+      document.querySelector('h1')?.parentElement?.querySelector('[data-new-post-from-brief]'),
+    ).toBeNull();
+  });
+
   it('fix 23: hidden for approvers', async () => {
     h.caps = { 'post.create': true, 'brief.create': true };
     h.getBrief.mockResolvedValue(detail());
     await mount();
     expect(text()).toContain('Festive drop');
     expect(button('New post from this brief')).toBeUndefined();
+    expect(document.querySelector('[data-brief-action-bar]')).toBeNull();
   });
 
   it('fix 23: hidden on a closed brief', async () => {
@@ -648,41 +707,90 @@ describe('Brief detail polish', () => {
   const phone = () => document.querySelector<HTMLElement>('[data-brief-details="phone"]');
   const desktop = () => document.querySelector<HTMLElement>('[data-brief-details="desktop"]');
 
-  it('phone Details shows the same facts as desktop: Status, Due date, Format, Raised, Linked posts', async () => {
+  it('details are two lines on phone and desktop, with no Status or Due date cells', async () => {
     h.getBrief.mockResolvedValue(detail());
     await mount();
     for (const section of [phone(), desktop()]) {
-      const terms = [...(section?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent);
-      expect(terms).toEqual(['Status', 'Due date', 'Format', 'Raised', 'Linked posts']);
-      expect(section?.textContent).toContain('by Asha Rao');
-      expect(section?.textContent).toContain('carousel');
+      expect(section?.querySelectorAll('dt')).toHaveLength(0);
+      // "1 Oct" in 2026, "1 Oct 2026" from a later year.
+      expect(section?.querySelector('[data-brief-raised]')?.textContent).toMatch(
+        /^Raised 1 Oct( 2026)? by Asha Rao$/,
+      );
+      expect(section?.querySelector('[data-brief-format]')?.textContent).toBe('Format Carousel');
+      expect(section?.textContent).not.toContain('carousel');
+      expect(section?.textContent).not.toContain('Status');
+      expect(section?.textContent).not.toContain('Due date');
     }
     expect(text()).not.toContain('Target date');
   });
 
-  it('hides the Format row on both when no format is set', async () => {
+  it('hides the Format line on both when no format is set', async () => {
     h.getBrief.mockResolvedValue(detail({ format_requested: null }));
     await mount();
     for (const section of [phone(), desktop()]) {
-      const terms = [...(section?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent);
-      expect(terms).toEqual(['Status', 'Due date', 'Raised', 'Linked posts']);
+      expect(section?.querySelector('[data-brief-format]')).toBeNull();
+      expect(section?.querySelector('[data-brief-raised]')).not.toBeNull();
     }
   });
 
-  it('Open is the accent pill with a dot; Closed is the grey pill with a lock and the closed line', async () => {
-    h.getBrief.mockResolvedValue(detail());
+  it('briefFormatLabel proper-cases the requested format', () => {
+    expect(briefFormatLabel('carousel')).toBe('Carousel');
+    expect(briefFormatLabel('single_image')).toBe('Single Image');
+  });
+
+  it('the top bar reads the status and due day with a 7px dot at 15px semibold', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-01T09:00:00Z'));
+    h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
-    const open = document.querySelector<HTMLElement>('[data-brief-status="open"]');
-    expect(open?.className).toContain('bg-accent-soft');
-    expect(text()).not.toContain('Closed briefs stay readable and open to comments.');
-    act(() => root?.unmount());
-    document.body.innerHTML = '';
+    const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
+    expect(line?.textContent).toBe('Open · Due 14 Aug');
+    expect(line?.querySelector('[aria-hidden="true"]')?.className).toContain('h-[7px] w-[7px]');
+    expect(line?.querySelector('.text-\\[15px\\]')?.className).toContain('font-semibold');
+    expect(line?.querySelector('[data-brief-due]')?.className ?? '').not.toContain('text-bad');
+  });
+
+  it('past due: the due part reads overdue in text-bad', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T09:00:00Z'));
+    h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
+    await mount();
+    const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
+    expect(line?.textContent).toBe('Open · Overdue 2 months');
+    expect(line?.querySelector('[data-brief-due]')?.className).toContain('text-bad');
+  });
+
+  it('a closed brief reads "Closed" in the top bar, with the closed line under the title', async () => {
     h.getBrief.mockResolvedValue(detail({ status: 'closed' }));
     await mount();
-    const closed = document.querySelector<HTMLElement>('[data-brief-status="closed"]');
-    expect(closed?.className).toContain('bg-panel-3');
-    expect(closed?.querySelector('svg rect')).not.toBeNull();
+    expect(document.querySelector('[data-brief-status-line]')?.textContent).toBe('Closed');
+    expect(document.querySelector('[data-brief-due]')).toBeNull();
     expect(text()).toContain('Closed briefs stay readable and open to comments.');
+  });
+
+  it('briefStatusLine: due, overdue, no date, closed', () => {
+    const now = new Date('2026-08-01T09:00:00Z');
+    expect(briefStatusLine('open', '2026-08-14', 'UTC', now)).toEqual({
+      status: 'Open',
+      due: 'Due 14 Aug',
+      overdue: false,
+    });
+    expect(briefStatusLine('open', '2026-08-01', 'UTC', now).overdue).toBe(false);
+    expect(briefStatusLine('open', '2026-07-31', 'UTC', now)).toEqual({
+      status: 'Open',
+      due: 'Overdue · 31 Jul',
+      overdue: true,
+    });
+    expect(briefStatusLine('open', null, 'UTC', now)).toEqual({
+      status: 'Open',
+      due: null,
+      overdue: false,
+    });
+    expect(briefStatusLine('closed', '2026-07-31', 'UTC', now)).toEqual({
+      status: 'Closed',
+      due: null,
+      overdue: false,
+    });
   });
 
   it('one wrapping title at the post title size', async () => {
@@ -706,5 +814,71 @@ describe('Brief detail polish', () => {
     h.getBrief.mockResolvedValue(detail());
     await mount();
     expect(text()).not.toContain('Select a workspace to view comments.');
+  });
+});
+
+describe('Brief detail linked posts', () => {
+  const post = (id: string, briefId: string | null, createdAt: string) => ({
+    id,
+    title: `Post ${id}`,
+    stage: 'review',
+    created_at: createdAt,
+    brief_id: briefId,
+  });
+
+  it('0 linked posts shows nothing and reads nothing', async () => {
+    h.getBrief.mockResolvedValue({
+      ...detail(),
+      data: { ...detail().data, linked_posts_count: 0 },
+    });
+    await mount();
+    expect(document.querySelector('[data-linked-posts]')).toBeNull();
+    expect(text()).not.toContain('Linked posts');
+    expect(h.listPosts).not.toHaveBeenCalled();
+  });
+
+  it('lists the linked posts as rows that open /posts/{id}, newest first', async () => {
+    h.listPosts.mockResolvedValue({
+      ok: true,
+      data: [
+        post('p1', 'b1', '2026-10-02T00:00:00Z'),
+        post('p9', 'other', '2026-10-03T00:00:00Z'),
+        post('p2', 'b1', '2026-10-04T00:00:00Z'),
+      ],
+    });
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    expect(h.listPosts.mock.calls[0]?.[1]).toEqual({ workspaceId: 'w1', limit: LINKED_POSTS_SCAN });
+    const rows = [
+      ...document.querySelectorAll<HTMLAnchorElement>(
+        '[data-brief-details="desktop"] ~ [data-linked-posts] a[data-linked-post]',
+      ),
+    ];
+    expect(rows.map((a) => a.getAttribute('href'))).toEqual(['/posts/p2', '/posts/p1']);
+    expect(rows[0]?.className).toContain('min-h-[44px]');
+    expect(rows[0]?.textContent).toBe('Post p2');
+  });
+
+  it('keeps the count as a pipeline link when the read cannot list every post', async () => {
+    h.listPosts.mockResolvedValue({ ok: true, data: [post('p1', 'b1', '2026-10-02T00:00:00Z')] });
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    const count = document.querySelector<HTMLAnchorElement>('[data-linked-posts-count]');
+    expect(count?.getAttribute('href')).toBe('/pipeline');
+    expect(count?.textContent).toBe('2');
+    expect(document.querySelector('a[data-linked-post]')).toBeNull();
+  });
+
+  it('linkedPostsFor keeps this brief only, newest first', () => {
+    expect(
+      linkedPostsFor(
+        [
+          post('a', 'b1', '2026-01-01T00:00:00Z'),
+          post('b', null, '2026-01-03T00:00:00Z'),
+          post('c', 'b1', '2026-01-02T00:00:00Z'),
+        ],
+        'b1',
+      ).map((p) => p.id),
+    ).toEqual(['c', 'a']);
   });
 });

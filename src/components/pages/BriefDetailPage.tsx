@@ -3,7 +3,7 @@ import { appPresignCache } from '@/lib/shared-presign';
 import { useSearchJump } from '@/lib/search/jump';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
@@ -13,15 +13,12 @@ import { IconButton } from '@/components/ui/IconButton';
 import { LoadError } from '@/components/ui/LoadError';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { useOptionalToast } from '@/components/ui/toast';
-import { IconBriefs, IconChevronLeft, IconCopy, IconMore } from '@/components/ui/icons';
+import { IconBriefs, IconChevronLeft, IconMore } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
-import { BRIEF_STATUS, BriefStatusPill, isBriefClosed } from '@/components/pages/BriefCard';
+import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
+import { BriefLink } from '@/components/pages/BriefLink';
 import { BRIEF_NOTE_PARAM } from '@/lib/brief-list';
-import { LinkButton } from '@/components/ui/LinkButton';
-import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
-import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
-import { checkLink } from '@/lib/links/safety';
 import { Toasts } from '@/components/pages/assets/Toasts';
 import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
@@ -32,7 +29,8 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
-import { formatDay } from '@/lib/display-date';
+import { formatDay, formatDue, formatOverdue } from '@/lib/display-date';
+import { formatLabel } from '@/lib/post-detail-presentation';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
 import { useEscapeLayer } from '@/lib/escape-stack';
@@ -43,7 +41,8 @@ import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { cn } from '@/lib/cn';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import { getBrief, getBriefGallery, reopenBrief } from '@srtdio/briefs';
-import type { BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
+import type { Brief, BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
+import { listPosts, type PipelinePost } from '@srtdio/posts';
 import { briefClose } from '@srtdio/rpc';
 
 // The line under a closed brief's title (and in the Close confirm).
@@ -69,7 +68,7 @@ export function focusCommentBox(root: HTMLElement | null): boolean {
 
 /**
  * The loading state: a static skeleton in the loaded page's shape (title,
- * Details rows, Objective lines; the Details column on desktop), in the same
+ * the two details lines, Objective lines; the Details column on desktop), in the same
  * containers, so nothing jumps when the brief arrives. Token fills, no motion.
  */
 export function BriefDetailSkeleton(): ReactElement {
@@ -87,9 +86,9 @@ export function BriefDetailSkeleton(): ReactElement {
     >
       <div className="md:col-span-2 flex flex-col gap-6">
         <div className="h-8 w-3/4 rounded bg-panel-2" />
-        <div className="md:hidden">
-          <div className="mb-2 h-3 w-14 rounded bg-panel-2" />
-          <div className="grid grid-cols-2 gap-3">{[0, 1, 2, 3].map(row)}</div>
+        <div className="flex flex-col gap-1.5 md:hidden">
+          <div className="h-4 w-52 rounded bg-panel-2" />
+          <div className="h-4 w-28 rounded bg-panel-2" />
         </div>
         <div className="flex flex-col gap-2">
           <div className="mb-1 h-3 w-20 rounded bg-panel-2" />
@@ -114,6 +113,98 @@ export function BriefDetailSkeleton(): ReactElement {
 export function briefDueDateLabel(targetDate: string | null, now: Date = new Date()): string {
   return targetDate !== null ? formatDay(targetDate, 'UTC', now) || targetDate : 'Not set';
 }
+
+/** Today's civil date in the zone as "YYYY-MM-DD"; an unknown zone reads UTC. */
+function todayIso(timeZone: string, now: Date): string {
+  const format = (zone: string): string =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now);
+  try {
+    return format(timeZone);
+  } catch {
+    return format('UTC');
+  }
+}
+
+export interface BriefStatusLine {
+  status: 'Open' | 'Closed';
+  /** "Due 14 Aug", or the overdue wording ("Overdue 2 months"); null when not shown. */
+  due: string | null;
+  /** True when the due part reads overdue (painted text-bad). */
+  overdue: boolean;
+}
+
+/**
+ * The top bar's status line: "Open · Due 14 Aug", "Open · Overdue 2 months"
+ * once the due day has passed in the workspace zone, plain "Open" with no due
+ * date, and plain "Closed" for a closed brief. The date-only target_date is read
+ * as written; the zone only decides which day is today. Pure.
+ */
+export function briefStatusLine(
+  status: string,
+  targetDate: string | null,
+  timeZone: string,
+  now: Date = new Date(),
+): BriefStatusLine {
+  if (status === BRIEF_STATUS.closed) return { status: 'Closed', due: null, overdue: false };
+  if (targetDate === null) return { status: 'Open', due: null, overdue: false };
+  if (targetDate < todayIso(timeZone, now)) {
+    return { status: 'Open', due: formatOverdue(targetDate, timeZone, now).text, overdue: true };
+  }
+  const due = formatDue(targetDate, timeZone, now);
+  return { status: 'Open', due: due === '' ? null : due, overdue: false };
+}
+
+/** The requested format proper-cased ("carousel" -> "Carousel"), never the raw enum. */
+export function briefFormatLabel(format: string): string {
+  return formatLabel(format.trim());
+}
+
+/**
+ * What "Copy brief" puts on the clipboard: the title, then every text section
+ * under its label (Objective, then Brand requirements when set). Pure.
+ */
+export function briefCopyText(
+  brief: Pick<Brief, 'title' | 'objective' | 'brand_requirements'>,
+): string {
+  const parts = [brief.title, `Objective\n${brief.objective}`];
+  const brand = brief.brand_requirements?.trim() ?? '';
+  if (brand !== '') parts.push(`Brand requirements\n${brand}`);
+  return parts.join('\n\n');
+}
+
+/**
+ * How many workspace posts the linked-posts list reads (the existing listPosts
+ * read, filtered here by brief_id). When the filter finds fewer than the
+ * brief's linked count, the section falls back to the count.
+ */
+export const LINKED_POSTS_SCAN = 200;
+
+export type LinkedPost = Pick<PipelinePost, 'id' | 'title' | 'stage' | 'created_at'>;
+
+/** This brief's posts out of a workspace read, newest first. Pure. */
+export function linkedPostsFor(
+  posts: readonly Pick<PipelinePost, 'id' | 'title' | 'stage' | 'created_at' | 'brief_id'>[],
+  briefId: string,
+): LinkedPost[] {
+  return posts
+    .filter((post) => post.brief_id === briefId)
+    .map(({ id, title, stage, created_at }) => ({ id, title, stage, created_at }))
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+}
+
+// posts.stage is a plain text column; an unknown value gets the draft dot.
+const LINKED_STAGE_DOT: Record<string, string> = {
+  draft: 'bg-fg-3',
+  review: 'bg-accent',
+  approved: 'bg-good',
+  parked: 'bg-warn',
+  rejected: 'bg-bad',
+};
 
 /**
  * Whether the viewer may close this brief: brief.close, or brief.close_own on a
@@ -192,18 +283,6 @@ export function briefAuthorLabel(
 
 const SECTION_LABEL = 'text-xs font-medium uppercase tracking-wide text-fg-3';
 
-/** A section label with a 44px copy button beside it. */
-function CopyHeading({ label, onCopy }: { label: string; onCopy: () => void }): ReactElement {
-  return (
-    <div className="mb-1 flex items-center justify-between gap-2">
-      <div className={SECTION_LABEL}>{label}</div>
-      <IconButton label={`Copy ${label.toLowerCase()}`} className="-my-2 shrink-0" onClick={onCopy}>
-        <IconCopy size={16} />
-      </IconButton>
-    </div>
-  );
-}
-
 /**
  * A failed reopen in plain words: invalid_payload means the brief is no longer
  * closed (someone reopened it first); anything else reads through the shared
@@ -244,20 +323,23 @@ interface BriefMenuRow {
 }
 
 /**
- * The header ⋯ menu, on every brief for every member: Copy link, then Close
- * brief (open, and the viewer may close) or Reopen brief (closed, any member).
+ * The header ⋯ menu, on every brief for every member: Copy link, Copy brief,
+ * then Close brief (open, and the viewer may close) or Reopen brief (closed,
+ * any member).
  * Escape or a tap outside closes it.
  */
 function BriefActionsMenu({
   closed,
   canClose,
   onCopyLink,
+  onCopyBrief,
   onCloseBrief,
   onReopenBrief,
 }: {
   closed: boolean;
   canClose: boolean;
   onCopyLink: () => void;
+  onCopyBrief: () => void;
   onCloseBrief: () => void;
   onReopenBrief: () => void;
 }): ReactElement {
@@ -265,6 +347,7 @@ function BriefActionsMenu({
   useEscapeLayer(open, () => setOpen(false));
   const rows: BriefMenuRow[] = [
     { label: 'Copy link', testId: 'brief-menu-copy-link', onSelect: onCopyLink },
+    { label: 'Copy brief', testId: 'brief-menu-copy-brief', onSelect: onCopyBrief },
   ];
   if (closed) {
     rows.push({ label: 'Reopen brief', testId: 'brief-menu-reopen', onSelect: onReopenBrief });
@@ -478,6 +561,28 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     };
   }, [briefId]);
 
+  // Linked posts: the existing workspace posts read, filtered to this brief.
+  // Only read when the brief has any; null until the read settles (nothing
+  // shows meanwhile), and a failed read leaves the count to stand in.
+  const [linkedPosts, setLinkedPosts] = useState<LinkedPost[] | null>(null);
+  const linkedCount = detail?.linked_posts_count ?? 0;
+  useEffect(() => {
+    setLinkedPosts(null);
+    if (briefId === undefined || workspaceId === null || linkedCount === 0) return;
+    let active = true;
+    listPosts(supabase, { workspaceId, limit: LINKED_POSTS_SCAN }).then(
+      (result) => {
+        if (active) setLinkedPosts(result.ok ? linkedPostsFor(result.data, briefId) : []);
+      },
+      () => {
+        if (active) setLinkedPosts([]);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [briefId, workspaceId, linkedCount]);
+
   // Close behind a 4s Undo: the badge flips to Closed at once, Undo puts it
   // back, and brief_close runs only once the window passes. A failed close
   // restores Open and says so in plain words.
@@ -538,8 +643,9 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     void copyText(link).then((ok) => push(ok ? 'Link copied' : COPY_FAILED));
   }
 
-  async function copy(text: string): Promise<void> {
-    push((await copyText(text)) ? 'Copied' : COPY_FAILED);
+  function copyBrief(): void {
+    if (detail === null) return;
+    void copyText(briefCopyText(detail.brief)).then((ok) => push(ok ? 'Copied' : COPY_FAILED));
   }
 
   function goBack(): void {
@@ -606,103 +712,161 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const canClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
   const hasBrand = brief.brand_requirements !== null && brief.brand_requirements.trim() !== '';
   const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
+  const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone);
+  const showNewPost = canCreatePost && !isApprover && !closed && briefId !== undefined;
+  const startPost = (): void => navigate(`/pipeline?new=1&brief=${encodeURIComponent(brief.id)}`);
   const authorLabel = briefAuthorLabel(
     brief.created_by,
     brief.legacy_author_name,
     (id) => memberById.get(id) ?? null,
     membersLoaded,
   );
-  // One Details list, the same facts on phone and desktop: Status, Due date,
-  // Format (only when set), Raised (day and by whom), Linked posts. Phone lays
-  // it out two across; desktop stacks it in the side column.
-  const detailsList = (
-    <dl className="grid grid-cols-2 gap-3 text-sm md:flex md:flex-col">
-      <div className="flex min-w-0 flex-col items-start gap-1">
-        <dt className="text-fg-3">Status</dt>
-        <dd>
-          <BriefStatusPill status={brief.status} />
-        </dd>
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <dt className="text-fg-3">Due date</dt>
-        <dd className="tabular-nums text-fg">{briefDueDateLabel(brief.target_date)}</dd>
-      </div>
+  // The details as two short lines, the same on phone (under the title) and
+  // desktop (the side column): "Raised 15 Jun by Priya Raman", then "Format
+  // Carousel" when a format is set. Status and due date live in the top bar.
+  const detailsLines = (
+    <div className="flex min-w-0 flex-col gap-1 text-sm">
+      <p data-brief-raised="" className="min-w-0 break-words text-fg">
+        <span className="text-fg-3">Raised</span>{' '}
+        <span className="tabular-nums">{briefRaisedLabel(brief.created_at, timeZone)}</span>
+        {authorLabel === '' && membersLoading ? (
+          <span
+            data-testid="created-by-skeleton"
+            aria-label="Loading"
+            className="ml-1 inline-block h-4 w-28 rounded bg-panel-3 align-middle"
+          />
+        ) : authorLabel !== '' ? (
+          <> by {authorLabel}</>
+        ) : null}
+      </p>
       {hasFormat ? (
-        <div className="flex min-w-0 flex-col gap-1">
-          <dt className="text-fg-3">Format</dt>
-          <dd className="break-words text-fg">{brief.format_requested}</dd>
-        </div>
+        <p data-brief-format="" className="min-w-0 break-words text-fg">
+          <span className="text-fg-3">Format</span> {briefFormatLabel(brief.format_requested ?? '')}
+        </p>
       ) : null}
-      <div className="flex min-w-0 flex-col gap-1">
-        <dt className="text-fg-3">Raised</dt>
-        <dd className="min-w-0 break-words text-fg">
-          <span className="tabular-nums">{briefRaisedLabel(brief.created_at, timeZone)}</span>
-          {authorLabel === '' && membersLoading ? (
-            <span
-              data-testid="created-by-skeleton"
-              aria-label="Loading"
-              className="mt-1 block h-4 w-28 rounded bg-panel-3"
-            />
-          ) : authorLabel !== '' ? (
-            <span className="block">by {authorLabel}</span>
-          ) : null}
-        </dd>
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <dt className="text-fg-3">Linked posts</dt>
-        <dd className="tabular-nums text-fg">{detail.linked_posts_count}</dd>
-      </div>
-    </dl>
+    </div>
   );
+  // Linked posts: compact rows that open each post. Nothing at all for none
+  // (no "0"), nothing while the read runs, and the count as a link to the
+  // pipeline when the list could not be read in full.
+  const linkedSection =
+    linkedCount === 0 || linkedPosts === null ? null : (
+      <section data-linked-posts={linkedPosts.length >= linkedCount ? 'list' : 'count'}>
+        <div className={`${SECTION_LABEL} mb-1`}>Linked posts</div>
+        {linkedPosts.length >= linkedCount ? (
+          <ul className="flex min-w-0 flex-col">
+            {linkedPosts.map((post) => (
+              <li key={post.id} className="min-w-0">
+                <Link
+                  to={`/posts/${post.id}`}
+                  data-linked-post=""
+                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-md px-2 text-sm text-fg transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`h-[7px] w-[7px] shrink-0 rounded-full ${LINKED_STAGE_DOT[post.stage] ?? 'bg-fg-3'}`}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{post.title}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Link
+            to="/pipeline"
+            data-linked-posts-count=""
+            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-md px-2 text-sm tabular-nums text-accent transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {linkedCount}
+          </Link>
+        )}
+      </section>
+    );
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
       <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
         {backButton}
-        {/* The title has its own wrapping line below on every screen size. */}
-        <div className="flex-1" />
+        {/* The status line, as the post screen's: a 7px dot and 15px semibold. */}
+        <div data-brief-status-line="" className="flex min-w-0 flex-1 items-center gap-2">
+          <span
+            aria-hidden="true"
+            className={`h-[7px] w-[7px] shrink-0 rounded-full ${closed ? 'bg-fg-3' : 'bg-accent'}`}
+          />
+          <span className="truncate text-[15px] font-semibold text-fg">
+            <span data-brief-status={closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open}>
+              {statusLine.status}
+            </span>
+            {statusLine.due !== null ? (
+              <>
+                {' · '}
+                <span
+                  data-brief-due=""
+                  {...(statusLine.overdue ? { 'data-overdue': '' } : {})}
+                  className={statusLine.overdue ? 'text-bad' : undefined}
+                >
+                  {statusLine.due}
+                </span>
+              </>
+            ) : null}
+          </span>
+        </div>
+        {showNewPost ? (
+          <Button
+            variant="primary"
+            size="lg"
+            data-new-post-from-brief="top"
+            className="hidden shrink-0 md:inline-flex"
+            onClick={startPost}
+          >
+            New post from this brief
+          </Button>
+        ) : null}
         <BriefActionsMenu
           closed={closed}
           canClose={canClose}
           onCopyLink={copyLink}
+          onCopyBrief={copyBrief}
           onCloseBrief={() => setConfirmingClose(true)}
           onReopenBrief={reopenWithUndo}
         />
       </div>
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* One order on phone and desktop: title (details lines under it on
+            phone), Objective, Brand requirements, Attachments, Reference links,
+            Comments. Desktop's side column holds the details and linked posts. */}
         <div className="md:col-span-2 flex min-w-0 flex-col gap-6">
-          {/* Phone order: title, Details, Objective, Brand requirements,
-              Attachments, Comments. md:order-none hands desktop back its DOM
-              order (gallery first), unchanged. */}
           <div className="flex min-w-0 flex-col gap-2">
             <h1 className={BRIEF_TITLE_CLASS}>
               <Highlight text={brief.title} />
             </h1>
             {closed ? <p className="text-sm text-fg-3">{CLOSED_BRIEF_LINE}</p> : null}
+            <div data-brief-details="phone" className="md:hidden">
+              {detailsLines}
+            </div>
           </div>
 
-          {canCreatePost && !isApprover && !closed && briefId !== undefined ? (
-            <div>
-              <Button
-                variant="primary"
-                size="lg"
-                data-new-post-from-brief=""
-                className="w-full md:w-auto"
-                onClick={() => navigate(`/pipeline?new=1&brief=${encodeURIComponent(brief.id)}`)}
-              >
-                New post from this brief
-              </Button>
-            </div>
-          ) : null}
+          {linkedSection !== null ? <div className="md:hidden">{linkedSection}</div> : null}
 
-          <section data-brief-details="phone" className="order-1 md:hidden">
-            <div className={`${SECTION_LABEL} mb-2`}>Details</div>
-            {detailsList}
+          <section className="min-w-0">
+            <div className={`${SECTION_LABEL} mb-1`}>Objective</div>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
+              <Highlight text={brief.objective} />
+            </p>
           </section>
 
+          {hasBrand ? (
+            <section className="min-w-0">
+              <div className={`${SECTION_LABEL} mb-1`}>Brand requirements</div>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
+                {brief.brand_requirements}
+              </p>
+            </section>
+          ) : null}
+
           {mediaItems.length > 0 ? (
-            <section className="order-4 md:order-none">
+            <section className="min-w-0">
               <PostGallery
                 items={mediaItems}
                 cache={cache}
@@ -715,44 +879,13 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             </section>
           ) : null}
 
-          <section className="order-2 min-w-0 md:order-none">
-            <CopyHeading label="Objective" onCopy={() => void copy(brief.objective)} />
-            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
-              <Highlight text={brief.objective} />
-            </p>
-          </section>
-
-          {hasBrand ? (
-            <section className="order-3 min-w-0 md:order-none">
-              <CopyHeading
-                label="Brand requirements"
-                onCopy={() => void copy(brief.brand_requirements ?? '')}
-              />
-              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
-                {brief.brand_requirements}
-              </p>
-            </section>
-          ) : null}
-
           {links.length > 0 ? (
-            <section className="order-4 min-w-0 md:order-none">
+            <section className="min-w-0">
               <div className={`${SECTION_LABEL} mb-2`}>Reference links</div>
               <ul className="flex min-w-0 flex-col gap-2">
-                {links.map((link, index) => (
+                {links.map((link) => (
                   <li key={link.href} className="min-w-0 break-words">
-                    {/* The first link gets the preview card; the rest stay buttons. */}
-                    {index === 0 ? (
-                      <LinkPreviewCard url={link.href} className="w-full max-w-[420px]" />
-                    ) : checkLink(link.href).verdict === 'unsafe' ? (
-                      <UnsafeLinkButton
-                        url={link.href}
-                        reasons={checkLink(link.href).reasons}
-                        domain={link.domain}
-                        className="w-full"
-                      />
-                    ) : (
-                      <LinkButton url={link.href} className="w-full" />
-                    )}
+                    <BriefLink url={link.href} domain={link.domain} />
                   </li>
                 ))}
               </ul>
@@ -761,7 +894,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
 
           {/* No workspace: nothing at all, never a dead-end line. */}
           {workspaceId !== null && briefId !== undefined ? (
-            <section ref={commentsRef} className="order-5 min-w-0 md:order-none">
+            <section ref={commentsRef} className="min-w-0">
               <div className={`${SECTION_LABEL} mb-2`}>Comments</div>
               <Comments
                 workspaceId={workspaceId}
@@ -776,10 +909,34 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
         <aside className="hidden md:flex min-w-0 flex-col gap-6">
           <section data-brief-details="desktop">
             <div className={`${SECTION_LABEL} mb-2`}>Details</div>
-            {detailsList}
+            {detailsLines}
           </section>
+          {linkedSection}
         </aside>
       </div>
+
+      {/* Phone: the primary action in a bar pinned above the tab bar (safe-area
+          aware), with room under the content so it never covers the comments.
+          Desktop has it in the top bar instead. */}
+      {showNewPost ? (
+        <>
+          <div aria-hidden="true" data-brief-action-space="" className="h-[76px] md:hidden" />
+          <div
+            data-brief-action-bar=""
+            className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 border-t border-border bg-panel px-4 py-3 md:hidden"
+          >
+            <Button
+              variant="primary"
+              size="lg"
+              data-new-post-from-brief="bar"
+              className="w-full"
+              onClick={startPost}
+            >
+              New post from this brief
+            </Button>
+          </div>
+        </>
+      ) : null}
 
       {confirmingClose ? (
         <ConfirmDialog

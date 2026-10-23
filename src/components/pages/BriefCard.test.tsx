@@ -265,3 +265,20 @@ describe('briefCardLink', () => {
     ).toBeNull();
   });
 });
+
+describe('BriefCard tap target', () => {
+  it('the card link covers the whole card and is named by the title', () => {
+    const { cache } = makeCache(null);
+    const out = render(makeBrief({ title: 'Spring launch' }), cache);
+    // The one link is the card root's first child, inset-0 over the whole card.
+    expect(out).toMatch(/^<div data-brief-card=""[^>]*><a /);
+    const tag = /<a [^>]*>/.exec(out)?.[0] ?? '';
+    expect(tag).toContain('aria-label="Spring launch"');
+    expect(tag).toContain('data-brief-card-link=""');
+    expect(tag).toContain('class="absolute inset-0');
+    expect(tag).toContain('href="/briefs/b1"');
+    expect(out.match(/<a /g) ?? []).toHaveLength(1);
+    // The title is text inside the card, never a small link of its own.
+    expect(out).not.toContain('after:absolute');
+  });
+});
