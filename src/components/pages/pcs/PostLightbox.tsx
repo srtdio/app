@@ -17,7 +17,6 @@ import {
   IconTrash,
   IconX,
 } from '@/components/ui/icons';
-import type { IconProps } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { wrapIndex, lightboxCounter, dragAxis, shouldDismiss } from '@/components/ui/ImageLightbox';
@@ -211,44 +210,6 @@ export function fitFrameStyle(width: number, height: number): CSSProperties {
   return { aspectRatio: `${width} / ${height}` };
 }
 
-// Double-chevron glyphs for make-first / make-last; local because the shared icon
-// set has no Chevrons* pair and this surface is the only consumer.
-function IconChevronsLeft({ className, size = 18 }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M11 6l-6 6 6 6M19 6l-6 6 6 6" />
-    </svg>
-  );
-}
-
-function IconChevronsRight({ className, size = 18 }: IconProps) {
-  return (
-    <svg
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 6l6 6-6 6M13 6l6 6-6 6" />
-    </svg>
-  );
-}
-
 // Icon buttons overlaid on the image (counter/close/prev/next): a translucent
 // chip keeps them legible over any photo, dark in both app themes.
 const OVERLAY_BUTTON =
@@ -285,12 +246,12 @@ export function removeImageConfirmCopy(count: number): {
 export const DOWNLOAD_DONE = 'Downloaded';
 export const DOWNLOAD_FAILED = "Couldn't download. Try again.";
 
-/** The agency manage actions, prewired to the current slide. */
+/**
+ * The agency manage actions, prewired to the current slide. #26: no per-tap
+ * reorder here (each tap saved a version); reordering happens only in the
+ * gallery's Reorder mode, one save.
+ */
 export interface LightboxManage {
-  onMakeFirst: () => void;
-  onMoveLeft: () => void;
-  onMoveRight: () => void;
-  onMakeLast: () => void;
   onAddAfter: () => void;
   onRemove: () => void;
 }
@@ -329,7 +290,7 @@ export interface LightboxViewProps {
   /** Whether the delete confirm row has replaced the bottom-bar controls. */
   removeConfirming?: boolean;
   /**
-   * A gallery write is in flight: reorder and delete are blocked and the bar
+   * A gallery write is in flight: delete is blocked and the bar
    * says "Saving…", so two full-list writes never overlap.
    */
   saving?: boolean;
@@ -539,8 +500,9 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
       </div>
 
       {/* Action bar: a slim full-width bar directly below the image (not
-          overlapping it) with the agency 7-control set (reorder · divider ·
-          download/add/delete), or download only for clients and read-only.
+          overlapping it) with the agency controls (download/add/delete; #26:
+          reordering lives in the gallery's Reorder mode), or download only for
+          clients and read-only.
           Delete swaps the whole bar for an inline confirm row. */}
       <div
         className={cn('flex h-12 w-full items-center justify-center', chromeMotion(chromeVisible))}
@@ -581,43 +543,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           </div>
         ) : (
           <div className="flex items-center">
-            <button
-              type="button"
-              aria-label="Make first"
-              disabled={saving || index === 0}
-              onClick={manage.onMakeFirst}
-              className={TOOLBAR_BUTTON}
-            >
-              <IconChevronsLeft size={20} />
-            </button>
-            <button
-              type="button"
-              aria-label="Move left"
-              disabled={saving || index === 0}
-              onClick={manage.onMoveLeft}
-              className={TOOLBAR_BUTTON}
-            >
-              <IconChevronLeft size={20} />
-            </button>
-            <button
-              type="button"
-              aria-label="Move right"
-              disabled={saving || index === count - 1}
-              onClick={manage.onMoveRight}
-              className={TOOLBAR_BUTTON}
-            >
-              <IconChevronRight size={20} />
-            </button>
-            <button
-              type="button"
-              aria-label="Make last"
-              disabled={saving || index === count - 1}
-              onClick={manage.onMakeLast}
-              className={TOOLBAR_BUTTON}
-            >
-              <IconChevronsRight size={20} />
-            </button>
-            <span aria-hidden className="mx-2 h-5 w-px bg-overlay-line" />
             <button
               type="button"
               aria-label="Download"
@@ -766,15 +691,11 @@ interface PostLightboxProps {
    */
   manage?:
     | {
-        onMakeFirst: (index: number) => void;
-        onMoveLeft: (index: number) => void;
-        onMoveRight: (index: number) => void;
-        onMakeLast: (index: number) => void;
         onAddAfter: (index: number) => void;
         onRemove: (index: number) => void;
       }
     | undefined;
-  /** A gallery write is in flight: reorder and delete taps do nothing. */
+  /** A gallery write is in flight: delete taps do nothing. */
   saving?: boolean | undefined;
 }
 
@@ -1140,31 +1061,11 @@ export function PostLightbox({
       .finally(() => setBusy(false));
   };
 
-  // After a manage move the viewed slide keeps being viewed: the index follows
-  // the slide and the scroll effect above brings the track along.
+  // After a manage action a valid slide stays in view; the scroll effect above
+  // brings the track along.
   const manageView: LightboxManage | undefined =
     manage !== undefined
       ? {
-          onMakeFirst: () => {
-            if (saving || index <= 0) return;
-            manage.onMakeFirst(index);
-            onIndexChange(0);
-          },
-          onMoveLeft: () => {
-            if (saving || index <= 0) return;
-            manage.onMoveLeft(index);
-            onIndexChange(index - 1);
-          },
-          onMoveRight: () => {
-            if (saving || index >= items.length - 1) return;
-            manage.onMoveRight(index);
-            onIndexChange(index + 1);
-          },
-          onMakeLast: () => {
-            if (saving || index >= items.length - 1) return;
-            manage.onMakeLast(index);
-            onIndexChange(items.length - 1);
-          },
           onAddAfter: () => {
             manage.onAddAfter(index);
           },

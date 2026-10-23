@@ -19,7 +19,8 @@ vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) 
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't1' }));
 vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
 
-import { PcsApproveConfirm, PostDetailPage, StageButtons } from '@/components/pages/PostDetailPage';
+import { PcsApproveConfirm, PostDetailPage } from '@/components/pages/PostDetailPage';
+import { PostDecisionRow } from '@/components/pages/pcs/PostDecisionBar';
 import { onBehalfConfirmLine, visibleStageActions } from '@/components/pages/pcs/stage-actions';
 import {
   GATE_IDLE,
@@ -56,14 +57,19 @@ function collect(node: ReactNode, found: ReactElement[]): void {
   collect((node.props as { children?: ReactNode }).children, found);
 }
 
-/** The rail for a client in review, wired as the page wires it: through the gate. */
+/** The decision row's buttons for a role and stage, wired as the page wires them: through the gate. */
 function rail(h: ReturnType<typeof harness>, stage: Stage, role: string): ReactElement[] {
   const all: ReactElement[] = [];
   collect(
-    StageButtons({
-      actions: visibleStageActions(stage, role),
-      transitioning: false,
-      onPick: (to) => h.gate.request('p1', to),
+    PostDecisionRow({
+      model: {
+        kind: 'approver',
+        actions: visibleStageActions(stage, role),
+        onComment: null,
+        onPick: (to) => h.gate.request('p1', to),
+      },
+      busy: false,
+      error: null,
     }),
     all,
   );

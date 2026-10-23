@@ -152,28 +152,33 @@ vi.mock('@/components/pages/pcs/PostGallery', async (importOriginal) => {
     },
   };
 });
+// Flow B 33: the page's open count comes from Comments' live counts (every
+// open thread, checkpoints included); h.counts feeds it.
 vi.mock('@/components/comments/Comments', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/comments/Comments')>();
-  return { ...actual, Comments: () => <div data-comments-stub="">comments</div> };
-});
-vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
   const { useEffect } = await import('react');
   return {
     ...actual,
-    CheckpointStrip: (props: { onCounts?: (c: { resolved: number; total: number }) => void }) => {
+    Comments: (props: { onCountsChange?: (c: { open: number; resolved: number }) => void }) => {
+      const { onCountsChange } = props;
       useEffect(() => {
-        props.onCounts?.(h.counts);
-      }, [props]);
-      return null;
+        onCountsChange?.({
+          open: h.counts.total - h.counts.resolved,
+          resolved: h.counts.resolved,
+        });
+      }, [onCountsChange]);
+      return <div data-comments-stub="">comments</div>;
     },
   };
 });
-vi.mock('@/components/pages/pcs/PostReadyNotice', () => ({ PostReadyNotice: () => null }));
-vi.mock('@/components/pages/pcs/PostDecisionBar', () => ({
-  PostDecisionBar: () => null,
-  DECISION_BAR_SPACE_PX: 0,
-}));
+vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
+  return { ...actual, CheckpointStrip: () => null };
+});
+vi.mock('@/components/pages/pcs/PostDecisionBar', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/pages/pcs/PostDecisionBar')>();
+  return { ...actual, PostDecisionBar: () => null, DECISION_BAR_SPACE_PX: 0 };
+});
 vi.mock('@/components/pages/pcs/PostActionSheet', () => ({ PostActionSheet: () => null }));
 vi.mock('@/components/pages/pcs/VersionHistorySheet', () => ({ VersionHistorySheet: () => null }));
 vi.mock('@/components/pages/assets/AssetUploadSheet', () => ({ AssetUploadSheet: () => null }));

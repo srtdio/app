@@ -42,7 +42,8 @@ describe('1. caption block (mock P1)', () => {
     const block = PAGE.slice(start, PAGE.indexOf('data-caption-edit=""', start) + 40);
     expect(block).toContain('<Avatar name={workspaceName ?? \'\'} size="md" />');
     expect(block).not.toContain('{formatLabel(post.format)}');
-    expect(block).not.toContain('<VersionPill');
+    // The old version pill is gone for good (its component was deleted).
+    expect(PAGE).not.toContain('VersionPill');
     expect(block).toContain('data-caption-edit=""');
     expect(block).toContain('<IconPencil size={15} />\n                    Edit');
     // The uppercase eyebrow and the select hint are gone.
@@ -79,17 +80,17 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
   it('the phone bar is the pcs PostDecisionBar, only off read-only, with room reserved under the page', () => {
     expect(PAGE).toContain('phoneLayout && !readOnly ? (');
     expect(PAGE).toContain(
-      '<PostDecisionBar actions={stageActions} transitioning={transitioning} onPick={pickStage} />',
+      '<PostDecisionBar model={decisionModel} busy={decisionBusy} error={actionError} />',
     );
     expect(PAGE).toContain('data-decision-bar-space=""');
-    expect(PAGE).toContain('calc(${DECISION_BAR_SPACE_PX}px + env(safe-area-inset-bottom))');
+    expect(PAGE).toContain(
+      'calc(${decisionBarSpace(decisionModel, actionError)}px + env(safe-area-inset-bottom))',
+    );
   });
 
   it('FN10: stage buttons stay enabled during the undo window and a pick flushes the pending commit', () => {
-    expect(PAGE).toContain(
-      '<StageButtons actions={stageActions} transitioning={transitioning} onPick={pickStage} />',
-    );
-    expect(PAGE).not.toContain('transitioning={transitioning || optimisticStage !== null}');
+    expect(PAGE).toContain('const decisionBusy = transitioning || notifying;');
+    expect(PAGE).not.toContain('optimisticStage !== null || transitioning');
     expect(PAGE).toMatch(
       /function pickStage\(to: Stage\): void \{\s*if \(optimisticStage !== null\) flushUndoable\(\);/,
     );
@@ -97,16 +98,15 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
 });
 
 describe('6. gallery hints and slide actions', () => {
-  it('the static hint line is gone and the slide sheet offers Make first / Make last', () => {
+  it('the static hint line is gone and the slide sheet has no per-tap reorder (#26: Reorder mode only)', () => {
     expect(PAGE).not.toContain('Long-press to place a pin.');
-    expect(PAGE).toContain(
-      'onMakeFirst={() => {\n          if (slideIndex !== null) handleMakeFirst(slideIndex);',
-    );
-    expect(PAGE).toContain(
-      'onMakeLast={() => {\n          if (slideIndex !== null) handleMakeLast(slideIndex);',
-    );
-    expect(SLIDE_ACTIONS).toContain('label="Make first"');
-    expect(SLIDE_ACTIONS).toContain('label="Make last"');
+    expect(PAGE).not.toContain('handleMakeFirst');
+    expect(PAGE).not.toContain('handleMoveLeft');
+    for (const label of ['Make first', 'Make last', 'Move left', 'Move right']) {
+      expect(SLIDE_ACTIONS).not.toContain(`label="${label}"`);
+    }
+    expect(SLIDE_ACTIONS).toContain('label="Add image after this"');
+    expect(SLIDE_ACTIONS).toContain('label="Remove image"');
   });
 });
 
@@ -133,9 +133,7 @@ describe('7. FB6 reject / park commit', () => {
       'stillHere: () => mountedRef.current && postIdRef.current === movedPostId,',
     );
     expect(body).toContain('setInlineError: setActionError,');
-    expect(body).toContain(
-      'isDomainError(error) ? friendlyTransitionError(error) : plainError(error)',
-    );
+    expect(body).toContain('friendlyError: postActionErrorCopy,');
     expect(body).not.toMatch(/\bthrow\b/);
   });
 
@@ -195,7 +193,7 @@ describe('8 / 9 / 10. reason sheet dirty, Back, delete', () => {
     expect(body).toContain('showWhenVisible(document, () => {');
     expect(body).not.toContain('Could not delete this post');
     expect(read('./pcs/PostActionSheet.tsx')).toContain(
-      "DELETE_CONFIRM_BASE = 'Delete this post? Moves to Recently deleted.'",
+      "DELETE_CONFIRM_BASE = 'Moves to Recently deleted. You can restore it there.'",
     );
   });
 });

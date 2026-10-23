@@ -105,7 +105,7 @@ describe('post actions (W9)', () => {
 describe('delete confirm names the plans (W10)', () => {
   const plan = (title: string): PostPlanRef => ({ planId: title, title });
   it('0 / 1 / 2+ plans, and the base copy while reading or on failure', () => {
-    const base = 'Delete this post? Moves to Recently deleted.';
+    const base = 'Moves to Recently deleted. You can restore it there.';
     expect(deleteConfirmText(null)).toBe(base);
     expect(deleteConfirmText({ ok: true, data: [] })).toBe(base);
     expect(deleteConfirmText({ ok: true, data: [plan('Week 42')] })).toBe(

@@ -10,6 +10,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
 import { Comments, runCreateCommentBatch } from '@/components/comments/Comments';
+import type { CommentCounts } from '@/components/comments/Comments';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { dispatchInductionDid, dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
@@ -25,8 +26,12 @@ import {
   IconChat,
   IconChevronDown,
   IconChevronLeft,
+  IconCheck,
   IconCopy,
+  IconLock,
+  IconPause,
   IconPipeline,
+  IconX,
 } from '@/components/ui/icons';
 import { PlatformPreviewPanel, PreviewChip } from '@/components/preview/PlatformPreviewPanel';
 import { galleryFrame, PostGallery } from '@/components/pages/pcs/PostGallery';
@@ -41,8 +46,7 @@ import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
 import { buildPinData } from '@/components/pages/pcs/pin-annotations';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
 import { CheckpointStrip } from '@/components/pages/pcs/CheckpointStrip';
-import type { CheckpointCounts } from '@/components/pages/pcs/CheckpointStrip';
-import { PostReadyNotice } from '@/components/pages/pcs/PostReadyNotice';
+import { runPostReadyNotify } from '@/components/pages/pcs/PostReadyNotice';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
 import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
 import {
@@ -59,13 +63,11 @@ import {
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import {
-  agencyReviewHelper,
   onBehalfConfirmLine,
   STAGE_REASON_LABEL,
   stageReasonComment,
   stageReasonConfirm,
   visibleStageActions,
-  type StageAction,
   type StageReasonConfirmCopy,
 } from '@/components/pages/pcs/stage-actions';
 import { sheetTitle } from '@/components/chat/post-sheet';
@@ -75,22 +77,27 @@ import {
   type GateState,
 } from '@/components/pages/pipeline/approve-gate';
 import { IconPencil, IconMoreVertical } from '@/components/pages/pcs/post-icons';
-import { PostActionSheet } from '@/components/pages/pcs/PostActionSheet';
+import { PostActionSheet, type PostMoveRow } from '@/components/pages/pcs/PostActionSheet';
 import {
   append,
   galleryWriteErrorCopy,
   insertAfter,
-  moveLeft,
-  moveRight,
+  POST_APPROVED_LOCKED,
   removeAt,
   replaceAt,
 } from '@/components/pages/pcs/gallery-transforms';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
-import { plainError } from '@/lib/error-copy';
 import { isTouchDevice } from '@/lib/modal-focus';
-import { PostDecisionBar, DECISION_BAR_SPACE_PX } from '@/components/pages/pcs/PostDecisionBar';
+import {
+  decisionBarSpace,
+  PostDecisionBar,
+  PostDecisionRow,
+  resolveFirstHelper,
+  SEND_AGAIN_LABEL,
+  type DecisionModel,
+} from '@/components/pages/pcs/PostDecisionBar';
 import { runStageMoveCommit, showWhenVisible } from '@/components/pages/pcs/stage-move-commit';
 import { formatPostDueLabel } from '@/components/pages/pcs/post-date';
 import {
@@ -111,6 +118,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
+import { safeTimeZone } from '@/lib/chat/time-format';
 import {
   annotationCreate,
   getPost,
@@ -134,7 +142,7 @@ type AddTarget =
   | { mode: 'replace'; index: number };
 
 // A refused RPC carries a DomainError ({ code, message }); a thrown transport
-// error does not, and goes to plainError instead.
+// error does not, and reads as the unknown line.
 function isDomainError(error: unknown): error is DomainError {
   return (
     typeof error === 'object' &&
@@ -142,6 +150,106 @@ function isDomainError(error: unknown): error is DomainError {
     typeof (error as { code?: unknown }).code === 'string' &&
     typeof (error as { message?: unknown }).message === 'string'
   );
+}
+
+/** Flow B 41: the one line for a failure we have no plain words for. */
+export const UNKNOWN_ERROR_COPY = "Couldn't do that. Try again.";
+/** Flow B 37: the approved lock (post_approved_locked) in plain words. */
+export const APPROVED_LOCKED_COPY = "Approved posts can't be edited.";
+
+/**
+ * Flow B 37 / 41: a failed stage move or edit on this page in plain words.
+ * The approved lock and the stage proc's known refusals get their own line;
+ * anything else (a thrown transport error included) the unknown line. Never
+ * the raw text. Pure.
+ */
+export function postActionErrorCopy(error: unknown): string {
+  if (isDomainError(error)) {
+    if (error.code === POST_APPROVED_LOCKED || error.message.includes(POST_APPROVED_LOCKED)) {
+      return APPROVED_LOCKED_COPY;
+    }
+    if (
+      error.code === 'forbidden_role' ||
+      error.code === 'invalid_stage_transition' ||
+      error.code === 'workspace_member_only'
+    ) {
+      return friendlyTransitionError(error);
+    }
+    return UNKNOWN_ERROR_COPY;
+  }
+  if (error instanceof Error && error.message.includes(POST_APPROVED_LOCKED)) {
+    return APPROVED_LOCKED_COPY;
+  }
+  return UNKNOWN_ERROR_COPY;
+}
+
+/**
+ * Flow B 33 / 41: a failed "Send for review again" (post_ready_notify) in plain
+ * words, from the proc's raised message. Pure.
+ */
+export function sendAgainErrorCopy(message: string | null): string {
+  switch (message) {
+    case 'checkpoints_open':
+      return 'Resolve every open comment first.';
+    case 'invalid_stage':
+      return 'This post is not in review anymore.';
+    case 'forbidden_role':
+      return 'You do not have permission to make this change.';
+    default:
+      return UNKNOWN_ERROR_COPY;
+  }
+}
+
+/** Flow B 33: the toast after a landed "Send for review again". */
+export const SENT_AGAIN_TOAST = 'Sent for review again.';
+
+/** Flow B 31: the creator's on-behalf approve row in the ⋯ sheet. */
+export function approveForLabel(brand: string | null | undefined): string {
+  const name = brand?.trim() ?? '';
+  return name !== '' ? `Approve for ${name}` : 'Approve on their behalf';
+}
+
+/** Flow B 40: the reject confirm's reason field label, helper and body. */
+export const REJECT_REASON_LABEL = 'Reason (optional)';
+export const REJECT_REASON_HELPER = 'Goes to the comments.';
+export function rejectConfirmBody(creatorName: string | null): string {
+  const first = creatorName?.trim().split(/\s+/)[0] ?? '';
+  return `${first !== '' ? first : 'The creator'} gets it back to rework. You can send a reason.`;
+}
+
+/** Flow B 37: the approved banner's second sentence (always shown). */
+export const APPROVED_LOCK_LINE =
+  "Approved posts can't be edited. To change it, park it first, then send it for review again.";
+
+/** "21 Oct": the approval day in the workspace zone, or '' for a bad instant. Pure. */
+export function approvedDayLabel(approvedAt: string, timeZone: string): string {
+  const instant = new Date(approvedAt);
+  if (Number.isNaN(instant.getTime())) return '';
+  // en-US parts ("Sep", never en-GB's "Sept"), assembled day first.
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: safeTimeZone(timeZone),
+    day: 'numeric',
+    month: 'short',
+  }).formatToParts(instant);
+  const day = parts.find((part) => part.type === 'day')?.value ?? '';
+  const month = parts.find((part) => part.type === 'month')?.value ?? '';
+  return day !== '' && month !== '' ? `${day} ${month}` : '';
+}
+
+/**
+ * Flow B 37: "Approved by {name} on {d MMM}." when both the approver and the
+ * time are known, else null (the banner then shows its second sentence only).
+ * Pure.
+ */
+export function approvedByLine(
+  approverName: string | null,
+  approvedAt: string | null,
+  timeZone: string,
+): string | null {
+  const name = approverName?.trim() ?? '';
+  if (name === '' || approvedAt === null) return null;
+  const day = approvedDayLabel(approvedAt, timeZone);
+  return day === '' ? null : `Approved by ${name} on ${day}.`;
 }
 import { formatLabel, postStatusLine } from '@/lib/post-detail-presentation';
 import { isPostPlatform, platformLabel as postPlatformLabel } from '@srtdio/posts';
@@ -205,6 +313,30 @@ export function scrollToCommentsSection(doc: Document = document): void {
 }
 
 /**
+ * Flow B 30: the approver's Comment puts the caret in the comment box (the
+ * root composer at the end of the comments) and brings it into view. With no
+ * box on screen it falls back to scrolling to the comments. Returns whether a
+ * box took focus.
+ */
+export function focusCommentComposer(doc: Document = document): boolean {
+  const box = doc.querySelector<HTMLElement>(
+    `#${COMMENTS_SECTION_ID} [data-comments-composer] textarea, #${COMMENTS_SECTION_ID} [data-comments-composer] [contenteditable]:not([contenteditable="false"])`,
+  );
+  if (box === null) {
+    scrollToCommentsSection(doc);
+    return false;
+  }
+  const view = doc.defaultView;
+  const reduce =
+    view !== null &&
+    typeof view.matchMedia === 'function' &&
+    view.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  box.focus({ preventScroll: true });
+  box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+  return true;
+}
+
+/**
  * Flow B 34: the page grid, shared by the skeleton and the loaded page so the
  * first paint never jumps. Below lg (phone, tablet portrait) one column: head
  * (title, details, chip), media, body (caption, comments). lg and up: the
@@ -232,37 +364,6 @@ export function postPageGrid(embedded: boolean): {
     media: 'min-w-0 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:self-start',
     body: 'min-w-0 lg:col-start-2 lg:row-start-2',
   };
-}
-
-/**
- * The stage rail buttons. Hookless so the tree is unit tested by walking it.
- * The Approve target gets a green success fill from the `good` token (there is
- * no on-good token, so its text is white, as the danger variant does); cn here
- * is a plain join, but Tailwind emits bg-good/text-white/hover:bg-good after
- * the primary variant's classes, so they deterministically win the override.
- */
-export function StageButtons(props: {
-  actions: StageAction[];
-  transitioning: boolean;
-  onPick: (to: Stage) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      {props.actions.map((action) => (
-        <Button
-          key={action.to}
-          size="lg"
-          variant={action.variant}
-          disabled={props.transitioning}
-          onClick={() => props.onPick(action.to)}
-          {...(action.to === 'approved' ? { 'data-induction': INDUCTION_KEYS.postApprove } : {})}
-          className={action.to === 'approved' ? 'bg-good text-white hover:bg-good' : undefined}
-        >
-          {action.label}
-        </Button>
-      ))}
-    </div>
-  );
 }
 
 /**
@@ -346,8 +447,17 @@ export function StageReasonConfirm(props: {
   onReasonChange: (reason: string) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  /** Flow B 40: the line under the title (reject: who gets it back), or none. */
+  body?: string | null;
+  /** The reason field's label; the shared park / reject label when absent. */
+  label?: string;
+  /** A quiet line under the field (reject: "Goes to the comments."), or none. */
+  helper?: string | null;
 }) {
   const { copy } = props;
+  const label = props.label ?? STAGE_REASON_LABEL;
+  const body = props.body ?? null;
+  const helper = props.helper ?? null;
   return (
     <Sheet
       open={copy !== null}
@@ -368,13 +478,23 @@ export function StageReasonConfirm(props: {
         </>
       }
     >
+      {body !== null ? (
+        <p data-stage-confirm-body="" className="mb-3 text-sm text-fg-2">
+          {body}
+        </p>
+      ) : null}
       <label className="flex flex-col gap-2">
-        <span className="text-sm text-fg-2">{STAGE_REASON_LABEL}</span>
+        <span className="text-sm text-fg-2">{label}</span>
         <Textarea
-          aria-label={STAGE_REASON_LABEL}
+          aria-label={label}
           value={props.reason}
           onChange={(event) => props.onReasonChange(event.target.value)}
         />
+        {helper !== null ? (
+          <span data-stage-confirm-helper="" className="text-xs text-fg-3">
+            {helper}
+          </span>
+        ) : null}
       </label>
     </Sheet>
   );
@@ -483,7 +603,13 @@ export function PostDetailPage({
   const [captionTipOpen, setCaptionTipOpen] = useState(false);
 
   const [transitioning, setTransitioning] = useState(false);
+  // Flow B 41: a failed move shows once, where it was tapped. actionError
+  // belongs to the decision row / bar (and the reject / park commit); a failed
+  // approve shows only inside the approve confirm (approveError).
   const [actionError, setActionError] = useState<string | null>(null);
+  const [approveError, setApproveError] = useState<string | null>(null);
+  // Flow B 33: "Send for review again" (post_ready_notify) in flight.
+  const [notifying, setNotifying] = useState(false);
 
   // Reject / park (W2): the confirm's target and reason, then the stage shown
   // optimistically while the Undo window runs. The move is sent only when the
@@ -539,21 +665,14 @@ export function PostDetailPage({
   // The failure shown inside the open composer sheet (text kept).
   const [composerError, setComposerError] = useState<string | null>(null);
 
-  // Checkpoint counts lifted from CheckpointStrip's one fetch (no duplicate
-  // read): they drive the page's single openCount (see below).
-  const [checkpointCounts, setCheckpointCounts] = useState<CheckpointCounts>({
-    resolved: 0,
-    total: 0,
-  });
-  const handleCheckpointCounts = useCallback(
-    (counts: CheckpointCounts) => setCheckpointCounts(counts),
-    [],
-  );
-  const bumpCommentsRefresh = useCallback(() => setCommentsRefresh((n) => n + 1), []);
+  // Flow B 33: the live thread counts lifted from Comments (every open
+  // top-level thread, checkpoints included, optimistic resolves too).
+  const [commentCounts, setCommentCounts] = useState<CommentCounts>({ open: 0, resolved: 0 });
+  const handleCommentCounts = useCallback((counts: CommentCounts) => setCommentCounts(counts), []);
   // The page's ONE open-comment count: the open-comments chip under the title
-  // (flow B 29), PostReadyNotice, and the decision row's "Resolve {n} open
-  // comments first." all read this value.
-  const openCount = Math.max(0, checkpointCounts.total - checkpointCounts.resolved);
+  // (flow B 29), the Comments header, and the creator's "Send for review
+  // again" gate ("Resolve {n} open comments first.") all read this value.
+  const openCount = Math.max(0, commentCounts.open);
 
   // Pin annotation state (F5): the placed point drives the pin composer, sibling
   // to the caption composer above. Posting mirrors the caption write path.
@@ -661,9 +780,12 @@ export function PostDetailPage({
     setHistoryOpen(false);
     setViewingVersionId(null);
     setCompareIds(null);
-    // A stale checkpoint chip never bleeds across posts; the ledger re-lifts
-    // the real counts once its fetch for the new post lands.
-    setCheckpointCounts({ resolved: 0, total: 0 });
+    // A stale open count never bleeds across posts; Comments re-lifts the
+    // real counts once its fetch for the new post lands.
+    setCommentCounts({ open: 0, resolved: 0 });
+    setActionError(null);
+    setApproveError(null);
+    setNotifying(false);
     // A pending reject / park commits for its own post (flush); the next post
     // never shows that optimistic stage.
     flushUndoable();
@@ -1194,11 +1316,16 @@ export function PostDetailPage({
     dispatchInductionRefresh();
   }
 
-  /** Resolves true once the move landed, false on a failure (the error is set). */
+  /**
+   * Resolves true once the move landed, false on a failure. Flow B 41: the
+   * error shows once, where it was tapped: a failed approve inside the approve
+   * confirm, any other move in the decision row / bar.
+   */
   async function handleTransition(to: Stage): Promise<boolean> {
     if (postId === undefined) return false;
     setTransitioning(true);
     setActionError(null);
+    setApproveError(null);
     const result = await stageTransition(supabase, {
       p_post_id: postId,
       p_to_stage: to,
@@ -1206,7 +1333,9 @@ export function PostDetailPage({
     });
     if (!result.ok) {
       setTransitioning(false);
-      setActionError(friendlyTransitionError(result.error));
+      const message = postActionErrorCopy(result.error);
+      if (to === 'approved') setApproveError(message);
+      else setActionError(message);
       return false;
     }
     // Re-fetch so the stage badge and the set of available buttons update.
@@ -1273,8 +1402,7 @@ export function PostDetailPage({
           stillHere: () => mountedRef.current && postIdRef.current === movedPostId,
           revert: () => setOptimisticStage(null),
           setInlineError: setActionError,
-          friendlyError: (error) =>
-            isDomainError(error) ? friendlyTransitionError(error) : plainError(error),
+          friendlyError: postActionErrorCopy,
           afterSuccess: async () => {
             await load(true);
             setOptimisticStage(null);
@@ -1337,7 +1465,8 @@ export function PostDetailPage({
   }
 
   // One field at a time through post_update; the proc bumps row_version itself
-  // and load(true) refreshes the page. A failure surfaces as a toast.
+  // and load(true) refreshes the page. A failure surfaces as one toast in plain
+  // words (flow B 41; the approved lock reads "Approved posts can't be edited.").
   const applyPostUpdate = useCallback(
     async (
       patch: Partial<Pick<PostUpdateInput, 'title' | 'bucketId' | 'ownerUserId' | 'targetDate'>>,
@@ -1347,7 +1476,7 @@ export function PostDetailPage({
       const result = await postUpdate(supabase, { postId, ...patch }, newTrace());
       setSavingMeta(false);
       if (!result.ok) {
-        push('Could not save the change. Please try again.');
+        push(postActionErrorCopy(result.error));
         return;
       }
       await load(true);
@@ -1419,7 +1548,7 @@ export function PostDetailPage({
     const result = await postCaptionUpdate(supabase, { postId, caption: value }, newTrace());
     setCaptionSaving(false);
     if (!result.ok) {
-      setCaptionError('Could not save the caption. Please try again.');
+      setCaptionError(postActionErrorCopy(result.error));
       return;
     }
     setEditingCaption(false);
@@ -1465,24 +1594,8 @@ export function PostDetailPage({
 
   const orderedIds = useMemo(() => gallery.map((item) => item.assetVersionId), [gallery]);
 
-  function handleMoveLeft(index: number): void {
-    void commitGallery(moveLeft(orderedIds, index));
-  }
-  function handleMoveRight(index: number): void {
-    void commitGallery(moveRight(orderedIds, index));
-  }
-  // Make-first / make-last compose the existing single-step transforms and land
-  // in the same one-shot gallery_set commit; no new write path.
-  function handleMakeFirst(index: number): void {
-    let ids = orderedIds;
-    for (let i = index; i > 0; i -= 1) ids = moveLeft(ids, i);
-    void commitGallery(ids);
-  }
-  function handleMakeLast(index: number): void {
-    let ids = orderedIds;
-    for (let i = index; i < ids.length - 1; i += 1) ids = moveRight(ids, i);
-    void commitGallery(ids);
-  }
+  // #26: no per-tap reorder (each tap saved a version); the gallery's Reorder
+  // mode saves the whole order once through tools.onSaveOrder.
   function handleRemove(index: number): void {
     // Removing the last image is allowed now: gallery_set accepts an empty list,
     // the post keeps its review stage, and the surface falls back to the empty
@@ -1659,23 +1772,47 @@ export function PostDetailPage({
   const pinKey =
     pinComposer !== null ? pinDraftKey(pinComposer.index, pinComposer.x, pinComposer.y) : null;
 
-  // A stage pick. Opening the approve confirm clears a stale error, as the
-  // chat sheet does. FN10: while a reject / park Undo window runs the buttons
+  // A stage pick. Any pick clears the last error (flow B 41: one error, where
+  // it was tapped). FN10: while a reject / park Undo window runs the buttons
   // stay enabled, and a pick flushes that pending commit first.
   function pickStage(to: Stage): void {
     if (optimisticStage !== null) flushUndoable();
-    if (to === 'approved') setActionError(null);
+    setActionError(null);
+    setApproveError(null);
     if (stageReasonConfirm(to) !== null) {
-      setActionError(null);
       setReasonDraft('');
       setReasonTarget(to);
       return;
     }
     approveGate.request(post.id, to);
   }
-  const stageButtons = (
-    <StageButtons actions={stageActions} transitioning={transitioning} onPick={pickStage} />
-  );
+
+  // Flow B 33: the creator's "Send for review again" tells the approvers
+  // through the existing post_ready_notify wrapper. A refusal shows once, in
+  // plain words, in the decision row / bar that was tapped.
+  async function sendForReviewAgain(): Promise<void> {
+    if (postId === undefined || notifying) return;
+    const sentFor = postId;
+    setActionError(null);
+    setNotifying(true);
+    const result = await runPostReadyNotify(supabase, {
+      postId: sentFor,
+      traceId: newTrace(),
+    }).catch(() => null);
+    if (!mountedRef.current || postIdRef.current !== sentFor) return;
+    setNotifying(false);
+    if (result === null || !result.ok) {
+      logger.warn('post page: send for review again failed', {
+        error: result === null ? 'thrown' : result.error.message,
+      });
+      setActionError(sendAgainErrorCopy(result === null ? null : result.error.message));
+      return;
+    }
+    push(SENT_AGAIN_TOAST);
+    setCommentsRefresh((n) => n + 1);
+    dispatchInductionRefresh();
+  }
+
   const approveTimeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
   // Flow B 28: the details row parts, each only when it has a value. Platform
@@ -1745,46 +1882,142 @@ export function PostDetailPage({
       </div>
     ) : null;
 
-  // The helper line above the stage buttons, or null.
+  // The approver's quiet note in review, or null.
   const stageHelper =
     currentStage === 'review' && clientRole
       ? 'Commenting keeps the post in review. Approval is deliberate, one post at a time.'
-      : currentStage === 'review' && agencySide
-        ? agencyReviewHelper(workspaceName)
-        : null;
-  const stageError =
-    actionError !== null ? (
-      <div role="alert" className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad">
-        {actionError}
-      </div>
-    ) : null;
+      : null;
 
-  // The stage-actions card, rendered ONCE. md and up (and embedded): in the
-  // decision row slot under the details row, with the buttons. Phone: the
-  // buttons move to the sticky decision bar (T12 / FN8) and only the helper
-  // copy and the error stay, under the caption. One conditional render, so the
-  // role=alert error never duplicates.
+  // Flow B 30 / 33: the decision row's model. Approvers: Comment (review),
+  // Reject, Approve. Creators: one main button; in review it is "Send for
+  // review again", live once every comment is resolved. Their other moves sit
+  // in the ⋯ sheet (moveRows below).
+  const reviewMove = stageActions.find((action) => action.to === 'review') ?? null;
+  const decisionModel: DecisionModel | null = readOnly
+    ? null
+    : clientRole
+      ? stageActions.length > 0 || currentStage === 'review'
+        ? {
+            kind: 'approver',
+            actions: stageActions,
+            onComment: currentStage === 'review' ? () => void focusCommentComposer() : null,
+            onPick: pickStage,
+          }
+        : null
+      : agencySide && currentStage === 'review'
+        ? {
+            kind: 'creator',
+            label: SEND_AGAIN_LABEL,
+            disabled: openCount > 0 || notifying,
+            helper: resolveFirstHelper(openCount),
+            onPress: () => void sendForReviewAgain(),
+          }
+        : agencySide && reviewMove !== null
+          ? {
+              kind: 'creator',
+              label: reviewMove.label,
+              disabled: false,
+              helper: null,
+              onPress: () => pickStage('review'),
+            }
+          : null;
+  const decisionBusy = transitioning || notifying;
+
+  // Flow B 31: the creator's other moves, as rows in the ⋯ sheet. "Approve for
+  // {brand}" opens the existing on-behalf approve confirm; Park and Reject open
+  // their reason confirms.
+  const moveRows: PostMoveRow[] =
+    agencySide && !readOnly
+      ? stageActions
+          .filter((action) => action.to !== 'review')
+          .map((action): PostMoveRow => {
+            if (action.to === 'approved') {
+              return {
+                key: 'approved',
+                icon: <IconCheck size={18} />,
+                label: approveForLabel(workspaceName),
+                onPick: () => pickStage('approved'),
+              };
+            }
+            if (action.to === 'rejected') {
+              return {
+                key: 'rejected',
+                icon: <IconX size={18} />,
+                label: action.label,
+                sub: 'You can add a reason. It goes to the comments.',
+                danger: true,
+                onPick: () => pickStage('rejected'),
+              };
+            }
+            return {
+              key: action.to,
+              icon: <IconPause size={18} />,
+              label: action.label,
+              sub: 'Keeps it aside. You can send it for review later.',
+              onPick: () => pickStage(action.to),
+            };
+          })
+      : [];
+
+  // The decision row, rendered ONCE per breakpoint. md and up (and embedded):
+  // inline in the decision slot (laptop: the right column, above the caption).
+  // Phone: the same row in the sticky decision bar (T12 / FN8), and only the
+  // approver's note stays inline, under the caption. A failed tap's error
+  // shows inside whichever row is on screen, so role=alert never duplicates.
   const phoneLayout = !isDesktop && !embedded;
   // Flow B 27: the stage shows once, in the top bar; with no moves to offer
-  // (and nothing to say) the card is not rendered at all.
-  const stageSection =
-    stageHelper !== null || stageActions.length > 0 || actionError !== null ? (
-      <section className="rounded-xl border border-border bg-panel-2 p-4">
-        {stageHelper !== null ? <p className="mb-3 text-sm text-fg-2">{stageHelper}</p> : null}
-        {stageActions.length > 0 ? stageButtons : null}
-        {stageError}
-      </section>
-    ) : null;
+  // (and nothing to say) nothing is rendered.
+  const stageSection = readOnly ? null : (
+    <PostDecisionRow
+      model={decisionModel}
+      busy={decisionBusy}
+      error={actionError}
+      note={stageHelper}
+    />
+  );
   const phoneStageNotes =
-    stageHelper !== null || actionError !== null ? (
+    stageHelper !== null ? (
       <section className="rounded-xl border border-border bg-panel-2 p-4">
-        {stageHelper !== null ? <p className="text-sm text-fg-2">{stageHelper}</p> : null}
-        {stageError}
+        <p className="text-sm text-fg-2">{stageHelper}</p>
       </section>
     ) : null;
   const decisionBar =
     phoneLayout && !readOnly ? (
-      <PostDecisionBar actions={stageActions} transitioning={transitioning} onPick={pickStage} />
+      <PostDecisionBar model={decisionModel} busy={decisionBusy} error={actionError} />
+    ) : null;
+  const decisionBarShown = decisionBar !== null && (decisionModel !== null || actionError !== null);
+
+  // Flow B 37: an approved post is locked. No title pencil, caption Edit,
+  // gallery tools, slide actions or lightbox edit tools; the details sheet
+  // keeps only the due date and the bucket. The banner says how to change it.
+  const approvedLocked = currentStage === 'approved';
+  const canEditContent = agencySide && !readOnly && !approvedLocked;
+  const approverName =
+    post.approved_by === null
+      ? null
+      : (memberById.get(post.approved_by)?.displayName ?? (membersLoaded ? FORMER_MEMBER : null));
+  const approvedLead = approvedLocked
+    ? approvedByLine(approverName, post.approved_at, approveTimeZone)
+    : null;
+  const approvedBanner =
+    approvedLocked && !readOnly ? (
+      <div
+        data-approved-banner=""
+        className="flex items-start gap-2.5 rounded-xl bg-good-soft px-3.5 py-3 text-sm text-fg"
+      >
+        <span aria-hidden className="mt-0.5 shrink-0 text-good">
+          <IconLock size={18} />
+        </span>
+        <p>
+          {approvedLead !== null ? (
+            <>
+              <span className="font-semibold">{approvedLead}</span>
+              <br />
+            </>
+          ) : null}
+          {APPROVED_LOCK_LINE}
+        </p>
+      </div>
     ) : null;
 
   return (
@@ -1851,7 +2084,7 @@ export function PostDetailPage({
       ) : (
         <div className={grid.page}>
           <div className={cn(grid.head, 'flex flex-col gap-3')}>
-            {agencySide && !readOnly ? (
+            {canEditContent ? (
               editingTitle ? (
                 <div className="flex flex-col gap-2">
                   <input
@@ -1944,10 +2177,12 @@ export function PostDetailPage({
               )}
               <PreviewChip platform={post.platform} onClick={() => setPreviewOpen(true)} />
             </div>
-            {/* DECISION ROW SLOT (flow B 34, 3a): on md and up (and embedded)
+            {/* Flow B 37: the approved lock, under the title and details. */}
+            {approvedBanner}
+            {/* DECISION ROW SLOT (flow B 30 / 34): on md and up (and embedded)
               the approver / creator decision row renders here, under the
               details and above the open-comments chip and the caption. Below
-              md the buttons live in the sticky PostDecisionBar instead. */}
+              md the same row lives in the sticky PostDecisionBar instead. */}
             {phoneLayout ? null : stageSection}
             {openCommentsChip}
           </div>
@@ -1984,24 +2219,21 @@ export function PostDetailPage({
                   onRequestPin={handleRequestPin}
                   onPlacePin={handlePlacePin}
                   pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
-                  onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
-                  onAddSlide={
-                    agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined
+                  onSlideActions={
+                    canEditContent ? (index: number) => setSlideIndex(index) : undefined
                   }
-                  onMakeFirst={agencySide && !readOnly ? handleMakeFirst : undefined}
-                  onMoveLeft={agencySide && !readOnly ? handleMoveLeft : undefined}
-                  onMoveRight={agencySide && !readOnly ? handleMoveRight : undefined}
-                  onMakeLast={agencySide && !readOnly ? handleMakeLast : undefined}
+                  onAddSlide={canEditContent ? () => openAdd({ mode: 'append' }) : undefined}
                   onAddAfter={
-                    agencySide && !readOnly
+                    canEditContent
                       ? (index: number) => openAdd({ mode: 'insertAfter', index })
                       : undefined
                   }
-                  onRemove={agencySide && !readOnly ? handleRemove : undefined}
+                  onRemove={canEditContent ? handleRemove : undefined}
                   saving={gallerySaving}
                   tools={{
-                    // #26: creators edit on draft / review / parked / rejected only.
-                    canEdit: agencySide && !readOnly && currentStage !== 'approved',
+                    // #26 / flow B 37: creators edit on draft / review / parked /
+                    // rejected only; an approved post is locked.
+                    canEdit: canEditContent,
                     versionNumber: currentVersionNumber,
                     error: galleryError,
                     onVersions: () => setHistoryOpen(true),
@@ -2055,7 +2287,7 @@ export function PostDetailPage({
                     <IconCopy size={18} />
                   </IconButton>
                 ) : null}
-                {agencySide && !editingCaption && !readOnly ? (
+                {canEditContent && !editingCaption ? (
                   <button
                     type="button"
                     data-caption-edit=""
@@ -2171,13 +2403,13 @@ export function PostDetailPage({
                     viewerIsClient={clientRole}
                     guideReplyCommentId={firstHighlightCommentId(post.caption ?? '', highlights)}
                     showHeader
+                    onCountsChange={handleCommentCounts}
                     belowHeader={
                       <CheckpointStrip
                         workspaceId={workspaceId}
                         postId={postId}
                         viewerIsClient={clientRole}
                         refreshSignal={commentsRefresh}
-                        onCounts={handleCheckpointCounts}
                       />
                     }
                   />
@@ -2188,29 +2420,19 @@ export function PostDetailPage({
                 </div>
               )}
             </section>
-
-            {workspaceId !== null && postId !== undefined ? (
-              <PostReadyNotice
-                workspaceId={workspaceId}
-                postId={postId}
-                postStage={currentStage}
-                viewerIsClient={clientRole}
-                openCount={openCount}
-                refreshSignal={commentsRefresh}
-                onMutated={bumpCommentsRefresh}
-              />
-            ) : null}
           </div>
         </div>
       )}
 
       {/* The sticky decision bar (phone) and the room under the content so it
           never covers the comment composer. */}
-      {decisionBar !== null ? (
+      {decisionBarShown ? (
         <div
           aria-hidden
           data-decision-bar-space=""
-          style={{ height: `calc(${DECISION_BAR_SPACE_PX}px + env(safe-area-inset-bottom))` }}
+          style={{
+            height: `calc(${decisionBarSpace(decisionModel, actionError)}px + env(safe-area-inset-bottom))`,
+          }}
         />
       ) : null}
       {decisionBar}
@@ -2265,6 +2487,13 @@ export function PostDetailPage({
         onReasonChange={setReasonDraft}
         onCancel={() => setReasonTarget(null)}
         onConfirm={confirmReasonMove}
+        {...(reasonTarget === 'rejected'
+          ? {
+              body: rejectConfirmBody(ownerKnown ? ownerInfo.name : null),
+              label: REJECT_REASON_LABEL,
+              helper: REJECT_REASON_HELPER,
+            }
+          : {})}
       />
 
       {confirmCaptionDiscard ? (
@@ -2300,6 +2529,7 @@ export function PostDetailPage({
         onChangeBucket={(bucketId) => void applyPostUpdate({ bucketId })}
         onChangeOwner={(ownerUserId) => void applyPostUpdate({ ownerUserId })}
         onChangeTargetDate={(targetDate) => void applyPostUpdate({ targetDate })}
+        lockedFields={approvedLocked}
       />
 
       <PlatformPreviewPanel
@@ -2322,28 +2552,16 @@ export function PostDetailPage({
         mediaCount={gallery.length > 0 ? gallery.length : null}
         targetDate={approveTargetDate(post.target_date, approveTimeZone)}
         busy={transitioning}
-        error={actionError}
+        error={approveError}
         onBehalf={agencySide}
         brand={workspaceName}
       />
 
       <SlideActionsSheet
-        open={slideIndex !== null}
+        open={slideIndex !== null && canEditContent}
         onClose={() => setSlideIndex(null)}
         index={slideIndex ?? 0}
         count={gallery.length}
-        onMoveLeft={() => {
-          if (slideIndex !== null) handleMoveLeft(slideIndex);
-        }}
-        onMoveRight={() => {
-          if (slideIndex !== null) handleMoveRight(slideIndex);
-        }}
-        onMakeFirst={() => {
-          if (slideIndex !== null) handleMakeFirst(slideIndex);
-        }}
-        onMakeLast={() => {
-          if (slideIndex !== null) handleMakeLast(slideIndex);
-        }}
         onAddAfter={() => {
           if (slideIndex !== null) openAdd({ mode: 'insertAfter', index: slideIndex });
         }}
@@ -2401,6 +2619,7 @@ export function PostDetailPage({
           onToast={push}
           canDelete={canDelete}
           onDeletePost={handleDeletePost}
+          moveRows={moveRows}
           {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
         />
       ) : null}

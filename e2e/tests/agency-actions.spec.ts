@@ -4,8 +4,9 @@ import { COLLEAGUE_A, ME, POST_IDS, setHarnessPlatform, WORKSPACE_ID } from '../
 import { expectMinTouchTarget } from '../helpers/touch-target';
 
 // Agency acts on behalf of client. The harness viewer (ME) is the workspace
-// owner, an agency-side role: on a post in review the PCS rail offers Approve
-// with the two-step confirm plus the on-behalf line, and Activity names who
+// owner, an agency-side role: on a post in review the post's ⋯ sheet offers
+// "Approve for {brand}" (flow B 31: creators never get a primary Approve) with
+// the two-step confirm plus the on-behalf line, and Activity names who
 // approved with "on behalf of client". The real app tree runs against fixture
 // data in both colour schemes; Linux WebKit approximates iOS WebKit, it is not iOS.
 
@@ -26,16 +27,16 @@ test('PCS: agency approves with the on-behalf line in the confirm', async ({ pag
   withKey(network);
   await page.goto(`/posts/${POST_IDS[0]}`);
 
-  const approve = page.getByRole('button', { name: 'Approve', exact: true }).first();
-  await approve.waitFor({ state: 'visible', timeout: 15_000 });
-  await expect(
-    page
-      .getByText("Waiting on Harness Studio's approvers. You can approve on their behalf.")
-      .first(),
-  ).toBeVisible();
-  // Agency sees Approve and Reject in review (and Park).
-  await expect(page.getByRole('button', { name: 'Reject', exact: true }).first()).toBeVisible();
-  await approve.click();
+  const more = page.getByRole('button', { name: 'Post actions' });
+  await more.waitFor({ state: 'visible', timeout: 15_000 });
+  // Flow B 31: no primary Approve for the creator side.
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+  await more.click();
+  const sheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
+  // Approve for {brand}, Reject and Park sit in the ⋯ sheet.
+  await expect(sheet.getByRole('button', { name: /Reject/ })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: /Park/ })).toBeVisible();
+  await sheet.getByRole('button', { name: /Approve for Harness Studio/ }).click();
 
   const line = page.locator('[data-approve-on-behalf]');
   await expect(line).toHaveText('You are approving on behalf of Harness Studio.');

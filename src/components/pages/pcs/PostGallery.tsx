@@ -1208,15 +1208,10 @@ interface PostGalleryProps {
   onSlideActions?: ((index: number) => void) | undefined;
   /** F7 (agency-side): the append flow, used by the zero-asset empty state. */
   onAddSlide?: (() => void) | undefined;
-  /** Lightbox manage row: make-first over the existing gallery_set commit path. */
-  onMakeFirst?: ((index: number) => void) | undefined;
-  /** Lightbox manage row: the existing move-left path. */
-  onMoveLeft?: ((index: number) => void) | undefined;
-  /** Lightbox manage row: the existing move-right path. */
-  onMoveRight?: ((index: number) => void) | undefined;
-  /** Lightbox manage row: make-last over the existing gallery_set commit path. */
-  onMakeLast?: ((index: number) => void) | undefined;
-  /** Lightbox manage row: the existing insert-after add/upload flow. */
+  /**
+   * Lightbox manage row: the existing insert-after add/upload flow. #26: the
+   * lightbox has no per-tap reorder; the Reorder mode saves one order.
+   */
   onAddAfter?: ((index: number) => void) | undefined;
   /** Lightbox manage bar: remove the slide over the existing gallery_set commit. */
   onRemove?: ((index: number) => void) | undefined;
@@ -1242,10 +1237,7 @@ interface PostGalleryProps {
   tools?: GalleryTools | undefined;
 }
 
-const EMPTY_EDIT: Pick<
-  PostGalleryProps,
-  'onMakeFirst' | 'onMoveLeft' | 'onMoveRight' | 'onMakeLast' | 'onAddAfter' | 'onRemove'
-> = {};
+const EMPTY_EDIT: Pick<PostGalleryProps, 'onAddAfter' | 'onRemove'> = {};
 
 /** The page's side of the #26 tools row. */
 export interface GalleryTools {
@@ -1293,9 +1285,7 @@ export function PostGallery({
   const editLocked = tools !== undefined && !tools.canEdit;
   const onSlideActions = editLocked ? undefined : editProps.onSlideActions;
   const onAddSlide = editLocked ? undefined : editProps.onAddSlide;
-  const { onMakeFirst, onMoveLeft, onMoveRight, onMakeLast, onAddAfter, onRemove } = editLocked
-    ? EMPTY_EDIT
-    : editProps;
+  const { onAddAfter, onRemove } = editLocked ? EMPTY_EDIT : editProps;
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   // #26 reorder mode: a draft order of attachment ids (null when not
@@ -1442,14 +1432,7 @@ export function PostGallery({
   };
 
   const manage =
-    onMakeFirst !== undefined &&
-    onMoveLeft !== undefined &&
-    onMoveRight !== undefined &&
-    onMakeLast !== undefined &&
-    onAddAfter !== undefined &&
-    onRemove !== undefined
-      ? { onMakeFirst, onMoveLeft, onMoveRight, onMakeLast, onAddAfter, onRemove }
-      : undefined;
+    onAddAfter !== undefined && onRemove !== undefined ? { onAddAfter, onRemove } : undefined;
 
   // #26 reorder mode: the draft order as items (unknown ids dropped, new items
   // appended so a concurrent refresh never loses a slide).
