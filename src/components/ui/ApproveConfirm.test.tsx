@@ -109,7 +109,7 @@ describe('ApproveConfirm', () => {
     expect(back).toContain('h-12');
     expect(back).toContain('border-border bg-panel text-fg');
     expect(approve).toContain('h-12');
-    expect(approve).toContain('bg-good');
+    expect(approve).toContain('bg-good-solid');
     expect(`${back} ${approve}`).not.toMatch(/#[0-9a-f]{3,6}|dark:/i);
   });
 

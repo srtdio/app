@@ -169,7 +169,7 @@ function CarouselBadge() {
   return (
     <span
       aria-label="Carousel"
-      className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-md bg-black/55 text-white"
+      className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-md bg-overlay-badge text-overlay-fg"
     >
       <svg
         width={14}
@@ -214,7 +214,7 @@ function PlayBadge() {
   return (
     <span
       aria-label="Video"
-      className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white"
+      className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg"
     >
       <IconPlay size={18} />
     </span>
@@ -306,7 +306,7 @@ export function PostCard({
           onClick={() => onMove(post)}
           className="group absolute right-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full focus:outline-none"
         >
-          <span className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors duration-fast ease-enter group-hover:bg-black/60 group-focus-visible:ring-2 group-focus-visible:ring-accent">
+          <span className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-overlay-badge text-overlay-fg backdrop-blur-sm transition-colors duration-fast ease-enter group-hover:bg-overlay-badge-hover group-focus-visible:ring-2 group-focus-visible:ring-accent">
             <MoreIcon />
           </span>
         </button>

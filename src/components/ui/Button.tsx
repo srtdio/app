@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'default' | 'primary' | 'ghost' | 'danger';
+  variant?: 'default' | 'primary' | 'ghost' | 'danger' | 'success';
   size?: 'sm' | 'md' | 'lg';
 }
 
@@ -19,7 +19,8 @@ const variants: Record<NonNullable<ButtonProps['variant']>, string> = {
   default: 'bg-panel-2 text-fg border border-border hover:bg-panel-3',
   primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
   ghost: 'text-fg-2 hover:bg-panel-2',
-  danger: 'bg-bad text-white hover:opacity-90',
+  danger: 'bg-bad-solid text-white hover:opacity-90',
+  success: 'bg-good-solid text-white hover:opacity-90',
 };
 
 export function Button({ variant = 'default', size = 'md', className, ...props }: ButtonProps) {

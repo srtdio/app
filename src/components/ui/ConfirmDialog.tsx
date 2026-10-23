@@ -78,7 +78,7 @@ export function ConfirmDialog({
       onClick={onOverlayClick}
       className={cn(
         // The bottom padding clears the iPhone home bar where the box sits low.
-        'fixed inset-0 z-50 flex items-end justify-center bg-black/45 px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] transition-opacity duration-base sm:items-center',
+        'fixed inset-0 z-50 flex items-end justify-center bg-scrim px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] transition-opacity duration-base sm:items-center',
         entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
       )}
     >
