@@ -1759,11 +1759,11 @@ export function PostDetailPage({
       </div>
     ) : null;
 
-  // The stage-actions card, rendered ONCE. Desktop (and embedded): in the
-  // aside, with the buttons. Phone: the buttons move to the sticky decision
-  // bar (T12 / FN8) and only the helper copy and the error stay here, at the
-  // bottom of the Post tab. One conditional render, so the role=alert error
-  // never duplicates.
+  // The stage-actions card, rendered ONCE. md and up (and embedded): in the
+  // decision row slot under the details row, with the buttons. Phone: the
+  // buttons move to the sticky decision bar (T12 / FN8) and only the helper
+  // copy and the error stay, under the caption. One conditional render, so the
+  // role=alert error never duplicates.
   const phoneLayout = !isDesktop && !embedded;
   // Flow B 27: the stage shows once, in the top bar; with no moves to offer
   // (and nothing to say) the card is not rendered at all.
@@ -1851,356 +1851,355 @@ export function PostDetailPage({
       ) : (
         <div className={grid.page}>
           <div className={cn(grid.head, 'flex flex-col gap-3')}>
-          {agencySide && !readOnly ? (
-            editingTitle ? (
-              <div className="flex flex-col gap-2">
-                <input
-                  autoFocus
-                  aria-label="Post title"
-                  value={titleDraft}
-                  disabled={savingMeta}
-                  onChange={(event) => setTitleDraft(event.target.value)}
-                  onBlur={onTitleBlur}
-                  onKeyDown={onTitleKeyDown}
-                  className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
+            {agencySide && !readOnly ? (
+              editingTitle ? (
+                <div className="flex flex-col gap-2">
+                  <input
+                    autoFocus
+                    aria-label="Post title"
+                    value={titleDraft}
+                    disabled={savingMeta}
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    onBlur={onTitleBlur}
+                    onKeyDown={onTitleKeyDown}
+                    className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
+                  />
+                  {isTouchDevice() ? (
+                    // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
+                    // visible. pointerdown is swallowed so the input's blur-save never
+                    // runs ahead of (or instead of) the tapped button.
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="primary"
+                        size="lg"
+                        disabled={savingMeta}
+                        onPointerDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          suppressTitleBlur.current = true;
+                          void saveTitle();
+                        }}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="lg"
+                        disabled={savingMeta}
+                        onPointerDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          suppressTitleBlur.current = true;
+                          setEditingTitle(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+                  {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
+                  <span className="whitespace-nowrap">
+                    <Highlight text={titleLast} />
+                    <button
+                      type="button"
+                      aria-label="Edit title"
+                      onClick={openTitleEditor}
+                      className="ml-1 inline-flex h-11 w-11 items-center justify-center align-top focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-panel-3 text-fg-3 transition-colors hover:text-fg-2">
+                        <IconPencil size={17} />
+                      </span>
+                    </button>
+                  </span>
+                </h1>
+              )
+            ) : (
+              <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+                <Highlight text={post.title} />
+              </h1>
+            )}
+
+            {/* Flow B 28: the visible details row. Owner, due date, bucket,
+              brief, platform and format, each only when it has a value;
+              creators tap it (Edit) to open the details sheet. */}
+            <div className="flex flex-wrap items-center gap-x-2">
+              {detailsEditable ? (
+                <button
+                  type="button"
+                  data-post-details=""
+                  onClick={() => setShowDetails(true)}
+                  className="-mx-1 flex min-h-[44px] max-w-full flex-wrap items-center gap-x-3.5 gap-y-1.5 rounded-lg px-1 py-1 text-left text-[13px] text-fg-2 transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  {detailsParts}
+                  <span className="font-medium text-accent">Edit</span>
+                </button>
+              ) : (
+                <div
+                  data-post-details=""
+                  className="flex min-h-[44px] max-w-full flex-wrap items-center gap-x-3.5 gap-y-1.5 py-1 text-[13px] text-fg-2"
+                >
+                  {detailsParts}
+                </div>
+              )}
+              <PreviewChip platform={post.platform} onClick={() => setPreviewOpen(true)} />
+            </div>
+            {/* DECISION ROW SLOT (flow B 34, 3a): on md and up (and embedded)
+              the approver / creator decision row renders here, under the
+              details and above the open-comments chip and the caption. Below
+              md the buttons live in the sticky PostDecisionBar instead. */}
+            {phoneLayout ? null : stageSection}
+            {openCommentsChip}
+          </div>
+
+          <div className={cn(grid.media, 'flex flex-col gap-3')}>
+            <section>
+              {/* Flow B 36: a failed gallery read is never shown as an empty
+                gallery: "Couldn't load the pictures." with Retry instead. */}
+              {galleryLoadError ? (
+                <LoadError
+                  title="the pictures"
+                  retrying={galleryRetrying}
+                  onRetry={() => void retryGallery()}
                 />
-                {isTouchDevice() ? (
-                  // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
-                  // visible. pointerdown is swallowed so the input's blur-save never
-                  // runs ahead of (or instead of) the tapped button.
+              ) : (
+                <PostGallery
+                  items={gallery}
+                  cache={cache}
+                  deps={deps}
+                  presignEnabled={presignEnabled}
+                  pinOverlay={(item) => (
+                    <PinOverlay
+                      pins={pinsByAttachment[item.assetAttachmentId] ?? []}
+                      onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
+                    />
+                  )}
+                  frame={{
+                    platform: post.platform,
+                    format: post.format,
+                    platformLabel: platformLabel(post.platform),
+                  }}
+                  pinsFor={(item) => pinsByAttachment[item.assetAttachmentId] ?? []}
+                  onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
+                  onRequestPin={handleRequestPin}
+                  onPlacePin={handlePlacePin}
+                  pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
+                  onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
+                  onAddSlide={
+                    agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined
+                  }
+                  onMakeFirst={agencySide && !readOnly ? handleMakeFirst : undefined}
+                  onMoveLeft={agencySide && !readOnly ? handleMoveLeft : undefined}
+                  onMoveRight={agencySide && !readOnly ? handleMoveRight : undefined}
+                  onMakeLast={agencySide && !readOnly ? handleMakeLast : undefined}
+                  onAddAfter={
+                    agencySide && !readOnly
+                      ? (index: number) => openAdd({ mode: 'insertAfter', index })
+                      : undefined
+                  }
+                  onRemove={agencySide && !readOnly ? handleRemove : undefined}
+                  saving={gallerySaving}
+                  tools={{
+                    // #26: creators edit on draft / review / parked / rejected only.
+                    canEdit: agencySide && !readOnly && currentStage !== 'approved',
+                    versionNumber: currentVersionNumber,
+                    error: galleryError,
+                    onVersions: () => setHistoryOpen(true),
+                    onAdd: () => openAdd({ mode: 'append' }),
+                    onReplace: (index) => openAdd({ mode: 'replace', index }),
+                    onSaveOrder: commitGallery,
+                  }}
+                />
+              )}
+              {gallerySaving ? (
+                <p aria-live="polite" className="mt-2.5 text-xs text-fg-3">
+                  Saving…
+                </p>
+              ) : null}
+              {pinError !== null ? (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                >
+                  {pinError}
+                </div>
+              ) : null}
+            </section>
+          </div>
+
+          <div className={cn(grid.body, 'flex flex-col gap-6')}>
+            {/* The caption block reads like the post (mock P1): the workspace
+              as the author row, Edit at the right, the caption text below.
+              Flow B 27: platform and format live once, in the details row;
+              the version button lives in the gallery tools row. */}
+            <section
+              data-caption-block=""
+              className="rounded-xl border border-border bg-panel-2 p-4"
+            >
+              <div className="flex items-center gap-3">
+                <Avatar name={workspaceName ?? ''} size="md" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-fg">
+                    {workspaceName ?? ''}
+                  </div>
+                </div>
+                {hasCaption && !editingCaption ? (
+                  <IconButton
+                    label="Copy caption"
+                    onClick={() => {
+                      void copyText(post.caption ?? '').then((ok) =>
+                        push(ok ? 'Caption copied' : COPY_FAILED),
+                      );
+                    }}
+                  >
+                    <IconCopy size={18} />
+                  </IconButton>
+                ) : null}
+                {agencySide && !editingCaption && !readOnly ? (
+                  <button
+                    type="button"
+                    data-caption-edit=""
+                    onClick={openCaptionEditor}
+                    className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <IconPencil size={15} />
+                    Edit
+                  </button>
+                ) : null}
+              </div>
+              {editingCaption ? (
+                <div className="mt-3 flex flex-col gap-2">
+                  <Textarea
+                    autoFocus
+                    autoGrow
+                    aria-label="Caption"
+                    value={captionDraft}
+                    disabled={captionSaving}
+                    onChange={(event) => setCaptionDraft(event.target.value)}
+                  />
+                  {captionError !== null ? (
+                    <div role="alert" className="text-sm text-bad">
+                      {captionError}
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-2">
                     <Button
                       variant="primary"
                       size="lg"
-                      disabled={savingMeta}
-                      onPointerDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        suppressTitleBlur.current = true;
-                        void saveTitle();
-                      }}
+                      disabled={captionSaving}
+                      onClick={() => void saveCaption()}
                     >
-                      Save
+                      {captionSaving ? 'Saving' : captionSaveLabel(currentVersionNumber)}
                     </Button>
                     <Button
                       variant="ghost"
                       size="lg"
-                      disabled={savingMeta}
-                      onPointerDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        suppressTitleBlur.current = true;
-                        setEditingTitle(false);
-                      }}
+                      disabled={captionSaving}
+                      onClick={cancelCaptionEdit}
                     >
                       Cancel
                     </Button>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-                {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
-                <span className="whitespace-nowrap">
-                  <Highlight text={titleLast} />
-                  <button
-                    type="button"
-                    aria-label="Edit title"
-                    onClick={openTitleEditor}
-                    className="ml-1 inline-flex h-11 w-11 items-center justify-center align-top focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-panel-3 text-fg-3 transition-colors hover:text-fg-2">
-                      <IconPencil size={17} />
+                    <span className="ml-auto text-xs tabular-nums text-fg-3">
+                      {captionDraft.trim().length}/5000
                     </span>
-                  </button>
-                </span>
-              </h1>
-            )
-          ) : (
-            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-              <Highlight text={post.title} />
-            </h1>
-          )}
-
-          {/* Flow B 28: the visible details row. Owner, due date, bucket,
-              brief, platform and format, each only when it has a value;
-              creators tap it (Edit) to open the details sheet. */}
-          <div className="flex flex-wrap items-center gap-x-2">
-            {detailsEditable ? (
-              <button
-                type="button"
-                data-post-details=""
-                onClick={() => setShowDetails(true)}
-                className="-mx-1 flex min-h-[44px] max-w-full flex-wrap items-center gap-x-3.5 gap-y-1.5 rounded-lg px-1 py-1 text-left text-[13px] text-fg-2 transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                {detailsParts}
-                <span className="font-medium text-accent">Edit</span>
-              </button>
-            ) : (
-              <div
-                data-post-details=""
-                className="flex min-h-[44px] max-w-full flex-wrap items-center gap-x-3.5 gap-y-1.5 py-1 text-[13px] text-fg-2"
-              >
-                {detailsParts}
-              </div>
-            )}
-            <PreviewChip platform={post.platform} onClick={() => setPreviewOpen(true)} />
-          </div>
-          {/* DECISION ROW SLOT (flow B 34, 3a): on md and up (and embedded)
-              the approver / creator decision row renders here, under the
-              details and above the open-comments chip and the caption. Below
-              md the buttons live in the sticky PostDecisionBar instead. */}
-          {phoneLayout ? null : stageSection}
-          {openCommentsChip}
-          </div>
-
-          <div className={cn(grid.media, 'flex flex-col gap-3')}>
-          <section>
-            {/* Flow B 36: a failed gallery read is never shown as an empty
-                gallery: "Couldn't load the pictures." with Retry instead. */}
-            {galleryLoadError ? (
-              <LoadError
-                title="the pictures"
-                retrying={galleryRetrying}
-                onRetry={() => void retryGallery()}
-              />
-            ) : (
-            <PostGallery
-              items={gallery}
-              cache={cache}
-              deps={deps}
-              presignEnabled={presignEnabled}
-              pinOverlay={(item) => (
-                <PinOverlay
-                  pins={pinsByAttachment[item.assetAttachmentId] ?? []}
-                  onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
-                />
-              )}
-              frame={{
-                platform: post.platform,
-                format: post.format,
-                platformLabel: platformLabel(post.platform),
-              }}
-              pinsFor={(item) => pinsByAttachment[item.assetAttachmentId] ?? []}
-              onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
-              onRequestPin={handleRequestPin}
-              onPlacePin={handlePlacePin}
-              pinCountFor={(item) => pinsByAttachment[item.assetAttachmentId]?.length ?? 0}
-              onSlideActions={agencySide ? (index: number) => setSlideIndex(index) : undefined}
-              onAddSlide={agencySide && !readOnly ? () => openAdd({ mode: 'append' }) : undefined}
-              onMakeFirst={agencySide && !readOnly ? handleMakeFirst : undefined}
-              onMoveLeft={agencySide && !readOnly ? handleMoveLeft : undefined}
-              onMoveRight={agencySide && !readOnly ? handleMoveRight : undefined}
-              onMakeLast={agencySide && !readOnly ? handleMakeLast : undefined}
-              onAddAfter={
-                agencySide && !readOnly
-                  ? (index: number) => openAdd({ mode: 'insertAfter', index })
-                  : undefined
-              }
-              onRemove={agencySide && !readOnly ? handleRemove : undefined}
-              saving={gallerySaving}
-              tools={{
-                // #26: creators edit on draft / review / parked / rejected only.
-                canEdit: agencySide && !readOnly && currentStage !== 'approved',
-                versionNumber: currentVersionNumber,
-                error: galleryError,
-                onVersions: () => setHistoryOpen(true),
-                onAdd: () => openAdd({ mode: 'append' }),
-                onReplace: (index) => openAdd({ mode: 'replace', index }),
-                onSaveOrder: commitGallery,
-              }}
-            />
-            )}
-            {gallerySaving ? (
-              <p aria-live="polite" className="mt-2.5 text-xs text-fg-3">
-                Saving…
-              </p>
-            ) : null}
-            {pinError !== null ? (
-              <div
-                role="alert"
-                className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-              >
-                {pinError}
-              </div>
-            ) : null}
-          </section>
-
-          </div>
-
-          <div className={cn(grid.body, 'flex flex-col gap-6')}>
-          {/* The caption block reads like the post (mock P1): the workspace
-              as the author row, Edit at the right, the caption text below.
-              Flow B 27: platform and format live once, in the details row;
-              the version button lives in the gallery tools row. */}
-          <section
-            data-caption-block=""
-            className="rounded-xl border border-border bg-panel-2 p-4"
-          >
-            <div className="flex items-center gap-3">
-              <Avatar name={workspaceName ?? ''} size="md" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-fg">
-                  {workspaceName ?? ''}
-                </div>
-              </div>
-              {hasCaption && !editingCaption ? (
-                <IconButton
-                  label="Copy caption"
-                  onClick={() => {
-                    void copyText(post.caption ?? '').then((ok) =>
-                      push(ok ? 'Caption copied' : COPY_FAILED),
-                    );
-                  }}
-                >
-                  <IconCopy size={18} />
-                </IconButton>
-              ) : null}
-              {agencySide && !editingCaption && !readOnly ? (
-                <button
-                  type="button"
-                  data-caption-edit=""
-                  onClick={openCaptionEditor}
-                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  <IconPencil size={15} />
-                  Edit
-                </button>
-              ) : null}
-            </div>
-            {editingCaption ? (
-              <div className="mt-3 flex flex-col gap-2">
-                <Textarea
-                  autoFocus
-                  autoGrow
-                  aria-label="Caption"
-                  value={captionDraft}
-                  disabled={captionSaving}
-                  onChange={(event) => setCaptionDraft(event.target.value)}
-                />
-                {captionError !== null ? (
-                  <div role="alert" className="text-sm text-bad">
-                    {captionError}
                   </div>
-                ) : null}
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    disabled={captionSaving}
-                    onClick={() => void saveCaption()}
-                  >
-                    {captionSaving ? 'Saving' : captionSaveLabel(currentVersionNumber)}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    disabled={captionSaving}
-                    onClick={cancelCaptionEdit}
-                  >
-                    Cancel
-                  </Button>
-                  <span className="ml-auto text-xs tabular-nums text-fg-3">
-                    {captionDraft.trim().length}/5000
-                  </span>
+                  {captionSaveNote(currentVersionNumber) !== null ? (
+                    <p className="text-xs text-fg-3">{captionSaveNote(currentVersionNumber)}</p>
+                  ) : null}
                 </div>
-                {captionSaveNote(currentVersionNumber) !== null ? (
-                  <p className="text-xs text-fg-3">{captionSaveNote(currentVersionNumber)}</p>
-                ) : null}
-              </div>
-            ) : hasCaption ? (
-              <>
-                <div className="mt-3" data-induction={INDUCTION_KEYS.postCaptionText}>
-                  <CaptionView
-                    caption={post.caption ?? ''}
-                    annotations={highlights}
-                    onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
-                    onAnnotate={handleAnnotate}
-                  />
-                </div>
-                {captionTipOpen ? (
-                  <div
-                    data-caption-tip=""
-                    className="mt-2 flex items-center gap-2 text-xs text-fg-3"
-                  >
-                    <span>{CAPTION_TIP_TEXT}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCaptionTipOpen(false);
-                        dismissCaptionTip(userId);
-                      }}
-                      className="ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-xs font-medium text-accent transition-colors hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              ) : hasCaption ? (
+                <>
+                  <div className="mt-3" data-induction={INDUCTION_KEYS.postCaptionText}>
+                    <CaptionView
+                      caption={post.caption ?? ''}
+                      annotations={highlights}
+                      onHighlightClick={(commentId) => flashTo(`comment-${commentId}`)}
+                      onAnnotate={handleAnnotate}
+                    />
+                  </div>
+                  {captionTipOpen ? (
+                    <div
+                      data-caption-tip=""
+                      className="mt-2 flex items-center gap-2 text-xs text-fg-3"
                     >
-                      Got it
-                    </button>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
-            )}
-            {annotateError !== null ? (
-              <div
-                role="alert"
-                className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-              >
-                {annotateError}
-              </div>
-            ) : null}
-          </section>
+                      <span>{CAPTION_TIP_TEXT}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCaptionTipOpen(false);
+                          dismissCaptionTip(userId);
+                        }}
+                        className="ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-xs font-medium text-accent transition-colors hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        Got it
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
+              )}
+              {annotateError !== null ? (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                >
+                  {annotateError}
+                </div>
+              ) : null}
+            </section>
 
             {phoneLayout ? phoneStageNotes : null}
 
-          {/* Comments own their header row ("Comments", the open-count chip,
+            {/* Comments own their header row ("Comments", the open-count chip,
               Open / All); the checkpoint strip sits under it, only when
               there are checkpoints (it renders nothing otherwise). */}
-          <section
-            id={COMMENTS_SECTION_ID}
-            className="scroll-mt-16 rounded-xl border border-border bg-panel-2 p-4"
-          >
-            {workspaceId !== null && postId !== undefined ? (
-              <div data-induction={INDUCTION_KEYS.postCommentComposer}>
-                <Comments
-                  workspaceId={workspaceId}
-                  entityType="post"
-                  entityId={postId}
-                  annotationsByCommentId={annotationsByCommentId}
-                  onAnnotationChipClick={(commentId) =>
-                    flashTo(`caption-mark-${commentId}`)
-                  }
-                  refreshSignal={commentsRefresh}
-                  focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
-                  viewerIsClient={clientRole}
-                  guideReplyCommentId={firstHighlightCommentId(post.caption ?? '', highlights)}
-                  showHeader
-                  belowHeader={
-                    <CheckpointStrip
-                      workspaceId={workspaceId}
-                      postId={postId}
-                      viewerIsClient={clientRole}
-                      refreshSignal={commentsRefresh}
-                      onCounts={handleCheckpointCounts}
-                    />
-                  }
-                />
-              </div>
-            ) : (
-              <div className="px-4 py-8 text-center text-sm text-fg-3">
-                Select a workspace to view comments.
-              </div>
-            )}
-          </section>
+            <section
+              id={COMMENTS_SECTION_ID}
+              className="scroll-mt-16 rounded-xl border border-border bg-panel-2 p-4"
+            >
+              {workspaceId !== null && postId !== undefined ? (
+                <div data-induction={INDUCTION_KEYS.postCommentComposer}>
+                  <Comments
+                    workspaceId={workspaceId}
+                    entityType="post"
+                    entityId={postId}
+                    annotationsByCommentId={annotationsByCommentId}
+                    onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
+                    refreshSignal={commentsRefresh}
+                    focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
+                    viewerIsClient={clientRole}
+                    guideReplyCommentId={firstHighlightCommentId(post.caption ?? '', highlights)}
+                    showHeader
+                    belowHeader={
+                      <CheckpointStrip
+                        workspaceId={workspaceId}
+                        postId={postId}
+                        viewerIsClient={clientRole}
+                        refreshSignal={commentsRefresh}
+                        onCounts={handleCheckpointCounts}
+                      />
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="px-4 py-8 text-center text-sm text-fg-3">
+                  Select a workspace to view comments.
+                </div>
+              )}
+            </section>
 
-          {workspaceId !== null && postId !== undefined ? (
-            <PostReadyNotice
-              workspaceId={workspaceId}
-              postId={postId}
-              postStage={currentStage}
-              viewerIsClient={clientRole}
-              openCount={openCount}
-              refreshSignal={commentsRefresh}
-              onMutated={bumpCommentsRefresh}
-            />
-          ) : null}
+            {workspaceId !== null && postId !== undefined ? (
+              <PostReadyNotice
+                workspaceId={workspaceId}
+                postId={postId}
+                postStage={currentStage}
+                viewerIsClient={clientRole}
+                openCount={openCount}
+                refreshSignal={commentsRefresh}
+                onMutated={bumpCommentsRefresh}
+              />
+            ) : null}
           </div>
         </div>
       )}
