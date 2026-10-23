@@ -82,9 +82,7 @@ describe('CheckpointStrip (fix 32)', () => {
     const text = host?.textContent ?? '';
     expect(text).not.toContain('2/3');
     // The one progress line beside the chips: "{n} of {m} resolved".
-    expect(host?.querySelector('[data-checkpoint-progress]')?.textContent).toBe(
-      '2 of 3 resolved',
-    );
+    expect(host?.querySelector('[data-checkpoint-progress]')?.textContent).toBe('2 of 3 resolved');
     expect(text).not.toMatch(/settled|ready for your check|Confirmed/);
     expect(host?.innerHTML ?? '').not.toContain('settled');
 

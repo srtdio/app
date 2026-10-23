@@ -59,8 +59,9 @@ describe('OnBehalfApproveView', () => {
   it('confirms with the picked approver id', () => {
     const p = props();
     const tree = OnBehalfApproveView(p);
-    const footer = (tree.props as { footer: { props: { children: Array<{ props: { onClick: () => void } }> } } })
-      .footer;
+    const footer = (
+      tree.props as { footer: { props: { children: Array<{ props: { onClick: () => void } }> } } }
+    ).footer;
     footer.props.children[1]!.props.onClick();
     expect(p.onConfirm).toHaveBeenCalledWith('u1');
   });

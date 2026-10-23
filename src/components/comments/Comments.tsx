@@ -686,11 +686,7 @@ export function replyParentId(tapped: Pick<CommentRow, 'id' | 'parent_comment_id
  * becomes the new seed; typed text is kept with the new mention in front (the
  * old seed is dropped so only one @Name leads). Pure.
  */
-export function retargetDraft(
-  draft: string | undefined,
-  oldSeed: string,
-  newSeed: string,
-): string {
+export function retargetDraft(draft: string | undefined, oldSeed: string, newSeed: string): string {
   if (draft === undefined || !replyHasTypedText(draft, oldSeed)) return newSeed;
   const typed = oldSeed !== '' && draft.startsWith(oldSeed) ? draft.slice(oldSeed.length) : draft;
   return `${newSeed}${typed.trimStart()}`;

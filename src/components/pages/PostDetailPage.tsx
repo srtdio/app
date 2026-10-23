@@ -1924,7 +1924,11 @@ export function PostDetailPage({
   });
   const detailsParts = detailParts.map((part, index) => (
     <span key={part.key} className="inline-flex min-w-0 max-w-full items-center gap-2">
-      {index > 0 ? <span aria-hidden className="text-fg-3">·</span> : null}
+      {index > 0 ? (
+        <span aria-hidden className="text-fg-3">
+          ·
+        </span>
+      ) : null}
       {part.node}
     </span>
   ));
@@ -2118,9 +2122,7 @@ export function PostDetailPage({
       {readOnly ? (
         <div className={cn(grid.page, 'pb-0')}>
           <div className={grid.head}>
-            <h1
-              className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]"
-            >
+            <h1 className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
               <Highlight text={post.title} />
             </h1>
           </div>
@@ -2199,9 +2201,7 @@ export function PostDetailPage({
                   ) : null}
                 </div>
               ) : (
-                <h1
-                  className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]"
-                >
+                <h1 className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
                   {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
                   <span className="whitespace-nowrap">
                     <Highlight text={titleLast} />

@@ -27,7 +27,12 @@ describe('stageTransition onBehalfOf', () => {
     });
     expect(calls[0]).toEqual({
       fn: 'stage_transition',
-      args: { p_post_id: 'p-1', p_to_stage: 'approved', p_trace_id: 't-1', p_on_behalf_of: 'u-client' },
+      args: {
+        p_post_id: 'p-1',
+        p_to_stage: 'approved',
+        p_trace_id: 't-1',
+        p_on_behalf_of: 'u-client',
+      },
     });
   });
 
