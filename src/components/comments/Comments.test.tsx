@@ -24,6 +24,9 @@ import {
   buildBatchArgs,
   buildCreateInput,
   buildThreads,
+  checkpointBox,
+  checkpointBoxLabel,
+  checkpointProgressText,
   checkpointReplySeed,
   checkpointState,
   checkpointStateLabel,
@@ -41,15 +44,15 @@ import {
   pointEditedMarker,
   pointWordCount,
   POINT_WORD_CAP,
-  PUSHBACK_SEED,
   renderCommentBody,
   renderReplyList,
+  replyParentId,
   replySeed,
+  retargetDraft,
   runCreateCommentBatch,
   runDeleteComment,
   runEditComment,
   showCheckpointConfirm,
-  showCheckpointNotDone,
   tickFilled,
   tickInteractive,
   toCommentAttachments,
@@ -401,25 +404,71 @@ describe('checkpoint state + feed controls', () => {
     }
   });
 
-  it('shows the client "Not done" only on a resolved point, never to an agency member', () => {
-    expect(showCheckpointNotDone('resolved', true)).toBe(true);
-    expect(showCheckpointNotDone('open', true)).toBe(false);
-    for (const state of ['open', 'resolved'] as const) {
-      expect(showCheckpointNotDone(state, false)).toBe(false);
+  it('seeds a checkpoint reply with only the @Name of the person replied to', () => {
+    const candidates: MentionCandidate[] = [
+      { id: UUID_A, name: 'Ada', role: '', avatarUrl: null, username: null },
+      { id: UUID_B, name: 'Bea', role: '', avatarUrl: null, username: null },
+    ];
+    const checkpoint = row({ id: 'c', author_user_id: UUID_A, ledger_seq: 1 });
+    const reply = row({ id: 'r', author_user_id: UUID_B, parent_comment_id: 'c' });
+    const viewer = '33333333-3333-4333-8333-333333333333';
+    // Reply on the checkpoint: its author. Reply on a reply: that reply's author.
+    expect(checkpointReplySeed(checkpoint, null, viewer, candidates)).toBe(`@[${UUID_A}] `);
+    expect(checkpointReplySeed(checkpoint, reply, viewer, candidates)).toBe(`@[${UUID_B}] `);
+    // Never yourself, never anything but the mention (no pre-filled sentence).
+    expect(checkpointReplySeed(checkpoint, reply, UUID_B, candidates)).toBe('');
+    for (const seed of [
+      checkpointReplySeed(checkpoint, null, viewer, candidates),
+      checkpointReplySeed(checkpoint, reply, viewer, candidates),
+    ]) {
+      expect(seed.replace(/@\[[0-9a-f-]{36}\] /g, '')).toBe('');
     }
   });
 
-  it('seeds the reply composer with the pushback prompt only on a "Not done"', () => {
-    const candidates: MentionCandidate[] = [
-      { id: UUID_A, name: 'Ada', role: '', avatarUrl: null, username: null },
-    ];
-    const checkpoint = row({ id: 'c', author_user_id: UUID_A, ledger_seq: 1 });
-    // Pushing back opens the composer pre-filled so the client must say why.
-    expect(checkpointReplySeed(true, checkpoint, UUID_B, candidates)).toBe(PUSHBACK_SEED);
-    expect(PUSHBACK_SEED.length).toBeGreaterThan(0);
-    expect(PUSHBACK_SEED).not.toContain('—');
-    // Otherwise it is the ordinary author pre-tag.
-    expect(checkpointReplySeed(false, checkpoint, UUID_B, candidates)).toBe(`@[${UUID_A}] `);
+  it('a reply to a reply posts to the checkpoint root (one reply level)', () => {
+    expect(replyParentId({ id: 'root', parent_comment_id: null })).toBe('root');
+    expect(replyParentId({ id: 'r1', parent_comment_id: 'root' })).toBe('root');
+  });
+
+  it('retargets a reply draft to the new mention, keeping typed text', () => {
+    const a = `@[${UUID_A}] `;
+    const b = `@[${UUID_B}] `;
+    expect(retargetDraft(undefined, a, b)).toBe(b);
+    expect(retargetDraft(a, a, b)).toBe(b);
+    expect(retargetDraft(`${a}the logo`, a, b)).toBe(`${b}the logo`);
+    expect(retargetDraft('the logo', '', b)).toBe(`${b}the logo`);
+  });
+
+  it('labels the checkbox Resolve (live), else Open / Resolved', () => {
+    expect(checkpointBoxLabel('open', true)).toBe('Resolve');
+    expect(checkpointBoxLabel('open', false)).toBe('Open');
+    expect(checkpointBoxLabel('resolved', false)).toBe('Resolved');
+    expect(checkpointBoxLabel('resolved', true)).toBe('Resolved');
+  });
+
+  it('draws the checkbox from tokens only: empty, hollow tick, filled tick', () => {
+    const cls = (checked: boolean, confirmed: boolean): string =>
+      elements(checkpointBox(checked, confirmed))
+        .map((el) => (el.props as { className?: string }).className ?? '')
+        .join(' ');
+    const tick = (checked: boolean, confirmed: boolean): string =>
+      (checkpointBox(checked, confirmed).props as { 'data-tick': string })['data-tick'];
+    expect(tick(false, false)).toBe('open');
+    expect(tick(true, false)).toBe('hollow');
+    expect(tick(true, true)).toBe('filled');
+    expect(cls(false, false)).toContain('border-border-strong');
+    expect(cls(false, false)).toContain('opacity-0');
+    expect(cls(true, true)).toContain('bg-[var(--good-solid)]');
+    expect(cls(true, false)).toContain('border-good');
+    for (const all of [cls(false, false), cls(true, false), cls(true, true)]) {
+      expect(all).not.toMatch(/#[0-9a-f]{3,6}\b|rgba\(|\bdark:|translate-x/i);
+    }
+  });
+
+  it('reads the chips row progress as "{n} of {m} resolved"', () => {
+    expect(checkpointProgressText(0, 3)).toBe('0 of 3 resolved');
+    expect(checkpointProgressText(2, 3)).toBe('2 of 3 resolved');
+    expect(checkpointProgressText(1, 1)).toBe('1 of 1 resolved');
   });
 });
 
@@ -466,6 +515,11 @@ describe('tombstoneText', () => {
   it('stays anonymous when the author no longer resolves', () => {
     const c = row({ id: 'P', deleted_at: '2026-01-05T00:00:00.000Z' });
     expect(tombstoneText(c, () => null)).toMatch(/^Comment deleted · /);
+  });
+
+  it('calls a deleted checkpoint a checkpoint', () => {
+    const c = row({ id: 'P', ledger_seq: 1, deleted_at: '2026-01-05T00:00:00.000Z' });
+    expect(tombstoneText(c, () => null)).toMatch(/^Checkpoint deleted · /);
   });
 
   it('prefers the legacy author name over the resolved FK author', () => {
@@ -991,25 +1045,25 @@ describe('pointMenuMode (kebab menu vs direct copy button vs nothing)', () => {
     expect(pointMenuMode(pointActions(dead, UUID_A, true))).toBe('none');
   });
 
-  it('a copy-only viewer gets the "Copy text" button and no "Point actions" trigger; an author gets "Point actions"', () => {
-    // The card renders one control per mode: 'menu' -> the "Point actions" kebab,
+  it('a copy-only viewer gets the "Copy text" button and no "Checkpoint actions" trigger; an author gets "Checkpoint actions"', () => {
+    // The card renders one control per mode: 'menu' -> the "Checkpoint actions" kebab,
     // 'copy' -> a direct "Copy text" button, 'none' -> nothing. Assert the label
     // the render branch selects for each viewer.
     const CONTROL_LABEL: Record<PointMenuMode, string | null> = {
       none: null,
       copy: 'Copy text',
-      menu: 'Point actions',
+      menu: 'Checkpoint actions',
     };
     const frozenOwn = point({ accepted_at: FROZEN, closed_at: null });
     const copyMode = pointMenuMode(pointActions(frozenOwn, UUID_A, false));
     expect(copyMode).toBe('copy');
     expect(CONTROL_LABEL[copyMode]).toBe('Copy text');
-    expect(CONTROL_LABEL[copyMode]).not.toBe('Point actions');
+    expect(CONTROL_LABEL[copyMode]).not.toBe('Checkpoint actions');
 
     const liveOwn = point({ accepted_at: null, closed_at: null });
     const menuMode = pointMenuMode(pointActions(liveOwn, UUID_A, false));
     expect(menuMode).toBe('menu');
-    expect(CONTROL_LABEL[menuMode]).toBe('Point actions');
+    expect(CONTROL_LABEL[menuMode]).toBe('Checkpoint actions');
   });
 });
 

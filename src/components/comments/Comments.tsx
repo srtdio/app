@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { dispatchInductionDid, INDUCTION_KEYS } from '@/lib/induction';
 import { IconButton } from '@/components/ui/IconButton';
@@ -87,8 +87,8 @@ function mentionDisplay(name: string | null): string {
 import {
   buildResolveArgs,
   friendlyPointFreezeError,
-  friendlyResolveError,
-  tickCircle,
+  RESOLVED_FILL_CLASS,
+  RESOLVED_HOLLOW_CLASS,
 } from '@/components/pages/pcs/checkpoint-controls';
 
 /** One caption_span annotation as it reads on a comment row. Optional surface:
@@ -171,6 +171,12 @@ export function liveCheckpointMap(
 
 export function commentCountsText(counts: CommentCounts): string {
   return `${counts.open} open · ${counts.resolved} resolved`;
+}
+
+/** The checkpoint chips row's progress line: "{n} of {m} resolved". Pure. The
+ *  chips row (CheckpointStrip) renders it beside the numbered chips. */
+export function checkpointProgressText(resolved: number, total: number): string {
+  return `${resolved} of ${total} resolved`;
 }
 
 /** The top-level thread filter: open threads only, or every thread. */
@@ -445,15 +451,27 @@ export function CommentLinkCard(props: { body: string }): ReactNode {
   ) : null;
 }
 
+interface TombstoneRow {
+  author_user_id: string;
+  deleted_at: string | null;
+  created_at: string;
+  legacy_author_name: string | null;
+  /** Set on a checkpoint row. */
+  ledger_seq?: number | null;
+}
+
 /** The tombstone line for a soft-deleted root. Author-only delete means the
- *  deleter is the author; name it when it resolves, else stay anonymous. */
+ *  deleter is the author; name it when it resolves, else stay anonymous. A
+ *  checkpoint row (ledger_seq set) reads "Checkpoint deleted". */
 export function tombstoneText(
-  comment: Pick<CommentRow, 'author_user_id' | 'deleted_at' | 'created_at' | 'legacy_author_name'>,
+  comment: TombstoneRow,
   nameOf: (id: string) => string | null,
 ): string {
   const when = formatTimestamp(comment.deleted_at ?? comment.created_at);
   const who = comment.legacy_author_name ?? nameOf(comment.author_user_id);
-  return who !== null ? `Deleted by ${who} · ${when}` : `Comment deleted · ${when}`;
+  const noun =
+    comment.ledger_seq !== undefined && comment.ledger_seq !== null ? 'Checkpoint' : 'Comment';
+  return who !== null ? `Deleted by ${who} · ${when}` : `${noun} deleted · ${when}`;
 }
 
 /** Map a comment's stored version ids to renderable attachments. The mime is
@@ -566,8 +584,8 @@ export function checkpointStateLabel(state: CheckpointState): CheckpointLabel {
     : { text: 'Resolved', className: 'bg-good-soft text-good' };
 }
 
-/** The one-tap "Resolve" is live only for an agency member on an open point.
- *  Every other case is a passive indicator. */
+/** The checkbox's one-tap Resolve is live only for an agency member on an open
+ *  checkpoint. Every other case is a passive box. */
 export function tickInteractive(state: CheckpointState, isClient: boolean): boolean {
   return !isClient && state === 'open';
 }
@@ -596,30 +614,86 @@ export function showCheckpointConfirm(
   return isClient && state === 'resolved' && !confirmed;
 }
 
-/** "Not done" (the client un-resolves, then must say why) shows only to a client
- *  on a resolved point not yet confirmed. An agency member never sees it. */
-export function showCheckpointNotDone(
-  state: CheckpointState,
-  isClient: boolean,
-  confirmed = false,
-): boolean {
-  return isClient && state === 'resolved' && !confirmed;
+/**
+ * The checkpoint's checkbox (the visible 24px box; the caller supplies the 44px
+ * hit area). Unticked: an empty box on the panel. Ticked: the shared resolved
+ * treatment, filled once the approver has confirmed, hollow (good outline and
+ * tick, no fill) while it waits for the Confirm. Tokens only, so light and dark
+ * parity is automatic. The tick enters on opacity + translateY only.
+ */
+export function checkpointBox(checked: boolean, confirmed: boolean): ReactElement {
+  return (
+    <span
+      aria-hidden
+      data-tick={checked ? (confirmed ? 'filled' : 'hollow') : 'open'}
+      className={cn(
+        'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border',
+        checked
+          ? confirmed
+            ? RESOLVED_FILL_CLASS
+            : RESOLVED_HOLLOW_CLASS
+          : 'border-border-strong bg-panel text-good',
+      )}
+    >
+      <span
+        className={cn(
+          // axis: opacity + translateY only (no translateX, rotate, scale)
+          'transition-[opacity,transform] duration-fast ease-enter',
+          checked ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-0',
+        )}
+      >
+        <IconCheck size={14} />
+      </span>
+    </span>
+  );
 }
 
-/** The pushback reason prompt. Un-resolving without saying why is the failure
- *  mode "Not done" exists to prevent, so the reply composer opens pre-filled with
- *  this line. No em-dash (user-facing string). */
-export const PUSHBACK_SEED = 'This point has gone back to the creators. What is still off? ';
+/** The word beside a checkpoint's checkbox: "Resolve" on the live, unticked box
+ *  (the one tap), else the state word ("Open" or "Resolved"). Pure. */
+export function checkpointBoxLabel(state: CheckpointState, interactive: boolean): string {
+  return interactive && state === 'open' ? 'Resolve' : checkpointStateLabel(state).text;
+}
 
-/** The seed body for a checkpoint's reply composer: the pushback prompt after a
- *  "Not done", otherwise the ordinary author pre-tag. */
+/** The person a checkpoint reply is aimed at: the checkpoint's author (Reply on
+ *  the checkpoint) or a reply's author (Reply on a reply). */
+export type ReplyTarget = Pick<CommentRow, 'author_user_id' | 'legacy_author_name'>;
+
+/**
+ * The seed body for a checkpoint's reply composer: only ever the @Name mention
+ * of the person replied to (a reply's author when replying to a reply, else the
+ * checkpoint's author). Nothing else is ever pre-filled. Pure.
+ */
 export function checkpointReplySeed(
-  pushback: boolean,
-  comment: Pick<CommentRow, 'author_user_id' | 'legacy_author_name'>,
+  root: ReplyTarget,
+  target: ReplyTarget | null,
   currentUserId: string | null,
   candidates: readonly MentionCandidate[],
 ): string {
-  return pushback ? PUSHBACK_SEED : replySeed(comment, currentUserId, candidates);
+  return replySeed(target ?? root, currentUserId, candidates);
+}
+
+/**
+ * The server keeps one reply level: a reply to a reply posts to the checkpoint
+ * root. The parent id for any reply inside a thread is therefore the root id,
+ * whichever row (root or reply) the Reply was tapped on. Pure.
+ */
+export function replyParentId(tapped: Pick<CommentRow, 'id' | 'parent_comment_id'>): string {
+  return tapped.parent_comment_id ?? tapped.id;
+}
+
+/**
+ * Retarget an open reply draft to a new person: an untouched (seed-only) draft
+ * becomes the new seed; typed text is kept with the new mention in front (the
+ * old seed is dropped so only one @Name leads). Pure.
+ */
+export function retargetDraft(
+  draft: string | undefined,
+  oldSeed: string,
+  newSeed: string,
+): string {
+  if (draft === undefined || !replyHasTypedText(draft, oldSeed)) return newSeed;
+  const typed = oldSeed !== '' && draft.startsWith(oldSeed) ? draft.slice(oldSeed.length) : draft;
+  return `${newSeed}${typed.trimStart()}`;
 }
 
 /** Merge the always-loaded checkpoints into the paginated list, de-duped by id
@@ -910,30 +984,6 @@ export async function fetchCheckpoints(
   return data;
 }
 
-/** A quiet text control: reads as plain text but carries a 44px minimum touch
- *  target from invisible padding, not a visible box. Drives the client's
- *  "Not done" beneath a resolved checkpoint row. */
-function QuietTextButton({
-  onClick,
-  disabled,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-}): ReactNode {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="inline-flex min-h-[44px] min-w-[44px] items-center text-sm text-fg-2 underline-offset-2 hover:text-fg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-    >
-      {children}
-    </button>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -997,14 +1047,18 @@ export function Comments({
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copyFailed, setCopyFailed] = useState(false);
-  // The comment (thread root or checkpoint) whose reopen / "Not done" request is
-  // in flight; null when idle. A one-tap Resolve is optimistic and never waits.
+  // The thread root whose reopen request is in flight; null when idle. A one-tap
+  // Resolve is optimistic and never waits.
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   // The bottom "Resolved" + Undo strip after a one-tap Resolve.
   const toast = useOptionalToast();
-  // Checkpoints whose reply composer was opened by a client "Not done"; their
-  // composer seeds with the pushback prompt so the client says what is still off.
-  const [pushbackSeeds, setPushbackSeeds] = useState<Set<string>>(new Set());
+  // Per checkpoint root: the reply whose author a Reply-on-a-reply aims at. The
+  // composer then seeds with that person's @Name (the server keeps one reply
+  // level, so the reply still posts to the root). Absent: the root's author.
+  const [replyTargets, setReplyTargets] = useState<Map<string, ReplyTarget>>(new Map());
+  // Per root: bumped on a retarget so the uncontrolled composer remounts with
+  // the new seed (its draft rides through replyDrafts).
+  const [composerEpochs, setComposerEpochs] = useState<Map<string, number>>(new Map());
   // The comment whose per-row actions popover is open (kebab); null when closed.
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   // The open image lightbox: the clicked comment's image list + current index,
@@ -1232,12 +1286,7 @@ export function Comments({
         next.delete(parentId);
         return next;
       });
-      setPushbackSeeds((prev) => {
-        if (!prev.has(parentId)) return prev;
-        const next = new Set(prev);
-        next.delete(parentId);
-        return next;
-      });
+      clearReplyTarget(parentId);
     }
     await loadPage(0);
     return { ok: true };
@@ -1272,7 +1321,10 @@ export function Comments({
     // Points are capped at 50 words server-side; enforce it before submit so an
     // over-long edit surfaces inline rather than as a raw invalid_payload.
     if (isPoint && pointWordCount(editBody) > POINT_WORD_CAP) {
-      setRowError({ id: commentId, message: `Points are limited to ${POINT_WORD_CAP} words.` });
+      setRowError({
+        id: commentId,
+        message: `Checkpoints are limited to ${POINT_WORD_CAP} words.`,
+      });
       return;
     }
     const result = await runEditComment(
@@ -1310,7 +1362,7 @@ export function Comments({
       });
     setHiddenIds((prev) => new Set(prev).add(commentId));
     undoable.run({
-      label: isPoint ? 'Point deleted' : 'Comment deleted',
+      label: isPoint ? 'Checkpoint deleted' : 'Comment deleted',
       commit: async () => {
         const result = await runDeleteComment(supabase, commentId, newTrace());
         if (!result.ok) {
@@ -1499,7 +1551,40 @@ export function Comments({
   }
 
   function replySeedFor(comment: CommentRow): string {
-    return checkpointReplySeed(pushbackSeeds.has(comment.id), comment, currentUserId, candidates);
+    return checkpointReplySeed(
+      comment,
+      replyTargets.get(comment.id) ?? null,
+      currentUserId,
+      candidates,
+    );
+  }
+
+  function clearReplyTarget(rootId: string): void {
+    setReplyTargets((prev) => {
+      if (!prev.has(rootId)) return prev;
+      const next = new Map(prev);
+      next.delete(rootId);
+      return next;
+    });
+  }
+
+  // Reply on a reply inside a checkpoint: the server keeps one reply level, so
+  // the composer is the root's (it posts with p_parent_comment_id = root id) and
+  // it opens with the @Name of the person replied to. Typed text survives a
+  // retarget; only the leading mention changes.
+  function onReplyToReply(root: CommentRow, reply: CommentRow): void {
+    const rootId = replyParentId(reply);
+    const key = draftKey(rootId);
+    const target: ReplyTarget = {
+      author_user_id: reply.author_user_id,
+      legacy_author_name: reply.legacy_author_name,
+    };
+    const nextSeed = checkpointReplySeed(root, target, currentUserId, candidates);
+    const draft = replyOpen.has(rootId) ? replyDrafts.get(key) : undefined;
+    replyDrafts.set(key, retargetDraft(draft, replySeedFor(root), nextSeed));
+    setReplyTargets((prev) => new Map(prev).set(rootId, target));
+    setComposerEpochs((prev) => new Map(prev).set(rootId, (prev.get(rootId) ?? 0) + 1));
+    setReplyOpen((prev) => (prev.has(rootId) ? prev : new Set(prev).add(rootId)));
   }
 
   // Reply / Cancel. Cancelling with typed text asks "Discard reply?" first; an
@@ -1522,6 +1607,7 @@ export function Comments({
     return (
       <div className="mt-3 border-l border-border pl-4">
         <CommentComposer
+          key={`reply-${comment.id}-${composerEpochs.get(comment.id) ?? 0}`}
           onSubmit={(body, options) =>
             handleCreate(body, { ...options, parentCommentId: comment.id })
           }
@@ -1548,34 +1634,9 @@ export function Comments({
       else next.add(id);
       return next;
     });
-    // Closing a composer drops any pushback seed so a later manual reply opens
-    // with the ordinary author pre-tag, not the stale reason prompt.
-    setPushbackSeeds((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }
-
-  // The client's "Not done": un-resolve, then open the reply composer seeded with
-  // the pushback prompt so the point does not go back silently. On a failed
-  // un-resolve nothing changes and the mapped error surfaces on the row.
-  async function handleCheckpointNotDone(comment: CommentRow): Promise<void> {
-    setRowError(null);
-    setResolvingId(comment.id);
-    const result = await commentResolve(
-      supabase,
-      buildResolveArgs({ commentId: comment.id, resolved: false, traceId: newTrace() }),
-    );
-    setResolvingId((current) => (current === comment.id ? null : current));
-    if (!result.ok) {
-      setRowError({ id: comment.id, message: friendlyResolveError(result.error) });
-      return;
-    }
-    setPushbackSeeds((prev) => new Set(prev).add(comment.id));
-    setReplyOpen((prev) => new Set(prev).add(comment.id));
-    await loadPage(0);
+    // Opening or closing from the root's own Reply aims at the root's author
+    // again; a Reply on a reply sets its target after this.
+    clearReplyTarget(id);
   }
 
   function startEdit(comment: CommentRow): void {
@@ -1675,7 +1736,11 @@ export function Comments({
     );
   }
 
-  function renderCommentCard(comment: CommentRow, isReply: boolean): ReactNode {
+  function renderCommentCard(
+    comment: CommentRow,
+    isReply: boolean,
+    onReply?: () => void,
+  ): ReactNode {
     // A reply is never a tombstone (deleted replies are filtered out) and roots
     // render their own tombstone, so the card itself is always a live comment.
     const actions = commentActions(comment, currentUserId, false);
@@ -1794,6 +1859,17 @@ export function Comments({
             ) : null}
             {isReply && actions.canCopy ? (
               <div className="mt-1 flex min-h-[44px] items-center gap-2">
+                {onReply !== undefined ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="min-h-[44px] min-w-[44px]"
+                    data-reply-to-reply=""
+                    onClick={onReply}
+                  >
+                    Reply
+                  </Button>
+                ) : null}
                 {copyControl(comment)}
               </div>
             ) : null}
@@ -1907,13 +1983,13 @@ export function Comments({
   }
 
   // Consecutive checkpoints from one author, collapsed into a single card. The
-  // header is just the author (avatar + name); each point is an "ask row" with a
-  // number badge, the verbatim body, its live state label, and its tick control.
-  // Only two states show: Open and Resolved. An agency member gets a one-tap
-  // "Resolve" on an open point (no note, no confirm; Undo lives in the bottom
-  // strip); every other case is a passive tick. A client gets the quiet
-  // "Not done" beneath a resolved point. The per-point reply affordance is the
-  // existing thread tail.
+  // header is just the author (avatar + name); each checkpoint is an "ask row"
+  // with a number badge, the verbatim body, and its checkbox. Only two states
+  // show: Open and Resolved. An agency member ticks an open checkpoint's box in
+  // one tap (no note, no confirm; Undo lives in the bottom strip); every other
+  // case is a passive box. The approver gets a one-tap Confirm on a resolved,
+  // unconfirmed checkpoint. Everyone, clients included, can reply on the
+  // checkpoint or on any reply inside it (the reply posts to the checkpoint).
   function renderBatchItem(group: { authorId: string; threads: ThreadRoot[] }): ReactNode {
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
@@ -1940,13 +2016,11 @@ export function Comments({
             const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
             const seq = comment.ledger_seq ?? 0;
             const state = checkpointState(comment);
-            const label = checkpointStateLabel(state);
             const live = !tombstone && tickInteractive(state, isClient);
             const confirmed = checkpointConfirmed(comment);
             const filled = tickFilled(state, confirmed);
             const confirmable = !tombstone && showCheckpointConfirm(state, isClient, confirmed);
-            const busy = resolvingId === comment.id;
-            const notDone = !tombstone && showCheckpointNotDone(state, isClient, confirmed);
+            const boxLabel = checkpointBoxLabel(state, live);
             const editing = editingId === comment.id;
             // Author-only edit/delete, hidden once the point is frozen (confirmed or
             // locked); Copy stays on every live point. The proc re-checks auth.uid().
@@ -2037,7 +2111,7 @@ export function Comments({
                     {!editing && pointMenuMode(actions) === 'menu' ? (
                       <div className="relative shrink-0">
                         <IconButton
-                          label="Point actions"
+                          label="Checkpoint actions"
                           className="opacity-70"
                           onClick={() =>
                             setMenuOpenId((current) => (current === comment.id ? null : comment.id))
@@ -2079,17 +2153,9 @@ export function Comments({
                     ) : null}
                   </div>
 
-                  {/* Meta row: state chip, timestamp, Reply, flexible spacer, tick.
-                      One row, aligned to the point-text column. */}
+                  {/* Meta row: timestamp, Reply, flexible spacer, Confirm, the
+                      checkbox and its word. One row, aligned to the text column. */}
                   <div className="mt-2 flex items-center gap-2 pl-7">
-                    <span
-                      className={cn(
-                        'inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.06em]',
-                        label.className,
-                      )}
-                    >
-                      {label.text}
-                    </span>
                     <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-fg-3">
                       {formatAgo(comment.created_at, new Date())}
                     </span>
@@ -2108,54 +2174,52 @@ export function Comments({
                         {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
                       </Button>
                     ) : null}
-                    {live ? (
-                      <button
-                        type="button"
-                        aria-label={`Resolve checkpoint ${seq}`}
-                        onClick={() => handleOneTapResolve(comment)}
-                        // axis: background-color on hover only; the tick fill motion
-                        // (opacity + translateY) lives inside tickCircle.
-                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md px-1.5 text-sm font-medium text-good transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                      >
-                        {tickCircle(false, true)}
-                        <span>Resolve</span>
-                      </button>
-                    ) : confirmable ? (
-                      // The approver's one-tap Confirm on a resolved point: the
-                      // hollow tick plus the word, one 44px target. Hidden once
-                      // confirmed; the row word stays "Resolved" either way.
+                    {confirmable ? (
+                      // The approver's one-tap Confirm on a creator-resolved
+                      // checkpoint: one 44px target beside the ticked box. Hidden
+                      // once confirmed; the box word stays "Resolved" either way.
                       <button
                         type="button"
                         aria-label={`Confirm checkpoint ${seq}`}
                         data-checkpoint-confirm=""
                         onClick={() => handleConfirm(comment)}
-                        // axis: background-color on hover only; the tick fill motion
-                        // (opacity + translateY) lives inside tickCircle.
-                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md px-1.5 text-sm font-medium text-good transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        // axis: background-color on hover only.
+                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-2 text-sm font-medium text-good transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                       >
-                        {tickCircle(false, false, true)}
-                        <span>Confirm</span>
+                        Confirm
+                      </button>
+                    ) : null}
+                    {tombstone ? null : live ? (
+                      // The checkbox: one tap ticks it and resolves the checkpoint.
+                      // No box, note or confirm opens; Undo lives in the strip.
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={false}
+                        aria-label={`Resolve checkpoint ${seq}`}
+                        data-checkpoint-box=""
+                        onClick={() => handleOneTapResolve(comment)}
+                        // axis: background-color on hover only; the tick motion
+                        // (opacity + translateY) lives inside checkpointBox.
+                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md px-1.5 text-sm font-medium text-fg-2 transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        {checkpointBox(false, false)}
+                        <span>{boxLabel}</span>
                       </button>
                     ) : (
                       <span
-                        aria-hidden
-                        className="ml-auto flex h-11 w-11 items-center justify-center"
+                        data-checkpoint-box=""
+                        className={cn(
+                          'flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-1.5 text-sm font-medium',
+                          confirmable ? '' : 'ml-auto',
+                          state === 'resolved' ? 'text-good' : 'text-fg-3',
+                        )}
                       >
-                        {tickCircle(filled, false, state === 'resolved')}
+                        {checkpointBox(state === 'resolved', filled)}
+                        <span>{boxLabel}</span>
                       </span>
                     )}
                   </div>
-
-                  {notDone ? (
-                    <div className="flex items-center gap-3 pl-7">
-                      <QuietTextButton
-                        disabled={busy}
-                        onClick={() => void handleCheckpointNotDone(comment)}
-                      >
-                        {busy ? 'Saving…' : 'Not done'}
-                      </QuietTextButton>
-                    </div>
-                  ) : null}
 
                   {rowError !== null && rowError.id === comment.id ? (
                     <div
@@ -2167,7 +2231,13 @@ export function Comments({
                   ) : null}
 
                   <div className="pl-7">
-                    {renderReplyList(replies, (reply) => renderCommentCard(reply, true))}
+                    {renderReplyList(replies, (reply) =>
+                      renderCommentCard(
+                        reply,
+                        true,
+                        tombstone ? undefined : () => onReplyToReply(comment, reply),
+                      ),
+                    )}
                     {!tombstone && replyOpen.has(comment.id) ? renderReplyComposer(comment) : null}
                   </div>
                 </div>
