@@ -735,6 +735,13 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).toContain('setItems((prev) => appendUnique(prev, result.data));');
   });
 
+  it('fix 18: only a load bumps the sequence, so the first page is never dropped on mount', () => {
+    // The workspace-reset effect runs right after the first 'reset' load starts:
+    // a bump there would drop page one and leave the feed empty.
+    expect(count(page, 'activitySeqRef.current += 1')).toBe(1);
+    expect(page).toContain("if (mode !== 'merge') activitySeqRef.current += 1;");
+  });
+
   it('fix 19: every provider read is dropped once its workspace or user is no longer active', () => {
     expect(provider).toContain('workspaceIdRef.current === ws && userIdRef.current === uid');
     expect(count(provider, 'if (!stillActive(ws, uid)) return;')).toBeGreaterThanOrEqual(4);

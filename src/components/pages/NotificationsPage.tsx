@@ -435,14 +435,12 @@ export function NotificationsPage() {
     void loadMentionCount();
   });
 
-  // Reset filters, the feed and Upcoming when the active workspace changes: the
-  // old workspace's rows clear before the new load, and its in-flight loads drop.
+  // Reset filters and Upcoming when the active workspace changes. The feed's
+  // own 'reset' load (loadActivity changes with the workspace) clears the old
+  // workspace's rows first and drops its in-flight loads; bumping the sequence
+  // here too would drop that new load.
   useEffect(() => {
     setState('all');
-    activitySeqRef.current += 1;
-    setItems([]);
-    setHasMore(false);
-    setEntering(new Set());
     upcomingSeqRef.current += 1;
     upcomingLoadedRef.current = false;
     setUpcoming([]);
