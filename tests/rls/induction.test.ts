@@ -1,7 +1,7 @@
 // Induction schema (20261015030000..20261015036000), recorded from live.
 // member_invite client email rules: free mail allowed, a set
 // client_domain admits itself and its subdomains (client_domain_mismatch
-// otherwise; full approver rule in client-domains.test.ts), and a workspace that already has clients but no client_domain is unaffected.
+// otherwise; full approver rule in client-domains.test.ts), and an empty client_domain is learnt from the first company email even when clients already exist.
 // post_create takes the platform from the workspace and refuses formats that
 // platform does not offer (invalid_format). brand_agency_request caps an open
 // request at 5 sends and is fulfilled when its sender is invited as a client.
@@ -162,7 +162,7 @@ describe.runIf(RLS_SUITE)('induction schema', () => {
       expect(await clientDomainOf(w.id)).toBe('kite.test');
     });
 
-    it('leaves a workspace with existing clients and no client_domain unaffected', async () => {
+    it('learns client_domain from the first company email even when clients already exist', async () => {
       const w = await newWorkspace();
       const existing = await seedUser(env, admin);
       users.push(existing);
@@ -170,7 +170,7 @@ describe.runIf(RLS_SUITE)('induction schema', () => {
       const du = await seedUserAt('elsewhere.test');
       const res = await invite(w.id, du.user.email, 'client');
       expect(res.error).toBeNull();
-      expect(await clientDomainOf(w.id)).toBeNull();
+      expect(await clientDomainOf(w.id)).toBe('elsewhere.test');
     });
   });
 
