@@ -19,7 +19,7 @@ import { checkLink } from '@/lib/links/safety';
 import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { glowById, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
-import { IconCheck, IconCopy, IconMore } from '@/components/ui/icons';
+import { IconCheck, IconMore } from '@/components/ui/icons';
 import { LoadError } from '@/components/ui/LoadError';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import { MenuPopover } from '@/components/shell/MenuPopover';
@@ -122,15 +122,16 @@ interface CommentsProps {
    *  highlight's): its Reply and reply Post carry the guide's keys. */
   guideReplyCommentId?: string | null;
   /**
-   * Posts: the "Comments" header row (open-count chip + the Open / All filter).
-   * Briefs keep their own heading and pass nothing.
+   * Posts: the "Checkpoints" header row (the title + the Open / All filter). The
+   * chips row under it (belowHeader) carries the one counter. Briefs keep their
+   * own heading and pass nothing.
    */
   showHeader?: boolean;
   /** Rendered under the header, above the list (the post's CheckpointStrip). */
   belowHeader?: ReactNode;
   /** Live open / resolved top-level thread counts (checkpoints included), lifted
    *  once loaded and on every change, optimistic resolves included. Lets the page
-   *  render its "{n} open comments" chip and the creator's resubmit gate. */
+   *  render its "{n} open checkpoints" pill and the creator's resubmit gate. */
   onCountsChange?: (counts: CommentCounts) => void;
 }
 
@@ -145,7 +146,6 @@ export const RESOLVE_FAILED_COPY = errorText('resolve the checkpoint', null);
 /** The one failure copy for a one-tap Confirm (or its Undo) that did not land. */
 export const CONFIRM_FAILED_COPY = errorText('confirm the checkpoint', null);
 
-/** The Comments header line: "{n} open · {m} resolved". Pure. */
 /** A checkpoint's live state as the comments list shows it (optimistic taps included). */
 export type LiveCheckpoint = Pick<CommentRow, 'resolved_at' | 'accepted_at'>;
 
@@ -169,15 +169,47 @@ export function liveCheckpointMap(
   return map;
 }
 
-export function commentCountsText(counts: CommentCounts): string {
-  return `${counts.open} open · ${counts.resolved} resolved`;
-}
-
 /** The checkpoint chips row's progress line: "{n} of {m} resolved". Pure. The
- *  chips row (CheckpointStrip) renders it beside the numbered chips. */
+ *  chips row (CheckpointStrip) renders it beside the numbered chips; it is the
+ *  section's only counter. */
 export function checkpointProgressText(resolved: number, total: number): string {
   return `${resolved} of ${total} resolved`;
 }
+
+/** The post's top pill: "1 open checkpoint" / "{n} open checkpoints". Pure. */
+export function openCheckpointsLabel(count: number): string {
+  return `${count} open ${count === 1 ? 'checkpoint' : 'checkpoints'}`;
+}
+
+/** The section title on posts (replaces "Comments"). */
+export const CHECKPOINTS_TITLE = 'Checkpoints';
+
+/** The empty-list line: posts read in checkpoints, briefs keep comments. Pure. */
+export function emptyListText(entityType: CommentEntityType, filter: CommentFilter): string {
+  if (entityType === 'post') {
+    return filter === 'open' ? 'No open checkpoints' : 'No checkpoints yet';
+  }
+  return filter === 'open' ? 'No open comments' : 'No comments yet';
+}
+
+/**
+ * One class for every row action (the checkpoint checkbox, Confirm, Resolve,
+ * Reply, Copy): the ghost button look at one 44px height. Colour is added per
+ * control (cn() is a plain join, so the base carries none). Tokens only.
+ */
+export const ROW_ACTION_CLASS =
+  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md px-2 text-sm font-medium transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50';
+
+/** The passive (non-interactive) checkbox: the same box, height and padding as
+ *  ROW_ACTION_CLASS without the hover or focus treatment. */
+export const ROW_ACTION_STATIC_CLASS =
+  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-2 text-sm font-medium';
+
+/** The time in every row header: 12px, regular weight, never monospace. */
+export const ROW_TIME_CLASS = 'whitespace-nowrap text-xs tabular-nums text-fg-3';
+
+/** The word beside every checkpoint checkbox, ticked or not. */
+export const CHECKPOINT_BOX_LABEL = 'Resolved';
 
 /** The top-level thread filter: open threads only, or every thread. */
 export type CommentFilter = 'open' | 'all';
@@ -648,12 +680,6 @@ export function checkpointBox(checked: boolean, confirmed: boolean): ReactElemen
   );
 }
 
-/** The word beside a checkpoint's checkbox: "Resolve" on the live, unticked box
- *  (the one tap), else the state word ("Open" or "Resolved"). Pure. */
-export function checkpointBoxLabel(state: CheckpointState, interactive: boolean): string {
-  return interactive && state === 'open' ? 'Resolve' : checkpointStateLabel(state).text;
-}
-
 /** The person a checkpoint reply is aimed at: the checkpoint's author (Reply on
  *  the checkpoint) or a reply's author (Reply on a reply). */
 export type ReplyTarget = Pick<CommentRow, 'author_user_id' | 'legacy_author_name'>;
@@ -978,6 +1004,26 @@ export async function fetchCheckpoints(
     .order('created_at', { ascending: false });
   if (error || data === null) return [];
   return data;
+}
+
+/** What one row on the shared row template shows besides the comment itself. */
+interface RowOptions {
+  /** A reply: smaller avatar, name on its own line, role and time below it. */
+  reply: boolean;
+  /** The checkpoint number shown in the header as "#n"; null on any other row. */
+  seq: number | null;
+  /** The header kebab's accessible name (only drawn when Edit or Delete is open). */
+  menuLabel: string;
+  actions: CommentActions;
+  /** A resolved checkpoint's body reads in fg-2. */
+  muted?: boolean;
+  /** First in the action row: the checkpoint checkbox (+ Confirm) or the
+   *  thread's Resolve / Reopen. */
+  leading?: ReactNode;
+  /** The row's Reply, after the leading control. */
+  replyButton?: ReactNode;
+  /** Under the row on the text column: replies and the reply composer. */
+  below?: ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -1673,21 +1719,20 @@ export function Comments({
     return role === undefined || role === '' ? null : roleLabel(role);
   }
 
-  // The visible Copy for one comment (T9), own and others' alike, with its
-  // inline "Copied" / "Couldn't copy" status beside it.
+  // The visible Copy for one row, own and others' alike, with its inline
+  // "Copied" / "Couldn't copy" status beside it. Same ghost look and height as
+  // every other row action.
   function copyControl(comment: CommentRow): ReactNode {
     return (
       <>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="min-h-[44px] min-w-[44px]"
-          aria-label="Copy comment"
+        <button
+          type="button"
+          data-row-action="copy"
+          className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
           onClick={() => void handleCopy(comment)}
         >
-          <IconCopy size={16} />
           Copy
-        </Button>
+        </button>
         {copiedId === comment.id ? (
           <span role="status" className="text-xs text-fg-3">
             {copyFailed ? COPY_FAILED : 'Copied'}
@@ -1732,514 +1777,410 @@ export function Comments({
     );
   }
 
-  function renderCommentCard(
-    comment: CommentRow,
-    isReply: boolean,
-    onReply?: () => void,
-  ): ReactNode {
-    // A reply is never a tombstone (deleted replies are filtered out) and roots
-    // render their own tombstone, so the card itself is always a live comment.
-    const actions = commentActions(comment, currentUserId, false);
-    const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
+  // The author-only Edit / Delete kebab in a row's header, or nothing. Every
+  // menu row closes the popover and calls the existing handler.
+  function rowMenu(comment: CommentRow, actions: CommentActions, label: string): ReactNode {
+    if (editingId === comment.id || pointMenuMode(actions) !== 'menu') return null;
+    const closeMenu = (): void => setMenuOpenId(null);
+    return (
+      // -my-2 keeps the 44px target from making the header taller than its text.
+      <div className="relative -my-2 shrink-0">
+        <IconButton
+          label={label}
+          onClick={() => setMenuOpenId((current) => (current === comment.id ? null : comment.id))}
+        >
+          <IconMore size={20} />
+        </IconButton>
+        <MenuPopover open={menuOpenId === comment.id} onClose={closeMenu} align="right">
+          {actions.canEdit ? (
+            <button
+              type="button"
+              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => {
+                closeMenu();
+                startEdit(comment);
+              }}
+            >
+              Edit
+            </button>
+          ) : null}
+          {actions.canDelete ? (
+            <button
+              type="button"
+              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => {
+                closeMenu();
+                handleDelete(comment.id);
+              }}
+            >
+              Delete
+            </button>
+          ) : null}
+        </MenuPopover>
+      </div>
+    );
+  }
+
+  /**
+   * The ONE row template for every item: checkpoints, plain comments and
+   * replies. Avatar on the left; on the text column a header (name, role, "·",
+   * time in regular 12px, the checkpoint's "#n" in fg-3), the body, then one
+   * left-aligned action row (the leading control, Reply, Copy), all the same
+   * ghost style and 44px height. A reply puts its name on its own line, with
+   * role and time wrapping below it, so the name is never cut.
+   */
+  function renderRow(comment: CommentRow, opts: RowOptions): ReactNode {
     const authorName =
       // '' only until the batched read answers (a gone person reads "Former member").
       comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? '';
     const authorAvatarUrl =
       comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
-    const editing = editingId === comment.id;
-
-    // T9: one header line (avatar, name, role label, time); Copy lives in the
-    // visible action row for every comment, so the kebab holds only the
-    // author-only Edit / Delete. Every menu row closes the popover and calls
-    // the existing handler.
-    const closeMenu = (): void => setMenuOpenId(null);
     const role = comment.legacy_author_name !== null ? null : roleOf(comment.author_user_id);
+    const editing = editingId === comment.id;
+    const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
+    const edited = pointEditedMarker(comment.edited_at, new Date());
+
+    const meta = (
+      <>
+        {role !== null ? (
+          <span data-comment-role="" className="text-xs text-fg-3">
+            {role}
+          </span>
+        ) : null}
+        {!opts.reply || role !== null ? (
+          <span aria-hidden className="text-xs text-fg-3">
+            ·
+          </span>
+        ) : null}
+        <span data-comment-time="" className={ROW_TIME_CLASS}>
+          {formatAgo(comment.created_at, new Date())}
+        </span>
+        {opts.seq !== null ? (
+          <span data-checkpoint-seq="" className="whitespace-nowrap text-xs tabular-nums text-fg-3">
+            #{opts.seq}
+          </span>
+        ) : null}
+        {edited !== null ? <span className="text-xs text-fg-3">{edited}</span> : null}
+      </>
+    );
+    const name = (
+      <span
+        data-comment-author=""
+        className={cn(
+          'text-xs font-medium text-fg [overflow-wrap:anywhere]',
+          opts.reply ? 'block' : '',
+        )}
+      >
+        {authorName}
+      </span>
+    );
 
     return (
-      <>
-        <div className="mb-1 flex min-w-0 items-center gap-2">
+      <div
+        data-comment-row={opts.reply ? 'reply' : 'root'}
+        className="flex min-w-0 items-start gap-2.5"
+      >
+        <span className="flex shrink-0">
           <Avatar
             name={authorName}
-            size={isReply ? 'sm' : 'md'}
+            size={opts.reply ? 'sm' : 'md'}
             {...(authorAvatarUrl !== null && authorAvatarUrl !== undefined
               ? { src: authorAvatarUrl }
               : {})}
           />
-          <span className="truncate text-xs font-medium text-fg">{authorName}</span>
-          {role !== null ? (
-            <span data-comment-role="" className="shrink-0 text-[11px] text-fg-3">
-              {role}
-            </span>
-          ) : null}
-          {comment.edited_at !== null ? (
-            <span className="shrink-0 text-[11px] text-fg-3">
-              {pointEditedMarker(comment.edited_at, new Date())}
-            </span>
-          ) : null}
-          <span aria-hidden className="text-fg-3">
-            ·
-          </span>
-          <span className="shrink-0 text-xs text-fg-3 tabular-nums">
-            {formatAgo(comment.created_at, new Date())}
-          </span>
-          {!editing && pointMenuMode(actions) === 'menu' ? (
-            <div className="relative ml-auto shrink-0">
-              <IconButton
-                label="Comment actions"
-                onClick={() =>
-                  setMenuOpenId((current) => (current === comment.id ? null : comment.id))
-                }
-              >
-                <IconMore size={20} />
-              </IconButton>
-              <MenuPopover open={menuOpenId === comment.id} onClose={closeMenu} align="right">
-                {actions.canEdit ? (
-                  <button
-                    type="button"
-                    className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    onClick={() => {
-                      closeMenu();
-                      startEdit(comment);
-                    }}
-                  >
-                    Edit
-                  </button>
-                ) : null}
-                {actions.canDelete ? (
-                  <button
-                    type="button"
-                    className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    onClick={() => {
-                      closeMenu();
-                      handleDelete(comment.id);
-                    }}
-                  >
-                    Delete
-                  </button>
-                ) : null}
-              </MenuPopover>
+        </span>
+        <div className="min-w-0 flex-1">
+          <div data-comment-header="" className="flex min-w-0 items-start gap-2">
+            {opts.reply ? (
+              <div className="min-w-0 flex-1">
+                {name}
+                <div className="flex flex-wrap items-center gap-x-1.5">{meta}</div>
+              </div>
+            ) : (
+              <div className="flex min-h-[26px] min-w-0 flex-1 flex-wrap items-center gap-x-1.5">
+                {name}
+                {meta}
+              </div>
+            )}
+            {rowMenu(comment, opts.actions, opts.menuLabel)}
+          </div>
+
+          {editing ? (
+            renderEditor(comment.id)
+          ) : (
+            <div className="mt-1">
+              {annotationChip(
+                comment.id,
+                annotationsByCommentId?.[comment.id],
+                onAnnotationChipClick,
+              )}
+              {comment.body.trim() !== '' ? (
+                <p
+                  className={cn(
+                    'text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
+                    opts.muted === true ? 'text-fg-2' : 'text-fg',
+                  )}
+                >
+                  {renderCommentBody(
+                    comment.body,
+                    handleOf,
+                    searchWords,
+                    firstExternalUrl(comment.body),
+                  )}
+                </p>
+              ) : null}
+              <CommentLinkCard body={comment.body} />
+              {attachments.length > 0 ? (
+                <MessageAttachments
+                  attachments={attachments}
+                  cache={presignCache}
+                  presignEnabled={presignEnabled}
+                  onImageClick={(attachment) => {
+                    const nav = commentImageNav(attachments, attachment.assetId);
+                    if (nav.images.length > 0) setLightbox(nav);
+                  }}
+                />
+              ) : null}
+            </div>
+          )}
+
+          {/* One action row, left-aligned on the text column (-ml-2 lines the
+              first control's content up with the body text). */}
+          {!editing ? (
+            <div data-comment-actions="" className="-ml-2 mt-1 flex flex-wrap items-center gap-1">
+              {opts.leading}
+              {opts.replyButton}
+              {opts.actions.canCopy ? copyControl(comment) : null}
             </div>
           ) : null}
+
+          {rowError !== null && rowError.id === comment.id ? (
+            <div
+              role="alert"
+              className="mt-2 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+            >
+              {rowError.message}
+            </div>
+          ) : null}
+
+          {opts.below}
         </div>
+      </div>
+    );
+  }
 
-        {editing ? (
-          renderEditor(comment.id)
-        ) : (
-          <>
-            {annotationChip(
-              comment.id,
-              annotationsByCommentId?.[comment.id],
-              onAnnotationChipClick,
-            )}
-            {comment.body.trim() !== '' ? (
-              <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] text-fg">
-                {renderCommentBody(
-                  comment.body,
-                  handleOf,
-                  searchWords,
-                  firstExternalUrl(comment.body),
-                )}
-              </p>
-            ) : null}
-            <CommentLinkCard body={comment.body} />
-            {attachments.length > 0 ? (
-              <MessageAttachments
-                attachments={attachments}
-                cache={presignCache}
-                presignEnabled={presignEnabled}
-                onImageClick={(attachment) => {
-                  const nav = commentImageNav(attachments, attachment.assetId);
-                  if (nav.images.length > 0) setLightbox(nav);
-                }}
-              />
-            ) : null}
-            {isReply && actions.canCopy ? (
-              <div className="mt-1 flex min-h-[44px] items-center gap-2">
-                {onReply !== undefined ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="min-h-[44px] min-w-[44px]"
-                    data-reply-to-reply=""
-                    onClick={onReply}
-                  >
-                    Reply
-                  </Button>
-                ) : null}
-                {copyControl(comment)}
-              </div>
-            ) : null}
-          </>
-        )}
+  // A root's Reply (Cancel while its composer is open). The guide's anchor rides
+  // on the comment the onboarding guide teaches replying on.
+  function rootReplyButton(comment: CommentRow): ReactNode {
+    return (
+      <button
+        type="button"
+        data-row-action="reply"
+        className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+        data-induction={
+          comment.id === guideReplyCommentId ? INDUCTION_KEYS.postCommentReply : undefined
+        }
+        onClick={() => onReplyButton(comment)}
+      >
+        {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
+      </button>
+    );
+  }
 
-        {rowError !== null && rowError.id === comment.id ? (
-          <div
-            role="alert"
-            className="mt-2 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+  // One reply, on the same row template. Inside a checkpoint a reply gets its
+  // own Reply, which posts to the checkpoint with the reply author's @Name.
+  function renderReplyRow(reply: CommentRow, onReply?: () => void): ReactNode {
+    // A reply is never a tombstone (deleted replies are filtered out).
+    return renderRow(reply, {
+      reply: true,
+      seq: null,
+      menuLabel: 'Comment actions',
+      actions: commentActions(reply, currentUserId, false),
+      replyButton:
+        onReply !== undefined ? (
+          <button
+            type="button"
+            data-row-action="reply"
+            data-reply-to-reply=""
+            className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+            onClick={onReply}
           >
-            {rowError.message}
-          </div>
+            Reply
+          </button>
+        ) : null,
+    });
+  }
+
+  // Under a root: the always-open replies list, then the root's reply composer.
+  function renderThreadBelow(
+    root: CommentRow,
+    replies: CommentRow[],
+    tombstone: boolean,
+    replyToReply: boolean,
+  ): ReactNode {
+    return (
+      <>
+        {renderReplyList(replies, (reply) =>
+          renderReplyRow(
+            reply,
+            replyToReply && !tombstone ? () => onReplyToReply(root, reply) : undefined,
+          ),
+        )}
+        {!tombstone && replyOpen.has(root.id) ? renderReplyComposer(root) : null}
+      </>
+    );
+  }
+
+  // A soft-deleted root kept for its live replies: the tombstone line, then the
+  // replies. No header, body or actions.
+  function renderTombstone(root: CommentRow, replies: CommentRow[]): ReactNode {
+    return (
+      <>
+        <p className="text-xs italic text-fg-3">{tombstoneText(root, nameOf)}</p>
+        {renderThreadBelow(root, replies, true, false)}
+      </>
+    );
+  }
+
+  // One plain one-level thread on the row template. Its leading control is the
+  // thread's one-tap Resolve (Reopen once resolved); a resolved thread keeps the
+  // good-family card border.
+  function renderThreadItem({ comment, replies, tombstone }: ThreadRoot): ReactNode {
+    // Thread-level resolved state lives on the root comment. A tombstone
+    // root cannot be resolved/reopened (the proc rejects a deleted comment).
+    const isResolved = comment.resolved_at !== null;
+    const isResolving = resolvingId === comment.id;
+    return (
+      <li
+        key={comment.id}
+        id={commentDomId(comment.id)}
+        className={cn(
+          'rounded-xl border bg-panel-2 px-4 py-3 transition-shadow',
+          isResolved ? 'border-good' : 'border-border',
+        )}
+      >
+        {tombstone
+          ? renderTombstone(comment, replies)
+          : renderRow(comment, {
+              reply: false,
+              seq: null,
+              menuLabel: 'Comment actions',
+              actions: commentActions(comment, currentUserId, false),
+              leading: (
+                <button
+                  type="button"
+                  data-comment-resolve=""
+                  className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+                  disabled={isResolving}
+                  onClick={() =>
+                    isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
+                  }
+                >
+                  {isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}
+                </button>
+              ),
+              replyButton: rootReplyButton(comment),
+              below: renderThreadBelow(comment, replies, false, false),
+            })}
+      </li>
+    );
+  }
+
+  // A checkpoint's leading controls: the checkbox with its word "Resolved", then
+  // (approver only, on a resolved and unconfirmed point) the one-tap Confirm. An
+  // agency member ticks an open checkpoint's box in one tap (no note, no
+  // confirm; Undo lives in the bottom strip); every other case is a passive box.
+  function checkpointLeading(comment: CommentRow, tombstone: boolean): ReactNode {
+    const seq = comment.ledger_seq ?? 0;
+    const state = checkpointState(comment);
+    const live = !tombstone && tickInteractive(state, isClient);
+    const confirmed = checkpointConfirmed(comment);
+    const filled = tickFilled(state, confirmed);
+    const confirmable = !tombstone && showCheckpointConfirm(state, isClient, confirmed);
+    return (
+      <>
+        {live ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={false}
+            aria-label={`Resolve checkpoint ${seq}`}
+            data-checkpoint-box=""
+            onClick={() => handleOneTapResolve(comment)}
+            // axis: background-color on hover only; the tick motion (opacity +
+            // translateY) lives inside checkpointBox.
+            className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+          >
+            {checkpointBox(false, false)}
+            <span>{CHECKPOINT_BOX_LABEL}</span>
+          </button>
+        ) : (
+          <span
+            role="checkbox"
+            aria-checked={state === 'resolved'}
+            aria-disabled="true"
+            data-checkpoint-box=""
+            className={cn(
+              ROW_ACTION_STATIC_CLASS,
+              state === 'resolved' ? 'text-good' : 'text-fg-3',
+            )}
+          >
+            {checkpointBox(state === 'resolved', filled)}
+            <span>{CHECKPOINT_BOX_LABEL}</span>
+          </span>
+        )}
+        {confirmable ? (
+          <button
+            type="button"
+            aria-label={`Confirm checkpoint ${seq}`}
+            data-checkpoint-confirm=""
+            onClick={() => handleConfirm(comment)}
+            // axis: background-color on hover only.
+            className={cn(ROW_ACTION_CLASS, 'text-good')}
+          >
+            Confirm
+          </button>
         ) : null}
       </>
     );
   }
 
-  // The shared tail of a top-level item: Reply, (optionally) the thread Resolve
-  // toggle, the always-open replies list, and the reply composer.
-  // Batch checkpoint points reuse it with showResolve=false: their tick state is
-  // owned by the feedback ledger, but replies stay normal child comments.
-  function renderThreadTail(
-    comment: CommentRow,
-    replies: CommentRow[],
-    tombstone: boolean,
-    showResolve: boolean,
-    footRight?: ReactNode,
-  ): ReactNode {
-    const isReplyOpen = replyOpen.has(comment.id);
-    const isResolved = comment.resolved_at !== null;
-    const isResolving = resolvingId === comment.id;
-    return (
-      <>
-        <div className="mt-2 flex min-h-[44px] items-center gap-2">
-          {!tombstone ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="min-h-[44px] min-w-[44px]"
-              data-induction={
-                comment.id === guideReplyCommentId ? INDUCTION_KEYS.postCommentReply : undefined
-              }
-              onClick={() => onReplyButton(comment)}
-            >
-              {isReplyOpen ? 'Cancel' : 'Reply'}
-            </Button>
-          ) : null}
-          {showResolve && !tombstone ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="min-h-[44px] min-w-[44px]"
-              disabled={isResolving}
-              onClick={() =>
-                isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
-              }
-            >
-              {isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}
-            </Button>
-          ) : null}
-          {!tombstone ? copyControl(comment) : null}
-          {footRight !== undefined ? <span className="ml-auto">{footRight}</span> : null}
-        </div>
-
-        {renderReplyList(replies, (reply) => renderCommentCard(reply, true))}
-
-        {isReplyOpen ? renderReplyComposer(comment) : null}
-      </>
-    );
-  }
-
-  // One plain one-level thread, exactly as before the ledger batches landed.
-  function renderThreadItem({ comment, replies, tombstone }: ThreadRoot): ReactNode {
-    // Thread-level resolved state lives on the root comment. A tombstone
-    // root cannot be resolved/reopened (the proc rejects a deleted comment).
-    const isResolved = comment.resolved_at !== null;
-    return (
-      <li
-        key={comment.id}
-        id={commentDomId(comment.id)}
-        className={
-          isResolved
-            ? 'rounded-xl border border-good bg-panel-2 px-4 py-3 transition-shadow'
-            : 'rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow'
-        }
-      >
-        {tombstone ? null : isResolved ? (
-          <div
-            data-comment-state="resolved"
-            className="mb-2 flex items-center gap-1.5 text-xs font-medium text-good"
-          >
-            <IconCheck size={14} />
-            Resolved
-          </div>
-        ) : (
-          <div data-comment-state="open" className="mb-2 text-xs font-medium text-fg-3">
-            Open
-          </div>
-        )}
-
-        {tombstone ? (
-          <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
-        ) : (
-          renderCommentCard(comment, false)
-        )}
-
-        {renderThreadTail(comment, replies, tombstone, true)}
-      </li>
-    );
-  }
-
-  // Consecutive checkpoints from one author, collapsed into a single card. The
-  // header is just the author (avatar + name); each checkpoint is an "ask row"
-  // with a number badge, the verbatim body, and its checkbox. Only two states
-  // show: Open and Resolved. An agency member ticks an open checkpoint's box in
-  // one tap (no note, no confirm; Undo lives in the bottom strip); every other
-  // case is a passive box. The approver gets a one-tap Confirm on a resolved,
-  // unconfirmed checkpoint. Everyone, clients included, can reply on the
-  // checkpoint or on any reply inside it (the reply posts to the checkpoint).
+  // Consecutive checkpoints from one author share one card; each checkpoint is
+  // its own row on the same template as a plain comment, divided by a rule.
+  // Everyone, clients included, can reply on the checkpoint or on any reply
+  // inside it (the reply posts to the checkpoint).
   function renderBatchItem(group: { authorId: string; threads: ThreadRoot[] }): ReactNode {
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
-    const authorName = first.legacy_author_name ?? nameOf(first.author_user_id) ?? '';
-    const authorAvatarUrl =
-      first.legacy_author_name !== null ? null : avatarOf(first.author_user_id);
     return (
       <li
-        key={`batch-${group.authorId}`}
+        key={`batch-${group.authorId}-${first.id}`}
         className="rounded-xl border border-border bg-panel-2 px-4 py-3"
       >
-        <div className="mb-2 flex items-center gap-2">
-          <Avatar
-            name={authorName}
-            size="md"
-            {...(authorAvatarUrl !== null && authorAvatarUrl !== undefined
-              ? { src: authorAvatarUrl }
-              : {})}
-          />
-          <span className="text-xs font-medium text-fg-2">{authorName}</span>
-        </div>
         <ol className="flex flex-col">
-          {group.threads.map(({ comment, replies, tombstone }, index) => {
-            const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
-            const seq = comment.ledger_seq ?? 0;
-            const state = checkpointState(comment);
-            const live = !tombstone && tickInteractive(state, isClient);
-            const confirmed = checkpointConfirmed(comment);
-            const filled = tickFilled(state, confirmed);
-            const confirmable = !tombstone && showCheckpointConfirm(state, isClient, confirmed);
-            const boxLabel = checkpointBoxLabel(state, live);
-            const editing = editingId === comment.id;
-            // Author-only edit/delete, hidden once the point is frozen (confirmed or
-            // locked); Copy stays on every live point. The proc re-checks auth.uid().
-            const actions = pointActions(comment, currentUserId, tombstone);
-            const editedMarker = pointEditedMarker(comment.edited_at, new Date());
-            return (
-              <li
-                key={comment.id}
-                id={commentDomId(comment.id)}
-                className={cn(
-                  'flex min-h-[44px] gap-3 py-3',
-                  index > 0 ? 'border-t border-border' : 'pt-0',
-                )}
-              >
-                {/* Decorative state rail on the leading edge: neutral (open),
-                    soft success (resolved). Colour only. */}
-                <span
-                  aria-hidden
-                  className={cn(
-                    'w-0.5 shrink-0 self-stretch rounded-full',
-                    state === 'open' ? 'bg-border' : 'bg-good opacity-60',
-                  )}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start gap-2">
-                    <span
-                      aria-hidden
-                      className="w-5 shrink-0 pt-0.5 text-right font-mono text-xs tabular-nums text-fg-3"
-                    >
-                      {comment.ledger_seq}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      {tombstone ? (
-                        <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
-                      ) : editing ? (
-                        renderEditor(comment.id)
-                      ) : (
-                        <>
-                          <p
-                            className={cn(
-                              'text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
-                              state === 'resolved' ? 'text-fg-2' : 'text-fg',
-                            )}
-                          >
-                            {renderCommentBody(
-                              comment.body,
-                              handleOf,
-                              searchWords,
-                              firstExternalUrl(comment.body),
-                            )}
-                            {editedMarker !== null ? (
-                              <span className="ml-1.5 text-[11px] text-fg-3">{editedMarker}</span>
-                            ) : null}
-                          </p>
-                          <CommentLinkCard body={comment.body} />
-                          {attachments.length > 0 ? (
-                            <MessageAttachments
-                              attachments={attachments}
-                              cache={presignCache}
-                              presignEnabled={presignEnabled}
-                              onImageClick={(attachment) => {
-                                const nav = commentImageNav(attachments, attachment.assetId);
-                                if (nav.images.length > 0) setLightbox(nav);
-                              }}
-                            />
-                          ) : null}
-                          {copiedId === comment.id ? (
-                            <span role="status" className="mt-1.5 block text-xs text-fg-3">
-                              {copyFailed ? COPY_FAILED : 'Copied'}
-                            </span>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                    {/* T9: Copy is visible on every live point; the kebab holds
-                        only the author-only Edit / Delete. */}
-                    {!editing && actions.canCopy ? (
-                      <div className="shrink-0">
-                        <IconButton
-                          label="Copy text"
-                          className="opacity-70"
-                          onClick={() => void handleCopy(comment)}
-                        >
-                          <IconCopy size={18} />
-                        </IconButton>
-                      </div>
-                    ) : null}
-                    {!editing && pointMenuMode(actions) === 'menu' ? (
-                      <div className="relative shrink-0">
-                        <IconButton
-                          label="Checkpoint actions"
-                          className="opacity-70"
-                          onClick={() =>
-                            setMenuOpenId((current) => (current === comment.id ? null : comment.id))
-                          }
-                        >
-                          <IconMore size={18} />
-                        </IconButton>
-                        <MenuPopover
-                          open={menuOpenId === comment.id}
-                          onClose={() => setMenuOpenId(null)}
-                          align="right"
-                        >
-                          {actions.canEdit ? (
-                            <button
-                              type="button"
-                              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                              onClick={() => {
-                                setMenuOpenId(null);
-                                startEdit(comment);
-                              }}
-                            >
-                              Edit
-                            </button>
-                          ) : null}
-                          {actions.canDelete ? (
-                            <button
-                              type="button"
-                              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                              onClick={() => {
-                                setMenuOpenId(null);
-                                handleDelete(comment.id);
-                              }}
-                            >
-                              Delete
-                            </button>
-                          ) : null}
-                        </MenuPopover>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* Meta row: timestamp, Reply, flexible spacer, Confirm, the
-                      checkbox and its word. One row, aligned to the text column. */}
-                  <div className="mt-2 flex items-center gap-2 pl-7">
-                    <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-fg-3">
-                      {formatAgo(comment.created_at, new Date())}
-                    </span>
-                    {!tombstone ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="min-h-[44px] min-w-[44px]"
-                        data-induction={
-                          comment.id === guideReplyCommentId
-                            ? INDUCTION_KEYS.postCommentReply
-                            : undefined
-                        }
-                        onClick={() => onReplyButton(comment)}
-                      >
-                        {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
-                      </Button>
-                    ) : null}
-                    {confirmable ? (
-                      // The approver's one-tap Confirm on a creator-resolved
-                      // checkpoint: one 44px target beside the ticked box. Hidden
-                      // once confirmed; the box word stays "Resolved" either way.
-                      <button
-                        type="button"
-                        aria-label={`Confirm checkpoint ${seq}`}
-                        data-checkpoint-confirm=""
-                        onClick={() => handleConfirm(comment)}
-                        // axis: background-color on hover only.
-                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-2 text-sm font-medium text-good transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                      >
-                        Confirm
-                      </button>
-                    ) : null}
-                    {tombstone ? null : live ? (
-                      // The checkbox: one tap ticks it and resolves the checkpoint.
-                      // No box, note or confirm opens; Undo lives in the strip.
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={false}
-                        aria-label={`Resolve checkpoint ${seq}`}
-                        data-checkpoint-box=""
-                        onClick={() => handleOneTapResolve(comment)}
-                        // axis: background-color on hover only; the tick motion
-                        // (opacity + translateY) lives inside checkpointBox.
-                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md px-1.5 text-sm font-medium text-fg-2 transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                      >
-                        {checkpointBox(false, false)}
-                        <span>{boxLabel}</span>
-                      </button>
-                    ) : (
-                      <span
-                        data-checkpoint-box=""
-                        className={cn(
-                          'flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-1.5 text-sm font-medium',
-                          confirmable ? '' : 'ml-auto',
-                          state === 'resolved' ? 'text-good' : 'text-fg-3',
-                        )}
-                      >
-                        {checkpointBox(state === 'resolved', filled)}
-                        <span>{boxLabel}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {rowError !== null && rowError.id === comment.id ? (
-                    <div
-                      role="alert"
-                      className="ml-7 mt-2 rounded-md border border-bad px-3 py-2 text-sm text-bad"
-                    >
-                      {rowError.message}
-                    </div>
-                  ) : null}
-
-                  <div className="pl-7">
-                    {renderReplyList(replies, (reply) =>
-                      renderCommentCard(
-                        reply,
-                        true,
-                        tombstone ? undefined : () => onReplyToReply(comment, reply),
-                      ),
-                    )}
-                    {!tombstone && replyOpen.has(comment.id) ? renderReplyComposer(comment) : null}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
+          {group.threads.map(({ comment, replies, tombstone }, index) => (
+            <li
+              key={comment.id}
+              id={commentDomId(comment.id)}
+              className={cn(index > 0 ? 'mt-3 border-t border-border pt-3' : '')}
+            >
+              {tombstone
+                ? renderTombstone(comment, replies)
+                : renderRow(comment, {
+                    reply: false,
+                    seq: comment.ledger_seq,
+                    menuLabel: 'Checkpoint actions',
+                    // Author-only edit/delete, hidden once the point is frozen
+                    // (confirmed or locked); Copy stays on every live point. The
+                    // proc re-checks auth.uid().
+                    actions: pointActions(comment, currentUserId, false),
+                    muted: checkpointState(comment) === 'resolved',
+                    leading: checkpointLeading(comment, false),
+                    replyButton: rootReplyButton(comment),
+                    below: renderThreadBelow(comment, replies, false, true),
+                  })}
+            </li>
+          ))}
         </ol>
       </li>
     );
@@ -2278,12 +2219,7 @@ export function Comments({
     <div className="flex flex-col gap-4">
       {showHeader ? (
         <div data-comments-header="" className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-fg">Comments</h3>
-          {!loading && !loadError && openCount + resolvedCount > 0 ? (
-            <span data-open-count="" className="text-xs tabular-nums text-fg-3">
-              {commentCountsText({ open: openCount, resolved: resolvedCount })}
-            </span>
-          ) : null}
+          <h3 className="text-sm font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>
           <div role="group" aria-label="Show comments" className="ml-auto flex items-center">
             {filterButton('open', 'Open')}
             {filterButton('all', 'All')}
@@ -2315,12 +2251,18 @@ export function Comments({
       ) : loadError ? (
         <LoadError title="comments" onRetry={() => void loadPage(0)} />
       ) : threads.length === 0 ? (
-        <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
-          No comments yet
+        <div
+          data-comments-empty=""
+          className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3"
+        >
+          {emptyListText(entityType, 'all')}
         </div>
       ) : groups.length === 0 ? (
-        <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
-          No open comments
+        <div
+          data-comments-empty=""
+          className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3"
+        >
+          {emptyListText(entityType, 'open')}
         </div>
       ) : (
         <ul className="flex flex-col gap-3">

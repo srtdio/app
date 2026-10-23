@@ -6,7 +6,8 @@ import type { CommentRow, CommentResult } from '@srtdio/comments';
 import type { ToastOptions } from '@/components/ui/toast/types';
 
 // Regression for fixes 32 and 42 on the post comments panel:
-// 32: one word for done ("Resolved"); the header reads "{n} open · {m} resolved";
+// 32: one word for done ("Resolved"); the header carries no count (the chips
+//     row's "{n} of {m} resolved" is the only counter; the panel lifts counts);
 //     no "settled" / "Confirmed" / "Your turn" / "With approvers" anywhere.
 // 42: Resolve is ONE tap (no textarea, note, sheet or dialog); the row flips at
 //     once, the bottom strip says "Resolved" with Undo for 4 seconds, and Undo
@@ -133,6 +134,10 @@ async function settle(): Promise<void> {
 }
 
 async function mount(onCountsChange?: (c: CommentCounts) => void): Promise<void> {
+  const record = (c: CommentCounts): void => {
+    lastCounts = c;
+    onCountsChange?.(c);
+  };
   act(() => {
     root?.render(
       <Comments
@@ -141,7 +146,7 @@ async function mount(onCountsChange?: (c: CommentCounts) => void): Promise<void>
         entityId="post-1"
         viewerIsClient={false}
         showHeader
-        {...(onCountsChange !== undefined ? { onCountsChange } : {})}
+        onCountsChange={record}
       />,
     );
   });
@@ -158,8 +163,10 @@ function buttonByAria(label: string): HTMLButtonElement | undefined {
     (b) => b.getAttribute('aria-label') === label,
   );
 }
-function headerCount(): string {
-  return host?.querySelector('[data-open-count]')?.textContent ?? '';
+/** The last counts the panel lifted to the page (the header shows none). */
+let lastCounts: CommentCounts | null = null;
+function lifted(): CommentCounts | null {
+  return lastCounts;
 }
 function expectNoExtraStates(): void {
   const text = host?.textContent ?? '';
@@ -175,6 +182,7 @@ function expectNoNoteStep(): void {
 }
 
 beforeEach(() => {
+  lastCounts = null;
   pageRows.current = [];
   checkpointRows.current = [];
   toasts.length = 0;
@@ -195,7 +203,7 @@ afterEach(() => {
 });
 
 describe('fix 32: one word for done, one count', () => {
-  it('reads "{n} open · {m} resolved" and shows only Open / Resolved states', async () => {
+  it('lifts "{n} open / {m} resolved", shows no header count, and only Open / Resolved states', async () => {
     const accepted = '2026-02-02T00:00:00.000Z';
     pageRows.current = [
       row('c-open', 'open body'),
@@ -214,9 +222,12 @@ describe('fix 32: one word for done, one count', () => {
     const counts = vi.fn();
     await mount(counts);
 
-    expect(headerCount()).toBe('2 open · 2 resolved');
+    expect(lifted()).toEqual({ open: 2, resolved: 2 });
     expect(counts).toHaveBeenLastCalledWith({ open: 2, resolved: 2 });
     expectNoExtraStates();
+    // The section header is "Checkpoints" with no count; the chips row owns it.
+    expect(host?.querySelector('[data-open-count]')).toBeNull();
+    expect(host?.querySelector('[data-comments-header]')?.textContent).not.toMatch(/resolved/);
     const text = host?.textContent ?? '';
     expect(text).toContain('Open');
     expect(text).toContain('Resolved');
@@ -228,13 +239,13 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
     pageRows.current = [row('c-1', 'needs a fix')];
     const counts = vi.fn();
     await mount(counts);
-    expect(headerCount()).toBe('1 open · 0 resolved');
+    expect(lifted()).toEqual({ open: 1, resolved: 0 });
 
     act(() => buttonByText('Resolve')?.click());
 
     // Instant (optimistic) and no extra step of any kind.
     expectNoNoteStep();
-    expect(headerCount()).toBe('0 open · 1 resolved');
+    expect(lifted()).toEqual({ open: 0, resolved: 1 });
     expect(counts).toHaveBeenLastCalledWith({ open: 0, resolved: 1 });
     expect(resolveSpy).toHaveBeenCalledTimes(1);
     expect(resolveSpy.mock.calls[0]?.[1]).toEqual({ commentId: 'c-1', resolved: true });
@@ -254,7 +265,7 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
 
     expect(resolveSpy).toHaveBeenCalledTimes(2);
     expect(resolveSpy.mock.calls[1]?.[1]).toEqual({ commentId: 'c-1', resolved: false });
-    expect(headerCount()).toBe('1 open · 0 resolved');
+    expect(lifted()).toEqual({ open: 1, resolved: 0 });
   });
 
   it('resolves a checkpoint in one tap through comment_resolve with no note; Undo unresolves', async () => {
@@ -263,12 +274,12 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
 
     const tap = buttonByAria('Resolve checkpoint 1');
     expect(tap).toBeDefined();
-    expect(tap?.textContent).toContain('Resolve');
+    expect(tap?.textContent).toBe('Resolved');
     act(() => tap?.click());
 
     expectNoNoteStep();
     expect(buttonByAria('Resolve checkpoint 1')).toBeUndefined();
-    expect(headerCount()).toBe('0 open · 1 resolved');
+    expect(lifted()).toEqual({ open: 0, resolved: 1 });
     expect(rpcSpy).toHaveBeenCalledTimes(1);
     const args = rpcSpy.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(args).toEqual({ p_comment_id: 'p-1', p_resolved: true, p_trace_id: 'trace-1' });
@@ -298,7 +309,7 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
     act(() => buttonByText('Resolve')?.click());
     await settle();
 
-    expect(headerCount()).toBe('1 open · 0 resolved');
+    expect(lifted()).toEqual({ open: 1, resolved: 0 });
     expect(dismissSpy).toHaveBeenCalledWith('toast-1');
     const alerts = Array.from(host?.querySelectorAll('[role="alert"]') ?? []);
     expect(alerts.map((a) => a.textContent)).toEqual([RESOLVE_FAILED_COPY]);

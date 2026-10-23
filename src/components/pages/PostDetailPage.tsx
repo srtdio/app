@@ -16,7 +16,11 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
-import { Comments, runCreateCommentBatch } from '@/components/comments/Comments';
+import {
+  Comments,
+  openCheckpointsLabel,
+  runCreateCommentBatch,
+} from '@/components/comments/Comments';
 import type { CommentCounts } from '@/components/comments/Comments';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { dispatchInductionDid, dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
@@ -265,7 +269,7 @@ export const COMMENTS_SECTION_ID = 'post-comments';
 
 /** Flow B 29: the pill under the title, "1 open checkpoint" / "{n} open checkpoints". */
 export function openCommentsLabel(count: number): string {
-  return `${count} open ${count === 1 ? 'checkpoint' : 'checkpoints'}`;
+  return openCheckpointsLabel(count);
 }
 
 /**

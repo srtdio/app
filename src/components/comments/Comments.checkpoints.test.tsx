@@ -328,3 +328,94 @@ describe('replies inside a checkpoint', () => {
     expect(String(args['p_body'])).toContain(`@[${OTHER}]`);
   });
 });
+
+describe('one row template for checkpoints and comments', () => {
+  function actionWords(rowId: string): string[] {
+    const actions = rowEl(rowId)?.querySelector('[data-comment-actions]');
+    return Array.from(actions?.children ?? [])
+      .filter((el) => el.tagName === 'BUTTON' || el.hasAttribute('data-checkpoint-box'))
+      .map((el) => el.textContent?.trim() ?? '');
+  }
+
+  it('a checkpoint and a plain comment share the header, body and action row', async () => {
+    checkpointRows.current = [checkpoint('p-1', 2)];
+    pageRows.current = [row('c-1', 'plain note', { created_at: '2026-01-03T00:00:00.000Z' })];
+    await mount(false);
+
+    for (const id of ['p-1', 'c-1']) {
+      const el = rowEl(id);
+      expect(el?.querySelector('[data-comment-row="root"]')).toBeTruthy();
+      expect(el?.querySelector('[data-comment-header] [data-comment-author]')).toBeTruthy();
+      expect(el?.querySelector('[data-comment-header] [data-comment-role]')).toBeTruthy();
+      const time = el?.querySelector('[data-comment-header] [data-comment-time]');
+      expect(time).toBeTruthy();
+      // 12px regular, never monospace.
+      expect(time?.className).toContain('text-xs');
+      expect(time?.className).not.toContain('font-mono');
+      expect(time?.className).not.toContain('text-[11px]');
+      expect(el?.innerHTML ?? '').not.toContain('font-mono');
+      // Every action the same ghost height, 44px targets.
+      for (const control of Array.from(el?.querySelectorAll('[data-comment-actions] > *') ?? [])) {
+        if (control.tagName !== 'BUTTON' && !control.hasAttribute('data-checkpoint-box')) continue;
+        expect(control.className).toContain('h-11');
+        expect(control.className).toContain('min-h-[44px]');
+        expect(control.className).toContain('min-w-[44px]');
+      }
+    }
+    // The checkpoint number sits in the header as "#2", in fg-3.
+    const seq = rowEl('p-1')?.querySelector('[data-comment-header] [data-checkpoint-seq]');
+    expect(seq?.textContent).toBe('#2');
+    expect(seq?.className).toContain('text-fg-3');
+    expect(rowEl('c-1')?.querySelector('[data-checkpoint-seq]')).toBeNull();
+
+    // One left-aligned action row: checkbox + "Resolved" first, then Reply, then Copy.
+    expect(actionWords('p-1')).toEqual(['Resolved', 'Reply', 'Copy']);
+    expect(actionWords('c-1')).toEqual(['Resolve', 'Reply', 'Copy']);
+    // No icon-only Copy floating at the right any more.
+    expect(byAria('Copy text')).toBeUndefined();
+  });
+
+  it('a reply puts its author on its own line, with role and time below', async () => {
+    viewer.id = CLIENT;
+    checkpointRows.current = [checkpoint('p-1', 1)];
+    pageRows.current = [
+      row('r-1', 'on it', {
+        author_user_id: OTHER,
+        parent_comment_id: 'p-1',
+        created_at: '2026-01-02T00:00:00.000Z',
+      }),
+    ];
+    await mount(true);
+
+    const reply = rowEl('r-1')?.querySelector('[data-comment-row="reply"]');
+    expect(reply).toBeTruthy();
+    const author = reply?.querySelector('[data-comment-author]');
+    expect(author).toBeTruthy();
+    expect(author?.className).toContain('block');
+    expect(author?.className).not.toContain('truncate');
+    // Role and time live on the line below, not beside the name.
+    const below = author?.nextElementSibling;
+    expect(below?.querySelector('[data-comment-role]')).toBeTruthy();
+    expect(below?.querySelector('[data-comment-time]')).toBeTruthy();
+    expect(below?.className).toContain('flex-wrap');
+  });
+
+  it('titles the section "Checkpoints" with no header count', async () => {
+    checkpointRows.current = [
+      checkpoint('p-1', 1),
+      checkpoint('p-2', 2, { resolved_at: RESOLVED }),
+    ];
+    await mount(false);
+
+    const header = host?.querySelector('[data-comments-header]');
+    expect(header?.querySelector('h3')?.textContent).toBe('Checkpoints');
+    expect(header?.textContent ?? '').not.toMatch(/\d+ open/);
+    expect(header?.textContent ?? '').not.toContain('resolved');
+    expect(host?.querySelector('[data-open-count]')).toBeNull();
+  });
+
+  it('reads "No checkpoints yet" on an empty post', async () => {
+    await mount(false);
+    expect(host?.querySelector('[data-comments-empty]')?.textContent).toBe('No checkpoints yet');
+  });
+});

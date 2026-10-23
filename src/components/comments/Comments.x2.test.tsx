@@ -12,8 +12,10 @@ vi.mock('agora-chat', () => ({
 
 import {
   annotationChip,
-  commentCountsText,
+  CHECKPOINTS_TITLE,
+  emptyListText,
   filterThreads,
+  openCheckpointsLabel,
   openThreadCount,
   resolvedThreadCount,
   type ThreadRoot,
@@ -101,7 +103,7 @@ describe('Open / All filter (item 2)', () => {
     expect(open[0]?.replies.map((r) => r.id)).toEqual(['r1']);
   });
 
-  it('the header count reads "{n} open · {m} resolved" over live threads', () => {
+  it('the lifted counts are over live threads; the header shows no count', () => {
     expect(openThreadCount(threads)).toBe(2);
     expect(resolvedThreadCount(threads)).toBe(1);
     expect(openThreadCount([thread('done', '2026-01-02T00:00:00.000Z')])).toBe(0);
@@ -109,15 +111,20 @@ describe('Open / All filter (item 2)', () => {
     expect(
       resolvedThreadCount([{ ...thread('gone', '2026-01-02T00:00:00.000Z'), tombstone: true }]),
     ).toBe(0);
-    expect(commentCountsText({ open: 2, resolved: 1 })).toBe('2 open · 1 resolved');
-    expect(SRC).toContain('commentCountsText({ open: openCount, resolved: resolvedCount })');
+    // The header's "{n} open · {m} resolved" is gone: the chips row's
+    // "{n} of {m} resolved" is the section's only counter.
+    expect(SRC).not.toContain('commentCountsText');
+    expect(SRC).not.toContain('data-open-count');
+    expect(SRC).not.toContain(' open · ');
     expect(SRC).toContain("useState<CommentFilter>('all')");
   });
 
   it('the header row is opt-in (posts), so briefs keep their own heading', () => {
     expect(SRC).toContain('showHeader = false');
     expect(SRC).toContain('{showHeader ? (');
-    expect(SRC).toContain('<h3 className="text-sm font-semibold text-fg">Comments</h3>');
+    expect(SRC).toContain('<h3 className="text-sm font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>');
+    expect(CHECKPOINTS_TITLE).toBe('Checkpoints');
+    expect(SRC).not.toContain('>Comments</h3>');
     expect(SRC).toContain("filterButton('open', 'Open')");
     expect(SRC).toContain("filterButton('all', 'All')");
   });
@@ -152,7 +159,7 @@ describe('caption quote inside the comment (item 3)', () => {
   });
 
   it('the quote renders above the body, and the card header carries the role label and time', () => {
-    const quote = SRC.indexOf('{annotationChip(\n              comment.id,');
+    const quote = SRC.indexOf('{annotationChip(');
     const body = SRC.indexOf("{comment.body.trim() !== '' ? (");
     expect(quote).toBeGreaterThan(-1);
     expect(quote).toBeLessThan(body);
@@ -161,11 +168,24 @@ describe('caption quote inside the comment (item 3)', () => {
   });
 });
 
+describe('section title, empty states and the top pill', () => {
+  it('posts read in checkpoints; briefs keep comments', () => {
+    expect(emptyListText('post', 'all')).toBe('No checkpoints yet');
+    expect(emptyListText('post', 'open')).toBe('No open checkpoints');
+    expect(emptyListText('brief', 'all')).toBe('No comments yet');
+    expect(emptyListText('brief', 'open')).toBe('No open comments');
+  });
+
+  it('the top pill reads "{n} open checkpoints", singular at one', () => {
+    expect(openCheckpointsLabel(8)).toBe('8 open checkpoints');
+    expect(openCheckpointsLabel(1)).toBe('1 open checkpoint');
+  });
+});
+
 describe('action row and composer (items 3, 4)', () => {
-  it('Reply, Resolve/Reopen and Copy are visible on every thread; the kebab holds only Edit / Delete', () => {
-    expect(SRC).toContain('{!tombstone ? copyControl(comment) : null}');
+  it('Resolve/Reopen, Reply and Copy are visible on every thread; the kebab holds only Edit / Delete', () => {
+    expect(SRC).toContain('{opts.actions.canCopy ? copyControl(comment) : null}');
     expect(SRC).toContain("{isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}");
-    expect(SRC).toContain('{isReply && actions.canCopy ? (');
     expect(SRC).toContain("{copyFailed ? COPY_FAILED : 'Copied'}");
     expect(SRC).not.toContain("'Comment copied'");
     // No Copy row inside the popover any more.
