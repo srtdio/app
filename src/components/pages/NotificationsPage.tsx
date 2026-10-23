@@ -60,7 +60,9 @@ import {
   UPCOMING_EMPTY,
   markAllTargets,
   markAllEntriesRead,
+  markChipRead,
   markEntryRead,
+  marksChipOnServer,
   marksWholeInbox,
   mergeFresh,
   msUntilZonedMidnight,
@@ -562,14 +564,36 @@ export function NotificationsPage() {
   // The active chip only: mark its unread rows (no snooze, or one that has run
   // out) read at once and write immediately; no Undo and no confirmation toast.
   // All and Unread are ONE call to inbox_mark_all_read (every unread row of
-  // every type, run-out snoozes and failed sends included); any other chip
-  // marks its loaded rows one by one and, on a partial failure, reverts only
-  // the rows whose save failed. Then the Mentions count and the nav badge
-  // refetch. Upcoming has no targets.
+  // every type, run-out snoozes and failed sends included). Mentions, Briefs
+  // and Plans mark every matching row on the server, loaded or not, 500 ids
+  // per inbox_mark_read_ids call (markChipRead); a failure part way reloads
+  // the list, so only the rows that did not save show unread again. Then the
+  // Mentions count and the nav badge refetch. Upcoming has no targets.
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
     const targets = markAllTargets(items, state, nowMs);
     if (targets.length === 0) return;
+    if (marksChipOnServer(state)) {
+      const ids = new Set(targets.map((item) => item.id));
+      const stamp = new Date().toISOString();
+      setItems((prev) =>
+        prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)),
+      );
+      const traceId = newTrace();
+      void markChipRead(supabase, { workspaceId, state, traceId }).then((result) => {
+        if (!result.ok) {
+          logger.warn('notifications: chip mark read failed', {
+            trace_id: traceId,
+            error: result.error.message,
+          });
+          toast?.show({ title: MARK_READ_FAILED });
+          void loadActivity();
+        }
+        void loadMentionCount();
+        window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+      });
+      return;
+    }
     if (!marksWholeInbox(state)) {
       markEntriesRead(targets);
       return;
@@ -599,6 +623,7 @@ export function NotificationsPage() {
     newTrace,
     toast,
     loadMentionCount,
+    loadActivity,
     markEntriesRead,
     revertRead,
   ]);

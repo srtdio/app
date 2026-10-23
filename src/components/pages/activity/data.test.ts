@@ -30,8 +30,11 @@ import {
   isSnoozed,
   isWelcome,
   keysetFilter,
+  MARK_READ_BATCH,
   mapEntry,
   markAllTargets,
+  markChipRead,
+  marksChipOnServer,
   marksWholeInbox,
   mergeFresh,
   msUntilZonedMidnight,
@@ -2323,5 +2326,99 @@ describe('notifications fixes: pure helpers', () => {
       expect(fileKindLabel({ filename: 'notes.txt', mimeType: 'text/plain' })).toBe('FILE');
       expect(fileKindLabel({ filename: 'README', mimeType: null })).toBe('FILE');
     });
+  });
+});
+
+describe('fix 23: chip Mark all read covers every matching row, not just the loaded ones', () => {
+  type FakeClient = Parameters<typeof markChipRead>[0];
+  type QueryResult = { data: { id: string }[] | null; error: { message: string } | null };
+
+  interface Recorded {
+    reads: { method: string; args: unknown[] }[][];
+    rpcs: { fn: string; args: unknown }[];
+  }
+
+  // Each inbox read returns the next page; every rpc call succeeds unless rpcError is set.
+  function fakeClient(pages: string[][], rpcError: string | null = null) {
+    const recorded: Recorded = { reads: [], rpcs: [] };
+    let page = 0;
+    const client = {
+      from() {
+        const calls: { method: string; args: unknown[] }[] = [];
+        recorded.reads.push(calls);
+        const ids = pages[page] ?? [];
+        page += 1;
+        const result: QueryResult = { data: ids.map((id) => ({ id })), error: null };
+        const self: Record<string, unknown> = {};
+        for (const method of ['select', 'eq', 'is', 'or', 'in', 'gt', 'order', 'limit']) {
+          self[method] = (...args: unknown[]) => {
+            calls.push({ method, args });
+            return self;
+          };
+        }
+        self.then = (onfulfilled: (v: QueryResult) => unknown) =>
+          Promise.resolve(result).then(onfulfilled);
+        return self;
+      },
+      rpc(fn: string, args: unknown) {
+        recorded.rpcs.push({ fn, args });
+        return Promise.resolve({
+          data: null,
+          error: rpcError === null ? null : { message: rpcError },
+        });
+      },
+    };
+    return { client: client as unknown as FakeClient, recorded };
+  }
+
+  const fullPage = (prefix: string): string[] =>
+    Array.from({ length: MARK_READ_BATCH }, (_, i) => `${prefix}${String(i).padStart(4, '0')}`);
+
+  it('pages ids 500 at a time and marks each batch with one inbox_mark_read_ids call', async () => {
+    const first = fullPage('a');
+    const { client, recorded } = fakeClient([first, ['b1', 'b2']]);
+    const res = await markChipRead(client, { workspaceId: 'w1', state: 'mentions', traceId: 't1' });
+    expect(res).toEqual({ ok: true, data: MARK_READ_BATCH + 2 });
+    expect(recorded.rpcs).toEqual([
+      { fn: 'inbox_mark_read_ids', args: { p_workspace_id: 'w1', p_ids: first, p_trace_id: 't1' } },
+      {
+        fn: 'inbox_mark_read_ids',
+        args: { p_workspace_id: 'w1', p_ids: ['b1', 'b2'], p_trace_id: 't1' },
+      },
+    ]);
+    // One read per batch: unread, not deleted, not snoozed (or run out), the chip, keyset by id.
+    expect(recorded.reads).toHaveLength(2);
+    const second = recorded.reads[1] ?? [];
+    expect(second).toContainEqual({ method: 'eq', args: ['event_type', 'mention'] });
+    expect(second).toContainEqual({ method: 'is', args: ['read_at', null] });
+    expect(second).toContainEqual({ method: 'gt', args: ['id', first[first.length - 1]] });
+    expect(second).toContainEqual({ method: 'limit', args: [MARK_READ_BATCH] });
+    expect(
+      second.some((c) => c.method === 'or' && String(c.args[0]).includes('snoozed_until.lte.')),
+    ).toBe(true);
+  });
+
+  it('filters Briefs by scope and stops at an empty page with no rpc call', async () => {
+    const { client, recorded } = fakeClient([[]]);
+    const res = await markChipRead(client, { workspaceId: 'w1', state: 'briefs', traceId: 't1' });
+    expect(res).toEqual({ ok: true, data: 0 });
+    expect(recorded.rpcs).toHaveLength(0);
+    expect(recorded.reads[0]).toContainEqual({ method: 'eq', args: ['scope', 'briefs'] });
+  });
+
+  it('stops at the first failed batch and reports it', async () => {
+    const { client, recorded } = fakeClient([fullPage('a'), ['b1']], 'boom');
+    const res = await markChipRead(client, { workspaceId: 'w1', state: 'plans', traceId: 't1' });
+    expect(res.ok).toBe(false);
+    expect(recorded.rpcs).toHaveLength(1);
+  });
+
+  it('only Mentions, Briefs and Plans page through the server', () => {
+    expect(marksChipOnServer('mentions')).toBe(true);
+    expect(marksChipOnServer('briefs')).toBe(true);
+    expect(marksChipOnServer('plans')).toBe(true);
+    expect(marksChipOnServer('all')).toBe(false);
+    expect(marksChipOnServer('unread')).toBe(false);
+    expect(marksChipOnServer('snoozed')).toBe(false);
   });
 });

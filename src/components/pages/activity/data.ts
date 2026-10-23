@@ -2095,6 +2095,65 @@ export function markAllEntriesRead(
   return inboxMarkAllRead(client, { p_workspace_id: workspaceId, p_trace_id: traceId });
 }
 
+/** The most ids one inbox_mark_read_ids call takes (the proc rejects more). */
+export const MARK_READ_BATCH = 500;
+
+/** A chip whose Mark all read covers every matching row on the server, loaded or not. */
+export type ChipMarkState = 'mentions' | 'briefs' | 'plans';
+
+/** Whether a chip's Mark all read pages through the server (Mentions, Briefs, Plans). Pure. */
+export function marksChipOnServer(state: ActivityState): state is ChipMarkState {
+  return state === 'mentions' || state === 'briefs' || state === 'plans';
+}
+
+/**
+ * Mark every unread row a chip matches read, loaded or not: unread, not deleted,
+ * and not snoozed (or a snooze that has run out). Reads the matching ids 500 at
+ * a time by id (one read per batch) and marks each batch with one
+ * inbox_mark_read_ids call carrying the explicit trace id. Stops at the first
+ * failure; the batches before it stay saved. Resolves to how many ids it sent.
+ */
+export async function markChipRead(
+  client: Client,
+  input: { workspaceId: string; state: ChipMarkState; traceId: string },
+): Promise<Result<number>> {
+  const nowIso = new Date().toISOString();
+  let after: string | null = null;
+  let sent = 0;
+  for (;;) {
+    const base = client
+      .from('inbox_entries')
+      .select('id')
+      .eq('workspace_id', input.workspaceId)
+      .is('read_at', null)
+      .is('deleted_at', null)
+      .or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`);
+    const typed =
+      input.state === 'mentions'
+        ? base.eq('event_type', MENTION_EVENT_TYPE)
+        : input.state === 'briefs'
+          ? base.eq('scope', BRIEFS_SCOPE)
+          : base.in('event_type', [...BELL_PLAN_EVENT_TYPES]);
+    const page = after !== null ? typed.gt('id', after) : typed;
+    const res = await page.order('id', { ascending: true }).limit(MARK_READ_BATCH);
+    if (res.error) return { ok: false, error: { code: 'unknown', message: res.error.message } };
+    const ids = (res.data ?? []).map((row) => row.id);
+    if (ids.length === 0) return { ok: true, data: sent };
+    const args: Database['public']['Functions']['inbox_mark_read_ids']['Args'] = {
+      p_workspace_id: input.workspaceId,
+      p_ids: ids,
+      p_trace_id: input.traceId,
+    };
+    const marked = await client.rpc('inbox_mark_read_ids', args);
+    if (marked.error) {
+      return { ok: false, error: { code: 'unknown', message: marked.error.message } };
+    }
+    sent += ids.length;
+    if (ids.length < MARK_READ_BATCH) return { ok: true, data: sent };
+    after = ids[ids.length - 1] ?? null;
+  }
+}
+
 /** Set or clear snoozed_until on one entry. */
 export function snoozeEntry(
   client: Client,
