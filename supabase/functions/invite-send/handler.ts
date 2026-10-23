@@ -7,13 +7,16 @@
 // the CALLER (anon key + caller bearer) so auth.uid() is the inviter. Running
 // member_invite on the service role would leave auth.uid() null and fail.
 // member_invite_check runs before any of that, as the same caller, so a
-// refused invite creates nothing.
+// refused invite creates nothing. The email checks (throwaway domain, mail
+// records) run before member_invite_check, so they create nothing either.
 
 import type { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { checkMailDomain, type MailDomainResult } from './mail-domain.ts';
 
 const TRACE_ID_HEADER = 'X-Trace-Id';
 const INVITE_TEMPLATE_KEY = 'member_invite';
+const MAIL_DNS_TIMEOUT_MS = 2500;
 
 function hasValidEmailDomain(email: string): boolean {
   const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
@@ -45,6 +48,16 @@ const inputSchema = z.object({
 export interface InviteSendDeps {
   env: (name: string) => string | undefined;
   createClient: typeof createClient;
+  /** True for a throwaway address: index.ts binds mailchecker (npm, MIT). */
+  isDisposableEmail: (email: string) => boolean;
+  /** Mail-record lookup; defaults to checkMailDomain over DoH (tests inject a stub). */
+  checkMailDomain?: (domain: string) => Promise<MailDomainResult>;
+}
+
+// Our own domains (and the test site's quick-tester addresses on them) may have
+// no mail records, so they never go through the DNS lookup.
+function skipsMailLookup(domain: string): boolean {
+  return domain.endsWith('srtd.io');
 }
 
 // Time-ordered UUID v7, generated inline (no dependency).
@@ -306,7 +319,6 @@ function mapInviteErrorStatus(message: string): number {
   if (message === 'workspace_member_only') return 403;
   if (message === 'forbidden_role') return 403;
   if (message === 'invalid_payload') return 400;
-  if (message === 'free_mail_client') return 400;
   if (message === 'client_domain_mismatch') return 409;
   return 500;
 }
@@ -383,6 +395,34 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
       );
     }
 
+    // Email legitimacy, before member_invite_check and any provisioning, so a
+    // refused address creates nothing. A failed lookup ('unknown') never blocks
+    // a real person: it is logged and the invite goes on.
+    if (deps.isDisposableEmail(email)) {
+      return json({ error: 'disposable_email', trace_id: traceId }, 400, allowedOrigin, traceId);
+    }
+    const domain = email.slice(email.lastIndexOf('@') + 1);
+    if (!skipsMailLookup(domain)) {
+      const lookupMailDomain =
+        deps.checkMailDomain ??
+        ((name: string) =>
+          checkMailDomain(name, {
+            fetch: globalThis.fetch,
+            timeoutMs: MAIL_DNS_TIMEOUT_MS,
+            dnsUrl: deps.env('MAIL_DNS_URL') || undefined,
+          }));
+      const mail = await lookupMailDomain(domain);
+      if (mail === 'no_mail') {
+        return json(
+          { error: 'email_domain_unreachable', trace_id: traceId },
+          400,
+          allowedOrigin,
+          traceId,
+        );
+      }
+      if (mail === 'unknown') console.warn(traceId, 'mail_domain_lookup_unknown', domain);
+    }
+
     // The membership read and the rule check are both read-only: run together.
     const checkArgs = { p_workspace_id: workspace_id, p_email: email, p_role: role };
     const [inviterMembership, checked] = await Promise.all([
@@ -420,7 +460,7 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
 
     // Pre-flight the invite rules as the CALLER, BEFORE any auth user is resolved
     // or created: member_invite_check writes nothing and raises the same codes as
-    // member_invite (free_mail_client, client_domain_mismatch, ...), so a refused
+    // member_invite (client_domain_mismatch, ...), so a refused
     // invite never leaves a provisioned auth user behind.
     if (checked.error) {
       console.error(traceId, checked.error.message);
