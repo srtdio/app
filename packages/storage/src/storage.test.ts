@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BUCKET_LOCATION_HINT,
   buildR2Key,
   buildThumbnailKey,
+  createBucketBody,
   InMemoryMultipartStorage,
   parseListObjectsXml,
   R2StorageClient,
@@ -245,5 +247,97 @@ describe('R2StorageClient listObjects / deleteBucket', () => {
       url: 'https://acct.r2.cloudflarestorage.com/assets-a',
       method: 'DELETE',
     });
+  });
+});
+
+describe('R2StorageClient ensureBucket (Asia-Pacific hint) / copyObject', () => {
+  const env = {
+    CLOUDFLARE_ACCOUNT_ID: 'acct',
+    CLOUDFLARE_R2_ACCESS_KEY_ID: 'key',
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
+  };
+
+  interface Call {
+    url: string;
+    method: string;
+    headers: Headers;
+    body: string;
+  }
+
+  function client(responses: Response[]): { r2: R2StorageClient; calls: Call[] } {
+    const calls: Call[] = [];
+    const fake: TracedFetch = (input, init) => {
+      const raw = init?.body;
+      calls.push({
+        url: String(input),
+        method: init?.method ?? 'GET',
+        headers: new Headers(init?.headers),
+        body: raw instanceof Uint8Array ? new TextDecoder().decode(raw) : '',
+      });
+      const next = responses.shift();
+      return next === undefined ? Promise.reject(new Error('no response')) : Promise.resolve(next);
+    };
+    return { r2: new R2StorageClient(env, fake), calls };
+  }
+
+  it('creates a new bucket with the apac location hint', async () => {
+    const { r2, calls } = client([new Response(null, { status: 200 })]);
+    await r2.ensureBucket('assets-new', 't');
+    expect(BUCKET_LOCATION_HINT).toBe('apac');
+    expect(calls[0]?.method).toBe('PUT');
+    expect(calls[0]?.url).toBe('https://acct.r2.cloudflarestorage.com/assets-new');
+    expect(calls[0]?.body).toBe(createBucketBody('apac'));
+    expect(calls[0]?.body).toContain('<LocationConstraint>apac</LocationConstraint>');
+  });
+
+  it('treats an already-owned bucket as created, without a second call', async () => {
+    const { r2, calls } = client([
+      new Response('<Error><Code>BucketAlreadyOwnedByYou</Code></Error>', { status: 409 }),
+    ]);
+    await r2.ensureBucket('assets-gbl', 't');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('accepts an existing bucket that rejects the hint (HEAD finds it), fails when it is missing', async () => {
+    const { r2, calls } = client([
+      new Response('<Error><Code>InvalidLocationConstraint</Code></Error>', { status: 400 }),
+      new Response(null, { status: 200 }),
+      new Response('<Error><Code>InternalError</Code></Error>', { status: 500 }),
+      new Response(null, { status: 404 }),
+    ]);
+    await r2.ensureBucket('assets-old', 't');
+    expect(calls[1]?.method).toBe('HEAD');
+    await expect(r2.ensureBucket('assets-x', 't')).rejects.toThrow('(500)');
+  });
+
+  it('copies an object server-side with a signed x-amz-copy-source and never deletes', async () => {
+    const { r2, calls } = client([
+      new Response('<CopyObjectResult><ETag>"e"</ETag></CopyObjectResult>', { status: 200 }),
+    ]);
+    await r2.copyObject({
+      sourceBucket: 'assets-gbl',
+      targetBucket: 'assets-gbl-apac',
+      key: 'images/a b/v1-x.jpg',
+      traceId: 't',
+    });
+    expect(calls[0]?.method).toBe('PUT');
+    expect(calls[0]?.url).toBe(
+      'https://acct.r2.cloudflarestorage.com/assets-gbl-apac/images/a%20b/v1-x.jpg',
+    );
+    expect(calls[0]?.headers.get('x-amz-copy-source')).toBe('/assets-gbl/images/a%20b/v1-x.jpg');
+    expect(calls[0]?.headers.get('Authorization')).toContain(
+      'SignedHeaders=host;x-amz-content-sha256;x-amz-copy-source;x-amz-date',
+    );
+    expect(calls.every((call) => call.method !== 'DELETE')).toBe(true);
+  });
+
+  it('fails a copy on an error status or a 200 carrying an <Error> body', async () => {
+    const { r2 } = client([
+      new Response('denied', { status: 403 }),
+      new Response('<Error><Code>InternalError</Code></Error>', { status: 200 }),
+    ]);
+    const input = { sourceBucket: 's', targetBucket: 'assets-t', key: 'k', traceId: 't' };
+    await expect(r2.copyObject(input)).rejects.toThrow('(403)');
+    await expect(r2.copyObject(input)).rejects.toThrow('InternalError');
   });
 });

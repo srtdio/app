@@ -1,0 +1,56 @@
+name: Copy workspace storage
+
+# Started by hand only (Actions -> Copy workspace storage -> Run workflow).
+# copy:   creates the target bucket in Asia-Pacific and copies every object of
+#         the source bucket into it, server-side. Re-running copies only what is
+#         new. Never deletes, never overwrites a differing object.
+# verify: compares source and target object by object (key and size) and fails
+#         the run on any mismatch.
+# Neither mode touches the database; pointing a workspace at the new bucket is a
+# separate owner-approved SQL step.
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Source bucket (e.g. assets-gbl)
+        required: true
+        type: string
+      target:
+        description: Target bucket, must start with assets- (e.g. assets-gbl-apac)
+        required: true
+        type: string
+      mode:
+        description: copy or verify
+        required: true
+        type: choice
+        options:
+          - copy
+          - verify
+
+concurrency:
+  group: copy-workspace-storage-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Copy or verify
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          SOURCE: ${{ inputs.source }}
+          TARGET: ${{ inputs.target }}
+          MODE: ${{ inputs.mode }}
+        run: >-
+          node --experimental-transform-types --no-warnings
+          scripts/copy-workspace-storage.ts
+          --source "$SOURCE" --target "$TARGET" --mode "$MODE"

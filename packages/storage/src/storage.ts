@@ -117,6 +117,22 @@ export interface BucketStorage {
   deleteBucket(bucket: string, traceId: string): Promise<void>;
 }
 
+/**
+ * R2 location hint for new buckets: Asia-Pacific (developers.cloudflare.com
+ * /r2/reference/data-location). Best effort, and honoured only when a bucket is
+ * first created.
+ */
+export const BUCKET_LOCATION_HINT = 'apac';
+
+/** S3 CreateBucket body carrying a location hint. */
+export function createBucketBody(locationHint: string): string {
+  return (
+    '<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">' +
+    `<LocationConstraint>${locationHint}</LocationConstraint>` +
+    '</CreateBucketConfiguration>'
+  );
+}
+
 /** Text of the first <tag>...</tag> in an S3 XML body, or null. */
 function xmlTag(xml: string, tag: string): string | null {
   const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(xml);
@@ -346,13 +362,16 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
   }
 
   async ensureBucket(bucket: string, traceId: string): Promise<void> {
-    // S3 CreateBucket. R2 returns 200 on create and is happy when the bucket is
-    // already owned by us; treat any 2xx and "already owned" as success.
+    // S3 CreateBucket with an Asia-Pacific location hint, so a new workspace's
+    // files are stored close to its (Indian) users. R2 honours a hint only when
+    // the bucket is first created; an existing bucket keeps its location. R2
+    // returns 200 on create and is happy when the bucket is already owned by us;
+    // treat any 2xx and "already owned" as success.
     const res = await this.signedFetch({
       method: 'PUT',
       path: `/${encodeSegment(bucket)}`,
-      body: new Uint8Array(0),
-      contentType: 'application/octet-stream',
+      body: enc.encode(createBucketBody(BUCKET_LOCATION_HINT)),
+      contentType: 'application/xml',
       traceId,
     });
     if (res.ok) {
@@ -362,7 +381,54 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
     if (res.status === 409 || /BucketAlreadyOwnedByYou|BucketAlreadyExists/.test(text)) {
       return;
     }
+    // An existing bucket created elsewhere may answer the hinted create with a
+    // location error; it still exists, so a HEAD settles it.
+    if (await this.bucketExists(bucket, traceId)) {
+      return;
+    }
     throw new Error(`R2 ensureBucket failed (${res.status}): ${text}`);
+  }
+
+  /** True when the bucket exists and is ours (S3 HeadBucket). */
+  private async bucketExists(bucket: string, traceId: string): Promise<boolean> {
+    const res = await this.signedFetch({
+      method: 'HEAD',
+      path: `/${encodeSegment(bucket)}`,
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      traceId,
+    });
+    return res.ok;
+  }
+
+  /**
+   * Server-side copy of one object into another bucket under the same key (S3
+   * CopyObject). Content-Type and other metadata are copied with it. The bytes
+   * never leave R2.
+   */
+  async copyObject(input: {
+    sourceBucket: string;
+    targetBucket: string;
+    key: string;
+    traceId: string;
+  }): Promise<void> {
+    const res = await this.signedFetch({
+      method: 'PUT',
+      path: objectPath(input.targetBucket, input.key),
+      body: new Uint8Array(0),
+      contentType: 'application/octet-stream',
+      amzHeaders: [['x-amz-copy-source', objectPath(input.sourceBucket, input.key)]],
+      traceId: input.traceId,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`R2 copyObject failed (${res.status}): ${text}`);
+    }
+    // A CopyObject can answer 200 with an <Error> body; treat that as a failure.
+    const text = await res.text();
+    if (/<Error>/.test(text)) {
+      throw new Error(`R2 copyObject failed: ${text}`);
+    }
   }
 
   async putObject(input: PutObjectInput): Promise<void> {
@@ -697,15 +763,24 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
     query?: ReadonlyArray<readonly [string, string]>;
     body: Uint8Array;
     contentType: string;
+    /** Extra x-amz-* headers (lowercase names), sent and signed. */
+    amzHeaders?: ReadonlyArray<readonly [string, string]>;
     traceId: string;
   }): Promise<Response> {
     const now = new Date();
     const { full, short } = amzDate(now);
     const payloadHash = await sha256Hex(req.body);
 
-    const canonicalHeaders =
-      `host:${this.host}\n` + `x-amz-content-sha256:${payloadHash}\n` + `x-amz-date:${full}\n`;
-    const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+    const base: Array<readonly [string, string]> = [
+      ['host', this.host],
+      ['x-amz-content-sha256', payloadHash],
+      ['x-amz-date', full],
+    ];
+    const signed = [...base, ...(req.amzHeaders ?? [])].sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    );
+    const canonicalHeaders = signed.map(([name, value]) => `${name}:${value.trim()}\n`).join('');
+    const signedHeaders = signed.map(([name]) => name).join(';');
 
     const canonicalQuery = [...(req.query ?? [])]
       .map(([k, v]) => [encodeSegment(k), encodeSegment(v)] as const)
@@ -738,6 +813,9 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
       'x-amz-date': full,
       'content-type': req.contentType,
     });
+    for (const [name, value] of req.amzHeaders ?? []) {
+      headers.set(name, value);
+    }
 
     // GET/HEAD must not carry a body: Node's fetch rejects them with "Request
     // with GET/HEAD method cannot have body." The SigV4 signature above already

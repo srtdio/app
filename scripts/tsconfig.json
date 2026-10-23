@@ -5,5 +5,9 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["./gen-emoji-data.ts"]
+  "include": [
+    "./gen-emoji-data.ts",
+    "./copy-workspace-storage.ts",
+    "./copy-workspace-storage.test.ts"
+  ]
 }
