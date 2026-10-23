@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Toast } from '@/components/ui/toast/Toast';
+import { UNDO_STRIP_KEYFRAMES, UndoStrip } from '@/components/ui/toast/UndoStrip';
 import type { Toast as ToastModel, ToastApi, ToastOptions } from '@/components/ui/toast/types';
 import { DUR_BASE_MS } from '@/lib/motion';
 
 /** Default auto-dismiss delay when `durationMs` is omitted. */
 export const DEFAULT_DURATION_MS = 5000;
-/** Newest-first cap; older toasts beyond this are dropped on show(). */
+/** Newest-first cap on top cards; older cards beyond this are dropped on show(). */
 export const MAX_VISIBLE = 3;
 /**
  * Exit-animation length; mirrors --dur-base. A dismissed toast is marked
@@ -19,13 +20,11 @@ export const EXIT_MS = DUR_BASE_MS;
 /**
  * Enter/exit keyframes, scoped to this surface (no color, no hex). Durations and
  * easings are applied on the card via motion tokens, not here. Axis: translateY
- * only. Enter glides up from 16px; exit drops to 8px. The countdown bar's fill
- * shrinks linearly (width), skipped under reduced motion.
+ * only. Enter glides up from 16px; exit drops to 8px.
  */
 const TOAST_KEYFRAMES =
   '@keyframes sorted-toast-in{from{opacity:0;transform:translateY(1rem)}to{opacity:1;transform:translateY(0)}}' +
-  '@keyframes sorted-toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(0.5rem)}}' +
-  '@keyframes sorted-toast-countdown{from{width:100%}to{width:0}}';
+  '@keyframes sorted-toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(0.5rem)}}';
 
 /** A toast plus its closing-phase flag. Kept local so ToastModel stays minimal. */
 export interface ManagedToast extends ToastModel {
@@ -128,20 +127,35 @@ export function createToastStore(): ToastStore {
       ...(options.onPress !== undefined ? { onPress: options.onPress } : {}),
       ...(options.action !== undefined ? { action: options.action } : {}),
       ...(options.tone !== undefined ? { tone: options.tone } : {}),
+      ...(options.kind !== undefined ? { kind: options.kind } : {}),
       leaving: false,
     };
     const ms = options.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs;
     const timedMs = ms !== null && ms > 0 ? ms : null;
-    if (options.countdown === true && timedMs !== null) toast.countdownMs = timedMs;
     if (options.onExpire !== undefined) expires.set(id, options.onExpire);
 
-    const kept = [toast, ...toasts];
-    const dropped = kept.slice(MAX_VISIBLE);
-    for (const old of dropped) clearTimer(old.id);
-    toasts = kept.slice(0, MAX_VISIBLE);
-    emit();
-    // A toast pushed past the cap can no longer be undone: accept it.
-    for (const old of dropped) runExpire(old.id);
+    // One strip at a time: a new Undo strip accepts the live one (commit now)
+    // and lets it play its exit. Cards keep their newest-first cap, which never
+    // counts the strip.
+    if (toast.kind === 'undo') {
+      for (const old of toasts) {
+        if (old.kind === 'undo' && !old.leaving) {
+          runExpire(old.id);
+          dismiss(old.id);
+        }
+      }
+      toasts = [toast, ...toasts];
+      emit();
+    } else {
+      const cards = [toast, ...toasts.filter((t) => t.kind !== 'undo')];
+      const dropped = cards.slice(MAX_VISIBLE);
+      for (const old of dropped) clearTimer(old.id);
+      const droppedIds = new Set(dropped.map((old) => old.id));
+      toasts = [toast, ...toasts.filter((t) => !droppedIds.has(t.id))];
+      emit();
+      // A toast pushed past the cap can no longer be undone: accept it.
+      for (const old of dropped) runExpire(old.id);
+    }
 
     if (timedMs !== null) {
       timers.set(
@@ -225,30 +239,44 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 /**
- * Fixed toast container. Mobile: top, below the safe-area. Desktop (md+):
- * top-right. Newest on top (the store keeps newest first). Cards glide up on
- * enter and fade down on exit via the keyframes below.
+ * Fixed toast containers. Cards: mobile top, below the safe-area; desktop
+ * (md+) top-right; newest on top (the store keeps newest first); they glide up
+ * on enter and fade down on exit via the keyframes below. Undo strips: the
+ * bottom strip (UndoStrip), one live at a time.
  */
 export function ToastViewport() {
   const ctx = useContext(ToastContext);
   if (ctx === null) return null;
+  const cards = ctx.toasts.filter((toast) => toast.kind !== 'undo');
+  const strips = ctx.toasts.filter((toast) => toast.kind === 'undo');
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:inset-x-auto md:right-4 md:items-end"
-    >
-      <style>{TOAST_KEYFRAMES}</style>
-      {ctx.toasts.map((toast) => (
-        <Toast
+    <>
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:inset-x-auto md:right-4 md:items-end"
+      >
+        <style>{TOAST_KEYFRAMES + UNDO_STRIP_KEYFRAMES}</style>
+        {cards.map((toast) => (
+          <Toast
+            key={toast.id}
+            toast={toast}
+            leaving={toast.leaving}
+            onDismiss={ctx.expire}
+            onAction={ctx.act}
+          />
+        ))}
+      </div>
+      {strips.map((toast) => (
+        <UndoStrip
           key={toast.id}
           toast={toast}
           leaving={toast.leaving}
-          onDismiss={ctx.expire}
+          onAccept={ctx.expire}
           onAction={ctx.act}
         />
       ))}
-    </div>
+    </>
   );
 }
 

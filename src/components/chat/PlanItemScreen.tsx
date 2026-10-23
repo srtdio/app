@@ -15,7 +15,7 @@
 // the viewer's PLAN side, closing writes nothing.
 // The agency side gets a red "Remove from plan" at the bottom (the Remove
 // confirm, then plan_item_remove) and Move to another day: a move that resets
-// nothing waits behind a 4s Undo toast with a countdown (useUndoableAction;
+// nothing waits behind a 4s Undo strip (useUndoableAction;
 // the write goes when the toast ends, never after Undo). Comments: the agency
 // sees all and picks Everyone or Agency only; a client sees Everyone ones
 // (RLS). A comment appends at once and keeps its text on failure. One read
@@ -58,7 +58,6 @@ import { postRoute } from '@/components/chat/post-card';
 import {
   COMMENT_FAILED,
   MOVE_FAILED,
-  PLAN_UNDO_MS,
   REMOVED_TOAST,
   REMOVE_FAILED,
   STATUS_LABELS,
@@ -339,7 +338,7 @@ export function PlanItemScreen(props: {
   const [askingChanges, setAskingChanges] = useState(false);
   const commentRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
-  const undoable = useUndoableAction({ durationMs: PLAN_UNDO_MS });
+  const undoable = useUndoableAction();
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<ConceptForm>(EMPTY_CONCEPT);
   // The concept's files when the sheet opened; null when not read yet.
@@ -647,7 +646,7 @@ export function PlanItemScreen(props: {
     const spec = dayMoveToast(dayHeaderOf(day), item.kind === 'post', !keep && hadTicks);
     setMoveOpen(false);
     if (spec.undo) {
-      // Nothing is reset: the write waits behind the Undo toast (4s, countdown);
+      // Nothing is reset: the write waits behind the Undo toast (4s);
       // Undo means it never goes.
       undoable.run({
         label: spec.title,

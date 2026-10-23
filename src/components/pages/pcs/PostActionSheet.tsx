@@ -74,7 +74,7 @@ interface PostActionSheetProps {
   readPlans?: (postId: string) => Promise<Result<PostPlanRef[]>>;
 }
 
-/** The delete confirm's base copy: honest about the 7s Undo and the recovery surface. */
+/** The delete confirm's base copy: honest about the 4s Undo and the recovery surface. */
 export const DELETE_CONFIRM_BASE = 'Delete this post? Moves to Recently deleted.';
 
 /**

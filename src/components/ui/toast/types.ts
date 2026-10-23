@@ -3,6 +3,9 @@ import type { ReactNode } from 'react';
 /** A toast's tint. */
 export type ToastTone = 'success';
 
+/** A toast's surface. Omitted: the top card. */
+export type ToastKind = 'undo';
+
 /**
  * An optional trailing action on a toast (e.g. Undo): pressing it runs onPress,
  * then dismisses the toast without calling onExpire.
@@ -33,8 +36,11 @@ export interface ToastOptions {
    * past the cap. Never called after the action is pressed.
    */
   onExpire?: () => void;
-  /** Show a 3px bar under the card that empties over durationMs. */
-  countdown?: boolean;
+  /**
+   * 'undo' renders the toast as the bottom Undo strip instead of the top card.
+   * One strip at a time: a newer one accepts (onExpire) the one it replaces.
+   */
+  kind?: ToastKind;
 }
 
 /** A live toast held by the provider. `id` is assigned on show(). */
@@ -46,8 +52,7 @@ export interface Toast {
   onPress?: () => void;
   action?: ToastAction;
   tone?: ToastTone;
-  /** Countdown bar length in ms; set only when countdown is on and the toast auto-dismisses. */
-  countdownMs?: number;
+  kind?: ToastKind;
 }
 
 /** Public surface returned by useToast(). */

@@ -15,7 +15,6 @@ import { planItemMove } from '@srtdio/rpc';
 import { planDayIds, planListGroups, MEMBER_NAME } from '@/components/chat/PlanScreen';
 import {
   MOVE_FAILED,
-  PLAN_UNDO_MS,
   approvedBy,
   dayHeaderOf,
   keepApprovalBody,
@@ -54,7 +53,7 @@ export function usePlanTabMove(input: { timeZone: string; reload: () => Promise<
 } {
   const { timeZone, reload } = input;
   const toast = useToast();
-  const undoable = useUndoableAction({ durationMs: PLAN_UNDO_MS });
+  const undoable = useUndoableAction();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [keepAsk, setKeepAsk] = useState<KeepAsk | null>(null);
   const busy = useRef(new Set<string>());

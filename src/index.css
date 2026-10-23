@@ -78,6 +78,12 @@
   --dur-slow: 200ms;
   --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  /* The bottom Undo strip: a dark bar in both themes, accent Undo. */
+  --strip-bg: #1b1c20;
+  --strip-fg: #ffffff;
+  --strip-action: #838bec;
+  --strip-border: transparent;
+  --strip-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   /* The docked plan panel over the chat (laptop): a shadow on its left edge only. */
   --shadow-panel-left: -12px 0 24px -12px rgba(20, 22, 30, 0.18);
   /* The induction guide's amber: the hairline, the label pill (dark ink on
@@ -91,6 +97,10 @@
 }
 .dark {
   --bg: #0c0d10;
+  --strip-bg: #212329;
+  --strip-fg: #f4f5f6;
+  --strip-action: #838bec;
+  --strip-border: #2f333b;
   --panel: #141519;
   --panel-2: #1a1c21;
   --panel-3: #212329;
