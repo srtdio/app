@@ -46,6 +46,10 @@ export interface ThumbnailProps {
   alt: string;
   /** Optional overlay decoration (e.g. a carousel badge) painted over the tile. */
   children?: ReactNode;
+  /** Lines of body text the 'post' text tile clamps to. Defaults to 4 (Pipeline). */
+  bodyLines?: 3 | 4;
+  /** A caller-drawn tile shown instead of `fallback` when there is no usable image. */
+  fallbackTile?: ReactNode;
 }
 
 const ASPECT: Record<NonNullable<ThumbnailProps['aspect']>, string> = {
@@ -53,8 +57,20 @@ const ASPECT: Record<NonNullable<ThumbnailProps['aspect']>, string> = {
   '4/3': 'aspect-[4/3]',
 };
 
+// Full class strings, so the default (Pipeline's) markup stays exactly as it was.
+const BODY_CLASS: Record<NonNullable<ThumbnailProps['bodyLines']>, string> = {
+  3: 'mt-auto line-clamp-3 text-xs leading-snug text-fg-2',
+  4: 'mt-auto line-clamp-4 text-xs leading-snug text-fg-2',
+};
+
 /** The glyph/label/caption tile shown when there is no usable image preview. */
-function FallbackTile({ fallback }: { fallback: ThumbnailFallback }) {
+function FallbackTile({
+  fallback,
+  bodyLines = 4,
+}: {
+  fallback: ThumbnailFallback;
+  bodyLines?: 3 | 4;
+}) {
   if (fallback.kind === 'post') {
     // A plain tile on the Thumbnail's own bg-panel-3: the format icon and the
     // body snippet, no decorative gradient and no uppercase format label.
@@ -72,7 +88,7 @@ function FallbackTile({ fallback }: { fallback: ThumbnailFallback }) {
       <div className="flex h-full w-full flex-col p-3">
         <span className="text-fg-3">{formatIcon(fallback.glyph, 16)}</span>
         {fallback.body !== null ? (
-          <p className="mt-auto line-clamp-4 text-xs leading-snug text-fg-2">{fallback.body}</p>
+          <p className={BODY_CLASS[bodyLines]}>{fallback.body}</p>
         ) : null}
       </div>
     );
@@ -126,6 +142,8 @@ export function Thumbnail({
   fallback,
   alt,
   children,
+  bodyLines = 4,
+  fallbackTile,
 }: ThumbnailProps) {
   const active = presignEnabled && assetVersionId !== null;
   const versionId = assetVersionId ?? '';
@@ -207,8 +225,10 @@ export function Thumbnail({
             />
           ) : null}
         </>
+      ) : fallbackTile !== undefined ? (
+        fallbackTile
       ) : (
-        <FallbackTile fallback={fallback} />
+        <FallbackTile fallback={fallback} bodyLines={bodyLines} />
       )}
       {children}
     </div>

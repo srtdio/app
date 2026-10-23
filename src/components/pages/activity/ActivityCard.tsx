@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import type { KeyboardEvent, ReactElement } from 'react';
+import { useEffect, useState } from 'react';
+import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { Avatar } from '@/components/ui/Avatar';
+import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
@@ -10,7 +10,10 @@ import type { PresignCache } from '@/lib/asset-presign';
 import {
   IconAlarmClock,
   IconCalendarClock,
+  IconChat,
   IconClock,
+  IconFile,
+  IconFileText,
   IconPlan,
   IconSend,
   IconTaskSquare,
@@ -22,11 +25,16 @@ import {
   PLAN_ITEM_ENTITY,
   UNKNOWN_ACTOR,
   activityLine,
+  actorRowLine,
   alertBody,
   alertTitle,
   alertTopLine,
   cardBodyLine,
   cardTitle,
+  deletedCount,
+  deletedFilesBody,
+  fileKindLabel,
+  filesPhrase,
   isSnoozed,
   relativeTime,
   isChatMention,
@@ -67,6 +75,8 @@ interface ActivityCardProps {
   onRetry?: (item: ActivityItem) => void;
   /** A failed scheduled send's Edit (open its chat; a stale row just clears). */
   onEdit?: (item: ActivityItem) => void;
+  /** A card a live refresh just added: it slides up into place (never sideways). */
+  entering?: boolean;
 }
 
 /**
@@ -173,9 +183,15 @@ function actorLine(item: ActivityItem, who: string | null): string {
   if (isChatMention(item)) return who ?? 'New mention';
   // A deleted post: "<who> deleted" over the post title (no body line).
   if (item.eventType === 'post_deleted') return `${who ?? UNKNOWN_ACTOR} deleted`;
-  // Actor rows (approve, reject, park, review, deletes): the body line says who
-  // did what, so the top line is the actor's name.
-  if (ACTOR_ROW_EVENTS.has(item.eventType)) return who ?? UNKNOWN_ACTOR;
+  // Deleted files: "<who> deleted 3 files" over the first filename.
+  if (item.eventType === 'assets_deleted') {
+    return `${who ?? UNKNOWN_ACTOR} deleted ${filesPhrase(deletedCount(item))}`;
+  }
+  // Actor rows (approve, reject, park, review): the action rides the top line
+  // ("chitraaraj parked") over the post title, and no body line repeats the name.
+  if (ACTOR_ROW_EVENTS.has(item.eventType)) {
+    return actorRowLine({ ...item, actorName: who }, { title: false }) ?? who ?? UNKNOWN_ACTOR;
+  }
   if (isWelcome(item)) return WELCOME_LABEL;
   switch (item.eventType) {
     case 'comment':
@@ -270,6 +286,116 @@ function AlertIcon({ item, alert }: { item: ActivityItem; alert: AlertInfo }): R
   );
 }
 
+/** The square icon tile every iconic card shares: the panel-2 square, the icon in fg-3. */
+function IconTile({ kind, children }: { kind: string; children: ReactNode }): ReactElement {
+  return (
+    <div
+      data-activity-icon-tile={kind}
+      aria-hidden="true"
+      className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The post-style text tile: a small icon and an uppercase eyebrow at the top, the
+ * body (a brief title, a filename) clamped to 3 lines at the bottom. Fills its box;
+ * the caller supplies the square and the panel-3 background.
+ */
+export function TextTile({
+  eyebrow,
+  icon,
+  body,
+}: {
+  eyebrow: string;
+  icon: ReactNode;
+  body: string;
+}): ReactElement {
+  return (
+    <div data-activity-text-tile={eyebrow} className="flex h-full w-full flex-col p-3">
+      <span className="flex items-center gap-1 text-fg-3">
+        {icon}
+        <span className="text-[10px] font-semibold uppercase tracking-wide">{eyebrow}</span>
+      </span>
+      <p className="mt-auto line-clamp-3 text-xs leading-snug text-fg-2 [overflow-wrap:anywhere]">
+        {body}
+      </p>
+    </div>
+  );
+}
+
+/** A brief card's tile: the text tile with the BRIEF eyebrow over the brief title. */
+function BriefTile({ title }: { title: string }): ReactElement {
+  return (
+    <div className="aspect-square w-full bg-panel-3">
+      <TextTile eyebrow="Brief" icon={<IconFileText size={12} />} body={title} />
+    </div>
+  );
+}
+
+/** The welcome card's tile: the workspace's avatar colour with its initial in white. */
+function WelcomeTile({ name }: { name: string }): ReactElement {
+  return (
+    <div
+      data-activity-welcome-tile=""
+      aria-hidden="true"
+      className={cn(
+        'flex aspect-square w-full items-center justify-center text-3xl font-semibold text-white',
+        avatarFillFor(name),
+      )}
+    >
+      {name.trim().charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+/**
+ * A deleted-files card's tile: the first file's thumbnail through the page's
+ * presign cache, with a "+N" corner badge for the rest. A wiped file (the image
+ * fails) or one without a version shows the text tile: its kind and its name.
+ */
+function DeletedFilesTile({
+  item,
+  cache,
+  presignEnabled,
+}: {
+  item: ActivityItem;
+  cache: PresignCache;
+  presignEnabled: boolean;
+}): ReactElement {
+  const file = item.deletedFiles?.[0];
+  const name = file?.filename ?? item.filenames?.[0] ?? filesPhrase(deletedCount(item));
+  const extra = deletedCount(item) - 1;
+  return (
+    <Thumbnail
+      assetVersionId={file?.assetVersionId ?? null}
+      cache={cache}
+      presignEnabled={presignEnabled}
+      aspect="square"
+      fallback={{ kind: 'glyph' }}
+      fallbackTile={
+        <TextTile
+          eyebrow={fileKindLabel({ filename: name, mimeType: file?.mimeType ?? null })}
+          icon={<IconFile size={12} />}
+          body={name}
+        />
+      }
+      alt={name}
+    >
+      {extra > 0 ? (
+        <span
+          data-activity-files-badge=""
+          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-md bg-panel px-1.5 text-[11px] font-medium tabular-nums text-fg-2"
+        >
+          +{extra}
+        </span>
+      ) : null}
+    </Thumbnail>
+  );
+}
+
 /** An alert card's title: a failed send's "Not sent" and a missed due time in bad. */
 function AlertTitle({
   item,
@@ -319,8 +445,16 @@ export function ActivityCard({
   side = 'unknown',
   onRetry,
   onEdit,
+  entering = false,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
+  // A live-added card starts 8px low and slides up on the next frame (motion-safe only).
+  const [settled, setSettled] = useState(!entering);
+  useEffect(() => {
+    if (settled) return;
+    const frame = window.requestAnimationFrame(() => setSettled(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [settled]);
 
   const lead = group[0];
   if (lead === undefined) return null;
@@ -337,12 +471,18 @@ export function ActivityCard({
   const assetsDeleted = lead.eventType === 'assets_deleted';
   // The welcome row: its title names the workspace, the body says what lands here.
   const welcome = isWelcome(lead);
-  // A deleted post's card is "<who> deleted" over its title: no body line repeats it.
-  const showsBody = (hasEntity || assetsDeleted || welcome) && lead.eventType !== 'post_deleted';
+  // An actor row (approve, park, deletes) says who did what on its top line: no
+  // body line repeats it. Deleted files list the other names instead.
+  const showsBody = (hasEntity || welcome) && !ACTOR_ROW_EVENTS.has(lead.eventType);
+  const filesBody = assetsDeleted ? deletedFilesBody(lead) : null;
   const alertLine = alert !== null ? alertBody(alert) : null;
   // An alert's title is its AlertTitle (the bell's line, partly in bad).
   const title =
-    hasEntity || welcome ? cardTitle(lead) : assetsDeleted ? 'Assets' : activityLine(lead);
+    hasEntity || welcome
+      ? cardTitle(lead)
+      : assetsDeleted
+        ? (lead.filenames?.[0] ?? 'Files')
+        : activityLine(lead);
   const leadTappable = !opensNothing(lead);
   const tag = SCOPE_TAG[lead.scope];
   // The header names the newest entry's actor (never an older row's).
@@ -361,9 +501,12 @@ export function ActivityCard({
   return (
     <div
       data-activity-event={lead.eventType}
+      data-activity-id={lead.id}
+      {...(entering ? { 'data-activity-entering': '' } : {})}
       className={cn(
-        'flex overflow-hidden rounded-xl border bg-panel transition-colors',
+        'flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-200',
         unread ? 'border-accent-line' : 'border-border',
+        !settled && 'motion-safe:translate-y-2',
       )}
     >
       <div
@@ -419,8 +562,14 @@ export function ActivityCard({
             ) : null}
 
             {showsBody ? (
-              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2">
+              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
                 {cardBodyLine(lead)}
+              </p>
+            ) : null}
+
+            {filesBody !== null ? (
+              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+                {filesBody}
               </p>
             ) : null}
 
@@ -442,6 +591,16 @@ export function ActivityCard({
               >
                 <IconPlan size={28} />
               </div>
+            ) : isChatMention(lead) ? (
+              <IconTile kind="chat">
+                <IconChat size={28} />
+              </IconTile>
+            ) : welcome && lead.welcome != null ? (
+              <WelcomeTile name={lead.welcome.workspaceName} />
+            ) : lead.entityType === 'brief' ? (
+              <BriefTile title={title} />
+            ) : assetsDeleted ? (
+              <DeletedFilesTile item={lead} cache={cache} presignEnabled={presignEnabled} />
             ) : (
               <Thumbnail
                 assetVersionId={lead.thumbnailAssetVersionId ?? null}
@@ -450,6 +609,7 @@ export function ActivityCard({
                 aspect="square"
                 fallback={leadFallback(lead)}
                 alt={title}
+                bodyLines={3}
               />
             )}
           </div>
@@ -483,7 +643,9 @@ export function ActivityCard({
 
         <div className="h-px bg-border" />
         <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
-          <span className="font-mono text-xs text-fg-3">{relativeTime(lead.createdAt, nowMs)}</span>
+          <span data-activity-time="" className="text-xs tabular-nums text-fg-3">
+            {relativeTime(lead.createdAt, nowMs)}
+          </span>
           {tag !== undefined ? (
             <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
               {tag}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
@@ -37,9 +37,17 @@ import {
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import { logger } from '@/lib/logger';
+import { INBOX_CHANGED_EVENT } from '@/lib/events';
+import { POLL_CHANGE_SOURCE } from '@/lib/inbox/inbox-live';
 import {
   ACTIVITY_PAGE_SIZE,
+  EMPTY_LINES,
+  LOADING_NOTIFICATIONS,
+  REFRESH_FAILED,
+  SNOOZE_FAILED,
+  appendUnique,
   bucketActorNames,
+  cursorAfter,
   createUpcomingScheduledWrites,
   fetchActivityEntries,
   fetchUpcoming,
@@ -53,10 +61,14 @@ import {
   markAllTargets,
   markAllEntriesRead,
   markEntryRead,
+  marksWholeInbox,
+  mergeFresh,
+  msUntilZonedMidnight,
   openAction,
   retryFailedSend,
   snoozeEntry,
   unreadCount,
+  updatesLabel,
   type ActivityDirection,
   type ActivityItem,
   type ActivityState,
@@ -101,6 +113,58 @@ function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
   }
 }
 
+/** How often relative times ("5m") re-render while the page is visible. */
+const TIME_TICK_MS = 60_000;
+
+/**
+ * How a feed load lands: 'reset' clears the list first (a chip, sort or
+ * workspace change); 'refresh' replaces it but keeps it on a failure; 'merge'
+ * folds a fresh page one into it (new rows from the shell's poll).
+ */
+type LoadMode = 'reset' | 'refresh' | 'merge';
+
+/** The topmost on-screen card and where it sat, to hold it still across a merge. */
+interface ScrollAnchor {
+  id: string;
+  top: number;
+}
+
+/** The nearest scrolling ancestor of an element, or null for the window. */
+function scrollParentOf(el: HTMLElement | null): HTMLElement | null {
+  for (let node = el?.parentElement ?? null; node !== null; node = node.parentElement) {
+    const { overflowY } = window.getComputedStyle(node);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+  }
+  return null;
+}
+
+/** The first card at or below the top of the viewport, once the list is scrolled. */
+function captureAnchor(list: HTMLElement | null): ScrollAnchor | null {
+  if (list === null) return null;
+  const scroller = scrollParentOf(list);
+  const scrolled = scroller !== null ? scroller.scrollTop : window.scrollY;
+  if (scrolled <= 0) return null;
+  for (const card of list.querySelectorAll<HTMLElement>('[data-activity-id]')) {
+    const top = card.getBoundingClientRect().top;
+    if (top >= 0) return { id: card.dataset.activityId ?? '', top };
+  }
+  return null;
+}
+
+/** Scroll by however far the anchor card moved, so cards added above it never jump the view. */
+function restoreAnchor(list: HTMLElement | null, anchor: ScrollAnchor): void {
+  if (list === null) return;
+  const card = list.querySelector<HTMLElement>(`[data-activity-id="${anchor.id}"]`);
+  if (card === null) return;
+  const delta = card.getBoundingClientRect().top - anchor.top;
+  if (delta === 0) return;
+  const scroller = scrollParentOf(list);
+  if (scroller !== null) scroller.scrollTop += delta;
+  else window.scrollBy(0, delta);
+}
+
 /** A load failure: the plain copy and Retry (the feed's and Upcoming's). */
 function LoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
@@ -119,7 +183,9 @@ function LoadFailed({ onRetry }: { onRetry: () => void }) {
 
 export function NotificationsPage() {
   const navigate = useNavigate();
-  const { workspaceId, workspaceKey } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
+  // Today and Yesterday follow the workspace's timezone, not the device's.
+  const tz = workspaces.find((row) => row.id === workspaceId)?.timezone ?? null;
   const newTrace = useNewTrace();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
@@ -151,42 +217,110 @@ export function NotificationsPage() {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
 
-  // Load page one for the active chip. Every chip filters server-side (All has
-  // no filter), so older matches are never hidden behind the newest-page cap.
-  // `state` is a dependency: switching chips replaces `items` wholesale, which
-  // resets pagination (the keyset cursor lives in the loaded rows).
-  const loadActivity = useCallback(async () => {
-    if (workspaceId === null) return;
-    setLoading(true);
-    setError(false);
-    const result = await fetchActivityEntries(supabase, workspaceId, { state });
-    setLoading(false);
-    setNowMs(Date.now());
-    if (!result.ok) {
-      setError(true);
+  // The latest values, read by async loads to drop a result that went stale.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const sortRef = useRef(sort);
+  sortRef.current = sort;
+  // Bumped by every reset or refresh: an older load, merge or load-more is dropped.
+  const activitySeqRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  // Cards a live merge just added (they slide up), and the card to hold still.
+  const [entering, setEntering] = useState<ReadonlySet<string>>(new Set());
+  const listRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<ScrollAnchor | null>(null);
+
+  // Load page one for the active chip and sort. Every chip filters server-side
+  // (All has no filter) and the server orders by the sort, so older matches are
+  // never hidden behind the page cap. A stale response (the chip, sort or
+  // workspace moved on) is dropped. A failure with rows on screen keeps them and
+  // toasts; only a first load with nothing on screen shows the error box.
+  const loadActivity = useCallback(
+    async (mode: LoadMode = 'refresh') => {
+      if (workspaceId === null) return;
+      if (mode !== 'merge') activitySeqRef.current += 1;
+      const seq = activitySeqRef.current;
+      if (mode === 'reset') {
+        setItems([]);
+        setHasMore(false);
+        setEntering(new Set());
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+      if (mode !== 'merge') {
+        setLoading(true);
+        setError(false);
+      }
+      const result = await fetchActivityEntries(supabase, workspaceId, {
+        state,
+        direction: sort,
+      });
+      if (seq !== activitySeqRef.current) return;
+      setNowMs(Date.now());
+      if (mode !== 'merge') setLoading(false);
+      if (!result.ok) {
+        logger.warn('notifications: load failed', { error: result.error });
+        if (mode === 'merge') return;
+        if (itemsRef.current.length > 0) push(REFRESH_FAILED);
+        else setError(true);
+        return;
+      }
+      if (mode === 'merge') {
+        const known = new Set(itemsRef.current.map((item) => item.id));
+        const added = result.data.filter((item) => !known.has(item.id));
+        setEntering(new Set(added.map((item) => item.id)));
+        anchorRef.current = captureAnchor(listRef.current);
+        setItems((prev) => mergeFresh(prev, result.data, sort));
+        return;
+      }
+      setItems(result.data);
+      setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
+    },
+    [workspaceId, state, sort, push],
+  );
+
+  // Hold the topmost visible card still when a merge adds cards above it.
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    anchorRef.current = null;
+    if (anchor !== null) restoreAnchor(listRef.current, anchor);
+  }, [items]);
+
+  // Fetch the next page in the sort's direction after the last loaded
+  // (created_at, id) and append it without duplicates. It carries the chip and
+  // sort it started with and is ignored if either (or the list) changed since.
+  const loadMore = useCallback(async () => {
+    if (workspaceId === null || loadingMoreRef.current) return;
+    const cursor = cursorAfter(itemsRef.current);
+    if (cursor === undefined) return;
+    const seq = activitySeqRef.current;
+    const chip = state;
+    const direction = sort;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    const result = await fetchActivityEntries(supabase, workspaceId, {
+      state: chip,
+      direction,
+      cursor,
+    });
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    if (
+      seq !== activitySeqRef.current ||
+      stateRef.current !== chip ||
+      sortRef.current !== direction
+    ) {
       return;
     }
-    setItems(result.data);
-    setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
-  }, [workspaceId, state]);
-
-  // Fetch the next, older page (rows strictly before the oldest loaded created_at)
-  // and append it, re-running enrichment for just the new rows. The active chip
-  // is carried so pagination stays within its filter.
-  const loadMore = useCallback(async () => {
-    if (workspaceId === null) return;
-    const oldest = items[items.length - 1]?.createdAt;
-    if (oldest === undefined) return;
-    setLoadingMore(true);
-    const result = await fetchActivityEntries(supabase, workspaceId, { before: oldest, state });
-    setLoadingMore(false);
     if (!result.ok) {
       push('Could not load more activity');
       return;
     }
-    setItems((prev) => [...prev, ...result.data]);
+    setItems((prev) => appendUnique(prev, result.data));
     setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
-  }, [workspaceId, state, items, push]);
+  }, [workspaceId, state, sort, push]);
 
   // The unread-mention count for the Mentions chip. Independent of the active
   // view (it is a HEAD count), so it is not affected by the chips.
@@ -233,8 +367,55 @@ export function NotificationsPage() {
 
   useEffect(() => {
     if (state === 'upcoming') void loadUpcoming();
-    else void loadActivity();
+    else void loadActivity('reset');
   }, [state, loadActivity, loadUpcoming]);
+
+  // New rows found by the shell's poll: fold page one in (no duplicates, no
+  // scroll jump) and refresh the Mentions count. A local write's event is not
+  // the poll's, so the page never reloads for its own mark-read.
+  useEffect(() => {
+    if (state === 'upcoming') return;
+    const onChanged = (event: Event): void => {
+      if (!(event instanceof CustomEvent) || event.detail !== POLL_CHANGE_SOURCE) return;
+      void loadActivity('merge');
+      void loadMentionCount();
+    };
+    window.addEventListener(INBOX_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
+  }, [state, loadActivity, loadMentionCount]);
+
+  // Relative times keep moving: a tick every minute while the page is visible,
+  // stopped while hidden and refreshed on the return.
+  useEffect(() => {
+    let timer: number | null = null;
+    const start = (): void => {
+      if (timer === null) timer = window.setInterval(() => setNowMs(Date.now()), TIME_TICK_MS);
+    };
+    const stop = (): void => {
+      if (timer !== null) window.clearInterval(timer);
+      timer = null;
+    };
+    const onVisibility = (): void => {
+      if (document.hidden) {
+        stop();
+        return;
+      }
+      setNowMs(Date.now());
+      start();
+    };
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  // Today and Yesterday roll over at midnight in the workspace timezone.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setNowMs(Date.now()), msUntilZonedMidnight(nowMs, tz));
+    return () => window.clearTimeout(timer);
+  }, [nowMs, tz]);
 
   // A reminder set, cancelled or rung anywhere (and the shell's poll tick)
   // reloads Upcoming while it is on screen.
@@ -254,9 +435,14 @@ export function NotificationsPage() {
     void loadMentionCount();
   });
 
-  // Reset filters (and Upcoming) when the active workspace changes.
+  // Reset filters, the feed and Upcoming when the active workspace changes: the
+  // old workspace's rows clear before the new load, and its in-flight loads drop.
   useEffect(() => {
     setState('all');
+    activitySeqRef.current += 1;
+    setItems([]);
+    setHasMore(false);
+    setEntering(new Set());
     upcomingSeqRef.current += 1;
     upcomingLoadedRef.current = false;
     setUpcoming([]);
@@ -266,8 +452,8 @@ export function NotificationsPage() {
   }, [workspaceId]);
 
   const buckets = useMemo(
-    () => groupDigest(filterByState(items, state, nowMs), sort),
-    [items, state, sort, nowMs],
+    () => groupDigest(filterByState(items, state, nowMs), sort, { nowMs, tz }),
+    [items, state, sort, nowMs, tz],
   );
 
   const totalUnread = useMemo(() => unreadCount(items, nowMs), [items, nowMs]);
@@ -283,30 +469,79 @@ export function NotificationsPage() {
     );
   }, []);
 
-  // Open one entry by its tap rule (openAction): mark it read (optimistic)
-  // unless it is a reminder, toast a deleted plan, then navigate to its link.
+  // Put rows a failed save had marked back to unread (only those still carrying its stamp).
+  const revertRead = useCallback((ids: ReadonlySet<string>, stamp: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        ids.has(item.id) && item.readAt === stamp ? { ...item, readAt: null } : item,
+      ),
+    );
+  }, []);
+
+  // Mark entries read at once (optimistic, one trace) and save them together.
+  // Only the rows whose save failed go back to unread, with the fixed toast; any
+  // success refreshes the Mentions count and the nav badge.
+  const markEntriesRead = useCallback(
+    (entries: readonly ActivityItem[]) => {
+      if (workspaceId === null || entries.length === 0) return;
+      const ids = new Set(entries.map((entry) => entry.id));
+      const stamp = new Date().toISOString();
+      setItems((prev) =>
+        prev.map((item) =>
+          ids.has(item.id) && item.readAt === null ? { ...item, readAt: stamp } : item,
+        ),
+      );
+      const traceId = newTrace();
+      void Promise.all(
+        entries.map((entry) => markEntryRead(supabase, entry, workspaceId, traceId)),
+      ).then((results) => {
+        const failed = new Set(
+          entries.flatMap((entry, i) => (results[i]?.ok === true ? [] : [entry.id])),
+        );
+        if (failed.size > 0) {
+          logger.warn('notifications: mark read failed', {
+            trace_id: traceId,
+            count: failed.size,
+          });
+          revertRead(failed, stamp);
+          toast?.show({ title: MARK_READ_FAILED });
+        }
+        if (failed.size < entries.length) {
+          void loadMentionCount();
+          window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+        }
+      });
+    },
+    [workspaceId, newTrace, revertRead, toast, loadMentionCount],
+  );
+
+  // Open one entry by its tap rule (openAction): mark it read (optimistic, and
+  // reverted with a toast if the save fails) unless it is a reminder, toast a
+  // deleted plan, then navigate to its link.
   const handleOpenEntry = useCallback(
     (entry: ActivityItem) => {
       if (workspaceId === null) return;
       const open = openAction(entry, workspaceKey);
-      if (open.markRead && entry.readAt === null) {
-        markReadLocal(entry.id);
-        void markEntryRead(supabase, entry, workspaceId, newTrace());
-      }
+      if (open.markRead && entry.readAt === null) markEntriesRead([entry]);
       if (open.toast !== null) toast?.show({ title: open.toast });
       if (open.href !== null) navigate(open.href);
     },
-    [workspaceId, workspaceKey, newTrace, navigate, markReadLocal, toast],
+    [workspaceId, workspaceKey, navigate, markEntriesRead, toast],
   );
 
-  // Open a thread from its lead entry: only the lead is marked read, so the
-  // rest stay unread and the card stays highlighted until they are seen.
+  // Open a thread from its lead entry: every unread entry in the group is marked
+  // read in one batch (a reminder stays), then it opens from the lead.
   const handleOpenGroup = useCallback(
     (group: ActivityItem[]) => {
       const lead = group[0];
-      if (lead !== undefined) handleOpenEntry(lead);
+      if (lead === undefined || workspaceId === null) return;
+      const open = openAction(lead, workspaceKey);
+      const unread = group.filter((e) => e.readAt === null && openAction(e, workspaceKey).markRead);
+      markEntriesRead(unread);
+      if (open.toast !== null) toast?.show({ title: open.toast });
+      if (open.href !== null) navigate(open.href);
     },
-    [handleOpenEntry],
+    [workspaceId, workspaceKey, navigate, markEntriesRead, toast],
   );
 
   const handleMarkRead = useCallback(
@@ -326,42 +561,49 @@ export function NotificationsPage() {
     [workspaceId, newTrace, markReadLocal, push, loadActivity, loadMentionCount],
   );
 
-  // The active chip only: mark its unread, non-snoozed rows read at once and
-  // write immediately; no Undo and no confirmation toast (the unread state just
-  // clears). On failure the rows go back to unread with a fixed error toast.
-  // The All chip is ONE call to inbox_mark_all_read (every unread, never-snoozed
-  // row of every type); another chip marks its own rows one by one. Then the
-  // Mentions count and the nav badge refetch. A failed scheduled send is never
-  // an optimistic target (markAllTargets); Upcoming has no targets.
+  // The active chip only: mark its unread rows (no snooze, or one that has run
+  // out) read at once and write immediately; no Undo and no confirmation toast.
+  // All and Unread are ONE call to inbox_mark_all_read (every unread row of
+  // every type, run-out snoozes and failed sends included); any other chip
+  // marks its loaded rows one by one and, on a partial failure, reverts only
+  // the rows whose save failed. Then the Mentions count and the nav badge
+  // refetch. Upcoming has no targets.
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
     const targets = markAllTargets(items, state, nowMs);
     if (targets.length === 0) return;
+    if (!marksWholeInbox(state)) {
+      markEntriesRead(targets);
+      return;
+    }
     const ids = new Set(targets.map((item) => item.id));
     const stamp = new Date().toISOString();
-    const chip = state;
     setItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
     const traceId = newTrace();
-    void (async () => {
-      const results =
-        chip === 'all'
-          ? [await markAllEntriesRead(supabase, workspaceId, traceId)]
-          : await Promise.all(
-              targets.map((item) => markEntryRead(supabase, item, workspaceId, traceId)),
-            );
-      if (results.some((result) => !result.ok)) {
-        setItems((prev) =>
-          prev.map((item) =>
-            ids.has(item.id) && item.readAt === stamp ? { ...item, readAt: null } : item,
-          ),
-        );
+    void markAllEntriesRead(supabase, workspaceId, traceId).then((result) => {
+      if (!result.ok) {
+        logger.warn('notifications: mark all read failed', {
+          trace_id: traceId,
+          error: result.error.message,
+        });
+        revertRead(ids, stamp);
         toast?.show({ title: MARK_READ_FAILED });
         return;
       }
       void loadMentionCount();
-      window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
-    })();
-  }, [workspaceId, items, state, nowMs, newTrace, toast, loadMentionCount]);
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
+    });
+  }, [
+    workspaceId,
+    items,
+    state,
+    nowMs,
+    newTrace,
+    toast,
+    loadMentionCount,
+    markEntriesRead,
+    revertRead,
+  ]);
 
   const chipUnread = useMemo(
     () => markAllTargets(items, state, nowMs).length,
@@ -376,12 +618,17 @@ export function NotificationsPage() {
       const previous = item.snoozedUntil;
       const next = optimisticSnoozeUntil(kind, Date.now());
       setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: next } : i)));
-      void snoozeEntry(supabase, item, workspaceId, kind, newTrace()).then((result) => {
+      const traceId = newTrace();
+      void snoozeEntry(supabase, item, workspaceId, kind, traceId).then((result) => {
         if (!result.ok) {
           setItems((prev) =>
             prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: previous } : i)),
           );
-          push(result.error.message);
+          logger.warn('notifications: snooze failed', {
+            trace_id: traceId,
+            error: result.error.message,
+          });
+          push(SNOOZE_FAILED);
           return;
         }
         window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
@@ -558,7 +805,7 @@ export function NotificationsPage() {
               options={SORT_OPTIONS}
               value={sort}
               onChange={setSort}
-              label="Sort activity"
+              label="Sort notifications"
             />
           </>
         }
@@ -575,7 +822,7 @@ export function NotificationsPage() {
         upcomingError ? (
           <LoadFailed onRetry={() => void loadUpcoming()} />
         ) : workspaceId === null || !upcomingLoaded ? (
-          <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading activity</div>
+          <div className="px-4 md:px-6 py-10 text-sm text-fg-3">{LOADING_NOTIFICATIONS}</div>
         ) : visibleUpcoming.length === 0 ? (
           <EmptyState icon={<IconCalendarClock size={24} />} title={UPCOMING_EMPTY} />
         ) : (
@@ -592,31 +839,19 @@ export function NotificationsPage() {
             ))}
           </div>
         )
-      ) : error ? (
+      ) : error && items.length === 0 ? (
         <LoadFailed onRetry={() => void loadActivity()} />
       ) : listLoading ? (
-        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading activity</div>
+        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">{LOADING_NOTIFICATIONS}</div>
       ) : buckets.length === 0 ? (
         state === 'mentions' ? (
-          <EmptyState
-            icon={<IconAt size={24} />}
-            title="No mentions yet"
-            description="When someone types @ and your name in a comment, it lands here."
-          />
+          <EmptyState icon={<IconAt size={24} />} title={EMPTY_LINES.mentions} />
         ) : state === 'briefs' ? (
-          <EmptyState
-            icon={<IconBriefs size={24} />}
-            title="No brief activity yet"
-            description="Briefs created or closed, brief comments and posts made from a brief will appear here."
-          />
+          <EmptyState icon={<IconBriefs size={24} />} title={EMPTY_LINES.briefs} />
         ) : state === 'plans' ? (
-          <EmptyState icon={<IconPlan size={24} />} title="You are all caught up" />
+          <EmptyState icon={<IconPlan size={24} />} title={EMPTY_LINES.plans} />
         ) : state === 'snoozed' ? (
-          <EmptyState
-            icon={<IconAlarmClock size={24} />}
-            title="Nothing snoozed"
-            description="Snoozed items wait here and come back on their own."
-          />
+          <EmptyState icon={<IconAlarmClock size={24} />} title={EMPTY_LINES.snoozed} />
         ) : (
           <EmptyState
             icon={<IconActivity size={24} />}
@@ -625,7 +860,7 @@ export function NotificationsPage() {
           />
         )
       ) : (
-        <div className="pb-6">
+        <div ref={listRef} className="pb-6">
           {buckets.map((bucket, bucketIndex) => {
             const entries = bucket.groups.flat();
             return (
@@ -635,7 +870,9 @@ export function NotificationsPage() {
                     {bucket.label}
                   </h2>
                   <AvatarStack names={bucketActorNames(entries)} />
-                  <span className="ml-auto text-xs text-fg-3">{entries.length}</span>
+                  <span data-bucket-count="" className="ml-auto text-xs tabular-nums text-fg-3">
+                    {updatesLabel(entries.length)}
+                  </span>
                 </div>
                 <div className="mt-2 flex flex-col gap-2 px-4 md:px-6">
                   {bucket.groups.map((group, groupIndex) => {
@@ -654,6 +891,7 @@ export function NotificationsPage() {
                         side={side}
                         onRetry={handleRetry}
                         onEdit={handleEdit}
+                        entering={entering.has(group[0]?.id ?? '')}
                       />
                     );
                     // The newest card is what the induction points at (its own corners, not the padded list).
