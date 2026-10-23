@@ -136,7 +136,10 @@ export function formatForFile(
  */
 export function untouchedDefaultFormat(platform: string, formats: readonly string[]): string {
   const first = formats[0] ?? '';
-  const needsVideo = expectedKinds(platform, first)?.every((kind) => kind === 'video') === true;
+  const expected = expectedKinds(platform, first);
+  // A text or link format (no file expected) never counts as needing a video.
+  const needsVideo =
+    expected !== null && expected.length > 0 && expected.every((kind) => kind === 'video');
   if (needsVideo && formats.includes('single_image')) return 'single_image';
   return first;
 }
