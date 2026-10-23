@@ -198,7 +198,6 @@ export function isMediaItem(item: AttachmentItem): boolean {
   return item.kind === 'image' || item.mime?.startsWith('video/') === true;
 }
 
-
 /** One local photo or video drawn in the post's platform frame. */
 function FramedMediaTile({
   item,
@@ -825,7 +824,9 @@ export function AttachmentsField({
   const listed = value
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => !framed || !isMediaItem(item));
-  const media = value.map((item, index) => ({ item, index })).filter(({ item }) => isMediaItem(item));
+  const media = value
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isMediaItem(item));
   // Framed: a picked photo or video has a tile; anything else keeps its row.
   const pendingTiles: PendingTile[] = framed
     ? pending

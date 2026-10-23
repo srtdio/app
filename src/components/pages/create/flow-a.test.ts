@@ -158,7 +158,7 @@ describe('Post flow A helpers', () => {
     expect(insertBySeq([a, b], c, 3, seqOf).map((i) => i.versionId)).toEqual(['a', 'b', 'c']);
   });
 
-  it("fix 14: failed files count and the \"didn't upload\" line", () => {
+  it('fix 14: failed files count and the "didn\'t upload" line', () => {
     const file = new File(['x'], 'a.png', { type: 'image/png' });
     expect(
       failedUploadCount([

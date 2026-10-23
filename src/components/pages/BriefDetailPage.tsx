@@ -582,9 +582,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
                 size="lg"
                 data-new-post-from-brief=""
                 className="w-full md:w-auto"
-                onClick={() =>
-                  navigate(`/pipeline?new=1&brief=${encodeURIComponent(brief.id)}`)
-                }
+                onClick={() => navigate(`/pipeline?new=1&brief=${encodeURIComponent(brief.id)}`)}
               >
                 New post from this brief
               </Button>

@@ -222,10 +222,7 @@ export function FileTiles({
                 index === activeIndex ? 'border-accent ring-2 ring-accent-soft' : 'border-border',
               )}
             >
-              <TilePicture
-                src={item.previewUrl}
-                video={item.mime?.startsWith('video/') === true}
-              />
+              <TilePicture src={item.previewUrl} video={item.mime?.startsWith('video/') === true} />
             </button>
             <RemoveButton label={`Remove ${item.name}`} onRemove={() => onRemove(index)} />
           </li>

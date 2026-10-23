@@ -611,9 +611,9 @@ describe('Brief detail New post from this brief', () => {
     const start = button('New post from this brief');
     expect(start).toBeDefined();
     await act(async () => start!.click());
-    expect(
-      document.querySelector('[data-pipeline-at]')?.getAttribute('data-pipeline-at'),
-    ).toBe('/pipeline?new=1&brief=b1');
+    expect(document.querySelector('[data-pipeline-at]')?.getAttribute('data-pipeline-at')).toBe(
+      '/pipeline?new=1&brief=b1',
+    );
   });
 
   it('fix 23: hidden for approvers', async () => {

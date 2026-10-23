@@ -168,8 +168,7 @@ const reviewButton = (): HTMLButtonElement =>
 const moreButton = (): HTMLButtonElement =>
   document.querySelector<HTMLButtonElement>('button[data-more-options]')!;
 const pill = (): string => document.querySelector('[data-format-pill]')?.textContent ?? '';
-const sourceLine = (): string =>
-  document.querySelector('[data-format-source]')?.textContent ?? '';
+const sourceLine = (): string => document.querySelector('[data-format-source]')?.textContent ?? '';
 const text = (): string => document.body.textContent ?? '';
 
 async function typeCaption(value: string): Promise<void> {
@@ -265,7 +264,7 @@ describe('CreatePostSheet flow A', () => {
     expect(sourceLine()).toBe('');
   });
 
-  it("fix 14: a failed file disables Save as draft and Send for review and says so", async () => {
+  it('fix 14: a failed file disables Save as draft and Send for review and says so', async () => {
     await renderSheet();
     await typeCaption('Hello');
     expect(draftButton().disabled).toBe(false);

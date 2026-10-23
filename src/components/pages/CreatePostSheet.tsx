@@ -1016,11 +1016,7 @@ export function CreatePostSheet({
     const key = workspaceKey ?? null;
     if (key === null) return createdPostPath(postId, null, null);
     try {
-      const { data } = await supabase
-        .from('posts')
-        .select('number')
-        .eq('id', postId)
-        .maybeSingle();
+      const { data } = await supabase.from('posts').select('number').eq('id', postId).maybeSingle();
       const number = (data as { number: number | null } | null)?.number ?? null;
       return createdPostPath(postId, key, number);
     } catch {
