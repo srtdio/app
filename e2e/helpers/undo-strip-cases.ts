@@ -62,8 +62,9 @@ export function undoStripCases(): void {
       await expect(strip.getByRole('button', { name: 'Dismiss notification' })).toHaveCount(0);
       await expect(strip.locator('[data-toast-countdown]')).toHaveCount(0);
       await expect(strip.locator('svg')).toHaveCount(0);
-      // Not a top card: the label is nowhere else on the page.
-      await expect(page.getByText(LABEL, { exact: true })).toHaveCount(1);
+      // Not a top card: one strip with the label, and no card X anywhere.
+      await expect(undoStrip(page, LABEL)).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Dismiss notification' })).toHaveCount(0);
 
       // Geometry: 16px side margins, 8px above the bottom tab bar.
       await strip.evaluate(async (el) => {
