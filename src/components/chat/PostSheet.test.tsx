@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PostCardRow, GalleryItem } from '../../../packages/posts/src/reads';
 import {
+  ACTION_BAD,
+  ACTION_BAD_FILL,
   ACTION_GOOD,
   PostSheetActions,
   PostSheetDetails,
@@ -64,10 +66,13 @@ function actionIds(html: string): string[] {
 }
 
 describe('PostSheetActions by side and stage', () => {
-  it('client in review: approve (good), comment, open full post, and the hint', () => {
+  it('client in review: approve, reject (bad), comment, open full post, and the hint', () => {
     const html = actions('client', row({ stage: 'review' }));
-    expect(actionIds(html)).toEqual(['approve', 'comment', 'open_post']);
+    expect(actionIds(html)).toEqual(['approve', 'reject', 'comment', 'open_post']);
     expect(html).toContain('>Approve<');
+    expect(html).toContain('>Reject<');
+    expect(ACTION_BAD).toContain('text-bad');
+    expect(ACTION_BAD).toContain('h-12');
     expect(html).toContain('Comment on this post');
     expect(html).toContain('Open full post');
     expect(html).toContain('One post at a time. Comments keep it in review.');
@@ -75,9 +80,9 @@ describe('PostSheetActions by side and stage', () => {
     expect(ACTION_GOOD).toContain('h-12');
   });
 
-  it('client on an approved post: open only, plus the disabled approved pill', () => {
+  it('client on an approved post: reject and open, plus the disabled approved pill', () => {
     const html = actions('client', row({ stage: 'approved' }), { approverName: 'Asha' });
-    expect(actionIds(html)).toEqual(['open_post']);
+    expect(actionIds(html)).toEqual(['reject', 'open_post']);
     expect(html).toContain('Approved by Asha');
     expect(html).toMatch(/data-approved-pill=""[^>]*disabled|disabled=""[^>]*data-approved-pill/);
   });
@@ -88,13 +93,15 @@ describe('PostSheetActions by side and stage', () => {
     expect(html).not.toContain('data-approved-pill');
   });
 
-  it('agency in draft: send for review (primary) then open in pipeline', () => {
+  it('agency in draft: send for review (primary) then open post', () => {
     const html = actions('agency', row({ stage: 'draft' }));
     expect(actionIds(html)).toEqual(['send_review', 'open_pipeline']);
     expect(html).toContain('bg-accent');
+    expect(html).toMatch(/data-sheet-action="open_pipeline"[^>]*>Open post</);
+    expect(html).not.toContain('Open in pipeline');
   });
 
-  it('agency in review: approve (good), open in pipeline and the waiting hint', () => {
+  it('agency in review: approve (good), open post and the waiting hint', () => {
     const html = actions('agency', row({ stage: 'review' }));
     expect(actionIds(html)).toEqual(['approve', 'open_pipeline']);
     expect(html).toContain('>Approve<');
@@ -102,14 +109,14 @@ describe('PostSheetActions by side and stage', () => {
     expect(html).toContain('bg-good');
   });
 
-  it('agency gets no Approve outside review, and never Reject or Park', () => {
-    for (const stage of ['draft', 'approved', 'parked', 'rejected']) {
+  it('agency gets no Approve outside review, and never Reject; nobody gets Park', () => {
+    for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected']) {
       const html = actions('agency', row({ stage }));
-      expect(actionIds(html)).not.toContain('approve');
+      if (stage !== 'review') expect(actionIds(html)).not.toContain('approve');
+      expect(html).not.toContain('Reject');
     }
     for (const side of ['agency', 'client'] as const) {
       const html = actions(side, row({ stage: 'review' }));
-      expect(html).not.toContain('Reject');
       expect(html).not.toContain('Park');
     }
   });
@@ -150,7 +157,7 @@ describe('PostSheetActions by side and stage', () => {
   it('every action button is 48px tall and the area pads for the safe area', () => {
     const html = actions('client', row({ stage: 'review' }));
     const buttons = html.match(/<button[^>]*>/g) ?? [];
-    expect(buttons.length).toBe(3);
+    expect(buttons.length).toBe(4);
     for (const b of buttons) expect(b).toContain('h-12');
     expect(html).toContain('pb-[env(safe-area-inset-bottom)]');
   });
@@ -169,6 +176,33 @@ describe('PostSheetActions confirm and error', () => {
     expect(html).toContain('>Approve<');
     expect(actionIds(html)).toEqual([]);
     expect(html).not.toContain('Comment on this post');
+  });
+
+  it('reject confirm: the question, the creator line, the reason field, Cancel and Reject', () => {
+    const html = actions('client', row({ stage: 'review' }), {
+      mode: { kind: 'confirm', confirm: 'reject' },
+      creatorName: 'Priya Shah',
+      reason: 'Wrong logo',
+    });
+    expect(html).toContain('data-sheet-confirm="reject"');
+    expect(html).toContain('Reject this post?');
+    expect(html).toContain('Priya gets it back to rework. You can send a reason.');
+    expect(html).toContain('Reason (optional)');
+    expect(html).toContain('Goes to the comments.');
+    expect(html).toMatch(/<textarea[^>]*data-sheet-reason=""/);
+    expect(html).toContain('Wrong logo');
+    expect(html).toContain('>Cancel<');
+    expect(html).toMatch(/data-sheet-reject-confirm=""[^>]*>Reject</);
+    expect(ACTION_BAD_FILL).toContain('bg-bad');
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/client|agency/i);
+    expect(actionIds(html)).toEqual([]);
+  });
+
+  it('reject confirm without a creator name reads "The creator"', () => {
+    const html = actions('client', row({ stage: 'approved' }), {
+      mode: { kind: 'confirm', confirm: 'reject' },
+    });
+    expect(html).toContain('The creator gets it back to rework. You can send a reason.');
   });
 
   it('send-for-review confirm has its own copy', () => {

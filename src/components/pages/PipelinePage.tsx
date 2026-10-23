@@ -8,14 +8,33 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconCalendar, IconPipeline, IconX } from '@/components/ui/icons';
+import { IconCalendar, IconPipeline } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
-import { PipelineSortControl } from '@/components/pages/pipeline/PipelineSortControl';
+import {
+  PipelineDateControl,
+  PipelineSortControl,
+} from '@/components/pages/pipeline/PipelineSortControl';
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
+import {
+  StageMoveConfirm,
+  needsConfirm,
+  type ConfirmTarget,
+} from '@/components/pages/pipeline/StageMoveConfirm';
+import {
+  hasAllowedMove,
+  firstNameOf,
+  type CardViewer,
+} from '@/components/pages/pipeline/card-status';
+import { useWorkspacePeople } from '@/components/pages/pipeline/use-workspace-people';
+import { postStageReason } from '@/components/pages/pipeline/stage-reason';
+import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
+import { isClient } from '@/components/pages/pcs/roles';
+import { requestPostCovers, usePostCovers, type CoverLookup } from '@/lib/chat/post-covers';
+import { generateTraceId } from '@/lib/trace';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import {
   dateChipLabel,
@@ -50,6 +69,7 @@ import {
   POST_SORT_OPTIONS,
   filterByFields,
   filterByWindow,
+  isUndated,
   sortPosts,
   type DateWindow,
   type PostSort,
@@ -58,6 +78,7 @@ import { groupByStage, stageColumns } from '@/lib/post-board';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, DomainErrorCode, PipelinePost, Stage } from '@srtdio/posts';
 import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
 
 // The board columns are the workflow stages, in transition-map order. Stage
 // values come from the @srtdio/posts type, never hardcoded literals in JSX.
@@ -86,6 +107,24 @@ interface PipelineHeaderProps {
   counts: Record<string, number>;
   /** post.create granted: only then does the header carry the "+" create button. */
   canCreate: boolean;
+  /** Approvers never see the Draft chip. */
+  hideDraft?: boolean;
+}
+
+/** The stage chips in transition-map order (Draft left out for approvers), All last. */
+export function stageChipItems(
+  counts: Record<string, number>,
+  hideDraft: boolean,
+): StageChipItem[] {
+  return [
+    ...STAGES.filter((stage) => !(hideDraft && stage === 'draft')).map((stage) => ({
+      key: stage,
+      label: stageLabel(stage),
+      count: counts[stage] ?? 0,
+      stage,
+    })),
+    { key: ALL_KEY, label: 'All', count: counts.all ?? 0 },
+  ];
 }
 
 /**
@@ -97,30 +136,24 @@ interface PipelineHeaderProps {
  * the state and re-fetch.
  */
 export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
-  // The five stages keep their transition-map order, All closes the row.
-  const items: StageChipItem[] = [
-    ...STAGES.map((stage) => ({
-      key: stage,
-      label: stageLabel(stage),
-      count: props.counts[stage] ?? 0,
-      stage,
-    })),
-    { key: ALL_KEY, label: 'All', count: props.counts.all ?? 0 },
-  ];
+  // The stages keep their transition-map order, All closes the row.
+  const hideDraft = props.hideDraft === true;
+  const items = stageChipItems(props.counts, hideDraft);
   return (
     <SectionHeader<PostSort>
       search={{ value: props.search, onChange: props.onSearchChange, placeholder: 'Search posts' }}
       sort={{
         node: (
-          <PipelineSortControl
-            order={props.sort}
-            onOrderChange={props.onSortChange}
-            dateWindow={props.dateWindow}
-            onDateWindowChange={props.onDateWindowChange}
-            customRange={props.customRange}
-            onCustomRangeChange={props.onCustomRangeChange}
-            weekStartDay={props.weekStartDay}
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <PipelineDateControl
+              dateWindow={props.dateWindow}
+              onDateWindowChange={props.onDateWindowChange}
+              customRange={props.customRange}
+              onCustomRangeChange={props.onCustomRangeChange}
+              weekStartDay={props.weekStartDay}
+            />
+            <PipelineSortControl order={props.sort} onOrderChange={props.onSortChange} />
+          </div>
         ),
       }}
       {...(props.canCreate
@@ -141,28 +174,35 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
           }
         : {})}
     >
-      <StageRow>
+      <StageRow hideDraft={hideDraft}>
         <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
       </StageRow>
     </SectionHeader>
   );
 }
 
-/** The Draft chip's place in the row: the stages keep transition-map order. */
-const DRAFT_CHIP_INDEX = STAGES.indexOf('draft');
-/** The Approved chip's place in the row, by the same transition-map order. */
-const APPROVED_CHIP_INDEX = STAGES.indexOf('approved');
-
 /**
  * The stage row, marked for the induction. StageChips renders its own buttons,
- * so the Draft chip's key is set on the rendered chip from here (attribute only).
+ * so the Draft and Approved chips' keys are set on the rendered chips from here
+ * (attribute only), found by their place in the row (no Draft chip for
+ * approvers).
  */
-function StageRow({ children }: { children: ReactNode }): ReactElement {
+function StageRow({
+  children,
+  hideDraft = false,
+}: {
+  children: ReactNode;
+  hideDraft?: boolean;
+}): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const keys = stageChipItems({}, hideDraft).map((item) => item.key);
     const chips = ref.current?.querySelectorAll('button');
-    chips?.[DRAFT_CHIP_INDEX]?.setAttribute('data-induction', INDUCTION_KEYS.pipelineDraftChip);
-    chips?.[APPROVED_CHIP_INDEX]?.setAttribute(
+    const draft = keys.indexOf('draft');
+    if (draft >= 0) {
+      chips?.[draft]?.setAttribute('data-induction', INDUCTION_KEYS.pipelineDraftChip);
+    }
+    chips?.[keys.indexOf('approved')]?.setAttribute(
       'data-induction',
       INDUCTION_KEYS.pipelineApprovedChip,
     );
@@ -179,23 +219,17 @@ function StageRow({ children }: { children: ReactNode }): ReactElement {
  * RPC failure with no Result). Shared by {@link moveErrorMessage}'s default and the
  * catch in {@link runMovePost} so both paths surface the same retry line.
  */
-export const MOVE_FALLBACK_MESSAGE = 'Could not move the post. Please try again.';
+export const MOVE_FALLBACK_MESSAGE = "Couldn't move the post. Try again.";
 
 /**
- * Map a proc domain error to friendly copy. The raw codes (invalid_stage_transition,
- * forbidden_role, ...) never reach the user; an unmapped/transport error gets a
- * generic retry line.
+ * Map a proc domain error to friendly copy: every code (invalid_stage_transition,
+ * forbidden_role, ...) and every transport error reads the same plain line. Raw
+ * server text never reaches the user.
  */
 export function moveErrorMessage(code: DomainErrorCode): string {
-  switch (code) {
-    case 'invalid_stage_transition':
-      return 'That move is not allowed from this stage.';
-    case 'forbidden_role':
-    case 'workspace_member_only':
-      return 'You do not have permission to move this post.';
-    default:
-      return MOVE_FALLBACK_MESSAGE;
-  }
+  // The code goes to the log only.
+  logger.warn('pipeline: move refused', { code });
+  return MOVE_FALLBACK_MESSAGE;
 }
 
 /**
@@ -224,9 +258,9 @@ export function postCountLabel(count: number): string {
 }
 
 /**
- * The header count. With no stage, search or date filter on it is the plain
- * total ("12 posts"); with any of them on it is honest about the narrowing:
- * "{shown} of {total} posts", where shown is what the active view lists.
+ * The honest narrowing count, "{shown} of {total} posts", shown only while a
+ * search or date filter is on (the chips carry the counts otherwise). Without
+ * `filtered` it is the plain total.
  */
 export function headerCountLabel(shown: number, total: number, filtered: boolean): string {
   if (!filtered) return postCountLabel(total);
@@ -246,6 +280,12 @@ export function postsLoadError(onRetry: () => void, retrying: boolean): ReactEle
     </div>
   );
 }
+
+/** The empty list a workspace switch renders until its own read lands. */
+const NO_POSTS: PipelinePost[] = [];
+const NO_IDS: string[] = [];
+/** Post ids per cover read, so the asset_attachments query stays a short URL. */
+const COVER_BATCH = 100;
 
 /** Skeleton cards: one board page's worth. */
 const SKELETON_CARDS = BOARD_CAP;
@@ -297,7 +337,7 @@ export function emptyPipeline(canCreate: boolean): ReactElement {
         description={
           canCreate
             ? 'Create the first post to start the pipeline.'
-            : 'Posts show up here once the agency creates them.'
+            : 'Posts show up here once creators make them.'
         }
         {...(canCreate
           ? {
@@ -317,9 +357,9 @@ export function emptyPipeline(canCreate: boolean): ReactElement {
   );
 }
 
-/** The searchable fields of a post; one source for both list derivations. */
-function postSearchFields(post: PipelinePost): (string | null)[] {
-  return [post.title, post.caption, post.platform];
+/** The searchable fields of a post: title and caption (the workspace has one platform). */
+export function postSearchFields(post: PipelinePost): (string | null)[] {
+  return [post.title, post.caption];
 }
 
 /** Everything {@link pipelineSurface} needs to pick and wire the active surface. */
@@ -345,6 +385,10 @@ export interface PipelineSurfaceProps {
   shownKey: string;
   /** The workspace zone each card reads its target day in. */
   timeZone?: string;
+  /** The viewer's role and approvers: each card's status line and its ⋯. */
+  viewer?: CardViewer;
+  /** Each post's first photo or video, so its card takes the platform frame. */
+  covers?: CoverLookup;
 }
 
 /**
@@ -367,6 +411,8 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
         role={props.role}
         onOpenMove={props.onLongPressPost}
         onBlockedMove={props.onBlockedMove}
+        {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
+        {...(props.covers !== undefined ? { covers: props.covers } : {})}
       />
     );
   }
@@ -380,6 +426,8 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
       onLongPressPost={props.onLongPressPost}
       shownKey={props.shownKey}
       {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
+      {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
+      {...(props.covers !== undefined ? { covers: props.covers } : {})}
     />
   );
 }
@@ -405,24 +453,29 @@ export function filteredEmpty(onClear: () => void): ReactElement {
   );
 }
 
-/** The active date filter as a chip with a 44px X that clears it (phones too). */
-export function dateFilterChip(label: string, onClear: () => void): ReactElement {
+/** "This week. 2 posts with no date are hidden." Pure. */
+export function undatedHiddenLine(label: string, count: number): string {
+  return `${label}. ${count} ${count === 1 ? 'post' : 'posts'} with no date ${count === 1 ? 'is' : 'are'} hidden.`;
+}
+
+/**
+ * While a date filter is on: how many undated posts it hides, with "Show them"
+ * that adds them back. null when none are hidden.
+ */
+export function undatedHint(label: string, count: number, onShow: () => void): ReactElement | null {
+  if (count <= 0) return null;
   return (
-    <span
-      data-date-chip=""
-      className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full border border-border bg-panel-2 pl-3 text-xs text-fg-2"
-    >
-      <IconCalendar size={14} className="shrink-0 text-fg-3" />
-      <span className="truncate">{label}</span>
+    <p data-undated-hint="" className="flex flex-wrap items-center gap-x-2 text-sm text-fg-2">
+      <IconCalendar size={15} className="shrink-0 text-fg-3" />
+      <span>{undatedHiddenLine(label, count)}</span>
       <button
         type="button"
-        aria-label="Clear date filter"
-        onClick={onClear}
-        className="-my-1.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        onClick={onShow}
+        className="inline-flex min-h-[44px] items-center font-medium text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconX size={14} />
+        Show them
       </button>
-    </span>
+    </p>
   );
 }
 
@@ -455,6 +508,13 @@ export function undoMoveLabel(toStage: Stage): string {
 /** {@link runMovePost}'s deps plus the Undo runner (useUndoableAction's run). */
 export interface UndoableMoveDeps extends MovePostDeps {
   run: (action: UndoableAction) => void;
+  /**
+   * Posts the reject reason as a comment after the move lands (the post
+   * page's comment call). Absent: a reason is dropped.
+   */
+  postReason?: (postId: string, body: string, traceId: string) => Promise<{ ok: boolean }>;
+  /** Mints the move's trace id, shared by the move and its reason comment. */
+  newTraceId?: () => string;
 }
 
 /**
@@ -464,7 +524,12 @@ export interface UndoableMoveDeps extends MovePostDeps {
  * once. A failed send puts the post back and toasts the friendly error. The
  * in-flight guard holds from the flip until the send settles or Undo.
  */
-export function runUndoableMove(deps: UndoableMoveDeps, postId: string, toStage: Stage): void {
+export function runUndoableMove(
+  deps: UndoableMoveDeps,
+  postId: string,
+  toStage: Stage,
+  reason: string | null = null,
+): void {
   if (deps.inFlight.has(postId)) {
     return;
   }
@@ -490,8 +555,13 @@ export function runUndoableMove(deps: UndoableMoveDeps, postId: string, toStage:
   deps.run({
     label: undoMoveLabel(toStage),
     commit: async () => {
+      const traceId = deps.newTraceId?.();
       try {
-        const result = await stageTransition(deps.client, { postId, toStage });
+        const result = await stageTransition(deps.client, {
+          postId,
+          toStage,
+          ...(traceId !== undefined ? { traceId } : {}),
+        });
         if (!result.ok) {
           revert();
           deps.toast(moveErrorMessage(result.error.code));
@@ -503,6 +573,16 @@ export function runUndoableMove(deps: UndoableMoveDeps, postId: string, toStage:
         return;
       }
       deps.inFlight.delete(postId);
+      // The move landed; a typed reason follows as a comment on the same trace.
+      if (reason !== null && deps.postReason !== undefined) {
+        let posted = false;
+        try {
+          posted = (await deps.postReason(postId, reason, traceId ?? generateTraceId())).ok;
+        } catch {
+          posted = false;
+        }
+        if (!posted) deps.toast(reasonFailureTitle(toStage));
+      }
     },
     revert,
   });
@@ -604,10 +684,6 @@ export function PipelinePage() {
     (range: DateRange | null): void => updateQuery({ customRange: range }),
     [updateQuery],
   );
-  const clearDate = useCallback(
-    (): void => updateQuery({ dateWindow: DATE_WINDOW_DEFAULT, customRange: null }),
-    [updateQuery],
-  );
   const clearFilters = useCallback(
     (): void => updateQuery({ search: '', dateWindow: DATE_WINDOW_DEFAULT, customRange: null }),
     [updateQuery],
@@ -627,12 +703,24 @@ export function PipelinePage() {
   const weekStartDay = activeWorkspace?.week_start_day ?? 1;
 
   const [posts, setPosts] = useState<PipelinePost[]>([]);
+  // The workspace `posts` was read for. A switch renders nothing of the old
+  // list: until the new read lands the board shows the skeleton.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const loadedForRef = useRef<string | null>(null);
+  const loadSeq = useRef(0);
   // True from the first render so the empty pipeline never flashes before the read.
   const [postsLoading, setPostsLoading] = useState(true);
   // A failed read: the plain LoadError shows; the raw message never reaches the UI.
   const [postsFailed, setPostsFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [movePostTarget, setMovePostTarget] = useState<PipelinePost | null>(null);
+  // A Reject, Park or Send for review waiting on its ask-first sheet.
+  const [confirmMove, setConfirmMove] = useState<{
+    post: PipelinePost;
+    to: ConfirmTarget;
+  } | null>(null);
+  // "Show them": the date filter key whose undated posts were added back.
+  const [undatedShownFor, setUndatedShownFor] = useState<string | null>(null);
   // Reactive mirror of the in-flight guard for the open move sheet: the guard
   // itself is a ref (no re-render), so this state drives the sheet's busy prop.
   const [movingId, setMovingId] = useState<string | null>(null);
@@ -667,21 +755,35 @@ export function PipelinePage() {
   const cache = appPresignCache();
 
   // One fetch for the whole board (no N+1): listPosts once, grouped in memory.
+  // A read that lands after a newer one started (a workspace switch) is dropped.
   const loadPosts = useCallback(async () => {
     if (workspaceId === null) return;
+    const seq = ++loadSeq.current;
     setPostsLoading(true);
     let ok = false;
+    let data: PipelinePost[] = [];
     try {
       const result = await listPosts(supabase, { workspaceId, limit: 500 });
       if (result.ok) {
         ok = true;
-        setPosts(result.data);
+        data = result.data;
       }
     } catch {
       // A transport throw (offline) is the same plain failure as an error Result.
     }
+    if (seq !== loadSeq.current) return;
+    if (ok) setPosts(data);
+    else if (loadedForRef.current !== workspaceId) setPosts([]);
+    loadedForRef.current = workspaceId;
+    setLoadedFor(workspaceId);
     setPostsFailed(!ok);
     setPostsLoading(false);
+  }, [workspaceId]);
+
+  // A workspace switch closes the sheets on the old workspace's posts.
+  useEffect(() => {
+    setMovePostTarget(null);
+    setConfirmMove(null);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -689,6 +791,13 @@ export function PipelinePage() {
   }, [loadPosts]);
   // The sample week landing or clearing under the board: re-read it.
   useWorkspaceDataChanged(() => void loadPosts());
+  // Only the active workspace's posts ever render.
+  const live = workspaceId !== null && loadedFor === workspaceId;
+  const shownPosts = live ? posts : NO_POSTS;
+
+  // The approvers' names (card status, Send for review helper) and every
+  // member's name (the creator in the reject confirm).
+  const people = useWorkspacePeople(workspaceId);
 
   useEffect(() => {
     if (workspaceId === null || userId === null) {
@@ -752,22 +861,30 @@ export function PipelinePage() {
   }, [params, setParams]);
 
   // Search + sort are pure, derived over the in-memory list (listPosts loads the
-  // whole board), so no refetch and no N+1: filter by title + caption + platform,
-  // then order, then group into columns. groupByStage is generic over the element
-  // type, so it preserves PipelinePost (thumbnailAssetVersionId and all) with no
-  // assertion.
+  // whole board), so no refetch and no N+1: filter by title + caption, then the
+  // date window (undated posts kept once "Show them" is tapped for this window),
+  // then order, then group into columns. groupByStage is generic over the
+  // element type, so it preserves PipelinePost (thumbnailAssetVersionId and
+  // all) with no assertion.
+  const dateKey = `${dateWindow}:${customRange?.start ?? ''}:${customRange?.end ?? ''}`;
+  const includeUndated = undatedShownFor === dateKey;
+  const searched = useMemo(
+    () => filterByFields(shownPosts, search, postSearchFields),
+    [shownPosts, search],
+  );
   const sorted = useMemo(
     () =>
       sortPosts(
-        filterByWindow(filterByFields(posts, search, postSearchFields), dateWindow, {
+        filterByWindow(searched, dateWindow, {
           now: new Date(),
           timeZone,
           weekStartDay,
           customRange,
+          includeUndated,
         }),
         activeSort,
       ),
-    [posts, search, dateWindow, customRange, activeSort, timeZone, weekStartDay],
+    [searched, dateWindow, customRange, activeSort, timeZone, weekStartDay, includeUndated],
   );
   const grouped = useMemo(() => groupByStage(sorted, STAGES), [sorted]);
 
@@ -776,16 +893,38 @@ export function PipelinePage() {
 
   // The empty view under active search/date filters gets "Nothing fits these filters".
   const visibleCount = (stage === ALL_KEY ? counts.all : counts[stage]) ?? 0;
+  const inStage = (list: PipelinePost[]): PipelinePost[] =>
+    stage === ALL_KEY ? list : list.filter((post) => post.stage === stage);
 
-  // The header counter: what the active view lists out of every post, honest
-  // about a stage, search or date filter.
-  const countLabel = headerCountLabel(visibleCount, posts.length, viewFiltered(query));
-  const showFilteredEmpty = filtersActive(query) && visibleCount === 0;
+  // Counts live on the chips. Only while a search or date filter narrows the
+  // view does a line say "{shown} of {total} posts" (total: this chip's posts).
+  const narrowed = filtersActive(query);
+  const countLabel = headerCountLabel(visibleCount, inStage(shownPosts).length, true);
+  const showFilteredEmpty = narrowed && visibleCount === 0;
+  // Undated posts the date window hides on this chip (after the search).
+  const hiddenUndated =
+    dateFilterActive(query) && !includeUndated ? inStage(searched).filter(isUndated).length : 0;
+
+  // Card covers (first photo or video with its stored size) for the platform
+  // frame, read in batches through the chat cover store; cached on the device.
+  const covers = usePostCovers(NO_IDS);
+  const coverKey = sorted.map((post) => post.id).join(',');
+  useEffect(() => {
+    if (workspaceId === null || coverKey === '') return;
+    const ids = coverKey.split(',');
+    for (let i = 0; i < ids.length; i += COVER_BATCH) {
+      void requestPostCovers(supabase, workspaceId, ids.slice(i, i + COVER_BATCH));
+    }
+  }, [workspaceId, coverKey]);
+  const viewer = useMemo<CardViewer>(
+    () => ({ role, approverFirstNames: people.approverFirstNames }),
+    [role, people.approverFirstNames],
+  );
 
   // Single source for the move: both the desktop drop and the mobile sheet call
   // this, which awaits the proc then re-groups on success (see runMovePost).
   const movePost = useCallback(
-    (postId: string, toStage: Stage): void => {
+    (postId: string, toStage: Stage, reason: string | null = null): void => {
       // Mirror runMovePost's in-flight guard so the busy bookkeeping only runs for
       // a move we actually start; a double-fire is dropped here (and again inside
       // runMovePost, which stays the authority for firing the proc once).
@@ -804,9 +943,15 @@ export function PipelinePage() {
             toast: push,
             role,
             run: runUndoable,
+            newTraceId: generateTraceId,
+            postReason: (id, body, traceId) =>
+              workspaceId === null
+                ? Promise.resolve({ ok: false })
+                : postStageReason(supabase, { workspaceId, postId: id, body, traceId, role }),
           },
           postId,
           toStage,
+          reason,
         );
         return;
       }
@@ -827,12 +972,53 @@ export function PipelinePage() {
         setMovingId((current) => (current === postId ? null : current));
       });
     },
-    [posts, push, role, runUndoable],
+    [posts, push, role, runUndoable, workspaceId],
   );
 
-  const boardLoading = workspaceId === null || (postsLoading && posts.length === 0 && !postsFailed);
+  // Every move asks the same question first: Reject and Park always confirm
+  // (move sheet, long-press, board drag); Send for review from Draft confirms
+  // from the move sheet. Everything else (Approve has its own confirm) moves.
+  const requestMove = useCallback(
+    (postId: string, toStage: Stage, fromSheet: boolean): void => {
+      const post = shownPosts.find((p) => p.id === postId);
+      if (post === undefined) return;
+      if (needsConfirm(post.stage as Stage, toStage, fromSheet)) {
+        if (!canRoleMove(role, post.stage as Stage, toStage)) return;
+        setMovePostTarget(null);
+        setConfirmMove({ post, to: toStage });
+        return;
+      }
+      movePost(postId, toStage);
+    },
+    [shownPosts, movePost, role],
+  );
+  const requestSheetMove = useCallback(
+    (postId: string, toStage: Stage): void => requestMove(postId, toStage, true),
+    [requestMove],
+  );
+  const requestBoardMove = useCallback(
+    (postId: string, toStage: Stage): void => requestMove(postId, toStage, false),
+    [requestMove],
+  );
+  // A long-press on a card this viewer cannot move does nothing.
+  const openMove = useCallback(
+    (post: PipelinePost): void => {
+      if (roleStatus === 'ready' && !hasAllowedMove(role, post.stage as Stage)) return;
+      setMovePostTarget(post);
+    },
+    [role, roleStatus],
+  );
+  const confirmCreator =
+    confirmMove === null
+      ? null
+      : firstNameOf(
+          people.names.get(confirmMove.post.owner_user_id ?? confirmMove.post.created_by ?? ''),
+        );
+
+  const boardLoading =
+    workspaceId === null || !live || (postsLoading && posts.length === 0 && !postsFailed);
   // No posts at all (not a filter hiding them) once a read has succeeded.
-  const pipelineEmpty = !boardLoading && !postsFailed && !postsLoading && posts.length === 0;
+  const pipelineEmpty = !boardLoading && !postsFailed && !postsLoading && shownPosts.length === 0;
 
   return (
     <>
@@ -850,19 +1036,23 @@ export function PipelinePage() {
         onStageChange: setStage,
         counts,
         canCreate,
+        hideDraft: isClient(role),
       })}
 
-      {/* Honest counter: "{shown} of {total} posts" while a stage, search or
-          date filter narrows the view, the plain total otherwise. */}
-      <div className="flex min-h-[44px] flex-wrap items-center gap-2 px-4 pt-3 md:px-6">
-        <span data-posts-count="" className="text-sm text-fg-3">
-          {countLabel}
-        </span>
-        {dateFilterActive(query) ? dateFilterChip(dateChipLabel(query), clearDate) : null}
-      </div>
+      {/* Counts live on the chips. While a search or date filter narrows the
+          view: the honest "{shown} of {total} posts", and the undated posts the
+          date filter hides with "Show them". */}
+      {narrowed && !boardLoading && !postsFailed ? (
+        <div className="flex flex-col gap-1 px-4 pt-3 md:px-6">
+          <span data-posts-count="" className="text-sm text-fg-3">
+            {countLabel}
+          </span>
+          {undatedHint(dateChipLabel(query), hiddenUndated, () => setUndatedShownFor(dateKey))}
+        </div>
+      ) : null}
 
       {/* The chips and filters above stay usable through a failed read. */}
-      {postsFailed
+      {live && postsFailed
         ? postsLoadError(() => void loadPosts(), postsLoading)
         : boardLoading
           ? postsSkeleton(isDesktop)
@@ -879,12 +1069,14 @@ export function PipelinePage() {
                   presignEnabled,
                   workspaceKey,
                   onViewAll: setStage,
-                  onMovePost: movePost,
-                  onLongPressPost: setMovePostTarget,
+                  onMovePost: requestBoardMove,
+                  onLongPressPost: openMove,
                   role,
                   onBlockedMove,
                   shownKey,
                   timeZone,
+                  viewer,
+                  covers,
                 })}
 
       <MoveSheet
@@ -892,10 +1084,22 @@ export function PipelinePage() {
         post={movePostTarget}
         busy={movePostTarget !== null && movingId === movePostTarget.id}
         onClose={() => setMovePostTarget(null)}
-        onMove={movePost}
+        onMove={requestSheetMove}
         role={role}
         roleStatus={roleStatus}
         onRetryRole={retryRole}
+        approverFirstNames={people.approverFirstNames}
+      />
+
+      <StageMoveConfirm
+        pending={confirmMove}
+        creatorFirstName={confirmCreator}
+        approverFirstNames={people.approverFirstNames}
+        onCancel={() => setConfirmMove(null)}
+        onConfirm={(postId, to, reason) => {
+          setConfirmMove(null);
+          movePost(postId, to, reason);
+        }}
       />
 
       <CreatePostSheet

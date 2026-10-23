@@ -829,15 +829,23 @@ export function PostSectionsView(
 
 /** The empty default view's copy per mode. */
 export function sectionsEmptyCopy(mode: PickerMode): { title: string; description: string } {
-  if (mode === 'drafts') return { title: 'No drafts', description: 'No post is in draft.' };
+  if (mode === 'drafts') return { title: 'No drafts yet', description: 'No post is in draft.' };
   if (mode === 'inline') {
-    return { title: 'No posts', description: 'Nothing is waiting or recently approved.' };
+    return { title: 'No posts yet', description: 'Nothing is waiting or recently approved.' };
   }
   return {
-    title: 'No posts',
+    title: 'No posts yet',
     description: 'Nothing is waiting, approved, parked or rejected.',
   };
 }
+
+/** The search no-match heading, naming the trimmed query. */
+export function searchEmptyTitle(query: string): string {
+  return `Nothing called "${query.trim()}". Try another word.`;
+}
+
+/** The briefs tab's empty line under a filter with no match. */
+export const BRIEFS_EMPTY_COPY = 'No briefs fit this filter yet.';
 
 /** Search results: "<N> matches", the rows, and a "Load 50 more" row while more remain. */
 export function SearchResultsView(
@@ -851,13 +859,7 @@ export function SearchResultsView(
   },
 ): ReactElement {
   if (props.rows.length === 0) {
-    return (
-      <EmptyState
-        icon={<IconPipeline size={22} />}
-        title={`No posts called "${props.query.trim()}"`}
-        description="Try another word or a post number."
-      />
-    );
+    return <EmptyState icon={<IconPipeline size={22} />} title={searchEmptyTitle(props.query)} />;
   }
   return (
     <ul className={LIST_CLASS}>
@@ -930,7 +932,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
   );
 }
 
-function BriefPickerList(props: {
+export function BriefPickerList(props: {
   briefs: BriefPickerRow[];
   loading: boolean;
   error: string | null;
@@ -956,7 +958,7 @@ function BriefPickerList(props: {
       <EmptyState
         icon={<IconBriefs size={22} />}
         title="No briefs"
-        description="No briefs match this filter."
+        description={BRIEFS_EMPTY_COPY}
       />
     );
   }

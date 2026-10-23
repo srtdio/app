@@ -8,6 +8,8 @@ import { PostCard } from '@/components/pages/PostCard';
 import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
 import { readShown, writeShown } from '@/components/pages/pipeline/pipeline-query';
 import type { PresignCache } from '@/lib/asset-presign';
+import type { CoverLookup } from '@/lib/chat/post-covers';
+import type { CardViewer } from '@/components/pages/pipeline/card-status';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
 export interface PipelineFeedProps {
@@ -29,6 +31,10 @@ export interface PipelineFeedProps {
   shownKey?: string;
   /** The workspace zone each card reads its target day in. Default UTC. */
   timeZone?: string;
+  /** The viewer's role and approvers: each card's status line and its ⋯. */
+  viewer?: CardViewer;
+  /** Each post's first photo or video, so its card takes the platform frame. */
+  covers?: CoverLookup;
 }
 
 /**
@@ -81,6 +87,8 @@ function cardGrid(
   workspaceKey: string | null,
   showStage: boolean,
   timeZone: string,
+  viewer: CardViewer | undefined,
+  covers: CoverLookup | undefined,
 ): ReactElement {
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -94,6 +102,8 @@ function cardGrid(
             onMove={onLongPressPost}
             showStage={showStage}
             timeZone={timeZone}
+            {...(viewer !== undefined ? { viewer } : {})}
+            {...(covers !== undefined ? { cover: covers(post.id) } : {})}
           />
         </FeedCard>
       ))}
@@ -118,6 +128,8 @@ export function PipelineFeed({
   onLongPressPost,
   shownKey,
   timeZone = 'UTC',
+  viewer,
+  covers,
 }: PipelineFeedProps): ReactElement {
   const depthKey = shownKey ?? null;
   const [shown, setShown] = useState(() =>
@@ -153,6 +165,8 @@ export function PipelineFeed({
             workspaceKey,
             activeStage === 'all',
             timeZone,
+            viewer,
+            covers,
           )}
           {list.length > shown ? (
             <div className="mt-4 flex justify-center">

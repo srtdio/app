@@ -11,14 +11,22 @@ import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { friendlyTransitionError } from '@/lib/post-transition-errors';
-import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
+import { POST_CHANGED_EVENT, firstName } from '@/components/chat/post-card';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
+import { stageReasonComment } from '@/components/pages/pcs/stage-actions';
+import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 
 /** Every action the sheet can offer. */
-export type SheetAction = 'approve' | 'comment' | 'open_post' | 'send_review' | 'open_pipeline';
+export type SheetAction =
+  | 'approve'
+  | 'reject'
+  | 'comment'
+  | 'open_post'
+  | 'send_review'
+  | 'open_pipeline';
 
-/** The two actions that ask first, then move the post. */
-export type ConfirmKind = 'approve' | 'send_review';
+/** The actions that ask first, then move the post. */
+export type ConfirmKind = 'approve' | 'reject' | 'send_review';
 
 /** The action area for one viewer side and stage. */
 export interface SheetActionSet {
@@ -33,12 +41,13 @@ export interface SheetActionSet {
 export const CLIENT_REVIEW_HINT = 'One post at a time. Comments keep it in review.';
 
 /**
- * The action set by side and stage. Client in review: approve, comment, open.
- * Client elsewhere: open only (plus the approved pill). Agency in draft: send for
- * review, open in pipeline. Agency in review: approve on the client's behalf and
- * open in pipeline, with a waiting hint. Agency elsewhere: open in pipeline. No
- * Reject or Park in chat for anyone. An unresolved side gets the neutral open action only, so a
- * write is never offered before the role is known.
+ * The action set by side and stage. Approvers (client side) in review: approve,
+ * reject, comment, open. Approvers on an approved post: reject and open (plus the
+ * approved pill). Approvers elsewhere: open only. Agency in draft: send for
+ * review, open post. Agency in review: approve on the approvers' behalf and open
+ * post, with a waiting hint. Agency elsewhere: open post. No Park in chat, and no
+ * Reject for the agency side. An unresolved side gets the neutral open action
+ * only, so a write is never offered before the role is known.
  */
 export function sheetActions(
   side: ViewerSide,
@@ -48,12 +57,15 @@ export function sheetActions(
   if (side === 'client') {
     if (post.stage === 'review') {
       return {
-        actions: ['approve', 'comment', 'open_post'],
+        actions: ['approve', 'reject', 'comment', 'open_post'],
         hint: CLIENT_REVIEW_HINT,
         approvedPill: false,
       };
     }
-    return { actions: ['open_post'], hint: null, approvedPill: post.stage === 'approved' };
+    if (post.stage === 'approved') {
+      return { actions: ['reject', 'open_post'], hint: null, approvedPill: true };
+    }
+    return { actions: ['open_post'], hint: null, approvedPill: false };
   }
   if (side === 'agency') {
     if (post.stage === 'draft') {
@@ -79,6 +91,8 @@ export function actionLabel(action: SheetAction): string {
   switch (action) {
     case 'approve':
       return 'Approve';
+    case 'reject':
+      return 'Reject';
     case 'comment':
       return 'Comment on this post';
     case 'open_post':
@@ -86,7 +100,7 @@ export function actionLabel(action: SheetAction): string {
     case 'send_review':
       return 'Send for review';
     case 'open_pipeline':
-      return 'Open in pipeline';
+      return 'Open post';
   }
 }
 
@@ -126,16 +140,37 @@ export interface ConfirmCopy {
   confirmLabel: string;
 }
 
+/** The reject confirm's reason field label and the helper line under it. */
+export const REJECT_REASON_LABEL = 'Reason (optional)';
+export const REJECT_REASON_HELPER = 'Goes to the comments.';
+
+/** The one line a failed reject shows; never the raw server text. */
+export const REJECT_ERROR = "Couldn't move the post. Try again.";
+
+/** How the reject confirm names the creator: their first name, or "The creator". */
+export function creatorSubject(creatorName: string | null | undefined): string {
+  const first = firstName(creatorName ?? '');
+  return first !== '' ? first : 'The creator';
+}
+
 /**
- * The confirm copy. Approve: "Approve <Title>, all N slides, for Oct 2?" followed
+ * The confirm copy. Reject: "Reject this post?" and who gets it back to rework.
+ * Approve: "Approve <Title>, all N slides, for Oct 2?" followed
  * by the logged-approval line; the slide and date clauses drop out when there is
  * no media or no target date. Send for review says what leaving draft means.
  * `subject` is the post's name as postSubject gives it.
  */
 export function confirmCopy(
   kind: ConfirmKind,
-  args: { subject: string; mediaCount: number; targetDate: string },
+  args: { subject: string; mediaCount: number; targetDate: string; creatorName?: string | null },
 ): ConfirmCopy {
+  if (kind === 'reject') {
+    return {
+      question: 'Reject this post?',
+      detail: `${creatorSubject(args.creatorName)} gets it back to rework. You can send a reason.`,
+      confirmLabel: 'Reject',
+    };
+  }
   const clauses = [args.subject];
   const slides = slidesPhrase(args.mediaCount);
   if (slides !== '') clauses.push(slides);
@@ -158,12 +193,16 @@ export function confirmCopy(
 
 /** The stage each confirm moves the post to. */
 export function confirmTarget(kind: ConfirmKind): StageTransitionInput['toStage'] {
-  return kind === 'approve' ? 'approved' : 'review';
+  if (kind === 'approve') return 'approved';
+  if (kind === 'reject') return 'rejected';
+  return 'review';
 }
 
-/** The success toast: "Post approved" / "Post sent for review". */
+/** The success toast: "Post approved" / "Post rejected" / "Post sent for review". */
 export function successToast(kind: ConfirmKind): string {
-  return kind === 'approve' ? 'Post approved' : 'Post sent for review';
+  if (kind === 'approve') return 'Post approved';
+  if (kind === 'reject') return 'Post rejected';
+  return 'Post sent for review';
 }
 
 /** The toast after a client comment lands. */
@@ -298,16 +337,23 @@ export interface StageChangeDeps {
   target: Pick<EventTarget, 'dispatchEvent'>;
   toast: (title: string) => void;
   close: () => void;
+  /**
+   * Posts a reject reason as a comment after the move lands (the post page's
+   * comment write). Absent means a reason is never posted.
+   */
+  postReason?: (body: string) => Promise<{ ok: boolean }>;
 }
 
 /**
  * Run one confirmed stage change: exactly one transition call. On success it
  * announces the change, closes the sheet and toasts, and resolves null; on
- * failure it resolves the friendly error copy and touches nothing else.
+ * failure it resolves the friendly error copy and touches nothing else. A
+ * reject with a typed reason posts it as a comment once the move lands; a
+ * reason that fails to post toasts so, and the move still stands.
  */
 export async function runStageChange(
   deps: StageChangeDeps,
-  args: { kind: ConfirmKind; postId: string; traceId: string },
+  args: { kind: ConfirmKind; postId: string; traceId: string; reason?: string },
 ): Promise<string | null> {
   let result: Result<string>;
   try {
@@ -319,9 +365,21 @@ export async function runStageChange(
   } catch {
     result = { ok: false, error: { code: 'unknown', message: 'unknown' } as DomainError };
   }
-  if (!result.ok) return friendlyTransitionError(result.error);
+  if (!result.ok) {
+    return args.kind === 'reject' ? REJECT_ERROR : friendlyTransitionError(result.error);
+  }
   dispatchPostChanged(deps.target, args.postId);
   deps.close();
   deps.toast(successToast(args.kind));
+  const body = args.kind === 'reject' ? stageReasonComment(args.reason ?? '') : null;
+  if (body !== null && deps.postReason !== undefined) {
+    let posted = false;
+    try {
+      posted = (await deps.postReason(body)).ok;
+    } catch {
+      posted = false;
+    }
+    if (!posted) deps.toast(reasonFailureTitle('rejected'));
+  }
   return null;
 }

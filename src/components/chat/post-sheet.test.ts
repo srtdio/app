@@ -3,7 +3,11 @@ import type { PostCardRow } from '../../../packages/posts/src/reads';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import {
   CLIENT_REVIEW_HINT,
+  REJECT_ERROR,
+  REJECT_REASON_HELPER,
+  REJECT_REASON_LABEL,
   actionLabel,
+  creatorSubject,
   approvedPillLabel,
   commentToast,
   confirmCopy,
@@ -45,21 +49,35 @@ function row(over: Partial<PostCardRow> = {}): PostCardRow {
 const TZ = 'UTC';
 
 describe('sheetActions', () => {
-  it('client in review: approve, comment, open, with the one-at-a-time hint', () => {
+  it('client in review: approve, reject, comment, open, with the one-at-a-time hint', () => {
     const set = sheetActions('client', row({ stage: 'review' }), TZ);
-    expect(set.actions).toEqual(['approve', 'comment', 'open_post']);
+    expect(set.actions).toEqual(['approve', 'reject', 'comment', 'open_post']);
     expect(set.hint).toBe(CLIENT_REVIEW_HINT);
     expect(CLIENT_REVIEW_HINT).toBe('One post at a time. Comments keep it in review.');
     expect(set.approvedPill).toBe(false);
   });
 
-  it('client elsewhere: open only; the approved pill only when approved', () => {
-    for (const stage of ['approved', 'parked', 'rejected', 'draft']) {
+  it('client on an approved post: reject and open, with the approved pill', () => {
+    const set = sheetActions('client', row({ stage: 'approved' }), TZ);
+    expect(set.actions).toEqual(['reject', 'open_post']);
+    expect(set.hint).toBeNull();
+    expect(set.approvedPill).toBe(true);
+  });
+
+  it('client elsewhere: open only, no pill', () => {
+    for (const stage of ['parked', 'rejected', 'draft']) {
       const set = sheetActions('client', row({ stage }), TZ);
       expect(set.actions).toEqual(['open_post']);
       expect(set.hint).toBeNull();
-      expect(set.approvedPill).toBe(stage === 'approved');
+      expect(set.approvedPill).toBe(false);
     }
+  });
+
+  it('the agency side never gets Reject', () => {
+    for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected']) {
+      expect(sheetActions('agency', row({ stage }), TZ).actions).not.toContain('reject');
+    }
+    expect(sheetActions('unknown', row({ stage: 'approved' }), TZ).actions).toEqual(['open_post']);
   });
 
   it('agency in draft: send for review, open in pipeline', () => {
@@ -89,10 +107,11 @@ describe('sheetActions', () => {
 describe('labels and copy', () => {
   it('action labels', () => {
     expect(actionLabel('approve')).toBe('Approve');
+    expect(actionLabel('reject')).toBe('Reject');
     expect(actionLabel('comment')).toBe('Comment on this post');
     expect(actionLabel('open_post')).toBe('Open full post');
     expect(actionLabel('send_review')).toBe('Send for review');
-    expect(actionLabel('open_pipeline')).toBe('Open in pipeline');
+    expect(actionLabel('open_pipeline')).toBe('Open post');
   });
 
   it('approved pill names the approver when known', () => {
@@ -138,9 +157,44 @@ describe('labels and copy', () => {
   it('confirm targets and toasts', () => {
     expect(confirmTarget('approve')).toBe('approved');
     expect(confirmTarget('send_review')).toBe('review');
+    expect(confirmTarget('reject')).toBe('rejected');
     expect(successToast('approve')).toBe('Post approved');
+    expect(successToast('reject')).toBe('Post rejected');
     expect(successToast('send_review')).toBe('Post sent for review');
     expect(commentToast()).toBe('Comment added');
+  });
+
+  it('reject confirm names the creator by first name, else "The creator"', () => {
+    const args = { subject: 'Launch', mediaCount: 2, targetDate: 'Oct 2' };
+    expect(confirmCopy('reject', { ...args, creatorName: 'Priya Shah' })).toEqual({
+      question: 'Reject this post?',
+      detail: 'Priya gets it back to rework. You can send a reason.',
+      confirmLabel: 'Reject',
+    });
+    expect(confirmCopy('reject', args).detail).toBe(
+      'The creator gets it back to rework. You can send a reason.',
+    );
+    expect(creatorSubject('   ')).toBe('The creator');
+    expect(creatorSubject(null)).toBe('The creator');
+    expect(REJECT_REASON_LABEL).toBe('Reason (optional)');
+    expect(REJECT_REASON_HELPER).toBe('Goes to the comments.');
+  });
+
+  it('reject copy never says client or agency', () => {
+    const reject = confirmCopy('reject', { subject: 'Launch', mediaCount: 0, targetDate: '' });
+    const lines = [
+      ...Object.values(reject),
+      REJECT_REASON_LABEL,
+      REJECT_REASON_HELPER,
+      REJECT_ERROR,
+      actionLabel('reject'),
+      actionLabel('open_pipeline'),
+      successToast('reject'),
+    ];
+    for (const line of lines) {
+      expect(line).not.toMatch(/client|agency/i);
+      expect(line).not.toContain('\u2014');
+    }
   });
 
   it('postSubject: the trimmed title, or "this post" when there is none', () => {
@@ -326,6 +380,72 @@ describe('runStageChange', () => {
     });
     expect(error).toBe('Something went wrong. Please try again.');
     expect(deps.close).not.toHaveBeenCalled();
+  });
+
+  it('reject: moves to rejected, then posts the trimmed reason as a comment', async () => {
+    const { deps, events } = fakeDeps({ ok: true, data: 'p1' });
+    const postReason = vi.fn(async () => ({ ok: true }));
+    const error = await runStageChange(
+      { ...deps, postReason },
+      { kind: 'reject', postId: 'p1', traceId: 't-r', reason: '  Wrong logo  ' },
+    );
+    expect(error).toBeNull();
+    expect(deps.transition).toHaveBeenCalledWith({
+      postId: 'p1',
+      toStage: 'rejected',
+      traceId: 't-r',
+    });
+    expect(events).toEqual([{ postId: 'p1' }]);
+    expect(postReason).toHaveBeenCalledTimes(1);
+    expect(postReason).toHaveBeenCalledWith('Wrong logo');
+    expect(deps.toast).toHaveBeenCalledWith('Post rejected');
+    expect(deps.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('reject with no reason posts no comment', async () => {
+    const { deps } = fakeDeps({ ok: true, data: 'p1' });
+    const postReason = vi.fn(async () => ({ ok: true }));
+    await runStageChange(
+      { ...deps, postReason },
+      { kind: 'reject', postId: 'p1', traceId: 't', reason: '   ' },
+    );
+    expect(postReason).not.toHaveBeenCalled();
+  });
+
+  it('a reason that fails to post toasts so; the move still stands', async () => {
+    const { deps } = fakeDeps({ ok: true, data: 'p1' });
+    const postReason = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    const error = await runStageChange(
+      { ...deps, postReason },
+      { kind: 'reject', postId: 'p1', traceId: 't', reason: 'Too long' },
+    );
+    expect(error).toBeNull();
+    expect(deps.toast).toHaveBeenCalledWith("Rejected, but your reason didn't post.");
+  });
+
+  it('a failed reject shows the fixed line, never server text, and posts no reason', async () => {
+    const { deps, events } = fakeDeps({
+      ok: false,
+      error: { code: 'invalid_stage_transition', message: 'raw server text' },
+    });
+    const postReason = vi.fn(async () => ({ ok: true }));
+    const error = await runStageChange(
+      { ...deps, postReason },
+      { kind: 'reject', postId: 'p1', traceId: 't', reason: 'Wrong logo' },
+    );
+    expect(error).toBe("Couldn't move the post. Try again.");
+    expect(error).toBe(REJECT_ERROR);
+    expect(events).toEqual([]);
+    expect(postReason).not.toHaveBeenCalled();
+    expect(deps.close).not.toHaveBeenCalled();
+
+    const thrown = fakeDeps({ ok: true, data: 'p1' });
+    thrown.deps.transition.mockRejectedValueOnce(new Error('offline'));
+    expect(await runStageChange(thrown.deps, { kind: 'reject', postId: 'p1', traceId: 't' })).toBe(
+      REJECT_ERROR,
+    );
   });
 
   it('dispatchPostChanged sends the PR 2 event with the post id', () => {

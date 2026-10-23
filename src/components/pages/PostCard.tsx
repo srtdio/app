@@ -1,13 +1,20 @@
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
-import { PlatformMark } from '@/components/ui/PlatformMark';
 import { IconPlay } from '@/components/ui/icons';
 import { FORMAT_GLYPH_LABEL, formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath } from '@/lib/entityRef';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import {
+  hasAllowedMove,
+  reviewStatus,
+  type CardViewer,
+} from '@/components/pages/pipeline/card-status';
 import { civilDate } from '@/lib/list-sort';
+import { frameFor } from '@/lib/platform-specs';
+import { cn } from '@/lib/cn';
+import type { CardFirstMedia } from '../../../packages/posts/src/reads';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
 export interface PostCardProps {
@@ -17,8 +24,22 @@ export interface PostCardProps {
   /** The active workspace's key, used to build the pretty /p/KEY-N link. When
    *  absent the card falls back to the classic /posts/:id route. */
   workspaceKey?: string | null;
-  /** Opens the move sheet for this post; renders the card's Move button. */
+  /** Opens the move sheet for this post; renders the ⋯ on the picture's corner. */
   onMove?: (post: PipelinePost) => void;
+  /**
+   * The viewer's role and the workspace approvers: drives the review status line
+   * and hides the ⋯ when this viewer has no allowed move. Absent: no status
+   * line, and the ⋯ shows whenever onMove is passed.
+   */
+  viewer?: CardViewer;
+  /**
+   * The post's first photo or video with its stored size (the chat card's
+   * cover read), so the picture takes the same platform frame as the chat card.
+   * undefined while unknown: the format's default frame.
+   */
+  cover?: CardFirstMedia | null;
+  /** The clock for the time-in-stage reading. Default: now. */
+  now?: Date;
   /** The All view: the meta line leads with the post's stage dot and label. */
   showStage?: boolean;
   /**
@@ -27,6 +48,57 @@ export interface PostCardProps {
    * browser's. Default UTC.
    */
   timeZone?: string;
+}
+
+/**
+ * The card's due line: "Due 15 Mar" (day and short month, in that order), the
+ * day read in the workspace zone by {@link formatTargetDate}.
+ */
+export function dueLabel(value: string, timeZone = 'UTC'): string {
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return `Due ${value}`;
+  let civil: string;
+  try {
+    civil = civilDate(instant, timeZone);
+  } catch {
+    civil = civilDate(instant, 'UTC');
+  }
+  const [, m, d] = civil.split('-').map((part) => Number(part));
+  return `Due ${d!} ${DUE_MONTHS[m! - 1] ?? ''}`.trimEnd();
+}
+
+const DUE_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/**
+ * The card's picture frame ratio (w / h): the post's platform + format frame
+ * fed the cover's stored size, the same rule the chat card uses (cardFrame),
+ * so both show one shape for one post. null for a format with no media box
+ * (text, link): the card keeps its square fallback tile. Pure.
+ */
+export function cardRatio(
+  post: Pick<PipelinePost, 'platform' | 'format'>,
+  cover: CardFirstMedia | null | undefined,
+): number | null {
+  const first = cover ?? null;
+  const frame = frameFor(
+    post.platform,
+    post.format,
+    first === null ? null : { kind: first.kind, w: first.width, h: first.height },
+  );
+  return frame === null ? null : frame.ratio;
 }
 
 /**
@@ -84,8 +156,8 @@ function formatToken(format: string): FormatGlyphToken {
  */
 function postFallback(post: PipelinePost): ThumbnailFallback {
   const token = formatToken(post.format);
-  // A no-media card shows its caption under the title, labelled "Caption", so
-  // the tile does not repeat it; a media post whose presign fails keeps it.
+  // A no-media card shows its caption under the title, so the tile does not
+  // repeat it; a media post whose presign fails keeps it.
   const hasCaption = post.caption !== null && post.caption.trim() !== '';
   const body = captionPreview(post) !== null ? null : hasCaption ? post.caption : post.title;
   const layout = token === 'video' || token === 'link' ? 'media' : 'text';
@@ -97,7 +169,7 @@ function CarouselBadge() {
   return (
     <span
       aria-label="Carousel"
-      className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-md bg-black/55 text-white"
+      className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-md bg-black/55 text-white"
     >
       <svg
         width={14}
@@ -116,13 +188,13 @@ function CarouselBadge() {
   );
 }
 
-/** Two opposed arrows: the Move button's swap glyph. */
-function SwapIcon() {
+/** Three dots in a row: the ⋯ glyph on the picture's corner. */
+function MoreIcon() {
   return (
     <svg
       aria-hidden
-      width={18}
-      height={18}
+      width={16}
+      height={16}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -130,10 +202,9 @@ function SwapIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M7 4 3 8l4 4" />
-      <path d="M3 8h14" />
-      <path d="m17 20 4-4-4-4" />
-      <path d="M21 16H7" />
+      <circle cx={5} cy={12} r={1.3} />
+      <circle cx={12} cy={12} r={1.3} />
+      <circle cx={19} cy={12} r={1.3} />
     </svg>
   );
 }
@@ -151,14 +222,15 @@ function PlayBadge() {
 }
 
 /**
- * A pipeline board card: a full-bleed square thumbnail above the title and one
- * quiet meta line (a platform mark, the format glyph, and the target date when
- * present). The thumbnail is the shared Thumbnail tile (same one Assets uses), so
- * an image post, an imageless post, and a glyph post all share ONE tile background
- * by state. The whole card navigates to the post detail (PCS) view; when the
- * board passes onMove, a 44px secondary Move button at the card's right edge,
- * vertically centred on the text block, opens the move sheet. Nothing overlays
- * the thumbnail but its own format and carousel labels.
+ * A pipeline board card: a full-bleed picture in the post's platform frame
+ * (4:5 for an Instagram post, the chat card's shape) above the title, the
+ * review status line, and one quiet meta line (the stage in the All view, the
+ * format glyph, and "Due {d MMM}" when dated). The picture is the shared
+ * Thumbnail tile, so an image post, an imageless post, and a glyph post share
+ * ONE tile background by state. The whole card navigates to the post detail
+ * (PCS) view; when the board passes onMove and the viewer has an allowed move,
+ * a ⋯ circle on the picture's top-right corner (44px tap area, about 30px
+ * visible) opens the move sheet, so the title gets the full card width.
  * Navigation is a full-bleed overlay button laid behind the card content.
  */
 export function PostCard({
@@ -167,6 +239,9 @@ export function PostCard({
   presignEnabled,
   workspaceKey = null,
   onMove,
+  viewer,
+  cover,
+  now,
   showStage = false,
   timeZone = 'UTC',
 }: PostCardProps) {
@@ -177,6 +252,14 @@ export function PostCard({
   const href =
     workspaceKey !== null ? entityUrlPath('post', workspaceKey, post.number) : `/posts/${post.id}`;
   const caption = captionPreview(post);
+  const stage = post.stage as Stage;
+  const ratio = cardRatio(post, cover);
+  const status =
+    viewer !== undefined
+      ? reviewStatus(stage, post.stage_entered_at, viewer, now ?? new Date())
+      : null;
+  const canMove =
+    onMove !== undefined && (viewer === undefined || hasAllowedMove(viewer.role, stage));
 
   return (
     <div
@@ -198,6 +281,7 @@ export function PostCard({
           cache={cache}
           presignEnabled={presignEnabled}
           aspect="square"
+          {...(ratio !== null ? { ratio } : {})}
           fallback={postFallback(post)}
           alt={post.title}
         >
@@ -208,64 +292,77 @@ export function PostCard({
           ) : null}
         </Thumbnail>
       </div>
-      <div data-post-card-body="" className="flex items-center gap-2 p-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <div
-            data-post-card-title=""
-            className="line-clamp-2 text-sm font-medium leading-snug [overflow-wrap:anywhere]"
-          >
-            {post.title}
-          </div>
-          {caption !== null ? (
-            <p
-              data-post-card-caption=""
-              className="line-clamp-2 text-xs leading-snug text-fg-3 [overflow-wrap:anywhere]"
-            >
-              <span className="font-medium">Caption</span>
-              <span aria-hidden="true">: </span>
-              {caption}
-            </p>
-          ) : null}
-          {/* One quiet meta line: the stage (All view only), the platform mark, the
-            format glyph, and the date pushed to the trailing edge. No two-pill
-            stack; the row never wraps. */}
-          <div className="flex items-center gap-1.5">
-            {showStage ? (
-              <span
-                data-post-card-stage=""
-                className="inline-flex shrink-0 items-center gap-1.5 text-xs text-fg-2"
-              >
-                <StageDot stage={post.stage as Stage} />
-                {stageLabel(post.stage as Stage)}
-              </span>
-            ) : null}
-            <PlatformMark platform={post.platform} />
-            <span className="inline-flex h-[19px] w-[19px] items-center justify-center rounded-md text-fg-3">
-              {formatIcon(formatToken(post.format), 13)}
-            </span>
-            {post.target_date !== null ? (
-              <span className="ml-auto shrink-0 text-xs tabular-nums text-fg-3">
-                {formatTargetDate(post.target_date, timeZone)}
-              </span>
-            ) : null}
-          </div>
+      {canMove && onMove !== undefined ? (
+        // On the picture's top-right corner, above the Open post overlay (z-10)
+        // so a tap moves, not opens. Pointer down stops here so the feed's
+        // long-press never arms under it. The carousel badge sits under it, so
+        // it moves to the left corner when the ⋯ shows.
+        <button
+          type="button"
+          aria-label={`Move post ${post.title}`}
+          data-post-card-move=""
+          draggable={false}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => onMove(post)}
+          className="group absolute right-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full focus:outline-none"
+        >
+          <span className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors duration-fast ease-enter group-hover:bg-black/60 group-focus-visible:ring-2 group-focus-visible:ring-accent">
+            <MoreIcon />
+          </span>
+        </button>
+      ) : null}
+      <div data-post-card-body="" className="flex min-w-0 flex-col gap-1.5 p-3">
+        <div
+          data-post-card-title=""
+          className="line-clamp-2 text-sm font-medium leading-snug [overflow-wrap:anywhere]"
+        >
+          {post.title}
         </div>
-        {onMove !== undefined ? (
-          // At the card's right edge, centred on the text block, above the Open
-          // post overlay (z-10) so a tap moves, not opens. Pointer down stops
-          // here so the feed's long-press never arms under it.
-          <button
-            type="button"
-            aria-label={`Move post ${post.title}`}
-            data-post-card-move=""
-            draggable={false}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onMove(post)}
-            className="relative z-10 inline-flex h-11 w-11 shrink-0 items-center justify-center self-center rounded-md border border-border bg-panel text-fg-2 transition-colors duration-fast ease-enter hover:bg-panel-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        {caption !== null ? (
+          <p
+            data-post-card-caption=""
+            className="line-clamp-2 text-xs leading-snug text-fg-3 [overflow-wrap:anywhere]"
           >
-            <SwapIcon />
-          </button>
+            {caption}
+          </p>
         ) : null}
+        {status !== null ? (
+          <div
+            data-post-card-status={status.tone}
+            className={cn(
+              'flex min-w-0 items-center gap-1.5 text-xs',
+              status.tone === 'you' ? 'font-semibold text-accent' : 'text-fg-2',
+            )}
+          >
+            {status.tone === 'you' ? (
+              <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+            ) : (
+              <StageDot stage={stage} />
+            )}
+            <span className="truncate">{status.text}</span>
+          </div>
+        ) : null}
+        {/* One quiet meta line: the stage (All view only, when no status line
+          names it), the format glyph, and the due date. The row never wraps. */}
+        <div className="flex min-w-0 items-center gap-1.5">
+          {showStage && status === null ? (
+            <span
+              data-post-card-stage=""
+              className="inline-flex shrink-0 items-center gap-1.5 text-xs text-fg-2"
+            >
+              <StageDot stage={stage} />
+              {stageLabel(stage)}
+            </span>
+          ) : null}
+          <span className="inline-flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-md text-fg-3">
+            {formatIcon(formatToken(post.format), 13)}
+          </span>
+          {post.target_date !== null ? (
+            <span data-post-card-due="" className="ml-auto truncate text-xs tabular-nums text-fg-3">
+              {dueLabel(post.target_date, timeZone)}
+            </span>
+          ) : null}
+        </div>
       </div>
     </div>
   );

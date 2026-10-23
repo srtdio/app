@@ -1,7 +1,9 @@
 // The post sheet a shared post card opens in chat: every slide of the post, the
 // title and its key facts, and the one action the viewer is waited on for.
-// Clients in review approve (after a confirm step) or leave checkpoint points
-// through the same SlotComposer the post page uses; agency in review may approve
+// Approvers in review approve or reject (each after a confirm step) or leave
+// checkpoint points through the same SlotComposer the post page uses; an
+// approved post can still be rejected. A reject's optional reason posts as a
+// comment through the post page's comment write. Agency in review may approve
 // on the client's behalf (same confirm, plus one on-behalf line); agency in draft
 // sends for review (also confirmed). The post itself is never refetched: the card's PR 2
 // row carries every value shown. Only the gallery is read, once per open, and
@@ -16,6 +18,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Sheet } from '@/components/ui/Sheet';
 import { Tag, isTagDot } from '@/components/ui/Tag';
+import { Textarea } from '@/components/ui/Textarea';
 import { IconPlay } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { useThumbnail } from '@/components/media/use-thumbnail';
@@ -30,7 +33,7 @@ import { SlotComposer } from '@/components/comments/SlotComposer';
 import type { CheckpointPoint } from '@/components/comments/SlotComposer';
 import { runCreateCommentBatch } from '@/components/comments/Comments';
 import { PostLightbox, slideFromScroll } from '@/components/pages/pcs/PostLightbox';
-import { postRoute, type SharedPostView } from '@/components/chat/post-card';
+import { postHref, type SharedPostView } from '@/components/chat/post-card';
 import {
   actionLabel,
   approvedPillLabel,
@@ -40,6 +43,8 @@ import {
   friendlyCommentError,
   isVideoItem,
   postSubject,
+  REJECT_REASON_HELPER,
+  REJECT_REASON_LABEL,
   reelLabel,
   runStageChange,
   sheetActions,
@@ -114,6 +119,10 @@ const ACTION_BASE =
   'inline-flex h-12 w-full items-center justify-center gap-2 rounded-md px-4 text-sm font-medium select-none transition-colors duration-fast disabled:pointer-events-none disabled:opacity-50';
 /** Approve: the success fill (no on-good token, so white ink as the post page does). */
 export const ACTION_GOOD = `${ACTION_BASE} bg-good text-white hover:opacity-90`;
+/** Reject in the action list: bad ink on the panel with a bad border. */
+export const ACTION_BAD = `${ACTION_BASE} border border-bad bg-panel text-bad hover:bg-bad-soft`;
+/** Reject's confirm button: the bad fill (white ink, as the post page's danger button). */
+export const ACTION_BAD_FILL = `${ACTION_BASE} bg-bad text-white hover:opacity-90`;
 export const ACTION_PRIMARY = `${ACTION_BASE} bg-accent text-accent-fg hover:bg-accent-hover`;
 export const ACTION_GHOST = `${ACTION_BASE} border border-border bg-panel text-fg hover:bg-panel-2`;
 export const ACTION_LINK = `${ACTION_BASE} text-accent hover:bg-panel-2`;
@@ -128,6 +137,7 @@ export function talkAboutLabel(): string {
 /** The emphasis each action takes: the first action is filled, the rest quieter. */
 function actionClass(action: SheetAction, first: boolean): string {
   if (action === 'approve') return ACTION_GOOD;
+  if (action === 'reject') return ACTION_BAD;
   if (action === 'open_post') return ACTION_LINK;
   if (first) return ACTION_PRIMARY;
   return action === 'comment' ? ACTION_GHOST : ACTION_LINK;
@@ -414,6 +424,11 @@ export interface PostSheetActionsProps {
   brand?: string | null;
   mediaCount: number;
   targetDate: string;
+  /** The creator's name for the reject confirm; null or absent reads "The creator". */
+  creatorName?: string | null;
+  /** The reject confirm's typed reason. */
+  reason?: string;
+  onReasonChange?: (reason: string) => void;
   busy: boolean;
   error: string | null;
   onAction: (action: SheetAction) => void;
@@ -439,7 +454,53 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
       </p>
     ) : null;
   let content: ReactElement;
-  if (mode.kind === 'confirm') {
+  if (mode.kind === 'confirm' && mode.confirm === 'reject') {
+    const copy = confirmCopy('reject', {
+      subject: props.subject,
+      mediaCount: props.mediaCount,
+      targetDate: props.targetDate,
+      creatorName: props.creatorName ?? null,
+    });
+    content = (
+      <div data-sheet-confirm="reject" className="flex flex-col gap-2">
+        <p className="text-sm font-medium text-fg">{copy.question}</p>
+        <p className="text-sm text-fg-2">{copy.detail}</p>
+        <label className="mt-1 flex flex-col gap-1.5">
+          <span className="text-sm text-fg-2">{REJECT_REASON_LABEL}</span>
+          <Textarea
+            data-sheet-reason=""
+            aria-describedby="post-sheet-reason-helper"
+            value={props.reason ?? ''}
+            disabled={props.busy}
+            onChange={(event) => props.onReasonChange?.(event.target.value)}
+          />
+        </label>
+        <p id="post-sheet-reason-helper" className="text-xs text-fg-3">
+          {REJECT_REASON_HELPER}
+        </p>
+        {error}
+        <div className="mt-1 flex gap-2">
+          <button
+            type="button"
+            disabled={props.busy}
+            onClick={props.onBack}
+            className={cn(ACTION_GHOST, 'flex-1')}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-sheet-reject-confirm=""
+            disabled={props.busy}
+            onClick={props.onConfirm}
+            className={cn(ACTION_BAD_FILL, 'flex-1')}
+          >
+            {copy.confirmLabel}
+          </button>
+        </div>
+      </div>
+    );
+  } else if (mode.kind === 'confirm') {
     const copy = confirmCopy(mode.confirm, {
       subject: props.subject,
       mediaCount: props.mediaCount,
@@ -581,12 +642,13 @@ export function PostSheet(props: PostSheetProps): ReactElement {
   const navigate = useNavigate();
   const newTrace = useNewTrace();
   const toast = useToast();
-  const { workspaceId, workspaceName } = useWorkspace();
+  const { workspaceId, workspaceName, workspaceKey } = useWorkspace();
   const brand = workspaceName ?? null;
   const gallery = useSheetGallery(open, view.postId);
   const [mode, setMode] = useState<SheetMode>({ kind: 'actions' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
   const [active, setActive] = useState(0);
   const [viewer, setViewer] = useState<number | null>(null);
 
@@ -596,6 +658,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     setMode({ kind: 'actions' });
     setBusy(false);
     setError(null);
+    setReason('');
     setActive(0);
     setViewer(null);
   }, [open]);
@@ -612,7 +675,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
 
   const openPost = (): void => {
     onClose();
-    navigate(postRoute(view.postId));
+    navigate(postHref(view.postId, post.number, workspaceKey));
   };
 
   const onAction = (action: SheetAction): void => {
@@ -620,6 +683,10 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     switch (action) {
       case 'approve':
         setMode({ kind: 'confirm', confirm: 'approve' });
+        return;
+      case 'reject':
+        setReason('');
+        setMode({ kind: 'confirm', confirm: 'reject' });
         return;
       case 'send_review':
         setMode({ kind: 'confirm', confirm: 'send_review' });
@@ -644,8 +711,18 @@ export function PostSheet(props: PostSheetProps): ReactElement {
         target: window,
         toast: (title) => toast.show({ title }),
         close: onClose,
+        postReason: async (body) => {
+          if (workspaceId === null) return { ok: false };
+          const result = await runCreateCommentBatch(supabase, {
+            workspaceId,
+            postId: view.postId,
+            points: [{ body }],
+            traceId: newTrace(),
+          });
+          return { ok: result.ok };
+        },
       },
-      { kind: mode.confirm, postId: view.postId, traceId: newTrace() },
+      { kind: mode.confirm, postId: view.postId, traceId: newTrace(), reason },
     ).then((message) => {
       setBusy(false);
       if (message !== null) setError(message);
@@ -691,6 +768,9 @@ export function PostSheet(props: PostSheetProps): ReactElement {
             onBehalf={actsOnBehalfOfClient(side)}
             mediaCount={post.mediaCount}
             targetDate={targetDate}
+            creatorName={view.creatorName ?? null}
+            reason={reason}
+            onReasonChange={setReason}
             busy={busy}
             error={error}
             onAction={onAction}
@@ -705,6 +785,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
             }
             onBack={() => {
               setError(null);
+              setReason('');
               setMode({ kind: 'actions' });
             }}
           />

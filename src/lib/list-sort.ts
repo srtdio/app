@@ -37,14 +37,15 @@ export function sortByDate<T extends DateSortable>(items: T[], sort: DateSort): 
   }
 }
 
-/** The Pipeline sort orders, in menu order. */
-export type PostSort = 'updated' | 'target';
+/** The Pipeline sort orders, in menu order. Every label says its direction. */
+export type PostSort = 'updated' | 'oldest' | 'target';
 
 export const POST_SORT_DEFAULT: PostSort = 'updated';
 
 export const POST_SORT_OPTIONS: SortOption<PostSort>[] = [
-  { value: 'updated', label: 'Recently updated' },
-  { value: 'target', label: 'Target date' },
+  { value: 'updated', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'target', label: 'Due soonest first' },
 ];
 
 /** The minimal row shape the post comparators need (id is the stable tiebreaker). */
@@ -62,14 +63,16 @@ function byId(a: PostSortable, b: PostSortable): number {
 /**
  * Order a Pipeline post list by the chosen sort. Pure; returns a new array.
  * Every comparator falls back to {@link byId} so equal keys are deterministic.
- * target_date keeps nulls last (see {@link compareTargetDate}); 'updated' is the
- * default branch.
+ * target_date keeps nulls last (see {@link compareTargetDate}); 'oldest' is
+ * 'updated' reversed; 'updated' is the default branch.
  */
 export function sortPosts<T extends PostSortable>(items: T[], sort: PostSort): T[] {
   const copy = [...items];
   switch (sort) {
     case 'target':
       return copy.sort((a, b) => compareTargetDate(a, b) || byId(a, b));
+    case 'oldest':
+      return copy.sort((a, b) => a.updated_at.localeCompare(b.updated_at) || byId(a, b));
     case 'updated':
     default:
       return copy.sort((a, b) => b.updated_at.localeCompare(a.updated_at) || byId(a, b));
@@ -107,6 +110,8 @@ export interface WindowBounds {
   timeZone: string;
   weekStartDay: number;
   customRange?: { start: string; end: string } | null;
+  /** Keep posts with no (or an unreadable) target date in a dated window ("Show them"). */
+  includeUndated?: boolean;
 }
 
 /** Probe a zone once; a blank or non-IANA value degrades to UTC, never throws. */
@@ -167,7 +172,7 @@ export function addCivilDays(civil: string, days: number): string {
  * - A blank/non-IANA `bounds.timeZone` degrades to UTC (validated in try/catch).
  * - An item with a null or unparseable `target_date` is excluded for every
  *   non-'any' window (an Invalid Date is never handed to Intl.format, which would
- *   throw).
+ *   throw), unless `bounds.includeUndated` keeps it.
  * - 'custom' with no `bounds.customRange` returns the list unchanged (a half-open
  *   range cannot be built yet, so the filter is a passthrough rather than a break).
  * Range is [start, end) of workspace-LOCAL civil date strings for week/month, and
@@ -181,15 +186,16 @@ export function filterByWindow<T extends { target_date: string | null }>(
   if (window === 'any') return items;
 
   const zone = safeZone(bounds.timeZone);
+  const keepUndated = bounds.includeUndated === true;
 
   if (window === 'custom') {
     const range = bounds.customRange;
     if (range === null || range === undefined) return items;
     const { start, end } = range;
     return items.filter((item) => {
-      if (item.target_date === null) return false;
+      if (item.target_date === null) return keepUndated;
       const instant = new Date(item.target_date);
-      if (Number.isNaN(instant.getTime())) return false;
+      if (Number.isNaN(instant.getTime())) return keepUndated;
       const d = civilDate(instant, zone);
       return start <= d && d <= end;
     });
@@ -211,12 +217,17 @@ export function filterByWindow<T extends { target_date: string | null }>(
   }
 
   return items.filter((item) => {
-    if (item.target_date === null) return false;
+    if (item.target_date === null) return keepUndated;
     const instant = new Date(item.target_date);
-    if (Number.isNaN(instant.getTime())) return false;
+    if (Number.isNaN(instant.getTime())) return keepUndated;
     const d = civilDate(instant, zone);
     return start <= d && d < end;
   });
+}
+
+/** Whether a row has no readable target date (null or unparseable). Pure. */
+export function isUndated(item: { target_date: string | null }): boolean {
+  return item.target_date === null || Number.isNaN(new Date(item.target_date).getTime());
 }
 
 /**

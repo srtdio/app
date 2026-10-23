@@ -15,6 +15,8 @@ vi.mock('@/lib/session-context', () => ({
 
 import type { Client } from '@srtdio/rpc';
 import {
+  BRIEFS_EMPTY_COPY,
+  BriefPickerList,
   InlinePickerPanel,
   PickerSkeleton,
   PostPicker,
@@ -23,6 +25,8 @@ import {
   loadPickerSections,
   loadSearchPage,
   briefsLoadError,
+  searchEmptyTitle,
+  sectionsEmptyCopy,
   POSTS_LOAD_FAILED,
   type PostRowContext,
 } from '@/components/chat/PostPicker';
@@ -493,5 +497,65 @@ describe('inline mode (the composer hash picker)', () => {
     );
     expect(html).toContain('Waiting on approvers');
     expect(html).toContain('in this chat');
+  });
+});
+
+describe('empty copy', () => {
+  const none = { sections: [], olderApprovedCount: 0 };
+  const visible = (html: string): string => html.replace(/<[^>]*>/g, ' ');
+
+  it('drafts mode with nothing in draft reads "No drafts yet"', () => {
+    expect(sectionsEmptyCopy('drafts').title).toBe('No drafts yet');
+    const html = renderToStaticMarkup(<PostSectionsView data={none} mode="drafts" {...ctx} />);
+    expect(html).toContain('No drafts yet');
+  });
+
+  it('posts and inline modes with nothing to show read "No posts yet"', () => {
+    expect(sectionsEmptyCopy('posts').title).toBe('No posts yet');
+    expect(sectionsEmptyCopy('inline').title).toBe('No posts yet');
+    const html = renderToStaticMarkup(<PostSectionsView data={none} mode="posts" {...ctx} />);
+    expect(html).toContain('No posts yet');
+  });
+
+  it('a search with no match names the query and suggests another word', () => {
+    expect(searchEmptyTitle('  diwali  ')).toBe('Nothing called "diwali". Try another word.');
+    const html = renderToStaticMarkup(
+      <SearchResultsView
+        rows={[]}
+        count={0}
+        query=" diwali "
+        loadingMore={false}
+        onLoadMore={() => undefined}
+        {...ctx}
+      />,
+    );
+    expect(visible(html)).toContain('Nothing called &quot;diwali&quot;. Try another word.');
+    expect(html).not.toContain('No posts called');
+  });
+
+  it('the briefs tab with no match under a filter reads "No briefs fit this filter yet."', () => {
+    expect(BRIEFS_EMPTY_COPY).toBe('No briefs fit this filter yet.');
+    const html = renderToStaticMarkup(
+      <BriefPickerList
+        briefs={[]}
+        loading={false}
+        error={null}
+        selected={[]}
+        onToggle={() => undefined}
+        timeZone="UTC"
+      />,
+    );
+    expect(html).toContain('No briefs fit this filter yet.');
+    expect(html).not.toContain('No briefs match this filter.');
+  });
+
+  it('no empty copy carries an em-dash', () => {
+    const lines = [
+      sectionsEmptyCopy('drafts').title,
+      sectionsEmptyCopy('posts').title,
+      searchEmptyTitle('x'),
+      BRIEFS_EMPTY_COPY,
+    ];
+    for (const line of lines) expect(line).not.toContain('\u2014');
   });
 });

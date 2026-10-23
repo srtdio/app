@@ -3,7 +3,6 @@ import type { DragEvent, ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { Sheet } from '@/components/ui/Sheet';
-import { sheetTitle } from '@/components/chat/post-sheet';
 import { PostCard } from '@/components/pages/PostCard';
 import {
   StageDot,
@@ -17,6 +16,8 @@ import {
   type GateState,
 } from '@/components/pages/pipeline/approve-gate';
 import type { PresignCache } from '@/lib/asset-presign';
+import type { CoverLookup } from '@/lib/chat/post-covers';
+import type { CardViewer } from '@/components/pages/pipeline/card-status';
 import { useWorkspace } from '@/lib/workspace-context';
 import { isAgencySide } from '@/components/pages/pcs/roles';
 import { canRoleMove, onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
@@ -45,6 +46,10 @@ export interface PipelineBoardProps {
   onBlockedMove?: (reason: string) => void;
   /** The workspace zone each card reads its target day in. Default UTC. */
   timeZone?: string;
+  /** The viewer's role and approvers: each card's status line and its ⋯. */
+  viewer?: CardViewer;
+  /** Each post's first photo or video, so its card takes the platform frame. */
+  covers?: CoverLookup;
 }
 
 // Native HTML5 DnD keeps dataTransfer unreadable during dragover (it is exposed
@@ -163,6 +168,9 @@ export function pendingPost(
   return null;
 }
 
+/** The approve confirm's title after a board drag. */
+export const BOARD_APPROVE_TITLE = 'Approve this post?';
+
 /**
  * The drop's approve confirm: the shared Sheet (translateY axis) with the post's
  * title and the chat-matching confirm in its footer. Open while a post waits on
@@ -187,7 +195,7 @@ export function BoardApproveConfirm(props: {
     <Sheet
       open={gateState.pendingId !== null && !gateState.sent}
       onClose={gate.cancel}
-      title={sheetTitle(post.format)}
+      title={BOARD_APPROVE_TITLE}
       footer={
         <ApproveConfirm
           postTitle={post.title}
@@ -238,6 +246,8 @@ export function PipelineBoardView({
   onOpenMove,
   onBlockedMove,
   timeZone = 'UTC',
+  viewer,
+  covers,
 }: PipelineBoardProps): ReactElement {
   const only = stages.length === 1 ? stages[0] : undefined;
   if (only !== undefined) {
@@ -250,6 +260,8 @@ export function PipelineBoardView({
       workspaceKey,
       timeZone,
       ...(onOpenMove !== undefined ? { onOpenMove } : {}),
+      ...(viewer !== undefined ? { viewer } : {}),
+      ...(covers !== undefined ? { covers } : {}),
     });
   }
   return (
@@ -306,6 +318,8 @@ export function PipelineBoardView({
                       showStage
                       timeZone={timeZone}
                       {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
+                      {...(viewer !== undefined ? { viewer } : {})}
+                      {...(covers !== undefined ? { cover: covers(post.id) } : {})}
                     />
                   </div>
                 ))}
@@ -346,6 +360,8 @@ function SingleStageGrid({
   workspaceKey,
   timeZone,
   onOpenMove,
+  viewer,
+  covers,
 }: {
   stage: Stage;
   posts: PipelinePost[];
@@ -354,6 +370,8 @@ function SingleStageGrid({
   workspaceKey: string | null;
   timeZone: string;
   onOpenMove?: (post: PipelinePost) => void;
+  viewer?: CardViewer;
+  covers?: CoverLookup;
 }): ReactElement {
   if (posts.length === 0) {
     return (
@@ -381,6 +399,8 @@ function SingleStageGrid({
             workspaceKey={workspaceKey}
             timeZone={timeZone}
             {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
+            {...(viewer !== undefined ? { viewer } : {})}
+            {...(covers !== undefined ? { cover: covers(post.id) } : {})}
           />
         </div>
       ))}
