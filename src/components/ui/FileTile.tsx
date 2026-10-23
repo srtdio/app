@@ -168,7 +168,14 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
           </span>
         ) : null}
       </span>
-      <span className="flex w-full shrink-0 flex-col gap-0.5 border-t border-border px-2 py-1.5">
+      <span
+        className={cn(
+          'flex w-full shrink-0 flex-col border-t border-border',
+          // The Assets card: the same 10px footer as a picture card, the meta
+          // line one 20px row with room on the right for the card's ⋯.
+          card ? 'gap-1.5 p-2.5' : 'gap-0.5 px-2 py-1.5',
+        )}
+      >
         <span
           data-file-name=""
           title={props.name}
@@ -179,7 +186,13 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
         >
           {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
         </span>
-        <span data-file-meta="" className="truncate text-[11px] leading-4 text-fg-3">
+        <span
+          data-file-meta=""
+          className={cn(
+            'truncate text-[11px] leading-4 text-fg-3',
+            card && 'flex h-5 items-center pr-8',
+          )}
+        >
           {props.meta.map((part, i) => (
             <span key={i}>
               {i > 0 ? ' · ' : null}
