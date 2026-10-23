@@ -98,9 +98,9 @@ export function noEntityCodesCases(): void {
         .getByRole('dialog', { name: 'Post actions', exact: true })
         .getByRole('button', { name: /Approve on their behalf/ })
         .click();
-      await expect(page.locator('[data-approve-confirm-button]')).toHaveText('Approve');
+      await expect(page.locator('[data-on-behalf-approve]')).toHaveText('Approve');
       expect(await visibleText(page)).not.toMatch(CODE);
-      await page.locator('[data-approve-back]').click();
+      await page.locator('[data-on-behalf-cancel]').click();
       expectNoBlocked(network);
     });
 
