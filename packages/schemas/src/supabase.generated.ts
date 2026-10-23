@@ -9707,6 +9707,14 @@ export type Database = {
         Args: { p_step: string; p_trace_id: string }
         Returns: undefined
       }
+      invite_delivery_list: {
+        Args: { p_workspace_id: string }
+        Returns: {
+          member_id: string
+          status: string
+          status_at: string
+        }[]
+      }
       is_active_workspace_member: {
         Args: { p_workspace_id: string }
         Returns: boolean
