@@ -92,6 +92,11 @@ export function friendlyPointFreezeError(
   }
 }
 
+/** The filled "resolved" circle: tokens only, never a literal colour. The fill is
+ *  --good-solid (the light green kept in both themes so on-colour ink stays at
+ *  4.5:1 or more) under the accent-fg ink token. Shared with the strip chips. */
+export const RESOLVED_FILL_CLASS = 'border-good bg-[var(--good-solid)] text-accent-fg';
+
 /** The tick circle. The check enters/leaves via opacity/translateY only, per the
  *  motion tokens; the fill flips instantly (colour is state, not motion). An
  *  unconfirmed circle reads in the good family already: a green outline over a
@@ -104,7 +109,7 @@ export function tickCircle(done: boolean, live = false): ReactElement {
     <span
       className={cn(
         'flex h-7 w-7 items-center justify-center rounded-full border',
-        done ? 'border-good bg-good text-white' : 'border-good bg-good-soft text-good',
+        done ? RESOLVED_FILL_CLASS : 'border-good bg-good-soft text-good',
         live && !done ? 'ring-2 ring-good-soft' : '',
       )}
     >
