@@ -1,4 +1,4 @@
-import { IconCheck, IconX } from '@/components/ui/icons';
+import { IconAlertTriangle, IconCheck, IconX } from '@/components/ui/icons';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
 interface ToastProps {
@@ -24,6 +24,10 @@ interface ToastProps {
 export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProps) {
   const { id, title, description, icon, onPress, action, tone } = toast;
   const success = tone === 'success';
+  // A failure (or partial failure) toast: bad-solid fill under white ink, so it
+  // never reads as the success style. White on bad-solid is 4.5:1 or more in
+  // both themes (index.css keeps the light value in dark).
+  const error = tone === 'error';
 
   // Motion via keyframes (defined once in the viewport) so the card stays
   // hookless. Durations/easings read from the motion tokens, never hardcoded.
@@ -34,16 +38,28 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
   const body = (
     <>
       {icon !== undefined ? (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-fg-2">{icon}</span>
+        <span
+          className={`flex h-6 w-6 shrink-0 items-center justify-center ${error ? 'text-white' : 'text-fg-2'}`}
+        >
+          {icon}
+        </span>
+      ) : error ? (
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-white">
+          <IconAlertTriangle size={16} />
+        </span>
       ) : success ? (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center text-good">
           <IconCheck size={16} />
         </span>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-fg">{title}</span>
+        <span className={`truncate text-sm font-medium ${error ? 'text-white' : 'text-fg'}`}>
+          {title}
+        </span>
         {description !== undefined ? (
-          <span className="truncate text-xs text-fg-2">{description}</span>
+          <span className={`truncate text-xs ${error ? 'text-white' : 'text-fg-2'}`}>
+            {description}
+          </span>
         ) : null}
       </span>
     </>
@@ -53,17 +69,20 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
     <div
       style={{ animation }}
       {...(success ? { 'data-toast-tone': 'success' } : {})}
+      {...(error ? { 'data-toast-tone': 'error', role: 'alert' } : {})}
       className={`pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border pr-1 shadow-lg ${
-        success
-          ? 'border-good bg-panel [background-image:linear-gradient(var(--good-soft),var(--good-soft))]'
-          : 'border-border bg-panel'
+        error
+          ? 'border-bad-solid bg-bad-solid'
+          : success
+            ? 'border-good bg-panel [background-image:linear-gradient(var(--good-soft),var(--good-soft))]'
+            : 'border-border bg-panel'
       }`}
     >
       {onPress !== undefined ? (
         <button
           type="button"
           onClick={onPress}
-          className="flex min-h-[44px] min-w-0 flex-1 items-center gap-3 rounded-l-lg px-3 py-2 text-left transition-colors hover:bg-panel-2"
+          className={`flex min-h-[44px] min-w-0 flex-1 items-center gap-3 rounded-l-lg px-3 py-2 text-left transition-colors ${error ? 'hover:opacity-90' : 'hover:bg-panel-2'}`}
         >
           {body}
         </button>
@@ -74,7 +93,9 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         type="button"
         aria-label="Dismiss notification"
         onClick={() => onDismiss(id)}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md transition-colors ${
+          error ? 'text-white hover:opacity-90' : 'text-fg-2 hover:bg-panel-2 hover:text-fg'
+        }`}
       >
         <IconX />
       </button>
@@ -90,7 +111,11 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
             action.onPress();
             onDismiss(id);
           }}
-          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-3 text-sm font-semibold text-accent transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+            error
+              ? 'text-white underline hover:opacity-90 focus-visible:ring-white'
+              : 'text-accent hover:bg-panel-2 focus-visible:ring-accent'
+          }`}
         >
           {action.label}
         </button>

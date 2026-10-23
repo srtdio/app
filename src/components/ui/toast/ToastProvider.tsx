@@ -6,7 +6,7 @@ import type { Toast as ToastModel, ToastApi, ToastOptions } from '@/components/u
 import { DUR_BASE_MS } from '@/lib/motion';
 
 /** Default auto-dismiss delay when `durationMs` is omitted. */
-export const DEFAULT_DURATION_MS = 5000;
+export const DEFAULT_DURATION_MS = 4000;
 /** Newest-first cap on top cards; older cards beyond this are dropped on show(). */
 export const MAX_VISIBLE = 3;
 /**

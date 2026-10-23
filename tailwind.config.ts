@@ -29,6 +29,8 @@ export default {
         good: 'var(--good)',
         warn: 'var(--warn)',
         bad: 'var(--bad)',
+        'good-solid': 'var(--good-solid)',
+        'bad-solid': 'var(--bad-solid)',
         'good-soft': 'var(--good-soft)',
         'bad-soft': 'var(--bad-soft)',
         'warn-soft': 'var(--warn-soft)',

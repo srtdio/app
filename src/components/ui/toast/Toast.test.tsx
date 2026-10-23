@@ -165,4 +165,25 @@ describe('Toast', () => {
     expect(onDismiss).not.toHaveBeenCalled();
     expect(onPress).not.toHaveBeenCalled();
   });
+
+  it('renders the error tone on bad-solid with white ink and an alert icon', () => {
+    const tree = Toast({
+      toast: { ...base, title: "Couldn't move the post. You're offline.", tone: 'error' },
+      onDismiss: () => {},
+    });
+    const root = tree as ReactElement<{ className: string; 'data-toast-tone'?: string }>;
+    expect(root.props['data-toast-tone']).toBe('error');
+    expect(root.props.className).toContain('bg-bad-solid');
+    expect(root.props.className).not.toContain('good-soft');
+    const white = findAll(tree, (el) =>
+      String((el.props as { className?: string }).className ?? '').includes('text-white'),
+    );
+    expect(white.length).toBeGreaterThan(0);
+  });
+
+  it('never gives a neutral toast the error fill', () => {
+    const tree = Toast({ toast: base, onDismiss: () => {} });
+    const root = tree as ReactElement<{ className: string }>;
+    expect(root.props.className).not.toContain('bg-bad-solid');
+  });
 });
