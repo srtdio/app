@@ -1,6 +1,6 @@
 // Induction schema (20261015030000..20261015036000), recorded from live.
-// member_invite client email rules: free mail refused (free_mail_client), a set
-// client_domain admits its brand word and subdomains (client_domain_mismatch
+// member_invite client email rules: free mail allowed, a set
+// client_domain admits itself and its subdomains (client_domain_mismatch
 // otherwise; full approver rule in client-domains.test.ts), and a workspace that already has clients but no client_domain is unaffected.
 // post_create takes the platform from the workspace and refuses formats that
 // platform does not offer (invalid_format). brand_agency_request caps an open
@@ -122,10 +122,11 @@ describe.runIf(RLS_SUITE)('induction schema', () => {
   });
 
   describe('member_invite client email rules', () => {
-    it('refuses a free mail address for a client (free_mail_client)', async () => {
+    it('allows a free mail address for a client and does not learn it as client_domain', async () => {
       const w = await newWorkspace();
-      const res = await invite(w.id, `someone_${randomSuffix()}@gmail.com`, 'client');
-      expect(res.error?.message).toBe('free_mail_client');
+      const du = await seedUserAt('gmail.com');
+      const res = await invite(w.id, du.user.email, 'client');
+      expect(res.error).toBeNull();
       expect(await clientDomainOf(w.id)).toBeNull();
     });
 

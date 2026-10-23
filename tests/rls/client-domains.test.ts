@@ -1,9 +1,8 @@
 // Approver email rule and client-invites-client (20261015037000_workspace_client_domains.sql),
-// recorded from live. For role client, member_invite refuses free mail (free_mail_client);
-// otherwise the invitee passes when the brand word of workspaces.client_domain appears in full
-// in the invitee's brand word (brand words under 4 letters need an exact match), or the
-// invitee domain equals or is a subdomain of an active owner-approved workspace_client_domains
-// row; anything else is client_domain_mismatch. A client inviter may invite only clients.
+// recorded from live; rule as of 20261023100000_invite_free_mail_exact_domain_role_set.sql.
+// For role client, member_invite allows free mail; otherwise the invitee domain must equal or
+// be a subdomain of workspaces.client_domain, or of an active owner-approved
+// workspace_client_domains row; anything else is client_domain_mismatch. A client inviter may invite only clients.
 // Only the workspace owner adds or removes approved domains; removal is soft.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -133,12 +132,12 @@ describe.runIf(RLS_SUITE)('approver email rule and workspace_client_domains', ()
     it('a client inviting a client passes the domain rule like an owner', async () => {
       const w = await newWorkspace('hinglish.com');
       const client = await memberOf(w, 'client');
-      const ok = await invite(client, w.id, await emailAt('hinglish.in'), 'client');
+      const ok = await invite(client, w.id, await emailAt('hinglish.com'), 'client');
       expect(ok.error).toBeNull();
-      const bad = await invite(client, w.id, await emailAt('english.com'), 'client');
+      const bad = await invite(client, w.id, await emailAt('hinglish.in'), 'client');
       expect(bad.error?.message).toBe('client_domain_mismatch');
       const free = await invite(client, w.id, await emailAt('outlook.com'), 'client');
-      expect(free.error?.message).toBe('free_mail_client');
+      expect(free.error).toBeNull();
     });
 
     it('a client cannot invite an agency, admin or owner member (forbidden_role)', async () => {
@@ -151,29 +150,24 @@ describe.runIf(RLS_SUITE)('approver email rule and workspace_client_domains', ()
     });
   });
 
-  describe('brand word rule', () => {
+  describe('exact client domain rule', () => {
     let w: SeededWorkspace;
 
     beforeAll(async () => {
       w = await newWorkspace('hinglish.com');
     });
 
-    it('refuses free mail for a client, outlook.com included (free_mail_client)', async () => {
+    it('allows free mail for a client, outlook.com included', async () => {
       for (const domain of ['gmail.com', 'outlook.com']) {
         const res = await inviteAt(w.id, domain);
-        expect(res.error?.message).toBe('free_mail_client');
+        expect(res.error, domain).toBeNull();
       }
     });
 
-    it('refuses a brand word that does not contain hinglish (client_domain_mismatch)', async () => {
-      for (const domain of ['english.com', 'hindustantimes.com']) {
-        const res = await inviteAt(w.id, domain);
-        expect(res.error?.message, domain).toBe('client_domain_mismatch');
-      }
-    });
-
-    it('allows endings, co.in style endings, longer brand words and subdomains', async () => {
+    it('refuses other endings, co.in style endings, longer brand words and their subdomains (client_domain_mismatch)', async () => {
       for (const domain of [
+        'english.com',
+        'hindustantimes.com',
         'hinglish.in',
         'hinglish.co.in',
         'hinglishh.com',
@@ -181,15 +175,24 @@ describe.runIf(RLS_SUITE)('approver email rule and workspace_client_domains', ()
         'mail.hinglish.in',
       ]) {
         const res = await inviteAt(w.id, domain);
+        expect(res.error?.message, domain).toBe('client_domain_mismatch');
+      }
+    });
+
+    it('allows the exact client domain and its subdomains', async () => {
+      for (const domain of ['hinglish.com', 'mail.hinglish.com']) {
+        const res = await inviteAt(w.id, domain);
         expect(res.error, domain).toBeNull();
       }
     });
 
-    it('needs an exact match for a brand word under 4 letters', async () => {
+    it('needs the exact domain for a short brand word too', async () => {
       const short = await newWorkspace('kia.com');
       const longer = await inviteAt(short.id, 'kiaads.com');
       expect(longer.error?.message).toBe('client_domain_mismatch');
-      const exact = await inviteAt(short.id, 'kia.co.in');
+      const otherEnding = await inviteAt(short.id, 'kia.co.in');
+      expect(otherEnding.error?.message).toBe('client_domain_mismatch');
+      const exact = await inviteAt(short.id, 'kia.com');
       expect(exact.error).toBeNull();
     });
   });
