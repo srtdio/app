@@ -25,6 +25,14 @@ import type { Database } from '../../packages/schemas/src/supabase.generated';
 
 const RLS_SUITE = process.env.RLS_SUITE === '1';
 
+/**
+ * Typed pass-through for direct .rpc() args. invite_delivery_list takes no trace id
+ * (read-only). callRpc() is the app wrapper and does not apply to these direct test calls.
+ */
+function rpcArgs<T>(args: T): T {
+  return args;
+}
+
 interface DeliveryRow {
   member_id: string;
   status: string;
@@ -44,7 +52,7 @@ describe.runIf(RLS_SUITE)('invite_delivery_list', () => {
   const users: SeededUser[] = [];
 
   async function list(client: SupabaseClient<Database>, wsId: string) {
-    return await client.rpc('invite_delivery_list', { p_workspace_id: wsId });
+    return await client.rpc('invite_delivery_list', rpcArgs({ p_workspace_id: wsId }));
   }
 
   beforeAll(async () => {
