@@ -8,9 +8,10 @@
 // checkpoint text and no controls live here. When the post has no checkpoints
 // the strip renders nothing.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { commentDomId } from '@/components/comments/Comments';
+import { commentDomId, LiveCheckpointsContext } from '@/components/comments/Comments';
+import type { LiveCheckpoint } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
 import {
   RESOLVED_FILL_CLASS,
@@ -97,6 +98,9 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
       >
         <span
           aria-hidden
+          data-chip-tick={
+            state === 'open' ? 'open' : row.accepted_at !== null ? 'filled' : 'hollow'
+          }
           className={cn(
             'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-xs font-semibold tabular-nums',
             chipCircleClass(state, row.accepted_at !== null),
@@ -111,6 +115,20 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
 
 /** The strip's sticky surface: the same token as the comments card it sits in. */
 export const STRIP_SURFACE_CLASS = 'bg-panel-2';
+
+/** Overlay the comments list's live state onto the strip's own read. Pure. */
+export function withLiveState(
+  rows: readonly CheckpointChipRow[],
+  live: ReadonlyMap<string, LiveCheckpoint> | null,
+): CheckpointChipRow[] {
+  if (live === null) return [...rows];
+  return rows.map((row) => {
+    const state = live.get(row.id);
+    return state === undefined
+      ? row
+      : { ...row, resolved_at: state.resolved_at, accepted_at: state.accepted_at };
+  });
+}
 
 export interface CheckpointStripProps {
   workspaceId: string;
@@ -169,14 +187,20 @@ export function CheckpointStrip({
     void load();
   }, [refreshSignal, load]);
 
+  // The comments list's live state (its optimistic Resolve / Reopen / Confirm /
+  // Undo included) wins over this read, so a chip changes in the same paint as
+  // the row and the header count. No refetch.
+  const live = useContext(LiveCheckpointsContext);
+  const shown = useMemo(() => withLiveState(rows, live), [rows, live]);
+
   // Lift the counts once a fetch has landed so the page chip / tab badge stay
   // derived from this one read.
   useEffect(() => {
     if (!loaded) return;
-    onCounts?.(checkpointCounts(rows));
-  }, [rows, loaded, onCounts]);
+    onCounts?.(checkpointCounts(shown));
+  }, [shown, loaded, onCounts]);
 
-  if (rows.length === 0) return null;
+  if (shown.length === 0) return null;
 
   // The sticky background is the comments card's own surface (bg-panel-2), so
   // the strip never reads as a different-coloured band while pinned.
@@ -188,7 +212,7 @@ export function CheckpointStrip({
       {/* axis: horizontal scroll only (overflow-x). Never overflow-y, never wrap:
           a twenty-point post stays one row and never grows vertically. */}
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-        {checkpointChips(rows)}
+        {checkpointChips(shown)}
       </div>
     </div>
   );

@@ -1,4 +1,13 @@
-import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  Fragment,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { dispatchInductionDid, INDUCTION_KEYS } from '@/lib/induction';
@@ -133,6 +142,29 @@ export interface CommentCounts {
 export const RESOLVE_FAILED_COPY = "Couldn't do that. Try again.";
 
 /** The Comments header line: "{n} open · {m} resolved". Pure. */
+/** A checkpoint's live state as the comments list shows it (optimistic taps included). */
+export type LiveCheckpoint = Pick<CommentRow, 'resolved_at' | 'accepted_at'>;
+
+/**
+ * The list's live checkpoint state, keyed by comment id, for the strip under the
+ * header. Null until the list has loaded (the strip then shows its own read).
+ */
+export const LiveCheckpointsContext = createContext<ReadonlyMap<string, LiveCheckpoint> | null>(
+  null,
+);
+
+/** Checkpoint rows (ledger_seq set) to their live resolved / confirmed state. Pure. */
+export function liveCheckpointMap(
+  rows: readonly Pick<CommentRow, 'id' | 'ledger_seq' | 'resolved_at' | 'accepted_at'>[],
+): ReadonlyMap<string, LiveCheckpoint> {
+  const map = new Map<string, LiveCheckpoint>();
+  for (const row of rows) {
+    if (row.ledger_seq === null) continue;
+    map.set(row.id, { resolved_at: row.resolved_at, accepted_at: row.accepted_at });
+  }
+  return map;
+}
+
 export function commentCountsText(counts: CommentCounts): string {
   return `${counts.open} open · ${counts.resolved} resolved`;
 }
@@ -1555,6 +1587,10 @@ export function Comments({
   const groups = groupThreads(filterThreads(threads, filter));
   const isClient = viewerIsClient === true;
 
+  // The same live rows feed the checkpoint strip (rendered in belowHeader), so a
+  // Resolve, Reopen, Confirm or Undo repaints its chip in this very render.
+  const liveCheckpoints = useMemo(() => liveCheckpointMap(displayed), [displayed]);
+
   // Lift the live counts to the page once loaded and on every change (an
   // optimistic one-tap Resolve included), so its chip and gate never lag.
   useEffect(() => {
@@ -2177,7 +2213,9 @@ export function Comments({
           </div>
         </div>
       ) : null}
-      {belowHeader}
+      <LiveCheckpointsContext.Provider value={loading ? null : liveCheckpoints}>
+        {belowHeader}
+      </LiveCheckpointsContext.Provider>
 
       {loading ? (
         <div aria-busy="true" className="flex flex-col gap-3">
