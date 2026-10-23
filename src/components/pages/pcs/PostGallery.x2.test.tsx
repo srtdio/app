@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
-import { galleryView, pinControls, slideMenuButton } from '@/components/pages/pcs/PostGallery';
+import { galleryView, pinControls } from '@/components/pages/pcs/PostGallery';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
-// H2 / H3 / T13: the visible Add pin (with Cancel while armed), the visible ⋯
-// per slide, and the no-callout / no-select slides. Hookless trees, walked.
+// H2 / T13: the visible Add pin (with Cancel while armed), no ⋮ circle on the
+// picture, and the no-callout / no-select slides. Hookless trees, walked.
 
 function flatten(node: ReactNode, out: ReactElement[]): void {
   if (Array.isArray(node)) {
@@ -113,21 +113,15 @@ describe('Add pin (H2)', () => {
   });
 });
 
-describe('slide ⋯ (H3)', () => {
-  it('renders a 44px actions button per slide for the agency side, opening the slide actions', () => {
-    const onSlideMenu = vi.fn();
-    const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {}, onSlideMenu });
-    const menus = elements(tree).filter((el) => label(el)?.endsWith(' actions') === true);
-    expect(menus.map(label)).toEqual(['Slide 1 actions', 'Slide 2 actions', 'Slide 3 actions']);
-    for (const menu of menus) expect(className(menu)).toContain('h-11 w-11');
-    (menus[2]?.props as { onClick: () => void }).onClick();
-    expect(onSlideMenu).toHaveBeenCalledWith(2);
-  });
-
-  it('is absent for the client side', () => {
-    expect(slideMenuButton(0, undefined)).toBeNull();
+describe('no ⋮ circle on the picture', () => {
+  it('no slide carries an actions button or a dialog opener', () => {
     const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
-    expect(elements(tree).some((el) => label(el)?.endsWith(' actions') === true)).toBe(false);
+    const all = elements(tree);
+    expect(all.some((el) => label(el)?.endsWith(' actions') === true)).toBe(false);
+    expect(
+      all.some((el) => (el.props as { 'aria-haspopup'?: string })['aria-haspopup'] === 'dialog'),
+    ).toBe(false);
+    expect(all.some((el) => className(el).includes('rounded-full bg-overlay '))).toBe(false);
   });
 });
 

@@ -162,9 +162,6 @@ function rowTick(id: string): string | null {
 function rowText(id: string): string {
   return rowEl(id)?.textContent ?? '';
 }
-function headerCount(): string {
-  return host?.querySelector('[data-open-count]')?.textContent ?? '';
-}
 
 beforeEach(() => {
   checkpointRows.current = [];
@@ -198,7 +195,6 @@ describe('approver Confirm on a resolved checkpoint', () => {
     expect(tap?.className).toContain('min-w-[44px]');
     expect(rowText('p-1')).toContain('Resolved');
     expect(rowTick('p-1')).toBe('hollow');
-    expect(headerCount()).toBe('0 open · 1 resolved');
 
     act(() => tap?.click());
 
@@ -207,7 +203,6 @@ describe('approver Confirm on a resolved checkpoint', () => {
     expect(rowTick('p-1')).toBe('filled');
     expect(rowText('p-1')).toContain('Resolved');
     expect(rowText('p-1')).not.toContain('Confirmed');
-    expect(headerCount()).toBe('0 open · 1 resolved');
 
     expect(acceptSpy).toHaveBeenCalledTimes(1);
     expect(acceptSpy.mock.calls[0]?.[1]).toEqual({

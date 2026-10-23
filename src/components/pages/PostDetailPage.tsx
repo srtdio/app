@@ -3,7 +3,11 @@ import { appPresignCache } from '@/lib/shared-presign';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
+import {
+  ApproveConfirm,
+  APPROVE_CONFIRM_TITLE,
+  approveTargetDate,
+} from '@/components/ui/ApproveConfirm';
 import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
 import { useWorkspaceApprovers } from '@/components/pages/pcs/use-approvers';
 import { briefRoute } from '@/lib/chat/briefs';
@@ -12,7 +16,11 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
-import { Comments, runCreateCommentBatch } from '@/components/comments/Comments';
+import {
+  Comments,
+  openCheckpointsLabel,
+  runCreateCommentBatch,
+} from '@/components/comments/Comments';
 import type { CommentCounts } from '@/components/comments/Comments';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { dispatchInductionDid, dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
@@ -24,7 +32,6 @@ import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
-  IconBriefs,
   IconCalendar,
   IconChat,
   IconChevronDown,
@@ -66,13 +73,11 @@ import {
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import {
-  STAGE_REASON_LABEL,
   stageReasonComment,
   stageReasonConfirm,
   visibleStageActions,
   type StageReasonConfirmCopy,
 } from '@/components/pages/pcs/stage-actions';
-import { sheetTitle } from '@/components/chat/post-sheet';
 import {
   useApproveGate,
   type ApproveGate,
@@ -248,15 +253,6 @@ function snapshotCaption(snapshot: Json | null): string | null {
   return typeof caption === 'string' ? caption : null;
 }
 
-// Split a title into everything-but-the-last-word and the last word, so the body
-// title can keep the trailing edit pencil glued to the final word (wrapped in a
-// nowrap span) instead of letting the glyph wrap onto its own line.
-function splitLastWord(title: string): { head: string; last: string } {
-  const words = title.split(' ');
-  const last = words.pop() ?? title;
-  return { head: words.join(' '), last };
-}
-
 // The header status-dot fill per stage, reusing the SAME per-stage colour the
 // pill carries (draft dim, review accent, approved good, parked warn, rejected
 // bad) so no new colour is introduced.
@@ -271,9 +267,9 @@ const STAGE_DOT: Record<Stage, string> = {
 /** The comments section's id: the open-comments chip scrolls here. */
 export const COMMENTS_SECTION_ID = 'post-comments';
 
-/** Flow B 29: the chip under the title, "1 open comment" / "{n} open comments". */
+/** Flow B 29: the pill under the title, "1 open checkpoint" / "{n} open checkpoints". */
 export function openCommentsLabel(count: number): string {
-  return `${count} open ${count === 1 ? 'comment' : 'comments'}`;
+  return openCheckpointsLabel(count);
 }
 
 /**
@@ -292,42 +288,20 @@ export function scrollToCommentsSection(doc: Document = document): void {
 }
 
 /**
- * Flow B 30: the approver's Comment puts the caret in the comment box (the
- * root composer at the end of the comments) and brings it into view. With no
- * box on screen it falls back to scrolling to the comments. Returns whether a
- * box took focus.
- */
-export function focusCommentComposer(doc: Document = document): boolean {
-  const box = doc.querySelector<HTMLElement>(
-    `#${COMMENTS_SECTION_ID} [data-comments-composer] textarea, #${COMMENTS_SECTION_ID} [data-comments-composer] [contenteditable]:not([contenteditable="false"])`,
-  );
-  if (box === null) {
-    scrollToCommentsSection(doc);
-    return false;
-  }
-  const view = doc.defaultView;
-  const reduce =
-    view !== null &&
-    typeof view.matchMedia === 'function' &&
-    view.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  box.focus({ preventScroll: true });
-  box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-  return true;
-}
-
-/**
  * Flow B 34: the page grid, shared by the skeleton and the loaded page so the
  * first paint never jumps. Below lg (phone, tablet portrait) one column: head
- * (title, details, chip), media, body (caption, comments). lg and up: the
- * picture on the left (at most 520px, the frame keeps the platform shape), the
- * head and body stacked on the right; page at most 1120px, centred. Embedded
- * (inside another screen) always stays one column.
+ * (title, details, pills), media, body (caption), side (checkpoints). lg and
+ * up, two columns: head, picture and caption on the left (at most 560px), the
+ * checkpoints on the right as their own column from the top, sticky and
+ * scrolling on their own within the viewport so neither side sits blank; page
+ * at most 1120px, centred. Embedded (inside another screen) stays one column.
  */
 export function postPageGrid(embedded: boolean): {
   page: string;
   head: string;
   media: string;
   body: string;
+  side: string;
 } {
   if (embedded) {
     return {
@@ -335,56 +309,52 @@ export function postPageGrid(embedded: boolean): {
       head: 'min-w-0',
       media: 'min-w-0',
       body: 'min-w-0',
+      side: 'min-w-0',
     };
   }
   return {
-    page: 'mx-auto grid w-full max-w-[1120px] grid-cols-1 gap-4 px-4 md:px-6 pt-4 pb-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:gap-x-8',
-    head: 'min-w-0 lg:col-start-2 lg:row-start-1',
-    media: 'min-w-0 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:self-start',
-    body: 'min-w-0 lg:col-start-2 lg:row-start-2',
+    page: 'mx-auto grid w-full max-w-[1120px] grid-cols-1 gap-4 px-4 md:px-6 pt-4 pb-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:gap-x-8',
+    head: 'min-w-0 lg:col-start-1 lg:row-start-1',
+    media: 'min-w-0 lg:col-start-1 lg:row-start-2',
+    body: 'min-w-0 lg:col-start-1 lg:row-start-3 lg:self-start',
+    side: 'min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:overscroll-contain',
   };
 }
 
 /**
- * The approve confirm (decision 22): the shared Sheet (translateY axis) with the
- * chat-matching confirm in its footer. The question names the post once (spec
- * B8 / D3: no title repeated above it). Open while the approve waits on a
- * confirm or is in flight;
- * a failure keeps it open with the error and Confirm re-armed. Back, the close
- * button, the backdrop and Escape send nothing. Hookless, so it is unit tested
- * by walking the tree.
+ * The approve confirm (decision 22, spec C1): the shared Sheet (translateY
+ * axis) titled "Approve this post?", one line "{n} slides · due {date}" (each
+ * part only when known; never the post title), then Back / Approve. The
+ * confirm sits in the body, not the footer, so no empty band shows above it.
+ * Open while the approve waits on a confirm or is in flight; a failure keeps
+ * it open with the error and Approve re-armed. Back, the close button, the
+ * backdrop and Escape send nothing. Hookless, so it is unit tested by walking
+ * the tree.
  */
 export function PcsApproveConfirm(props: {
   gate: ApproveGate;
   gateState: GateState;
-  format: string;
-  title: string;
   /** Slides in the loaded gallery; null leaves the clause out. */
   mediaCount: number | null;
+  /** The due day ("20 Jul"), or '' to leave it out. */
   targetDate: string;
   busy: boolean;
   error: string | null;
 }) {
   const { gate, gateState } = props;
   return (
-    <Sheet
-      open={gateState.pendingId !== null}
-      onClose={gate.cancel}
-      title={sheetTitle(props.format)}
-      footer={
-        <ApproveConfirm
-          postTitle={props.title}
-          mediaCount={props.mediaCount}
-          targetDate={props.targetDate}
-          error={props.error}
-          busy={props.busy || gateState.sent}
-          onBack={gate.cancel}
-          onConfirm={gate.confirm}
-          induction={INDUCTION_KEYS.postApproveConfirm}
-        />
-      }
-    >
-      {null}
+    <Sheet open={gateState.pendingId !== null} onClose={gate.cancel} title={APPROVE_CONFIRM_TITLE}>
+      <ApproveConfirm
+        mode="summary"
+        postTitle={null}
+        mediaCount={props.mediaCount}
+        targetDate={props.targetDate}
+        error={props.error}
+        busy={props.busy || gateState.sent}
+        onBack={gate.cancel}
+        onConfirm={gate.confirm}
+        induction={INDUCTION_KEYS.postApproveConfirm}
+      />
     </Sheet>
   );
 }
@@ -408,9 +378,11 @@ export function StageReasonConfirm(props: {
   label?: string;
   /** A quiet line under the field (reject: "Goes to the comments."), or none. */
   helper?: string | null;
+  /** Reject is red; Park uses the default button. */
+  destructive?: boolean;
 }) {
   const { copy } = props;
-  const label = props.label ?? STAGE_REASON_LABEL;
+  const label = props.label ?? REJECT_REASON_LABEL;
   const body = props.body ?? null;
   const helper = props.helper ?? null;
   return (
@@ -427,7 +399,12 @@ export function StageReasonConfirm(props: {
           <Button size="lg" className="ml-auto" onClick={props.onCancel}>
             Cancel
           </Button>
-          <Button size="lg" variant="danger" data-stage-confirm="" onClick={props.onConfirm}>
+          <Button
+            size="lg"
+            variant={props.destructive === true ? 'danger' : 'default'}
+            data-stage-confirm=""
+            onClick={props.onConfirm}
+          >
             {copy?.confirmLabel ?? ''}
           </Button>
         </>
@@ -539,6 +516,8 @@ export function PostDetailPage({
   // The sticky phone decision bar shows below md; md and up keep the stage
   // card inline (the laptop two-column layout itself switches at lg).
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  // Spec D2: at lg the stage action sits in the header bar beside the ⋮.
+  const isWide = useMediaQuery('(min-width: 1024px)');
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
@@ -668,10 +647,13 @@ export function PostDetailPage({
   const approvers = useWorkspaceApprovers(workspaceId);
 
   const [showDetails, setShowDetails] = useState(false);
-  // Workspace buckets, fetched once per workspace to resolve the post's bucket
-  // chip (mirrors PostDetailsSheet). A failure leaves the list empty: the chip
-  // simply does not render, no spinner, no flash.
-  const [buckets, setBuckets] = useState<BucketOption[]>([]);
+  // Spec A4: the slide on show, so the header ⋮ can remove it (the ⋮ circle
+  // on the picture is gone).
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  // Workspace buckets, fetched once per workspace (mirrors PostDetailsSheet);
+  // the bucket shows in the details sheet, not on the meta line. A failure
+  // leaves the list empty, no spinner, no flash.
+  const [, setBuckets] = useState<BucketOption[]>([]);
   const [bucketsLoaded, setBucketsLoaded] = useState(false);
   // The post's brief name for the details row; briefLoaded settles once the
   // read for the current brief_id lands (or there is no brief). A failure
@@ -1713,6 +1695,8 @@ export function PostDetailPage({
               <div className="mt-2 h-3 w-5/6 animate-pulse rounded bg-panel-3" />
               <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
             </div>
+          </div>
+          <div aria-hidden className={grid.side}>
             <div className="h-24 animate-pulse rounded-xl bg-panel-2" />
           </div>
         </div>
@@ -1768,9 +1752,7 @@ export function PostDetailPage({
   };
   const stageActions = visibleStageActions(currentStage, role);
   const ownerInfo = resolveOwner(post.owner_user_id, post.legacy_author_name);
-  const bucket = buckets.find((b) => b.id === post.bucket_id) ?? null;
   const hasCaption = post.caption !== null && post.caption.trim() !== '';
-  const { head: titleHead, last: titleLast } = splitLastWord(post.title);
   const composerKey = composer !== null ? captionDraftKey(composer.start, composer.end) : null;
   const pinKey =
     pinComposer !== null ? pinDraftKey(pinComposer.index, pinComposer.x, pinComposer.y) : null;
@@ -1837,120 +1819,116 @@ export function PostDetailPage({
 
   const approveTimeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
-  // Flow B 28: the details row parts, each only when it has a value. Platform
-  // and format always have one, and this is the one place they show (27).
-  // Flow B 37 / spec B4: an approved post is locked. No title pencil, caption
-  // Edit, gallery tools, slide actions or lightbox edit tools (each shows a
-  // lock instead); the details sheet keeps only the due date and the bucket.
+  // Spec A1: one meta line under the title. Owner · "Due 20 Jul" · "From
+  // brief: {title}" (a link), each only when it has a value; one line that
+  // truncates. Platform and format live in the details sheet.
+  // Flow B 37 / spec B4: an approved post is locked. No title edit, caption
+  // Edit, gallery tools, slide actions or lightbox edit tools (one lock per
+  // row instead), and the meta line no longer opens the details sheet.
   const approvedLocked = currentStage === 'approved';
   const canEditContent = agencySide && !readOnly && !approvedLocked;
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
   const dueLabel =
     post.target_date !== null ? formatDue(post.target_date, approveTimeZone, new Date()) : null;
-  const detailsEditable = agencySide && !readOnly;
-  // Spec B2: owner · Due date · "From brief: {title}" (a link to the brief),
-  // then the bucket and the platform. Each part only when it has a value; a
-  // quiet dot sits between parts.
-  const detailParts: { key: string; node: React.ReactNode }[] = [];
+  const detailsEditable = canEditContent;
+  const metaDot = (
+    <span aria-hidden className="shrink-0 text-fg-3">
+      ·
+    </span>
+  );
+  const metaHead: React.ReactNode[] = [];
   if (ownerKnown) {
-    detailParts.push({
-      key: 'owner',
-      node: (
-        <span data-detail="owner" className="inline-flex min-w-0 items-center gap-1.5">
-          <Avatar
-            name={ownerInfo.name}
-            size="sm"
-            {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
-          />
-          <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
-          {approvedLocked && agencySide ? (
-            <span aria-hidden data-detail-lock="" className="shrink-0 text-fg-3">
-              <IconLock size={13} />
-            </span>
-          ) : null}
-        </span>
-      ),
-    });
+    metaHead.push(
+      <span key="owner" data-detail="owner" className="inline-flex min-w-0 items-center gap-1.5">
+        <Avatar
+          name={ownerInfo.name}
+          size="sm"
+          {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
+        />
+        <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
+        {approvedLocked && agencySide ? (
+          <span aria-hidden data-detail-lock="" className="shrink-0 text-fg-3">
+            <IconLock size={14} />
+          </span>
+        ) : null}
+      </span>,
+    );
   }
   if (dueLabel !== null) {
-    detailParts.push({
-      key: 'due',
-      node: (
-        <span data-detail="due" className="inline-flex items-center gap-1.5 tabular-nums">
-          <IconCalendar size={15} />
-          {dueLabel}
-        </span>
-      ),
-    });
+    if (metaHead.length > 0) metaHead.push(<span key="due-dot">{metaDot}</span>);
+    metaHead.push(
+      <span key="due" data-detail="due" className="shrink-0 whitespace-nowrap tabular-nums">
+        {dueLabel}
+      </span>,
+    );
   }
-  if (briefName !== null && post.brief_id !== null) {
-    detailParts.push({
-      key: 'brief',
-      node: (
-        <Link
-          data-detail="brief"
-          to={briefRoute(post.brief_id)}
-          className="inline-flex min-h-[44px] min-w-0 max-w-full items-center gap-1.5 rounded-md font-medium text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <IconBriefs size={15} />
-          <span className="min-w-0 truncate">{fromBriefLabel(briefName)}</span>
-        </Link>
-      ),
-    });
-  }
-  if (bucket !== null) {
-    detailParts.push({
-      key: 'bucket',
-      node: (
-        <span data-detail="bucket" className="inline-flex min-w-0 items-center gap-1.5">
-          <span
-            aria-hidden
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ backgroundColor: bucket.colorHex }}
-          />
-          <span className="truncate">{bucket.name}</span>
-        </span>
-      ),
-    });
-  }
-  detailParts.push({
-    key: 'platform',
-    node: (
-      <span data-detail="platform" className="text-fg-3">
-        {platformLabel(post.platform)} · {formatLabel(post.format)}
-      </span>
-    ),
-  });
-  const detailsParts = detailParts.map((part, index) => (
-    <span key={part.key} className="inline-flex min-w-0 max-w-full items-center gap-2">
-      {index > 0 ? (
-        <span aria-hidden className="text-fg-3">
-          ·
-        </span>
-      ) : null}
-      {part.node}
-    </span>
-  ));
+  const briefLink =
+    briefName !== null && post.brief_id !== null ? (
+      <Link
+        data-detail="brief"
+        to={briefRoute(post.brief_id)}
+        className="inline-flex min-h-[44px] min-w-0 items-center rounded-md font-medium text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <span className="min-w-0 truncate">{fromBriefLabel(briefName)}</span>
+      </Link>
+    ) : null;
+  const metaHeadClass = 'flex min-h-[44px] min-w-0 shrink items-center gap-2 rounded-lg';
+  const metaLine =
+    metaHead.length > 0 || briefLink !== null ? (
+      <div
+        data-post-details=""
+        className="flex min-h-[44px] min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-[13px] text-fg-2"
+      >
+        {metaHead.length > 0 ? (
+          detailsEditable ? (
+            <button
+              type="button"
+              data-post-details-edit=""
+              onClick={() => setShowDetails(true)}
+              className={cn(
+                metaHeadClass,
+                '-mx-1 px-1 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              )}
+            >
+              {metaHead}
+            </button>
+          ) : (
+            <div className={metaHeadClass}>{metaHead}</div>
+          )
+        ) : null}
+        {metaHead.length > 0 && briefLink !== null ? metaDot : null}
+        {briefLink}
+      </div>
+    ) : detailsEditable ? (
+      // Nothing to show yet: the line is still the way into the details sheet.
+      <button
+        type="button"
+        data-post-details-edit=""
+        aria-label="Post details"
+        onClick={() => setShowDetails(true)}
+        className="inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg text-[13px] text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <IconCalendar size={15} />
+      </button>
+    ) : null;
 
   // Flow B 29: "{n} open comments" under the title while in review; a tap
   // scrolls to the comments. Hidden at 0.
   const openCommentsChip =
     currentStage === 'review' && openCount > 0 && !readOnly ? (
-      <div>
-        <button
-          type="button"
-          data-open-comments-chip=""
-          onClick={() => scrollToCommentsSection()}
-          className="group inline-flex min-h-[44px] items-center focus:outline-none"
-        >
-          <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-warn-soft px-3 text-[13px] font-semibold text-[color:var(--warn-ink)] group-focus-visible:ring-2 group-focus-visible:ring-accent">
-            <IconChat size={15} />
-            {openCommentsLabel(openCount)}
-            <IconChevronDown size={15} />
-          </span>
-        </button>
-      </div>
+      <button
+        type="button"
+        data-open-comments-chip=""
+        onClick={() => scrollToCommentsSection()}
+        className="group inline-flex min-h-[44px] items-center focus:outline-none"
+      >
+        <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-warn-soft px-3 text-[13px] font-semibold text-[color:var(--warn-ink)] group-focus-visible:ring-2 group-focus-visible:ring-accent">
+          <IconChat size={15} />
+          {openCommentsLabel(openCount)}
+          <IconChevronDown size={15} />
+        </span>
+      </button>
     ) : null;
 
   // The approver's quiet note in review, or null.
@@ -1969,7 +1947,6 @@ export function PostDetailPage({
         ? {
             kind: 'approver',
             actions: stageActions,
-            onComment: currentStage === 'review' ? () => void focusCommentComposer() : null,
             onPick: pickStage,
           }
         : null
@@ -2035,14 +2012,22 @@ export function PostDetailPage({
   const phoneLayout = !isDesktop && !embedded;
   // Flow B 27: the stage shows once, in the top bar; with no moves to offer
   // (and nothing to say) nothing is rendered.
+  // Spec D2: at lg (not embedded) the buttons move to the header bar beside
+  // the ⋮; the note and a failed tap's error stay in the content.
+  const headerDecision = isWide && !embedded && !readOnly;
   const stageSection = readOnly ? null : (
     <PostDecisionRow
-      model={decisionModel}
+      model={headerDecision ? null : decisionModel}
       busy={decisionBusy}
       error={actionError}
       note={stageHelper}
     />
   );
+  const headerStageAction = headerDecision ? (
+    <div data-header-decision="" className="shrink-0">
+      <PostDecisionRow model={decisionModel} busy={decisionBusy} error={null} />
+    </div>
+  ) : null;
   const phoneStageNotes =
     stageHelper !== null ? (
       <section className="rounded-xl border border-border bg-panel-2 p-4">
@@ -2102,6 +2087,7 @@ export function PostDetailPage({
               )}
             </span>
           </div>
+          {headerStageAction}
           {!readOnly ? (
             <button
               type="button"
@@ -2163,10 +2149,11 @@ export function PostDetailPage({
                     onChange={(event) => setTitleDraft(event.target.value)}
                     onBlur={onTitleBlur}
                     onKeyDown={onTitleKeyDown}
-                    // Spec B1: the same type and line height as the h1, with
-                    // no border or block padding (the ring draws outside the
-                    // box), so entering edit never shifts the page.
-                    className="-mx-2 w-[calc(100%+1rem)] rounded-md border-0 bg-panel-2 px-2 py-0 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
+                    // Spec B1 / A3: the same type, line height, padding and
+                    // 44px floor as the tappable title, with no border (the
+                    // ring draws outside the box), so entering edit never
+                    // shifts the page.
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-md border-0 bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
@@ -2201,24 +2188,18 @@ export function PostDetailPage({
                   ) : null}
                 </div>
               ) : (
+                // Spec A3: the title itself is the edit target (no pencil
+                // tile): at least 44px tall, a visible focus ring, and the
+                // same padding as the editor so tapping never shifts the page.
                 <h1 className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
-                  {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
-                  <span className="whitespace-nowrap">
-                    <Highlight text={titleLast} />
-                    {/* The 44px target overflows the line box (negative block
-                        margins), so the title line keeps its own height and the
-                        editor below it does not shift. */}
-                    <button
-                      type="button"
-                      aria-label="Edit title"
-                      onClick={openTitleEditor}
-                      className="-my-1.5 ml-1 inline-flex h-11 w-11 items-center justify-center align-top focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    >
-                      <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-panel-3 text-fg-3 transition-colors hover:text-fg-2">
-                        <IconPencil size={17} />
-                      </span>
-                    </button>
-                  </span>
+                  <button
+                    type="button"
+                    data-title-edit=""
+                    onClick={openTitleEditor}
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-md px-2 py-1 text-left font-semibold leading-tight tracking-tight transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <Highlight text={post.title} />
+                  </button>
                 </h1>
               )
             ) : (
@@ -2233,44 +2214,29 @@ export function PostDetailPage({
                     data-title-lock=""
                     className="ml-2 inline-flex align-middle text-fg-3"
                   >
-                    <IconLock size={18} />
+                    <IconLock size={14} />
                   </span>
                 ) : null}
               </h1>
             )}
 
-            {/* Flow B 28: the visible details row. Owner, due date, bucket,
-              brief, platform and format, each only when it has a value;
-              creators tap it (Edit) to open the details sheet. */}
-            <div className="flex flex-wrap items-center gap-x-2">
-              {/* The brief part is a link, so the row is a plain line and
-                  creators open the details sheet from its own Edit button. */}
-              <div
-                data-post-details=""
-                className="flex min-h-[44px] min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1.5 py-1 text-[13px] text-fg-2"
-              >
-                {detailsParts}
-                {detailsEditable ? (
-                  <button
-                    type="button"
-                    data-post-details-edit=""
-                    onClick={() => setShowDetails(true)}
-                    className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-2 font-medium text-accent transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  >
-                    Edit
-                  </button>
-                ) : null}
-              </div>
+            {/* Spec A1: one meta line (owner, due, brief); agency roles tap
+              it to open the details sheet while the post is not approved. */}
+            {metaLine}
+            {/* Spec A2: the preview pill and the open checkpoints pill share
+              one row. */}
+            <div data-post-pills="" className="flex flex-wrap items-center gap-x-2">
               <PreviewChip platform={post.platform} onClick={() => setPreviewOpen(true)} />
+              {openCommentsChip}
             </div>
             {/* Flow B 37: the approved lock, under the title and details. */}
             {approvedBanner}
-            {/* DECISION ROW SLOT (flow B 30 / 34): on md and up (and embedded)
-              the approver / creator decision row renders here, under the
-              details and above the open-comments chip and the caption. Below
-              md the same row lives in the sticky PostDecisionBar instead. */}
+            {/* DECISION ROW SLOT (flow B 30 / 34): on md (and embedded) the
+              approver / creator decision row renders here, under the details
+              and above the caption. Below md the same row lives in the sticky
+              PostDecisionBar; at lg its buttons sit in the header bar and only
+              the note and a failed tap's error stay here. */}
             {phoneLayout ? null : stageSection}
-            {openCommentsChip}
           </div>
 
           <div className={cn(grid.media, 'flex flex-col gap-3')}>
@@ -2315,6 +2281,7 @@ export function PostDetailPage({
                       : undefined
                   }
                   onRemove={canEditContent ? handleRemove : undefined}
+                  onActiveIndexChange={setGalleryIndex}
                   saving={gallerySaving}
                   tools={{
                     // #26 / flow B 37: creators edit on draft / review / parked /
@@ -2381,7 +2348,7 @@ export function PostDetailPage({
                     data-caption-lock=""
                     className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-fg-3"
                   >
-                    <IconLock size={16} />
+                    <IconLock size={14} />
                   </span>
                 ) : null}
                 {canEditContent && !editingCaption ? (
@@ -2479,10 +2446,14 @@ export function PostDetailPage({
             </section>
 
             {phoneLayout ? phoneStageNotes : null}
+          </div>
 
-            {/* Comments own their header row ("Comments", the open-count chip,
-              Open / All); the checkpoint strip sits under it, only when
-              there are checkpoints (it renders nothing otherwise). */}
+          {/* Spec D1: the checkpoints are their own column at lg (sticky,
+            scrolling within the viewport); below lg they follow the caption.
+            Comments own their header row ("Checkpoints", Open / All); the
+            checkpoint strip sits under it, only when there are checkpoints
+            (it renders nothing otherwise). */}
+          <div data-post-side="" className={grid.side}>
             <section
               id={COMMENTS_SECTION_ID}
               className="scroll-mt-16 rounded-xl border border-border bg-panel-2 p-4"
@@ -2587,7 +2558,7 @@ export function PostDetailPage({
         {...(reasonTarget === 'rejected'
           ? {
               body: rejectConfirmBody(ownerKnown ? ownerInfo.name : null),
-              label: REJECT_REASON_LABEL,
+              destructive: true,
             }
           : {})}
       />
@@ -2655,6 +2626,7 @@ export function PostDetailPage({
           });
         }}
         lockedFields={approvedLocked}
+        platformFormat={`${platformLabel(post.platform)} · ${formatLabel(post.format)}`}
       />
 
       <PlatformPreviewPanel
@@ -2672,8 +2644,6 @@ export function PostDetailPage({
       <PcsApproveConfirm
         gate={approveGate}
         gateState={approveState}
-        format={post.format}
-        title={post.title}
         mediaCount={gallery.length > 0 ? gallery.length : null}
         targetDate={approveTargetDate(post.target_date, approveTimeZone)}
         busy={transitioning}
@@ -2757,6 +2727,16 @@ export function PostDetailPage({
           canDelete={canDelete}
           onDeletePost={handleDeletePost}
           moveRows={moveRows}
+          removeImage={
+            canEditContent && gallery.length > 0
+              ? {
+                  index: Math.min(galleryIndex, gallery.length - 1),
+                  count: gallery.length,
+                  saving: gallerySaving,
+                  onRemove: () => handleRemove(Math.min(galleryIndex, gallery.length - 1)),
+                }
+              : undefined
+          }
           {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
         />
       ) : null}

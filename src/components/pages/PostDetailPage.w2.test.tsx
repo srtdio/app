@@ -60,15 +60,14 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
       onReasonChange: () => {},
       onCancel,
       onConfirm,
+      destructive: true,
     });
     const sheet = tree as ReactElement<{ open: boolean; title: string }>;
     expect(sheet.props.open).toBe(true);
     expect(sheet.props.title).toBe('Reject this post?');
     const els = walk(tree);
     const field = els.find(
-      (el) =>
-        (el.props as { 'aria-label'?: string })['aria-label'] ===
-        'Reason (optional), goes to the comments',
+      (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Reason (optional)',
     );
     expect(field).toBeDefined();
     const confirm = els.find(
@@ -81,6 +80,28 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
     const cancel = els.find((el) => (el.props as { children?: ReactNode }).children === 'Cancel')!;
     (cancel.props as { onClick: () => void }).onClick();
     expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('C2: park reads "Reason (optional)" and uses the default (non-red) button', () => {
+    const tree = StageReasonConfirm({
+      copy: stageReasonConfirm('parked'),
+      reason: '',
+      onReasonChange: () => {},
+      onCancel: () => {},
+      onConfirm: () => {},
+    });
+    const els = walk(tree);
+    expect(
+      els.find(
+        (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Reason (optional)',
+      ),
+    ).toBeDefined();
+    const confirm = els.find(
+      (el) => (el.props as { 'data-stage-confirm'?: string })['data-stage-confirm'] === '',
+    )!;
+    expect((confirm.props as { variant?: string }).variant).toBe('default');
+    // Only the reject confirm passes destructive.
+    expect(PAGE).toMatch(/reasonTarget === 'rejected'[\s\S]{0,200}destructive: true/);
   });
 
   it('closed when there is no target', () => {
@@ -187,9 +208,10 @@ describe('7. small copy and hit areas', () => {
     expect(PAGE).not.toContain('Tap a slide to view it.');
   });
 
-  it('the bucket chip button is at least 44px tall', () => {
-    const start = PAGE.indexOf('onClick={() => setShowDetails(true)}');
-    expect(PAGE.slice(start, start + 200)).toContain('min-h-[44px]');
+  it('the meta line button that opens the details sheet is at least 44px tall', () => {
+    expect(PAGE).toContain("const metaHeadClass = 'flex min-h-[44px]");
+    const start = PAGE.indexOf('data-post-details-edit=""');
+    expect(PAGE.slice(start, start + 200)).toContain('metaHeadClass');
   });
 
   it('the details sheet target date has a Clear that sends null', () => {

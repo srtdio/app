@@ -12,12 +12,16 @@
 // It is mounted in LIVE PCS only (never the read-only old-version view).
 // Embedded in a plan item, the same sheet leads with Open in pipeline. Delete
 // post asks nothing (spec B7): the sheet closes and the page deletes behind its
-// 4s "Post deleted" Undo strip.
+// 4s "Post deleted" Undo strip. Remove image (agency, editable stage) acts on
+// the slide the gallery shows; it was the picture's own ⋮ and asks first with
+// the lightbox's confirm copy (Cancel / Remove).
 
 import { useContext, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
+import { Button } from '@/components/ui/Button';
+import { removeImageConfirmCopy } from '@/components/pages/pcs/PostLightbox';
 import {
   IconCalendar,
   IconDownload,
@@ -87,6 +91,22 @@ interface PostActionSheetProps {
   onOpenInPipeline?: () => void;
   /** Stage moves listed first (creators only); absent or empty shows none. */
   moveRows?: readonly PostMoveRow[];
+  /**
+   * Remove the slide the gallery shows (agency, editable stage only); absent
+   * hides the row. Asks first, then hands off to the page's gallery write.
+   */
+  removeImage?: RemoveImageAction | undefined;
+}
+
+/** The header sheet's Remove image row: which slide, and the page's remove. */
+export interface RemoveImageAction {
+  /** Zero-based slide the gallery shows. */
+  index: number;
+  /** Total slides, for the row line and the confirm copy. */
+  count: number;
+  /** A gallery write is in flight: Remove is disabled. */
+  saving: boolean;
+  onRemove: () => void;
 }
 
 /**
@@ -100,12 +120,14 @@ export function postActionLabels(opts: {
   openInPipeline: boolean;
   download: boolean;
   canDelete: boolean;
+  removeImage?: boolean;
 }): string[] {
   return [
     ...(opts.openInPipeline ? ['Open in pipeline'] : []),
     'Send to chat',
     'Copy link',
     ...(opts.download ? ['Download all images'] : []),
+    ...(opts.removeImage === true ? ['Remove image'] : []),
     ...(opts.canDelete ? ['Delete post'] : []),
   ];
 }
@@ -161,9 +183,10 @@ export function PostActionSheet({
   onDeletePost,
   onOpenInPipeline,
   moveRows = [],
+  removeImage,
 }: PostActionSheetProps): ReactElement {
   const planRows = useContext(PostSheetPlanRowsContext);
-  const [view, setView] = useState<'actions' | 'chat'>('actions');
+  const [view, setView] = useState<'actions' | 'chat' | 'remove'>('actions');
   const [downloading, setDownloading] = useState(false);
 
   const images = useMemo(() => gallery.filter(isDownloadableImage), [gallery]);
@@ -224,11 +247,39 @@ export function PostActionSheet({
     void onDeletePost();
   }
 
-  const title = view === 'chat' ? 'Send to chat' : 'Post actions';
+  const removeCopy = removeImage !== undefined ? removeImageConfirmCopy(removeImage.count) : null;
+  const title =
+    view === 'chat'
+      ? 'Send to chat'
+      : view === 'remove' && removeCopy !== null
+        ? removeCopy.title
+        : 'Post actions';
 
   return (
     <Sheet open={open} onClose={close} title={title}>
-      {view === 'chat' ? (
+      {view === 'remove' && removeImage !== undefined && removeCopy !== null ? (
+        <div data-remove-image-confirm="" className="flex flex-col gap-3">
+          {removeCopy.message !== null ? (
+            <p className="text-sm text-fg-2">{removeCopy.message}</p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button size="lg" onClick={() => setView('actions')}>
+              Cancel
+            </Button>
+            <Button
+              size="lg"
+              variant="danger"
+              disabled={removeImage.saving}
+              onClick={() => {
+                close();
+                removeImage.onRemove();
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        </div>
+      ) : view === 'chat' ? (
         <ConversationPicker
           postId={postId}
           workspaceId={workspaceId}
@@ -295,6 +346,21 @@ export function PostActionSheet({
                   : `${images.length} image${images.length === 1 ? '' : 's'}`
               }
               onClick={() => void handleDownloadAll()}
+            />
+          ) : null}
+          {removeImage !== undefined && removeImage.count > 0 ? (
+            <ActionRow
+              danger
+              icon={<IconTrash size={18} />}
+              label="Remove image"
+              sub={
+                removeImage.saving
+                  ? 'Saving…'
+                  : `Image ${Math.min(removeImage.index, removeImage.count - 1) + 1} of ${removeImage.count}`
+              }
+              onClick={() => {
+                if (!removeImage.saving) setView('remove');
+              }}
             />
           ) : null}
           {canDelete ? (

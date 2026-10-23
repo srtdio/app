@@ -9,7 +9,9 @@ import {
   countWords,
   filledCount,
   sendLabel,
+  showSlotNumbers,
   slotsSendable,
+  ADD_SLOT_LABEL,
 } from '@/components/comments/SlotComposer';
 
 // Node unit environment: the stateful composer is not mounted; the pure rules
@@ -126,10 +128,17 @@ describe('buildPoints (p_points shape)', () => {
 });
 
 describe('sendLabel and limits', () => {
-  it('reads Send N checkpoints, singular at one', () => {
-    expect(sendLabel(1)).toBe('Send 1 checkpoint');
+  it('reads "Send" for one checkpoint, "Send N checkpoints" for more', () => {
+    expect(sendLabel(1)).toBe('Send');
+    expect(sendLabel(0)).toBe('Send');
     expect(sendLabel(2)).toBe('Send 2 checkpoints');
     expect(sendLabel(20)).toBe('Send 20 checkpoints');
+  });
+
+  it('adds a slot with "+ Another" and numbers slots only once there are two', () => {
+    expect(ADD_SLOT_LABEL).toBe('+ Another');
+    expect(showSlotNumbers(1)).toBe(false);
+    expect(showSlotNumbers(2)).toBe(true);
   });
 
   it('pins the proc limits: 20 points per batch, counter from 35, cap at 50', () => {

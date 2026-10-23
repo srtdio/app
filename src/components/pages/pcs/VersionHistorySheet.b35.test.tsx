@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  VERSION_TEXT_CLASS,
+  VERSION_THUMBS_CLASS,
+  VERSION_THUMBS_MAX,
   versionHistorySheet,
   type VersionThumbs,
 } from '@/components/pages/pcs/VersionHistorySheet';
@@ -78,11 +81,14 @@ function version(id: string, n: number, gallery: string[]): PostVersionView {
 
 const noop = (): void => {};
 
-function sheet(selectedIds: string[] = []): ReactNode {
+function sheet(
+  selectedIds: string[] = [],
+  versions: PostVersionView[] = [version('v1', 1, ['ver-a']), version('v2', 2, ['ver-a', 'ver-b'])],
+): ReactNode {
   return versionHistorySheet({
     open: true,
     onClose: noop,
-    versions: [version('v1', 1, ['ver-a']), version('v2', 2, ['ver-a', 'ver-b'])],
+    versions,
     currentVersionNumber: 2,
     resolveAuthor: () => 'Casey',
     onSelectVersion: noop,
@@ -127,6 +133,64 @@ describe('#35 versions sheet', () => {
     const items = snapshotItems(['ver-a', 'ver-b', 'ver-b'], thumbs.gallery);
     expect(items.map((item) => item.kind)).toEqual(['image', 'video', 'video']);
     expect(new Set(items.map((item) => item.assetAttachmentId)).size).toBe(3);
+  });
+});
+
+describe('versions sheet at 360px (post screen polish)', () => {
+  const four = [
+    version('v1', 1, ['ver-a']),
+    version('v2', 2, ['ver-a', 'ver-b', 'ver-c', 'ver-d']),
+  ];
+
+  it('at most 2 thumbs per row, then "+n"', () => {
+    expect(VERSION_THUMBS_MAX).toBe(2);
+    const rows = elements(
+      (sheet([], four) as ReactElement<{ children?: ReactNode }>).props.children,
+    ).filter((el) => el.type === SnapshotThumbs);
+    expect(rows.every((el) => (el.props as { max?: number }).max === 2)).toBe(true);
+    expect(rows.every((el) => (el.props as { size?: string }).size === 'xs')).toBe(true);
+    const html = renderToStaticMarkup(rows[0] as ReactElement);
+    expect(html).toContain('h-8');
+    expect(html.match(/aspect-ratio:0.5625/g)).toHaveLength(2);
+    expect(html).toContain('+2');
+  });
+
+  it('thumbs are h-8 and give way first; the text column keeps about 120px', () => {
+    expect(VERSION_THUMBS_CLASS).toContain('min-w-0');
+    expect(VERSION_THUMBS_CLASS).toContain('overflow-hidden');
+    expect(VERSION_THUMBS_CLASS).not.toContain('shrink-0');
+    expect(VERSION_TEXT_CLASS).toContain('min-w-[120px]');
+    const all = elements(
+      (sheet([], four) as ReactElement<{ children?: ReactNode }>).props.children,
+    );
+    const wrappers = all.filter(
+      (el) => (el.props as { className?: string }).className === VERSION_THUMBS_CLASS,
+    );
+    expect(wrappers).toHaveLength(2);
+    const text = all.filter((el) => 'data-version-text' in (el.props as object));
+    expect(text).toHaveLength(2);
+    expect(
+      text.every((el) => (el.props as { className: string }).className === VERSION_TEXT_CLASS),
+    ).toBe(true);
+  });
+
+  it('the author truncates and the date stays', () => {
+    const all = elements(
+      (sheet([], four) as ReactElement<{ children?: ReactNode }>).props.children,
+    );
+    const author = all.find((el) => 'data-version-author' in (el.props as object));
+    const date = all.find((el) => 'data-version-date' in (el.props as object));
+    expect((author?.props as { className: string }).className).toContain('truncate');
+    expect((author?.props as { className: string }).className).toContain('min-w-0');
+    expect((date?.props as { className: string }).className).toContain('shrink-0');
+  });
+
+  it('the list clips sideways overflow so the sheet never pans on X', () => {
+    const list = (sheet([], four) as ReactElement<{ children?: ReactNode }>).props
+      .children as ReactElement<{ className: string }>;
+    expect(list.type).toBe('ul');
+    expect(list.props.className).toContain('overflow-x-hidden');
+    expect(list.props.className).toContain('min-w-0');
   });
 });
 

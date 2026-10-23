@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import {
-  COMMENT_LABEL,
   DECISION_BAR_SPACE_PX,
   decisionBarOrder,
   decisionBarSpace,
@@ -43,20 +42,21 @@ function label(el: ReactElement<Record<string, unknown>>): string {
   return parts.filter((part): part is string => typeof part === 'string').join('');
 }
 
-function approver(role: string, onPick = vi.fn(), onComment = vi.fn()): DecisionModel {
-  return { kind: 'approver', actions: visibleStageActions('review', role), onComment, onPick };
+function approver(role: string, onPick = vi.fn()): DecisionModel {
+  return { kind: 'approver', actions: visibleStageActions('review', role), onPick };
 }
 
-describe('30. approver row: Comment, Reject, Approve, same on phone and laptop', () => {
-  it('reads Comment, Reject, Approve in that order; Reject is plain with bad ink, Approve the one primary', () => {
+describe('30. approver row: Reject, Approve, same on phone and laptop', () => {
+  it('reads Reject, Approve in that order (no Comment); Reject is plain with bad ink, Approve the one primary', () => {
     for (const tree of [
       PostDecisionBar({ model: approver('client'), busy: false, error: null }),
       PostDecisionRow({ model: approver('client'), busy: false, error: null }),
     ]) {
       const row = buttons(tree);
-      expect(row.map(label)).toEqual([COMMENT_LABEL, 'Reject', 'Approve']);
-      const [comment, reject, approve] = row;
-      expect(comment?.props.variant).toBe('default');
+      expect(row.map(label)).toEqual(['Reject', 'Approve']);
+      expect(row.map(label)).not.toContain('Comment');
+      expect(all(tree).some((el) => 'data-decision-comment' in el.props)).toBe(false);
+      const [reject, approve] = row;
       expect(reject?.props.variant).toBe('default');
       expect(String(reject?.props.className)).toContain('text-bad');
       expect(approve?.props.variant).toBe('primary');
@@ -65,16 +65,13 @@ describe('30. approver row: Comment, Reject, Approve, same on phone and laptop',
     }
   });
 
-  it('Comment calls the focus handler; Reject and Approve report their targets', () => {
+  it('Reject and Approve report their targets', () => {
     const onPick = vi.fn();
-    const onComment = vi.fn();
     const row = buttons(
-      PostDecisionRow({ model: approver('client', onPick, onComment), busy: false, error: null }),
+      PostDecisionRow({ model: approver('client', onPick), busy: false, error: null }),
     );
     (row[0]?.props.onClick as () => void)();
-    expect(onComment).toHaveBeenCalledOnce();
     (row[1]?.props.onClick as () => void)();
-    (row[2]?.props.onClick as () => void)();
     expect(onPick.mock.calls).toEqual([['rejected'], ['approved']]);
   });
 
@@ -104,6 +101,11 @@ describe('30. approver row: Comment, Reject, Approve, same on phone and laptop',
   it('renders nothing with no model and no error', () => {
     expect(PostDecisionBar({ model: null, busy: false, error: null })).toBeNull();
     expect(PostDecisionRow({ model: null, busy: false, error: null })).toBeNull();
+  });
+
+  it('renders nothing for an approver with no moves (no lone Comment bar)', () => {
+    const model: DecisionModel = { kind: 'approver', actions: [], onPick: vi.fn() };
+    expect(PostDecisionBar({ model, busy: false, error: null })).toBeNull();
   });
 });
 

@@ -65,7 +65,6 @@ function rail(h: ReturnType<typeof harness>, stage: Stage, role: string): ReactE
       model: {
         kind: 'approver',
         actions: visibleStageActions(stage, role),
-        onComment: null,
         onPick: (to) => h.gate.request('p1', to),
       },
       busy: false,
@@ -91,8 +90,6 @@ function sheet(
   return PcsApproveConfirm({
     gate: h.gate,
     gateState: h.state(),
-    format: 'carousel',
-    title: 'Diwali teaser',
     mediaCount: 3,
     targetDate: 'Oct 2',
     busy: false,
@@ -102,9 +99,11 @@ function sheet(
 }
 
 function confirmOf(el: ReactElement): ConfirmProps {
-  const footer = (el.props as { footer: ReactElement }).footer;
-  expect(footer.type).toBe(ApproveConfirm);
-  return footer.props as ConfirmProps;
+  // Spec C1: the confirm sits in the sheet body (no empty band, no footer).
+  expect((el.props as { footer?: unknown }).footer).toBeUndefined();
+  const body = (el.props as { children: ReactElement }).children;
+  expect(body.type).toBe(ApproveConfirm);
+  return body.props as ConfirmProps;
 }
 
 function question(props: ConfirmProps): string {
@@ -174,38 +173,33 @@ describe('PCS approve confirm', () => {
     }
   });
 
-  it('T6: slide count from the loaded gallery and the target date when set; omitted when not', () => {
+  it('T6 / C1: "Approve this post?", then "{n} slides · due {date}", parts omitted when unknown', () => {
     const h = harness();
     press(rail(h, 'review', 'client'), 'Approve');
-    expect(question(confirmOf(sheet(h)))).toBe('Approve Diwali teaser, all 3 slides, for Oct 2?');
-    expect(question(confirmOf(sheet(h, { mediaCount: null })))).toBe(
-      'Approve Diwali teaser, for Oct 2?',
-    );
-    expect(question(confirmOf(sheet(h, { mediaCount: null, targetDate: '' })))).toBe(
-      'Approve Diwali teaser?',
-    );
-    expect((sheet(h).props as { title: string }).title).toBe('Carousel');
+    expect((sheet(h).props as { title: string }).title).toBe('Approve this post?');
+    expect(question(confirmOf(sheet(h)))).toBe('3 slides · due Oct 2');
+    expect(question(confirmOf(sheet(h, { mediaCount: 1 })))).toBe('1 slide · due Oct 2');
+    expect(question(confirmOf(sheet(h, { mediaCount: null })))).toBe('due Oct 2');
+    expect(confirmOf(sheet(h)).mode).toBe('summary');
   });
 
-  it('the confirm names the post by title, never a KEY-N code', () => {
+  it('C1: the confirm never names the post title, never a KEY-N code', () => {
     const h = harness();
     press(rail(h, 'review', 'client'), 'Approve');
     const confirm = confirmOf(sheet(h));
-    expect(confirm.postTitle).toBe('Diwali teaser');
+    expect(confirm.postTitle).toBeNull();
     expect(question(confirm)).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
     expect((sheet(h).props as { title: string }).title).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
-  it('T7 / spec B8: the question names the post once; no title line above it', () => {
+  it('T7 / spec B8: one summary line, no title line above it', () => {
     const h = harness();
     press(rail(h, 'review', 'client'), 'Approve');
     const el = sheet(h);
     expect((el.props as { open: boolean }).open).toBe(true);
     const all: ReactElement[] = [];
-    collect((el.props as { children: ReactNode }).children, all);
-    const texts = all.map((n) => (n.props as { children?: unknown }).children);
-    expect(texts).not.toContain('Diwali teaser');
-    expect(question(confirmOf(el))).toContain('Diwali teaser');
+    collect(ApproveConfirm(confirmOf(el)), all);
+    expect(all.filter((n) => n.type === 'p')).toHaveLength(1);
     // The guided tour key rides the Approve button itself.
     expect(confirmOf(el).induction).toBeDefined();
     confirmOf(el).onConfirm();
@@ -216,8 +210,9 @@ describe('PCS approve confirm', () => {
     const h = harness();
     press(rail(h, 'review', 'client'), 'Approve');
     const all: ReactElement[] = [];
-    collect((sheet(h).props as { children: ReactNode }).children, all);
-    expect(all).toHaveLength(0);
+    collect(ApproveConfirm(confirmOf(sheet(h))), all);
+    const texts = all.map((n) => String((n.props as { children?: unknown }).children ?? ''));
+    expect(texts.some((t) => t.includes('on their behalf'))).toBe(false);
   });
 
   it('T9: agency Reject from review and from approved moves at once', () => {

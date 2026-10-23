@@ -25,7 +25,7 @@ import {
   buildCreateInput,
   buildThreads,
   checkpointBox,
-  checkpointBoxLabel,
+  CHECKPOINT_BOX_LABEL,
   checkpointProgressText,
   checkpointReplySeed,
   checkpointState,
@@ -439,11 +439,8 @@ describe('checkpoint state + feed controls', () => {
     expect(retargetDraft('the logo', '', b)).toBe(`${b}the logo`);
   });
 
-  it('labels the checkbox Resolve (live), else Open / Resolved', () => {
-    expect(checkpointBoxLabel('open', true)).toBe('Resolve');
-    expect(checkpointBoxLabel('open', false)).toBe('Open');
-    expect(checkpointBoxLabel('resolved', false)).toBe('Resolved');
-    expect(checkpointBoxLabel('resolved', true)).toBe('Resolved');
+  it('labels the checkbox "Resolved", ticked or not', () => {
+    expect(CHECKPOINT_BOX_LABEL).toBe('Resolved');
   });
 
   it('draws the checkbox from tokens only: empty, hollow tick, filled tick', () => {
@@ -1045,19 +1042,20 @@ describe('pointMenuMode (kebab menu vs direct copy button vs nothing)', () => {
     expect(pointMenuMode(pointActions(dead, UUID_A, true))).toBe('none');
   });
 
-  it('a copy-only viewer gets the "Copy text" button and no "Checkpoint actions" trigger; an author gets "Checkpoint actions"', () => {
-    // The card renders one control per mode: 'menu' -> the "Checkpoint actions" kebab,
-    // 'copy' -> a direct "Copy text" button, 'none' -> nothing. Assert the label
-    // the render branch selects for each viewer.
+  it('a copy-only viewer gets only the row\'s "Copy" and no "Checkpoint actions" trigger; an author gets "Checkpoint actions"', () => {
+    // Copy lives in every live row's action row; the header kebab ("Checkpoint
+    // actions") is drawn only in 'menu' mode. Assert the header control the
+    // render branch selects for each viewer.
     const CONTROL_LABEL: Record<PointMenuMode, string | null> = {
       none: null,
-      copy: 'Copy text',
+      copy: null,
       menu: 'Checkpoint actions',
     };
     const frozenOwn = point({ accepted_at: FROZEN, closed_at: null });
     const copyMode = pointMenuMode(pointActions(frozenOwn, UUID_A, false));
     expect(copyMode).toBe('copy');
-    expect(CONTROL_LABEL[copyMode]).toBe('Copy text');
+    expect(pointActions(frozenOwn, UUID_A, false).canCopy).toBe(true);
+    expect(CONTROL_LABEL[copyMode]).toBeNull();
     expect(CONTROL_LABEL[copyMode]).not.toBe('Checkpoint actions');
 
     const liveOwn = point({ accepted_at: null, closed_at: null });

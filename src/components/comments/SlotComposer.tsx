@@ -1,5 +1,7 @@
-// The client checkpoint composer: numbered single-line slots that grow as
-// typed, one point per slot, all sent in ONE comment_batch_create call. It
+// The client checkpoint composer: single-line slots that grow as typed (numbered
+// only once there are two or more), one point per slot, added with the small
+// "+ Another" ghost in the composer row, all sent in ONE comment_batch_create
+// call ("Send" for one, "Send N checkpoints" for more). It
 // replaces only the CLIENT-role TOP-LEVEL composer on posts; replies (any
 // role), the agency composer, and brief comments keep the free-text
 // CommentComposer untouched. Checkpoints carry no mentions, so a slot is a
@@ -90,9 +92,18 @@ export function buildPoints(
     );
 }
 
-/** The send button label: "Send N checkpoints" (singular at one). */
+/** The send button label: "Send" for one checkpoint (or none typed yet),
+ *  "Send N checkpoints" for more. */
 export function sendLabel(count: number): string {
-  return `Send ${count} ${count === 1 ? 'checkpoint' : 'checkpoints'}`;
+  return count <= 1 ? 'Send' : `Send ${count} checkpoints`;
+}
+
+/** The small ghost button inside the composer row that adds another slot. */
+export const ADD_SLOT_LABEL = '+ Another';
+
+/** Slot numbers show only once there is more than one slot. Pure. */
+export function showSlotNumbers(slotCount: number): boolean {
+  return slotCount > 1;
 }
 
 type SubmitResult = { ok: true } | { ok: false; error: string };
@@ -152,6 +163,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
     slot.pending.some((item) => item.status.state === 'uploading'),
   );
   const canSend = slotsSendable(slots.map((slot) => slot.body)) && !uploading && !submitting;
+  const numbered = showSlotNumbers(slots.length);
 
   function updateBody(slotId: string, body: string): void {
     setSlots((prev) => prev.map((slot) => (slot.id === slotId ? { ...slot, body } : slot)));
@@ -304,12 +316,15 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
               )}
             >
               <div className="flex items-start gap-2">
-                <span
-                  aria-hidden
-                  className="flex h-11 w-5 shrink-0 items-center justify-center text-xs font-medium tabular-nums text-fg-3"
-                >
-                  {index + 1}
-                </span>
+                {numbered ? (
+                  <span
+                    aria-hidden
+                    data-slot-number=""
+                    className="flex h-11 w-5 shrink-0 items-center justify-center text-xs font-medium tabular-nums text-fg-3"
+                  >
+                    {index + 1}
+                  </span>
+                ) : null}
                 <Textarea
                   autoGrow
                   rows={1}
@@ -369,12 +384,12 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                 </span>
               ) : null}
               {tone === 'over' ? (
-                <p role="alert" className="pl-7 text-xs text-bad">
+                <p role="alert" className={cn('text-xs text-bad', numbered ? 'pl-7' : '')}>
                   {OVER_LIMIT_MESSAGE}
                 </p>
               ) : null}
               {slot.pending.length > 0 ? (
-                <ul className="flex flex-wrap gap-2 pl-7">
+                <ul className={cn('flex flex-wrap gap-2', numbered ? 'pl-7' : '')}>
                   {slot.pending.map((item) => (
                     <PendingChip
                       key={item.id}
@@ -390,15 +405,18 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
         })}
       </ol>
 
+      {/* The composer row: the small "+ Another" ghost on the left, the one
+          primary on the right; both 44px tall, like the agency composer's row. */}
       <div className="flex items-center gap-3 flex-wrap">
         <Button
-          size="lg"
+          size="sm"
           variant="ghost"
-          className="min-w-[44px]"
+          className="min-h-[44px] min-w-[44px]"
+          data-add-slot=""
           disabled={submitting || slots.length >= MAX_POINTS}
           onClick={addSlot}
         >
-          Add checkpoint
+          {ADD_SLOT_LABEL}
         </Button>
         <Button
           size="lg"

@@ -4,8 +4,8 @@
 // and up (laptop: the right column, above the caption). The page renders
 // exactly one of them per breakpoint.
 //
-// Approvers in review: Comment, Reject (plain, bad ink), Approve (the one
-// primary), in that order everywhere. Creators: one main button ("Send for
+// Approvers in review: Reject (plain, bad ink) then Approve (the one primary),
+// in that order everywhere; no Comment button (the composer is on the page). Creators: one main button ("Send for
 // review", or "Send for review again"); their other moves (Approve on their
 // behalf, Park, Reject) live in the post's ⋯ sheet. A failed tap
 // shows its plain-words error here, once. Hookless, so the tree is unit tested
@@ -14,7 +14,7 @@
 
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { IconChat, IconSend } from '@/components/ui/icons';
+import { IconSend } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import type { StageAction } from '@/components/pages/pcs/stage-actions';
 import type { Stage } from '@srtdio/posts';
@@ -22,16 +22,12 @@ import type { Stage } from '@srtdio/posts';
 /** Height the page reserves under its content for a plain bar (px, plus the safe area). */
 export const DECISION_BAR_SPACE_PX = 76;
 
-/** The approver row's Comment label. */
-export const COMMENT_LABEL = 'Comment';
-
 /** The creator's main button in review (flow B 33). */
 export const SEND_AGAIN_LABEL = 'Send for review again';
 
 /**
  * The approver row order (flow B 30): Reject first, Approve last, anything
- * else between, each group keeping its order. Comment leads the row ahead of
- * these. Pure.
+ * else between, each group keeping its order. Pure.
  */
 export function decisionBarOrder(actions: readonly StageAction[]): StageAction[] {
   const rank = (action: StageAction): number =>
@@ -44,8 +40,6 @@ export type DecisionModel =
   | {
       kind: 'approver';
       actions: readonly StageAction[];
-      /** Comment (review only): focuses the comment box. Null hides it. */
-      onComment: (() => void) | null;
       onPick: (to: Stage) => void;
     }
   | {
@@ -75,18 +69,6 @@ function approverButtons(
   const ordered = decisionBarOrder(model.actions);
   return (
     <div className="flex items-center gap-2">
-      {model.onComment !== null ? (
-        <Button
-          size="lg"
-          variant="default"
-          data-decision-comment=""
-          onClick={model.onComment}
-          className="min-w-[44px] flex-1 gap-1.5"
-        >
-          <IconChat size={16} />
-          {COMMENT_LABEL}
-        </Button>
-      ) : null}
       {ordered.map((action) => {
         const approve = action.to === 'approved';
         return (
@@ -165,7 +147,7 @@ function decisionContent(
 function hasContent(model: DecisionModel | null, error: string | null): boolean {
   if (error !== null) return true;
   if (model === null) return false;
-  return model.kind === 'creator' || model.actions.length > 0 || model.onComment !== null;
+  return model.kind === 'creator' || model.actions.length > 0;
 }
 
 /** The phone bar: fixed above the safe area, below md only. */

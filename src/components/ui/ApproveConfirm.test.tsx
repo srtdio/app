@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import {
+  APPROVE_CONFIRM_TITLE,
   ApproveConfirm,
+  approveConfirmBody,
   approveTargetDate,
   type ApproveConfirmProps,
 } from '@/components/ui/ApproveConfirm';
+import { Button } from '@/components/ui/Button';
 import { confirmCopy, postSubject } from '@/components/chat/post-sheet';
 
 function collect(node: ReactNode, found: ReactElement[]): void {
@@ -93,24 +96,26 @@ describe('ApproveConfirm', () => {
 
   it('wires Back and Confirm, both disabled while busy', () => {
     const props = base();
-    const buttons = elements(props).filter((el) => el.type === 'button');
+    const buttons = elements(props).filter((el) => el.type === Button);
     expect(buttons).toHaveLength(2);
     (buttons[0]!.props as { onClick: () => void }).onClick();
     expect(props.onBack).toHaveBeenCalledOnce();
     (buttons[1]!.props as { onClick: () => void }).onClick();
     expect(props.onConfirm).toHaveBeenCalledOnce();
-    const busy = elements(base({ busy: true })).filter((el) => el.type === 'button');
+    const busy = elements(base({ busy: true })).filter((el) => el.type === Button);
     expect(busy.every((el) => (el.props as { disabled: boolean }).disabled)).toBe(true);
   });
 
-  it('uses the chat sheet look: 48px buttons, good fill, tokens only', () => {
-    const buttons = elements(base()).filter((el) => el.type === 'button');
-    const [back, approve] = buttons.map((el) => (el.props as { className: string }).className);
-    expect(back).toContain('h-12');
-    expect(back).toContain('border-border bg-panel text-fg');
-    expect(approve).toContain('h-12');
-    expect(approve).toContain('bg-good-solid');
-    expect(`${back} ${approve}`).not.toMatch(/#[0-9a-f]{3,6}|dark:/i);
+  it('Back and Approve are lg Buttons, Approve the success variant, tokens only', () => {
+    const buttons = elements(base()).filter((el) => el.type === Button);
+    const [back, approve] = buttons.map(
+      (el) => el.props as { variant?: string; size?: string; className: string },
+    );
+    expect(back?.variant).toBeUndefined();
+    expect(back?.size).toBe('lg');
+    expect(approve?.variant).toBe('success');
+    expect(approve?.size).toBe('lg');
+    expect(`${back?.className} ${approve?.className}`).not.toMatch(/#[0-9a-f]{3,6}|dark:|rgba/i);
   });
 
   it('formats the target date with the app day format', () => {
@@ -118,5 +123,50 @@ describe('ApproveConfirm', () => {
     expect(approveTargetDate(null, 'UTC', now)).toBe('');
     expect(approveTargetDate('2026-10-02T06:30:00Z', 'Asia/Kolkata', now)).toBe('2 Oct');
     expect(approveTargetDate('2027-01-04T06:30:00Z', 'Asia/Kolkata', now)).toBe('4 Jan 2027');
+  });
+});
+
+describe('ApproveConfirm summary mode (post screen)', () => {
+  const summary = (over: Partial<ApproveConfirmProps> = {}): ApproveConfirmProps =>
+    base({ mode: 'summary', targetDate: '20 Jul', ...over });
+
+  it('the sheet title is the question, never the format', () => {
+    expect(APPROVE_CONFIRM_TITLE).toBe('Approve this post?');
+  });
+
+  it('one body line "{n} slides · due {date}", then Back and Approve; never the post title', () => {
+    expect(texts(summary())).toEqual(['4 slides · due 20 Jul', 'Back', 'Approve']);
+    for (const text of texts(summary())) expect(text).not.toContain('Launch teaser');
+  });
+
+  it('omits missing parts and says "1 slide"', () => {
+    expect(texts(summary({ mediaCount: 1 }))[0]).toBe('1 slide · due 20 Jul');
+    expect(texts(summary({ mediaCount: null }))[0]).toBe('due 20 Jul');
+    expect(texts(summary({ targetDate: '' }))[0]).toBe('4 slides');
+    expect(texts(summary({ mediaCount: null, targetDate: '' }))).toEqual(['Back', 'Approve']);
+    expect(
+      elements(summary({ mediaCount: null, targetDate: '' })).some(
+        (el) => 'data-approve-summary' in (el.props as object),
+      ),
+    ).toBe(false);
+  });
+
+  it('approveConfirmBody is pure and drops a zero count', () => {
+    expect(approveConfirmBody({ slides: 3, dueDay: '2 Oct' })).toBe('3 slides · due 2 Oct');
+    expect(approveConfirmBody({ slides: 0, dueDay: '' })).toBe('');
+    expect(approveConfirmBody({ slides: 1, dueDay: '' })).toBe('1 slide');
+  });
+
+  it('shows a failed approve above the buttons', () => {
+    expect(texts(summary({ error: 'Could not approve.' }))).toEqual([
+      '4 slides · due 20 Jul',
+      'Could not approve.',
+      'Back',
+      'Approve',
+    ]);
+  });
+
+  it('no em-dashes in the copy', () => {
+    for (const text of texts(summary())) expect(text).not.toContain('\u2014');
   });
 });

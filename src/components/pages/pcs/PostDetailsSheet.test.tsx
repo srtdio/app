@@ -4,7 +4,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Flow B 28: the details sheet's target date is a draft until Done. Changing
-// the date input never writes; Done writes the picked day once and closes.
+// the date never writes; Done writes the picked day once and closes. The date
+// is the app's DatePicker (as the create sheet uses), never a native input.
 // Spec B3 / B4: no Origin row, the inline "+ New bucket" flow, "Discard
 // changes?" on an unsaved date, and the owner row's lock on an approved post.
 
@@ -29,6 +30,7 @@ async function mount(
   over: {
     isAgencySide?: boolean;
     lockedFields?: boolean;
+    platformFormat?: string;
     onCreateBucket?: (name: string) => Promise<Result<BucketOption>>;
   } = {},
 ) {
@@ -57,6 +59,7 @@ async function mount(
         onChangeOwner={() => {}}
         onChangeTargetDate={onChangeTargetDate}
         {...(over.lockedFields !== undefined ? { lockedFields: over.lockedFields } : {})}
+        {...(over.platformFormat !== undefined ? { platformFormat: over.platformFormat } : {})}
         {...(over.onCreateBucket !== undefined ? { onCreateBucket: over.onCreateBucket } : {})}
       />,
     );
@@ -85,10 +88,17 @@ function rowButton(label: string): HTMLButtonElement | undefined {
   );
 }
 
-function setDate(input: HTMLInputElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  setter?.call(input, value);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+/** The DatePicker trigger (aria-label "Due date"). */
+const dateTrigger = () =>
+  document.querySelector<HTMLButtonElement>('button[aria-label="Due date"]');
+
+/** Open the DatePicker and pick a day of the shown month (the stored date's, October 2026). */
+async function pickDay(day: number): Promise<void> {
+  await click(dateTrigger());
+  const cell = [...document.querySelectorAll<HTMLButtonElement>('[role="gridcell"]')].find(
+    (el) => el.textContent?.trim() === String(day),
+  );
+  await click(cell);
 }
 
 const button = (label: string) =>
@@ -105,16 +115,17 @@ afterEach(() => {
 describe('PostDetailsSheet target date (flow B 28)', () => {
   it('saves on Done, not on every input change', async () => {
     const { onClose, onChangeTargetDate } = await mount();
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Due date"]');
-    expect(input).not.toBeNull();
-    expect(input?.value).toBe('2026-10-20');
+    expect(dateTrigger()).not.toBeNull();
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+    // The stored day is selected in the calendar.
+    await click(dateTrigger());
+    expect(
+      document.querySelector('[role="gridcell"][aria-selected="true"]')?.textContent?.trim(),
+    ).toBe('20');
+    await click(dateTrigger());
 
-    await act(async () => {
-      setDate(input!, '2026-10-27');
-    });
-    await act(async () => {
-      setDate(input!, '2026-10-28');
-    });
+    await pickDay(27);
+    await pickDay(28);
     expect(onChangeTargetDate).not.toHaveBeenCalled();
 
     const done = button('Done');
@@ -141,7 +152,7 @@ describe('PostDetailsSheet target date (flow B 28)', () => {
   it('approvers get no Done (read-only rows)', async () => {
     await mount({ isAgencySide: false });
     expect(button('Done')).toBeUndefined();
-    expect(document.querySelector('input[aria-label="Due date"]')).toBeNull();
+    expect(dateTrigger()).toBeNull();
   });
 
   it('lockedFields keeps the owner row read-only, with a lock', async () => {
@@ -152,7 +163,7 @@ describe('PostDetailsSheet target date (flow B 28)', () => {
     expect(ownerRow).toBeUndefined();
     expect(document.querySelectorAll('[data-detail-row-lock]')).toHaveLength(1);
     // Due date and bucket stay editable.
-    expect(document.querySelector('input[aria-label="Due date"]')).not.toBeNull();
+    expect(dateTrigger()).not.toBeNull();
     expect(rowButton('Bucket')).toBeDefined();
   });
 
@@ -169,10 +180,7 @@ describe('PostDetailsSheet target date (flow B 28)', () => {
 
   it('B3: closing with an unsaved date asks "Discard changes?" and writes nothing', async () => {
     const { onClose, onChangeTargetDate } = await mount();
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Due date"]');
-    await act(async () => {
-      setDate(input!, '2026-10-29');
-    });
+    await pickDay(29);
     await click(document.querySelector('button[aria-label="Close"]'));
     const dialog = document.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain('Discard changes?');
@@ -224,5 +232,35 @@ describe('PostDetailsSheet target date (flow B 28)', () => {
       "That name's already taken.",
     );
     expect(onChangeBucket).not.toHaveBeenCalled();
+  });
+});
+
+describe('PostDetailsSheet rows (post screen polish)', () => {
+  it('the due date is the app DatePicker, not a native date input', async () => {
+    await mount();
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+    expect(
+      document.querySelector('[data-details-date] button[aria-haspopup="dialog"]'),
+    ).not.toBeNull();
+  });
+
+  it('"No bucket" reads in text-fg-3', async () => {
+    await mount();
+    const empty = [...document.querySelectorAll('span')].find(
+      (el) => el.children.length === 0 && el.textContent === 'No bucket',
+    );
+    expect(empty?.className).toContain('text-fg-3');
+  });
+
+  it('shows the platform and format on a read-only row when given', async () => {
+    await mount({ platformFormat: 'Instagram · Carousel' });
+    const row = document.querySelector('[data-detail-platform-format]');
+    expect(row?.textContent).toBe('Instagram · Carousel');
+    expect(row?.closest('button')).toBeNull();
+  });
+
+  it('no platform row when not given', async () => {
+    await mount();
+    expect(document.querySelector('[data-detail-platform-format]')).toBeNull();
   });
 });

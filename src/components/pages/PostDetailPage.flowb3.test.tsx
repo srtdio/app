@@ -24,6 +24,7 @@ const h = vi.hoisted(() => ({
   stage: 'review' as string,
   role: 'agency' as string | null,
   desktop: true,
+  wide: false,
   counts: { open: 0, resolved: 0 },
   approvedBy: null as string | null,
   approvedAt: null as string | null,
@@ -68,7 +69,9 @@ vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'u1' } } }),
 }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => h.desktop }));
+vi.mock('@/lib/use-media-query', () => ({
+  useMediaQuery: (query: string) => (query === '(min-width: 1024px)' ? h.wide : h.desktop),
+}));
 vi.mock('@/lib/search/jump', () => ({ useSearchJump: () => ({ words: [] }) }));
 vi.mock('@/components/pages/pcs/use-post-members', () => ({
   usePostMembers: () => ({
@@ -295,6 +298,7 @@ beforeEach(() => {
   h.stage = 'review';
   h.role = 'agency';
   h.desktop = true;
+  h.wide = false;
   h.counts = { open: 0, resolved: 0 };
   h.approvedBy = null;
   h.approvedAt = null;
@@ -320,7 +324,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('30. approver row: Comment, Reject, Approve', () => {
+describe('30 / C5. approver row: Reject and Approve only', () => {
   it('laptop: the row sits inline in the decision slot (above the caption), and no phone bar', async () => {
     h.role = 'client';
     await render();
@@ -328,7 +332,6 @@ describe('30. approver row: Comment, Reject, Approve', () => {
     expect(row).not.toBeNull();
     expect(document.querySelector('[data-decision-bar]')).toBeNull();
     expect(buttonsIn('[data-decision-row]').map((b) => b.textContent?.trim())).toEqual([
-      'Comment',
       'Reject',
       'Approve',
     ]);
@@ -336,7 +339,7 @@ describe('30. approver row: Comment, Reject, Approve', () => {
     expect(row!.compareDocumentPosition(caption!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('phone: the same row in the sticky bar only, and Comment focuses the comment box', async () => {
+  it('phone: the same row in the sticky bar only, with no Comment (the composer is on the page)', async () => {
     h.role = 'client';
     h.desktop = false;
     await render();
@@ -344,12 +347,10 @@ describe('30. approver row: Comment, Reject, Approve', () => {
     const bar = document.querySelector('[data-decision-bar]');
     expect(bar).not.toBeNull();
     expect(buttonsIn('[data-decision-bar]').map((b) => b.textContent?.trim())).toEqual([
-      'Comment',
       'Reject',
       'Approve',
     ]);
-    await click(byText('Comment', bar!));
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Write a comment');
+    expect(bar?.querySelector('[data-decision-comment]')).toBeNull();
   });
 
   it('B5: the client line above Approve / Reject reads "Review and approve one post at a time."', async () => {
@@ -438,7 +439,7 @@ describe("33. the creator's one main button and the single open count", () => {
     expect(text()).not.toContain('Resolve');
     // The chip reads the same count.
     expect(document.querySelector('[data-open-comments-chip]')?.textContent).toContain(
-      '2 open comments',
+      '2 open checkpoints',
     );
     // The separate bottom notice is gone.
     expect(text()).not.toContain("Tell approvers it's ready");
@@ -535,13 +536,57 @@ describe("33. the creator's one main button and the single open count", () => {
   });
 });
 
+describe('A3. the title is the edit target', () => {
+  it('has no pencil tile; tapping the title opens the editor at the same 44px floor', async () => {
+    h.stage = 'draft';
+    await render();
+    const h1 = document.querySelector('h1');
+    expect(h1?.querySelector('svg')).toBeNull();
+    const title = h1?.querySelector<HTMLButtonElement>('[data-title-edit]');
+    expect(title?.className).toContain('min-h-[44px]');
+    expect(title?.className).toContain('focus-visible:ring-2');
+    expect(title?.className).toContain('leading-tight');
+    await click(title ?? null);
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Post title"]');
+    expect(input).not.toBeNull();
+    expect(input?.className).toContain('min-h-[44px]');
+    expect(input?.className).toContain('leading-tight');
+  });
+
+  it('approvers get a plain title, no edit target', async () => {
+    h.role = 'client';
+    await render();
+    expect(document.querySelector('[data-title-edit]')).toBeNull();
+  });
+});
+
+describe('D2. laptop: the stage action sits in the header bar', () => {
+  it('at lg the main button is beside the ⋮, not in the content', async () => {
+    h.wide = true;
+    await render();
+    const header = document.querySelector('[data-header-decision]');
+    expect(header?.querySelector('[data-decision-main]')?.textContent?.trim()).toBe(
+      'Send for review again',
+    );
+    expect(document.querySelectorAll('[data-decision-main]').length).toBe(1);
+    const more = document.querySelector('[aria-label="Post actions"]');
+    expect(header?.nextElementSibling).toBe(more);
+  });
+
+  it('below lg it stays in the content row', async () => {
+    await render();
+    expect(document.querySelector('[data-header-decision]')).toBeNull();
+    expect(document.querySelector('[data-decision-main]')).not.toBeNull();
+  });
+});
+
 describe('37. approved posts are locked', () => {
-  it('B4: locks on title, caption, pictures and owner; date and bucket stay editable; the banner says how', async () => {
+  it('B4: one 14px lock on title, caption, pictures and owner; the meta line does not open the sheet; the banner says how', async () => {
     h.stage = 'approved';
     h.approvedBy = 'u3';
     h.approvedAt = '2026-10-21T06:00:00.000Z';
     await render();
-    expect(document.querySelector('[aria-label="Edit title"]')).toBeNull();
+    expect(document.querySelector('[data-title-edit]')).toBeNull();
     expect(document.querySelector('[data-caption-edit]')).toBeNull();
     expect(h.galleryProps?.tools?.canEdit).toBe(false);
     // The lock rows: title, caption, pictures (the gallery tools row) and owner.
@@ -549,9 +594,16 @@ describe('37. approved posts are locked', () => {
     expect(document.querySelector('[data-caption-lock]')).not.toBeNull();
     expect(h.galleryProps?.tools?.locked).toBe(true);
     expect(document.querySelector('[data-detail="owner"] [data-detail-lock]')).not.toBeNull();
+    // A5: at most one lock per row, 14px, text-fg-3.
+    for (const selector of ['[data-title-lock]', '[data-caption-lock]', '[data-detail-lock]']) {
+      const lock = document.querySelector(selector);
+      expect(lock?.className).toContain('text-fg-3');
+      expect(lock?.querySelectorAll('svg').length).toBe(1);
+      expect(lock?.querySelector('svg')?.getAttribute('width')).toBe('14');
+    }
     expect(h.detailsSheetProps?.lockedFields).toBe(true);
-    // Details Edit stays (due date and bucket).
-    expect(document.querySelector('[data-post-details-edit]')?.tagName).toBe('BUTTON');
+    // A1: the meta line opens the details sheet for agency roles only while not approved.
+    expect(document.querySelector('[data-post-details-edit]')).toBeNull();
     const banner = document.querySelector('[data-approved-banner]');
     expect(APPROVED_LOCK_LINE).toBe('To make changes, move it to Parked.');
     expect(banner?.textContent).toContain('To make changes, move it to Parked.');
@@ -594,7 +646,8 @@ describe('37. approved posts are locked', () => {
   it('a draft keeps every edit path and shows no banner', async () => {
     h.stage = 'draft';
     await render();
-    expect(document.querySelector('[aria-label="Edit title"]')).not.toBeNull();
+    expect(document.querySelector('[data-title-edit]')).not.toBeNull();
+    expect(document.querySelector('[data-post-details-edit]')?.tagName).toBe('BUTTON');
     expect(document.querySelector('[data-caption-edit]')).not.toBeNull();
     expect(h.galleryProps?.tools?.canEdit).toBe(true);
     expect(h.galleryProps?.tools?.locked).toBe(false);
@@ -653,6 +706,22 @@ describe('40 / B6. reject confirm copy', () => {
     expect(byText('Cancel', dialog!)).toBeDefined();
     expect(byText('Reject', dialog!)).toBeDefined();
     expect(rejectConfirmBody(null)).toBe('The creator gets it back to rework.');
+  });
+
+  it('C2: park asks "Reason (optional)" with a neutral Park button; only Reject is red', async () => {
+    h.stage = 'draft';
+    await render();
+    const park = (h.actionSheetProps?.moveRows ?? []).find((r) => r.key === 'parked');
+    await act(async () => {
+      park?.onPick();
+    });
+    await settle();
+    const dialog = [...document.querySelectorAll('[role="dialog"]')].find((d) =>
+      d.textContent?.includes('Park this post?'),
+    );
+    expect(dialog?.querySelector('textarea')?.getAttribute('aria-label')).toBe('Reason (optional)');
+    const confirm = dialog?.querySelector<HTMLButtonElement>('[data-stage-confirm]');
+    expect(confirm?.className ?? '').not.toContain('bg-bad');
   });
 
   it('B6: the ⋯ sheet Reject row carries no reason subtitle', async () => {
