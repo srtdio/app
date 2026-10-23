@@ -165,7 +165,7 @@ export const APPROVED_LOCKED_COPY = "Approved posts can't be edited.";
  */
 export function postActionErrorCopy(error: unknown): string {
   if (isDomainError(error)) {
-    if (error.code === POST_APPROVED_LOCKED || error.message.includes(POST_APPROVED_LOCKED)) {
+    if (error.message.includes(POST_APPROVED_LOCKED)) {
       return APPROVED_LOCKED_COPY;
     }
     if (

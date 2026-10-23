@@ -247,7 +247,10 @@ function buttonsIn(selector: string): HTMLButtonElement[] {
   return scope === null ? [] : [...scope.querySelectorAll('button')];
 }
 
-function byText(label: string, scope: ParentNode = document): HTMLButtonElement | undefined {
+function byText(
+  label: string,
+  scope: Element | Document = document,
+): HTMLButtonElement | undefined {
   return [...scope.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
 }
 
