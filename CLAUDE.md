@@ -18,6 +18,8 @@ Node 22 (`.nvmrc`), pnpm. Run `pnpm install` first.
 - `pnpm format` / `pnpm format:check` - Prettier
 - `pnpm types:supabase` - regenerate `packages/schemas/src/supabase.generated.ts` (needs `SUPABASE_PROJECT_ID`); never edit that file by hand
 
+These commands are for GitHub CI. Claude Code does not run them (see Speed rule).
+
 Single unit test: `pnpm exec vitest run src/lib/foo.test.ts`.
 
 iPhone/WebKit visual checks: `pnpm test:e2e` (e2e/harness)
@@ -67,6 +69,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 
 ## Rules for Claude Code
 
+- Speed rule: never run pnpm test, pnpm build, pnpm typecheck, pnpm lint, e2e or any test suite locally. GitHub CI runs all checks. Write tests, do not run them. Do not wait for CI or the test site after pushing: push, open the PR, return the URL. No self-audit loops.
 - One PR per prompt.
 - Never auto-merge a PR.
 - Schema changes execute via the Supabase MCP only after Shubham approves them.
@@ -90,7 +93,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 
 - https://test.srtdio-app.pages.dev is the permanent test site. Cloudflare hosts it (Pages alias `test`, plus Worker preview versions `test-<worker>` for avatar-upload, asset-upload, asset-read, chat-token, chat-transcribe). It uses the Supabase project above; the production deploy is untouched.
 - Every push to an open PR updates it automatically via `.github/workflows/preview-deploy.yml` (about 3 minutes). The latest push to any PR wins.
-- After every push, tell Shubham: "Changes are on the test site, please check: https://test.srtdio-app.pages.dev", and say which PR it is showing. Confirm it is live before saying so.
+- After pushing, give the PR URL. The test site updates on its own in about 3 minutes; do not wait for it or confirm it.
 - Never ask Shubham to merge a PR he has not checked on the test site and approved.
 
 ## How to handoff

@@ -1,6 +1,7 @@
 // Guards the "briefs are read-only after creation" invariant. There is no
 // update wrapper, no brief_update proc, and no brief-update edge function: the
-// only mutation a brief ever undergoes is the open -> closed flip via brief_close.
+// only mutations a brief ever undergoes are the open <-> closed flips via
+// brief_close and brief_reopen.
 //
 // Three angles: the package exposes no update/patch/edit surface; no brief-update
 // edge function route exists on disk; and at the database level an authenticated
