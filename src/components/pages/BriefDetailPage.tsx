@@ -284,6 +284,8 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const canCloseOwn = useWorkspaceCapability('brief.close_own');
   // Approvers write briefs, so the "from the approvers" hint is for everyone else.
   const isApprover = useWorkspaceCapability('brief.create') === true;
+  // Creators (they make posts, not briefs) start a post from an open brief.
+  const canCreatePost = useWorkspaceCapability('post.create') === true;
 
   // The active workspace's zone, derived exactly as the Pipeline surface derives
   // it, so the Raised row reads on the workspace calendar rather than whatever
@@ -572,6 +574,20 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           <h2 className="md:hidden text-[22px] font-semibold leading-tight tracking-tight text-fg">
             <Highlight text={brief.title} />
           </h2>
+
+          {canCreatePost && !isApprover && !closed && briefId !== undefined ? (
+            <div>
+              <Button
+                variant="primary"
+                size="lg"
+                data-new-post-from-brief=""
+                className="w-full md:w-auto"
+                onClick={() => navigate(`/pipeline?new=1&brief=${encodeURIComponent(brief.id)}`)}
+              >
+                New post from this brief
+              </Button>
+            </div>
+          ) : null}
 
           <section className="order-1 md:hidden">
             <div className={`${SECTION_LABEL} mb-2`}>Details</div>

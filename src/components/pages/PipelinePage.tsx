@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { ReactElement, ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
@@ -725,8 +725,11 @@ export function PipelinePage() {
 
   // The Create (+) button and command palette dispatch this event; the sheet
   // lives here so the board can re-fetch on success.
+  const navigate = useNavigate();
+  const [createBriefId, setCreateBriefId] = useState<string | undefined>(undefined);
   useEffect(() => {
     function openCreate(): void {
+      setCreateBriefId(undefined);
       setCreateOpen(true);
     }
     window.addEventListener('sorted:create-post', openCreate);
@@ -734,6 +737,19 @@ export function PipelinePage() {
       window.removeEventListener('sorted:create-post', openCreate);
     };
   }, []);
+  // New post from a brief: /pipeline?new=1&brief=<id> opens the sheet with that
+  // brief chosen (and More options open); the query is then dropped so Back and
+  // a reload do not reopen it.
+  useEffect(() => {
+    if (params.get('new') !== '1') return;
+    const brief = params.get('brief');
+    setCreateBriefId(brief !== null && brief !== '' ? brief : undefined);
+    setCreateOpen(true);
+    const next = new URLSearchParams(params);
+    next.delete('new');
+    next.delete('brief');
+    setParams(next, { replace: true });
+  }, [params, setParams]);
 
   // Search + sort are pure, derived over the in-memory list (listPosts loads the
   // whole board), so no refetch and no N+1: filter by title + caption + platform,
@@ -886,10 +902,13 @@ export function PipelinePage() {
         open={createOpen}
         workspaceId={workspaceId}
         {...(postPreset !== undefined ? { preset: postPreset } : {})}
+        {...(createBriefId !== undefined ? { initialBriefId: createBriefId } : {})}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => {
+        onCreated={(_postId, outcome) => {
           setCreateOpen(false);
           void loadPosts();
+          // The full sheet lands on the new post; the first-post preset stays here.
+          if (outcome !== undefined) navigate(outcome.path);
         }}
       />
     </>

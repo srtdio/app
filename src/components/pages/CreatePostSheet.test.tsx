@@ -95,11 +95,11 @@ describe('format options per workspace platform', () => {
     expect(defaultFormatFor('youtube_shorts')).toBe('short');
   });
 
-  it('words invalid_format with the platform name and passes other errors through', () => {
+  it('words invalid_format with the platform name and never passes raw errors through', () => {
     expect(postCreateErrorMessage('invalid_format', 'tiktok')).toBe(
       'That format is not available on TikTok.',
     );
-    expect(postCreateErrorMessage('boom', 'x')).toBe('boom');
+    expect(postCreateErrorMessage('boom', 'x')).toBe("Couldn't save the post. Try again.");
   });
 });
 
@@ -167,7 +167,7 @@ describe('submitCreatePost', () => {
       gallerySet,
     });
     const result = await submitCreatePost(d);
-    expect(result).toEqual({ ok: false, message: 'boom' });
+    expect(result).toEqual({ ok: false, message: 'boom', postId: null });
     expect(gallerySet).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@
 // the upload/link runners are pure so they unit-test with a fake uploader.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import type { ReactElement } from 'react';
 import { ALLOWED_MIME_TYPES, isImageMime } from '@srtdio/storage';
 import { platformLabel } from '@srtdio/posts';
@@ -29,6 +30,10 @@ import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
+import { FileTiles, type PendingTile } from '@/components/pages/create/FileTiles';
+import { RemoveButton } from '@/components/pages/create/RemoveButton';
+import { createLimiter, UPLOAD_CONCURRENCY } from '@/components/pages/create/limiter';
+import { moveWithin } from '@/components/pages/create/reorder';
 import { useNewTrace } from '@/lib/trace-context';
 import {
   addAssetLink,
@@ -193,20 +198,6 @@ export function isMediaItem(item: AttachmentItem): boolean {
   return item.kind === 'image' || item.mime?.startsWith('video/') === true;
 }
 
-/** A 44x44 remove control laid over a tile's corner. */
-function RemoveButton({ label, onRemove }: { label: string; onRemove: () => void }): ReactElement {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onRemove}
-      className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white"
-    >
-      <IconX size={14} />
-    </button>
-  );
-}
-
 /** One local photo or video drawn in the post's platform frame. */
 function FramedMediaTile({
   item,
@@ -218,7 +209,8 @@ function FramedMediaTile({
   item: AttachmentItem;
   frame: Frame;
   removeLabel: string;
-  onRemove: () => void;
+  /** Absent: no remove on the frame (the tile row carries it). */
+  onRemove?: () => void;
   onMeasure: (versionId: string, w: number, h: number) => void;
 }): ReactElement {
   const video = item.mime?.startsWith('video/') === true;
@@ -268,16 +260,32 @@ function FramedMediaTile({
           }
         />
       )}
-      <RemoveButton label={removeLabel} onRemove={onRemove} />
+      {onRemove !== undefined ? <RemoveButton label={removeLabel} onRemove={onRemove} /> : null}
     </PlatformFrame>
   );
 }
+
+/** The frame's slide counter: "1/3". Pure. */
+export function slideCounterText(index: number, count: number): string {
+  return `${index + 1}/${count}`;
+}
+
+/** The slide a carousel scrolled to, from its scroll offset and slide width (gap included). Pure. */
+export function slideFromScroll(scrollLeft: number, slideWidth: number, count: number): number {
+  if (slideWidth <= 0 || count <= 0) return 0;
+  return Math.min(Math.max(Math.round(scrollLeft / slideWidth), 0), count - 1);
+}
+
+/** Gap between slides (Tailwind gap-2). */
+const SLIDE_GAP = 8;
 
 /**
  * The composer's media in the post's platform frame. No media yet: the empty
  * frame at the format's shape is the upload target. With media: each photo or
  * video fills the same frame (slides swipe on the X axis, as on the post page),
  * and the line under it says how much of the first photo the platform cuts.
+ * With nav, the frame shows a "1/3" counter top-right and dots at the bottom,
+ * follows the index it is given, reports swipes, and takes arrow keys.
  */
 export function ComposerMediaFrame({
   frame,
@@ -290,6 +298,7 @@ export function ComposerMediaFrame({
   pickLabel,
   pickDisabled = false,
   onPick,
+  nav,
 }: {
   frame: Frame;
   platform: string;
@@ -302,10 +311,32 @@ export function ComposerMediaFrame({
   pickLabel: string;
   pickDisabled?: boolean;
   onPick: () => void;
+  /** The create sheet: counter, dots, swipe and arrow keys; removes live on the tiles. */
+  nav?: { index: number; onIndexChange: (index: number) => void };
 }): ReactElement {
   const media = items
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => isMediaItem(item));
+  const listRef = useRef<HTMLUListElement>(null);
+  // The slide a programmatic scroll is heading to: swipe reports wait for it.
+  const scrollTarget = useRef<number | null>(null);
+  const count = media.length;
+  const hasNav = nav !== undefined;
+  const navIndex = nav === undefined ? 0 : Math.min(nav.index, Math.max(count - 1, 0));
+
+  // Follow the index given (a tile tap, an arrow key): scroll that slide in.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!hasNav || list === null) return;
+    const width = list.clientWidth + SLIDE_GAP;
+    if (slideFromScroll(list.scrollLeft, width, count) === navIndex) return;
+    const target = list.children[navIndex] as HTMLElement | undefined;
+    if (target !== undefined && typeof list.scrollTo === 'function') {
+      scrollTarget.current = navIndex;
+      list.scrollTo({ left: target.offsetLeft - list.offsetLeft, behavior: 'smooth' });
+    }
+  }, [hasNav, navIndex, count]);
+
   const first = media[0]?.item;
   if (first === undefined) {
     return (
@@ -327,27 +358,94 @@ export function ComposerMediaFrame({
           platformLabel(platform),
         )
       : null;
+
+  function onScroll(): void {
+    const list = listRef.current;
+    if (nav === undefined || list === null) return;
+    const at = slideFromScroll(list.scrollLeft, list.clientWidth + SLIDE_GAP, count);
+    if (scrollTarget.current !== null) {
+      if (at === scrollTarget.current) scrollTarget.current = null;
+      return;
+    }
+    if (at !== navIndex) nav.onIndexChange(at);
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLUListElement>): void {
+    if (nav === undefined) return;
+    if (event.key === 'ArrowRight' && navIndex < count - 1) {
+      event.preventDefault();
+      nav.onIndexChange(navIndex + 1);
+    } else if (event.key === 'ArrowLeft' && navIndex > 0) {
+      event.preventDefault();
+      nav.onIndexChange(navIndex - 1);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-1">
-      <ul
-        aria-roledescription="carousel"
-        className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain"
-      >
-        {media.map(({ item, index }) => (
-          <li
-            key={`${item.versionId}-${index}`}
-            className="flex w-full shrink-0 snap-start justify-center"
-          >
-            <FramedMediaTile
-              item={item}
-              frame={frame}
-              removeLabel={removeLabel(item)}
-              onRemove={() => onRemove(index)}
-              onMeasure={onMeasure}
-            />
-          </li>
-        ))}
-      </ul>
+      <div className="relative">
+        <ul
+          ref={listRef}
+          aria-roledescription="carousel"
+          {...(nav !== undefined
+            ? {
+                tabIndex: 0,
+                'aria-label': 'Post media',
+                onScroll,
+                onKeyDown,
+                // A finger on the frame takes over from any scroll still heading somewhere.
+                onPointerDown: () => {
+                  scrollTarget.current = null;
+                },
+              }
+            : {})}
+          className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          {media.map(({ item, index }, slide) => (
+            <li
+              key={`${item.versionId}-${index}`}
+              {...(nav !== undefined
+                ? { 'aria-roledescription': 'slide', 'aria-label': slideCounterText(slide, count) }
+                : {})}
+              className="flex w-full shrink-0 snap-start justify-center"
+            >
+              <FramedMediaTile
+                item={item}
+                frame={frame}
+                removeLabel={removeLabel(item)}
+                {...(nav === undefined ? { onRemove: () => onRemove(index) } : {})}
+                onMeasure={onMeasure}
+              />
+            </li>
+          ))}
+        </ul>
+        {nav !== undefined && count > 1 ? (
+          <>
+            <span
+              data-frame-counter=""
+              aria-live="polite"
+              className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white"
+            >
+              {slideCounterText(navIndex, count)}
+            </span>
+            <span
+              data-frame-dots=""
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1.5"
+            >
+              {media.map(({ item, index }, slide) => (
+                <span
+                  key={`${item.versionId}-${index}`}
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full transition-colors motion-reduce:transition-none',
+                    slide === navIndex ? 'bg-white' : 'bg-white/50',
+                  )}
+                />
+              ))}
+            </span>
+          </>
+        ) : null}
+      </div>
       {cut !== null ? (
         <p data-frame-cut className="text-[13px] text-fg-2">
           {cut}
@@ -370,18 +468,54 @@ async function resolveCurrentVersionId(assetId: string): Promise<string | null> 
 
 type Pending = {
   id: string;
+  /** Pick order: a finished file takes its picked place among the others. */
+  seq: number;
   name: string;
   kind: 'image' | 'file' | 'link';
+  /** The picked photo or video's own local picture, shown on its tile from the pick. */
   previewUrl: string | null;
   error: string | null;
+  /** Upload progress 0..1 while the request runs. */
+  progress: number;
   /** The picked file and its pre-check branch, kept so a failed row can Retry. */
   file?: File;
   isPhoto?: boolean;
+  /** A failed link's input, kept so its row can Retry. */
+  link?: { url: string; name: string };
 };
 
 /** Rows still uploading (failed rows are not counted). Pure. */
 export function pendingUploadCount(rows: readonly { error: string | null }[]): number {
   return rows.filter((row) => row.error === null).length;
+}
+
+/** Files that failed to upload (failed links are not files). Pure. */
+export function failedUploadCount(
+  rows: readonly { error: string | null; file?: File | undefined }[],
+): number {
+  return rows.filter((row) => row.error !== null && row.file !== undefined).length;
+}
+
+/** The line under the tiles while files failed: "1 file didn't upload." Pure. */
+export function failedFilesLine(count: number): string {
+  return count === 1 ? "1 file didn't upload." : `${count} files didn't upload.`;
+}
+
+/**
+ * Put a finished item at its picked place: before the first item picked after
+ * it (items with no known pick order stay where they are). Pure.
+ */
+export function insertBySeq(
+  items: readonly AttachmentItem[],
+  item: AttachmentItem,
+  seq: number,
+  seqOf: (item: AttachmentItem) => number | undefined,
+): AttachmentItem[] {
+  const at = items.findIndex((other) => {
+    const s = seqOf(other);
+    return s !== undefined && s > seq;
+  });
+  return at < 0 ? [...items, item] : [...items.slice(0, at), item, ...items.slice(at)];
 }
 
 let pendingSeq = 0;
@@ -398,6 +532,10 @@ interface AttachmentsFieldProps {
   frame?: { platform: string; format: string } | null;
   /** How many files are still uploading; called whenever that count changes. */
   onPendingChange?: (count: number) => void;
+  /** How many files failed and wait for Retry or Remove; called whenever that changes. */
+  onFailedChange?: (count: number) => void;
+  /** Once per pick, after its files have all finished: the ones that uploaded. */
+  onPickDone?: (items: AttachmentItem[]) => void;
 }
 
 export function AttachmentsField({
@@ -406,6 +544,8 @@ export function AttachmentsField({
   onChange,
   frame,
   onPendingChange,
+  onFailedChange,
+  onPickDone,
 }: AttachmentsFieldProps): ReactElement {
   const newTrace = useNewTrace();
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
@@ -415,37 +555,56 @@ export function AttachmentsField({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkName, setLinkName] = useState('');
   const [linkBusy, setLinkBusy] = useState(false);
+  const [slide, setSlide] = useState(0);
 
   const [measured, setMeasured] = useState<Record<string, { w: number; h: number }>>({});
   const photoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  // Up to three files upload at once; the rest wait in pick order.
+  const limiter = useRef(createLimiter(UPLOAD_CONCURRENCY));
+  // Each finished file's pick order, so it lands at its picked place.
+  const seqs = useRef(new Map<string, number>());
   // An upload that finishes after the sheet closed frees its preview instead of
   // handing it to a form that is gone.
   const alive = useRef(true);
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      for (const row of pendingRef.current) {
+        if (row.previewUrl !== null) URL.revokeObjectURL(row.previewUrl);
+      }
     };
   }, []);
 
-  // value is a prop, so a sequential add loop reads the latest through this ref
-  // rather than a stale closure capture.
+  // value is a prop, so parallel uploads read (and advance) the latest through
+  // this ref rather than a stale closure capture.
   const valueRef = useRef(value);
   valueRef.current = value;
 
   const pendingCount = pendingUploadCount(pending);
+  const failedCount = failedUploadCount(pending);
   const pendingChangeRef = useRef(onPendingChange);
   pendingChangeRef.current = onPendingChange;
   useEffect(() => {
     pendingChangeRef.current?.(pendingCount);
   }, [pendingCount]);
+  const failedChangeRef = useRef(onFailedChange);
+  failedChangeRef.current = onFailedChange;
+  useEffect(() => {
+    failedChangeRef.current?.(failedCount);
+  }, [failedCount]);
+  const pickDoneRef = useRef(onPickDone);
+  pickDoneRef.current = onPickDone;
 
   // Upload one picked file via the shared chat upload runner (the comment
-  // composer's path), returning an asset VERSION id. Never throws.
+  // composer's path) over XHR so its tile shows progress, returning an asset
+  // VERSION id. Never throws.
   const uploadFile = useCallback(
-    async (file: File): Promise<ChatAttachmentUpload> => {
+    async (file: File, onProgress: (fraction: number) => void): Promise<ChatAttachmentUpload> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '' || workspaceId === null) {
         return { ok: false, message: "Couldn't upload. Try again." };
       }
@@ -459,7 +618,7 @@ export function AttachmentsField({
         origin: 'library',
         token,
         endpoint: uploadEndpoint,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+        xhr: { traceId: newTrace(), onProgress },
       });
     },
     [uploadEndpoint, workspaceId, newTrace],
@@ -486,63 +645,122 @@ export function AttachmentsField({
     [uploadEndpoint, workspaceId, newTrace],
   );
 
-  // Every picked file shows its Uploading row at once; the uploads then run in
-  // pick order so the completed list keeps that order.
-  async function addFiles(list: FileList | null, isPhoto: boolean): Promise<void> {
-    if (list === null) return;
-    const rows = Array.from(list).map((file) => ({
-      id: `att-${(pendingSeq += 1)}`,
-      file,
-      isPhoto,
-    }));
-    setPending((prev) => [
-      ...prev,
-      ...rows.map(({ id, file }) => ({
-        id,
-        name: file.name,
-        kind: isPhoto || file.type.startsWith('image/') ? ('image' as const) : ('file' as const),
-        previewUrl: null,
-        error: null,
-        file,
-        isPhoto,
-      })),
-    ]);
-    for (const row of rows) {
-      if (!alive.current) return;
-      await uploadRow(row.id, row.file, row.isPhoto);
-    }
+  function setProgress(id: string, fraction: number): void {
+    if (!alive.current) return;
+    setPending((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, progress: fraction } : item)),
+    );
   }
 
-  // Upload one row's file; success moves it to the completed list, failure
-  // keeps the row (with its file) so Retry can run it again.
-  async function uploadRow(id: string, file: File, isPhoto: boolean): Promise<void> {
-    const isImage = isPhoto || file.type.startsWith('image/');
-    const previewUrl = isImage || file.type.startsWith('video/') ? URL.createObjectURL(file) : null;
-    const result = await runFileAttachment(file, isPhoto, uploadFile);
-    if (!alive.current) {
-      if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
-      return;
-    }
+  // Every picked file shows its tile (its own picture) at once; up to three
+  // upload at a time, and each lands at its picked place when done. Once the
+  // whole pick has finished, the parent hears about it once.
+  async function addFiles(list: FileList | null, isPhoto: boolean): Promise<void> {
+    if (list === null) return;
+    const rows: Pending[] = Array.from(list).map((file) => {
+      pendingSeq += 1;
+      const isImage = isPhoto || file.type.startsWith('image/');
+      const media = isImage || file.type.startsWith('video/');
+      return {
+        id: `att-${pendingSeq}`,
+        seq: pendingSeq,
+        name: file.name,
+        kind: isImage ? ('image' as const) : ('file' as const),
+        previewUrl: media ? URL.createObjectURL(file) : null,
+        error: null,
+        progress: 0,
+        file,
+        isPhoto,
+      };
+    });
+    setPending((prev) => [...prev, ...rows]);
+    const done = await Promise.all(rows.map((row) => limiter.current.run(() => uploadRow(row))));
+    if (!alive.current) return;
+    const items = done.filter((item): item is AttachmentItem => item !== null);
+    if (items.length > 0) pickDoneRef.current?.(items);
+  }
+
+  // Upload one row's file; success moves it to the completed list at its picked
+  // place, failure keeps the row (with its file and picture) so Retry can run it.
+  async function uploadRow(row: Pending): Promise<AttachmentItem | null> {
+    if (!alive.current || row.file === undefined) return null;
+    const result = await runFileAttachment(row.file, row.isPhoto === true, (file) =>
+      uploadFile(file, (fraction) => setProgress(row.id, fraction)),
+    );
+    if (!alive.current) return null;
     if (result.ok) {
-      setPending((prev) => prev.filter((item) => item.id !== id));
-      onChange([
-        ...valueRef.current,
-        { ...result.item, ...(previewUrl !== null ? { previewUrl } : {}) },
-      ]);
-    } else {
-      if (previewUrl !== null) URL.revokeObjectURL(previewUrl);
-      setPending((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, error: result.message } : item)),
+      const item: AttachmentItem = {
+        ...result.item,
+        ...(row.previewUrl !== null ? { previewUrl: row.previewUrl } : {}),
+      };
+      seqs.current.set(item.versionId, row.seq);
+      setPending((prev) => prev.filter((other) => other.id !== row.id));
+      const next = insertBySeq(valueRef.current, item, row.seq, (other) =>
+        seqs.current.get(other.versionId),
       );
+      valueRef.current = next;
+      onChange(next);
+      return item;
     }
+    setPending((prev) =>
+      prev.map((other) =>
+        other.id === row.id ? { ...other, error: result.message, progress: 0 } : other,
+      ),
+    );
+    return null;
   }
 
   function retryPending(id: string): void {
     const row = pending.find((item) => item.id === id);
-    if (row?.file === undefined) return;
-    const file = row.file;
+    if (row === undefined) return;
+    if (row.link !== undefined) {
+      void retryLink(row.id, row.link);
+      return;
+    }
+    if (row.file === undefined) return;
+    const fresh: Pending = { ...row, error: null, progress: 0 };
+    setPending((prev) => prev.map((item) => (item.id === id ? fresh : item)));
+    void limiter.current
+      .run(() => uploadRow(fresh))
+      .then((item) => {
+        if (item !== null && alive.current) pickDoneRef.current?.([item]);
+      });
+  }
+
+  function retryFailed(): void {
+    for (const row of pending) {
+      if (row.error !== null && row.file !== undefined) retryPending(row.id);
+    }
+  }
+
+  function removeFailed(): void {
+    for (const row of pending) {
+      if (row.error !== null && row.file !== undefined && row.previewUrl !== null) {
+        URL.revokeObjectURL(row.previewUrl);
+      }
+    }
+    setPending((prev) => prev.filter((row) => row.error === null || row.file === undefined));
+  }
+
+  async function retryLink(id: string, link: { url: string; name: string }): Promise<void> {
     setPending((prev) => prev.map((item) => (item.id === id ? { ...item, error: null } : item)));
-    void uploadRow(id, file, row.isPhoto === true);
+    const result = await runLinkAttachment({
+      url: link.url,
+      name: link.name,
+      addLink,
+      resolveVersionId: resolveCurrentVersionId,
+    });
+    if (!alive.current) return;
+    if (result.ok) {
+      setPending((prev) => prev.filter((item) => item.id !== id));
+      const next = [...valueRef.current, result.item];
+      valueRef.current = next;
+      onChange(next);
+    } else {
+      setPending((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, error: result.message } : item)),
+      );
+    }
   }
 
   async function submitLink(): Promise<void> {
@@ -556,19 +774,25 @@ export function AttachmentsField({
     });
     setLinkBusy(false);
     if (result.ok) {
-      onChange([...valueRef.current, result.item]);
+      const next = [...valueRef.current, result.item];
+      valueRef.current = next;
+      onChange(next);
       setLinkUrl('');
       setLinkName('');
       setLinkOpen(false);
     } else {
+      pendingSeq += 1;
       setPending((prev) => [
         ...prev,
         {
-          id: `link-${(pendingSeq += 1)}-err`,
+          id: `link-${pendingSeq}-err`,
+          seq: pendingSeq,
           name: linkName.trim() === '' ? linkUrl : linkName.trim(),
           kind: 'link',
           previewUrl: null,
           error: result.message,
+          progress: 0,
+          link: { url: linkUrl, name: linkName },
         },
       ]);
     }
@@ -577,10 +801,16 @@ export function AttachmentsField({
   function removeCompleted(index: number): void {
     const target = value[index];
     if (target?.previewUrl !== undefined) URL.revokeObjectURL(target.previewUrl);
-    onChange(removeAttachmentAt(value, index));
+    const next = removeAttachmentAt(value, index);
+    valueRef.current = next;
+    onChange(next);
   }
 
   function dismissPending(id: string): void {
+    const row = pending.find((item) => item.id === id);
+    if (row?.previewUrl !== null && row?.previewUrl !== undefined) {
+      URL.revokeObjectURL(row.previewUrl);
+    }
     setPending((prev) => prev.filter((item) => item.id !== id));
   }
 
@@ -589,10 +819,30 @@ export function AttachmentsField({
     frame !== null && frame !== undefined
       ? frameFor(frame.platform, frame.format, firstMedia(value, measured))
       : null;
-  // Framed: media sit in the frame, files and links list below it.
+  const framed = postFrame !== null;
+  // Framed: media sit in the frame and the tile row, files and links list below.
   const listed = value
     .map((item, index) => ({ item, index }))
-    .filter(({ item }) => postFrame === null || !isMediaItem(item));
+    .filter(({ item }) => !framed || !isMediaItem(item));
+  const media = value
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isMediaItem(item));
+  // Framed: a picked photo or video has a tile; anything else keeps its row.
+  const pendingTiles: PendingTile[] = framed
+    ? pending
+        .filter((row) => row.previewUrl !== null)
+        .map((row) => ({
+          id: row.id,
+          name: row.name,
+          previewUrl: row.previewUrl ?? '',
+          video: row.file?.type.startsWith('video/') === true,
+          progress: row.progress,
+          failed: row.error !== null,
+        }))
+    : [];
+  const pendingRows = framed ? pending.filter((row) => row.previewUrl === null) : pending;
+  const slideAt = Math.min(slide, Math.max(media.length - 1, 0));
+
   function measure(versionId: string, w: number, h: number): void {
     if (w <= 0 || h <= 0) return;
     setMeasured((prev) =>
@@ -600,20 +850,92 @@ export function AttachmentsField({
     );
   }
 
+  function reorderMedia(from: number, to: number): void {
+    const next = moveWithin(value, isMediaItem, from, to);
+    valueRef.current = next;
+    onChange(next);
+    setSlide(to);
+  }
+
+  const addButtons = (
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" size="lg" onClick={() => photoInputRef.current?.click()}>
+        Photo
+      </Button>
+      <Button type="button" size="lg" onClick={() => docInputRef.current?.click()}>
+        Document
+      </Button>
+      <Button type="button" size="lg" onClick={() => setLinkOpen((prev) => !prev)}>
+        <IconLink size={16} />
+        Link
+      </Button>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" size="lg" onClick={() => photoInputRef.current?.click()}>
-          Photo
-        </Button>
-        <Button type="button" size="lg" onClick={() => docInputRef.current?.click()}>
-          Document
-        </Button>
-        <Button type="button" size="lg" onClick={() => setLinkOpen((prev) => !prev)}>
-          <IconLink size={16} />
-          Link
-        </Button>
-      </div>
+      {framed ? null : addButtons}
+
+      {postFrame !== null && frame !== null && frame !== undefined ? (
+        <ComposerMediaFrame
+          frame={postFrame}
+          platform={frame.platform}
+          items={value}
+          measured={measured}
+          onMeasure={measure}
+          onRemove={removeCompleted}
+          removeLabel={(item) => `Remove ${item.name}`}
+          pickLabel="Add a photo or video"
+          // The empty frame cannot be tapped while uploads run.
+          pickDisabled={pendingCount > 0}
+          onPick={() => mediaInputRef.current?.click()}
+          nav={{ index: slideAt, onIndexChange: setSlide }}
+        />
+      ) : null}
+
+      {framed && (media.length > 0 || pendingTiles.length > 0) ? (
+        <FileTiles
+          items={media.map(({ item }) => item)}
+          pending={pendingTiles}
+          activeIndex={slideAt}
+          onSelect={setSlide}
+          onRemove={(at) => {
+            const target = media[at];
+            if (target !== undefined) removeCompleted(target.index);
+          }}
+          onReorder={reorderMedia}
+        />
+      ) : null}
+
+      {framed && failedCount > 0 ? (
+        <div
+          data-upload-failed=""
+          role="alert"
+          className="flex flex-wrap items-center gap-2 rounded-md border border-bad bg-bad-soft px-3 py-1"
+        >
+          <p className="min-w-0 flex-1 text-sm text-bad">{failedFilesLine(failedCount)}</p>
+          <Button
+            type="button"
+            size="lg"
+            variant="ghost"
+            className="shrink-0 px-3 text-accent"
+            onClick={retryFailed}
+          >
+            Retry
+          </Button>
+          <Button
+            type="button"
+            size="lg"
+            variant="ghost"
+            className="shrink-0 px-3 text-bad"
+            onClick={removeFailed}
+          >
+            Remove
+          </Button>
+        </div>
+      ) : null}
+
+      {framed ? addButtons : null}
 
       {linkOpen ? (
         <div className="flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3">
@@ -650,20 +972,6 @@ export function AttachmentsField({
         </div>
       ) : null}
 
-      {postFrame !== null && frame !== null && frame !== undefined ? (
-        <ComposerMediaFrame
-          frame={postFrame}
-          platform={frame.platform}
-          items={value}
-          measured={measured}
-          onMeasure={measure}
-          onRemove={removeCompleted}
-          removeLabel={(item) => `Remove ${item.name}`}
-          pickLabel="Add a photo or video"
-          onPick={() => mediaInputRef.current?.click()}
-        />
-      ) : null}
-
       {listed.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {attachmentItemList(
@@ -676,9 +984,9 @@ export function AttachmentsField({
         </ul>
       ) : null}
 
-      {pending.length > 0 ? (
+      {pendingRows.length > 0 ? (
         <ul className="flex flex-col gap-2">
-          {pending.map((item) => (
+          {pendingRows.map((item) => (
             <li key={item.id} className={cnPending(item.error)}>
               <span className="shrink-0 text-fg-3">
                 {item.kind === 'link' ? <IconLink size={16} /> : <IconFile size={16} />}
@@ -691,7 +999,7 @@ export function AttachmentsField({
               >
                 {item.error ?? 'Uploading'}
               </span>
-              {item.error !== null && item.file !== undefined ? (
+              {item.error !== null && (item.file !== undefined || item.link !== undefined) ? (
                 <Button
                   type="button"
                   size="lg"
@@ -727,6 +1035,7 @@ export function AttachmentsField({
       <input
         ref={mediaInputRef}
         type="file"
+        multiple
         accept={MEDIA_ACCEPT}
         className="sr-only"
         aria-label="Add a photo or video"

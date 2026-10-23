@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
-import { Select, type SelectOption } from '@/components/ui/Select';
+import {
+  computeMenuPlacement,
+  Select,
+  SelectMenu,
+  type MenuPlacement,
+  type SelectOption,
+} from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { IconChevronDown, IconSend } from '@/components/ui/icons';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import {
   AttachmentsField,
   attachmentVersionIds,
@@ -21,7 +30,23 @@ import {
   type PreviewBodyProps,
 } from '@/components/preview/PlatformPreviewPanel';
 import { FilePromptSheet } from '@/components/pages/create/FilePromptSheet';
-import { fileKindOf, filePrompt, mismatchedFiles } from '@/components/pages/create/file-kind';
+import {
+  fileKindOf,
+  filePrompt,
+  formatForFile,
+  mismatchedFiles,
+  untouchedDefaultFormat,
+} from '@/components/pages/create/file-kind';
+import {
+  CAPTION_LIMITS,
+  captionCounterText,
+  captionOverLimit,
+} from '@/components/pages/create/caption-limits';
+import {
+  BUCKET_SAVE_FAILED,
+  createSheetErrorMessage,
+  POST_SAVE_FAILED,
+} from '@/components/pages/create/errors';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
@@ -40,6 +65,7 @@ import {
 import { FIRST_POST_SAMPLE } from '@/lib/induction-copy';
 import { logger } from '@/lib/logger';
 import { useOptionalToast } from '@/components/ui/toast';
+import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
 import { sendMessageRecord } from '@/lib/chat/record';
 import { newMessageId } from '@/lib/chat/message-id';
@@ -50,7 +76,6 @@ import {
   FORMATS_BY_PLATFORM,
   PostCreatePayloadSchema,
   formatLabel,
-  platformLabel,
   type GalleryItem,
   type PostPlatform,
 } from '@srtdio/posts';
@@ -63,14 +88,62 @@ interface CreatePostSheetProps {
   /** Seeds the target date when the sheet opens ('YYYY-MM-DD'); default blank. */
   initialTargetDate?: string;
   onClose: () => void;
-  /** Called with the new post's id once it (and its attachments) saved. */
-  onCreated: (postId: string) => void;
+  /** Preselects this brief and opens More options (New post from this brief). */
+  initialBriefId?: string;
+  /**
+   * Called with the new post's id once it (and its attachments) saved. The full
+   * sheet also passes where the post now sits and the link to open it on.
+   */
+  onCreated: (postId: string, outcome?: CreatedOutcome) => void;
   /**
    * An induction post step: owner, bucket, origin and brief stay out, the title
    * comes from the caption, media is required when the format needs it, and the
    * primary is Send for review or Save as draft. Absent: the full sheet.
    */
   preset?: PostSheetPreset;
+}
+
+/** What the full sheet saved: the post's stage and the in-app link to open it on. */
+export interface CreatedOutcome {
+  stage: 'draft' | 'review';
+  path: string;
+}
+
+/** Which footer button saved: Save as draft or Send for review. */
+export type SubmitMode = 'draft' | 'review';
+
+/** The bottom strip after the sheet closes. Pure. */
+export function createdStripTitle(stage: SubmitMode): string {
+  return stage === 'review' ? 'Sent for review' : 'Saved as draft';
+}
+
+/** The new post's link: the pretty /p/key-n when known, else /posts/:id. Pure. */
+export function createdPostPath(
+  postId: string,
+  workspaceKey: string | null,
+  number: number | null,
+): string {
+  return workspaceKey !== null && number !== null
+    ? entityUrlPath('post', workspaceKey, number)
+    : `/posts/${postId}`;
+}
+
+/** The line above the footer while a file failed. */
+export const FAILED_UPLOAD_FOOTER = "Retry or remove the file that didn't upload.";
+
+/** The folded row under the caption and its sub-line. */
+export const MORE_OPTIONS_LABEL = 'More options';
+export const MORE_OPTIONS_HINT = 'Title, bucket, due date, brief';
+
+/** The Title helper inside More options. */
+export const TITLE_HELPER = "Left blank, it uses the caption's first line.";
+
+/** The Brief helper inside More options. */
+export const BRIEF_HELPER = 'Open briefs in this workspace.';
+
+/** The Format row's line once the first file set the format. Pure. */
+export function formatSourceLine(kind: 'image' | 'video'): string {
+  return kind === 'video' ? 'Set from your video' : 'Set from your photo';
 }
 
 /** The post saved but the move to review did not land: retry the move, never re-create. */
@@ -119,14 +192,13 @@ export function defaultFormatFor(platform: PostPlatform): string {
 }
 
 /**
- * User-facing copy for a post_create failure. invalid_format (a format the
- * workspace's platform does not offer) names the platform; anything else keeps
- * the proc's message.
+ * User-facing copy for a post_create failure, always plain words. invalid_format
+ * (a format the workspace's platform does not offer) names the platform; known
+ * codes get their own line; anything else is "Couldn't save the post. Try
+ * again." Raw server text is never shown.
  */
-export function postCreateErrorMessage(message: string, platform: PostPlatform): string {
-  return message === 'invalid_format'
-    ? `That format is not available on ${platformLabel(platform)}.`
-    : message;
+export function postCreateErrorMessage(message: string, platform: PostPlatform | null): string {
+  return createSheetErrorMessage(message, platform, POST_SAVE_FAILED);
 }
 
 /**
@@ -188,13 +260,21 @@ type OriginValue = 'none' | 'brief';
 /** The Bucket select's last option: opens the inline new bucket form. */
 export const NEW_BUCKET_VALUE = '__new_bucket__';
 
-/** The discard confirm for a dirty sheet. */
-export const CREATE_POST_DISCARD = {
-  title: 'Discard this post?',
-  message: 'Your caption and files will be lost.',
-};
+/** The discard confirm for a dirty sheet: every close path and Cancel share it. Pure. */
+export function createPostDiscard(files: number): { title: string; message: string } {
+  return {
+    title: 'Discard this post?',
+    message: `Your caption and ${files} ${files === 1 ? 'file' : 'files'} will be removed.`,
+  };
+}
 
-/** Whether closing would lose work: any field with content, or any file (done or uploading). Pure. */
+/** The discard confirm with no files counted. */
+export const CREATE_POST_DISCARD = createPostDiscard(0);
+
+/**
+ * Whether closing would lose work: any field with content, or any file (done,
+ * uploading or failed). A brief the sheet opened with is not work. Pure.
+ */
 export function createPostDirty(
   form: Pick<
     CreateFormState,
@@ -202,12 +282,13 @@ export function createPostDirty(
   >,
   pendingUploads: number,
   initialTargetDate = '',
+  initialBriefId = '',
 ): boolean {
   return (
     form.title.trim() !== '' ||
     form.caption.trim() !== '' ||
     form.bucketId !== '' ||
-    form.briefId !== '' ||
+    form.briefId !== initialBriefId ||
     form.targetDate !== initialTargetDate ||
     form.attachments.length > 0 ||
     pendingUploads > 0
@@ -224,14 +305,24 @@ export function waitForUploadsMessage(count: number): string {
   return `Wait for ${count} ${count === 1 ? 'file' : 'files'} to finish`;
 }
 
-/** Each missing required field's inline error (caption and format). Pure. */
+/** Each missing required field's inline error. The format is always set, so only the caption. Pure. */
 export function requiredFieldErrors(
   form: Pick<CreateFormState, 'caption' | 'format'>,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (form.format === '') errors.format = 'Choose a format';
   if (form.caption.trim() === '') errors.caption = 'Write a caption';
   return errors;
+}
+
+/** Drop one field's error the moment the person types a fix. Pure. */
+export function clearFieldError(
+  errors: Record<string, string>,
+  key: string,
+): Record<string, string> {
+  if (errors[key] === undefined) return errors;
+  const next = { ...errors };
+  delete next[key];
+  return next;
 }
 
 /** The title sent: the typed one, else the caption's first line (80 chars max). Pure. */
@@ -387,39 +478,54 @@ export interface SubmitCreatePostDeps {
     client: Client,
     args: { p_post_id: string; p_asset_version_ids: string[]; p_trace_id: string },
   ) => Promise<Result<string>>;
+  /**
+   * The duplicate guard: a post this sheet already created (an earlier attempt
+   * whose attach failed). When set, post_create is skipped and the files
+   * attach to that post, so a retry never makes a second post.
+   */
+  existingPostId?: string | null;
+  /** Called the moment the post row exists, before the files attach. */
+  onPostCreated?: (postId: string) => void;
 }
 
 /**
  * Create the post via post_create, then (only when there are completed
  * attachments) bind them in order via gallery_set. post_create takes no gallery,
- * so the second call is how attachments attach. Surfaces the first failing call's
- * message; never throws.
+ * so the second call is how attachments attach. With existingPostId the create
+ * is skipped and only the attach runs. Surfaces the first failing call's
+ * message (and the post's id once it exists); never throws.
  */
 export async function submitCreatePost(
   deps: SubmitCreatePostDeps,
-): Promise<{ ok: true; postId: string } | { ok: false; message: string }> {
-  const created = await deps.postCreate(deps.client, {
-    p_workspace_id: deps.workspaceId,
-    p_payload: deps.payload,
-    p_trace_id: deps.newTrace(),
-  });
-  if (!created.ok) return { ok: false, message: created.error.message };
+): Promise<{ ok: true; postId: string } | { ok: false; message: string; postId: string | null }> {
+  let postId = deps.existingPostId ?? null;
+  if (postId === null) {
+    const created = await deps.postCreate(deps.client, {
+      p_workspace_id: deps.workspaceId,
+      p_payload: deps.payload,
+      p_trace_id: deps.newTrace(),
+    });
+    if (!created.ok) return { ok: false, message: created.error.message, postId: null };
+    postId = created.data;
+    deps.onPostCreated?.(postId);
+  }
 
   if (deps.versionIds.length > 0) {
     const gallery = await deps.gallerySet(deps.client, {
-      p_post_id: created.data,
+      p_post_id: postId,
       p_asset_version_ids: [...deps.versionIds],
       p_trace_id: deps.newTrace(),
     });
-    if (!gallery.ok) return { ok: false, message: gallery.error.message };
+    if (!gallery.ok) return { ok: false, message: gallery.error.message, postId };
   }
-  return { ok: true, postId: created.data };
+  return { ok: true, postId };
 }
 
 export function CreatePostSheet({
   open,
   workspaceId,
   initialTargetDate,
+  initialBriefId,
   onClose,
   onCreated,
   preset: presetProp,
@@ -434,7 +540,7 @@ export function CreatePostSheet({
   const currentUserId = session?.user.id ?? null;
   // One workspace = one platform: the format list is that platform's own.
   const workspacePlatform = useWorkspacePlatform(open ? workspaceId : null);
-  const { workspaceName } = useWorkspace();
+  const { workspaceName, workspaceKey } = useWorkspace();
   // Below lg the preview opens from a chip; at lg+ it sits beside the form.
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -451,6 +557,19 @@ export function CreatePostSheet({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Full sheet: which button is saving, the post row once created (the
+  // duplicate guard: a retry re-attaches to it), and the Cancel confirm.
+  const [submitMode, setSubmitMode] = useState<SubmitMode | null>(null);
+  const createdPostId = useRef<string | null>(null);
+  // A second tap in the same frame (before Saving… renders) is ignored.
+  const submitLock = useRef(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  // Full sheet: the folded More options row, and Format following the first
+  // file until the person picks one themselves.
+  const [moreOpen, setMoreOpen] = useState(initialBriefId !== undefined);
+  const formatTouched = useRef(false);
+  const [formatSource, setFormatSource] = useState<'image' | 'video' | null>(null);
+  const [failedUploads, setFailedUploads] = useState(0);
   // Preset only: the saved post whose move to review failed, the share toggle,
   // and an upload in flight.
   const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
@@ -480,13 +599,44 @@ export function CreatePostSheet({
     setForm((prev) => ({ ...prev, ...next }));
   }
 
-  /** Newly attached files: flag any the current format does not usually carry. */
+  /**
+   * Preset: newly attached files are flagged when the current format does not
+   * usually carry them. Full sheet: until the person picks a format, the first
+   * photo or video sets it (the soft prompt waits for the whole pick).
+   */
   function onAttachmentsChange(next: AttachmentItem[]): void {
-    const before = new Set(formRef.current.attachments.map((item) => item.versionId));
+    if (preset !== undefined) {
+      const before = new Set(formRef.current.attachments.map((item) => item.versionId));
+      patch({ attachments: next });
+      if (workspacePlatform === null) return;
+      const added = next.filter((item) => !before.has(item.versionId));
+      const off = mismatchedFiles(workspacePlatform, formRef.current.format, added);
+      if (off.length > 0) {
+        setPromptIds((prev) => [...prev, ...off.map((item) => item.versionId)]);
+      }
+      return;
+    }
     patch({ attachments: next });
+    formRef.current = { ...formRef.current, attachments: next };
+    if (workspacePlatform === null || formatTouched.current) return;
+    const first = next.find(isMediaItem);
+    if (first === undefined) {
+      setFormatSource(null);
+      return;
+    }
+    const kind = first.kind === 'image' ? 'image' : fileKindOf(first.mime ?? '');
+    if (kind !== 'image' && kind !== 'video') return;
+    const format = formatForFile(workspacePlatform, FORMATS_BY_PLATFORM[workspacePlatform], kind);
+    if (format === null) return;
+    formRef.current = { ...formRef.current, format };
+    patch({ format });
+    setFormatSource(kind);
+  }
+
+  /** Full sheet: once per pick, flag the files the format does not usually carry. */
+  function onPickDone(items: AttachmentItem[]): void {
     if (workspacePlatform === null) return;
-    const added = next.filter((item) => !before.has(item.versionId));
-    const off = mismatchedFiles(workspacePlatform, formRef.current.format, added);
+    const off = mismatchedFiles(workspacePlatform, formRef.current.format, items);
     if (off.length > 0) {
       setPromptIds((prev) => [...prev, ...off.map((item) => item.versionId)]);
     }
@@ -494,6 +644,8 @@ export function CreatePostSheet({
 
   /** A format change re-checks every attached file against the new format. */
   function onFormatChange(format: string): void {
+    formatTouched.current = true;
+    setFormatSource(null);
     patch({ format });
     if (workspacePlatform === null) return;
     setPromptIds(
@@ -530,13 +682,22 @@ export function CreatePostSheet({
   useEffect(() => {
     if (!open) return;
     revokePreviews(formRef.current.attachments);
-    setForm(
-      initialCreateState({
+    setForm({
+      ...initialCreateState({
         defaultFormat: '',
         currentUserId: null,
         ...(initialTargetDate !== undefined ? { targetDate: initialTargetDate } : {}),
       }),
-    );
+      briefId: initialBriefId ?? '',
+    });
+    setSubmitMode(null);
+    createdPostId.current = null;
+    submitLock.current = false;
+    setCancelConfirm(false);
+    setMoreOpen(initialBriefId !== undefined);
+    formatTouched.current = false;
+    setFormatSource(null);
+    setFailedUploads(0);
     setBuckets([]);
     setBriefs([]);
     setFieldErrors({});
@@ -553,7 +714,7 @@ export function CreatePostSheet({
     setNewBucketName('');
     setNewBucketBusy(false);
     setNewBucketError(null);
-  }, [open, initialTargetDate]);
+  }, [open, initialTargetDate, initialBriefId]);
 
   // Desktop: the caption takes focus on open. Touch: nothing autofocuses.
   const hasPreset = preset !== undefined;
@@ -571,18 +732,19 @@ export function CreatePostSheet({
   // Unmounting frees whatever local previews the draft still holds.
   useEffect(() => () => revokePreviews(formRef.current.attachments), []);
 
-  // Default the format to the platform's first one, and keep it inside the
-  // platform's list (the platform resolves with the workspace). Runs after the
-  // reset above, so a fresh open always lands on the first allowed format.
+  // Default the format and keep it inside the platform's list (the platform
+  // resolves with the workspace). Runs after the reset above. The preset opens on
+  // the platform's first format; the full sheet on its single-image format where
+  // the first one needs a video (Instagram: Single image, not Reel), and the
+  // first file then sets it.
   useEffect(() => {
     if (!open || workspacePlatform === null) return;
     const allowed: readonly string[] = FORMATS_BY_PLATFORM[workspacePlatform];
-    setForm((prev) =>
-      allowed.includes(prev.format)
-        ? prev
-        : { ...prev, format: defaultFormatFor(workspacePlatform) },
-    );
-  }, [open, workspacePlatform]);
+    const fallback = hasPreset
+      ? defaultFormatFor(workspacePlatform)
+      : untouchedDefaultFormat(workspacePlatform, allowed);
+    setForm((prev) => (allowed.includes(prev.format) ? prev : { ...prev, format: fallback }));
+  }, [open, workspacePlatform, hasPreset]);
 
   // Default the owner to the current user once the session resolves while open.
   useEffect(() => {
@@ -591,18 +753,16 @@ export function CreatePostSheet({
     }
   }, [open, currentUserId]);
 
-  // Load buckets and the workspace's briefs (reusing the existing reads). Briefs
-  // are scoped to the active workspace client-side, as the Briefs page does.
+  // Load buckets and this workspace's open briefs (reusing the existing reads).
+  // The brief list is filtered in the query: this workspace, open only.
   useEffect(() => {
     if (!open || workspaceId === null) return;
     let cancelled = false;
     void listBuckets(supabase, workspaceId).then((res) => {
       if (!cancelled && res.ok) setBuckets(res.data);
     });
-    void listBriefs(supabase).then((res) => {
-      if (!cancelled && res.ok) {
-        setBriefs(res.data.filter((brief) => brief.workspace_id === workspaceId));
-      }
+    void listBriefs(supabase, { workspaceId, status: 'open' }).then((res) => {
+      if (!cancelled && res.ok) setBriefs(res.data);
     });
     return () => {
       cancelled = true;
@@ -653,7 +813,9 @@ export function CreatePostSheet({
     const res = await createBucket(supabase, workspaceId, name, newTrace());
     setNewBucketBusy(false);
     if (!res.ok) {
-      setNewBucketError(res.error.message);
+      setNewBucketError(
+        createSheetErrorMessage(res.error.message, workspacePlatform, BUCKET_SAVE_FAILED),
+      );
       return;
     }
     setBuckets((prev) => (prev.some((b) => b.id === res.data.id) ? prev : [...prev, res.data]));
@@ -663,7 +825,24 @@ export function CreatePostSheet({
   }
 
   const dirty =
-    preset === undefined && createPostDirty(form, pendingUploads, initialTargetDate ?? '');
+    preset === undefined &&
+    createPostDirty(
+      form,
+      pendingUploads + failedUploads,
+      initialTargetDate ?? '',
+      initialBriefId ?? '',
+    );
+  const discard = createPostDiscard(form.attachments.length + pendingUploads + failedUploads);
+
+  /** Footer Cancel: the same discard confirm as X, backdrop, Escape and Back. */
+  function requestCancel(): void {
+    if (submitting) return;
+    if (dirty) {
+      setCancelConfirm(true);
+      return;
+    }
+    onClose();
+  }
 
   const canSubmit =
     preset !== undefined
@@ -674,8 +853,9 @@ export function CreatePostSheet({
           attachments: form.attachments.length,
           busy: submitting || mediaBusy,
         })
-      : // Never disabled for a missing field: a tap shows each field's error.
-        workspaceId !== null && !submitting;
+      : // Never disabled for a missing field: a tap shows each field's error. A
+        // failed file blocks both buttons until Retry or Remove.
+        workspaceId !== null && !submitting && failedUploads === 0;
 
   /** Preset: move the saved post to review; a failure keeps it to retry the move only. */
   async function sendForReview(postId: string): Promise<boolean> {
@@ -806,11 +986,7 @@ export function CreatePostSheet({
       });
       if (!result.ok) {
         setSubmitting(false);
-        setSubmitError(
-          workspacePlatform !== null
-            ? postCreateErrorMessage(result.message, workspacePlatform)
-            : result.message,
-        );
+        setSubmitError(postCreateErrorMessage(result.message, workspacePlatform));
         return;
       }
       postId = result.postId;
@@ -826,12 +1002,35 @@ export function CreatePostSheet({
     void finishInBackground(postId, items);
   }
 
-  async function handleSubmit(): Promise<void> {
+  /** Focus a field after its error shows: scroll it into view first. */
+  function focusField(el: HTMLElement | null): void {
+    if (el === null) return;
+    if (typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    el.focus({ preventScroll: true });
+  }
+
+  /** The new post's link: its pretty /p/key-n when the number reads back, else /posts/:id. */
+  async function createdPath(postId: string): Promise<string> {
+    const key = workspaceKey ?? null;
+    if (key === null) return createdPostPath(postId, null, null);
+    try {
+      const { data } = await supabase.from('posts').select('number').eq('id', postId).maybeSingle();
+      const number = (data as { number: number | null } | null)?.number ?? null;
+      return createdPostPath(postId, key, number);
+    } catch {
+      return createdPostPath(postId, null, null);
+    }
+  }
+
+  async function handleSubmit(mode: SubmitMode = 'draft'): Promise<void> {
     if (workspaceId === null) return;
     if (preset !== undefined) {
       await handlePresetSubmit();
       return;
     }
+    if (submitting || failedUploads > 0) return;
 
     if (pendingUploads > 0) {
       setUploadWait(true);
@@ -840,6 +1039,7 @@ export function CreatePostSheet({
     const missing = requiredFieldErrors(form);
     if (Object.keys(missing).length > 0) {
       setFieldErrors(missing);
+      focusField(captionRef.current);
       return;
     }
 
@@ -855,13 +1055,20 @@ export function CreatePostSheet({
     });
     if (!built.ok) {
       setFieldErrors(built.errors);
+      // The failing field may sit inside the folded More options.
+      if (built.errors.caption === undefined) setMoreOpen(true);
       return;
     }
 
+    if (submitLock.current) return;
+    submitLock.current = true;
     setFieldErrors({});
     setSubmitting(true);
+    setSubmitMode(mode);
     setSubmitError(null);
 
+    // The duplicate guard (as the preset's): once the post row exists its id is
+    // kept, so a retry after a failed attach or move re-uses it.
     const result = await submitCreatePost({
       client: supabase,
       workspaceId,
@@ -870,19 +1077,46 @@ export function CreatePostSheet({
       newTrace,
       postCreate,
       gallerySet,
+      existingPostId: createdPostId.current,
+      onPostCreated: (postId) => {
+        createdPostId.current = postId;
+      },
     });
 
-    setSubmitting(false);
     if (!result.ok) {
-      setSubmitError(
-        workspacePlatform !== null
-          ? postCreateErrorMessage(result.message, workspacePlatform)
-          : result.message,
-      );
+      logger.error('create post failed', { error: result.message });
+      submitLock.current = false;
+      setSubmitting(false);
+      setSubmitMode(null);
+      setSubmitError(postCreateErrorMessage(result.message, workspacePlatform));
       return;
     }
+
+    // Send for review: the same move the preset's Send for review makes.
+    if (mode === 'review') {
+      const moved = await stageTransition(supabase, {
+        p_post_id: result.postId,
+        p_to_stage: 'review',
+        p_trace_id: newTrace(),
+      });
+      if (!moved.ok) {
+        logger.error('new post to review failed', { error: moved.error.message });
+        submitLock.current = false;
+        setSubmitting(false);
+        setSubmitMode(null);
+        setSubmitError(REVIEW_RETRY_MESSAGE);
+        dispatchWorkspaceDataChanged();
+        return;
+      }
+    }
+
+    const path = await createdPath(result.postId);
+    submitLock.current = false;
+    setSubmitting(false);
+    setSubmitMode(null);
     dispatchInductionRefresh();
-    onCreated(result.postId);
+    toast?.show({ title: createdStripTitle(mode), kind: 'undo' });
+    onCreated(result.postId, { stage: mode, path });
   }
 
   const preview = draftPreview({
@@ -899,6 +1133,111 @@ export function CreatePostSheet({
     ) : null;
   }
 
+  /** A field's value changed: its error goes at once, not at the next submit. */
+  function patchField(key: keyof CreateFormState, next: Partial<CreateFormState>): void {
+    patch(next);
+    setFieldErrors((prev) => clearFieldError(prev, key));
+  }
+
+  // Laptop: Cmd/Ctrl+Enter sends for review.
+  function onFormKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (preset !== undefined || event.key !== 'Enter') return;
+    if (!(event.metaKey || event.ctrlKey) || isTouchDevice()) return;
+    event.preventDefault();
+    void handleSubmit('review');
+  }
+
+  const presetFooter = (
+    <>
+      <Button size="lg" onClick={onClose} disabled={submitting}>
+        Cancel
+      </Button>
+      <span className="ml-auto flex flex-col items-end gap-1">
+        <Button
+          variant="primary"
+          size="lg"
+          data-induction={INDUCTION_KEYS.postSheetPrimary}
+          onClick={() => void handleSubmit()}
+          disabled={!canSubmit}
+          aria-busy={false}
+        >
+          {preset !== undefined
+            ? presetPrimaryLabel({ preset, submitting, savedDraft: savedDraftId !== null })
+            : null}
+        </Button>
+      </span>
+    </>
+  );
+
+  const fullFooter = (
+    <div className="flex w-full min-w-0 flex-col gap-2">
+      {failedUploads > 0 ? (
+        <p data-upload-failed-footer="" role="status" className="text-[13px] text-bad">
+          {FAILED_UPLOAD_FOOTER}
+        </p>
+      ) : uploadWait && pendingUploads > 0 ? (
+        <p data-upload-wait="" role="status" className="text-[11px] text-fg-2">
+          {waitForUploadsMessage(pendingUploads)}
+        </p>
+      ) : null}
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-2.5">
+        <Button
+          size="lg"
+          variant="ghost"
+          className="shrink-0 px-2.5 sm:px-4"
+          onClick={requestCancel}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
+        <span className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2.5">
+          <Button
+            size="lg"
+            className="shrink-0 px-2.5 sm:px-4"
+            data-submit="draft"
+            onClick={() => void handleSubmit('draft')}
+            disabled={!canSubmit}
+            aria-busy={pendingUploads > 0}
+          >
+            {submitMode === 'draft' ? (
+              'Saving…'
+            ) : pendingUploads > 0 ? (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                />
+                {uploadingLabel(pendingUploads)}
+              </>
+            ) : (
+              'Save as draft'
+            )}
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
+            className="shrink-0 px-2.5 sm:px-4"
+            data-submit="review"
+            onClick={() => void handleSubmit('review')}
+            disabled={!canSubmit}
+          >
+            {submitMode === 'review' ? (
+              'Saving…'
+            ) : (
+              <>
+                <IconSend size={16} />
+                Send for review
+              </>
+            )}
+          </Button>
+        </span>
+      </div>
+    </div>
+  );
+
+  const captionLimit = workspacePlatform !== null ? CAPTION_LIMITS[workspacePlatform] : null;
+  const captionCount = form.caption.length;
+
   return (
     <Sheet
       open={open}
@@ -906,55 +1245,19 @@ export function CreatePostSheet({
       wide
       title="New post"
       dirty={dirty}
-      discard={CREATE_POST_DISCARD}
+      discard={discard}
       busy={preset === undefined && submitting}
-      footer={
-        <>
-          <Button size="lg" onClick={onClose} disabled={submitting}>
-            Cancel
-          </Button>
-          <span className="ml-auto flex flex-col items-end gap-1">
-            {preset === undefined && uploadWait && pendingUploads > 0 ? (
-              <span data-upload-wait="" role="status" className="text-[11px] text-fg-2">
-                {waitForUploadsMessage(pendingUploads)}
-              </span>
-            ) : null}
-            <Button
-              variant="primary"
-              size="lg"
-              data-induction={INDUCTION_KEYS.postSheetPrimary}
-              onClick={() => void handleSubmit()}
-              disabled={!canSubmit}
-              aria-busy={preset === undefined && pendingUploads > 0}
-            >
-              {preset !== undefined ? (
-                presetPrimaryLabel({ preset, submitting, savedDraft: savedDraftId !== null })
-              ) : submitting ? (
-                'Creating'
-              ) : pendingUploads > 0 ? (
-                <>
-                  <span
-                    aria-hidden="true"
-                    className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
-                  />
-                  {uploadingLabel(pendingUploads)}
-                </>
-              ) : (
-                'Save as draft'
-              )}
-            </Button>
-          </span>
-        </>
-      }
+      busyLabel="Saving…"
+      footer={preset !== undefined ? presetFooter : fullFooter}
     >
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-start lg:gap-6">
-        <div className="flex flex-col gap-4 overflow-x-hidden">
-          {preview !== null ? (
-            <div className="-my-2 lg:hidden">
-              <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
-            </div>
-          ) : null}
-          {preset !== undefined ? (
+      {preset !== undefined ? (
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:items-start lg:gap-6">
+          <div className="flex flex-col gap-4 overflow-x-hidden">
+            {preview !== null ? (
+              <div className="-my-2 lg:hidden">
+                <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
+              </div>
+            ) : null}
             <PresetFields
               preset={preset}
               form={form}
@@ -969,156 +1272,222 @@ export function CreatePostSheet({
               onMediaBusyChange={setMediaBusy}
               captionError={gridError('caption')}
             />
-          ) : (
-            <>
-              <Field label="Format">
-                <Select
-                  label="Format"
-                  value={form.format}
-                  options={formatOptions}
-                  onChange={onFormatChange}
-                />
-                {gridError('format')}
-              </Field>
+            {submitError !== null ? (
+              <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+                {submitError}
+              </div>
+            ) : null}
+          </div>
+          {preview !== null ? (
+            <aside
+              data-composer-preview=""
+              aria-label={previewChipLabel(preview.platform)}
+              className="hidden lg:sticky lg:top-0 lg:flex lg:flex-col lg:gap-3"
+            >
+              <h3 className="text-[13px] font-semibold text-fg-2">
+                {previewChipLabel(preview.platform)}
+              </h3>
+              <PreviewBody {...preview} />
+            </aside>
+          ) : null}
+        </div>
+      ) : (
+        <div
+          data-create-layout=""
+          onKeyDown={onFormKeyDown}
+          className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6"
+        >
+          {/* Below lg the preview opens from a chip; its row is reserved from the
+              first paint so nothing jumps when the platform resolves. At lg the
+              frame itself is the preview. */}
+          <div data-preview-chip-slot="" className="-my-2 flex min-h-[44px] items-center lg:hidden">
+            {preview !== null ? (
+              <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
+            ) : null}
+          </div>
+          <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-0">
+            <AttachmentsField
+              workspaceId={workspaceId}
+              value={form.attachments}
+              onChange={onAttachmentsChange}
+              onPendingChange={setPendingUploads}
+              onFailedChange={setFailedUploads}
+              onPickDone={onPickDone}
+              frame={
+                workspacePlatform !== null
+                  ? { platform: workspacePlatform, format: form.format }
+                  : null
+              }
+            />
+          </div>
+          <div className="flex min-w-0 flex-col gap-4">
+            <FormatRow
+              platform={workspacePlatform}
+              format={form.format}
+              source={formatSource}
+              options={formatOptions}
+              onChange={onFormatChange}
+            />
 
-              <Field label="Media">
-                <AttachmentsField
-                  workspaceId={workspaceId}
-                  value={form.attachments}
-                  onChange={onAttachmentsChange}
-                  onPendingChange={setPendingUploads}
-                  frame={
-                    workspacePlatform !== null
-                      ? { platform: workspacePlatform, format: form.format }
-                      : null
-                  }
-                />
-              </Field>
-
-              <Field label="Caption" htmlFor="post-caption" required>
+            <Field label="Caption" htmlFor="post-caption" required>
+              <div className="relative">
                 <Textarea
                   ref={captionRef}
                   id="post-caption"
+                  autoGrow
                   value={form.caption}
-                  onChange={(event) => patch({ caption: event.target.value })}
+                  aria-invalid={fieldErrors.caption !== undefined ? true : undefined}
+                  aria-describedby="post-caption-count"
+                  onChange={(event) => patchField('caption', { caption: event.target.value })}
                   placeholder="Write the caption"
+                  className="pb-7"
                 />
-                {gridError('caption')}
-              </Field>
-
-              <Field label="Title (optional)" htmlFor="post-title">
-                <Input
-                  id="post-title"
-                  value={form.title}
-                  onChange={(event) => patch({ title: event.target.value })}
-                  placeholder="Uses the caption's first line if empty"
-                />
-                {gridError('title')}
-              </Field>
-
-              <Field label="Bucket (optional)">
-                <Select
-                  label="Bucket"
-                  value={form.bucketId}
-                  options={bucketOptions}
-                  onChange={onBucketChange}
-                  placeholder="No bucket"
-                />
-                {newBucketOpen ? (
-                  <div
-                    data-new-bucket=""
-                    className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3"
+                {captionLimit !== null ? (
+                  <span
+                    id="post-caption-count"
+                    data-caption-count=""
+                    {...(captionOverLimit(captionCount, captionLimit) ? { 'data-over': '' } : {})}
+                    className={cn(
+                      'pointer-events-none absolute bottom-2 right-3 text-[11px] tabular-nums',
+                      captionOverLimit(captionCount, captionLimit) ? 'text-bad' : 'text-fg-3',
+                    )}
                   >
-                    <Input
-                      aria-label="New bucket name"
-                      placeholder="Bucket name"
-                      value={newBucketName}
-                      maxLength={BUCKET_NAME_MAX}
-                      disabled={newBucketBusy}
-                      onChange={(event) => {
-                        setNewBucketName(event.target.value);
-                        setNewBucketError(null);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          void submitNewBucket();
-                        }
-                      }}
-                    />
-                    {newBucketError !== null ? (
-                      <p role="alert" className="text-[11px] text-bad">
-                        {newBucketError}
-                      </p>
-                    ) : null}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        size="lg"
-                        variant="primary"
+                    {captionCounterText(captionCount, captionLimit)}
+                  </span>
+                ) : null}
+              </div>
+              {gridError('caption')}
+            </Field>
+
+            <button
+              type="button"
+              data-more-options=""
+              aria-expanded={moreOpen}
+              aria-controls="post-more-options"
+              onClick={() => setMoreOpen((prev) => !prev)}
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-md border border-border bg-panel-2 px-3 py-2 text-left transition-colors hover:bg-panel-3"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
+                <span className="block truncate text-[13px] text-fg-3">{MORE_OPTIONS_HINT}</span>
+              </span>
+              <IconChevronDown
+                size={16}
+                className={cn(
+                  'shrink-0 text-fg-3 transition-transform motion-reduce:transition-none',
+                  moreOpen && 'rotate-180',
+                )}
+              />
+            </button>
+
+            {moreOpen ? (
+              <div id="post-more-options" className="flex flex-col gap-4">
+                <Field label="Title" htmlFor="post-title" hint={TITLE_HELPER}>
+                  <Input
+                    id="post-title"
+                    value={form.title}
+                    onChange={(event) => patchField('title', { title: event.target.value })}
+                    placeholder="Post title"
+                  />
+                  {gridError('title')}
+                </Field>
+
+                <Field label="Bucket">
+                  <Select
+                    label="Bucket"
+                    value={form.bucketId}
+                    options={bucketOptions}
+                    onChange={onBucketChange}
+                    placeholder="No bucket"
+                  />
+                  {newBucketOpen ? (
+                    <div
+                      data-new-bucket=""
+                      className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3"
+                    >
+                      <Input
+                        aria-label="New bucket name"
+                        placeholder="Bucket name"
+                        value={newBucketName}
+                        maxLength={BUCKET_NAME_MAX}
                         disabled={newBucketBusy}
-                        onClick={() => void submitNewBucket()}
-                      >
-                        {newBucketBusy ? 'Creating' : 'Create'}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="lg"
-                        variant="ghost"
-                        disabled={newBucketBusy}
-                        onClick={() => {
-                          setNewBucketOpen(false);
-                          setNewBucketName('');
+                        onChange={(event) => {
+                          setNewBucketName(event.target.value);
                           setNewBucketError(null);
                         }}
-                      >
-                        Cancel
-                      </Button>
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void submitNewBucket();
+                          }
+                        }}
+                      />
+                      {newBucketError !== null ? (
+                        <p role="alert" className="text-[11px] text-bad">
+                          {newBucketError}
+                        </p>
+                      ) : null}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="lg"
+                          variant="primary"
+                          disabled={newBucketBusy}
+                          onClick={() => void submitNewBucket()}
+                        >
+                          {newBucketBusy ? 'Creating' : 'Create'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="lg"
+                          variant="ghost"
+                          disabled={newBucketBusy}
+                          onClick={() => {
+                            setNewBucketOpen(false);
+                            setNewBucketName('');
+                            setNewBucketError(null);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ) : null}
-              </Field>
+                  ) : null}
+                </Field>
 
-              <Field label="Target date (optional)">
-                <DatePicker
-                  label="Target date"
-                  value={form.targetDate}
-                  onChange={(value) => patch({ targetDate: value })}
-                />
-              </Field>
+                <Field label="Due date">
+                  <DatePicker
+                    label="Due date"
+                    value={form.targetDate}
+                    disablePast
+                    actions
+                    onChange={(value) => patchField('targetDate', { targetDate: value })}
+                  />
+                  {gridError('targetDate')}
+                </Field>
 
-              <Field label="Brief (optional)">
-                <Select
-                  label="Brief"
-                  value={form.briefId}
-                  options={briefOptions}
-                  onChange={(value) => patch({ briefId: value })}
-                  placeholder="No brief"
-                />
-                {gridError('briefId')}
-              </Field>
-            </>
-          )}
+                <Field label="Brief" hint={BRIEF_HELPER}>
+                  <Select
+                    label="Brief"
+                    value={form.briefId}
+                    options={briefOptions}
+                    onChange={(value) => patchField('briefId', { briefId: value })}
+                    placeholder="No brief"
+                  />
+                  {gridError('briefId')}
+                </Field>
+              </div>
+            ) : null}
 
-          {submitError !== null ? (
-            <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
-              {submitError}
-            </div>
-          ) : null}
+            {submitError !== null ? (
+              <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+                {submitError}
+              </div>
+            ) : null}
+          </div>
         </div>
-        {preview !== null ? (
-          <aside
-            data-composer-preview=""
-            aria-label={previewChipLabel(preview.platform)}
-            className="hidden lg:sticky lg:top-0 lg:flex lg:flex-col lg:gap-3"
-          >
-            <h3 className="text-[13px] font-semibold text-fg-2">
-              {previewChipLabel(preview.platform)}
-            </h3>
-            <PreviewBody {...preview} />
-          </aside>
-        ) : null}
-      </div>
+      )}
       {preview !== null ? (
         <PlatformPreviewPanel
           open={open && previewOpen}
@@ -1133,7 +1502,107 @@ export function CreatePostSheet({
           onRemove={removePrompted}
         />
       ) : null}
+      {open && cancelConfirm ? (
+        <ConfirmDialog
+          title={discard.title}
+          message={discard.message}
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={() => {
+            setCancelConfirm(false);
+            onClose();
+          }}
+          onCancel={() => setCancelConfirm(false)}
+        />
+      ) : null}
     </Sheet>
+  );
+}
+
+/**
+ * The full sheet's Format row: the label, a pill with the format's name, where
+ * it came from ("Set from your photo") while the first file set it, and Change,
+ * which opens the format picker.
+ */
+export function FormatRow({
+  platform,
+  format,
+  source,
+  options,
+  onChange,
+}: {
+  platform: PostPlatform | null;
+  format: string;
+  source: 'image' | 'video' | null;
+  options: SelectOption[];
+  onChange: (format: string) => void;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<MenuPlacement>('down');
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEscapeLayer(open, () => setOpen(false));
+
+  // Open: the selected format takes focus so the arrow keys work at once.
+  // Close: Change gets focus back.
+  useEffect(() => {
+    if (!open) return;
+    const trigger = buttonRef.current;
+    const list = listRef.current;
+    (
+      list?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ??
+      list?.querySelector<HTMLElement>('[role="option"]') ??
+      null
+    )?.focus({ preventScroll: true });
+    return () => trigger?.focus({ preventScroll: true });
+  }, [open]);
+
+  function toggle(): void {
+    if (!open && buttonRef.current !== null) {
+      setPlacement(
+        computeMenuPlacement(buttonRef.current.getBoundingClientRect().bottom, window.innerHeight),
+      );
+    }
+    setOpen((prev) => !prev);
+  }
+
+  const name = platform !== null && format !== '' ? formatLabel(platform, format) : '';
+  return (
+    <div data-format-row="" className="relative flex min-h-[44px] min-w-0 items-center gap-3">
+      <span className="shrink-0 text-sm font-medium text-fg">Format</span>
+      <span
+        data-format-pill=""
+        className="inline-flex h-7 shrink-0 items-center rounded-full border border-border bg-panel-2 px-3 text-[13px] font-medium text-fg"
+      >
+        {name}
+      </span>
+      <span data-format-source="" className="min-w-0 flex-1 truncate text-[13px] text-fg-3">
+        {source !== null ? formatSourceLine(source) : ''}
+      </span>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="inline-flex h-11 shrink-0 items-center justify-center rounded-md px-3 text-sm font-medium text-accent transition-colors hover:bg-panel-2 disabled:pointer-events-none disabled:opacity-50"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Change format"
+        disabled={options.length === 0}
+        onClick={toggle}
+      >
+        Change
+      </button>
+      {open ? (
+        <SelectMenu
+          options={options}
+          value={format}
+          placement={placement}
+          onChange={onChange}
+          onClose={() => setOpen(false)}
+          listRef={listRef}
+        />
+      ) : null}
+    </div>
   );
 }
 

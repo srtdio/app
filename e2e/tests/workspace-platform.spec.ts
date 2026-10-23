@@ -68,10 +68,10 @@ test('create a workspace with a platform, then post in its formats @theme @deskt
 
   // New post: no Platform field, and only Instagram's formats.
   await page.getByRole('button', { name: 'New post', exact: true }).click();
-  const format = page.getByRole('button', { name: 'Format' });
-  await expect(format).toContainText('Reel');
+  // Format follows the first file; before one, Instagram opens on Single image.
+  await expect(page.locator('[data-format-pill]')).toHaveText('Single image');
   await expect(page.getByRole('button', { name: 'Platform' })).toHaveCount(0);
-  await format.click();
+  await page.getByRole('button', { name: 'Change format', exact: true }).click();
   await expect(page.getByRole('option')).toHaveText(['Reel', 'Story', 'Carousel', 'Single image']);
 
   expectClean(network);

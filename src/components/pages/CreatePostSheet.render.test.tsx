@@ -31,7 +31,11 @@ vi.mock('@/components/pages/create/AttachmentsField', () => ({
   attachmentVersionIds: () => [],
 }));
 vi.mock('@/components/ui/DatePicker', () => ({ DatePicker: () => null }));
-vi.mock('@srtdio/rpc', () => ({ postCreate: mockPostCreate, gallerySet: vi.fn() }));
+vi.mock('@srtdio/rpc', () => ({
+  postCreate: mockPostCreate,
+  gallerySet: vi.fn(),
+  stageTransition: vi.fn(),
+}));
 
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 
@@ -63,10 +67,21 @@ async function renderSheet(platform: PostPlatform): Promise<void> {
   });
 }
 
+// The full sheet's Format row: a pill with the format's name and Change.
 function formatTrigger(): HTMLButtonElement {
-  const el = document.querySelector<HTMLButtonElement>('button[aria-label="Format"]');
-  if (el === null) throw new Error('no Format select');
+  const el = document.querySelector<HTMLButtonElement>('button[aria-label="Change format"]');
+  if (el === null) throw new Error('no Change format button');
   return el;
+}
+
+function formatPill(): string {
+  return document.querySelector('[data-format-pill]')?.textContent ?? '';
+}
+
+async function openMoreOptions(): Promise<void> {
+  const more = document.querySelector<HTMLButtonElement>('button[data-more-options]');
+  if (more === null) throw new Error('no More options row');
+  if (more.getAttribute('aria-expanded') !== 'true') await act(async () => more.click());
 }
 
 async function openFormats(): Promise<string[]> {
@@ -88,9 +103,9 @@ describe('CreatePostSheet', () => {
     expect(document.body.textContent).not.toContain('Choose a platform');
   });
 
-  it("lists only the workspace platform's formats and defaults to the first", async () => {
+  it("lists only the workspace platform's formats; Instagram opens on Single image", async () => {
     await renderSheet('instagram');
-    expect(formatTrigger().textContent).toContain('Reel');
+    expect(formatPill()).toBe('Single image');
     expect(await openFormats()).toEqual(['Reel', 'Story', 'Carousel', 'Single image']);
   });
 
@@ -110,6 +125,7 @@ describe('CreatePostSheet', () => {
       error: { code: 'unknown', message: 'invalid_format' },
     });
     await renderSheet('tiktok');
+    await openMoreOptions();
     await act(async () => {
       setValue(document.querySelector<HTMLInputElement>('#post-title')!, 'Launch');
       setValue(document.querySelector<HTMLTextAreaElement>('#post-caption')!, 'Caption');
@@ -132,7 +148,7 @@ describe('CreatePostSheet', () => {
     await renderSheet('instagram');
     const frame = () =>
       document.querySelector('[data-attachments-frame]')?.getAttribute('data-attachments-frame');
-    expect(frame()).toBe('reel');
+    expect(frame()).toBe('single_image');
     await openFormats();
     const story = [...document.querySelectorAll('[role="option"]')].find(
       (o) => o.textContent === 'Story',
@@ -141,17 +157,18 @@ describe('CreatePostSheet', () => {
     expect(frame()).toBe('story');
   });
 
-  it('the live preview follows the draft caption and opens from the chip', async () => {
+  it('the live preview follows the draft caption and opens from the chip (no side panel)', async () => {
     await renderSheet('linkedin');
     await act(async () => {
       setValue(document.querySelector<HTMLTextAreaElement>('#post-caption')!, 'Quarterly results');
     });
-    const preview = document.querySelector('[data-composer-preview]');
-    expect(preview?.textContent).toContain('Quarterly results');
+    expect(document.querySelector('[data-composer-preview]')).toBeNull();
     const chip = [...document.querySelectorAll('button')].find(
       (b) => b.textContent === 'LinkedIn preview',
     );
     await act(async () => chip!.click());
-    expect(document.querySelector('[role="dialog"][aria-label="LinkedIn preview"]')).not.toBeNull();
+    const dialog = document.querySelector('[role="dialog"][aria-label="LinkedIn preview"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Quarterly results');
   });
 });

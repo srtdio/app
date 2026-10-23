@@ -63,10 +63,10 @@ describe('dayCells', () => {
 describe('popoverPlacement', () => {
   const phone = { width: 390, height: 844 };
 
-  it('opens below a trigger with room under it, at least 288px wide', () => {
+  it('opens below a trigger with room under it, at least 336px wide (seven 44px days)', () => {
     const at = popoverPlacement({ top: 200, bottom: 244, left: 200, width: 170 }, phone);
     expect(at.top).toBe(250);
-    expect(at.width).toBe(288);
+    expect(at.width).toBe(336);
     expect(at.left + at.width).toBeLessThanOrEqual(390 - 8);
   });
 
