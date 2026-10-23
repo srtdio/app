@@ -85,35 +85,39 @@ describe.runIf(DB_AVAILABLE)('approved-post lock (authenticated role)', () => {
   }
 
   function captionUpdate(postId: string, caption: string) {
-    return ownerClient.rpc('post_caption_update', {
+    const args = {
       p_post_id: postId,
       p_caption: caption,
       p_trace_id: generateTraceId(),
-    });
+    };
+    return ownerClient.rpc('post_caption_update', args);
   }
 
   function postUpdate(postId: string, payload: Record<string, unknown>) {
-    return ownerClient.rpc('post_update', {
+    const args = {
       p_post_id: postId,
       p_payload: payload as Database['public']['Functions']['post_update']['Args']['p_payload'],
       p_trace_id: generateTraceId(),
-    });
+    };
+    return ownerClient.rpc('post_update', args);
   }
 
   function gallerySet(postId: string, versionIds: string[]) {
-    return ownerClient.rpc('gallery_set', {
+    const args = {
       p_post_id: postId,
       p_asset_version_ids: versionIds,
       p_trace_id: generateTraceId(),
-    });
+    };
+    return ownerClient.rpc('gallery_set', args);
   }
 
   function versionCreate(postId: string) {
-    return ownerClient.rpc('post_version_create', {
+    const args = {
       p_post_id: postId,
       p_snapshot: { caption: `snap ${randomSuffix()}` },
       p_trace_id: generateTraceId(),
-    });
+    };
+    return ownerClient.rpc('post_version_create', args);
   }
 
   beforeAll(async () => {
