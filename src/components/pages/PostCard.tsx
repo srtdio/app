@@ -37,7 +37,7 @@ export interface PostCardProps {
    * cover read), so the picture takes the same platform frame as the chat card.
    * undefined while unknown: the format's default frame.
    */
-  cover?: CardFirstMedia | null;
+  cover?: CardFirstMedia | null | undefined;
   /** The clock for the time-in-stage reading. Default: now. */
   now?: Date;
   /** The All view: the meta line leads with the post's stage dot and label. */
