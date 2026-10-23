@@ -67,19 +67,22 @@ vi.mock('@/lib/workspace-context', () => ({
 import {
   INITIAL_STAGE,
   MOVE_FALLBACK_MESSAGE,
+  boardStages,
   filteredEmpty,
-  isUndoableMove,
   moveErrorMessage,
   pipelineHeader,
   pipelineSurface,
   postCountLabel,
-  runMovePost,
+  postsSkeleton,
   runUndoableMove,
+  skeletonRatio,
   undoMoveLabel,
   sanitizePostSort,
   stageCounts,
+  visibleStage,
 } from '@/components/pages/PipelinePage';
-import type { MovePostDeps } from '@/components/pages/PipelinePage';
+import type { MovePostDeps, UndoableMoveDeps } from '@/components/pages/PipelinePage';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { parsePipelineQuery } from '@/components/pages/pipeline/pipeline-query';
 import type { UndoableAction } from '@/lib/use-undoable-action';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -436,91 +439,133 @@ describe('moveErrorMessage', () => {
   });
 });
 
-describe('runMovePost', () => {
+describe('every move: flip, "Moved to {Stage}" with Undo, then send', () => {
   afterEach(() => {
     stMock.mockReset();
   });
 
-  it('success: calls the proc with {postId,toStage}, re-groups, closes, and toasts', async () => {
+  /** The harness deps plus a captured Undo runner. */
+  function undoable(posts: PipelinePost[], over: Partial<UndoableMoveDeps> = {}) {
+    const h = harness(posts);
+    const actions: UndoableAction[] = [];
+    const deps: UndoableMoveDeps = { ...h.deps, run: (a) => actions.push(a), ...over };
+    return { h, deps, actions };
+  }
+
+  it('success: flips at once, closes, toasts "Moved to Review" with Undo, and sends once on expiry', async () => {
     stMock.mockResolvedValue({ ok: true, data: 'ok' } satisfies Result<string>);
-    const h = harness([makePost('p1', 'draft')]);
+    const { h, deps, actions } = undoable([makePost('p1', 'draft')]);
 
-    await runMovePost(h.deps, 'p1', 'review');
+    runUndoableMove(deps, 'p1', 'review');
 
-    expect(stMock).toHaveBeenCalledTimes(1);
-    expect(stMock).toHaveBeenCalledWith(h.deps.client, { postId: 'p1', toStage: 'review' });
-    // The post re-groups into the new stage column.
+    // The post re-groups into the new stage column before anything is sent.
     const grouped = groupByStage(h.state(), STAGES);
     expect(grouped.review.map((p) => p.id)).toEqual(['p1']);
     expect(grouped.draft).toHaveLength(0);
     expect(h.closed()).toBe(true);
-    expect(h.toasts).toEqual(['"Post p1" moved to Review']);
+    expect(actions.map((a) => a.label)).toEqual(['Moved to Review']);
+    expect(stMock).not.toHaveBeenCalled();
+    await actions[0]!.commit();
+    expect(stMock).toHaveBeenCalledTimes(1);
+    expect(stMock).toHaveBeenCalledWith(h.deps.client, { postId: 'p1', toStage: 'review' });
+    // No title in quotes anywhere.
+    expect(h.toasts).toEqual([]);
   });
 
-  it('client role: a park or back-to-review never reaches the proc', async () => {
-    stMock.mockClear();
+  it('the toast reads "Moved to {Stage}" for every target, no title', () => {
+    for (const stage of STAGES)
+      expect(undoMoveLabel(stage)).toBe(`Moved to ${stage[0]!.toUpperCase()}${stage.slice(1)}`);
+    expect(undoMoveLabel('approved')).toBe('Moved to Approved');
+    for (const [from, to] of [
+      ['draft', 'review'],
+      ['review', 'approved'],
+      ['review', 'parked'],
+      ['approved', 'rejected'],
+      ['rejected', 'review'],
+    ] as [Stage, Stage][]) {
+      const { deps, actions } = undoable([makePost('p1', from)]);
+      runUndoableMove(deps, 'p1', to);
+      expect(actions.map((a) => a.label)).toEqual([undoMoveLabel(to)]);
+      expect(actions[0]!.label).not.toContain('Post p1');
+      expect(actions[0]!.label).not.toContain('"');
+    }
+  });
+
+  it('an on-behalf approve sends the picked approver with the move', async () => {
+    stMock.mockResolvedValue({ ok: true, data: 'ok' } satisfies Result<string>);
+    const { h, deps, actions } = undoable([makePost('p1', 'review')]);
+    runUndoableMove(deps, 'p1', 'approved', null, { onBehalfOf: 'u-client' });
+    expect(h.state()[0]!.stage).toBe('approved');
+    await actions[0]!.commit();
+    expect(stMock).toHaveBeenCalledWith(h.deps.client, {
+      postId: 'p1',
+      toStage: 'approved',
+      onBehalfOf: 'u-client',
+    });
+  });
+
+  it('an approver is never sent for a move other than approve', async () => {
+    stMock.mockResolvedValue({ ok: true, data: 'ok' } satisfies Result<string>);
+    const { h, deps, actions } = undoable([makePost('p1', 'review')]);
+    runUndoableMove(deps, 'p1', 'parked', null, { onBehalfOf: 'u-client' });
+    await actions[0]!.commit();
+    expect(stMock).toHaveBeenCalledWith(h.deps.client, { postId: 'p1', toStage: 'parked' });
+  });
+
+  it('client role: a park or back-to-review never flips or reaches the proc', () => {
     for (const [from, to] of [
       ['review', 'parked'],
       ['approved', 'parked'],
       ['rejected', 'review'],
     ] as [Stage, Stage][]) {
-      const h = harness([makePost('p1', from)]);
-      await runMovePost({ ...h.deps, role: 'client' }, 'p1', to);
+      const { h, deps, actions } = undoable([makePost('p1', from)], { role: 'client' });
+      runUndoableMove(deps, 'p1', to);
       expect(h.setPostsCalls()).toBe(0);
-      expect(h.toasts).toEqual([]);
+      expect(actions).toHaveLength(0);
     }
     expect(stMock).not.toHaveBeenCalled();
   });
 
-  it('client role: approve and reject still reach the proc', async () => {
-    stMock.mockResolvedValue({ ok: true, data: 'p1' } satisfies Result<string>);
-    const h = harness([makePost('p1', 'review')]);
-    await runMovePost({ ...h.deps, role: 'client' }, 'p1', 'approved');
-    expect(h.state()[0]!.stage).toBe('approved');
+  it('client role: approve and reject still go through', () => {
+    for (const to of ['approved', 'rejected'] as const) {
+      const { h, deps, actions } = undoable([makePost('p1', 'review')], { role: 'client' });
+      runUndoableMove(deps, 'p1', to);
+      expect(h.state()[0]!.stage).toBe(to);
+      expect(actions).toHaveLength(1);
+    }
   });
 
-  it('failure: leaves the post in place, toasts a friendly error, no stage change', async () => {
+  it('failure: puts the post back and toasts a friendly error', async () => {
     stMock.mockResolvedValue({
       ok: false,
       error: { code: 'invalid_stage_transition', message: 'invalid_stage_transition' },
     } satisfies Result<string>);
-    const h = harness([makePost('p1', 'draft')]);
-
-    await runMovePost(h.deps, 'p1', 'approved');
-
-    expect(h.setPostsCalls()).toBe(0);
-    expect(h.state()[0]!.stage).toBe('draft');
-    expect(h.closed()).toBe(false);
+    const { h, deps, actions } = undoable([makePost('p1', 'review')]);
+    runUndoableMove(deps, 'p1', 'approved');
+    await actions[0]!.commit();
+    expect(h.state()[0]!.stage).toBe('review');
     expect(h.toasts).toEqual([moveErrorMessage('invalid_stage_transition')]);
+    expect(h.deps.inFlight.has('p1')).toBe(false);
   });
 
-  it('transport failure: a thrown proc toasts the fallback error, leaves the post put, and clears the in-flight guard', async () => {
+  it('transport failure: a thrown proc toasts the fallback error and clears the in-flight guard', async () => {
     stMock.mockRejectedValue(new Error('network down'));
-    const h = harness([makePost('p1', 'draft')]);
-
-    // Must not reject: the catch swallows the throw into a toast. If the catch is
-    // removed this await rejects and the test fails.
-    await runMovePost(h.deps, 'p1', 'review');
-
-    expect(h.setPostsCalls()).toBe(0);
+    const { h, deps, actions } = undoable([makePost('p1', 'draft')]);
+    runUndoableMove(deps, 'p1', 'review');
+    await actions[0]!.commit();
     expect(h.state()[0]!.stage).toBe('draft');
-    expect(h.closed()).toBe(false);
     expect(h.toasts).toEqual([MOVE_FALLBACK_MESSAGE]);
-    // The double-fire guard cleared on failure exactly as on success.
     expect(h.deps.inFlight.has('p1')).toBe(false);
   });
 
   it('offline: a fetch failure toasts "Couldn\'t move the post. You\'re offline." with Retry', async () => {
     stMock.mockRejectedValue(new TypeError('Failed to fetch'));
-    const h = harness([makePost('p1', 'draft')]);
     const failures: Array<{ message: string; retry: boolean }> = [];
-    const deps: MovePostDeps = {
-      ...h.deps,
+    const { deps, actions } = undoable([makePost('p1', 'draft')], {
       toast: (message, failure) => failures.push({ message, retry: failure?.retry !== undefined }),
-    };
-
-    await runMovePost(deps, 'p1', 'review');
-
+    });
+    runUndoableMove(deps, 'p1', 'review');
+    await actions[0]!.commit();
     expect(failures).toEqual([{ message: "Couldn't move the post. You're offline.", retry: true }]);
   });
 
@@ -529,20 +574,17 @@ describe('runMovePost', () => {
       ok: false,
       error: { code: 'forbidden_role', message: 'forbidden_role' },
     } satisfies Result<string>);
-    const h = harness([makePost('p1', 'draft')]);
     const failures: Array<{ message: string; failed: boolean; retry: boolean }> = [];
-    const deps: MovePostDeps = {
-      ...h.deps,
+    const { deps, actions } = undoable([makePost('p1', 'draft')], {
       toast: (message, failure) =>
         failures.push({
           message,
           failed: failure !== undefined,
           retry: failure?.retry !== undefined,
         }),
-    };
-
-    await runMovePost(deps, 'p1', 'review');
-
+    });
+    runUndoableMove(deps, 'p1', 'review');
+    await actions[0]!.commit();
     expect(failures).toEqual([
       {
         message: "Couldn't move the post. You don't have access to do this.",
@@ -552,22 +594,11 @@ describe('runMovePost', () => {
     ]);
   });
 
-  it('double-fire guard: two rapid calls for the same post fire the proc once', async () => {
-    let resolve: ((value: Result<string>) => void) | undefined;
-    stMock.mockReturnValue(
-      new Promise<Result<string>>((r) => {
-        resolve = r;
-      }),
-    );
-    const h = harness([makePost('p1', 'draft')]);
-
-    const first = runMovePost(h.deps, 'p1', 'review');
-    const second = runMovePost(h.deps, 'p1', 'review');
-
-    expect(stMock).toHaveBeenCalledTimes(1);
-    resolve?.({ ok: true, data: 'ok' });
-    await Promise.all([first, second]);
-    expect(stMock).toHaveBeenCalledTimes(1);
+  it('double-fire guard: two rapid calls for the same post flip and queue once', () => {
+    const { deps, actions } = undoable([makePost('p1', 'draft')]);
+    runUndoableMove(deps, 'p1', 'review');
+    runUndoableMove(deps, 'p1', 'review');
+    expect(actions).toHaveLength(1);
   });
 });
 
@@ -581,7 +612,7 @@ describe('persisted sort sanitization (fix 1)', () => {
 
   it('passes a still-listed value through untouched', () => {
     expect(sanitizePostSort('updated')).toBe('updated');
-    // 'oldest' is listed again ("Oldest first").
+    // 'oldest' is listed again ("Least recently updated").
     expect(sanitizePostSort('oldest')).toBe('oldest');
     expect(sanitizePostSort('target')).toBe('target');
   });
@@ -664,7 +695,7 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
     expect(menuRows(body()).map(rowLabel)).not.toContain('This week');
   });
 
-  it('Sort lists Newest first, Oldest first and Due soonest first and fires onOrderChange', () => {
+  it('Sort lists Recently updated, Least recently updated and Due soonest first and fires onOrderChange', () => {
     let picked: string | null = null;
     const rows = menuRows(
       body({
@@ -673,7 +704,11 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
         },
       }),
     );
-    expect(rows.map(rowLabel)).toEqual(['Newest first', 'Oldest first', 'Due soonest first']);
+    expect(rows.map(rowLabel)).toEqual([
+      'Recently updated',
+      'Least recently updated',
+      'Due soonest first',
+    ]);
     (rows[1]!.props as { onClick: () => void }).onClick();
     expect(picked).toBe('oldest');
     (rows[2]!.props as { onClick: () => void }).onClick();
@@ -728,7 +763,9 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
         order = o;
       },
     });
-    const oldest = menuRows(shell(sortTree).body).find((r) => rowLabel(r) === 'Oldest first')!;
+    const oldest = menuRows(shell(sortTree).body).find(
+      (r) => rowLabel(r) === 'Least recently updated',
+    )!;
     (oldest.props as { onClick: () => void }).onClick();
     expect(order).toBe('oldest');
     expect(hookState.calls[0]).toEqual([false]);
@@ -873,7 +910,7 @@ describe('W4 fix 6 (revised): the date filter is its own button, no chip under t
   });
 });
 
-describe('W4 fix 7: undoable Rejected / Parked moves', () => {
+describe('W4 fix 7: undoable moves (Rejected / Parked)', () => {
   afterEach(() => {
     stMock.mockReset();
   });
@@ -887,8 +924,7 @@ describe('W4 fix 7: undoable Rejected / Parked moves', () => {
     return { h, actions };
   }
 
-  it('only Rejected and Parked are undoable, with the "Moved to X" label', () => {
-    expect(STAGES.filter(isUndoableMove)).toEqual(['parked', 'rejected']);
+  it('Rejected and Parked carry the "Moved to X" label', () => {
     expect(undoMoveLabel('rejected')).toBe('Moved to Rejected');
     expect(undoMoveLabel('parked')).toBe('Moved to Parked');
   });
@@ -941,5 +977,98 @@ describe('W4 fix 7: undoable Rejected / Parked moves', () => {
     expect(src).not.toMatch(/assets\/useToasts|assets\/Toasts/);
     expect(src).toMatch(/@\/components\/ui\/toast/);
     expect(src).toMatch(/useUndoableAction/);
+  });
+});
+
+describe('E: clients never see Draft', () => {
+  it('the laptop board has no Draft column for a client; the agency side keeps it', () => {
+    expect(boardStages('all', 'client')).toEqual(['review', 'approved', 'parked', 'rejected']);
+    expect(boardStages('all', 'agency')).toEqual(STAGES);
+    expect(boardStages('all', 'owner')).toContain('draft');
+    expect(boardStages('draft', 'client')).toEqual([]);
+    expect(boardStages('review', 'client')).toEqual(['review']);
+  });
+
+  it('a client on a Draft link lands on Review', () => {
+    expect(visibleStage('draft', 'client')).toBe('review');
+    expect(visibleStage('draft', 'agency')).toBe('draft');
+    expect(visibleStage('all', 'client')).toBe('all');
+  });
+
+  it('the surface hands the board the client columns', () => {
+    const tree = pipelineSurface({
+      role: 'client',
+      stage: 'all',
+      isDesktop: true,
+      sorted: [],
+      grouped: groupByStage([], STAGES),
+      cache: {} as unknown as PresignCache,
+      presignEnabled: false,
+      workspaceKey: null,
+      onViewAll: () => {},
+      onMovePost: () => {},
+      onLongPressPost: () => {},
+      onBlockedMove: () => {},
+      shownKey: 'pipeline:shown:',
+      roleReady: false,
+      canCreate: false,
+    });
+    const props = tree.props as { stages: Stage[]; roleReady: boolean };
+    expect(props.stages).not.toContain('draft');
+    expect(props.roleReady).toBe(false);
+  });
+});
+
+describe('E: no jumps while loading', () => {
+  it('the New post space is held while post.create is still loading', () => {
+    const tree = pipelineHeader({
+      search: '',
+      onSearchChange: () => {},
+      sort: 'updated',
+      onSortChange: () => {},
+      dateWindow: 'any',
+      onDateWindowChange: () => {},
+      customRange: null,
+      onCustomRangeChange: () => {},
+      weekStartDay: 1,
+      stage: 'all',
+      onStageChange: () => {},
+      counts: { all: 0 },
+      canCreate: false,
+      createPending: true,
+    });
+    const held = findAll(tree, isNewPost);
+    expect(held).toHaveLength(1);
+    const props = held[0]!.props as {
+      className: string;
+      'aria-hidden'?: string;
+      tabIndex?: number;
+      disabled?: boolean;
+      onClick?: unknown;
+    };
+    expect(props.className).toContain('invisible');
+    expect(props['aria-hidden']).toBe('true');
+    expect(props.tabIndex).toBe(-1);
+    expect(props.disabled).toBe(true);
+    expect(props.onClick).toBeUndefined();
+  });
+
+  it('the laptop All skeleton is the kanban, one column per stage, cards in the platform frame', () => {
+    const ratio = skeletonRatio('instagram');
+    expect(ratio).toBeCloseTo(0.8);
+    expect(skeletonRatio(null)).toBeNull();
+    const kanban = renderToStaticMarkup(postsSkeleton(true, { kanban: true, ratio, columns: 5 }));
+    expect(kanban).toContain('data-posts-skeleton="kanban"');
+    expect((kanban.match(/w-\[260px\]/g) ?? []).length).toBe(5);
+    expect(kanban).toContain('aspect-ratio:0.8');
+    expect(kanban).not.toContain('aspect-square');
+    // The card shape: full height, a two-line title block and the meta row.
+    expect(kanban).toContain('min-h-[2.75em]');
+    expect(kanban).toContain('h-5');
+    const client = renderToStaticMarkup(postsSkeleton(true, { kanban: true, ratio, columns: 4 }));
+    expect((client.match(/w-\[260px\]/g) ?? []).length).toBe(4);
+    // A stage view on a laptop keeps the grid.
+    const grid = renderToStaticMarkup(postsSkeleton(true, { ratio }));
+    expect(grid).toContain('grid-cols-[repeat(auto-fill,minmax(220px,1fr))]');
   });
 });

@@ -2,15 +2,19 @@
 // checkpoint comments. The comment feed now owns every checkpoint's body, state
 // and controls; the strip is only a jump index into it. It shows one chip per
 // checkpoint (its ledger_seq, or a tick once resolved), coloured by its one of
-// two visible states: Open or Resolved. The Comments header owns the only count
-// ("{n} open · {m} resolved"), so the strip carries no counter and no banner.
+// two visible states: Open or Resolved. Beside the chips it reads its progress,
+// "{n} of {m} resolved" (checkpointProgressText); no banner.
 // Activating a chip scrolls to and rings that checkpoint's row in the feed. No
 // checkpoint text and no controls live here. When the post has no checkpoints
 // the strip renders nothing.
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { commentDomId, LiveCheckpointsContext } from '@/components/comments/Comments';
+import {
+  checkpointProgressText,
+  commentDomId,
+  LiveCheckpointsContext,
+} from '@/components/comments/Comments';
 import type { LiveCheckpoint } from '@/components/comments/Comments';
 import { flashNode } from '@/components/comments/flash-node';
 import {
@@ -201,6 +205,7 @@ export function CheckpointStrip({
   }, [shown, loaded, onCounts]);
 
   if (shown.length === 0) return null;
+  const counts = checkpointCounts(shown);
 
   // The sticky background is the comments card's own surface (bg-panel-2), so
   // the strip never reads as a different-coloured band while pinned.
@@ -214,6 +219,12 @@ export function CheckpointStrip({
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         {checkpointChips(shown)}
       </div>
+      <span
+        data-checkpoint-progress=""
+        className="ml-2 shrink-0 self-center text-xs tabular-nums text-fg-3"
+      >
+        {checkpointProgressText(counts.resolved, counts.total)}
+      </span>
     </div>
   );
 }

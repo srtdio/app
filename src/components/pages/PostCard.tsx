@@ -1,18 +1,19 @@
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { IconPlay } from '@/components/ui/icons';
-import { FORMAT_GLYPH_LABEL, formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
+import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath } from '@/lib/entityRef';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import {
   hasAllowedMove,
+  reservesStatusLine,
   reviewStatus,
   type CardViewer,
 } from '@/components/pages/pipeline/card-status';
 import { civilDate } from '@/lib/list-sort';
-import { formatDue } from '@/lib/display-date';
+import { formatDue, formatOverdue } from '@/lib/display-date';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
 import type { CardFirstMedia } from '../../../packages/posts/src/reads';
@@ -25,7 +26,7 @@ export interface PostCardProps {
   /** The active workspace's key, used to build the pretty /p/KEY-N link. When
    *  absent the card falls back to the classic /posts/:id route. */
   workspaceKey?: string | null;
-  /** Opens the move sheet for this post; renders the ⋯ on the picture's corner. */
+  /** Opens the move sheet for this post; renders the ⋯ at the right end of the due row. */
   onMove?: (post: PipelinePost) => void;
   /**
    * The viewer's role and the workspace approvers: drives the review status line
@@ -41,8 +42,13 @@ export interface PostCardProps {
   cover?: CardFirstMedia | null | undefined;
   /** The clock for the time-in-stage reading. Default: now. */
   now?: Date;
-  /** The All view: the meta line leads with the post's stage dot and label. */
+  /** The phone All view: the meta line leads with the post's stage dot and label. */
   showStage?: boolean;
+  /**
+   * The card sits in a kanban column that already names its stage: the card
+   * never repeats the stage name or its dot (the status line drops its dot).
+   */
+  inColumn?: boolean;
   /**
    * The workspace's IANA zone (the one the move sheet and approve confirm use).
    * target_date is a timestamptz, so its day is read in this zone, never the
@@ -68,6 +74,40 @@ export function dueLabel(value: string, timeZone = 'UTC', now: Date = new Date()
     civil = civilDate(instant, 'UTC');
   }
   return formatDue(civil, 'UTC', now);
+}
+
+/** The card's due reading: the due line, or the overdue line in the bad tone. */
+export interface CardDue {
+  text: string;
+  overdue: boolean;
+}
+
+/**
+ * "Due 15 Mar" while the day is today or ahead; once the civil day (in the
+ * workspace zone) has passed, "Overdue · 12 Oct" / "Overdue 5 months" via the
+ * shared formatter. An approved post is done, so it never reads overdue. An
+ * unparseable value shows as stored.
+ */
+export function cardDue(
+  value: string,
+  stage: Stage,
+  timeZone = 'UTC',
+  now: Date = new Date(),
+): CardDue {
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return { text: `Due ${value}`, overdue: false };
+  const read = (at: Date): string => {
+    try {
+      return civilDate(at, timeZone);
+    } catch {
+      return civilDate(at, 'UTC');
+    }
+  };
+  const civil = read(instant);
+  if (stage !== 'approved' && civil < read(now)) {
+    return { text: formatOverdue(civil, timeZone, now).text, overdue: true };
+  }
+  return { text: dueLabel(value, timeZone, now), overdue: false };
 }
 
 /**
@@ -103,7 +143,7 @@ export function captionPreview(post: PipelinePost): string | null {
 /**
  * Map the DB post format to a glyph token: single_image folds into 'image'; every
  * other format value is already a FormatGlyphToken ('text' | 'carousel' | 'video'
- * | 'link'). One source for both the meta-line glyph and the fallback tile.
+ * | 'link'). Used by the fallback tile.
  */
 function formatToken(format: string): FormatGlyphToken {
   return format === 'single_image' ? 'image' : (format as FormatGlyphToken);
@@ -150,23 +190,13 @@ function CarouselBadge() {
   );
 }
 
-/** Three dots in a row: the ⋯ glyph on the picture's corner. */
+/** Three dots in a row: the plain 18px ⋯ glyph at the right end of the due row. */
 function MoreIcon() {
   return (
-    <svg
-      aria-hidden
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx={5} cy={12} r={1.3} />
-      <circle cx={12} cy={12} r={1.3} />
-      <circle cx={19} cy={12} r={1.3} />
+    <svg aria-hidden width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
+      <circle cx={5} cy={12} r={1.75} />
+      <circle cx={12} cy={12} r={1.75} />
+      <circle cx={19} cy={12} r={1.75} />
     </svg>
   );
 }
@@ -185,15 +215,19 @@ function PlayBadge() {
 
 /**
  * A pipeline board card: a full-bleed picture in the post's platform frame
- * (4:5 for an Instagram post, the chat card's shape) above the title, the
- * review status line, and one quiet meta line (the stage in the All view, the
- * format glyph, and "Due {d MMM}" when dated). The picture is the shared
+ * (4:5 for an Instagram post, the chat card's shape; before the cover loads
+ * the frame is the platform's default for the format) above the title, the
+ * review status line, and one quiet meta line (the stage in the phone All
+ * view, the due or overdue reading, and the ⋯). The picture is the shared
  * Thumbnail tile, so an image post, an imageless post, and a glyph post share
- * ONE tile background by state. The whole card navigates to the post detail
- * (PCS) view; when the board passes onMove and the viewer has an allowed move,
- * a ⋯ circle on the picture's top-right corner (44px tap area, about 30px
- * visible) opens the move sheet, so the title gets the full card width.
- * Navigation is a full-bleed overlay button laid behind the card content.
+ * ONE tile background by state. The format shows once: the carousel badge or
+ * play badge on the picture, never a glyph on the meta line. The card fills
+ * its grid cell (h-full) and the title holds two lines, so every card in a row
+ * ends on the same line. The whole card navigates to the post detail (PCS)
+ * view; when the board passes onMove and the viewer has an allowed move, a
+ * plain ⋯ glyph at the right end of the meta line (44x44 tap area, negative
+ * margins so the row keeps its height) opens the move sheet. Navigation is a
+ * full-bleed overlay button laid behind the card content.
  */
 export function PostCard({
   post,
@@ -205,6 +239,7 @@ export function PostCard({
   cover,
   now,
   showStage = false,
+  inColumn = false,
   timeZone = 'UTC',
 }: PostCardProps) {
   const navigate = useNavigate();
@@ -216,18 +251,19 @@ export function PostCard({
   const caption = captionPreview(post);
   const stage = post.stage as Stage;
   const ratio = cardRatio(post, cover);
+  const clock = now ?? new Date();
   const status =
-    viewer !== undefined
-      ? reviewStatus(stage, post.stage_entered_at, viewer, now ?? new Date())
-      : null;
+    viewer !== undefined ? reviewStatus(stage, post.stage_entered_at, viewer, clock) : null;
+  const reserveStatus = status === null && reservesStatusLine(stage, viewer);
   const canMove =
     onMove !== undefined && (viewer === undefined || hasAllowedMove(viewer.role, stage));
+  const due = post.target_date !== null ? cardDue(post.target_date, stage, timeZone, clock) : null;
 
   return (
     <div
       data-induction={INDUCTION_KEYS.pipelinePostRow}
       data-induction-post={post.id}
-      className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2"
+      className="relative flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2"
     >
       <button
         type="button"
@@ -254,29 +290,10 @@ export function PostCard({
           ) : null}
         </Thumbnail>
       </div>
-      {canMove && onMove !== undefined ? (
-        // On the picture's top-right corner, above the Open post overlay (z-10)
-        // so a tap moves, not opens. Pointer down stops here so the feed's
-        // long-press never arms under it. The carousel badge sits on the left
-        // corner so the two never overlap.
-        <button
-          type="button"
-          aria-label={`Move post ${post.title}`}
-          data-post-card-move=""
-          draggable={false}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={() => onMove(post)}
-          className="group absolute right-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full focus:outline-none"
-        >
-          <span className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-overlay-badge text-overlay-fg backdrop-blur-sm transition-colors duration-fast ease-enter group-hover:bg-overlay-badge-hover group-focus-visible:ring-2 group-focus-visible:ring-accent">
-            <MoreIcon />
-          </span>
-        </button>
-      ) : null}
-      <div data-post-card-body="" className="flex min-w-0 flex-col gap-1.5 p-3">
+      <div data-post-card-body="" className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
         <div
           data-post-card-title=""
-          className="line-clamp-2 text-sm font-medium leading-snug [overflow-wrap:anywhere]"
+          className="line-clamp-2 min-h-[2.75em] text-sm font-medium leading-snug [overflow-wrap:anywhere]"
         >
           {post.title}
         </div>
@@ -292,22 +309,26 @@ export function PostCard({
           <div
             data-post-card-status={status.tone}
             className={cn(
-              'flex min-w-0 items-center gap-1.5 text-xs',
+              'flex h-4 min-w-0 items-center gap-1.5 text-xs',
               status.tone === 'you' ? 'font-semibold text-accent' : 'text-fg-2',
             )}
           >
             {status.tone === 'you' ? (
               <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-accent" />
-            ) : (
+            ) : inColumn ? null : (
               <StageDot stage={stage} />
             )}
             <span className="truncate">{status.text}</span>
           </div>
+        ) : reserveStatus ? (
+          // The role is still loading: hold the status line's height.
+          <div aria-hidden data-post-card-status-pending="" className="h-4" />
         ) : null}
-        {/* One quiet meta line: the stage (All view only, when no status line
-          names it), the format glyph, and the due date. The row never wraps. */}
-        <div className="flex min-w-0 items-center gap-1.5">
-          {showStage && status === null ? (
+        {/* One quiet meta line, pinned to the card's foot: the stage (phone All
+          view only, when no status line names it), the due or overdue reading,
+          and the ⋯. The row never wraps and keeps its height. */}
+        <div data-post-card-meta="" className="mt-auto flex h-5 min-w-0 items-center gap-1.5">
+          {showStage && !inColumn && status === null ? (
             <span
               data-post-card-stage=""
               className="inline-flex shrink-0 items-center gap-1.5 text-xs text-fg-2"
@@ -316,13 +337,32 @@ export function PostCard({
               {stageLabel(stage)}
             </span>
           ) : null}
-          <span className="inline-flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-md text-fg-3">
-            {formatIcon(formatToken(post.format), 13)}
-          </span>
-          {post.target_date !== null ? (
-            <span data-post-card-due="" className="ml-auto truncate text-xs tabular-nums text-fg-3">
-              {dueLabel(post.target_date, timeZone, now ?? new Date())}
+          {due !== null ? (
+            <span
+              data-post-card-due={due.overdue ? 'overdue' : ''}
+              className={cn(
+                'min-w-0 truncate whitespace-nowrap text-xs tabular-nums',
+                due.overdue ? 'text-bad' : 'text-fg-3',
+              )}
+            >
+              {due.text}
             </span>
+          ) : null}
+          {canMove && onMove !== undefined ? (
+            // Above the Open post overlay (z-10) so a tap moves, not opens.
+            // Pointer down stops here so the feed's long-press never arms under
+            // it. The negative margins keep the 44px target from growing the row.
+            <button
+              type="button"
+              aria-label={`Move post ${post.title}`}
+              data-post-card-move=""
+              draggable={false}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => onMove(post)}
+              className="relative z-10 -my-3 -mr-3 ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 transition-colors duration-fast ease-enter hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <MoreIcon />
+            </button>
           ) : null}
         </div>
       </div>

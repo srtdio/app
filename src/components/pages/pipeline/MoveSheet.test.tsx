@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { MoveSheetView } from '@/components/pages/pipeline/MoveSheet';
-import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import { ApproveConfirm } from '@/components/ui/ApproveConfirm';
+import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
+import { Sheet } from '@/components/ui/Sheet';
 import {
   GATE_IDLE,
   createApproveGate,
   type GateState,
+  type MoveOptions,
 } from '@/components/pages/pipeline/approve-gate';
 import { STAGE_TRANSITIONS, canTransition } from '@srtdio/posts';
 import type { PipelinePost, Stage } from '@srtdio/posts';
@@ -42,14 +44,16 @@ function makePost(stage: Stage): PipelinePost {
   };
 }
 
+type Move = (postId: string, toStage: Stage, options?: MoveOptions) => void;
+
 /** A real gate over a local state, with a spy as the page's move handler. */
 function harness(): {
   gate: ReturnType<typeof createApproveGate>;
-  move: ReturnType<typeof vi.fn<(postId: string, toStage: Stage) => void>>;
+  move: ReturnType<typeof vi.fn<Move>>;
   state: () => GateState;
 } {
   let state = GATE_IDLE;
-  const move = vi.fn<(postId: string, toStage: Stage) => void>();
+  const move = vi.fn<Move>();
   const gate = createApproveGate({
     move,
     read: () => state,
@@ -74,6 +78,22 @@ function view(
 
 function isElement(node: ReactNode): node is ReactElement {
   return typeof node === 'object' && node !== null && 'props' in node;
+}
+
+/** The move sheet's own Sheet inside the view's fragment (the on-behalf sheet sits beside it). */
+function sheetOf(tree: ReactElement | null): ReactElement {
+  const all: ReactElement[] = [];
+  collect(tree, all);
+  const sheet = all.find((el) => el.type === Sheet);
+  expect(sheet).toBeDefined();
+  return sheet!;
+}
+
+/** The on-behalf sheet beside the move sheet, if this role gets one. */
+function onBehalfOf(tree: ReactElement | null): ReactElement | undefined {
+  const all: ReactElement[] = [];
+  collect(tree, all);
+  return all.find((el) => el.type === OnBehalfApproveSheet);
 }
 
 function collect(node: ReactNode, found: ReactElement[]): void {
@@ -189,13 +209,18 @@ describe('MoveSheet', () => {
 
 type ConfirmProps = Parameters<typeof ApproveConfirm>[0];
 
-function render(h: ReturnType<typeof harness>, post: PipelinePost, busy = false): ReactElement {
+function render(
+  h: ReturnType<typeof harness>,
+  post: PipelinePost,
+  busy = false,
+  role: string | null = 'client',
+): ReactElement {
   const tree = MoveSheetView({
     open: true,
     post,
     onClose: () => {},
     busy,
-    ...view(h),
+    ...view(h, role),
     targetDate: post.target_date === null ? '' : 'Oct 2',
   });
   expect(tree).not.toBeNull();
@@ -213,10 +238,12 @@ function click(el: ReactElement | undefined): void {
   (el?.props as { onClick: () => void }).onClick();
 }
 
-/** The footer's approve confirm props, or null when the footer is the Cancel button. */
+/** The footer's approve confirm props, or null when the sheet has no footer (X only). */
 function confirmOf(tree: ReactElement): ConfirmProps | null {
-  const footer = (tree.props as { footer: ReactElement }).footer;
-  return footer.type === ApproveConfirm ? (footer.props as ConfirmProps) : null;
+  const footer = (sheetOf(tree).props as { footer?: ReactElement }).footer;
+  return footer !== undefined && footer.type === ApproveConfirm
+    ? (footer.props as ConfirmProps)
+    : null;
 }
 
 /** Every text node the confirm block renders. */
@@ -228,7 +255,7 @@ function confirmText(props: ConfirmProps): string[] {
     .filter((child): child is string => typeof child === 'string');
 }
 
-describe('MoveSheet approve confirm', () => {
+describe('MoveSheet approve confirm (client)', () => {
   it('T1: picking Approved opens the confirm and does not move', () => {
     const h = harness();
     click(row(render(h, makePost('review')), 'approved'));
@@ -239,18 +266,28 @@ describe('MoveSheet approve confirm', () => {
     expect(row(tree, 'rejected')).toBeUndefined();
   });
 
-  it('T2: Back, Cancel, backdrop and Escape (Sheet onClose) send nothing', () => {
+  it('T2: Back, the X, backdrop and Escape (Sheet onClose) send nothing', () => {
     const h = harness();
     const onClose = vi.fn();
     click(row(render(h, makePost('review')), 'approved'));
-    const tree = MoveSheetView({ open: true, post: makePost('review'), onClose, ...view(h) });
+    const tree = MoveSheetView({
+      open: true,
+      post: makePost('review'),
+      onClose,
+      ...view(h, 'client'),
+    });
     confirmOf(tree as ReactElement)?.onBack();
     expect(h.state()).toEqual(GATE_IDLE);
     expect(confirmOf(render(h, makePost('review')))).toBeNull();
-    // Cancel, backdrop and Escape all route to the Sheet's onClose: the page's close.
+    // The X, backdrop and Escape all route to the Sheet's onClose: the page's close.
     click(row(render(h, makePost('review')), 'approved'));
-    const open = MoveSheetView({ open: true, post: makePost('review'), onClose, ...view(h) });
-    (open as ReactElement).props.onClose();
+    const open = MoveSheetView({
+      open: true,
+      post: makePost('review'),
+      onClose,
+      ...view(h, 'client'),
+    });
+    (sheetOf(open).props as { onClose: () => void }).onClose();
     expect(onClose).toHaveBeenCalledOnce();
     expect(h.move).not.toHaveBeenCalled();
   });
@@ -279,24 +316,27 @@ describe('MoveSheet approve confirm', () => {
   it('T5: Rejected and Parked move at once with no confirm', () => {
     for (const stage of ['rejected', 'parked'] as const) {
       const h = harness();
-      const tree = render(h, makePost('review'));
+      const tree = render(h, makePost('review'), false, 'agency');
       click(row(tree, stage));
       expect(h.move).toHaveBeenCalledWith('p1', stage);
       expect(confirmOf(render(h, makePost('review')))).toBeNull();
     }
   });
 
-  it('T6: the confirm names the post title and the target date when set, and omits slides', () => {
+  it('T6: the confirm asks once with the target date, never repeats the header title, omits slides', () => {
     const h = harness();
     const dated = { ...makePost('review'), target_date: '2026-10-02T06:30:00Z' };
     click(row(render(h, dated), 'approved'));
     const withDate = confirmOf(render(h, dated));
-    expect(withDate).toMatchObject({ postTitle: 'A post', mediaCount: null, targetDate: 'Oct 2' });
-    expect(confirmText(withDate as ConfirmProps)).toContain('Approve A post, for Oct 2?');
+    expect(withDate).toMatchObject({ postTitle: null, mediaCount: null, targetDate: 'Oct 2' });
+    expect(confirmText(withDate as ConfirmProps)).toContain('Approve this post, for Oct 2?');
+    expect(confirmText(withDate as ConfirmProps).join(' ')).not.toContain('A post');
     expect(confirmText(withDate as ConfirmProps).join(' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
     const undated = confirmOf(render(h, makePost('review')));
     expect(undated?.targetDate).toBe('');
-    expect(confirmText(undated as ConfirmProps)).toContain('Approve A post?');
+    expect(confirmText(undated as ConfirmProps)).toContain('Approve this post?');
+    // The title stays in the header.
+    expect((sheetOf(render(h, dated)).props as { title: string }).title).toBe('A post');
   });
 });
 
@@ -324,24 +364,79 @@ describe('MoveSheet targets per role', () => {
     ]);
   });
 
-  it('agency approve confirm carries the on-behalf line; client confirm does not', () => {
-    for (const [role, expected] of [
-      ['agency', true],
-      ['client', false],
-    ] as [string, boolean][]) {
-      const h = harness();
-      h.gate.request('p1', 'approved');
-      const tree = MoveSheetView({
-        open: true,
-        post: makePost('review'),
-        onClose: () => {},
-        ...view(h, role),
-      });
-      const all: ReactElement[] = [];
-      collect(tree, all);
-      const texts = all.map((el) => (el.props as { children?: unknown }).children);
-      expect(texts.includes(onBehalfConfirmLine(null))).toBe(expected);
-    }
+  it('agency Approve on their behalf opens the on-behalf sheet; a client keeps the plain confirm', () => {
+    const agency = harness();
+    agency.gate.request('p1', 'approved');
+    const agencyTree = MoveSheetView({
+      open: true,
+      post: makePost('review'),
+      onClose: () => {},
+      ...view(agency, 'agency'),
+      brand: 'Zomato',
+      approvers: [{ userId: 'u-client', name: 'Meera Shah' }],
+    });
+    const behalf = onBehalfOf(agencyTree);
+    expect(behalf).toBeDefined();
+    expect(behalf!.props).toMatchObject({
+      open: true,
+      brand: 'Zomato',
+      approvers: [{ userId: 'u-client', name: 'Meera Shah' }],
+    });
+    // The move sheet steps aside while the on-behalf sheet is up, with no plain confirm.
+    expect((sheetOf(agencyTree).props as { open: boolean }).open).toBe(false);
+    expect(confirmOf(agencyTree!)).toBeNull();
+    // No on-behalf line anywhere: the picker replaces it.
+    const all: ReactElement[] = [];
+    collect(agencyTree, all);
+    expect(all.some((el) => 'data-approve-on-behalf' in (el.props as object))).toBe(false);
+
+    const client = harness();
+    client.gate.request('p1', 'approved');
+    const clientTree = MoveSheetView({
+      open: true,
+      post: makePost('review'),
+      onClose: () => {},
+      ...view(client, 'client'),
+    });
+    expect(onBehalfOf(clientTree)).toBeUndefined();
+    expect(confirmOf(clientTree!)).not.toBeNull();
+  });
+
+  it('the on-behalf Approve moves once with the picked approver; Cancel sends nothing', () => {
+    const h = harness();
+    h.gate.request('p1', 'approved');
+    const tree = MoveSheetView({
+      open: true,
+      post: makePost('review'),
+      onClose: () => {},
+      ...view(h, 'agency'),
+      approvers: [{ userId: 'u-client', name: 'Meera Shah' }],
+    });
+    const props = onBehalfOf(tree)!.props as {
+      onCancel: () => void;
+      onConfirm: (id: string | undefined) => void;
+    };
+    props.onConfirm('u-client');
+    props.onConfirm('u-client');
+    expect(h.move).toHaveBeenCalledOnce();
+    expect(h.move).toHaveBeenCalledWith('p1', 'approved', { onBehalfOf: 'u-client' });
+
+    const cancelled = harness();
+    cancelled.gate.request('p1', 'approved');
+    const again = MoveSheetView({
+      open: true,
+      post: makePost('review'),
+      onClose: () => {},
+      ...view(cancelled, 'agency'),
+    });
+    (onBehalfOf(again)!.props as { onCancel: () => void }).onCancel();
+    expect(cancelled.state()).toEqual(GATE_IDLE);
+    expect(cancelled.move).not.toHaveBeenCalled();
+  });
+
+  it('Parked and Rejected offer "Send for review"', () => {
+    expect(rows('parked', 'agency')).toEqual([{ to: 'review', label: 'Send for review' }]);
+    expect(rows('rejected', 'agency').map((r) => r.label)).toEqual(['Send for review']);
   });
 });
 
@@ -368,6 +463,17 @@ describe('W4 fix 9 (revised): MoveSheet has no blocked rows and is titled by the
 
   it('the sheet title is the post title, not "Move post"', () => {
     const tree = sheet('review');
-    expect((tree.props as { title: string }).title).toBe('A very long post title that should wrap');
+    expect((sheetOf(tree).props as { title: string }).title).toBe(
+      'A very long post title that should wrap',
+    );
+  });
+
+  it('closes with the X only: no footer and no Cancel button', () => {
+    const tree = sheet('review');
+    expect((sheetOf(tree).props as { footer?: unknown }).footer).toBeUndefined();
+    const all: ReactElement[] = [];
+    collect(tree, all);
+    const texts = all.map((el) => (el.props as { children?: unknown }).children);
+    expect(texts).not.toContain('Cancel');
   });
 });

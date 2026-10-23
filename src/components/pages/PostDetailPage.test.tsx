@@ -21,7 +21,7 @@ vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
 
 import { PcsApproveConfirm, PostDetailPage } from '@/components/pages/PostDetailPage';
 import { PostDecisionRow } from '@/components/pages/pcs/PostDecisionBar';
-import { onBehalfConfirmLine, visibleStageActions } from '@/components/pages/pcs/stage-actions';
+import { visibleStageActions } from '@/components/pages/pcs/stage-actions';
 import {
   GATE_IDLE,
   createApproveGate,
@@ -97,7 +97,6 @@ function sheet(
     targetDate: 'Oct 2',
     busy: false,
     error: null,
-    onBehalf: false,
     ...over,
   });
 }
@@ -197,27 +196,28 @@ describe('PCS approve confirm', () => {
     expect((sheet(h).props as { title: string }).title).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
-  it('T7: agency approves with the same two-step confirm plus the on-behalf line', () => {
+  it('T7 / spec B8: the question names the post once; no title line above it', () => {
     const h = harness();
-    press(rail(h, 'review', 'agency'), 'Approve');
-    expect(h.move).not.toHaveBeenCalled();
-    const el = sheet(h, { onBehalf: true });
+    press(rail(h, 'review', 'client'), 'Approve');
+    const el = sheet(h);
     expect((el.props as { open: boolean }).open).toBe(true);
     const all: ReactElement[] = [];
     collect((el.props as { children: ReactNode }).children, all);
     const texts = all.map((n) => (n.props as { children?: unknown }).children);
-    expect(texts).toContain(onBehalfConfirmLine(null));
+    expect(texts).not.toContain('Diwali teaser');
+    expect(question(confirmOf(el))).toContain('Diwali teaser');
+    // The guided tour key rides the Approve button itself.
+    expect(confirmOf(el).induction).toBeDefined();
     confirmOf(el).onConfirm();
     expect(h.move).toHaveBeenCalledWith('p1', 'approved');
   });
 
-  it('T8: the client confirm carries no on-behalf line', () => {
+  it('T8: the approve confirm carries no on-behalf line (that is its own sheet now)', () => {
     const h = harness();
     press(rail(h, 'review', 'client'), 'Approve');
     const all: ReactElement[] = [];
     collect((sheet(h).props as { children: ReactNode }).children, all);
-    const texts = all.map((n) => (n.props as { children?: unknown }).children);
-    expect(texts).not.toContain(onBehalfConfirmLine(null));
+    expect(all).toHaveLength(0);
   });
 
   it('T9: agency Reject from review and from approved moves at once', () => {

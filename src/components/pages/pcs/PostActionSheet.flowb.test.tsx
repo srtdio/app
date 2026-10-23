@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Flow B 31 / 38 on the post's ⋯ sheet: the creator's stage moves ("Approve
 // for {brand}", Reject, Park) lead the list and hand off to the page after the
-// sheet closes; the delete row and its confirm say the same thing.
+// sheet closes; Delete post deletes at once (spec B7: no confirm, the page's
+// Undo strip is the safety net).
 
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
@@ -36,7 +37,11 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function render(moveRows: PostMoveRow[], onClose = vi.fn()): Promise<void> {
+async function render(
+  moveRows: PostMoveRow[],
+  onClose = vi.fn(),
+  onDeletePost: () => Promise<void> = async () => {},
+): Promise<void> {
   await act(async () => {
     root?.render(
       <PostActionSheet
@@ -55,8 +60,7 @@ async function render(moveRows: PostMoveRow[], onClose = vi.fn()): Promise<void>
         postNumber={101}
         onToast={() => {}}
         canDelete
-        onDeletePost={async () => {}}
-        readPlans={async () => ({ ok: true, data: [] })}
+        onDeletePost={onDeletePost}
         moveRows={moveRows}
       />,
     );
@@ -110,10 +114,12 @@ describe('31. Approve on their behalf lives in the ⋯ sheet', () => {
   });
 });
 
-describe('38. delete says the same thing on the row and in the confirm', () => {
-  it('"Moves to Recently deleted. You can restore it there." on both', async () => {
+describe('B7. Delete post deletes at once, no confirm', () => {
+  it('the row keeps its honest line; a tap closes the sheet and hands off once', async () => {
     expect(DELETE_CONFIRM_BASE).toBe('Moves to Recently deleted. You can restore it there.');
-    await render([]);
+    const onClose = vi.fn();
+    const onDeletePost = vi.fn(async () => {});
+    await render([], onClose, onDeletePost);
     const row = rowNamed('Delete post');
     expect(row?.textContent).toContain(DELETE_CONFIRM_BASE);
     expect(document.body.textContent).not.toContain('cannot be undone');
@@ -121,8 +127,14 @@ describe('38. delete says the same thing on the row and in the confirm', () => {
       row?.click();
       await new Promise((r) => setTimeout(r, 30));
     });
-    expect(document.querySelector('[data-post-delete-text]')?.textContent).toBe(
-      DELETE_CONFIRM_BASE,
-    );
+    expect(onDeletePost).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalled();
+    // No confirm view: no second "Delete post" dialog, no confirm copy.
+    expect(document.querySelector('[data-post-delete-text]')).toBeNull();
+    expect(
+      [...document.querySelectorAll('[role="dialog"]')].some((d) =>
+        d.querySelector('h2')?.textContent?.includes('Delete post'),
+      ),
+    ).toBe(false);
   });
 });

@@ -1,15 +1,21 @@
 // The approve gate for the pipeline's two move surfaces (the mobile move sheet
 // and the desktop board drop). A move into 'approved' parks the post until the
 // user confirms; every other target passes straight through to the page's move
-// handler, unchanged. Confirm fires the same handler once with the same args; a
-// second tap before the move settles is dropped. The controller is plain
+// handler, unchanged. Confirm fires the same handler once with the same args
+// (plus the on-behalf approver when one was picked); a second tap before the
+// move settles is dropped. The controller is plain
 // functions over an injected read/write so it is unit tested without a DOM;
 // useApproveGate binds it to React with a ref for the synchronous guard.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Stage } from '@srtdio/posts';
 
-export type MoveFn = (postId: string, toStage: Stage) => void;
+/** What an approve confirm adds to the move: the client approver an agency-side role approves for. */
+export interface MoveOptions {
+  onBehalfOf?: string;
+}
+
+export type MoveFn = (postId: string, toStage: Stage, options?: MoveOptions) => void;
 
 /** The post waiting on a confirm (null: none), and whether its approve was sent. */
 export interface GateState {
@@ -22,8 +28,13 @@ export const GATE_IDLE: GateState = { pendingId: null, sent: false };
 export interface ApproveGate {
   /** A move request: approve opens the confirm; any other target moves now. */
   request: MoveFn;
-  /** Send the pending approve once. A no-op with nothing pending or already sent. */
-  confirm: () => void;
+  /**
+   * Send the pending approve once, carrying the picked approver when an
+   * agency-side role approves on their behalf. A no-op with nothing pending or
+   * already sent. Anything but a non-empty string (a click event passed straight
+   * through as onClick) reads as no approver.
+   */
+  confirm: (onBehalfOf?: unknown) => void;
   /** Cancel, backdrop, Escape, Back: forget the pending approve, send nothing. */
   cancel: () => void;
   /** The move settled without closing (a failure): allow one more confirm. */
@@ -43,10 +54,14 @@ export function createApproveGate(deps: {
       }
       deps.write({ pendingId: postId, sent: false });
     },
-    confirm: () => {
+    confirm: (onBehalfOf) => {
       const { pendingId, sent } = deps.read();
       if (pendingId === null || sent) return;
       deps.write({ pendingId, sent: true });
+      if (typeof onBehalfOf === 'string' && onBehalfOf !== '') {
+        deps.move(pendingId, 'approved', { onBehalfOf });
+        return;
+      }
       deps.move(pendingId, 'approved');
     },
     cancel: () => {
@@ -70,7 +85,10 @@ export function useApproveGate(move: MoveFn): { gate: ApproveGate; state: GateSt
   const gate = useMemo(
     () =>
       createApproveGate({
-        move: (postId, toStage) => moveRef.current(postId, toStage),
+        move: (postId, toStage, options) =>
+          options !== undefined
+            ? moveRef.current(postId, toStage, options)
+            : moveRef.current(postId, toStage),
         read: () => stateRef.current,
         write: (next) => {
           stateRef.current = next;

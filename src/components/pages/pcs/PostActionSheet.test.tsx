@@ -1,8 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { Result } from '@srtdio/rpc';
-import type { PostPlanRef } from '@/lib/chat/plans';
 
 // The unit environment is node (no DOM/clipboard), so these specs exercise the
 // pure link-decision helper that handleCopyLink delegates to: it is what decides
@@ -19,7 +17,6 @@ let postCopyLink: (
   postId: string,
 ) => string;
 
-let deleteConfirmText: (plans: Result<PostPlanRef[]> | null) => string;
 let postActionLabels: (opts: {
   openInPipeline: boolean;
   download: boolean;
@@ -28,8 +25,7 @@ let postActionLabels: (opts: {
 
 beforeAll(async () => {
   (globalThis as { self?: unknown }).self = globalThis;
-  ({ postCopyLink, deleteConfirmText, postActionLabels } =
-    await import('@/components/pages/pcs/PostActionSheet'));
+  ({ postCopyLink, postActionLabels } = await import('@/components/pages/pcs/PostActionSheet'));
 });
 
 describe('postCopyLink', () => {
@@ -102,30 +98,14 @@ describe('post actions (W9)', () => {
   });
 });
 
-describe('delete confirm names the plans (W10)', () => {
-  const plan = (title: string): PostPlanRef => ({ planId: title, title });
-  it('0 / 1 / 2+ plans, and the base copy while reading or on failure', () => {
-    const base = 'Moves to Recently deleted. You can restore it there.';
-    expect(deleteConfirmText(null)).toBe(base);
-    expect(deleteConfirmText({ ok: true, data: [] })).toBe(base);
-    expect(deleteConfirmText({ ok: true, data: [plan('Week 42')] })).toBe(
-      `${base} It's in Week 42 and will leave that plan.`,
-    );
-    expect(deleteConfirmText({ ok: true, data: [plan('Week 42'), plan('B'), plan('C')] })).toBe(
-      `${base} It's in Week 42 and 2 other plans and will leave them.`,
-    );
-    expect(
-      deleteConfirmText({ ok: false, error: { code: 'unknown', message: 'read timed out' } }),
-    ).toBe(base);
-  });
-
-  it('reads once per confirm opening (no per-plan reads)', () => {
+describe('Delete post has no confirm (spec B7)', () => {
+  it('no confirm view, no plans read; the row hands off to the page at once', () => {
     const src = readFileSync(
       fileURLToPath(new URL('./PostActionSheet.tsx', import.meta.url)),
       'utf8',
     );
-    expect(src.match(/readPostPlans\(/g)).toHaveLength(1);
-    expect(src).toContain("const confirming = open && view === 'confirm-delete';");
-    expect(src).toContain('}, [confirming, postId]);');
+    expect(src).not.toContain('confirm-delete');
+    expect(src).not.toContain('readPostPlans(');
+    expect(src).toContain('onClick={handleDelete}');
   });
 });

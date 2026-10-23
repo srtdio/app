@@ -16,6 +16,11 @@ export interface CardViewer {
   role: string | null;
   /** The workspace's active approvers' first names, in member order. */
   approverFirstNames: readonly string[];
+  /**
+   * The role read is still in flight: a review card reserves its status line's
+   * height so the card does not grow when the line lands.
+   */
+  pending?: boolean;
 }
 
 /** A review post's status line: the approver's turn, or who the creator is waiting on. */
@@ -44,6 +49,11 @@ export function reviewStatus(
   const only = viewer.approverFirstNames.length === 1 ? viewer.approverFirstNames[0] : undefined;
   const who = only !== undefined && only !== '' ? only : 'approvers';
   return { tone: 'with', text: `With ${who} · ${formatAgo(stageEnteredAt, now)}` };
+}
+
+/** Whether a review card holds its status line's height while the role loads. */
+export function reservesStatusLine(stage: Stage, viewer: CardViewer | undefined): boolean {
+  return stage === 'review' && viewer?.pending === true;
 }
 
 /** Whether this viewer may make any move at all from `stage` (the card's ⋯ shows only then). */

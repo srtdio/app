@@ -45,6 +45,8 @@ export interface ApproveConfirmProps {
   busy: boolean;
   onBack: () => void;
   onConfirm: () => void;
+  /** The guided-tour key set on the Approve button (data-induction); absent sets none. */
+  induction?: string;
 }
 
 /** "Approve <Title>, all N slides, for Oct 2?", its consequence, then Back and Approve. */
@@ -76,6 +78,7 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
         <button
           type="button"
           data-approve-confirm-button=""
+          {...(props.induction !== undefined ? { 'data-induction': props.induction } : {})}
           disabled={props.busy}
           onClick={props.onConfirm}
           className={cn(ACTION_GOOD, 'flex-1')}

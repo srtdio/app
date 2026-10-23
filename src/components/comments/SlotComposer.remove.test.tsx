@@ -34,13 +34,13 @@ describe('SlotComposer removable slots', () => {
   it('gives every slot after the first a remove X and drops that slot', () => {
     const onSubmit = vi.fn(async () => ({ ok: true as const }));
     act(() => root?.render(<SlotComposer onSubmit={onSubmit} canAttach={false} />));
-    act(() => button('Add point')?.click());
-    act(() => button('Add point')?.click());
+    act(() => button('Add checkpoint')?.click());
+    act(() => button('Add checkpoint')?.click());
     expect(host?.querySelectorAll('textarea')).toHaveLength(3);
-    expect(button('Remove point 1')).toBeUndefined();
-    expect(button('Remove point 2')).toBeDefined();
+    expect(button('Remove checkpoint 1')).toBeUndefined();
+    expect(button('Remove checkpoint 2')).toBeDefined();
 
-    act(() => button('Remove point 2')?.click());
+    act(() => button('Remove checkpoint 2')?.click());
     expect(host?.querySelectorAll('textarea')).toHaveLength(2);
   });
 });

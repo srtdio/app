@@ -40,6 +40,20 @@ interface PipelineDateControlProps {
   weekStartDay: number;
 }
 
+/**
+ * The Pipeline's sort labels. Both update orders say what they sort by (the
+ * post's last update), not just a direction.
+ */
+const SORT_LABEL: Record<PostSort, string> = {
+  updated: 'Recently updated',
+  oldest: 'Least recently updated',
+  target: 'Due soonest first',
+};
+
+/** The sort menu rows, in menu order, with the Pipeline's labels. */
+export const PIPELINE_SORT_OPTIONS: readonly { value: PostSort; label: string }[] =
+  POST_SORT_OPTIONS.map((option) => ({ value: option.value, label: SORT_LABEL[option.value] }));
+
 const MONTHS_SHORT = [
   'Jan',
   'Feb',
@@ -109,7 +123,7 @@ export function sortControlBody(props: {
 }): ReactElement {
   return (
     <div role="menu" aria-label="Sort" className="flex flex-col">
-      {POST_SORT_OPTIONS.map((option) =>
+      {PIPELINE_SORT_OPTIONS.map((option) =>
         radioRow(option.value, option.label, option.value === props.order, () =>
           props.onOrderChange(option.value),
         ),
@@ -196,7 +210,7 @@ export function PipelineSortControl({
 }: PipelineSortControlProps): ReactElement {
   const [open, setOpen] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const activeOrder = POST_SORT_OPTIONS.find((option) => option.value === order);
+  const activeOrder = PIPELINE_SORT_OPTIONS.find((option) => option.value === order);
   const trigger = (
     <button
       type="button"

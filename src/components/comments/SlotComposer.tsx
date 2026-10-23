@@ -39,7 +39,7 @@ export const MAX_POINTS = 20;
 export const COUNTER_FROM = 35;
 /** A point is 1..50 words; over blocks send. */
 export const MAX_WORDS = 50;
-export const OVER_LIMIT_MESSAGE = 'Over 50 words. Split it into two points.';
+export const OVER_LIMIT_MESSAGE = 'Over 50 words. Split it into two checkpoints.';
 
 /**
  * Word count exactly as the server counts it: regexp_split_to_array(btrim(body),
@@ -90,9 +90,9 @@ export function buildPoints(
     );
 }
 
-/** The send button label: "Send N points" (singular at one). */
+/** The send button label: "Send N checkpoints" (singular at one). */
 export function sendLabel(count: number): string {
-  return `Send ${count} ${count === 1 ? 'point' : 'points'}`;
+  return `Send ${count} ${count === 1 ? 'checkpoint' : 'checkpoints'}`;
 }
 
 type SubmitResult = { ok: true } | { ok: false; error: string };
@@ -313,8 +313,8 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                 <Textarea
                   autoGrow
                   rows={1}
-                  aria-label={`Point ${index + 1}`}
-                  placeholder={index === 0 ? 'Add a point' : 'Add another point'}
+                  aria-label={`Checkpoint ${index + 1}`}
+                  placeholder={index === 0 ? 'Add a checkpoint' : 'Add another checkpoint'}
                   value={slot.body}
                   disabled={submitting}
                   ref={(el) => {
@@ -338,7 +338,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                 />
                 {attachEnabled ? (
                   <IconButton
-                    label={`Attach a file to point ${index + 1}`}
+                    label={`Attach a file to checkpoint ${index + 1}`}
                     disabled={submitting}
                     onClick={() => {
                       attachSlotId.current = slot.id;
@@ -350,7 +350,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                 ) : null}
                 {index > 0 ? (
                   <IconButton
-                    label={`Remove point ${index + 1}`}
+                    label={`Remove checkpoint ${index + 1}`}
                     disabled={submitting}
                     onClick={() => removeSlot(slot.id)}
                   >
@@ -398,7 +398,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           disabled={submitting || slots.length >= MAX_POINTS}
           onClick={addSlot}
         >
-          Add point
+          Add checkpoint
         </Button>
         <Button
           size="lg"

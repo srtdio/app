@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 describe('CheckpointStrip (fix 32)', () => {
-  it('shows chips only: no settled counter, no banner, token ink, card surface', async () => {
+  it('chips plus "{n} of {m} resolved": no settled counter, no banner, token ink, card surface', async () => {
     rows.current = [
       { id: 'a', ledger_seq: 1, resolved_at: null, accepted_at: null },
       { id: 'b', ledger_seq: 2, resolved_at: 't', accepted_at: null },
@@ -81,6 +81,8 @@ describe('CheckpointStrip (fix 32)', () => {
     expect(strip).not.toBeNull();
     const text = host?.textContent ?? '';
     expect(text).not.toContain('2/3');
+    // The one progress line beside the chips: "{n} of {m} resolved".
+    expect(host?.querySelector('[data-checkpoint-progress]')?.textContent).toBe('2 of 3 resolved');
     expect(text).not.toMatch(/settled|ready for your check|Confirmed/);
     expect(host?.innerHTML ?? '').not.toContain('settled');
 

@@ -12,6 +12,7 @@ import {
   IconGrip,
   IconHistory,
   IconImagePlus,
+  IconLock,
   IconMore,
   IconPin,
   IconPlus,
@@ -563,6 +564,8 @@ const TOOL_BUTTON =
 export interface GalleryToolsModel {
   /** Creator on draft / review / parked / rejected: Add, Replace, Reorder show. */
   canEdit: boolean;
+  /** Spec B4: a creator on an approved post sees a lock in place of the tools. */
+  locked?: boolean;
   itemCount: number;
   /** The current version number; the v{n} button hides when null. */
   versionNumber: number | null;
@@ -583,10 +586,20 @@ export interface GalleryToolsModel {
  */
 export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
   const { canEdit, itemCount, versionNumber, saving, error } = model;
-  if (!canEdit && versionNumber === null) return null;
+  const locked = !canEdit && model.locked === true;
+  if (!canEdit && !locked && versionNumber === null) return null;
   return (
     <div data-gallery-tools="" className="mt-2 flex flex-col gap-1">
       <div className="flex flex-wrap items-center gap-2">
+        {locked ? (
+          <span
+            aria-hidden
+            data-gallery-lock=""
+            className="inline-flex h-11 w-11 items-center justify-center text-fg-3"
+          >
+            <IconLock size={16} />
+          </span>
+        ) : null}
         {canEdit ? (
           <>
             <button
@@ -1242,6 +1255,8 @@ const EMPTY_EDIT: Pick<PostGalleryProps, 'onAddAfter' | 'onRemove'> = {};
 /** The page's side of the #26 tools row. */
 export interface GalleryTools {
   canEdit: boolean;
+  /** Spec B4: an approved post, seen by a creator: the tools row shows a lock. */
+  locked?: boolean;
   versionNumber: number | null;
   /** The inline line from the last failed gallery write, or null. */
   error: string | null;
@@ -1458,6 +1473,7 @@ export function PostGallery({
     tools !== undefined && columns === 4
       ? galleryToolsRow({
           canEdit: tools.canEdit,
+          locked: tools.locked === true,
           itemCount: items.length,
           versionNumber: tools.versionNumber,
           saving,

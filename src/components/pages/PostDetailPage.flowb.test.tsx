@@ -347,13 +347,28 @@ describe('28. visible details row', () => {
     expect(rowText).toContain('Monsoon edit');
     expect(rowText).toContain('Instagram · Carousel');
     expect(rowText).toContain('Edit');
-    expect(row?.tagName).toBe('BUTTON');
+    // The row holds the brief link, so it is a plain line with its own Edit.
+    expect(row?.tagName).toBe('DIV');
+    const edit = row?.querySelector<HTMLButtonElement>('[data-post-details-edit]');
+    expect(edit?.textContent?.trim()).toBe('Edit');
 
     await act(async () => {
-      row?.click();
+      edit?.click();
       await new Promise((r) => setTimeout(r, 30));
     });
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Post details');
+  });
+
+  it('B2: owner · Due · "From brief: {title}" as a link to the brief, in that order', async () => {
+    await render();
+    const row = document.querySelector<HTMLElement>('[data-post-details]');
+    const brief = row?.querySelector<HTMLAnchorElement>('a[data-detail="brief"]');
+    expect(brief?.textContent).toBe('From brief: Monsoon edit');
+    expect(brief?.getAttribute('href')).toBe('/briefs/br1');
+    const owner = row?.querySelector('[data-detail="owner"]');
+    const due = row?.querySelector('[data-detail="due"]');
+    expect(owner!.compareDocumentPosition(due!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(due!.compareDocumentPosition(brief!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('omits the due date when there is none; approvers get no Edit', async () => {

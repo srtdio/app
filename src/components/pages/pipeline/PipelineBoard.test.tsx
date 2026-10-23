@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { DragEvent, ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,17 +8,23 @@ import {
   BoardApproveConfirm,
   PipelineBoardView,
   pendingPost,
+  type PipelineBoardProps,
 } from '@/components/pages/pipeline/PipelineBoard';
 import {
   GATE_IDLE,
   createApproveGate,
   type GateState,
+  type MoveOptions,
 } from '@/components/pages/pipeline/approve-gate';
 import { ApproveConfirm } from '@/components/ui/ApproveConfirm';
-import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { PostCard } from '@/components/pages/PostCard';
-import { BOARD_CAP, emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
+import {
+  APPROVE_ROLE_BLOCKED,
+  BOARD_CAP,
+  emptyStageMessage,
+  moveBlockedReason,
+} from '@/components/pages/pipeline/stage-meta';
 import { groupByStage } from '@/lib/post-board';
 import { STAGE_TRANSITIONS } from '@srtdio/posts';
 import type { PipelinePost, Stage } from '@srtdio/posts';
@@ -305,7 +313,7 @@ describe('PipelineBoard single-stage grid', () => {
     expect(findAll(tree, (el) => attr(el, 'draggable') === true)).toHaveLength(0);
   });
 
-  it('an empty single-stage view names the stage with emptyStageMessage', () => {
+  it('an empty single-stage view shows the stage line in the shared empty state', () => {
     const tree = PipelineBoardView({
       stages: ['parked'],
       grouped: groupByStage([], STAGES),
@@ -317,8 +325,11 @@ describe('PipelineBoard single-stage grid', () => {
       role: 'agency',
     });
     const markup = renderToStaticMarkup(tree);
-    expect(markup).toContain('Nothing in Parked. Posts land here when moved.');
+    expect(markup).toContain('Posts set aside for later show up here.');
     expect(markup).toContain('data-board-grid');
+    expect(markup).toContain('data-stage-empty="parked"');
+    // No New post without post.create.
+    expect(markup).not.toContain('data-stage-empty-create');
   });
 
   it('All still renders the column layout, not the grid', () => {
@@ -339,13 +350,15 @@ describe('PipelineBoard single-stage grid', () => {
   });
 });
 
+type Move = (postId: string, toStage: Stage, options?: MoveOptions) => void;
+
 function harness(): {
   gate: ReturnType<typeof createApproveGate>;
-  move: ReturnType<typeof vi.fn<(postId: string, toStage: Stage) => void>>;
+  move: ReturnType<typeof vi.fn<Move>>;
   state: () => GateState;
 } {
   let state = GATE_IDLE;
-  const move = vi.fn<(postId: string, toStage: Stage) => void>();
+  const move = vi.fn<Move>();
   const gate = createApproveGate({
     move,
     read: () => state,
@@ -384,14 +397,14 @@ function sheet(h: ReturnType<typeof harness>, posts: PipelinePost[]): ReactEleme
     gate: h.gate,
     gateState: h.state(),
     timeZone: 'UTC',
-    onBehalf: false,
   });
 }
 
+/** The client's confirm sits in the sheet body (no footer of its own). */
 function confirmOf(el: ReactElement | null): ConfirmProps {
-  const footer = (el?.props as { footer: ReactElement }).footer;
-  expect(footer.type).toBe(ApproveConfirm);
-  return footer.props as ConfirmProps;
+  const body = (el?.props as { children: ReactElement }).children;
+  expect(body.type).toBe(ApproveConfirm);
+  return body.props as ConfirmProps;
 }
 
 describe('PipelineBoard approve confirm (drop)', () => {
@@ -444,40 +457,44 @@ describe('PipelineBoard approve confirm (drop)', () => {
     }
   });
 
-  it('T6: the confirm names the post title and the target date when set, never slides', () => {
+  it('T6: the sheet header names the post once; the confirm asks once with the date, never slides', () => {
     const h = harness();
     const dated = { ...review, number: 9, target_date: '2026-10-02T06:30:00Z' };
     drop(board(h, [dated]), 'approved', 'review:p1');
     expect(confirmOf(sheet(h, [dated]))).toMatchObject({
-      postTitle: 'Post p1',
+      postTitle: null,
       mediaCount: null,
       targetDate: '2 Oct',
     });
     expect(confirmOf(sheet(h, [review])).targetDate).toBe('');
-    // The sheet title is the format alone and the confirm never shows a KEY-N code.
     const el = sheet(h, [dated]);
-    expect((el?.props as { title: string }).title).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
-    const html = renderToStaticMarkup((el?.props as { footer: ReactElement }).footer);
-    expect(html).toContain('Approve Post p1, for 2 Oct?');
+    expect((el?.props as { title: string }).title).toBe('Post p1');
+    expect((el?.props as { footer?: unknown }).footer).toBeUndefined();
+    const html = renderToStaticMarkup((el?.props as { children: ReactElement }).children);
+    // The question is asked once and does not repeat the title from the header.
+    expect(html).toContain('Approve this post, for 2 Oct?');
+    expect(html).not.toContain('Post p1');
     expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
-  it('T7: an agency approve confirm adds the on-behalf line; a client one does not', () => {
-    for (const onBehalf of [true, false]) {
-      const h = harness();
-      drop(board(h, [review]), 'approved', 'review:p1');
-      const el = BoardApproveConfirm({
-        post: pendingPost(groupByStage([review], STAGES), h.state().pendingId),
-        gate: h.gate,
-        gateState: h.state(),
-        timeZone: 'UTC',
-        onBehalf,
-      });
-      const html = renderToStaticMarkup(
-        (el?.props as { children: ReactNode }).children as ReactElement,
-      );
-      expect(html.includes(onBehalfConfirmLine(null))).toBe(onBehalf);
-    }
+  it('T7: an on-behalf Approve carries the picked approver into the move', () => {
+    const h = harness();
+    drop(board(h, [review]), 'approved', 'review:p1');
+    expect(h.move).not.toHaveBeenCalled();
+    // OnBehalfApproveSheet's onConfirm, as PipelineBoard wires it for the agency side.
+    h.gate.confirm('u-client');
+    expect(h.move).toHaveBeenCalledOnce();
+    expect(h.move).toHaveBeenCalledWith('p1', 'approved', { onBehalfOf: 'u-client' });
+  });
+
+  it('T8: the board source opens the on-behalf sheet for the agency side, not the on-behalf line', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./PipelineBoard.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toMatch(/<OnBehalfApproveSheet/);
+    expect(src).toMatch(/useWorkspaceApprovers\(workspaceId\)/);
+    expect(src).not.toMatch(/onBehalfConfirmLine/);
   });
 });
 
@@ -502,7 +519,7 @@ describe('W4 board fixes', () => {
     };
     drop('approved', 'draft:p1');
     expect(onMovePost).not.toHaveBeenCalled();
-    expect(onBlockedMove).toHaveBeenCalledWith('Not allowed from Draft');
+    expect(onBlockedMove).toHaveBeenCalledWith('Draft posts can move to Review or Parked.');
     // A drop back onto its own column is silent.
     onBlockedMove.mockClear();
     drop('draft', 'draft:p1');
@@ -542,7 +559,7 @@ describe('W4 board fixes', () => {
     (card.props as { onDragEnd: () => void }).onDragEnd();
   });
 
-  it('fix 1 and 5: every board card gets the Move button handler and, in All, the stage line', () => {
+  it('fix 1 and 5: every board card gets the Move button handler and never repeats its column stage', () => {
     const onOpenMove = vi.fn();
     const columns = PipelineBoardView({
       stages: STAGES,
@@ -558,9 +575,10 @@ describe('W4 board fixes', () => {
     const cards = findAll(columns, (el) => el.type === PostCard);
     expect(cards).toHaveLength(2);
     for (const card of cards) {
-      const props = card.props as { onMove?: unknown; showStage?: boolean };
+      const props = card.props as { onMove?: unknown; showStage?: boolean; inColumn?: boolean };
       expect(props.onMove).toBe(onOpenMove);
-      expect(props.showStage).toBe(true);
+      expect(props.showStage).toBeUndefined();
+      expect(props.inColumn).toBe(true);
     }
     const grid = PipelineBoardView({
       stages: ['review'],
@@ -591,7 +609,7 @@ describe('W4 board fixes', () => {
     );
   });
 
-  it('fix 9: the approve confirm title wraps to two lines', () => {
+  it('fix 9: the client approve confirm names the post in the header only, no title line', () => {
     let state: GateState = GATE_IDLE;
     const gate = createApproveGate({
       move: () => {},
@@ -606,9 +624,105 @@ describe('W4 board fixes', () => {
       gate,
       gateState: state,
       timeZone: 'UTC',
-      onBehalf: false,
     })!;
-    const title = findAll(tree, (el) => 'data-approve-title' in (el.props as object))[0]!;
-    expect((title.props as { className: string }).className).toContain('line-clamp-2');
+    expect((tree.props as { title: string }).title).toBe('Post p1');
+    expect(findAll(tree, (el) => 'data-approve-title' in (el.props as object))).toHaveLength(0);
+  });
+});
+
+describe('E: drag and drop', () => {
+  function columns(
+    role: string | null,
+    posts: PipelinePost[],
+    extra: Partial<PipelineBoardProps> = {},
+  ): ReactElement {
+    return PipelineBoardView({
+      stages: STAGES,
+      grouped: groupByStage(posts, STAGES),
+      cap: BOARD_CAP,
+      cache,
+      presignEnabled: false,
+      onViewAll: () => {},
+      onMovePost: () => {},
+      role,
+      ...extra,
+    });
+  }
+  function draggables(tree: ReactNode): (boolean | undefined)[] {
+    return findAll(tree, (el) =>
+      Boolean((el.props as { 'data-drag-item'?: boolean })['data-drag-item']),
+    ).map((el) => (el.props as { draggable?: boolean }).draggable);
+  }
+
+  it('a blocked drop says where the post can go, for the role', () => {
+    expect(moveBlockedReason('agency', 'draft', 'approved')).toBe(
+      'Draft posts can move to Review or Parked.',
+    );
+    expect(moveBlockedReason('agency', 'parked', 'approved')).toBe(
+      'Parked posts can move to Review.',
+    );
+    expect(moveBlockedReason('agency', 'approved', 'review')).toBe(
+      'Approved posts can move to Parked or Rejected.',
+    );
+    expect(moveBlockedReason('client', 'review', 'parked')).toBe(
+      'Review posts can move to Approved or Rejected.',
+    );
+    // A drop back onto its own column, or a legal one, has no reason.
+    expect(moveBlockedReason('agency', 'draft', 'draft')).toBeNull();
+    expect(moveBlockedReason('agency', 'draft', 'review')).toBeNull();
+  });
+
+  it('a role without approve dropping on Approved: "Only approvers can approve."', () => {
+    expect(APPROVE_ROLE_BLOCKED).toBe('Only approvers can approve.');
+    expect(moveBlockedReason(null, 'review', 'approved')).toBe('Only approvers can approve.');
+    expect(moveBlockedReason(null, 'draft', 'approved')).toBe('Only approvers can approve.');
+  });
+
+  it('a drop on a blocked column calls onBlockedMove with the reason, never the move', () => {
+    const onMovePost = vi.fn();
+    const onBlockedMove = vi.fn();
+    const tree = columns('client', [makePost('p1', 'review')], { onMovePost, onBlockedMove });
+    const col = findAll(tree, (el) => dataStage(el) === 'parked' && 'onDrop' in el.props)[0]!;
+    (col.props as { onDrop: (e: DragEvent<HTMLDivElement>) => void }).onDrop(
+      dropEvent('review:p1'),
+    );
+    expect(onMovePost).not.toHaveBeenCalled();
+    expect(onBlockedMove).toHaveBeenCalledWith('Review posts can move to Approved or Rejected.');
+  });
+
+  it('every legal drop other than Approved moves at once (no confirm in between)', () => {
+    const h = harness();
+    drop(board(h, [makePost('p1', 'draft')]), 'parked', 'draft:p1');
+    expect(h.move).toHaveBeenCalledWith('p1', 'parked');
+    expect(h.state()).toEqual(GATE_IDLE);
+  });
+
+  it('no card is draggable until the role is known', () => {
+    const posts = [makePost('p1', 'draft'), makePost('p2', 'review')];
+    expect(draggables(columns('agency', posts, { roleReady: false }))).toEqual([false, false]);
+    expect(draggables(columns('agency', posts, { roleReady: true }))).toEqual([true, true]);
+  });
+
+  it('a card this role cannot move anywhere is not draggable', () => {
+    // A client has no move from Parked (columns run Review before Parked).
+    const tree = columns('client', [makePost('p1', 'parked'), makePost('p2', 'review')]);
+    expect(draggables(tree)).toEqual([true, false]);
+  });
+
+  it('an empty column shows its one line; post.create adds New post', () => {
+    const lines: Record<Stage, string> = {
+      draft: 'New posts start here.',
+      review: 'Posts sent for review show up here.',
+      approved: 'Approved posts show up here.',
+      parked: 'Posts set aside for later show up here.',
+      rejected: 'Posts sent back for changes show up here.',
+    };
+    for (const stage of STAGES) expect(emptyStageMessage(stage)).toBe(lines[stage]);
+    const plain = renderToStaticMarkup(<>{columns('client', [])}</>);
+    for (const stage of STAGES) expect(plain).toContain(lines[stage]);
+    expect(plain).not.toContain('data-stage-empty-create');
+    const agency = renderToStaticMarkup(<>{columns('agency', [], { canCreate: true })}</>);
+    expect((agency.match(/data-stage-empty-create=""/g) ?? []).length).toBe(STAGES.length);
+    expect(agency).toContain('>New post</button>');
   });
 });

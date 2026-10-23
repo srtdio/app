@@ -162,13 +162,48 @@ async function typeCaption(value: string): Promise<void> {
 }
 
 describe('CreatePostSheet preset', () => {
-  it('hides owner, bucket, origin, brief and the title field', async () => {
+  it('hides owner, bucket, origin and brief; shows an optional Title and the Due date', async () => {
     await renderSheet('instagram', SEND);
     for (const label of ['Owner', 'Bucket', 'Origin', 'Brief']) {
       expect(document.querySelector(`button[aria-label="${label}"]`)).toBeNull();
     }
-    expect(document.querySelector('#post-title')).toBeNull();
-    expect(document.body.textContent).toContain('Target date (optional)');
+    const title = document.querySelector<HTMLInputElement>('#post-title');
+    expect(title).not.toBeNull();
+    expect(title!.getAttribute('placeholder')).toBe('e.g. Monsoon drop, part one');
+    // Optional: no required star.
+    expect(document.querySelector('label[for="post-title"]')?.textContent).toBe('Title (optional)');
+    expect(document.body.textContent).toContain('Due date (optional)');
+    expect(document.body.textContent).not.toContain('Target date');
+  });
+
+  it('a typed title is sent as it is', async () => {
+    await renderSheet('x', SEND);
+    const title = document.querySelector<HTMLInputElement>('#post-title')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => {
+      setter?.call(title, 'Monsoon drop');
+      title.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await typeCaption('Thread opener\nMore');
+    await act(async () => button('Send for review').click());
+    const args = mockPostCreate.mock.calls[0]![1] as { p_payload: Record<string, unknown> };
+    expect(args.p_payload).toMatchObject({ title: 'Monsoon drop' });
+  });
+
+  it('a blank title falls back to the caption first line', async () => {
+    await renderSheet('x', SEND);
+    await typeCaption('Thread opener\nMore');
+    await act(async () => button('Send for review').click());
+    const args = mockPostCreate.mock.calls[0]![1] as { p_payload: Record<string, unknown> };
+    expect(args.p_payload).toMatchObject({ title: 'Thread opener' });
+  });
+
+  it('refuses a caption over 4,000 characters, no save', async () => {
+    await renderSheet('x', SEND);
+    await typeCaption('a'.repeat(4001));
+    await act(async () => button('Send for review').click());
+    expect(mockPostCreate).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('Captions can be up to 4,000 characters.');
   });
 
   it('requires media for a reel, then sends for review with the title from the caption', async () => {

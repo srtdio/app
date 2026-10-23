@@ -68,7 +68,7 @@ describe('counterTone (hidden < 35, amber 35..50, red over 50)', () => {
   });
 
   it('carries the exact blocking message', () => {
-    expect(OVER_LIMIT_MESSAGE).toBe('Over 50 words. Split it into two points.');
+    expect(OVER_LIMIT_MESSAGE).toBe('Over 50 words. Split it into two checkpoints.');
   });
 });
 
@@ -126,10 +126,10 @@ describe('buildPoints (p_points shape)', () => {
 });
 
 describe('sendLabel and limits', () => {
-  it('reads Send N points, singular at one', () => {
-    expect(sendLabel(1)).toBe('Send 1 point');
-    expect(sendLabel(2)).toBe('Send 2 points');
-    expect(sendLabel(20)).toBe('Send 20 points');
+  it('reads Send N checkpoints, singular at one', () => {
+    expect(sendLabel(1)).toBe('Send 1 checkpoint');
+    expect(sendLabel(2)).toBe('Send 2 checkpoints');
+    expect(sendLabel(20)).toBe('Send 20 checkpoints');
   });
 
   it('pins the proc limits: 20 points per batch, counter from 35, cap at 50', () => {

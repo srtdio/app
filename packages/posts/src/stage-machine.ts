@@ -34,6 +34,11 @@ export interface StageTransitionInput {
   toStage: Stage;
   /** Optional; a uuid_v7 is minted at entry when omitted. */
   traceId?: string;
+  /**
+   * The client approver an agency-side role approves for (user id). Sent as
+   * p_on_behalf_of only when moving to approved; the proc owns who may use it.
+   */
+  onBehalfOf?: string;
 }
 
 /**
@@ -45,9 +50,13 @@ export function stageTransition(
   client: Client,
   input: StageTransitionInput,
 ): Promise<Result<string>> {
-  return stageTransitionRpc(client, {
+  const base = {
     p_post_id: input.postId,
     p_to_stage: input.toStage,
     p_trace_id: resolveTraceId(input.traceId),
-  });
+  };
+  if (input.toStage === 'approved' && input.onBehalfOf !== undefined && input.onBehalfOf !== '') {
+    return stageTransitionRpc(client, { ...base, p_on_behalf_of: input.onBehalfOf });
+  }
+  return stageTransitionRpc(client, base);
 }

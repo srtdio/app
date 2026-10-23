@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import { FORMER_MEMBER } from '@/lib/people-names';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
+import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
+import { useWorkspaceApprovers } from '@/components/pages/pcs/use-approvers';
+import { briefRoute } from '@/lib/chat/briefs';
 import { Sheet } from '@/components/ui/Sheet';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
@@ -63,7 +66,6 @@ import {
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import {
-  onBehalfConfirmLine,
   STAGE_REASON_LABEL,
   stageReasonComment,
   stageReasonConfirm,
@@ -106,7 +108,7 @@ import {
 import { hasInAppHistory } from '@/components/pages/pcs/post-nav';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
-import { listBuckets, type BucketOption } from '@/lib/buckets';
+import { createBucket, listBuckets, type BucketOption } from '@/lib/buckets';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import type { PresignDeps } from '@/lib/asset-presign';
@@ -116,7 +118,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { formatDay, formatDue } from '@/lib/display-date';
+import { formatDue } from '@/lib/display-date';
 import {
   annotationCreate,
   getPost,
@@ -124,6 +126,7 @@ import {
   gallerySet,
   postCaptionUpdate,
   postUpdate,
+  stageTransition as stageMove,
 } from '@srtdio/posts';
 import type { GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
 import { friendlyTransitionError } from '@/lib/post-transition-errors';
@@ -204,44 +207,28 @@ export function sendAnywayTitle(openCount: number): string {
 }
 export const SEND_ANYWAY_LABEL = 'Send anyway';
 
-/** Flow B 40: the reject confirm's reason field label, helper and body. */
+/**
+ * Flow B 40 / spec B6: the reject confirm's reason field label. The "optional,
+ * goes to the comments" idea is said once, here; the body and the menu row
+ * no longer repeat it.
+ */
 export const REJECT_REASON_LABEL = 'Reason (optional)';
-export const REJECT_REASON_HELPER = 'Goes to the comments.';
 export function rejectConfirmBody(creatorName: string | null): string {
   const first = creatorName?.trim().split(/\s+/)[0] ?? '';
-  return `${first !== '' ? first : 'The creator'} gets it back to rework. You can send a reason.`;
+  return `${first !== '' ? first : 'The creator'} gets it back to rework.`;
 }
 
-/** Flow B 37: the approved banner's second sentence (always shown). */
-export const APPROVED_LOCK_LINE =
-  "Approved posts can't be edited. To change it, park it first, then send it for review again.";
+/** Spec B4: the approved banner beside the lock. */
+export const APPROVED_LOCK_LINE = 'To make changes, move it to Parked.';
+/** Spec B4: the banner's button (agency roles only). */
+export const MOVE_TO_PARKED_LABEL = 'Move to Parked';
 
-/**
- * "21 Oct" ("4 Jan 2027" outside now's year): the approval day in the
- * workspace zone via the app formatter, or '' for a bad instant.
- */
-export function approvedDayLabel(
-  approvedAt: string,
-  timeZone: string,
-  now: Date = new Date(),
-): string {
-  return formatDay(approvedAt, timeZone, now);
-}
+/** Spec B5: the approver's line above Approve / Reject while in review. */
+export const CLIENT_REVIEW_NOTE = 'Review and approve one post at a time.';
 
-/**
- * Flow B 37: "Approved by {name} on {d MMM}." when both the approver and the
- * time are known, else null (the banner then shows its second sentence only).
- * Pure.
- */
-export function approvedByLine(
-  approverName: string | null,
-  approvedAt: string | null,
-  timeZone: string,
-): string | null {
-  const name = approverName?.trim() ?? '';
-  if (name === '' || approvedAt === null) return null;
-  const day = approvedDayLabel(approvedAt, timeZone);
-  return day === '' ? null : `Approved by ${name} on ${day}.`;
+/** Spec B2: the header line's brief part, "From brief: {title}". */
+export function fromBriefLabel(briefTitle: string): string {
+  return `From brief: ${briefTitle}`;
 }
 import { formatLabel, postStatusLine } from '@/lib/post-detail-presentation';
 import { isPostPlatform, platformLabel as postPlatformLabel } from '@srtdio/posts';
@@ -359,20 +346,10 @@ export function postPageGrid(embedded: boolean): {
 }
 
 /**
- * The shared ApproveConfirm renders its own buttons, so the induction key is set
- * on the rendered confirm in the same dialog from here (attribute only). A stable
- * callback ref keeps PcsApproveConfirm hookless.
- */
-function markApproveConfirm(el: HTMLParagraphElement | null): void {
-  el?.closest('[role="dialog"]')
-    ?.querySelector('[data-approve-confirm-button]')
-    ?.setAttribute('data-induction', INDUCTION_KEYS.postApproveConfirm);
-}
-
-/**
  * The approve confirm (decision 22): the shared Sheet (translateY axis) with the
- * post's title and the chat-matching confirm in its footer, as the pipeline
- * board shows it. Open while the approve waits on a confirm or is in flight;
+ * chat-matching confirm in its footer. The question names the post once (spec
+ * B8 / D3: no title repeated above it). Open while the approve waits on a
+ * confirm or is in flight;
  * a failure keeps it open with the error and Confirm re-armed. Back, the close
  * button, the backdrop and Escape send nothing. Hookless, so it is unit tested
  * by walking the tree.
@@ -387,10 +364,6 @@ export function PcsApproveConfirm(props: {
   targetDate: string;
   busy: boolean;
   error: string | null;
-  /** Agency side: the confirm adds the on-behalf-of-client line. */
-  onBehalf: boolean;
-  /** The workspace's brand name; null falls back to "the approvers". */
-  brand?: string | null;
 }) {
   const { gate, gateState } = props;
   return (
@@ -407,21 +380,11 @@ export function PcsApproveConfirm(props: {
           busy={props.busy || gateState.sent}
           onBack={gate.cancel}
           onConfirm={gate.confirm}
+          induction={INDUCTION_KEYS.postApproveConfirm}
         />
       }
     >
-      <p
-        ref={markApproveConfirm}
-        data-approve-title=""
-        className="truncate text-sm font-medium text-fg"
-      >
-        {props.title}
-      </p>
-      {props.onBehalf ? (
-        <p data-approve-on-behalf="" className="mt-2 text-sm text-fg-2">
-          {onBehalfConfirmLine(props.brand)}
-        </p>
-      ) : null}
+      {null}
     </Sheet>
   );
 }
@@ -604,6 +567,11 @@ export function PostDetailPage({
   const [notifying, setNotifying] = useState(false);
   // Flow B 33: the "{n} comments are still open. Send anyway?" confirm.
   const [confirmSendAnyway, setConfirmSendAnyway] = useState(false);
+  // Spec D: the agency's "Approve on their behalf" sheet, its in-flight flag
+  // and its one error line (shown inside the sheet only).
+  const [onBehalfOpen, setOnBehalfOpen] = useState(false);
+  const [onBehalfBusy, setOnBehalfBusy] = useState(false);
+  const [onBehalfError, setOnBehalfError] = useState<string | null>(null);
 
   // Reject / park (W2): the confirm's target and reason, then the stage shown
   // optimistically while the Undo window runs. The move is sent only when the
@@ -696,6 +664,8 @@ export function PostDetailPage({
   // Only a list that loaded proves someone is not a current member: until then a
   // person not in it renders nothing extra, never "Former member".
   const membersLoaded = !membersLoading && membersError === null;
+  // The workspace's approvers, for the on-behalf approve sheet's picker.
+  const approvers = useWorkspaceApprovers(workspaceId);
 
   const [showDetails, setShowDetails] = useState(false);
   // Workspace buckets, fetched once per workspace to resolve the post's bucket
@@ -785,6 +755,9 @@ export function PostDetailPage({
     setActionError(null);
     setApproveError(null);
     setNotifying(false);
+    setOnBehalfOpen(false);
+    setOnBehalfBusy(false);
+    setOnBehalfError(null);
     // A pending reject / park commits for its own post (flush); the next post
     // never shows that optimistic stage.
     flushUndoable();
@@ -1358,6 +1331,33 @@ export function PostDetailPage({
     });
   });
 
+  // Spec D: the agency approves on a named approver's behalf. The actor stays
+  // auth.uid() server-side; onBehalfOf only names whom it was for. A landed
+  // approve closes the sheet; a failure keeps it open with the error once.
+  async function confirmOnBehalf(onBehalfOf: string | undefined): Promise<void> {
+    if (postId === undefined || onBehalfBusy) return;
+    const approvedFor = postId;
+    setOnBehalfBusy(true);
+    setOnBehalfError(null);
+    setActionError(null);
+    const result = await stageMove(supabase, {
+      postId: approvedFor,
+      toStage: 'approved',
+      traceId: newTrace(),
+      ...(onBehalfOf !== undefined ? { onBehalfOf } : {}),
+    }).catch((error: unknown) => ({ ok: false as const, error }));
+    if (!mountedRef.current || postIdRef.current !== approvedFor) return;
+    if (!result.ok) {
+      setOnBehalfBusy(false);
+      setOnBehalfError(postActionErrorCopy(result.error, 'approve the post'));
+      return;
+    }
+    await load(true);
+    setOnBehalfBusy(false);
+    setOnBehalfOpen(false);
+    dispatchInductionRefresh();
+  }
+
   // Reject / park confirmed: show the new stage now, commit after the Undo
   // window. Commit is the existing stage RPC, then (when a reason was typed)
   // the reason as a comment through the same create path as every comment. A
@@ -1790,6 +1790,14 @@ export function PostDetailPage({
     approveGate.request(post.id, to);
   }
 
+  // Spec D: the ⋯ sheet's "Approve on their behalf" opens the on-behalf sheet.
+  function openOnBehalf(): void {
+    if (optimisticStage !== null) flushUndoable();
+    setActionError(null);
+    setOnBehalfError(null);
+    setOnBehalfOpen(true);
+  }
+
   // Flow B 33: the creator's "Send for review again" tells the approvers
   // through the existing post_ready_notify wrapper. A refusal shows once, in
   // plain words, in the decision row / bar that was tapped. With comments still
@@ -1831,14 +1839,24 @@ export function PostDetailPage({
 
   // Flow B 28: the details row parts, each only when it has a value. Platform
   // and format always have one, and this is the one place they show (27).
+  // Flow B 37 / spec B4: an approved post is locked. No title pencil, caption
+  // Edit, gallery tools, slide actions or lightbox edit tools (each shows a
+  // lock instead); the details sheet keeps only the due date and the bucket.
+  const approvedLocked = currentStage === 'approved';
+  const canEditContent = agencySide && !readOnly && !approvedLocked;
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
   const dueLabel =
     post.target_date !== null ? formatDue(post.target_date, approveTimeZone, new Date()) : null;
   const detailsEditable = agencySide && !readOnly;
-  const detailsParts = (
-    <>
-      {ownerKnown ? (
+  // Spec B2: owner · Due date · "From brief: {title}" (a link to the brief),
+  // then the bucket and the platform. Each part only when it has a value; a
+  // quiet dot sits between parts.
+  const detailParts: { key: string; node: React.ReactNode }[] = [];
+  if (ownerKnown) {
+    detailParts.push({
+      key: 'owner',
+      node: (
         <span data-detail="owner" className="inline-flex min-w-0 items-center gap-1.5">
           <Avatar
             name={ownerInfo.name}
@@ -1846,15 +1864,45 @@ export function PostDetailPage({
             {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
           />
           <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
+          {approvedLocked && agencySide ? (
+            <span aria-hidden data-detail-lock="" className="shrink-0 text-fg-3">
+              <IconLock size={13} />
+            </span>
+          ) : null}
         </span>
-      ) : null}
-      {dueLabel !== null ? (
+      ),
+    });
+  }
+  if (dueLabel !== null) {
+    detailParts.push({
+      key: 'due',
+      node: (
         <span data-detail="due" className="inline-flex items-center gap-1.5 tabular-nums">
           <IconCalendar size={15} />
           {dueLabel}
         </span>
-      ) : null}
-      {bucket !== null ? (
+      ),
+    });
+  }
+  if (briefName !== null && post.brief_id !== null) {
+    detailParts.push({
+      key: 'brief',
+      node: (
+        <Link
+          data-detail="brief"
+          to={briefRoute(post.brief_id)}
+          className="inline-flex min-h-[44px] min-w-0 max-w-full items-center gap-1.5 rounded-md font-medium text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <IconBriefs size={15} />
+          <span className="min-w-0 truncate">{fromBriefLabel(briefName)}</span>
+        </Link>
+      ),
+    });
+  }
+  if (bucket !== null) {
+    detailParts.push({
+      key: 'bucket',
+      node: (
         <span data-detail="bucket" className="inline-flex min-w-0 items-center gap-1.5">
           <span
             aria-hidden
@@ -1863,18 +1911,27 @@ export function PostDetailPage({
           />
           <span className="truncate">{bucket.name}</span>
         </span>
-      ) : null}
-      {briefName !== null ? (
-        <span data-detail="brief" className="inline-flex min-w-0 items-center gap-1.5">
-          <IconBriefs size={15} />
-          <span className="truncate">{briefName}</span>
-        </span>
-      ) : null}
+      ),
+    });
+  }
+  detailParts.push({
+    key: 'platform',
+    node: (
       <span data-detail="platform" className="text-fg-3">
         {platformLabel(post.platform)} · {formatLabel(post.format)}
       </span>
-    </>
-  );
+    ),
+  });
+  const detailsParts = detailParts.map((part, index) => (
+    <span key={part.key} className="inline-flex min-w-0 max-w-full items-center gap-2">
+      {index > 0 ? (
+        <span aria-hidden className="text-fg-3">
+          ·
+        </span>
+      ) : null}
+      {part.node}
+    </span>
+  ));
 
   // Flow B 29: "{n} open comments" under the title while in review; a tap
   // scrolls to the comments. Hidden at 0.
@@ -1897,10 +1954,7 @@ export function PostDetailPage({
     ) : null;
 
   // The approver's quiet note in review, or null.
-  const stageHelper =
-    currentStage === 'review' && clientRole
-      ? 'Commenting keeps the post in review. Approval is deliberate, one post at a time.'
-      : null;
+  const stageHelper = currentStage === 'review' && clientRole ? CLIENT_REVIEW_NOTE : null;
 
   // Flow B 30 / 33: the decision row's model. Approvers: Comment (review),
   // Reject, Approve. Creators: one main button; in review it is "Send for
@@ -1951,7 +2005,7 @@ export function PostDetailPage({
                 key: 'approved',
                 icon: <IconCheck size={18} />,
                 label: APPROVE_ON_BEHALF_LABEL,
-                onPick: () => pickStage('approved'),
+                onPick: openOnBehalf,
               };
             }
             if (action.to === 'rejected') {
@@ -1959,7 +2013,6 @@ export function PostDetailPage({
                 key: 'rejected',
                 icon: <IconX size={18} />,
                 label: action.label,
-                sub: 'You can add a reason. It goes to the comments.',
                 danger: true,
                 onPick: () => pickStage('rejected'),
               };
@@ -2002,36 +2055,30 @@ export function PostDetailPage({
     ) : null;
   const decisionBarShown = decisionBar !== null && (decisionModel !== null || actionError !== null);
 
-  // Flow B 37: an approved post is locked. No title pencil, caption Edit,
-  // gallery tools, slide actions or lightbox edit tools; the details sheet
-  // keeps only the due date and the bucket. The banner says how to change it.
-  const approvedLocked = currentStage === 'approved';
-  const canEditContent = agencySide && !readOnly && !approvedLocked;
-  const approverName =
-    post.approved_by === null
-      ? null
-      : (memberById.get(post.approved_by)?.displayName ?? (membersLoaded ? FORMER_MEMBER : null));
-  const approvedLead = approvedLocked
-    ? approvedByLine(approverName, post.approved_at, approveTimeZone)
-    : null;
+  // Spec B4: beside the lock, how to change it, and (agency roles, when the
+  // move is legal) "Move to Parked", which opens the existing park confirm.
+  // Who approved is not repeated here (the top bar already says Approved).
+  const canParkApproved = agencySide && stageActions.some((action) => action.to === 'parked');
   const approvedBanner =
     approvedLocked && !readOnly ? (
       <div
         data-approved-banner=""
-        className="flex items-start gap-2.5 rounded-xl bg-good-soft px-3.5 py-3 text-sm text-fg"
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-sm text-fg"
       >
-        <span aria-hidden className="mt-0.5 shrink-0 text-good">
+        <span aria-hidden className="shrink-0 text-good">
           <IconLock size={18} />
         </span>
-        <p>
-          {approvedLead !== null ? (
-            <>
-              <span className="font-semibold">{approvedLead}</span>
-              <br />
-            </>
-          ) : null}
-          {APPROVED_LOCK_LINE}
-        </p>
+        <p className="min-w-0 flex-1 py-2">{APPROVED_LOCK_LINE}</p>
+        {canParkApproved ? (
+          <Button
+            size="lg"
+            data-approved-park=""
+            className="shrink-0"
+            onClick={() => pickStage('parked')}
+          >
+            {MOVE_TO_PARKED_LABEL}
+          </Button>
+        ) : null}
       </div>
     ) : null;
 
@@ -2075,7 +2122,7 @@ export function PostDetailPage({
       {readOnly ? (
         <div className={cn(grid.page, 'pb-0')}>
           <div className={grid.head}>
-            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+            <h1 className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
               <Highlight text={post.title} />
             </h1>
           </div>
@@ -2116,7 +2163,10 @@ export function PostDetailPage({
                     onChange={(event) => setTitleDraft(event.target.value)}
                     onBlur={onTitleBlur}
                     onKeyDown={onTitleKeyDown}
-                    className="w-full rounded-md border border-border bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
+                    // Spec B1: the same type and line height as the h1, with
+                    // no border or block padding (the ring draws outside the
+                    // box), so entering edit never shifts the page.
+                    className="-mx-2 w-[calc(100%+1rem)] rounded-md border-0 bg-panel-2 px-2 py-0 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
@@ -2151,15 +2201,18 @@ export function PostDetailPage({
                   ) : null}
                 </div>
               ) : (
-                <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+                <h1 className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
                   {titleHead !== '' ? <Highlight text={`${titleHead} `} /> : ''}
                   <span className="whitespace-nowrap">
                     <Highlight text={titleLast} />
+                    {/* The 44px target overflows the line box (negative block
+                        margins), so the title line keeps its own height and the
+                        editor below it does not shift. */}
                     <button
                       type="button"
                       aria-label="Edit title"
                       onClick={openTitleEditor}
-                      className="ml-1 inline-flex h-11 w-11 items-center justify-center align-top focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      className="-my-1.5 ml-1 inline-flex h-11 w-11 items-center justify-center align-top focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     >
                       <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-panel-3 text-fg-3 transition-colors hover:text-fg-2">
                         <IconPencil size={17} />
@@ -2169,8 +2222,20 @@ export function PostDetailPage({
                 </h1>
               )
             ) : (
-              <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+              <h1
+                data-post-title=""
+                className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]"
+              >
                 <Highlight text={post.title} />
+                {approvedLocked && agencySide ? (
+                  <span
+                    aria-hidden
+                    data-title-lock=""
+                    className="ml-2 inline-flex align-middle text-fg-3"
+                  >
+                    <IconLock size={18} />
+                  </span>
+                ) : null}
               </h1>
             )}
 
@@ -2178,24 +2243,24 @@ export function PostDetailPage({
               brief, platform and format, each only when it has a value;
               creators tap it (Edit) to open the details sheet. */}
             <div className="flex flex-wrap items-center gap-x-2">
-              {detailsEditable ? (
-                <button
-                  type="button"
-                  data-post-details=""
-                  onClick={() => setShowDetails(true)}
-                  className="-mx-1 flex min-h-[44px] max-w-full flex-wrap items-center gap-x-3.5 gap-y-1.5 rounded-lg px-1 py-1 text-left text-[13px] text-fg-2 transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  {detailsParts}
-                  <span className="font-medium text-accent">Edit</span>
-                </button>
-              ) : (
-                <div
-                  data-post-details=""
-                  className="flex min-h-[44px] max-w-full flex-wrap items-center gap-x-3.5 gap-y-1.5 py-1 text-[13px] text-fg-2"
-                >
-                  {detailsParts}
-                </div>
-              )}
+              {/* The brief part is a link, so the row is a plain line and
+                  creators open the details sheet from its own Edit button. */}
+              <div
+                data-post-details=""
+                className="flex min-h-[44px] min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1.5 py-1 text-[13px] text-fg-2"
+              >
+                {detailsParts}
+                {detailsEditable ? (
+                  <button
+                    type="button"
+                    data-post-details-edit=""
+                    onClick={() => setShowDetails(true)}
+                    className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-2 font-medium text-accent transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    Edit
+                  </button>
+                ) : null}
+              </div>
               <PreviewChip platform={post.platform} onClick={() => setPreviewOpen(true)} />
             </div>
             {/* Flow B 37: the approved lock, under the title and details. */}
@@ -2255,6 +2320,7 @@ export function PostDetailPage({
                     // #26 / flow B 37: creators edit on draft / review / parked /
                     // rejected only; an approved post is locked.
                     canEdit: canEditContent,
+                    locked: agencySide && approvedLocked,
                     versionNumber: currentVersionNumber,
                     error: galleryError,
                     onVersions: () => setHistoryOpen(true),
@@ -2308,6 +2374,15 @@ export function PostDetailPage({
                   >
                     <IconCopy size={18} />
                   </IconButton>
+                ) : null}
+                {agencySide && approvedLocked ? (
+                  <span
+                    aria-hidden
+                    data-caption-lock=""
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-fg-3"
+                  >
+                    <IconLock size={16} />
+                  </span>
                 ) : null}
                 {canEditContent && !editingCaption ? (
                   <button
@@ -2513,7 +2588,6 @@ export function PostDetailPage({
           ? {
               body: rejectConfirmBody(ownerKnown ? ownerInfo.name : null),
               label: REJECT_REASON_LABEL,
-              helper: REJECT_REASON_HELPER,
             }
           : {})}
       />
@@ -2557,13 +2631,29 @@ export function PostDetailPage({
         bucketId={post.bucket_id}
         ownerUserId={post.owner_user_id}
         targetDate={post.target_date}
-        origin={post.origin}
         memberOptions={memberOptions}
         ownerName={ownerInfo.name}
         ownerAvatarUrl={ownerInfo.avatarUrl}
         onChangeBucket={(bucketId) => void applyPostUpdate({ bucketId })}
         onChangeOwner={(ownerUserId) => void applyPostUpdate({ ownerUserId })}
         onChangeTargetDate={(targetDate) => void applyPostUpdate({ targetDate })}
+        onCreateBucket={(name) => {
+          if (workspaceId === null) {
+            return Promise.resolve({
+              ok: false as const,
+              error: { code: 'unknown' as const, message: 'No workspace selected.' },
+            });
+          }
+          return createBucket(supabase, workspaceId, name, newTrace()).then((result) => {
+            if (result.ok) {
+              const created = result.data;
+              setBuckets((prev) =>
+                prev.some((b) => b.id === created.id) ? prev : [...prev, created],
+              );
+            }
+            return result;
+          });
+        }}
         lockedFields={approvedLocked}
       />
 
@@ -2588,8 +2678,20 @@ export function PostDetailPage({
         targetDate={approveTargetDate(post.target_date, approveTimeZone)}
         busy={transitioning}
         error={approveError}
-        onBehalf={agencySide}
-        brand={workspaceName}
+      />
+
+      <OnBehalfApproveSheet
+        open={onBehalfOpen}
+        approvers={approvers}
+        brand={workspaceName ?? null}
+        busy={onBehalfBusy}
+        error={onBehalfError}
+        onCancel={() => {
+          if (onBehalfBusy) return;
+          setOnBehalfOpen(false);
+          setOnBehalfError(null);
+        }}
+        onConfirm={(onBehalfOf) => void confirmOnBehalf(onBehalfOf)}
       />
 
       <SlideActionsSheet

@@ -55,9 +55,9 @@ describe('visibleStageActions', () => {
     }
   });
 
-  it('shows the agency side move-to-review from parked and rejected', () => {
-    expect(labels('parked', 'agency')).toEqual(['Move to review']);
-    expect(labels('rejected', 'agency')).toEqual(['Move to review']);
+  it('shows the agency side send-for-review from parked and rejected (E10)', () => {
+    expect(labels('parked', 'agency')).toEqual(['Send for review']);
+    expect(labels('rejected', 'agency')).toEqual(['Send for review']);
   });
 
   it('treats every agency-side role the same', () => {
