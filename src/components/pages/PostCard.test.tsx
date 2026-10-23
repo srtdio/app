@@ -86,9 +86,9 @@ describe('PostCard thumbnail frame', () => {
     expect(peekThumbnail).toHaveBeenCalledWith('av1');
   });
 
-  it('(b) the imageless text tile shows the caption, falling back to the title when blank', () => {
+  it('(b) a text-only post has no cover box: the card starts at the title', () => {
     const { cache } = makeCache(null);
-    const withCaption = render({
+    const out = render({
       post: makePost({
         thumbnailAssetVersionId: null,
         format: 'text',
@@ -97,43 +97,38 @@ describe('PostCard thumbnail frame', () => {
       cache,
       presignEnabled: true,
     });
-    // The plain format tile carries the body snippet (the caption) and the
-    // format icon, never an <img> and never an uppercase format label.
-    expect(withCaption).toContain('Launch day is here');
-    expect(withCaption).toContain('<svg');
-    expect(withCaption).not.toContain('<img');
-    expect(withCaption).not.toContain('uppercase');
-    expect(withCaption).not.toContain('bg-gradient-to-br');
-
-    // A blank caption falls back to the title as the body, so the tile is never
-    // a lone glyph for a titled post.
-    const emptyCaption = render({
-      post: makePost({
-        thumbnailAssetVersionId: null,
-        format: 'text',
-        caption: '   ',
-        title: 'Post title',
-      }),
+    expect(out).not.toContain('data-post-card-thumb');
+    expect(out).not.toContain('data-post-card-play');
+    expect(out).not.toContain('<img');
+    expect(out).not.toContain('bg-panel-3');
+    // The title is the card's first content; the caption reads under it.
+    expect(out.indexOf('data-post-card-title')).toBeLessThan(out.indexOf('data-post-card-caption'));
+    expect(out).toContain('Launch day is here');
+    // A single image post with no upload yet is no-media too: no grey box.
+    const noUpload = render({
+      post: makePost({ thumbnailAssetVersionId: null, format: 'single_image' }),
       cache,
       presignEnabled: true,
     });
-    expect(emptyCaption).toContain('Post title');
-    expect(emptyCaption).toContain('<svg');
-    expect(emptyCaption).not.toContain('<img');
+    expect(noUpload).not.toContain('data-post-card-thumb');
   });
 
-  it('(c) renders the format-aware media tile for a video post with no thumbnail', () => {
+  it('(c) a video with no poster shows a centred play glyph on bg-panel-3 at the fixed ratio', () => {
     const { cache } = makeCache(null);
-    const out = render({
-      post: makePost({ thumbnailAssetVersionId: null, format: 'video', caption: null }),
-      cache,
-      presignEnabled: true,
-    });
-    // The video glyph tile, body falling back to the title; no <img>, no poster
-    // play badge (gated on a thumbnail, which this post has none of).
-    expect(out).toContain('<svg');
-    expect(out).not.toContain('<img');
-    expect(out).not.toContain('aria-label="Video"');
+    for (const format of ['video', 'reel']) {
+      const out = render({
+        post: makePost({ thumbnailAssetVersionId: null, format, caption: null }),
+        cache,
+        presignEnabled: true,
+      });
+      const box = /<div[^>]*data-post-card-play=""[^>]*>/.exec(out)?.[0] ?? '';
+      expect(box).toContain('bg-panel-3');
+      expect(box).toContain('items-center justify-center');
+      // Instagram's one fixed box (4:5), the same for a reel as for a photo.
+      expect(box).toContain('aspect-ratio:0.8');
+      expect(out).toContain('aria-label="Video"');
+      expect(out).not.toContain('<img');
+    }
   });
 
   it('(d) never touches the cache and shows the fallback tile when presign is disabled', () => {
@@ -191,7 +186,7 @@ describe('PostCard thumbnail frame', () => {
   it('shows the carousel badge on a carousel post', () => {
     const { cache } = makeCache(null);
     const out = render({
-      post: makePost({ thumbnailAssetVersionId: null, format: 'carousel', caption: null }),
+      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'carousel', caption: null }),
       cache,
       presignEnabled: true,
     });
@@ -304,7 +299,11 @@ describe('E: Pipeline card polish', () => {
 
   it('the ⋯ is a plain glyph at the right end of the due row, never on the picture', () => {
     const out = renderWith({
-      post: makePost({ target_date: '2026-11-02', format: 'carousel' }),
+      post: makePost({
+        target_date: '2026-11-02',
+        format: 'carousel',
+        thumbnailAssetVersionId: 'av1',
+      }),
       onMove: () => {},
       now: NOW,
     });
@@ -363,13 +362,18 @@ describe('E: Pipeline card polish', () => {
     expect(upcoming).not.toContain('text-bad');
   });
 
-  it('the review status line reads "With approvers · 4 months ago"', () => {
+  it('the review status line shows the dot and "4 months ago" only; the full phrase is its title and aria-label', () => {
     const out = renderWith({
       post: makePost({ stage: 'review', stage_entered_at: '2026-06-15T12:00:00Z' }),
       viewer: { role: 'agency', approverFirstNames: ['Meera', 'Arjun'] },
       now: NOW,
     });
-    expect(out).toContain('With approvers · 4 months ago');
+    const line = /<div[^>]*data-post-card-status="with"[^>]*>(.*?)<\/div>/.exec(out);
+    expect(line?.[0]).toContain('title="With approvers · 4 months ago"');
+    expect(line?.[0]).toContain('aria-label="With approvers · 4 months ago"');
+    expect(line?.[1]).toContain('bg-stage-review');
+    expect(line?.[1]).toContain('>4 months ago</span>');
+    expect(line?.[1]).not.toContain('With approvers');
   });
 
   it('every card fills its grid cell and the title holds two lines', () => {
@@ -419,5 +423,48 @@ describe('E: Pipeline card polish', () => {
       viewer: { role: null, approverFirstNames: [], pending: true },
     });
     expect(draft).not.toContain('data-post-card-status-pending');
+  });
+});
+
+describe('Pipeline polish: one fixed cover box per platform', () => {
+  function renderWith(props: Partial<PostCardProps> & Pick<PostCardProps, 'post'>): string {
+    const { cache } = makeCache(null);
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <PostCard cache={cache} presignEnabled={false} {...props} />
+      </MemoryRouter>,
+    );
+  }
+  function box(out: string): string {
+    const at = out.indexOf('data-post-card-thumb');
+    return /<div[^>]*>/.exec(out.slice(out.indexOf('<div', at + 1)))?.[0] ?? '';
+  }
+
+  it('portrait and landscape media get the same cover box', () => {
+    const post = makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' });
+    const portrait = renderWith({
+      post,
+      cover: { assetVersionId: 'av1', kind: 'image', width: 1080, height: 1350 },
+    });
+    const landscape = renderWith({
+      post,
+      cover: { assetVersionId: 'av1', kind: 'image', width: 3000, height: 1000 },
+    });
+    const video = renderWith({
+      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'reel' }),
+      cover: { assetVersionId: 'av2', kind: 'video', width: 1080, height: 1920 },
+    });
+    expect(box(portrait)).toContain('aspect-ratio:0.8');
+    expect(box(landscape)).toBe(box(portrait));
+    expect(box(video)).toBe(box(portrait));
+  });
+
+  it('a video post with a poster keeps the picture and its play badge', () => {
+    const out = renderWith({
+      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'video' }),
+    });
+    expect(out).toContain('data-post-card-thumb');
+    expect(out).not.toContain('data-post-card-play');
+    expect(out).toContain('aria-label="Video"');
   });
 });

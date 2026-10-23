@@ -4,8 +4,6 @@
 
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
-import { dispatchSorted } from '@/lib/events';
-import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPipeline } from '@/components/ui/icons';
 import { canRoleMove, roleMayTarget } from '@/components/pages/pcs/stage-actions';
@@ -91,36 +89,24 @@ export function moveBlockedReason(role: string | null, from: Stage, to: Stage): 
 
 /**
  * An empty stage, the same on the phone feed and the laptop board: the shared
- * EmptyState with the pipeline icon and the stage's one line, no heading
- * beside it. People who may create posts also get New post (it opens the
- * create sheet). Hookless, so the tree is unit tested by walking it.
+ * EmptyState with the pipeline icon and the stage's one line, no heading and
+ * no action (the toolbar's New post is the one way to create). `compact` drops
+ * the 320px min-height (the phone feed and a kanban column). Hookless, so the
+ * tree is unit tested by walking it.
  */
 export function StageEmpty({
   stage,
-  canCreate = false,
+  compact = false,
 }: {
   stage: Stage;
-  canCreate?: boolean;
+  compact?: boolean;
 }): ReactElement {
   return (
     <div data-stage-empty={stage}>
       <EmptyState
         icon={<IconPipeline size={22} />}
         title={emptyStageMessage(stage)}
-        {...(canCreate
-          ? {
-              action: (
-                <Button
-                  variant="primary"
-                  size="lg"
-                  data-stage-empty-create=""
-                  onClick={() => dispatchSorted('sorted:create-post')}
-                >
-                  New post
-                </Button>
-              ),
-            }
-          : {})}
+        compact={compact}
       />
     </div>
   );

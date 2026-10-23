@@ -23,7 +23,7 @@ export interface StageChipsProps {
 // The scroll hint: a fade at each edge that still has chips past it. A mask is
 // alpha only (the keyword colours carry no hue), so it reads the same in light
 // and dark with no token.
-const FADE = '26px';
+const FADE = '24px';
 
 /** The mask for the row's scroll position; 'none' when nothing is cut off. */
 export function chipRowMask(fadeStart: boolean, fadeEnd: boolean): string {

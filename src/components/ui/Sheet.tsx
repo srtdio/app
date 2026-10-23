@@ -152,7 +152,9 @@ export function Sheet({
         )}
       >
         <div className="flex items-center gap-2.5 px-[18px] py-[15px] border-b border-border">
-          <h2 className="font-semibold text-[15px]">{title}</h2>
+          <h2 className="line-clamp-2 min-w-0 font-semibold text-[15px] [overflow-wrap:anywhere]">
+            {title}
+          </h2>
           <span className="ml-auto flex items-center gap-2">
             {busy ? <span className="text-xs text-fg-3">{busyLabel}</span> : null}
             <IconButton

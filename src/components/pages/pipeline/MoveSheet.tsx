@@ -4,9 +4,9 @@
 // owns the confirms, the proc call, the Undo strip and the regroup).
 //
 // It lists ONLY the moves this viewer can make from the post's stage (the
-// client-side transition map and canRoleMove), as actions with a one-line
-// helper: "Send for review", "Approve" (approvers) or "Approve on their
-// behalf" (creators), "Park" and "Reject". No greyed rows and no Draft row.
+// client-side transition map and canRoleMove), as one-line actions: "Send for
+// review", "Approve" (approvers) or "Approve on their behalf" (creators),
+// "Park" and "Reject". No helper lines, no greyed rows and no Draft row.
 // While the role is unknown the sheet says it is checking, and a failed role
 // read says so with Retry. The server proc remains the real guard.
 //
@@ -26,7 +26,6 @@ import { OnBehalfApproveSheet, type ApproverOption } from '@/components/ui/OnBeh
 import { cn } from '@/lib/cn';
 import { useWorkspace } from '@/lib/workspace-context';
 import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
-import { sendForReviewHelper } from '@/components/pages/pipeline/card-status';
 import {
   useApproveGate,
   type ApproveGate,
@@ -69,8 +68,6 @@ export interface MoveSheetProps {
   roleStatus?: RoleStatus;
   /** Re-runs the role read (the error state's Retry). */
   onRetryRole?: () => void;
-  /** The workspace approvers' first names, for the Send for review helper. */
-  approverFirstNames?: readonly string[];
 }
 
 /**
@@ -118,48 +115,34 @@ export interface MoveSheetViewProps extends Omit<MoveSheetProps, 'onMove'> {
   approvers?: readonly ApproverOption[];
 }
 
-/** One move the viewer can make: its target, label, helper and tone. */
+/** One move the viewer can make: its target, label and tone. One line, no helper. */
 export interface MoveAction {
   to: Stage;
   label: string;
-  helper: string | null;
   tone: 'default' | 'bad';
 }
-
-export const PARK_HELPER = 'Keeps it aside. You can send it for review later.';
-export const REJECT_HELPER = 'You can add a reason. It goes to the comments.';
 
 /**
  * The moves this role can make from `currentStage`, in transition-map order,
  * as actions. Only legal, role-allowed targets appear; Draft is never one.
  * An unknown role gets none. Pure.
  */
-export function moveActions(
-  role: string | null,
-  currentStage: Stage,
-  approverFirstNames: readonly string[] = [],
-): MoveAction[] {
+export function moveActions(role: string | null, currentStage: Stage): MoveAction[] {
   const out: MoveAction[] = [];
   for (const to of STAGES) {
     if (to === currentStage || to === 'draft' || !canRoleMove(role, currentStage, to)) continue;
     if (to === 'review') {
-      out.push({
-        to,
-        label: 'Send for review',
-        helper: sendForReviewHelper(approverFirstNames),
-        tone: 'default',
-      });
+      out.push({ to, label: 'Send for review', tone: 'default' });
     } else if (to === 'approved') {
       out.push({
         to,
         label: isClient(role) ? 'Approve' : 'Approve on their behalf',
-        helper: null,
         tone: 'default',
       });
     } else if (to === 'parked') {
-      out.push({ to, label: 'Park', helper: PARK_HELPER, tone: 'default' });
+      out.push({ to, label: 'Park', tone: 'default' });
     } else if (to === 'rejected') {
-      out.push({ to, label: 'Reject', helper: REJECT_HELPER, tone: 'bad' });
+      out.push({ to, label: 'Reject', tone: 'bad' });
     }
   }
   return out;
@@ -187,7 +170,6 @@ export function MoveSheetView({
   approvers = [],
   roleStatus = 'ready',
   onRetryRole,
-  approverFirstNames = [],
 }: MoveSheetViewProps): ReactElement | null {
   if (post === null) {
     return null;
@@ -196,7 +178,7 @@ export function MoveSheetView({
   const currentStage = post.stage as Stage;
   const confirming = gateState.pendingId === post.id;
   const onBehalf = isAgencySide(role);
-  const actions = roleStatus === 'ready' ? moveActions(role, currentStage, approverFirstNames) : [];
+  const actions = roleStatus === 'ready' ? moveActions(role, currentStage) : [];
   return (
     <>
       <Sheet
@@ -219,7 +201,7 @@ export function MoveSheetView({
           : {})}
       >
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-fg-3">
+          <div data-move-current="" className="flex items-center gap-1.5 text-sm text-fg-3">
             <span>Currently in</span>
             <StageDot stage={currentStage} />
             <span>{stageLabel(currentStage)}</span>
@@ -251,7 +233,7 @@ export function MoveSheetView({
                     data-move-action={action.to}
                     onClick={() => gate.request(post.id, action.to)}
                     className={cn(
-                      'flex w-full min-h-[52px] flex-col items-start justify-center rounded-lg px-3 py-2 text-left transition-colors',
+                      'flex w-full min-h-[44px] items-center rounded-lg px-3 py-2 text-left transition-colors',
                       'hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
                     )}
                   >
@@ -263,11 +245,6 @@ export function MoveSheetView({
                     >
                       {action.label}
                     </span>
-                    {action.helper !== null ? (
-                      <span data-move-helper="" className="mt-0.5 text-xs text-fg-3">
-                        {action.helper}
-                      </span>
-                    ) : null}
                   </button>
                 </li>
               ))}

@@ -103,7 +103,7 @@ function radioRow(
       aria-checked={selected}
       onClick={onClick}
       className={cn(
-        'flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-3 text-left text-sm transition-colors',
+        'flex h-11 w-full items-center gap-2.5 rounded-md px-3 text-left text-sm transition-colors',
         selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
       )}
     >
@@ -164,8 +164,10 @@ export function dateButtonLabel(dateWindow: DateWindow, customRange: DateRange |
   return DATE_WINDOW_OPTIONS.find((option) => option.value === dateWindow)?.label ?? 'Any time';
 }
 
+// 44x44 at least on every screen: h-11 tall, and min-w-11 so the icon-only
+// phone date button is never narrower than its target.
 const TRIGGER =
-  'inline-flex h-11 shrink-0 items-center gap-2 rounded-md border bg-panel px-3 text-sm transition-colors hover:bg-panel-2 hover:text-fg';
+  'inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md border bg-panel px-3 text-sm transition-colors hover:bg-panel-2 hover:text-fg';
 
 /** The responsive shell: a popover on desktop, the shared bottom Sheet on mobile. */
 function MenuShell(props: {

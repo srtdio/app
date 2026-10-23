@@ -35,9 +35,8 @@ export interface PostCardProps {
    */
   viewer?: CardViewer;
   /**
-   * The post's first photo or video with its stored size (the chat card's
-   * cover read), so the picture takes the same platform frame as the chat card.
-   * undefined while unknown: the format's default frame.
+   * The post's first photo or video (the chat card's cover read): a video with
+   * no poster shows the play glyph in the cover box. undefined while unknown.
    */
   cover?: CardFirstMedia | null | undefined;
   /** The clock for the time-in-stage reading. Default: now. */
@@ -111,22 +110,34 @@ export function cardDue(
 }
 
 /**
- * The card's picture frame ratio (w / h): the post's platform + format frame
- * fed the cover's stored size, the same rule the chat card uses (cardFrame),
- * so both show one shape for one post. null for a format with no media box
- * (text, link): the card keeps its square fallback tile. Pure.
+ * The card's cover box ratio (w / h): ONE fixed box per workspace platform,
+ * the platform's default image frame (4:5 for Instagram), whatever the post's
+ * format or its media's own size. Every card in a row then has the same
+ * picture height; the picture fills it with object-cover. null for a platform
+ * with no frame: the box falls back to square. Pure.
  */
-export function cardRatio(
-  post: Pick<PipelinePost, 'platform' | 'format'>,
-  cover: CardFirstMedia | null | undefined,
-): number | null {
-  const first = cover ?? null;
-  const frame = frameFor(
-    post.platform,
-    post.format,
-    first === null ? null : { kind: first.kind, w: first.width, h: first.height },
-  );
+export function cardRatio(post: Pick<PipelinePost, 'platform'>): number | null {
+  const frame = frameFor(post.platform, 'single_image', null);
   return frame === null ? null : frame.ratio;
+}
+
+/** Formats whose media is a video. */
+const VIDEO_FORMATS: readonly string[] = ['video', 'reel', 'story', 'short'];
+
+/**
+ * What the card's cover box shows: the picture ('image'), a centred play glyph
+ * for a video with no poster ('video'), or no box at all for a post with no
+ * media ('none', a text-only post: the card starts at the title). Pure.
+ */
+export type CardCoverKind = 'image' | 'video' | 'none';
+
+export function cardCoverKind(
+  post: Pick<PipelinePost, 'format' | 'thumbnailAssetVersionId'>,
+  cover: CardFirstMedia | null | undefined,
+): CardCoverKind {
+  if (post.thumbnailAssetVersionId !== null) return 'image';
+  if (cover?.kind === 'video' || VIDEO_FORMATS.includes(post.format)) return 'video';
+  return 'none';
 }
 
 /** A post with no media of its own: the tile is the format fallback. */
@@ -214,9 +225,9 @@ function PlayBadge() {
 }
 
 /**
- * A pipeline board card: a full-bleed picture in the post's platform frame
- * (4:5 for an Instagram post, the chat card's shape; before the cover loads
- * the frame is the platform's default for the format) above the title, the
+ * A pipeline board card: a full-bleed picture in the workspace platform's one
+ * fixed cover box (4:5 for Instagram, object-cover), a play glyph in that box
+ * for a video with no poster, or no box for a text-only post, above the title, the
  * review status line, and one quiet meta line (the stage in the phone All
  * view, the due or overdue reading, and the ⋯). The picture is the shared
  * Thumbnail tile, so an image post, an imageless post, and a glyph post share
@@ -250,7 +261,8 @@ export function PostCard({
     workspaceKey !== null ? entityUrlPath('post', workspaceKey, post.number) : `/posts/${post.id}`;
   const caption = captionPreview(post);
   const stage = post.stage as Stage;
-  const ratio = cardRatio(post, cover);
+  const ratio = cardRatio(post);
+  const coverKind = cardCoverKind(post, cover);
   const clock = now ?? new Date();
   const status =
     viewer !== undefined ? reviewStatus(stage, post.stage_entered_at, viewer, clock) : null;
@@ -273,23 +285,40 @@ export function PostCard({
       />
       {/* The tile is relative, so it would paint over the absolute Open post button;
           pointer-events-none lets a tap on the thumbnail reach the button. */}
-      <div data-post-card-thumb="" className="pointer-events-none">
-        <Thumbnail
-          assetVersionId={post.thumbnailAssetVersionId}
-          cache={cache}
-          presignEnabled={presignEnabled}
-          aspect="square"
-          {...(ratio !== null ? { ratio } : {})}
-          fallback={postFallback(post)}
-          alt={post.title}
-        >
-          {post.format === 'carousel' ? (
-            <CarouselBadge />
-          ) : post.format === 'video' && hasPoster ? (
-            <PlayBadge />
-          ) : null}
-        </Thumbnail>
-      </div>
+      {coverKind === 'image' ? (
+        <div data-post-card-thumb="" className="pointer-events-none">
+          <Thumbnail
+            assetVersionId={post.thumbnailAssetVersionId}
+            cache={cache}
+            presignEnabled={presignEnabled}
+            aspect="square"
+            {...(ratio !== null ? { ratio } : {})}
+            fallback={postFallback(post)}
+            alt={post.title}
+          >
+            {post.format === 'carousel' ? (
+              <CarouselBadge />
+            ) : post.format === 'video' && hasPoster ? (
+              <PlayBadge />
+            ) : null}
+          </Thumbnail>
+        </div>
+      ) : coverKind === 'video' ? (
+        <div data-post-card-thumb="" className="pointer-events-none">
+          <div
+            data-post-card-play=""
+            className={cn(
+              'flex w-full items-center justify-center bg-panel-3 text-fg-3',
+              ratio === null ? 'aspect-square' : null,
+            )}
+            {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
+          >
+            <span role="img" aria-label="Video" className="inline-flex">
+              <IconPlay size={28} />
+            </span>
+          </div>
+        </div>
+      ) : null}
       <div data-post-card-body="" className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
         <div
           data-post-card-title=""
@@ -306,8 +335,11 @@ export function PostCard({
           </p>
         ) : null}
         {status !== null ? (
+          // A creator's line shows the dot and the time in stage only ("2 days
+          // ago"); the full phrase stays as its title and aria-label.
           <div
             data-post-card-status={status.tone}
+            {...(status.tone === 'with' ? { title: status.text, 'aria-label': status.text } : {})}
             className={cn(
               'flex h-4 min-w-0 items-center gap-1.5 text-xs',
               status.tone === 'you' ? 'font-semibold text-accent' : 'text-fg-2',
@@ -318,7 +350,7 @@ export function PostCard({
             ) : inColumn ? null : (
               <StageDot stage={stage} />
             )}
-            <span className="truncate">{status.text}</span>
+            <span className="truncate">{status.tone === 'with' ? status.ago : status.text}</span>
           </div>
         ) : reserveStatus ? (
           // The role is still loading: hold the status line's height.

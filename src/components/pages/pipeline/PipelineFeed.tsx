@@ -35,8 +35,6 @@ export interface PipelineFeedProps {
   viewer?: CardViewer;
   /** Each post's first photo or video, so its card takes the platform frame. */
   covers?: CoverLookup;
-  /** post.create granted: an empty stage also offers New post. */
-  canCreate?: boolean;
 }
 
 /**
@@ -132,7 +130,6 @@ export function PipelineFeed({
   timeZone = 'UTC',
   viewer,
   covers,
-  canCreate = false,
 }: PipelineFeedProps): ReactElement {
   const depthKey = shownKey ?? null;
   const [shown, setShown] = useState(() =>
@@ -157,7 +154,7 @@ export function PipelineFeed({
         activeStage === 'all' ? (
           <EmptyState icon={<IconPipeline size={22} />} title="No posts yet" />
         ) : (
-          <StageEmpty stage={activeStage as Stage} canCreate={canCreate} />
+          <StageEmpty stage={activeStage as Stage} compact />
         )
       ) : (
         <>

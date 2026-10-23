@@ -328,8 +328,9 @@ describe('PipelineBoard single-stage grid', () => {
     expect(markup).toContain('Posts set aside for later show up here.');
     expect(markup).toContain('data-board-grid');
     expect(markup).toContain('data-stage-empty="parked"');
-    // No New post without post.create.
+    // The empty stage has no New post (the toolbar's is the action).
     expect(markup).not.toContain('data-stage-empty-create');
+    expect(markup).not.toContain('>New post<');
   });
 
   it('All still renders the column layout, not the grid', () => {
@@ -709,7 +710,7 @@ describe('E: drag and drop', () => {
     expect(draggables(tree)).toEqual([true, false]);
   });
 
-  it('an empty column shows its one line; post.create adds New post', () => {
+  it('an empty column shows its one line in a compact EmptyState, never a New post', () => {
     const lines: Record<Stage, string> = {
       draft: 'New posts start here.',
       review: 'Posts sent for review show up here.',
@@ -721,8 +722,9 @@ describe('E: drag and drop', () => {
     const plain = renderToStaticMarkup(<>{columns('client', [])}</>);
     for (const stage of STAGES) expect(plain).toContain(lines[stage]);
     expect(plain).not.toContain('data-stage-empty-create');
-    const agency = renderToStaticMarkup(<>{columns('agency', [], { canCreate: true })}</>);
-    expect((agency.match(/data-stage-empty-create=""/g) ?? []).length).toBe(STAGES.length);
-    expect(agency).toContain('>New post</button>');
+    const agency = renderToStaticMarkup(<>{columns('agency', [])}</>);
+    expect(agency).not.toContain('>New post<');
+    // The kanban empty column drops EmptyState's 320px min-height.
+    expect(agency).not.toContain('min-h-[320px]');
   });
 });
