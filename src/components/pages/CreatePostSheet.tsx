@@ -1129,7 +1129,7 @@ export function CreatePostSheet({
 
   function gridError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-[11px] text-bad">{fieldErrors[key]}</p>
+      <p className="mt-1.5 text-xs text-bad">{fieldErrors[key]}</p>
     ) : null;
   }
 
@@ -1172,7 +1172,7 @@ export function CreatePostSheet({
   const fullFooter = (
     <div className="flex w-full min-w-0 flex-col gap-2">
       {failedUploads > 0 ? (
-        <p data-upload-failed-footer="" role="status" className="text-[13px] text-bad">
+        <p data-upload-failed-footer="" role="status" className="text-xs text-bad">
           {FAILED_UPLOAD_FOOTER}
         </p>
       ) : uploadWait && pendingUploads > 0 ? (
@@ -1424,7 +1424,7 @@ export function CreatePostSheet({
                         }}
                       />
                       {newBucketError !== null ? (
-                        <p role="alert" className="text-[11px] text-bad">
+                        <p role="alert" className="text-xs text-bad">
                           {newBucketError}
                         </p>
                       ) : null}

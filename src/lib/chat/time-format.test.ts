@@ -28,8 +28,14 @@ const CREATED_AT = '2026-09-22T18:45:00.123456+00:00';
 
 describe('formatShortDate', () => {
   it('renders the civil date in the workspace zone', () => {
-    expect(formatShortDate(CREATED_AT, 'Asia/Kolkata')).toBe('Sep 23');
-    expect(formatShortDate(CREATED_AT, 'Europe/London')).toBe('Sep 22');
+    const now = new Date('2026-10-23T12:00:00Z');
+    expect(formatShortDate(CREATED_AT, 'Asia/Kolkata', now)).toBe('23 Sep');
+    expect(formatShortDate(CREATED_AT, 'Europe/London', now)).toBe('22 Sep');
+  });
+
+  it('adds the year only when it is not the current year', () => {
+    const now = new Date('2027-02-01T12:00:00Z');
+    expect(formatShortDate(CREATED_AT, 'Europe/London', now)).toBe('22 Sep 2026');
   });
 });
 
@@ -55,9 +61,9 @@ describe('workspaceTimeZone', () => {
 
 describe('formatShortDateOnly', () => {
   it('formats a DATE column with no timezone shift', () => {
-    expect(formatShortDateOnly('2026-01-01')).toBe('Jan 1');
-    expect(formatShortDateOnly('2026-12-31')).toBe('Dec 31');
-    expect(formatShortDateOnly('2026-10-02')).toBe('Oct 2');
+    expect(formatShortDateOnly('2026-01-01')).toBe('1 Jan');
+    expect(formatShortDateOnly('2026-12-31')).toBe('31 Dec');
+    expect(formatShortDateOnly('2026-10-02')).toBe('2 Oct');
   });
 
   it('renders anything that is not YYYY-MM-DD as empty', () => {

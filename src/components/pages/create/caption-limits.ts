@@ -15,9 +15,9 @@ export const CAPTION_LIMITS: Record<PostPlatform, number> = {
   youtube_shorts: 5000,
 };
 
-const GROUPING = new Intl.NumberFormat('en-IN');
+const GROUPING = new Intl.NumberFormat('en-US');
 
-/** A count in Indian digit grouping: 63206 reads "63,206", 100000 reads "1,00,000". */
+/** A count in US digit grouping: 63206 reads "63,206", 100000 reads "100,000". */
 export function groupDigits(value: number): string {
   return GROUPING.format(value);
 }

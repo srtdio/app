@@ -83,7 +83,7 @@ vi.mock('@/components/comments/useMentionCandidates', () => ({
   useMentionCandidates: () => ({ candidates: [] }),
 }));
 
-import { Comments, RESOLVE_FAILED_COPY } from '@/components/comments/Comments';
+import { Comments, CONFIRM_FAILED_COPY } from '@/components/comments/Comments';
 import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -263,7 +263,8 @@ describe('approver Confirm on a resolved checkpoint', () => {
     expect(confirmButton(1)).toBeDefined();
     expect(rowTick('p-1')).toBe('hollow');
     const alerts = Array.from(host?.querySelectorAll('[role="alert"]') ?? []);
-    expect(alerts.map((a) => a.textContent)).toEqual([RESOLVE_FAILED_COPY]);
+    expect(alerts.map((a) => a.textContent)).toEqual([CONFIRM_FAILED_COPY]);
+    expect(CONFIRM_FAILED_COPY).toBe("Couldn't confirm the checkpoint. Try again.");
   });
 
   it('the creator never sees Confirm; a resolved point shows the hollow tick', async () => {

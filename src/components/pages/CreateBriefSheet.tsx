@@ -346,7 +346,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
 
   function fieldError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-[11px] text-bad">{fieldErrors[key]}</p>
+      <p className="mt-1.5 text-xs text-bad">{fieldErrors[key]}</p>
     ) : null;
   }
 
@@ -461,7 +461,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             />
           </div>
           {uploadNotice !== null ? (
-            <p role="status" className="mt-1.5 text-[11px] text-bad">
+            <p role="status" className="mt-1.5 text-xs text-bad">
               {uploadNotice}
             </p>
           ) : null}

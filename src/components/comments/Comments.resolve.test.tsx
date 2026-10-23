@@ -11,7 +11,7 @@ import type { ToastOptions } from '@/components/ui/toast/types';
 // 42: Resolve is ONE tap (no textarea, note, sheet or dialog); the row flips at
 //     once, the bottom strip says "Resolved" with Undo for 4 seconds, and Undo
 //     calls the resolve RPC with false. Same for a checkpoint. A failure reverts
-//     and shows "Couldn't do that. Try again." once, inline.
+//     and shows "Couldn't resolve the checkpoint. Try again." once, inline.
 
 type ListResult = CommentResult<CommentRow[]>;
 
@@ -302,6 +302,6 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
     expect(dismissSpy).toHaveBeenCalledWith('toast-1');
     const alerts = Array.from(host?.querySelectorAll('[role="alert"]') ?? []);
     expect(alerts.map((a) => a.textContent)).toEqual([RESOLVE_FAILED_COPY]);
-    expect(RESOLVE_FAILED_COPY).toBe("Couldn't do that. Try again.");
+    expect(RESOLVE_FAILED_COPY).toBe("Couldn't resolve the checkpoint. Try again.");
   });
 });

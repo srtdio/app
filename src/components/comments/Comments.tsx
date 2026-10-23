@@ -31,6 +31,7 @@ import { UNDO_WINDOW_MS, useUndoableAction } from '@/lib/use-undoable-action';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { friendlyCommentError } from '@/components/comments/comment-errors';
+import { errorText } from '@/lib/error-copy';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { supabase } from '@/lib/supabase';
@@ -139,7 +140,9 @@ export interface CommentCounts {
 }
 
 /** The one failure copy for a one-tap Resolve (or its Undo) that did not land. */
-export const RESOLVE_FAILED_COPY = "Couldn't do that. Try again.";
+export const RESOLVE_FAILED_COPY = errorText('resolve the checkpoint', null);
+/** The one failure copy for a one-tap Confirm (or its Undo) that did not land. */
+export const CONFIRM_FAILED_COPY = errorText('confirm the checkpoint', null);
 
 /** The Comments header line: "{n} open · {m} resolved". Pure. */
 /** A checkpoint's live state as the comments list shows it (optimistic taps included). */
@@ -1216,7 +1219,10 @@ export function Comments({
         traceId: newTrace(),
       }),
     );
-    if (!result.ok) return { ok: false, error: friendlyCommentError(result.error) };
+    if (!result.ok) {
+      const action = options.parentCommentId !== null ? 'post the reply' : 'post the comment';
+      return { ok: false, error: friendlyCommentError(result.error, action) };
+    }
     const parentId = options.parentCommentId;
     if (parentId !== null) replyDrafts.delete(draftKey(parentId));
     // The guide's reply landed: it moves on even if a phone lost the tap.
@@ -1253,7 +1259,9 @@ export function Comments({
       points,
       traceId: newTrace(),
     });
-    if (!result.ok) return { ok: false, error: friendlyCommentError(result.error) };
+    if (!result.ok) {
+      return { ok: false, error: friendlyCommentError(result.error, 'add the checkpoints') };
+    }
     await loadPage(0);
     return { ok: true };
   }
@@ -1281,7 +1289,7 @@ export function Comments({
         id: commentId,
         message: isPoint
           ? friendlyPointFreezeError(result.error, target, 'edit')
-          : friendlyCommentError(result.error),
+          : friendlyCommentError(result.error, 'edit the comment'),
       });
       return;
     }
@@ -1314,7 +1322,7 @@ export function Comments({
             id: commentId,
             message: isPoint
               ? friendlyPointFreezeError(result.error, target, 'delete')
-              : friendlyCommentError(result.error),
+              : friendlyCommentError(result.error, 'delete the comment'),
           });
           return;
         }
@@ -1334,7 +1342,13 @@ export function Comments({
     const result = await resolveComment(supabase, { commentId: comment.id, resolved }, newTrace());
     setResolvingId((current) => (current === comment.id ? null : current));
     if (!result.ok) {
-      setRowError({ id: comment.id, message: friendlyCommentError(result.error) });
+      setRowError({
+        id: comment.id,
+        message: friendlyCommentError(
+          result.error,
+          resolved ? 'resolve the thread' : 'reopen the thread',
+        ),
+      });
       return;
     }
     await loadPage(0);
@@ -1458,7 +1472,7 @@ export function Comments({
               if (!mounted.current) return;
               if (!withdrawn) {
                 patchAcceptedAt(comment.id, optimistic);
-                setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+                setRowError({ id: comment.id, message: CONFIRM_FAILED_COPY });
               }
             });
           },
@@ -1470,7 +1484,7 @@ export function Comments({
       if (!mounted.current || undone || landed) return;
       if (stripId !== null) toast?.dismiss(stripId);
       patchAcceptedAt(comment.id, prior);
-      setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+      setRowError({ id: comment.id, message: CONFIRM_FAILED_COPY });
     });
   }
 

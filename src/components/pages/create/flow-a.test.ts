@@ -183,10 +183,11 @@ describe('Post flow A helpers', () => {
       tiktok: 4000,
       youtube_shorts: 5000,
     });
-    expect(groupDigits(100000)).toBe('1,00,000');
+    expect(groupDigits(100000)).toBe('100,000');
+    expect(groupDigits(1000000)).toBe('1,000,000');
     expect(groupDigits(63206)).toBe('63,206');
     expect(captionCounterText(12, 2200)).toBe('12 / 2,200');
-    expect(captionCounterText(100000, 63206)).toBe('1,00,000 / 63,206');
+    expect(captionCounterText(100000, 63206)).toBe('100,000 / 63,206');
     expect(captionOverLimit(280, 280)).toBe(false);
     expect(captionOverLimit(281, 280)).toBe(true);
   });

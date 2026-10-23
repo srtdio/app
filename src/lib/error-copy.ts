@@ -1,74 +1,91 @@
-// One plain sentence for a failure, never the raw PostgREST or exception text.
-// Known domain codes (the procs' RAISE names, src/packages/rpc) and the
-// transport failures a phone meets (offline, a timeout) each get their own
-// line; anything else is the generic one. Pages adopt it in their own PRs.
+// The one failure line every surface shows: "Couldn't {action}. {reason}".
+// The action is the caller's ("move the post", "post the reply"); the reason is
+// read off the error by its code or raised message, never shown raw. Only the
+// offline and unknown reasons are retryable: a refusal (no access, deleted,
+// locked, conflict, a bad field) reads the same on a second try. Pure, apart
+// from the navigator.onLine probe the offline check makes.
 
-export const GENERIC_ERROR = 'Something went wrong. Try again.';
+/** Why an action failed, as the copy groups it. */
+export type ErrorReason =
+  | 'offline'
+  | 'forbidden'
+  | 'not_found'
+  | 'stale'
+  | 'approved_locked'
+  | 'caption_too_long'
+  | 'title_required'
+  | 'unknown';
 
-const KNOWN: Record<string, string> = {
-  forbidden_role: "You don't have permission to do that.",
-  invalid_payload: "Something in that request wasn't right. Check it and try again.",
-  not_authenticated: 'Your session has ended. Sign in again.',
-  network_failure: "You're offline or the connection dropped. Check your network and try again.",
-  timeout: 'That took too long. Try again.',
+/** The approved reason lines (23 Oct 2026), one per reason. */
+export const REASON_COPY: Record<ErrorReason, string> = {
+  offline: "You're offline.",
+  forbidden: "You don't have access to do this.",
+  not_found: 'It was deleted.',
+  stale: 'Someone else changed it. Refresh to see the latest.',
+  approved_locked: 'Approved posts are locked.',
+  caption_too_long: 'Captions can be up to 4,000 characters.',
+  title_required: 'Add a title to save.',
+  unknown: 'Try again.',
 };
 
-/** Normalise a code or message to one of KNOWN's keys, or null. */
-function codeOf(text: string): string | null {
-  const t = text.trim().toLowerCase();
-  if (t === '') return null;
-  if (t === 'forbidden_role') return 'forbidden_role';
-  if (t === 'invalid_payload') return 'invalid_payload';
-  if (t === 'not authenticated' || t === 'not_authenticated' || t === 'unauthenticated')
-    return 'not_authenticated';
-  if (
-    t === 'network_failure' ||
-    t === 'network failure' ||
-    t === 'failed to fetch' ||
-    t === 'load failed' ||
-    t === 'networkerror when attempting to fetch resource.' ||
-    t === 'networkerror' ||
-    t === 'network request failed'
-  )
-    return 'network_failure';
-  if (
-    t === 'timeout' ||
-    t === 'timed out' ||
-    t === 'aborterror' ||
-    t === 'timeouterror' ||
-    t === 'statement_timeout' ||
-    t === '57014' ||
-    t === 'canceling statement due to statement timeout'
-  )
-    return 'timeout';
-  return null;
+const RETRYABLE: ReadonlySet<ErrorReason> = new Set<ErrorReason>(['offline', 'unknown']);
+
+/** A failure in plain words, plus whether a Retry belongs beside it. */
+export interface ErrorCopy {
+  reason: ErrorReason;
+  text: string;
+  retryable: boolean;
 }
 
-/** The strings an unknown error value may carry a code or message in. */
-function candidates(error: unknown): string[] {
-  if (typeof error === 'string') return [error];
-  if (error instanceof Error) return [error.name, error.message];
+// The code and message off any error shape the app produces: a DomainError
+// ({ code, message }), a PostgREST error, a thrown Error, or a bare code string.
+function partsOf(error: unknown): { code: string; message: string; isTypeError: boolean } {
+  if (typeof error === 'string') return { code: error, message: error, isTypeError: false };
   if (typeof error === 'object' && error !== null) {
-    const out: string[] = [];
-    for (const key of ['code', 'name', 'message', 'error', 'reason']) {
-      const value = (error as Record<string, unknown>)[key];
-      if (typeof value === 'string') out.push(value);
-    }
-    return out;
+    const code = (error as { code?: unknown }).code;
+    const message = (error as { message?: unknown }).message;
+    return {
+      code: typeof code === 'string' ? code : '',
+      message: typeof message === 'string' ? message : '',
+      isTypeError: error instanceof TypeError,
+    };
   }
-  return [];
+  return { code: '', message: '', isTypeError: false };
 }
 
-/**
- * A plain sentence for `error`: a domain code string, an Error, a PostgREST
- * or DomainError object ({ code, message }), or anything else. The known
- * codes map to their own line; everything else to the generic one. The input
- * text itself is never returned.
- */
-export function plainError(error: unknown): string {
-  for (const text of candidates(error)) {
-    const code = codeOf(text);
-    if (code !== null) return KNOWN[code] ?? GENERIC_ERROR;
+function browserOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
+const NETWORK_RE = /failed to fetch|networkerror|network request failed|load failed|network error/i;
+
+/** Read the reason off an error. Server refusals win over the offline probe. */
+export function errorReason(error: unknown): ErrorReason {
+  const { code, message, isTypeError } = partsOf(error);
+  const text = `${code} ${message}`;
+  if (/post_approved_locked|approved_locked/i.test(text)) return 'approved_locked';
+  if (/caption_too_long/i.test(text)) return 'caption_too_long';
+  if (/title_required/i.test(text)) return 'title_required';
+  if (/forbidden_role|workspace_member_only|permission denied|\b42501\b/i.test(text)) {
+    return 'forbidden';
   }
-  return GENERIC_ERROR;
+  if (/not[_ ]found|\bPGRST116\b/i.test(text)) return 'not_found';
+  if (/row_version|stale|version_conflict|\bconflict\b/i.test(text)) return 'stale';
+  if (browserOffline() || isTypeError || NETWORK_RE.test(text)) return 'offline';
+  return 'unknown';
+}
+
+/** "Couldn't {action}. {reason}" with the reason read off `error`. */
+export function errorCopy(action: string, error: unknown): ErrorCopy {
+  const reason = errorReason(error);
+  return {
+    reason,
+    text: `Couldn't ${action}. ${REASON_COPY[reason]}`,
+    retryable: RETRYABLE.has(reason),
+  };
+}
+
+/** As {@link errorCopy}, the line only. */
+export function errorText(action: string, error: unknown): string {
+  return errorCopy(action, error).text;
 }
