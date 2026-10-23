@@ -37,11 +37,13 @@ function walk(node: ReactNode, out: ReactElement[] = []): ReactElement[] {
 }
 
 describe('1. caption block (mock P1)', () => {
-  it('reads like the post: workspace row, platform · format · vN, a text Edit with pencil', () => {
-    const block = PAGE.slice(PAGE.indexOf('data-caption-block=""'));
+  it('reads like the post: workspace row and a text Edit with pencil (flow B 27: no platform line, no vN)', () => {
+    const start = PAGE.indexOf('data-caption-block=""');
+    const block = PAGE.slice(start, PAGE.indexOf('data-caption-edit=""', start) + 600);
     expect(block).toContain('<Avatar name={workspaceName ?? \'\'} size="md" />');
-    expect(block).toContain('{platformLabel(post.platform)} · {formatLabel(post.format)}');
-    expect(block).toContain('<VersionPill');
+    expect(block).not.toContain('{formatLabel(post.format)}');
+    // The old version pill is gone for good (its component was deleted).
+    expect(PAGE).not.toContain('VersionPill');
     expect(block).toContain('data-caption-edit=""');
     expect(block).toContain('<IconPencil size={15} />\n                    Edit');
     // The uppercase eyebrow and the select hint are gone.
@@ -78,17 +80,17 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
   it('the phone bar is the pcs PostDecisionBar, only off read-only, with room reserved under the page', () => {
     expect(PAGE).toContain('phoneLayout && !readOnly ? (');
     expect(PAGE).toContain(
-      '<PostDecisionBar actions={stageActions} transitioning={transitioning} onPick={pickStage} />',
+      '<PostDecisionBar model={decisionModel} busy={decisionBusy} error={actionError} />',
     );
     expect(PAGE).toContain('data-decision-bar-space=""');
-    expect(PAGE).toContain('calc(${DECISION_BAR_SPACE_PX}px + env(safe-area-inset-bottom))');
+    expect(PAGE).toContain(
+      'calc(${decisionBarSpace(decisionModel, actionError)}px + env(safe-area-inset-bottom))',
+    );
   });
 
   it('FN10: stage buttons stay enabled during the undo window and a pick flushes the pending commit', () => {
-    expect(PAGE).toContain(
-      '<StageButtons actions={stageActions} transitioning={transitioning} onPick={pickStage} />',
-    );
-    expect(PAGE).not.toContain('transitioning={transitioning || optimisticStage !== null}');
+    expect(PAGE).toContain('const decisionBusy = transitioning || notifying;');
+    expect(PAGE).not.toContain('optimisticStage !== null || transitioning');
     expect(PAGE).toMatch(
       /function pickStage\(to: Stage\): void \{\s*if \(optimisticStage !== null\) flushUndoable\(\);/,
     );
@@ -96,16 +98,15 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
 });
 
 describe('6. gallery hints and slide actions', () => {
-  it('the static hint line is gone and the slide sheet offers Make first / Make last', () => {
+  it('the static hint line is gone and the slide sheet has no per-tap reorder (#26: Reorder mode only)', () => {
     expect(PAGE).not.toContain('Long-press to place a pin.');
-    expect(PAGE).toContain(
-      'onMakeFirst={() => {\n          if (slideIndex !== null) handleMakeFirst(slideIndex);',
-    );
-    expect(PAGE).toContain(
-      'onMakeLast={() => {\n          if (slideIndex !== null) handleMakeLast(slideIndex);',
-    );
-    expect(SLIDE_ACTIONS).toContain('label="Make first"');
-    expect(SLIDE_ACTIONS).toContain('label="Make last"');
+    expect(PAGE).not.toContain('handleMakeFirst');
+    expect(PAGE).not.toContain('handleMoveLeft');
+    for (const label of ['Make first', 'Make last', 'Move left', 'Move right']) {
+      expect(SLIDE_ACTIONS).not.toContain(`label="${label}"`);
+    }
+    expect(SLIDE_ACTIONS).toContain('label="Add image after this"');
+    expect(SLIDE_ACTIONS).toContain('label="Remove image"');
   });
 });
 
@@ -132,9 +133,7 @@ describe('7. FB6 reject / park commit', () => {
       'stillHere: () => mountedRef.current && postIdRef.current === movedPostId,',
     );
     expect(body).toContain('setInlineError: setActionError,');
-    expect(body).toContain(
-      'isDomainError(error) ? friendlyTransitionError(error) : plainError(error)',
-    );
+    expect(body).toContain('friendlyError: postActionErrorCopy,');
     expect(body).not.toMatch(/\bthrow\b/);
   });
 
@@ -194,7 +193,7 @@ describe('8 / 9 / 10. reason sheet dirty, Back, delete', () => {
     expect(body).toContain('showWhenVisible(document, () => {');
     expect(body).not.toContain('Could not delete this post');
     expect(read('./pcs/PostActionSheet.tsx')).toContain(
-      "DELETE_CONFIRM_BASE = 'Delete this post? Moves to Recently deleted.'",
+      "DELETE_CONFIRM_BASE = 'Moves to Recently deleted. You can restore it there.'",
     );
   });
 });
@@ -212,7 +211,10 @@ describe('11. FN7 / FN9 / FN11 copy', () => {
 
 describe('13 / 14. skeleton and load error', () => {
   it('Loading post is a skeleton with a screen-reader label, never bare text', () => {
-    const paint = PAGE.slice(PAGE.indexOf('if (loading) {'), PAGE.indexOf('if (loadError) {'));
+    const paint = PAGE.slice(
+      PAGE.indexOf('if (firstPaintPending) {'),
+      PAGE.indexOf('if (loadError) {'),
+    );
     expect(paint).toContain('aria-busy="true"');
     expect(paint).toContain('<span className="sr-only">Loading post</span>');
     expect(paint).toContain('animate-pulse');
@@ -229,14 +231,12 @@ describe('13 / 14. skeleton and load error', () => {
 });
 
 describe('15. FB8 workspace-zone date', () => {
-  it('the owner / date line and the details sheet read the day in the workspace zone', () => {
-    expect(PAGE).toContain('formatPostTargetDate(post.target_date, approveTimeZone)');
+  it('the details row and the details sheet read the day in the workspace zone', () => {
+    expect(PAGE).toContain('formatPostDueLabel(post.target_date, approveTimeZone)');
     expect(PAGE).not.toContain('toLocaleDateString');
     expect(PAGE).toContain('timeZone={approveTimeZone}');
     expect(DETAILS).toContain('targetDateInputValue(targetDate, timeZone)');
-    expect(DETAILS).toContain(
-      'onChangeTargetDate(targetDateFromInput(event.target.value, timeZone))',
-    );
+    expect(DETAILS).toContain('onChangeTargetDate(targetDateFromInput(dateDraft, timeZone));');
     expect(DETAILS).not.toContain('toISOString().slice(0, 10)');
   });
 });

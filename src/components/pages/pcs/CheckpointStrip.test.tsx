@@ -20,7 +20,7 @@ vi.mock('@/components/comments/flash-node', () => ({
 import {
   CheckpointStrip,
   CHECKPOINT_SELECT,
-  awaitingCount,
+  STRIP_SURFACE_CLASS,
   checkpointChips,
   checkpointCounts,
   chipCircleClass,
@@ -80,7 +80,7 @@ describe('chip read shape (narrowed to only what the chips need)', () => {
   });
 });
 
-describe('checkpointCounts (settled of total)', () => {
+describe('checkpointCounts (resolved of total, lifted to the page)', () => {
   it('counts every checkpoint whose resolved_at is not null against the total', () => {
     expect(
       checkpointCounts([{ resolved_at: 't' }, { resolved_at: null }, { resolved_at: 't' }]),
@@ -89,60 +89,45 @@ describe('checkpointCounts (settled of total)', () => {
   });
 });
 
-describe('chipState (derived from columns, never stored)', () => {
-  it('maps resolved + accepted to open / awaiting / confirmed', () => {
-    expect(chipState({ resolved_at: null, accepted_at: null })).toBe('open');
-    expect(chipState({ resolved_at: 't', accepted_at: null })).toBe('awaiting');
-    expect(chipState({ resolved_at: 't', accepted_at: 't' })).toBe('confirmed');
-    // An agency reopen (resolved_at back to null) drops even a previously
-    // accepted point straight to open.
-    expect(chipState({ resolved_at: null, accepted_at: 't' })).toBe('open');
+describe('chipState (fix 32: only Open and Resolved are visible)', () => {
+  it('maps every DB state down to open / resolved', () => {
+    expect(chipState({ resolved_at: null })).toBe('open');
+    // Resolved, confirmed or not, is one visible state.
+    expect(chipState({ resolved_at: 't' })).toBe('resolved');
+    expect(chipState(row('a', 1, 't', 't'))).toBe('resolved');
+    // An agency reopen drops even a previously accepted point straight to open.
+    expect(chipState(row('b', 2, null, 't'))).toBe('open');
   });
 });
 
-describe('chipCircleClass (each state its own token treatment)', () => {
-  it('confirmed fills with the success token', () => {
-    expect(chipCircleClass('confirmed')).toContain('bg-good');
+describe('chipCircleClass (token treatment per visible state)', () => {
+  it('resolved fills with the success fill and the on-colour ink token, never text-white', () => {
+    const cls = chipCircleClass('resolved');
+    expect(cls).toContain('bg-[var(--good-solid)]');
+    expect(cls).toContain('text-accent-fg');
+    expect(cls).not.toContain('text-white');
   });
-  it('awaiting uses the soft success background for a hollow green tick', () => {
-    const cls = chipCircleClass('awaiting');
-    expect(cls).toContain('bg-good-soft');
-    expect(cls).toContain('border-good');
-    expect(cls).toContain('text-good');
-  });
-  it('open uses the muted panel treatment, distinct from the other two', () => {
+  it('open uses the muted panel treatment, distinct from resolved', () => {
     const cls = chipCircleClass('open');
     expect(cls).toContain('bg-panel-2');
-    expect(cls).not.toContain('bg-good');
+    expect(cls).not.toContain('good');
   });
-  it('uses only design tokens: no hex, no dark: literal', () => {
-    for (const state of ['open', 'awaiting', 'confirmed'] as const) {
+  it('uses only design tokens: no hex, no dark: literal, no white literal', () => {
+    for (const state of ['open', 'resolved'] as const) {
       const cls = chipCircleClass(state);
       expect(cls).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
       expect(cls).not.toContain('dark:');
+      expect(cls).not.toMatch(/\bwhite\b/);
     }
-  });
-});
-
-describe('awaitingCount (points awaiting the client)', () => {
-  it('counts resolved-but-unconfirmed points only', () => {
-    expect(
-      awaitingCount([
-        row('a', 1, 't', null), // awaiting
-        row('b', 2, 't', 't'), // confirmed
-        row('c', 3, null, null), // open
-        row('d', 4, 't', null), // awaiting
-      ]),
-    ).toBe(2);
   });
 });
 
 describe('checkpointChips', () => {
   // Deliberately out of read order to prove the render sorts.
   const rows = [
-    row('c', 3, 't', 't'), // confirmed
+    row('c', 3, 't', 't'), // resolved (and accepted in the DB)
     row('a', 1, null, null), // open
-    row('b', 2, 't', null), // awaiting
+    row('b', 2, 't', null), // resolved
   ];
 
   it('renders one chip per checkpoint in ledger_seq order regardless of read order', () => {
@@ -170,9 +155,8 @@ describe('checkpointChips', () => {
     expect(elements(open).some((el) => typeof el.type === 'function')).toBe(false);
   });
 
-  it('shows a tick glyph and NOT the number on a resolved chip, awaiting or confirmed', () => {
-    // The tick tracks what the counter counts (resolved_at set), so both the
-    // awaiting and confirmed states swap their number for the glyph.
+  it('shows a tick glyph and NOT the number on a resolved chip, accepted or not', () => {
+    // The tick tracks resolved_at only; accepted_at never shows as its own state.
     for (const resolved of [row('a', 7, 't', null), row('x', 7, 't', 't')]) {
       const chip = checkpointChips([resolved])[0]!;
       expect(collectText(chip)).not.toContain('7');
@@ -180,8 +164,8 @@ describe('checkpointChips', () => {
     }
   });
 
-  it('applies each of the three states its own circle treatment', () => {
-    const chips = checkpointChips(rows); // ordered 1(open), 2(awaiting), 3(confirmed)
+  it('resolved chips: hollow tick until confirmed, filled once confirmed', () => {
+    const chips = checkpointChips(rows); // ordered 1(open), 2(resolved), 3(resolved, accepted)
     const circleClass = (chip: ReactElement): string => {
       const inner = elements(chip).find((el) =>
         ((el.props as { className?: string }).className ?? '').includes('rounded-full'),
@@ -189,8 +173,28 @@ describe('checkpointChips', () => {
       return (inner?.props as { className?: string }).className ?? '';
     };
     expect(circleClass(chips[0]!)).toContain('bg-panel-2');
-    expect(circleClass(chips[1]!)).toContain('bg-good-soft');
-    expect(circleClass(chips[2]!)).toContain('bg-good');
+    expect(circleClass(chips[1]!)).toContain('bg-transparent');
+    expect(circleClass(chips[1]!)).toContain('border-good');
+    expect(circleClass(chips[1]!)).toContain('text-good');
+    expect(circleClass(chips[2]!)).toContain('bg-[var(--good-solid)]');
+    expect(chipCircleClass('resolved', false)).not.toContain('good-solid');
+  });
+
+  it('applies the two visible states their circle treatment (open vs resolved)', () => {
+    const chips = checkpointChips([
+      row('a', 1, null, null),
+      row('b', 2, 't', 't'),
+      row('c', 3, 't', 't'),
+    ]);
+    const circleClass = (chip: ReactElement): string => {
+      const inner = elements(chip).find((el) =>
+        ((el.props as { className?: string }).className ?? '').includes('rounded-full'),
+      );
+      return (inner?.props as { className?: string }).className ?? '';
+    };
+    expect(circleClass(chips[0]!)).toContain('bg-panel-2');
+    expect(circleClass(chips[1]!)).toContain('bg-[var(--good-solid)]');
+    expect(circleClass(chips[2]!)).toBe(circleClass(chips[1]!));
   });
 
   it('activating a chip flashes that checkpoint by its comment DOM id', () => {
@@ -234,5 +238,12 @@ describe('render (empty state)', () => {
   // this exercises the "return null when there are no checkpoints" invariant.
   it('renders nothing when the post has no checkpoints', () => {
     expect(renderToStaticMarkup(<CheckpointStrip {...stripProps()} />)).toBe('');
+  });
+});
+
+describe('strip surface (sticky background matches its card)', () => {
+  it('uses the comments card surface token, not the page background', () => {
+    expect(STRIP_SURFACE_CLASS).toBe('bg-panel-2');
+    expect(STRIP_SURFACE_CLASS).not.toContain('bg-bg');
   });
 });

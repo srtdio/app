@@ -19,7 +19,8 @@ vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) 
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't1' }));
 vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
 
-import { PcsApproveConfirm, PostDetailPage, StageButtons } from '@/components/pages/PostDetailPage';
+import { PcsApproveConfirm, PostDetailPage } from '@/components/pages/PostDetailPage';
+import { PostDecisionRow } from '@/components/pages/pcs/PostDecisionBar';
 import { onBehalfConfirmLine, visibleStageActions } from '@/components/pages/pcs/stage-actions';
 import {
   GATE_IDLE,
@@ -56,14 +57,19 @@ function collect(node: ReactNode, found: ReactElement[]): void {
   collect((node.props as { children?: ReactNode }).children, found);
 }
 
-/** The rail for a client in review, wired as the page wires it: through the gate. */
+/** The decision row's buttons for a role and stage, wired as the page wires them: through the gate. */
 function rail(h: ReturnType<typeof harness>, stage: Stage, role: string): ReactElement[] {
   const all: ReactElement[] = [];
   collect(
-    StageButtons({
-      actions: visibleStageActions(stage, role),
-      transitioning: false,
-      onPick: (to) => h.gate.request('p1', to),
+    PostDecisionRow({
+      model: {
+        kind: 'approver',
+        actions: visibleStageActions(stage, role),
+        onComment: null,
+        onPick: (to) => h.gate.request('p1', to),
+      },
+      busy: false,
+      error: null,
     }),
     all,
   );
@@ -251,10 +257,11 @@ describe('PostDetailPage embedded', () => {
       fileURLToPath(new URL('./PostDetailPage.tsx', import.meta.url)),
       'utf8',
     );
-    // Exactly two writes: the ?comment= strip and the flashTo tab switch.
-    expect(src.match(/setSearchParams\(/g)).toHaveLength(2);
+    // Exactly one write: the ?comment= strip (replace). Pin / highlight taps
+    // never touch the URL (flow B: no tabs, no history entries).
+    expect(src.match(/setSearchParams\(/g)).toHaveLength(1);
+    expect(src).toContain('setSearchParams(next, { replace: true });');
     expect(src).toMatch(/useEffect\(\(\) => \{\n\s+if \(embedded\) return;\n\s+const comment/);
-    expect(src).toContain('if (!embedded && !isDesktop && activeTab !== tab) {');
     // Every hard navigation to the pipeline goes through leave().
     expect(src.match(/navigate\('\/pipeline'\)/g)).toHaveLength(1);
   });
@@ -268,7 +275,9 @@ describe('PostDetailPage embedded', () => {
     expect(src).toContain('onActionsOpenChange?.(next);');
     expect(src).toContain('{...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}');
     // A host open while the sheet cannot mount closes at once (never pops open later).
-    expect(src).toContain('!loading && !notFound && !loadError && detail !== null && !readOnly;');
+    expect(src).toContain(
+      '!firstPaintPending && !notFound && !loadError && detail !== null && !readOnly;',
+    );
     expect(src).toContain(
       'if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);',
     );

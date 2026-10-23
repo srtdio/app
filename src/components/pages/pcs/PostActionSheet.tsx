@@ -14,7 +14,7 @@
 // delete confirm names the post's live plans (one bounded read on opening it).
 
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
@@ -44,6 +44,20 @@ import { supabase } from '@/lib/supabase';
 import { MOVE_ROW_LABEL, PostSheetPlanRowsContext } from '@/components/chat/PlanMoveSheet';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 
+/**
+ * One stage move offered in the sheet (flow B 31): the creator's Approve on
+ * their behalf, Park and Reject. The page owns the move (its confirm, Undo and
+ * errors); the sheet closes, then hands off.
+ */
+export interface PostMoveRow {
+  key: string;
+  icon: ReactNode;
+  label: string;
+  sub?: string;
+  danger?: boolean;
+  onPick: () => void;
+}
+
 interface PostActionSheetProps {
   open: boolean;
   onClose: () => void;
@@ -72,10 +86,15 @@ interface PostActionSheetProps {
   onOpenInPipeline?: () => void;
   /** The delete confirm's plans read; the live read (5s cap) when absent. */
   readPlans?: (postId: string) => Promise<Result<PostPlanRef[]>>;
+  /** Stage moves listed first (creators only); absent or empty shows none. */
+  moveRows?: readonly PostMoveRow[];
 }
 
-/** The delete confirm's base copy: honest about the 4s Undo and the recovery surface. */
-export const DELETE_CONFIRM_BASE = 'Delete this post? Moves to Recently deleted.';
+/**
+ * Flow B 38: the one delete line, the same on the menu row and in the confirm:
+ * honest about the recovery surface.
+ */
+export const DELETE_CONFIRM_BASE = 'Moves to Recently deleted. You can restore it there.';
 
 /**
  * The delete confirm's copy: the base, then the plans line once the read
@@ -154,6 +173,7 @@ export function PostActionSheet({
   onDeletePost,
   onOpenInPipeline,
   readPlans,
+  moveRows = [],
 }: PostActionSheetProps): ReactElement {
   const planRows = useContext(PostSheetPlanRowsContext);
   const [view, setView] = useState<'actions' | 'chat' | 'confirm-delete'>('actions');
@@ -294,6 +314,19 @@ export function PostActionSheet({
               }}
             />
           ) : null}
+          {moveRows.map((row) => (
+            <ActionRow
+              key={row.key}
+              icon={row.icon}
+              label={row.label}
+              {...(row.sub !== undefined ? { sub: row.sub } : {})}
+              {...(row.danger === true ? { danger: true } : {})}
+              onClick={() => {
+                close();
+                row.onPick();
+              }}
+            />
+          ))}
           <ActionRow
             icon={<IconSend size={18} />}
             label="Send to chat"
@@ -324,7 +357,7 @@ export function PostActionSheet({
               danger
               icon={<IconTrash size={18} />}
               label="Delete post"
-              sub="This cannot be undone"
+              sub={DELETE_CONFIRM_BASE}
               onClick={() => setView('confirm-delete')}
             />
           ) : null}

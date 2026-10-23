@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconChevronRight } from '@/components/ui/icons';
 import { supabase } from '@/lib/supabase';
@@ -43,6 +44,11 @@ interface PostDetailsSheetProps {
    * zone, see post-date.ts), or null when Clear removes the date.
    */
   onChangeTargetDate: (targetDate: string | null) => void;
+  /**
+   * Approved posts (3a): only the due date and the bucket stay editable, so the
+   * owner row turns read-only. Absent or false: every agency row is editable.
+   */
+  lockedFields?: boolean;
 }
 
 /** The stored date as a day in the workspace zone, for read display. */
@@ -116,9 +122,26 @@ export function PostDetailsSheet({
   onChangeBucket,
   onChangeOwner,
   onChangeTargetDate,
+  lockedFields = false,
 }: PostDetailsSheetProps) {
   const [buckets, setBuckets] = useState<BucketOption[]>([]);
   const [picker, setPicker] = useState<'bucket' | 'owner' | null>(null);
+  // Flow B 28: the picked day is a draft until Done; changing the input never
+  // writes. It re-seeds from the stored date whenever the sheet opens or the
+  // stored date changes (a save landed, or Clear).
+  const storedDay = targetDateInputValue(targetDate, timeZone);
+  const [dateDraft, setDateDraft] = useState(storedDay);
+  useEffect(() => {
+    if (open) setDateDraft(storedDay);
+  }, [open, storedDay]);
+
+  // Done: write the picked day once (only when it changed), then close.
+  function done(): void {
+    if (isAgencySide && dateDraft !== '' && dateDraft !== storedDay) {
+      onChangeTargetDate(targetDateFromInput(dateDraft, timeZone));
+    }
+    onClose();
+  }
 
   // Load the non-archived buckets whenever the sheet opens, for both the current
   // value (dot + name) and the picker list.
@@ -161,7 +184,24 @@ export function PostDetailsSheet({
 
   return (
     <>
-      <Sheet open={open} onClose={onClose} title="Post details">
+      <Sheet
+        open={open}
+        onClose={onClose}
+        title="Post details"
+        footer={
+          isAgencySide ? (
+            <Button
+              variant="primary"
+              size="lg"
+              className="ml-auto"
+              data-details-done=""
+              onClick={done}
+            >
+              Done
+            </Button>
+          ) : undefined
+        }
+      >
         <div className="flex flex-col gap-1">
           <DetailRow
             label="Bucket"
@@ -171,7 +211,7 @@ export function PostDetailsSheet({
           <DetailRow
             label="Owner"
             value={ownerValue}
-            onTap={isAgencySide ? () => setPicker('owner') : undefined}
+            onTap={isAgencySide && !lockedFields ? () => setPicker('owner') : undefined}
           />
 
           {isAgencySide ? (
@@ -180,11 +220,8 @@ export function PostDetailsSheet({
               <input
                 type="date"
                 aria-label="Target date"
-                value={targetDateInputValue(targetDate, timeZone)}
-                onChange={(event) => {
-                  if (event.target.value !== '')
-                    onChangeTargetDate(targetDateFromInput(event.target.value, timeZone));
-                }}
+                value={dateDraft}
+                onChange={(event) => setDateDraft(event.target.value)}
                 className="min-h-[44px] min-w-0 flex-1 rounded-md border border-border bg-panel-2 px-3 text-sm text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
               />
               {targetDate !== null ? (

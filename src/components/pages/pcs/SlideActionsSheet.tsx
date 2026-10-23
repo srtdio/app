@@ -1,12 +1,12 @@
-// The agency-only slide actions for one gallery image, opened by a long-press or
-// right-click on a grid thumbnail and by the lightbox kebab. It is presentational
-// only: it renders the four actions and reports the intent; the page owns the
-// pure transform + the single gallerySet write (so versioning and annotation
-// re-staling stay server-side). The move actions are disabled at the ends; Remove
-// is the danger action and the page now allows it down to the last image (an
-// empty gallery is valid, so the post is simply left with no artwork). Remove
-// asks first with the lightbox's own confirm (same copy, Cancel / Remove), and a
-// gallery write in flight blocks the moves and Remove behind "Saving…".
+// The agency-only slide actions for one gallery image, opened by a right-click
+// on a gallery tile. It is presentational only: it renders the actions and
+// reports the intent; the page owns the pure transform + the single gallerySet
+// write (so versioning and annotation re-staling stay server-side). #26: no
+// per-tap move rows (each tap saved a version); reordering happens only in the
+// gallery's Reorder mode, one save. Remove is the danger action and the page
+// allows it down to the last image (an empty gallery is valid). Remove asks
+// first with the lightbox's own confirm (same copy, Cancel / Remove), and a
+// gallery write in flight blocks Remove behind "Saving…".
 
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -14,23 +14,18 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { removeImageConfirmCopy } from '@/components/pages/pcs/PostLightbox';
-import { IconChevronLeft, IconChevronRight, IconPlus, IconTrash } from '@/components/ui/icons';
+import { IconPlus, IconTrash } from '@/components/ui/icons';
 
 interface SlideActionsSheetProps {
   open: boolean;
   onClose: () => void;
   /** Zero-based position of the slide these actions apply to. */
   index: number;
-  /** Total slides, so the move actions know the ends. */
+  /** Total slides, for the title and the remove confirm copy. */
   count: number;
-  onMoveLeft: () => void;
-  onMoveRight: () => void;
-  /** Make first / make last over the same gallery_set commit; rows hidden when absent. */
-  onMakeFirst?: (() => void) | undefined;
-  onMakeLast?: (() => void) | undefined;
   onAddAfter: () => void;
   onRemove: () => void;
-  /** A gallery write is in flight: moves and Remove are disabled. */
+  /** A gallery write is in flight: Remove is disabled. */
   saving?: boolean;
 }
 
@@ -78,10 +73,6 @@ export function SlideActionsSheet({
   onClose,
   index,
   count,
-  onMoveLeft,
-  onMoveRight,
-  onMakeFirst,
-  onMakeLast,
   onAddAfter,
   onRemove,
   saving = false,
@@ -121,34 +112,6 @@ export function SlideActionsSheet({
         </div>
       ) : (
         <div className="flex flex-col gap-1">
-          <SlideRow
-            icon={<IconChevronLeft size={18} />}
-            label="Move left"
-            disabled={saving || index <= 0}
-            onClick={() => run(onMoveLeft)}
-          />
-          <SlideRow
-            icon={<IconChevronRight size={18} />}
-            label="Move right"
-            disabled={saving || index >= count - 1}
-            onClick={() => run(onMoveRight)}
-          />
-          {onMakeFirst !== undefined ? (
-            <SlideRow
-              icon={<IconChevronLeft size={18} />}
-              label="Make first"
-              disabled={saving || index <= 0}
-              onClick={() => run(onMakeFirst)}
-            />
-          ) : null}
-          {onMakeLast !== undefined ? (
-            <SlideRow
-              icon={<IconChevronRight size={18} />}
-              label="Make last"
-              disabled={saving || index >= count - 1}
-              onClick={() => run(onMakeLast)}
-            />
-          ) : null}
           <SlideRow
             icon={<IconPlus size={18} />}
             label="Add image after this"

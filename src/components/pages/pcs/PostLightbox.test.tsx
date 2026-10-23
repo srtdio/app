@@ -116,10 +116,6 @@ const GESTURES: StageGestures = {
 };
 
 const MANAGE = {
-  onMakeFirst: () => {},
-  onMoveLeft: () => {},
-  onMoveRight: () => {},
-  onMakeLast: () => {},
   onAddAfter: () => {},
   onRemove: () => {},
 };
@@ -312,25 +308,15 @@ describe('lightboxView', () => {
     ).toBe(true);
   });
 
-  it('renders the agency 7-control bottom bar: reorder, divider, download/add/delete', () => {
+  it('renders the agency bottom bar: download/add/delete, no per-tap reorder (#26)', () => {
     const manage = {
-      onMakeFirst: vi.fn(),
-      onMoveLeft: vi.fn(),
-      onMoveRight: vi.fn(),
-      onMakeLast: vi.fn(),
       onAddAfter: vi.fn(),
       onRemove: vi.fn(),
     };
     const tree = lightboxView(props({ index: 1, manage }));
-    // The reorder + download + add controls fire their prewired handlers, and
-    // every icon button is a 44px target.
-    for (const [label, fn] of [
-      ['Make first', manage.onMakeFirst],
-      ['Move left', manage.onMoveLeft],
-      ['Move right', manage.onMoveRight],
-      ['Make last', manage.onMakeLast],
-      ['Add image', manage.onAddAfter],
-    ] as const) {
+    // The add control fires its prewired handler, and every icon button is a
+    // 44px target.
+    for (const [label, fn] of [['Add image', manage.onAddAfter]] as const) {
       const button = byLabel(tree, label)!;
       expect(button).toBeDefined();
       expect(className(button)).toContain('h-11');
@@ -344,16 +330,17 @@ describe('lightboxView', () => {
     // Add keeps the accent token; delete hovers to the destructive token.
     expect(className(byLabel(tree, 'Add image')!)).toContain('text-accent');
     expect(className(byLabel(tree, 'Delete image')!)).toContain('hover:text-bad');
-    // A subtle divider separates the reorder group from the actions.
-    expect(elements(tree).some((el) => className(el).includes('bg-overlay-line'))).toBe(true);
+    // #26: no per-tap reorder (each tap saved a version); Reorder mode in the
+    // gallery is the one way to reorder.
+    for (const label of ['Make first', 'Move left', 'Move right', 'Make last']) {
+      expect(byLabel(tree, label)).toBeUndefined();
+    }
   });
 
   it('shows only the download button in the bottom bar for clients and read-only', () => {
     const clientTree = lightboxView(props({ index: 1 }));
     expect(byLabel(clientTree, 'Download')).toBeDefined();
     // No edit actions render without a manage bar.
-    expect(byLabel(clientTree, 'Make first')).toBeUndefined();
-    expect(byLabel(clientTree, 'Move left')).toBeUndefined();
     expect(byLabel(clientTree, 'Add image')).toBeUndefined();
     expect(byLabel(clientTree, 'Delete image')).toBeUndefined();
     // Download sits inside the transparent bottom bar, not the top bar.
@@ -430,7 +417,6 @@ describe('lightboxView', () => {
     );
     // The confirm row replaces the controls; the reorder/add buttons are gone.
     expect(strings(tree)).toContain('Remove this image?');
-    expect(byLabel(tree, 'Make first')).toBeUndefined();
     expect(byLabel(tree, 'Add image')).toBeUndefined();
 
     // Cancel restores the bar; Remove runs the existing remove handler.
@@ -446,21 +432,6 @@ describe('lightboxView', () => {
     expect(onCancelRemove).toHaveBeenCalledOnce();
     (remove.props as { onClick: () => void }).onClick();
     expect(onConfirmRemove).toHaveBeenCalledOnce();
-  });
-
-  it('disables left/first at position 1 and right/last at the end', () => {
-    const manage = MANAGE;
-    const first = lightboxView(props({ index: 0, manage }));
-    expect((byLabel(first, 'Make first')!.props as { disabled: boolean }).disabled).toBe(true);
-    expect((byLabel(first, 'Move left')!.props as { disabled: boolean }).disabled).toBe(true);
-    expect((byLabel(first, 'Move right')!.props as { disabled: boolean }).disabled).toBe(false);
-    expect((byLabel(first, 'Make last')!.props as { disabled: boolean }).disabled).toBe(false);
-
-    const last = lightboxView(props({ index: 2, manage }));
-    expect((byLabel(last, 'Make first')!.props as { disabled: boolean }).disabled).toBe(false);
-    expect((byLabel(last, 'Move left')!.props as { disabled: boolean }).disabled).toBe(false);
-    expect((byLabel(last, 'Move right')!.props as { disabled: boolean }).disabled).toBe(true);
-    expect((byLabel(last, 'Make last')!.props as { disabled: boolean }).disabled).toBe(true);
   });
 
   it('renders one snapping carousel slide per item, navigable by swipe or overlay arrows', () => {
@@ -859,9 +830,9 @@ describe('a broken file never blanks the post or brief', () => {
 });
 
 describe('W2 gallery and download', () => {
-  it('while a gallery save is in flight, reorder and delete are blocked and the bar says Saving…', () => {
+  it('while a gallery save is in flight, delete is blocked and the bar says Saving…', () => {
     const tree = lightboxView(props({ index: 1, manage: MANAGE, saving: true }));
-    for (const label of ['Make first', 'Move left', 'Move right', 'Make last', 'Delete image']) {
+    for (const label of ['Delete image']) {
       expect((byLabel(tree, label)!.props as { disabled?: boolean }).disabled).toBe(true);
     }
     expect(strings(tree)).toContain('Saving…');

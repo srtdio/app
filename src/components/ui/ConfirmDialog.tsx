@@ -9,7 +9,8 @@ import { DUR_BASE_MS } from '@/lib/motion';
 
 interface ConfirmDialogProps {
   title: string;
-  message: string;
+  /** Body line under the title. Omit it for a title-only confirm: no body element and no gap. */
+  message?: string;
   confirmLabel: string;
   /** Label for the dismiss action. Default "Cancel". */
   cancelLabel?: string;
@@ -94,7 +95,11 @@ export function ConfirmDialog({
         )}
       >
         <h2 className="text-sm font-semibold text-fg">{title}</h2>
-        <p className="mt-2 text-sm text-fg-2">{message}</p>
+        {message !== undefined && message !== '' ? (
+          <p data-confirm-message="" className="mt-2 text-sm text-fg-2">
+            {message}
+          </p>
+        ) : null}
         <div className="mt-5 flex justify-end gap-2">
           <Button size="lg" disabled={busy} onClick={requestClose}>
             {cancelLabel}

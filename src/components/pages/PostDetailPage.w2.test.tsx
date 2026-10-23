@@ -159,7 +159,7 @@ describe('2. caption and pin comment sheets', () => {
 
 describe('4. gallery writes never overlap', () => {
   it('a second reorder or remove while a save is in flight is dropped', () => {
-    expect(PAGE).toContain('if (postId === undefined || gallerySavingRef.current) return;');
+    expect(PAGE).toContain('if (postId === undefined || gallerySavingRef.current) return false;');
     expect(PAGE).toContain('gallerySavingRef.current = false;');
     expect(PAGE).toContain('saving={gallerySaving}');
   });

@@ -600,14 +600,14 @@ describe.runIf(COMMENTS_SUITE)('feedback ledger guards (edit / mentions / versio
 
   // 7 -----------------------------------------------------------------------
   describe('post_ready_notify', () => {
-    it('raises checkpoints_open while any ledger comment is unresolved', async () => {
+    it('sends even while a ledger comment is unresolved (no checkpoints_open gate)', async () => {
       const postId = await insertPost('review');
       await seedCheckpoint(clientAClient, wsA.id, postId, 'still open');
       const { error } = await postReadyNotify(agencyClient, {
         p_post_id: postId,
         p_trace_id: generateTraceId(),
       });
-      expect(error?.message).toBe('checkpoints_open');
+      expect(error).toBeNull();
     });
 
     it('rejects a client caller with forbidden_role', async () => {

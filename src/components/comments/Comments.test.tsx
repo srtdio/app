@@ -27,7 +27,6 @@ import {
   checkpointReplySeed,
   checkpointState,
   checkpointStateLabel,
-  checkpointWithdrawalText,
   groupThreads,
   canModifyComment,
   commentActions,
@@ -49,9 +48,8 @@ import {
   runCreateCommentBatch,
   runDeleteComment,
   runEditComment,
+  showCheckpointConfirm,
   showCheckpointNotDone,
-  showCheckpointUndo,
-  showCheckpointWithdrawal,
   tickFilled,
   tickInteractive,
   toCommentAttachments,
@@ -310,50 +308,41 @@ describe('groupThreads (feedback ledger: consecutive same-author checkpoints col
 describe('checkpoint state + feed controls', () => {
   const RESOLVED = '2026-02-01T00:00:00.000Z';
   const ACCEPTED = '2026-02-02T00:00:00.000Z';
-  const WITHDRAWN = '2026-02-03T00:00:00.000Z';
 
   const open = row({ id: 'open', ledger_seq: 1, resolved_at: null, accepted_at: null });
-  const clientTurn = row({ id: 'ct', ledger_seq: 2, resolved_at: RESOLVED, accepted_at: null });
-  const confirmed = row({
+  const resolved = row({ id: 'rs', ledger_seq: 2, resolved_at: RESOLVED, accepted_at: null });
+  const accepted = row({
     id: 'cf',
     ledger_seq: 3,
     resolved_at: RESOLVED,
     accepted_at: ACCEPTED,
   });
 
-  it('derives state from the resolved / accepted columns only', () => {
+  it('maps every DB state down to the two visible states, open / resolved', () => {
     expect(checkpointState(open)).toBe('open');
-    expect(checkpointState(clientTurn)).toBe('client_turn');
-    expect(checkpointState(confirmed)).toBe('confirmed');
-    // Confirmed requires resolved: an agency reopen (resolved_at null) is 'open'
-    // regardless of a lingering accepted stamp.
+    expect(checkpointState(resolved)).toBe('resolved');
+    // An accepted point is still just "resolved" on screen.
+    expect(checkpointState(accepted)).toBe('resolved');
+    // An agency reopen (resolved_at null) is 'open' regardless of a lingering
+    // accepted stamp.
     expect(checkpointState(row({ id: 'x', resolved_at: null, accepted_at: ACCEPTED }))).toBe(
       'open',
     );
   });
 
-  it('labels each state with the right wording per side and a chip token pair', () => {
-    expect(checkpointStateLabel('open', true)).toEqual({
-      text: 'With creators',
-      className: 'bg-panel-3 text-fg-3',
-    });
-    expect(checkpointStateLabel('open', false)).toEqual({
+  it('labels only "Open" and "Resolved", the same on both sides (fix 32)', () => {
+    expect(checkpointStateLabel('open')).toEqual({
       text: 'Open',
       className: 'bg-panel-3 text-fg-3',
     });
-    expect(checkpointStateLabel('client_turn', true)).toEqual({
-      text: 'Your turn',
-      className: 'bg-accent-soft text-accent',
-    });
-    expect(checkpointStateLabel('client_turn', false)).toEqual({
-      text: 'With approvers',
-      className: 'bg-accent-soft text-accent',
-    });
-    expect(checkpointStateLabel('confirmed', true)).toEqual({
-      text: 'Confirmed',
+    expect(checkpointStateLabel('resolved')).toEqual({
+      text: 'Resolved',
       className: 'bg-good-soft text-good',
     });
-    expect(checkpointStateLabel('confirmed', false).text).toBe('Confirmed');
+    const words = (['open', 'resolved'] as const).map((s) => checkpointStateLabel(s).text);
+    for (const gone of ['Confirmed', 'Your turn', 'With approvers', 'With creators', 'settled']) {
+      expect(words).not.toContain(gone);
+    }
   });
 
   // Every className across the tickCircle subtree, joined, so a substring match
@@ -363,7 +352,7 @@ describe('checkpoint state + feed controls', () => {
       .map((el) => (el.props as { className?: string }).className ?? '')
       .join(' ');
 
-  it('renders an unconfirmed tick with a visible ghost glyph and good-family outline', () => {
+  it('renders an open tick with a visible ghost glyph and good-family outline', () => {
     const cls = tickClasses(false, false);
     expect(cls).toContain('border-good'); // good-family outline
     expect(cls).toContain('bg-good-soft'); // soft green fill
@@ -372,83 +361,52 @@ describe('checkpoint state + feed controls', () => {
     expect(cls).not.toContain('opacity-0'); // glyph not faded out
   });
 
-  it('adds the good-family halo only on a live, unconfirmed tick', () => {
+  it('adds the good-family halo only on a live, open tick', () => {
     expect(tickClasses(false, true)).toContain('ring-good-soft'); // live: halo
     expect(tickClasses(false, false)).not.toContain('ring-good-soft'); // passive: none
   });
 
-  it('renders a confirmed tick with the filled treatment', () => {
+  it('renders a resolved tick with the filled token treatment, never text-white', () => {
     const cls = tickClasses(true);
-    expect(cls).toContain('bg-good');
-    expect(cls).toContain('text-white');
+    expect(cls).toContain('bg-[var(--good-solid)]');
+    expect(cls).toContain('text-accent-fg');
+    expect(cls).not.toContain('text-white');
     expect(cls).toContain('opacity-100');
     expect(cls).not.toContain('ring-good-soft');
   });
 
-  it('makes the tick live for an agency member only when the checkpoint is open', () => {
+  it('makes the one-tap Resolve live for an agency member only on an open point', () => {
     expect(tickInteractive('open', false)).toBe(true);
-    expect(tickInteractive('client_turn', false)).toBe(false);
-    expect(tickInteractive('confirmed', false)).toBe(false);
+    expect(tickInteractive('resolved', false)).toBe(false);
   });
 
-  it('makes the tick live for a client only when resolved and unconfirmed', () => {
-    expect(tickInteractive('client_turn', true)).toBe(true);
+  it('never gives a client the Resolve tick (the client gets Confirm instead)', () => {
     expect(tickInteractive('open', true)).toBe(false);
-    expect(tickInteractive('confirmed', true)).toBe(false);
+    expect(tickInteractive('resolved', true)).toBe(false);
   });
 
-  it('fills the agency tick once resolved, the client tick once confirmed', () => {
+  it('fills the tick only once resolved AND confirmed, for either side', () => {
     expect(tickFilled('open', false)).toBe(false);
-    expect(tickFilled('client_turn', false)).toBe(true);
-    expect(tickFilled('confirmed', false)).toBe(true);
     expect(tickFilled('open', true)).toBe(false);
-    expect(tickFilled('client_turn', true)).toBe(false);
-    expect(tickFilled('confirmed', true)).toBe(true);
+    expect(tickFilled('resolved', false)).toBe(false);
+    expect(tickFilled('resolved', true)).toBe(true);
   });
 
-  it('shows the client "Not done" only when resolved and "Undo" only when confirmed', () => {
-    expect(showCheckpointNotDone('client_turn', true)).toBe(true);
-    expect(showCheckpointNotDone('open', true)).toBe(false);
-    expect(showCheckpointNotDone('confirmed', true)).toBe(false);
-    expect(showCheckpointUndo('confirmed', true)).toBe(true);
-    expect(showCheckpointUndo('client_turn', true)).toBe(false);
-  });
-
-  it('shows an agency member neither "Not done" nor "Undo" in any state', () => {
-    for (const state of ['open', 'client_turn', 'confirmed'] as const) {
-      expect(showCheckpointNotDone(state, false)).toBe(false);
-      expect(showCheckpointUndo(state, false)).toBe(false);
+  it('shows Confirm only to a client on a resolved, unconfirmed point', () => {
+    expect(showCheckpointConfirm('resolved', true, false)).toBe(true);
+    expect(showCheckpointConfirm('resolved', true, true)).toBe(false);
+    expect(showCheckpointConfirm('open', true, false)).toBe(false);
+    for (const state of ['open', 'resolved'] as const) {
+      expect(showCheckpointConfirm(state, false, false)).toBe(false);
     }
   });
 
-  it('surfaces the withdrawal line after a client undo, not after an agency un-tick', () => {
-    // Client withdrew: still resolved, unconfirmed, with an unaccepted stamp.
-    const clientUndo = row({
-      id: 'u',
-      resolved_at: RESOLVED,
-      accepted_at: null,
-      unaccepted_at: WITHDRAWN,
-      unaccepted_by: UUID_B,
-    });
-    expect(showCheckpointWithdrawal(clientUndo)).toBe(true);
-    // Agency un-tick: back to open (resolved_at null), even with a stale stamp.
-    const agencyUntick = row({
-      id: 'a',
-      resolved_at: null,
-      accepted_at: null,
-      unaccepted_at: WITHDRAWN,
-      unaccepted_by: UUID_B,
-    });
-    expect(showCheckpointWithdrawal(agencyUntick)).toBe(false);
-    // Never confirmed, no stamp: nothing to show.
-    expect(showCheckpointWithdrawal(clientTurn)).toBe(false);
-  });
-
-  it('names the withdrawing member, falling back to "Former member"', () => {
-    expect(checkpointWithdrawalText(WITHDRAWN, 'Ada')).toMatch(/^Confirmation withdrawn by Ada · /);
-    expect(checkpointWithdrawalText(WITHDRAWN, null)).toMatch(
-      /^Confirmation withdrawn by Former member · /,
-    );
+  it('shows the client "Not done" only on a resolved point, never to an agency member', () => {
+    expect(showCheckpointNotDone('resolved', true)).toBe(true);
+    expect(showCheckpointNotDone('open', true)).toBe(false);
+    for (const state of ['open', 'resolved'] as const) {
+      expect(showCheckpointNotDone(state, false)).toBe(false);
+    }
   });
 
   it('seeds the reply composer with the pushback prompt only on a "Not done"', () => {

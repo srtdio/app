@@ -12,8 +12,10 @@ vi.mock('agora-chat', () => ({
 
 import {
   annotationChip,
+  commentCountsText,
   filterThreads,
   openThreadCount,
+  resolvedThreadCount,
   type ThreadRoot,
 } from '@/components/comments/Comments';
 
@@ -99,11 +101,16 @@ describe('Open / All filter (item 2)', () => {
     expect(open[0]?.replies.map((r) => r.id)).toEqual(['r1']);
   });
 
-  it('the open-count chip counts live unresolved threads, hidden at 0', () => {
+  it('the header count reads "{n} open · {m} resolved" over live threads', () => {
     expect(openThreadCount(threads)).toBe(2);
+    expect(resolvedThreadCount(threads)).toBe(1);
     expect(openThreadCount([thread('done', '2026-01-02T00:00:00.000Z')])).toBe(0);
     expect(openThreadCount([{ ...thread('gone', null), tombstone: true }])).toBe(0);
-    expect(SRC).toContain('{openCount > 0 ? (');
+    expect(
+      resolvedThreadCount([{ ...thread('gone', '2026-01-02T00:00:00.000Z'), tombstone: true }]),
+    ).toBe(0);
+    expect(commentCountsText({ open: 2, resolved: 1 })).toBe('2 open · 1 resolved');
+    expect(SRC).toContain('commentCountsText({ open: openCount, resolved: resolvedCount })');
     expect(SRC).toContain("useState<CommentFilter>('all')");
   });
 

@@ -86,13 +86,18 @@ export function noEntityCodesCases(): void {
       withKey(network);
       await page.goto(`/posts/${POST_IDS[0]}`);
 
-      const approve = page.getByRole('button', { name: 'Approve', exact: true }).first();
-      await approve.waitFor({ state: 'visible', timeout: 15_000 });
+      // Flow B 31: the agency-side viewer approves from the ⋯ sheet.
+      const more = page.getByRole('button', { name: 'Post actions' });
+      await more.waitFor({ state: 'visible', timeout: 15_000 });
       await expect(page.getByText('Monday carousel', { exact: true }).first()).toBeVisible();
       expect(await visibleText(page)).not.toMatch(CODE);
       await expect(page.getByText('HS-101', { exact: false })).toHaveCount(0);
 
-      await approve.click();
+      await more.click();
+      await page
+        .getByRole('dialog', { name: 'Post actions', exact: true })
+        .getByRole('button', { name: /Approve on their behalf/ })
+        .click();
       await expect(page.locator('[data-approve-confirm-button]')).toHaveText('Approve');
       expect(await visibleText(page)).not.toMatch(CODE);
       await page.locator('[data-approve-back]').click();

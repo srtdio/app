@@ -1,8 +1,16 @@
-import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  Fragment,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { dispatchInductionDid, INDUCTION_KEYS } from '@/lib/induction';
-import { Textarea } from '@/components/ui/Textarea';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
@@ -19,7 +27,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { relativeLong, relativeShort, shortDate } from '@/lib/relative-time';
-import { useUndoableAction } from '@/lib/use-undoable-action';
+import { UNDO_WINDOW_MS, useUndoableAction } from '@/lib/use-undoable-action';
+import { useOptionalToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { friendlyCommentError } from '@/components/comments/comment-errors';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
@@ -75,12 +84,8 @@ function mentionDisplay(name: string | null): string {
 }
 import {
   buildResolveArgs,
-  friendlyAcceptError,
   friendlyPointFreezeError,
   friendlyResolveError,
-  MAX_NOTE_CHARS,
-  NOTE_PLACEHOLDER,
-  noteRevealClass,
   tickCircle,
 } from '@/components/pages/pcs/checkpoint-controls';
 
@@ -121,6 +126,47 @@ interface CommentsProps {
   showHeader?: boolean;
   /** Rendered under the header, above the list (the post's CheckpointStrip). */
   belowHeader?: ReactNode;
+  /** Live open / resolved top-level thread counts (checkpoints included), lifted
+   *  once loaded and on every change, optimistic resolves included. Lets the page
+   *  render its "{n} open comments" chip and the creator's resubmit gate. */
+  onCountsChange?: (counts: CommentCounts) => void;
+}
+
+/** Open vs resolved top-level threads, as the header reads them. */
+export interface CommentCounts {
+  open: number;
+  resolved: number;
+}
+
+/** The one failure copy for a one-tap Resolve (or its Undo) that did not land. */
+export const RESOLVE_FAILED_COPY = "Couldn't do that. Try again.";
+
+/** The Comments header line: "{n} open · {m} resolved". Pure. */
+/** A checkpoint's live state as the comments list shows it (optimistic taps included). */
+export type LiveCheckpoint = Pick<CommentRow, 'resolved_at' | 'accepted_at'>;
+
+/**
+ * The list's live checkpoint state, keyed by comment id, for the strip under the
+ * header. Null until the list has loaded (the strip then shows its own read).
+ */
+export const LiveCheckpointsContext = createContext<ReadonlyMap<string, LiveCheckpoint> | null>(
+  null,
+);
+
+/** Checkpoint rows (ledger_seq set) to their live resolved / confirmed state. Pure. */
+export function liveCheckpointMap(
+  rows: readonly Pick<CommentRow, 'id' | 'ledger_seq' | 'resolved_at' | 'accepted_at'>[],
+): ReadonlyMap<string, LiveCheckpoint> {
+  const map = new Map<string, LiveCheckpoint>();
+  for (const row of rows) {
+    if (row.ledger_seq === null) continue;
+    map.set(row.id, { resolved_at: row.resolved_at, accepted_at: row.accepted_at });
+  }
+  return map;
+}
+
+export function commentCountsText(counts: CommentCounts): string {
+  return `${counts.open} open · ${counts.resolved} resolved`;
 }
 
 /** The top-level thread filter: open threads only, or every thread. */
@@ -139,6 +185,12 @@ export function filterThreads(threads: readonly ThreadRoot[], filter: CommentFil
 /** The open-count chip's number: live, unresolved top-level threads. Pure. */
 export function openThreadCount(threads: readonly ThreadRoot[]): number {
   return threads.filter((thread) => !thread.tombstone && thread.comment.resolved_at === null)
+    .length;
+}
+
+/** The resolved half of the header count: live, resolved top-level threads. Pure. */
+export function resolvedThreadCount(threads: readonly ThreadRoot[]): number {
+  return threads.filter((thread) => !thread.tombstone && thread.comment.resolved_at !== null)
     .length;
 }
 
@@ -487,89 +539,66 @@ export function groupThreads(threads: readonly ThreadRoot[]): ThreadGroup[] {
 // Checkpoint state + controls in the feed (derived from columns, never stored)
 // ---------------------------------------------------------------------------
 
-/** A checkpoint's live state, read straight off its columns:
- *  resolved_at null -> 'open' (the agency owes work); resolved and unconfirmed ->
- *  'client_turn' (the agency marked it done, it awaits the client); accepted ->
- *  'confirmed'. Confirmed requires resolved, so an agency reopen (resolved_at back
- *  to null) drops a confirmed point straight to 'open'. */
-export type CheckpointState = 'open' | 'client_turn' | 'confirmed';
-export function checkpointState(
-  row: Pick<CommentRow, 'resolved_at' | 'accepted_at'>,
-): CheckpointState {
-  if (row.resolved_at === null) return 'open';
-  return row.accepted_at !== null ? 'confirmed' : 'client_turn';
+/** A checkpoint's VISIBLE state. Only two words exist on screen: "Open" and
+ *  "Resolved". The DB keeps its richer columns (accepted_at, unaccepted_at, ...)
+ *  untouched; display maps them down: resolved_at null -> 'open', anything
+ *  resolved (confirmed or not) -> 'resolved'. */
+export type CheckpointState = 'open' | 'resolved';
+export function checkpointState(row: Pick<CommentRow, 'resolved_at'>): CheckpointState {
+  return row.resolved_at === null ? 'open' : 'resolved';
 }
 
-/** The state label text + design tokens for one checkpoint row. The wording turns
- *  on the viewer's side; the tokens pair a foreground with its matching soft
- *  background so the label reads as a chip: muted (open), accent (client's turn),
- *  or success (confirmed). Open has no dedicated soft token, so it borrows the
- *  neutral raised surface (panel-3). */
+/** The state label text + design tokens for one comment or checkpoint row, the
+ *  same on both sides: muted "Open" (borrowing the neutral raised surface, as
+ *  open has no soft token) or success "Resolved". */
 export interface CheckpointLabel {
   text: string;
   className: string;
 }
-export function checkpointStateLabel(state: CheckpointState, isClient: boolean): CheckpointLabel {
-  switch (state) {
-    case 'open':
-      return { text: isClient ? 'With creators' : 'Open', className: 'bg-panel-3 text-fg-3' };
-    case 'client_turn':
-      return {
-        text: isClient ? 'Your turn' : 'With approvers',
-        className: 'bg-accent-soft text-accent',
-      };
-    case 'confirmed':
-      return { text: 'Confirmed', className: 'bg-good-soft text-good' };
-  }
+export function checkpointStateLabel(state: CheckpointState): CheckpointLabel {
+  return state === 'open'
+    ? { text: 'Open', className: 'bg-panel-3 text-fg-3' }
+    : { text: 'Resolved', className: 'bg-good-soft text-good' };
 }
 
-/** The tick is a live control only for the actor whose turn it is: the agency
- *  while the point is open, the client while it is resolved-and-unconfirmed.
+/** The one-tap "Resolve" is live only for an agency member on an open point.
  *  Every other case is a passive indicator. */
 export function tickInteractive(state: CheckpointState, isClient: boolean): boolean {
-  return isClient ? state === 'client_turn' : state === 'open';
+  return !isClient && state === 'open';
 }
 
-/** The passive tick's fill: the agency's tick fills once the point is resolved;
- *  the client's fills once they have confirmed. */
-export function tickFilled(state: CheckpointState, isClient: boolean): boolean {
-  return isClient ? state === 'confirmed' : state !== 'open';
+/** True once the approver has confirmed the point (accepted_at set). Confirmed
+ *  requires resolved, so an agency reopen (resolved_at back to null) never reads
+ *  as confirmed even with a stale accepted stamp. Pure. */
+export function checkpointConfirmed(row: Pick<CommentRow, 'resolved_at' | 'accepted_at'>): boolean {
+  return row.resolved_at !== null && row.accepted_at !== null;
 }
 
-/** "Not done" (the client un-resolves, then must say why) shows only on the
- *  client's turn; "Undo" (the client withdraws a confirmation) only once
- *  confirmed. An agency member sees neither. */
-export function showCheckpointNotDone(state: CheckpointState, isClient: boolean): boolean {
-  return isClient && state === 'client_turn';
-}
-export function showCheckpointUndo(state: CheckpointState, isClient: boolean): boolean {
-  return isClient && state === 'confirmed';
+/** The passive tick fills only once the point is resolved AND confirmed by the
+ *  approver; a resolved point awaiting the Confirm shows the hollow tick. The
+ *  state word stays "Resolved" either way. */
+export function tickFilled(state: CheckpointState, confirmed: boolean): boolean {
+  return state === 'resolved' && confirmed;
 }
 
-/** The withdrawal record shows only when a confirmation was withdrawn: the point
- *  is the client's turn again (resolved, unconfirmed) AND an unaccepted stamp
- *  exists. An agency un-tick returns the point to 'open', so this stays false
- *  there; a point that simply never was confirmed has no unaccepted stamp. */
-export function showCheckpointWithdrawal(
-  row: Pick<CommentRow, 'resolved_at' | 'accepted_at' | 'unaccepted_at'>,
+/** The approver's one-tap "Confirm" shows only to a client on a resolved point
+ *  they have not confirmed yet. The creator never sees it. */
+export function showCheckpointConfirm(
+  state: CheckpointState,
+  isClient: boolean,
+  confirmed: boolean,
 ): boolean {
-  return checkpointState(row) === 'client_turn' && row.unaccepted_at !== null;
+  return isClient && state === 'resolved' && !confirmed;
 }
 
-/** The one-line withdrawal record, naming the withdrawing member through the same
- *  chain the rest of the file uses ("Former member" only once a read confirmed
- *  the id is not a current member; a deleted withdrawer, null, is gone). While
- *  the name is still loading (undefined) the line keeps its height and shows
- *  nothing, so it never names anyone early and never jumps. */
-export function checkpointWithdrawalText(
-  unacceptedAt: string,
-  name: string | null | undefined,
-): string {
-  if (name === undefined) return '\u00a0';
-  return `Confirmation withdrawn by ${name ?? FORMER_MEMBER} · ${relativeLong(
-    unacceptedAt,
-    new Date(),
-  )}`;
+/** "Not done" (the client un-resolves, then must say why) shows only to a client
+ *  on a resolved point not yet confirmed. An agency member never sees it. */
+export function showCheckpointNotDone(
+  state: CheckpointState,
+  isClient: boolean,
+  confirmed = false,
+): boolean {
+  return isClient && state === 'resolved' && !confirmed;
 }
 
 /** The pushback reason prompt. Un-resolving without saying why is the failure
@@ -883,7 +912,7 @@ export async function fetchCheckpoints(
 
 /** A quiet text control: reads as plain text but carries a 44px minimum touch
  *  target from invisible padding, not a visible box. Drives the client's
- *  "Not done" / "Undo" beneath a checkpoint row. */
+ *  "Not done" beneath a resolved checkpoint row. */
 function QuietTextButton({
   onClick,
   disabled,
@@ -930,6 +959,7 @@ export function Comments({
   guideReplyCommentId = null,
   showHeader = false,
   belowHeader,
+  onCountsChange,
 }: CommentsProps) {
   const newTrace = useNewTrace();
   // The Open / All thread filter (posts' header); All by default.
@@ -967,15 +997,11 @@ export function Comments({
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copyFailed, setCopyFailed] = useState(false);
-  // The comment (thread root or checkpoint) whose resolve/accept request is in
-  // flight; null when idle. Shared by the single-thread resolve and every
-  // checkpoint tick / "Not done" / "Undo".
+  // The comment (thread root or checkpoint) whose reopen / "Not done" request is
+  // in flight; null when idle. A one-tap Resolve is optimistic and never waits.
   const [resolvingId, setResolvingId] = useState<string | null>(null);
-  // Agency tick flow on a checkpoint: the row whose resolution-note composer is
-  // open, its draft, and the one-frame entrance flag for the reveal motion.
-  const [noteForId, setNoteForId] = useState<string | null>(null);
-  const [noteDraft, setNoteDraft] = useState('');
-  const [noteEntered, setNoteEntered] = useState(false);
+  // The bottom "Resolved" + Undo strip after a one-tap Resolve.
+  const toast = useOptionalToast();
   // Checkpoints whose reply composer was opened by a client "Not done"; their
   // composer seeds with the pushback prompt so the client says what is still off.
   const [pushbackSeeds, setPushbackSeeds] = useState<Set<string>>(new Set());
@@ -1104,11 +1130,7 @@ export function Comments({
   useEffect(() => {
     const needed: string[] = [];
     for (const comment of merged) {
-      for (const id of [
-        comment.author_user_id,
-        ...parseMentions(comment.body),
-        ...(comment.unaccepted_by !== null ? [comment.unaccepted_by] : []),
-      ]) {
+      for (const id of [comment.author_user_id, ...parseMentions(comment.body)]) {
         if (!attemptedProfiles.current.has(id)) {
           attemptedProfiles.current.add(id);
           needed.push(id);
@@ -1161,14 +1183,6 @@ export function Comments({
       active = false;
     };
   }, [merged]);
-
-  // One-frame entrance for the agency note composer reveal (opacity/translateY
-  // only). Mirrors the ledger's note-reveal timing.
-  useEffect(() => {
-    if (noteForId === null || noteEntered) return;
-    const raf = requestAnimationFrame(() => setNoteEntered(true));
-    return () => cancelAnimationFrame(raf);
-  }, [noteForId, noteEntered]);
 
   const nameOf = useCallback((id: string): string | null => resolveName(profiles, id), [profiles]);
   // Mentions inside a body read as @username; author lines keep the full name.
@@ -1326,6 +1340,140 @@ export function Comments({
     await loadPage(0);
   }
 
+  // Flip one row's resolved_at in place (both the paged list and the always-loaded
+  // checkpoints) so a one-tap Resolve, its Undo, or a revert paints at once.
+  function patchResolvedAt(commentId: string, resolvedAt: string | null): void {
+    const patch = (rows: CommentRow[]): CommentRow[] =>
+      rows.some((row) => row.id === commentId)
+        ? rows.map((row) => (row.id === commentId ? { ...row, resolved_at: resolvedAt } : row))
+        : rows;
+    setComments(patch);
+    setCheckpoints(patch);
+  }
+
+  // The existing resolve RPC for either kind of row: a checkpoint goes through
+  // comment_resolve with no note; a plain thread through the comments package
+  // wrapper. Both carry an explicit trace. True when the write landed.
+  async function sendResolve(comment: CommentRow, resolved: boolean): Promise<boolean> {
+    if (comment.ledger_seq !== null) {
+      const result = await commentResolve(
+        supabase,
+        buildResolveArgs({ commentId: comment.id, resolved, traceId: newTrace() }),
+      );
+      return result.ok;
+    }
+    const result = await resolveComment(supabase, { commentId: comment.id, resolved }, newTrace());
+    return result.ok;
+  }
+
+  // One-tap Resolve: no box, note, sheet or confirm. The row flips to Resolved
+  // at once (optimistic) while the RPC runs, and the bottom strip offers "Undo"
+  // for UNDO_WINDOW_MS. Undo flips the row back and sends resolved=false (after
+  // the first write settles, so the two never race). A failure on either leg
+  // reverts and shows the one inline line, once.
+  function handleOneTapResolve(comment: CommentRow): void {
+    const prior = comment.resolved_at;
+    const optimistic = new Date().toISOString();
+    setRowError(null);
+    patchResolvedAt(comment.id, optimistic);
+    const sent = sendResolve(comment, true).catch(() => false);
+    let undone = false;
+    const stripId =
+      toast?.show({
+        title: 'Resolved',
+        action: {
+          label: 'Undo',
+          onPress: () => {
+            undone = true;
+            patchResolvedAt(comment.id, prior);
+            void sent.then(async (landed) => {
+              if (!landed) return;
+              const reopened = await sendResolve(comment, false).catch(() => false);
+              if (!mounted.current) return;
+              if (!reopened) {
+                patchResolvedAt(comment.id, optimistic);
+                setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+              }
+            });
+          },
+        },
+        durationMs: UNDO_WINDOW_MS,
+        kind: 'undo',
+      }) ?? null;
+    // No page-0 refetch on success: the optimistic row is already right, and a
+    // reload would flash the skeleton under the strip.
+    void sent.then((landed) => {
+      if (!mounted.current || undone || landed) return;
+      if (stripId !== null) toast?.dismiss(stripId);
+      patchResolvedAt(comment.id, prior);
+      setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+    });
+  }
+
+  // Flip one checkpoint's accepted_at in place (paged list + always-loaded
+  // checkpoints) so a Confirm, its Undo, or a revert paints at once.
+  function patchAcceptedAt(commentId: string, acceptedAt: string | null): void {
+    const patch = (rows: CommentRow[]): CommentRow[] =>
+      rows.some((row) => row.id === commentId)
+        ? rows.map((row) => (row.id === commentId ? { ...row, accepted_at: acceptedAt } : row))
+        : rows;
+    setComments(patch);
+    setCheckpoints(patch);
+  }
+
+  // The existing checkpoint_accept RPC (accepted=true confirms, accepted=false
+  // withdraws), always with an explicit trace. True when the write landed.
+  async function sendAccept(comment: CommentRow, accepted: boolean): Promise<boolean> {
+    const result = await checkpointAccept(supabase, {
+      p_comment_id: comment.id,
+      p_accepted: accepted,
+      p_trace_id: newTrace(),
+    });
+    return result.ok;
+  }
+
+  // The approver's one-tap Confirm on a resolved checkpoint. Same shape as the
+  // creator's one-tap Resolve: the tick fills at once (optimistic) while the RPC
+  // runs, and the bottom strip shows "Confirmed" + "Undo" for UNDO_WINDOW_MS.
+  // Undo empties the tick and sends accepted=false once the first write settles.
+  // A failure on either leg reverts and shows the one inline line, once.
+  function handleConfirm(comment: CommentRow): void {
+    const prior = comment.accepted_at;
+    const optimistic = new Date().toISOString();
+    setRowError(null);
+    patchAcceptedAt(comment.id, optimistic);
+    const sent = sendAccept(comment, true).catch(() => false);
+    let undone = false;
+    const stripId =
+      toast?.show({
+        title: 'Confirmed',
+        action: {
+          label: 'Undo',
+          onPress: () => {
+            undone = true;
+            patchAcceptedAt(comment.id, prior);
+            void sent.then(async (landed) => {
+              if (!landed) return;
+              const withdrawn = await sendAccept(comment, false).catch(() => false);
+              if (!mounted.current) return;
+              if (!withdrawn) {
+                patchAcceptedAt(comment.id, optimistic);
+                setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+              }
+            });
+          },
+        },
+        durationMs: UNDO_WINDOW_MS,
+        kind: 'undo',
+      }) ?? null;
+    void sent.then((landed) => {
+      if (!mounted.current || undone || landed) return;
+      if (stripId !== null) toast?.dismiss(stripId);
+      patchAcceptedAt(comment.id, prior);
+      setRowError({ id: comment.id, message: RESOLVE_FAILED_COPY });
+    });
+  }
+
   async function handleCopy(comment: CommentRow): Promise<void> {
     const ok = await copyText(commentCopyText(comment.body, handleOf));
     setCopyFailed(!ok);
@@ -1399,39 +1547,6 @@ export function Comments({
     });
   }
 
-  // Agency ticks a checkpoint done (resolved=true, with the optional note) or the
-  // client un-resolves it (resolved=false). Same Result/DomainError handling and
-  // refetch-on-success pattern as handleResolve: a failed call surfaces the mapped
-  // friendly error on the row and leaves the prior state untouched.
-  async function handleCheckpointResolve(
-    comment: CommentRow,
-    resolved: boolean,
-    note?: string,
-  ): Promise<void> {
-    setRowError(null);
-    setResolvingId(comment.id);
-    const result = await commentResolve(
-      supabase,
-      buildResolveArgs({
-        commentId: comment.id,
-        resolved,
-        traceId: newTrace(),
-        ...(note !== undefined ? { note } : {}),
-      }),
-    );
-    setResolvingId((current) => (current === comment.id ? null : current));
-    if (!result.ok) {
-      setRowError({ id: comment.id, message: friendlyResolveError(result.error) });
-      return;
-    }
-    if (noteForId === comment.id) {
-      setNoteForId(null);
-      setNoteDraft('');
-      setNoteEntered(false);
-    }
-    await loadPage(0);
-  }
-
   // The client's "Not done": un-resolve, then open the reply composer seeded with
   // the pushback prompt so the point does not go back silently. On a failed
   // un-resolve nothing changes and the mapped error surfaces on the row.
@@ -1452,24 +1567,6 @@ export function Comments({
     await loadPage(0);
   }
 
-  // The client confirms (accepted=true) or withdraws (accepted=false) a resolved
-  // checkpoint via checkpoint_accept, with the ledger's friendly-accept mapping.
-  async function handleCheckpointAccept(comment: CommentRow, accepted: boolean): Promise<void> {
-    setRowError(null);
-    setResolvingId(comment.id);
-    const result = await checkpointAccept(supabase, {
-      p_comment_id: comment.id,
-      p_accepted: accepted,
-      p_trace_id: newTrace(),
-    });
-    setResolvingId((current) => (current === comment.id ? null : current));
-    if (!result.ok) {
-      setRowError({ id: comment.id, message: friendlyAcceptError(result.error) });
-      return;
-    }
-    await loadPage(0);
-  }
-
   function startEdit(comment: CommentRow): void {
     setEditingId(comment.id);
     const shown = editableBody(comment.body, handleOf);
@@ -1486,8 +1583,20 @@ export function Comments({
   // The header's Open / All filter applies to top-level threads; replies follow
   // their thread. The open count is over every thread, whatever the filter.
   const openCount = openThreadCount(threads);
+  const resolvedCount = resolvedThreadCount(threads);
   const groups = groupThreads(filterThreads(threads, filter));
   const isClient = viewerIsClient === true;
+
+  // The same live rows feed the checkpoint strip (rendered in belowHeader), so a
+  // Resolve, Reopen, Confirm or Undo repaints its chip in this very render.
+  const liveCheckpoints = useMemo(() => liveCheckpointMap(displayed), [displayed]);
+
+  // Lift the live counts to the page once loaded and on every change (an
+  // optimistic one-tap Resolve included), so its chip and gate never lag.
+  useEffect(() => {
+    if (loading || loadError) return;
+    onCountsChange?.({ open: openCount, resolved: resolvedCount });
+  }, [loading, loadError, openCount, resolvedCount, onCountsChange]);
 
   // The author's workspace role label ("Creator", "Approver") from the same
   // members read the mention picker uses; null until it loads or for someone gone.
@@ -1728,7 +1837,9 @@ export function Comments({
               variant="ghost"
               className="min-h-[44px] min-w-[44px]"
               disabled={isResolving}
-              onClick={() => void handleResolve(comment, !isResolved)}
+              onClick={() =>
+                isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
+              }
             >
               {isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}
             </Button>
@@ -1759,12 +1870,19 @@ export function Comments({
             : 'rounded-xl border border-border bg-panel-2 px-4 py-3 transition-shadow'
         }
       >
-        {isResolved && !tombstone ? (
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-good">
+        {tombstone ? null : isResolved ? (
+          <div
+            data-comment-state="resolved"
+            className="mb-2 flex items-center gap-1.5 text-xs font-medium text-good"
+          >
             <IconCheck size={14} />
             Resolved
           </div>
-        ) : null}
+        ) : (
+          <div data-comment-state="open" className="mb-2 text-xs font-medium text-fg-3">
+            Open
+          </div>
+        )}
 
         {tombstone ? (
           <p className="text-xs italic text-fg-3">{tombstoneText(comment, nameOf)}</p>
@@ -1780,12 +1898,11 @@ export function Comments({
   // Consecutive checkpoints from one author, collapsed into a single card. The
   // header is just the author (avatar + name); each point is an "ask row" with a
   // number badge, the verbatim body, its live state label, and its tick control.
-  // The tick is live for the actor whose turn it is (agency opens the note
-  // composer then resolves; client confirms via checkpoint_accept); every other
-  // case is a passive indicator. Beneath the row the client gets the quiet
-  // "Not done" / "Undo" controls and any withdrawal record. The feedback ledger
-  // still carries its own copy of these controls; a follow-up PR removes that
-  // duplication. The per-point reply affordance is the existing thread tail.
+  // Only two states show: Open and Resolved. An agency member gets a one-tap
+  // "Resolve" on an open point (no note, no confirm; Undo lives in the bottom
+  // strip); every other case is a passive tick. A client gets the quiet
+  // "Not done" beneath a resolved point. The per-point reply affordance is the
+  // existing thread tail.
   function renderBatchItem(group: { authorId: string; threads: ThreadRoot[] }): ReactNode {
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
@@ -1812,14 +1929,13 @@ export function Comments({
             const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
             const seq = comment.ledger_seq ?? 0;
             const state = checkpointState(comment);
-            const label = checkpointStateLabel(state, isClient);
+            const label = checkpointStateLabel(state);
             const live = !tombstone && tickInteractive(state, isClient);
-            const filled = tickFilled(state, isClient);
+            const confirmed = checkpointConfirmed(comment);
+            const filled = tickFilled(state, confirmed);
+            const confirmable = !tombstone && showCheckpointConfirm(state, isClient, confirmed);
             const busy = resolvingId === comment.id;
-            const noteOpen = noteForId === comment.id;
-            const withdrawn = !tombstone && showCheckpointWithdrawal(comment);
-            const notDone = !tombstone && showCheckpointNotDone(state, isClient);
-            const undo = !tombstone && showCheckpointUndo(state, isClient);
+            const notDone = !tombstone && showCheckpointNotDone(state, isClient, confirmed);
             const editing = editingId === comment.id;
             // Author-only edit/delete, hidden once the point is frozen (confirmed or
             // locked); Copy stays on every live point. The proc re-checks auth.uid().
@@ -1835,16 +1951,12 @@ export function Comments({
                 )}
               >
                 {/* Decorative state rail on the leading edge: neutral (open),
-                    accent (client's turn), soft success (confirmed). Colour only. */}
+                    soft success (resolved). Colour only. */}
                 <span
                   aria-hidden
                   className={cn(
                     'w-0.5 shrink-0 self-stretch rounded-full',
-                    state === 'open'
-                      ? 'bg-border'
-                      : state === 'client_turn'
-                        ? 'bg-accent'
-                        : 'bg-good opacity-60',
+                    state === 'open' ? 'bg-border' : 'bg-good opacity-60',
                   )}
                 />
                 <div className="min-w-0 flex-1">
@@ -1865,7 +1977,7 @@ export function Comments({
                           <p
                             className={cn(
                               'text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
-                              state === 'confirmed' ? 'text-fg-2' : 'text-fg',
+                              state === 'resolved' ? 'text-fg-2' : 'text-fg',
                             )}
                           >
                             {renderCommentBody(
@@ -1988,113 +2100,49 @@ export function Comments({
                     {live ? (
                       <button
                         type="button"
-                        disabled={busy}
-                        aria-label={
-                          isClient ? `Confirm checkpoint ${seq}` : `Mark checkpoint ${seq} done`
-                        }
-                        onClick={() => {
-                          if (isClient) {
-                            void handleCheckpointAccept(comment, true);
-                            return;
-                          }
-                          // Agency: open the resolution-note composer; Mark done then
-                          // calls comment_resolve(true) with the note.
-                          setRowError(null);
-                          setNoteDraft('');
-                          setNoteEntered(false);
-                          setNoteForId(comment.id);
-                        }}
+                        aria-label={`Resolve checkpoint ${seq}`}
+                        onClick={() => handleOneTapResolve(comment)}
                         // axis: background-color on hover only; the tick fill motion
                         // (opacity + translateY) lives inside tickCircle.
-                        className="ml-auto flex h-11 w-11 items-center justify-center rounded-md transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md px-1.5 text-sm font-medium text-good transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                       >
                         {tickCircle(false, true)}
+                        <span>Resolve</span>
+                      </button>
+                    ) : confirmable ? (
+                      // The approver's one-tap Confirm on a resolved point: the
+                      // hollow tick plus the word, one 44px target. Hidden once
+                      // confirmed; the row word stays "Resolved" either way.
+                      <button
+                        type="button"
+                        aria-label={`Confirm checkpoint ${seq}`}
+                        data-checkpoint-confirm=""
+                        onClick={() => handleConfirm(comment)}
+                        // axis: background-color on hover only; the tick fill motion
+                        // (opacity + translateY) lives inside tickCircle.
+                        className="ml-auto flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md px-1.5 text-sm font-medium text-good transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        {tickCircle(false, false, true)}
+                        <span>Confirm</span>
                       </button>
                     ) : (
                       <span
                         aria-hidden
                         className="ml-auto flex h-11 w-11 items-center justify-center"
                       >
-                        {tickCircle(filled)}
+                        {tickCircle(filled, false, state === 'resolved')}
                       </span>
                     )}
                   </div>
 
-                  {withdrawn && comment.unaccepted_at !== null ? (
-                    <p className="pl-7 text-xs text-fg-3">
-                      {checkpointWithdrawalText(
-                        comment.unaccepted_at,
-                        comment.unaccepted_by !== null
-                          ? (nameOf(comment.unaccepted_by) ?? undefined)
-                          : null,
-                      )}
-                    </p>
-                  ) : null}
-
-                  {noteOpen ? (
-                    // axis: opacity + translateY only (noteRevealClass); no translateX,
-                    // rotate, or scale.
-                    <div
-                      className={cn('mt-2 flex flex-col gap-2 pl-7', noteRevealClass(noteEntered))}
-                    >
-                      <Textarea
-                        autoFocus
-                        autoGrow
-                        rows={1}
-                        maxLength={MAX_NOTE_CHARS}
-                        aria-label={`Resolution note for checkpoint ${seq}`}
-                        placeholder={NOTE_PLACEHOLDER}
-                        value={noteDraft}
-                        disabled={busy}
-                        onChange={(event) => setNoteDraft(event.target.value)}
-                        style={{ minHeight: '44px' }}
-                      />
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="lg"
-                          variant="primary"
-                          disabled={busy}
-                          onClick={() => void handleCheckpointResolve(comment, true, noteDraft)}
-                        >
-                          {busy ? 'Saving' : 'Mark done'}
-                        </Button>
-                        <Button
-                          size="lg"
-                          variant="ghost"
-                          disabled={busy}
-                          onClick={() => {
-                            setNoteForId(null);
-                            setNoteDraft('');
-                            setNoteEntered(false);
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                        <span className="ml-auto text-xs tabular-nums text-fg-3">
-                          {noteDraft.length}/{MAX_NOTE_CHARS}
-                        </span>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {notDone || undo ? (
+                  {notDone ? (
                     <div className="flex items-center gap-3 pl-7">
-                      {notDone ? (
-                        <QuietTextButton
-                          disabled={busy}
-                          onClick={() => void handleCheckpointNotDone(comment)}
-                        >
-                          {busy ? 'Saving' : 'Not done'}
-                        </QuietTextButton>
-                      ) : null}
-                      {undo ? (
-                        <QuietTextButton
-                          disabled={busy}
-                          onClick={() => void handleCheckpointAccept(comment, false)}
-                        >
-                          {busy ? 'Saving' : 'Undo'}
-                        </QuietTextButton>
-                      ) : null}
+                      <QuietTextButton
+                        disabled={busy}
+                        onClick={() => void handleCheckpointNotDone(comment)}
+                      >
+                        {busy ? 'Saving' : 'Not done'}
+                      </QuietTextButton>
                     </div>
                   ) : null}
 
@@ -2154,13 +2202,9 @@ export function Comments({
       {showHeader ? (
         <div data-comments-header="" className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-fg">Comments</h3>
-          {openCount > 0 ? (
-            <span
-              data-open-count=""
-              aria-label={`${openCount} open`}
-              className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold tabular-nums text-accent"
-            >
-              {openCount}
+          {!loading && !loadError && openCount + resolvedCount > 0 ? (
+            <span data-open-count="" className="text-xs tabular-nums text-fg-3">
+              {commentCountsText({ open: openCount, resolved: resolvedCount })}
             </span>
           ) : null}
           <div role="group" aria-label="Show comments" className="ml-auto flex items-center">
@@ -2169,7 +2213,9 @@ export function Comments({
           </div>
         </div>
       ) : null}
-      {belowHeader}
+      <LiveCheckpointsContext.Provider value={loading ? null : liveCheckpoints}>
+        {belowHeader}
+      </LiveCheckpointsContext.Provider>
 
       {loading ? (
         <div aria-busy="true" className="flex flex-col gap-3">

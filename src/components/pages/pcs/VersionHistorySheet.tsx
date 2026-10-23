@@ -12,7 +12,11 @@ import type { ReactNode } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconCheck, IconChevronRight } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
-import { sortVersionsDesc, type PostVersionView } from '@/lib/post-versions';
+import { parseSnapshot, sortVersionsDesc, type PostVersionView } from '@/lib/post-versions';
+import type { PresignCache } from '@/lib/asset-presign';
+import type { GalleryItem } from '@srtdio/posts';
+import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
+import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
 import { shortDate } from '@/lib/relative-time';
 
 interface VersionHistorySheetProps {
@@ -28,6 +32,21 @@ interface VersionHistorySheetProps {
   onSelectVersion: (id: string) => void;
   /** Enter compare mode for the two chosen versions (from = earlier). */
   onCompare: (fromId: string, toId: string) => void;
+  /**
+   * #35: each row's pictures, from that version's snapshot gallery. Absent
+   * keeps the text-only rows.
+   */
+  thumbs?: VersionThumbs | undefined;
+}
+
+/** What the rows need to draw a version's pictures. */
+export interface VersionThumbs {
+  /** The live gallery, reused for metadata of versions still attached. */
+  gallery: readonly GalleryItem[];
+  cache: PresignCache;
+  presignEnabled: boolean;
+  /** The post's platform frame ratio (w / h), so thumbnails are platform-shaped. */
+  ratio: number;
 }
 
 // The pure render model: the props above plus the transient selection the wrapper
@@ -67,17 +86,21 @@ export function versionHistorySheet({
   onCompare,
   selectedIds,
   onToggleSelect,
+  thumbs,
 }: VersionHistorySheetModel): ReactNode {
   const ordered = sortVersionsDesc(versions);
   // Compare is only offered when there is more than one version to line up.
   const showSelect = versions.length >= 2;
 
   // The two picked versions, earlier first: the from side is always the lower
-  // version_number so the diff reads old -> new regardless of pick order.
-  const picked = selectedIds
+  // version_number so the diff reads old -> new regardless of pick order. Until
+  // two are picked the footer offers the two newest (the latest change).
+  const chosen = selectedIds
     .map((id) => versions.find((version) => version.id === id))
-    .filter((version): version is PostVersionView => version !== undefined)
-    .sort((a, b) => a.versionNumber - b.versionNumber);
+    .filter((version): version is PostVersionView => version !== undefined);
+  const picked = (chosen.length === 2 ? chosen : ordered.slice(0, 2)).sort(
+    (a, b) => a.versionNumber - b.versionNumber,
+  );
   const fromVersion = picked[0];
   const toVersion = picked[1];
   const canCompare = fromVersion !== undefined && toVersion !== undefined;
@@ -97,13 +120,13 @@ export function versionHistorySheet({
       )}
     >
       {canCompare
-        ? `Compare v${fromVersion.versionNumber} → v${toVersion.versionNumber}`
+        ? `Compare v${fromVersion.versionNumber} and v${toVersion.versionNumber}`
         : 'Select two versions'}
     </button>
   ) : undefined;
 
   return (
-    <Sheet open={open} onClose={onClose} title="Version history" footer={footer}>
+    <Sheet open={open} onClose={onClose} title="Versions" footer={footer}>
       <ul className="flex flex-col gap-1">
         {ordered.map((version) => {
           const isCurrent = version.versionNumber === currentVersionNumber;
@@ -115,6 +138,20 @@ export function versionHistorySheet({
               aria-current={isCurrent ? 'true' : undefined}
               className={showSelect ? cn(ROW_BASE, 'min-w-0 flex-1') : ROW_BASE}
             >
+              {thumbs !== undefined ? (
+                <span className="shrink-0">
+                  <SnapshotThumbs
+                    items={snapshotItems(
+                      parseSnapshot(version.snapshot).galleryVersionIds,
+                      thumbs.gallery,
+                    )}
+                    cache={thumbs.cache}
+                    presignEnabled={thumbs.presignEnabled}
+                    ratio={thumbs.ratio}
+                    max={3}
+                  />
+                </span>
+              ) : null}
               <span className="flex min-w-0 flex-col">
                 <span className="text-sm font-medium tabular-nums text-fg">
                   v{version.versionNumber}
