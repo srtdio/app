@@ -4,6 +4,7 @@ import {
   enrichNewRows,
   fetchInboxSince,
   fetchInboxUnreadCount,
+  fetchNewestInboxAt,
   fetchUnreadMentionCount,
 } from '@/lib/inbox/inbox-reads';
 import { toastFromEnriched, type InboxRow } from '@/lib/inbox/inbox-live';
@@ -517,5 +518,53 @@ describe('merged counts: the Notifications badge and the Mentions chip count eve
     expect(calls.filter((c) => c.method === 'or')).toEqual([{ method: 'or', args: [SNOOZE_OR] }]);
     expect(calls.some((c) => c.method === 'not')).toBe(false);
     expect(calls.some((c) => c.args[0] === 'entity_type')).toBe(false);
+  });
+});
+
+describe('fix 28: fetchNewestInboxAt seeds the live mark from the server clock', () => {
+  function recording(result: QueryResult) {
+    const calls: { method: string; args: unknown[] }[] = [];
+    const tables: string[] = [];
+    const self: Record<string, unknown> = {};
+    for (const method of ['select', 'eq', 'is', 'or', 'not', 'gt', 'order', 'limit', 'in']) {
+      self[method] = (...args: unknown[]) => {
+        calls.push({ method, args });
+        return self;
+      };
+    }
+    self.then = (onfulfilled: (v: QueryResult) => unknown) =>
+      Promise.resolve(result).then(onfulfilled);
+    const client = {
+      from: (table: string) => {
+        tables.push(table);
+        return self;
+      },
+    };
+    return { client: client as unknown as Parameters<typeof fetchNewestInboxAt>[0], calls, tables };
+  }
+  const params = { workspaceId: 'w1', userId: 'u1' };
+
+  it('reads one row: the newest created_at for the user in the workspace', async () => {
+    const { client, calls, tables } = recording(
+      okData([{ created_at: '2026-10-20T11:00:00.000Z' }]),
+    );
+    const res = await fetchNewestInboxAt(client, params);
+    expect(res).toEqual({ ok: true, data: '2026-10-20T11:00:00.000Z' });
+    expect(tables).toEqual(['inbox_entries']);
+    expect(calls).toEqual([
+      { method: 'select', args: ['created_at'] },
+      { method: 'eq', args: ['workspace_id', 'w1'] },
+      { method: 'eq', args: ['user_id', 'u1'] },
+      { method: 'order', args: ['created_at', { ascending: false }] },
+      { method: 'limit', args: [1] },
+    ]);
+  });
+
+  it('an empty inbox is null; a failed read is an error, never a device-clock guess', async () => {
+    const empty = await fetchNewestInboxAt(recording(okData([])).client, params);
+    expect(empty).toEqual({ ok: true, data: null });
+    const failed = await fetchNewestInboxAt(recording(err('boom')).client, params);
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error.message).toContain('boom');
   });
 });

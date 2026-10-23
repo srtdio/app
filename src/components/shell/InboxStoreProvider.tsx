@@ -1,9 +1,15 @@
 // The always-on inbox (Notifications) live layer. Mounted once at the shell (inside the
 // toast provider and the router), it seeds the unread count for the active
 // workspace and keeps it live with a foreground-only 30s poll. A poll that finds
-// rows newer than the high-water mark fires a single toast (coalescing a burst)
-// and advances the mark. The high-water mark is baselined to mount time so the
-// existing backlog never toasts. Mirrors ChatStoreProvider: all decisions live in
+// rows newer than the high-water mark fires a single toast (coalescing a burst),
+// advances the mark and tells an open Notifications page (sorted:inbox-changed,
+// detail 'poll'). The high-water mark is seeded from the newest server row's
+// created_at (never the device clock) so the existing backlog never toasts.
+//
+// RACES: every read captures its workspace and user, and a result whose tenant
+// is no longer active is dropped (count, toasts and the mark alike). One
+// in-flight guard covers the timer and the return-to-visible tick, and toasts
+// are deduped by entry id. Mirrors ChatStoreProvider: all decisions live in
 // the pure layer (inbox-live.ts); this file only wires it to PostgREST, React, the
 // toast surface and the nav badge (read via useInboxStore).
 //
@@ -42,13 +48,21 @@ import {
   ACTIVITY_PATH,
   activityToneWanted,
   mentionToastFrom,
+  mentionTabText,
   othersRows,
   pickNewest,
+  POLL_CHANGE_SOURCE,
+  unseenRows,
   splitNewRows,
   summarizeNew,
   toastFromEnriched,
 } from '@/lib/inbox/inbox-live';
-import { enrichNewRows, fetchInboxSince, fetchInboxUnreadCount } from '@/lib/inbox/inbox-reads';
+import {
+  enrichNewRows,
+  fetchInboxSince,
+  fetchInboxUnreadCount,
+  fetchNewestInboxAt,
+} from '@/lib/inbox/inbox-reads';
 import { readProfiles } from '@/lib/chat-reads';
 import { announceRemindersChanged } from '@/lib/chat/reminders';
 import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
@@ -84,23 +98,115 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
 
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // The newest created_at already accounted for (ms). Seeded to mount time so the
-  // existing backlog never toasts; reset on a workspace/user switch below.
-  const highWaterRef = useRef<number>(Date.now());
+  // The newest created_at already accounted for (ms), from the server's clock.
+  // Null until seeded for the active workspace/user (a tick seeds it and toasts
+  // nothing); reset on a workspace/user switch below.
+  const highWaterRef = useRef<number | null>(null);
   // The active workspace/user, mirrored into refs so the single interval tick and
   // the change listener never read a stale closure.
   const workspaceIdRef = useRef<string | null>(workspaceId);
   const userIdRef = useRef<string | null>(userId);
+  // One poll at a time, shared by the timer and the return-to-visible tick.
+  const inFlightRef = useRef(false);
+  // Entry ids already toasted for the active tenant: a row is never toasted twice.
+  const toastedRef = useRef<Set<string>>(new Set());
+
+  // Whether a read started for ws/uid still matches the active tenant.
+  const stillActive = (ws: string, uid: string): boolean =>
+    workspaceIdRef.current === ws && userIdRef.current === uid;
 
   // Refetch only the count (CQS: a query, no toast side effect). Used by the change
-  // event and as the first half of each poll tick.
+  // event and as the first half of each poll tick. A stale tenant's count is dropped.
   const refreshCount = (ws: string, uid: string): void => {
     void (async () => {
       const nowIso = new Date().toISOString();
       const res = await fetchInboxUnreadCount(supabase, { workspaceId: ws, userId: uid, nowIso });
+      if (!stillActive(ws, uid)) return;
       if (res.ok) setUnreadCount(res.data);
       else logger.warn('inbox store: count refresh failed', { error: res.error.message });
     })();
+  };
+
+  // Seed "seen up to" from the newest server row (zero when there is none). A
+  // failed read leaves it unseeded, so the next tick tries again.
+  const seedHighWater = async (ws: string, uid: string): Promise<void> => {
+    const res = await fetchNewestInboxAt(supabase, { workspaceId: ws, userId: uid });
+    if (!stillActive(ws, uid)) return;
+    if (!res.ok) {
+      logger.warn('inbox store: seed failed', { error: res.error.message });
+      return;
+    }
+    const ms = res.data !== null ? Date.parse(res.data) : 0;
+    highWaterRef.current = Number.isNaN(ms) ? 0 : ms;
+  };
+
+  // One poll: seed the mark if unseeded, else diff new rows against it, tell
+  // Notifications, and toast at most once for the batch (never a row twice).
+  const pollNew = async (ws: string, uid: string): Promise<void> => {
+    const sinceMs = highWaterRef.current;
+    if (sinceMs === null) {
+      await seedHighWater(ws, uid);
+      return;
+    }
+    const sinceIso = new Date(sinceMs).toISOString();
+    const sinceRes = await fetchInboxSince(supabase, {
+      workspaceId: ws,
+      userId: uid,
+      sinceIso,
+    });
+    if (!stillActive(ws, uid)) return;
+    if (!sinceRes.ok) {
+      logger.warn('inbox store: since fetch failed', { error: sinceRes.error.message });
+      return;
+    }
+    const summary = summarizeNew(sinceRes.data.rows, sinceMs);
+    highWaterRef.current = summary.nextHighWaterMs;
+    if (summary.newRows.length > 0) {
+      window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT, { detail: POLL_CHANGE_SOURCE }));
+    }
+    const fresh = unseenRows(summary.newRows, toastedRef.current);
+    const { activity, chatMentions } = splitNewRows(fresh);
+    const elsewhere = chatMentions.filter((r) => r.entity_id !== openChatRef.current);
+    if (elsewhere.length > 0) void toastMentions(elsewhere, ws);
+    // The viewer's own already-read rows are history: no toast, no tone.
+    const newRows = othersRows(activity, uid);
+    if (newRows.length === 0) return;
+    if (activityToneWanted(newRows.length, pathnameRef.current, document.hidden)) {
+      playToneShared();
+    }
+
+    // The server count is exact (bell rows are filtered before the cap); the own
+    // rows dropped from this page are taken off it.
+    const ownDropped = activity.length - newRows.length;
+    const enriched = await enrichNewRows(
+      supabase,
+      newRows,
+      undefined,
+      Math.max(newRows.length, sinceRes.data.activityCount - ownDropped),
+    );
+    if (!stillActive(ws, uid)) return;
+    const spec = toastFromEnriched(enriched);
+    if (spec === null) return;
+    // Background tab: the tab speaks the same words as the toast.
+    pushTabAlert({ kind: 'activity', text: spec.title });
+
+    const newest = pickNewest(newRows);
+    const href =
+      enriched.count === 1 && newest !== null
+        ? (entityHref(mapEntry(newest)) ?? ACTIVITY_PATH)
+        : ACTIVITY_PATH;
+    toast.show({
+      title: spec.title,
+      ...(spec.description !== undefined ? { description: spec.description } : {}),
+      icon: (
+        <Avatar
+          {...(spec.actorName !== null ? { name: spec.actorName } : {})}
+          {...(spec.actorAvatarUrl !== null ? { src: spec.actorAvatarUrl } : {})}
+          size="sm"
+        />
+      ),
+      onPress: () => navigate(href),
+    });
   };
 
   // The full poll tick, held in a ref so the interval registers once yet always
@@ -110,69 +216,21 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   tickRef.current = () => {
     const ws = workspaceIdRef.current;
     const uid = userIdRef.current;
-    if (ws === null || uid === null) return;
+    if (ws === null || uid === null || inFlightRef.current) return;
     refreshCount(ws, uid);
     announceRemindersChanged();
-    void (async () => {
-      const sinceMs = highWaterRef.current;
-      const sinceIso = new Date(sinceMs).toISOString();
-      const sinceRes = await fetchInboxSince(supabase, {
-        workspaceId: ws,
-        userId: uid,
-        sinceIso,
-      });
-      if (!sinceRes.ok) {
-        logger.warn('inbox store: since fetch failed', { error: sinceRes.error.message });
-        return;
-      }
-      const summary = summarizeNew(sinceRes.data.rows, sinceMs);
-      highWaterRef.current = summary.nextHighWaterMs;
-      const { activity, chatMentions } = splitNewRows(summary.newRows);
-      const elsewhere = chatMentions.filter((r) => r.entity_id !== openChatRef.current);
-      if (elsewhere.length > 0) void toastMentions(elsewhere);
-      // The viewer's own already-read rows are history: no toast, no tone.
-      const newRows = othersRows(activity, uid);
-      if (newRows.length === 0) return;
-      if (activityToneWanted(newRows.length, pathnameRef.current, document.hidden)) {
-        playToneShared();
-      }
-
-      // The server count is exact (bell rows are filtered before the cap); the own
-      // rows dropped from this page are taken off it.
-      const ownDropped = activity.length - newRows.length;
-      const enriched = await enrichNewRows(
-        supabase,
-        newRows,
-        undefined,
-        Math.max(newRows.length, sinceRes.data.activityCount - ownDropped),
-      );
-      const spec = toastFromEnriched(enriched);
-      if (spec === null) return;
-      // Background tab: the tab speaks the same words as the toast.
-      pushTabAlert({ kind: 'activity', text: spec.title });
-
-      const newest = pickNewest(newRows);
-      const href =
-        enriched.count === 1 && newest !== null
-          ? (entityHref(mapEntry(newest)) ?? ACTIVITY_PATH)
-          : ACTIVITY_PATH;
-      toast.show({
-        title: spec.title,
-        ...(spec.description !== undefined ? { description: spec.description } : {}),
-        icon: (
-          <Avatar
-            {...(spec.actorName !== null ? { name: spec.actorName } : {})}
-            {...(spec.actorAvatarUrl !== null ? { src: spec.actorAvatarUrl } : {})}
-            size="sm"
-          />
-        ),
-        onPress: () => navigate(href),
-      });
-    })();
+    inFlightRef.current = true;
+    void pollNew(ws, uid).finally(() => {
+      inFlightRef.current = false;
+    });
   };
 
-  // The toast for new chat mentions: one batched name read, one toast.
-  const toastMentions = async (rows: Parameters<typeof mentionToastFrom>[0]): Promise<void> => {
+  // The toast for new chat mentions: one batched name read, one toast, and the
+  // background tab's "<Name> mentioned you". Dropped if the workspace changed.
+  const toastMentions = async (
+    rows: Parameters<typeof mentionToastFrom>[0],
+    ws: string,
+  ): Promise<void> => {
     const ids = [
       ...new Set(rows.flatMap((r) => (r.actor_user_id != null ? [r.actor_user_id] : []))),
     ];
@@ -186,9 +244,14 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
         logger.warn('inbox store: mention names failed', { error: profiles.error.message });
       }
     }
+    if (workspaceIdRef.current !== ws) return;
     const spec = mentionToastFrom(rows, (id) => names.get(id)?.name ?? null);
     if (spec === null) return;
     const actor = spec.actorId !== null ? names.get(spec.actorId) : undefined;
+    for (const row of rows) {
+      const name = row.actor_user_id != null ? (names.get(row.actor_user_id)?.name ?? null) : null;
+      pushTabAlert({ kind: 'chat', text: mentionTabText(name) });
+    }
     toast.show({
       title: spec.title,
       description: spec.description,
@@ -212,18 +275,20 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     namesUserRef.current = userId;
   }
 
-  // Mount + workspace/user switch: reset the high-water mark to now (the backlog
-  // must not toast) and seed the count. A null tenant clears the count to zero.
+  // Mount + workspace/user switch: re-seed the high-water mark from the server
+  // (the backlog must not toast), forget the toasted ids and seed the count. A
+  // null tenant clears the count to zero. Reads for the old tenant are dropped.
   useEffect(() => {
     workspaceIdRef.current = workspaceId;
     userIdRef.current = userId;
-    highWaterRef.current = Date.now();
+    highWaterRef.current = null;
+    toastedRef.current = new Set();
     if (workspaceId === null || userId === null) {
       setUnreadCount(0);
       return;
     }
     refreshCount(workspaceId, userId);
-    // refreshCount reads its args, not refs, so no cleanup flag is needed here.
+    void seedHighWater(workspaceId, userId);
   }, [workspaceId, userId]);
 
   // The foreground-only poll plus the two window listeners, installed once. The
@@ -233,7 +298,9 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     const onVisibility = (): void => {
       if (!document.hidden) tickRef.current();
     };
-    const onChanged = (): void => {
+    const onChanged = (event: Event): void => {
+      // The poll's own event: the tick already refetched the count.
+      if (event instanceof CustomEvent && event.detail === POLL_CHANGE_SOURCE) return;
       const ws = workspaceIdRef.current;
       const uid = userIdRef.current;
       if (ws !== null && uid !== null) refreshCount(ws, uid);

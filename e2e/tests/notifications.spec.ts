@@ -28,6 +28,11 @@ const REMINDER_ENTRY_ID = '0190f100-0000-7000-8000-0000000000f1';
 const REMINDER_ID = '0190e000-0000-7000-8000-000000000001';
 const UPCOMING_SCHEDULED_ID = '0190f200-0000-7000-8000-0000000000c1';
 const UPCOMING_BODY = 'Draft goes out at noon';
+const BRIEF_ENTRY_ID = '0190f200-0000-7000-8000-0000000000d1';
+const BRIEF_ID = '0190f200-0000-7000-8000-0000000000d2';
+const BRIEF_TITLE = 'Festive drop launch brief';
+const FILES_ENTRY_ID = '0190f200-0000-7000-8000-0000000000e1';
+const FILES_FIRST = 'launch-deck.pdf';
 
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
@@ -426,5 +431,116 @@ test('Upcoming: a pending reminder and a scheduled message, soonest first; never
     .toBe(1);
   await expect(page.locator('[data-upcoming-row="reminder"]')).toHaveCount(0);
   await expect(page.locator('[data-upcoming-row="scheduled"]')).toHaveCount(1);
+  expectClean(network);
+});
+
+/** A brief_created row (its brief seeded) and an assets_deleted row naming three files. */
+function seedTiles(world: ChatWorld): void {
+  const now = new Date().toISOString();
+  (world.tables.briefs ??= []).push({
+    id: BRIEF_ID,
+    workspace_id: WORKSPACE_ID,
+    number: 4,
+    title: BRIEF_TITLE,
+    status: 'open',
+    created_by: PEER,
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+  });
+  (world.tables.inbox_entries ??= []).push(
+    inboxRow(
+      BRIEF_ENTRY_ID,
+      'brief_created',
+      {
+        actor_user_id: PEER,
+        entity_type: 'brief',
+        entity_id: BRIEF_ID,
+        scope: 'briefs',
+        scope_key: BRIEF_ID,
+        payload: { title: BRIEF_TITLE },
+      },
+      90_000,
+    ),
+    inboxRow(
+      FILES_ENTRY_ID,
+      'assets_deleted',
+      {
+        actor_user_id: PEER,
+        entity_type: 'workspace',
+        entity_id: WORKSPACE_ID,
+        scope: 'everything',
+        scope_key: WORKSPACE_ID,
+        payload: {
+          count: 3,
+          actor_role: 'agency',
+          // The first file has no version left to preview: its tile is the text tile.
+          files: [
+            { asset_version_id: null, filename: FILES_FIRST, mime_type: 'application/pdf' },
+            { asset_version_id: null, filename: 'hero.png', mime_type: 'image/png' },
+            { asset_version_id: null, filename: 'teaser.mov', mime_type: 'video/quicktime' },
+          ],
+        },
+      },
+      30_000,
+    ),
+  );
+}
+
+test('fix 3: at 390px the chip row ends with a full gutter after Snoozed and no fade', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const network = await installHarnessNetwork(page);
+  await page.goto('/notifications');
+  const row = page.locator('[data-activity-chips]');
+  await row.waitFor({ state: 'visible', timeout: 15_000 });
+  const maskOf = () =>
+    row.evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-mask-image'));
+
+  // While chips remain past the right edge the row fades there.
+  const overflows = await row.evaluate((el) => el.scrollWidth - el.clientWidth > 2);
+  if (overflows) await expect.poll(maskOf).not.toBe('none');
+
+  await row.evaluate((el) => {
+    el.scrollLeft = el.scrollWidth;
+  });
+  await expect.poll(maskOf).toBe('none');
+
+  const snoozed = row.getByRole('button', { name: 'Snoozed', exact: true });
+  await expect(snoozed).toBeVisible();
+  const box = await snoozed.boundingBox();
+  if (box === null) throw new Error('Snoozed chip has no box');
+  // The trailing spacer plus the chip gap: a 16px right gutter, like the left one.
+  expect(Math.floor(box.x + box.width)).toBeLessThanOrEqual(390 - 16);
+  expectClean(network);
+});
+
+test('fix 6 and 30: a brief row shows the BRIEF text tile; deleted files show a tile and "+2"', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  seedTiles(network.world);
+  await page.goto('/notifications');
+
+  const brief = card(page, 'brief_created');
+  await expect(brief).toBeVisible({ timeout: 15_000 });
+  const briefTile = brief.locator('[data-activity-text-tile="Brief"]');
+  await expect(briefTile).toBeVisible();
+  await expect(briefTile).toContainText(BRIEF_TITLE);
+  const briefBox = await briefTile.boundingBox();
+  if (briefBox === null) throw new Error('brief tile has no box');
+  expect(briefBox.width).toBeGreaterThan(40);
+  expect(briefBox.height).toBeGreaterThan(40);
+
+  const files = card(page, 'assets_deleted');
+  await expect(files).toContainText(`${PEER_NAME} deleted 3 files`);
+  await expect(files).toContainText(FILES_FIRST);
+  await expect(files).toContainText('Also hero.png and teaser.mov');
+  await expect(files.locator('[data-activity-text-tile], img').first()).toBeVisible();
+  await expect(files.locator('[data-activity-text-tile="PDF"]')).toContainText(FILES_FIRST);
+  const badge = files.locator('[data-activity-files-badge]');
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveText('+2');
   expectClean(network);
 });

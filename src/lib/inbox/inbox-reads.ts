@@ -77,6 +77,27 @@ export async function fetchUnreadMentionCount(
   return { ok: true, data: res.count ?? 0 };
 }
 
+/**
+ * The created_at of the caller's newest inbox row in a workspace (deleted rows
+ * included), or null when there is none. Seeds the live layer's "seen up to"
+ * mark from the server's clock, never the device's. One row, one round trip.
+ */
+export async function fetchNewestInboxAt(
+  client: Client,
+  params: { workspaceId: string; userId: string },
+): Promise<Result<string | null>> {
+  const res = await client
+    .from('inbox_entries')
+    .select('created_at')
+    .eq('workspace_id', params.workspaceId)
+    .eq('user_id', params.userId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (res.error) return fail(`fetchNewestInboxAt: ${res.error.message}`);
+  const first = (res.data ?? [])[0];
+  return { ok: true, data: first !== undefined ? first.created_at : null };
+}
+
 /** How many new activity rows one poll reads to word the toast (the count is exact regardless). */
 export const SINCE_ACTIVITY_LIMIT = 50;
 

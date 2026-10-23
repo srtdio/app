@@ -482,6 +482,24 @@ export function splitNewRows(rows: readonly InboxRow[]): NewRowsSplit {
   };
 }
 
+/** The detail a poll's inbox-changed event carries, so listeners can tell it from a local write. */
+export const POLL_CHANGE_SOURCE = 'poll';
+
+/**
+ * Rows not yet toasted, by entry id: a row two overlapping ticks both read is
+ * toasted once. Adds the returned rows' ids to `seen`. Mutates only `seen`.
+ */
+export function unseenRows<T extends { id: string }>(rows: readonly T[], seen: Set<string>): T[] {
+  const fresh = rows.filter((row) => !seen.has(row.id));
+  for (const row of fresh) seen.add(row.id);
+  return fresh;
+}
+
+/** The tab alert for one new chat mention: "<Name> mentioned you". Pure. */
+export function mentionTabText(name: string | null): string {
+  return `${name ?? 'Someone'} mentioned you`;
+}
+
 /** The live toast for new chat mentions. */
 export interface MentionToastSpec {
   title: string;

@@ -251,8 +251,10 @@ export interface ActivityItem {
   actorRole?: string | null;
   /** assets_deleted only: how many assets went (payload.count); null otherwise. */
   assetCount?: number | null;
-  /** assets_deleted only: up to 3 of the deleted filenames (payload.filenames). */
+  /** assets_deleted only: up to 3 of the deleted filenames (payload.files, else payload.filenames). */
   filenames?: string[];
+  /** assets_deleted only: up to 3 deleted files with their version and type (payload.files); empty on old rows. */
+  deletedFiles?: DeletedFile[];
   /** Plan events only (plan_comment / plan_review): the plan (payload.plan_id); null otherwise. */
   planId?: string | null;
   /** Plan events only: the plan's title, resolved by the batched plans read. */
@@ -322,6 +324,31 @@ function alertOf(row: InboxEntryRow, payload: unknown): AlertInfo | null {
     itemTitle: null,
     ...(kind === 'task' ? { task: taskFieldsOf(row) } : {}),
   };
+}
+
+/** One deleted file an assets_deleted row names (payload.files[]). */
+export interface DeletedFile {
+  assetVersionId: string | null;
+  filename: string;
+  mimeType: string | null;
+}
+
+/** payload.files[] of an assets_deleted row; entries without a filename are dropped. Pure. */
+export function deletedFilesOf(payload: unknown): DeletedFile[] {
+  if (typeof payload !== 'object' || payload === null) return [];
+  const files = (payload as Record<string, unknown>).files;
+  if (!Array.isArray(files)) return [];
+  return files.flatMap((entry: unknown) => {
+    const filename = payloadStr(entry, 'filename');
+    if (filename === null) return [];
+    return [
+      {
+        assetVersionId: payloadStr(entry, 'asset_version_id'),
+        filename,
+        mimeType: payloadStr(entry, 'mime_type'),
+      },
+    ];
+  });
 }
 
 /** The workspace a welcome row names: payload.workspace_name and payload.platform. */
@@ -470,6 +497,8 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
   const review = row.event_type === 'plan_review';
   const onBehalfOfId =
     row.event_type === 'stage_change' ? payloadStr(payload, 'on_behalf_of') : null;
+  const deleted = row.event_type === 'assets_deleted';
+  const deletedFiles = deleted ? deletedFilesOf(payload) : [];
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -506,7 +535,12 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
     channelType: null,
     actorRole: payloadStr(payload, 'actor_role'),
     assetCount: row.event_type === 'assets_deleted' ? payloadNum(payload, 'count') : null,
-    filenames: row.event_type === 'assets_deleted' ? payloadStrings(payload, 'filenames') : [],
+    filenames: !deleted
+      ? []
+      : deletedFiles.length > 0
+        ? deletedFiles.map((file) => file.filename)
+        : payloadStrings(payload, 'filenames'),
+    deletedFiles,
     planId: plan ? payloadStr(payload, 'plan_id') : null,
     planTitle: null,
     reviewSide: review ? payloadStr(payload, 'side') : null,
@@ -648,12 +682,61 @@ export function actorRowLine(item: ActivityItem, parts: ActorLineParts = {}): st
     const title = withTitle && item.title !== null && item.title !== '' ? ` ${item.title}` : '';
     return `${lead}deleted${title}`;
   }
-  const filenames = item.filenames ?? [];
-  const count = item.assetCount ?? filenames.length;
-  const first = filenames[0];
-  const what =
-    count === 1 && first !== undefined ? first : count === 1 ? 'an asset' : `${count} assets`;
-  return `${lead}deleted ${what}`;
+  return `${lead}deleted ${filesPhrase(deletedCount(item))}`;
+}
+
+/** How many files an assets_deleted row deleted: payload.count, else the names it lists. Pure. */
+export function deletedCount(item: Pick<ActivityItem, 'assetCount' | 'filenames'>): number {
+  return item.assetCount ?? (item.filenames ?? []).length;
+}
+
+/** "a file" / "N files". Pure. */
+export function filesPhrase(count: number): string {
+  return count === 1 ? 'a file' : `${count} files`;
+}
+
+/**
+ * An assets_deleted card's body: the other files it names. "Also A and B",
+ * "Also A, B and 1 more"; null for a single file. Pure.
+ */
+export function deletedFilesBody(
+  item: Pick<ActivityItem, 'assetCount' | 'filenames'>,
+): string | null {
+  const names = item.filenames ?? [];
+  const count = Math.max(deletedCount(item), names.length);
+  const others = names.slice(1);
+  if (count <= 1 || others.length === 0) {
+    return count > 1 ? `Also ${count - 1} more` : null;
+  }
+  const more = count - 1 - others.length;
+  if (more > 0) return `Also ${others.join(', ')} and ${more} more`;
+  if (others.length === 1) return `Also ${others[0] ?? ''}`;
+  return `Also ${others.slice(0, -1).join(', ')} and ${others[others.length - 1] ?? ''}`;
+}
+
+const IMAGE_EXTENSIONS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'heic',
+  'heif',
+  'svg',
+  'avif',
+]);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv']);
+
+/** A deleted file's kind for its text tile: PDF, IMAGE, VIDEO or FILE. Pure. */
+export function fileKindLabel(file: Pick<DeletedFile, 'filename' | 'mimeType'>): string {
+  const mime = (file.mimeType ?? '').toLowerCase();
+  const ext = file.filename.includes('.')
+    ? (file.filename.split('.').pop() ?? '').toLowerCase()
+    : '';
+  if (mime === 'application/pdf' || ext === 'pdf') return 'PDF';
+  if (mime.startsWith('image/') || IMAGE_EXTENSIONS.has(ext)) return 'IMAGE';
+  if (mime.startsWith('video/') || VIDEO_EXTENSIONS.has(ext)) return 'VIDEO';
+  return 'FILE';
 }
 
 /**
@@ -1026,23 +1109,57 @@ export function filterByState(
 /** The "Mark all read" action label; its failure toast derives from it. No success toast. */
 export const MARKED_READ_LABEL = 'Marked as read';
 
+/** A refresh that failed with rows already on screen (they stay). */
+export const REFRESH_FAILED = "Couldn't refresh. Try again.";
+
+/** A snooze that did not save (the raw error goes to the log, never the screen). */
+export const SNOOZE_FAILED = "Couldn't snooze. Try again.";
+
+/** The loading line under the chips. */
+export const LOADING_NOTIFICATIONS = 'Loading notifications';
+
+/** A bucket header's count: "1 update" / "N updates". Pure. */
+export function updatesLabel(n: number): string {
+  return `${n} ${n === 1 ? 'update' : 'updates'}`;
+}
+
+/** The one positive line each chip's empty state shows (All and Upcoming keep their own). */
+export const EMPTY_LINES = {
+  plans: 'Plan updates show up here.',
+  mentions: 'Mentions of you show up here.',
+  briefs: 'Brief updates show up here.',
+  snoozed: 'Snoozed updates come back here.',
+} as const;
+
 /** The load error: plain copy, never the raw error. */
 export const ACTIVITY_LOAD_FAILED = "Couldn't load activity. Check your connection and try again.";
 
 /**
- * The entries "Mark all read" clears: the unread, non-snoozed items the active
- * chip shows, except a failed scheduled send (it stays until it is retried,
- * edited or opened, as the bell kept it). Every other chip's rows are left
- * alone; Upcoming has none. Pure.
+ * Whether a chip's Mark all read is the one workspace-wide inbox_mark_all_read
+ * call: All, and Unread (which shows exactly what All marks). Pure.
+ */
+export function marksWholeInbox(state: ActivityState): boolean {
+  return state === 'all' || state === 'unread';
+}
+
+/**
+ * The entries "Mark all read" clears: the unread items the active chip shows
+ * whose snooze is unset or has run out (snoozed_until <= now, as the server
+ * marks them). On All and Unread that includes a failed scheduled send, since
+ * inbox_mark_all_read marks it read too; on any other chip a failed send stays
+ * until it is retried, edited or opened. Upcoming has none. Pure.
  */
 export function markAllTargets(
   items: readonly ActivityItem[],
   state: ActivityState,
   nowMs: number,
 ): ActivityItem[] {
+  const whole = marksWholeInbox(state);
   return filterByState(items, state, nowMs).filter(
     (item) =>
-      item.readAt === null && !isSnoozed(item, nowMs) && item.eventType !== 'scheduled_failed',
+      item.readAt === null &&
+      !isSnoozed(item, nowMs) &&
+      (whole || item.eventType !== 'scheduled_failed'),
   );
 }
 
@@ -1123,10 +1240,56 @@ export interface DigestBucket {
   groups: ActivityItem[][];
 }
 
-function startOfDay(ms: number): number {
-  const d = new Date(ms);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+/** The clock the digest groups by: now, and the workspace timezone (IANA; null uses the device's). */
+export interface DigestClock {
+  nowMs: number;
+  tz: string | null;
+}
+
+/** Calendar parts of an instant in a timezone; an unknown zone falls back to the device's. */
+function zonedParts(ms: number, tz: string | null): Record<string, number> {
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  };
+  let format: Intl.DateTimeFormat;
+  try {
+    format = new Intl.DateTimeFormat('en-CA', tz !== null ? { ...options, timeZone: tz } : options);
+  } catch {
+    format = new Intl.DateTimeFormat('en-CA', options);
+  }
+  const parts: Record<string, number> = {};
+  for (const part of format.formatToParts(new Date(ms))) {
+    if (part.type !== 'literal') parts[part.type] = Number(part.value);
+  }
+  return parts;
+}
+
+/** The calendar day of an instant in a timezone, as a sortable "YYYY-MM-DD". Pure. */
+export function zonedDayKey(ms: number, tz: string | null): string {
+  const p = zonedParts(ms, tz);
+  return dayKeyOf(Date.UTC(p.year ?? 1970, (p.month ?? 1) - 1, p.day ?? 1));
+}
+
+function dayKeyOf(utcMidnightMs: number): string {
+  return new Date(utcMidnightMs).toISOString().slice(0, 10);
+}
+
+/** The day before a "YYYY-MM-DD" key. Pure. */
+function previousDayKey(key: string): string {
+  return dayKeyOf(Date.parse(`${key}T00:00:00Z`) - 86_400_000);
+}
+
+/** Milliseconds from `nowMs` to the next midnight in the timezone (at least one second). Pure. */
+export function msUntilZonedMidnight(nowMs: number, tz: string | null): number {
+  const p = zonedParts(nowMs, tz);
+  const elapsed = ((p.hour ?? 0) * 3600 + (p.minute ?? 0) * 60 + (p.second ?? 0)) * 1000;
+  return Math.max(1000, 86_400_000 - elapsed - (nowMs % 1000));
 }
 
 /**
@@ -1175,24 +1338,28 @@ function threadGroups(bucket: ActivityItem[], direction: ActivityDirection): Act
 }
 
 /**
- * Bucket items into Today / Yesterday / Earlier, then thread each bucket into
- * per-entity groups. Buckets, groups and entries all follow `direction`. 'newest'
- * = Today -> Yesterday -> Earlier, newest first; 'oldest' reverses. Empty dropped.
+ * Bucket items into Today / Yesterday / Earlier by the calendar day in the
+ * workspace timezone (clock.tz) as of clock.nowMs, then thread each bucket into
+ * per-entity groups. Buckets, groups and entries all follow `direction`.
+ * 'newest' = Today -> Yesterday -> Earlier, newest first; 'oldest' reverses.
+ * Empty dropped. Pure: it never reads the device clock.
  */
 export function groupDigest(
   items: readonly ActivityItem[],
   direction: ActivityDirection,
+  clock: DigestClock,
 ): DigestBucket[] {
-  const todayStart = startOfDay(Date.now());
-  const yesterdayStart = todayStart - 86_400_000;
+  const todayKey = zonedDayKey(clock.nowMs, clock.tz);
+  const yesterdayKey = previousDayKey(todayKey);
 
   const today: ActivityItem[] = [];
   const yesterday: ActivityItem[] = [];
   const earlier: ActivityItem[] = [];
   for (const item of items) {
     const t = Date.parse(item.createdAt);
-    if (!Number.isNaN(t) && t >= todayStart) today.push(item);
-    else if (!Number.isNaN(t) && t >= yesterdayStart) yesterday.push(item);
+    const key = Number.isNaN(t) ? null : zonedDayKey(t, clock.tz);
+    if (key !== null && key >= todayKey) today.push(item);
+    else if (key === yesterdayKey) yesterday.push(item);
     else earlier.push(item);
   }
 
@@ -1206,6 +1373,67 @@ export function groupDigest(
 }
 
 // --- network -----------------------------------------------------------------
+
+/** A keyset position: the last loaded row's (created_at, id). */
+export interface ActivityCursor {
+  createdAt: string;
+  id: string;
+}
+
+/** One page request: the chip, the sort direction, and the cursor for a next page. */
+export interface ActivityPageInput {
+  state?: ActivityState;
+  direction?: ActivityDirection;
+  cursor?: ActivityCursor;
+  /** The snooze cut-off; defaults to now. */
+  nowIso?: string;
+}
+
+/** The cursor after a page: its last row's (created_at, id); undefined for an empty list. Pure. */
+export function cursorAfter(items: readonly ActivityItem[]): ActivityCursor | undefined {
+  const last = items[items.length - 1];
+  return last !== undefined ? { createdAt: last.createdAt, id: last.id } : undefined;
+}
+
+/**
+ * The PostgREST .or() filter for the rows after `cursor` in the sort order:
+ * (created_at, id) strictly below it newest-first, strictly above it oldest-first,
+ * so rows sharing a timestamp are never skipped. Values are quoted. Pure.
+ */
+export function keysetFilter(cursor: ActivityCursor, ascending: boolean): string {
+  const op = ascending ? 'gt' : 'lt';
+  const at = `"${cursor.createdAt}"`;
+  return `created_at.${op}.${at},and(created_at.eq.${at},id.${op}.${cursor.id})`;
+}
+
+/** Append a page to the loaded rows, dropping any id already loaded. Pure. */
+export function appendUnique(
+  items: readonly ActivityItem[],
+  page: readonly ActivityItem[],
+): ActivityItem[] {
+  const seen = new Set(items.map((item) => item.id));
+  return [...items, ...page.filter((item) => !seen.has(item.id))];
+}
+
+/**
+ * Merge a fresh page one into the loaded rows: a fresh copy replaces the row
+ * with its id, new ids join, and the whole list is re-sorted by (created_at, id)
+ * in `direction`. No duplicates. Pure.
+ */
+export function mergeFresh(
+  items: readonly ActivityItem[],
+  fresh: readonly ActivityItem[],
+  direction: ActivityDirection,
+): ActivityItem[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  for (const item of fresh) byId.set(item.id, item);
+  const sign = direction === 'oldest' ? 1 : -1;
+  return [...byId.values()].sort((a, b) => {
+    const diff = Date.parse(a.createdAt) - Date.parse(b.createdAt);
+    if (diff !== 0) return sign * diff;
+    return sign * (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  });
+}
 
 export type LoadResult = { ok: true; data: ActivityItem[] } | { ok: false; error: string };
 
@@ -1394,18 +1622,19 @@ function stitchAlert(alert: AlertInfo, messageId: string | null, from: AlertSour
  * best-effort: a failed sub-query leaves its field null rather than failing the
  * feed. Soft-deleted rows are excluded; the inbox is a permanent surface. Every
  * row shows, the chat, plan and task alerts included (their chats, messages,
- * failed sends and plan titles join in the same batched waves). Pass
- * `before` (the oldest loaded created_at) to fetch the next, older page. Pass
- * `state` to filter server-side to the active chip (Unread, Mentions, Briefs,
- * Plans, Snoozed; All has no filter; Upcoming is not an inbox slice, so the page
- * loads fetchUpcoming for it instead), so older matches are never hidden behind the
- * newest-page cap: the DESC order, the keyset `before` cursor and the page size
- * are all preserved unchanged. `nowIso` is the snooze cut-off (defaults to now).
+ * failed sends and plan titles join in the same batched waves). Rows are
+ * ordered by (created_at, id) in `direction` (newest first by default) on the
+ * server; pass `cursor` (the last loaded row's pair, cursorAfter) to fetch the
+ * next page in that same direction. Pass `state` to filter server-side to the
+ * active chip (Unread, Mentions, Briefs, Plans, Snoozed; All has no filter;
+ * Upcoming is not an inbox slice, so the page loads fetchUpcoming for it
+ * instead), so older matches are never hidden behind the page cap. `nowIso` is
+ * the snooze cut-off (defaults to now).
  */
 export async function fetchActivityEntries(
   client: Client,
   workspaceId: string,
-  input: { before?: string; state?: ActivityState; nowIso?: string } = {},
+  input: ActivityPageInput = {},
 ): Promise<LoadResult> {
   const base = client
     .from('inbox_entries')
@@ -1425,8 +1654,13 @@ export async function fetchActivityEntries(
             : input.state === 'snoozed'
               ? base.gt('snoozed_until', nowIso)
               : base;
-  const scoped = input.before !== undefined ? typed.lt('created_at', input.before) : typed;
-  const res = await scoped.order('created_at', { ascending: false }).limit(ACTIVITY_PAGE_SIZE);
+  const ascending = input.direction === 'oldest';
+  const scoped =
+    input.cursor !== undefined ? typed.or(keysetFilter(input.cursor, ascending)) : typed;
+  const res = await scoped
+    .order('created_at', { ascending })
+    .order('id', { ascending })
+    .limit(ACTIVITY_PAGE_SIZE);
   if (res.error) return { ok: false, error: res.error.message };
 
   const rows = (res.data ?? []).map((row) => row as InboxEntryRow);
@@ -1859,6 +2093,80 @@ export function markAllEntriesRead(
   traceId: string,
 ): Promise<Result<undefined>> {
   return inboxMarkAllRead(client, { p_workspace_id: workspaceId, p_trace_id: traceId });
+}
+
+/** The most ids one inbox_mark_read_ids call takes (the proc rejects more). */
+export const MARK_READ_BATCH = 500;
+
+/** A chip whose Mark all read covers every matching row on the server, loaded or not. */
+export type ChipMarkState = 'mentions' | 'briefs' | 'plans';
+
+/** Whether a chip's Mark all read pages through the server (Mentions, Briefs, Plans). Pure. */
+export function marksChipOnServer(state: ActivityState): state is ChipMarkState {
+  return state === 'mentions' || state === 'briefs' || state === 'plans';
+}
+
+/** One page (up to 500) of a chip's unread, unsnoozed ids, in id order after `after`. */
+async function readChipUnreadIds(
+  client: Client,
+  input: { workspaceId: string; state: ChipMarkState; nowIso: string },
+  after: string | null,
+): Promise<Result<string[]>> {
+  const base = client
+    .from('inbox_entries')
+    .select('id')
+    .eq('workspace_id', input.workspaceId)
+    .is('read_at', null)
+    .is('deleted_at', null)
+    .or(`snoozed_until.is.null,snoozed_until.lte.${input.nowIso}`);
+  const typed =
+    input.state === 'mentions'
+      ? base.eq('event_type', MENTION_EVENT_TYPE)
+      : input.state === 'briefs'
+        ? base.eq('scope', BRIEFS_SCOPE)
+        : base.in('event_type', [...BELL_PLAN_EVENT_TYPES]);
+  const page = after !== null ? typed.gt('id', after) : typed;
+  const res = await page.order('id', { ascending: true }).limit(MARK_READ_BATCH);
+  if (res.error) return { ok: false, error: { code: 'unknown', message: res.error.message } };
+  return { ok: true, data: (res.data ?? []).map((row) => row.id) };
+}
+
+/**
+ * Mark every unread row a chip matches read, loaded or not: unread, not deleted,
+ * and not snoozed (or a snooze that has run out). Reads the matching ids 500 at
+ * a time by id (one read per batch) and marks each batch with one
+ * inbox_mark_read_ids call carrying the explicit trace id. Stops at the first
+ * failure; the batches before it stay saved. Resolves to how many ids it sent.
+ */
+export async function markChipRead(
+  client: Client,
+  input: { workspaceId: string; state: ChipMarkState; traceId: string },
+): Promise<Result<number>> {
+  const read = {
+    workspaceId: input.workspaceId,
+    state: input.state,
+    nowIso: new Date().toISOString(),
+  };
+  let after: string | null = null;
+  let sent = 0;
+  for (;;) {
+    const page: Result<string[]> = await readChipUnreadIds(client, read, after);
+    if (!page.ok) return page;
+    const ids = page.data;
+    if (ids.length === 0) return { ok: true, data: sent };
+    const args: Database['public']['Functions']['inbox_mark_read_ids']['Args'] = {
+      p_workspace_id: input.workspaceId,
+      p_ids: ids,
+      p_trace_id: input.traceId,
+    };
+    const marked = await client.rpc('inbox_mark_read_ids', args);
+    if (marked.error) {
+      return { ok: false, error: { code: 'unknown', message: marked.error.message } };
+    }
+    sent += ids.length;
+    if (ids.length < MARK_READ_BATCH) return { ok: true, data: sent };
+    after = ids[ids.length - 1] ?? null;
+  }
 }
 
 /** Set or clear snoozed_until on one entry. */

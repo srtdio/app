@@ -29,6 +29,7 @@ import {
   fetchActivityEntries,
   filterByState,
   mapEntry,
+  EMPTY_LINES,
   markAllTargets,
   unreadCount,
   openAction,
@@ -180,8 +181,10 @@ const feed: ActivityItem[] = [
 const ids = (state: ActivityState, items: readonly ActivityItem[] = feed): string[] =>
   filterByState(items, state, NOW).map((i) => i.id);
 
+const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
+
 describe('the page', () => {
-  it('is titled "Notifications"; the Plans chip has a friendly zero state', () => {
+  it('is titled "Notifications"; the Plans chip has a positive zero state', () => {
     const src = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
@@ -190,8 +193,9 @@ describe('the page', () => {
     expect(src).toContain('title={NOTIFICATIONS_TITLE}');
     expect(src).not.toContain('title="Activity"');
     expect(src).toMatch(
-      /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{24\} \/>\} title="You are all caught up" \/>/,
+      /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{24\} \/>\} title=\{EMPTY_LINES\.plans\} \/>/,
     );
+    expect(EMPTY_LINES.plans).toBe('Plan updates show up here.');
   });
 });
 
@@ -224,17 +228,17 @@ describe('chips', () => {
 });
 
 describe('Mark all read', () => {
-  it('never targets a failed scheduled send, on any chip', () => {
+  it('targets a failed scheduled send on All and Unread (the proc marks it read too)', () => {
     for (const state of ['all', 'unread'] as const) {
       const targets = markAllTargets(feed, state, NOW).map((i) => i.id);
-      expect(targets).not.toContain('fail');
+      expect(targets).toContain('fail');
       expect(targets).toContain('rem');
     }
   });
 
   it('the All chip targets every unread row of every type (one proc call covers them)', () => {
     const targets = markAllTargets(feed, 'all', NOW).map((i) => i.id);
-    for (const id of ['rem', 'sent', 'cm', 'pm', ...PLAN_TYPES, 'task', 'due', 'comment']) {
+    for (const id of ['rem', 'sent', 'fail', 'cm', 'pm', ...PLAN_TYPES, 'task', 'due', 'comment']) {
       expect(targets).toContain(id);
     }
   });
@@ -244,7 +248,10 @@ describe('Mark all read', () => {
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    expect(page).toContain('[await markAllEntriesRead(supabase, workspaceId, traceId)]');
+    expect(page).toMatch(
+      /if \(!marksWholeInbox\(state\)\) \{\s*markEntriesRead\(targets\);\s*return;\s*\}/,
+    );
+    expect(count(page, 'markAllEntriesRead(supabase, workspaceId, traceId)')).toBe(1);
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
   });
 
@@ -648,5 +655,156 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
     });
     const res = await fetchActivityEntries(client, 'w1');
     expect(res.ok && res.data[0]?.alert?.stale).toBe(true);
+  });
+});
+
+// Behaviour that lives inside NotificationsPage and InboxStoreProvider (timers,
+// refs, async writes) is pinned at the source level, as the tests above do.
+describe('notifications fixes: page and provider wiring', () => {
+  const page = readFileSync(
+    fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
+    'utf8',
+  );
+  const provider = readFileSync(
+    fileURLToPath(new URL('../../shell/InboxStoreProvider.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  it('fix 9: opening a group marks every unread entry in it, not only the lead', () => {
+    expect(page).toContain(
+      'const unread = group.filter((e) => e.readAt === null && openAction(e, workspaceKey).markRead);',
+    );
+    expect(page).toMatch(/const unread = group\.filter[^\n]*\n\s*markEntriesRead\(unread\);/);
+    expect(page).not.toContain('if (lead !== undefined) handleOpenEntry(lead);');
+  });
+
+  it('fix 11: relative times tick every 60s while visible and stop on hidden or unmount', () => {
+    expect(page).toContain('const TIME_TICK_MS = 60_000;');
+    expect(page).toContain('window.setInterval(() => setNowMs(Date.now()), TIME_TICK_MS)');
+    expect(page).toMatch(/if \(document\.hidden\) \{\s*stop\(\);\s*return;\s*\}/);
+    expect(page).toMatch(/if \(!document\.hidden\) start\(\);/);
+    expect(page).toMatch(
+      /return \(\) => \{\s*stop\(\);\s*document\.removeEventListener\('visibilitychange', onVisibility\);/,
+    );
+    expect(page).toContain('if (timer !== null) window.clearInterval(timer);');
+  });
+
+  it('fix 12: the page speaks of notifications, never activity, in its loading and sort copy', () => {
+    expect(page).toContain('label="Sort notifications"');
+    expect(page).not.toContain('Sort activity');
+    expect(page).not.toContain('Loading activity');
+    expect(count(page, '{LOADING_NOTIFICATIONS}')).toBe(2);
+    expect(page).toContain('{updatesLabel(entries.length)}');
+  });
+
+  it('fix 13: each chip empty state is its one positive line', () => {
+    for (const key of ['mentions', 'briefs', 'plans', 'snoozed'] as const) {
+      expect(page).toContain(`title={EMPTY_LINES.${key}}`);
+    }
+    for (const gone of [
+      'No mentions yet',
+      'No brief activity yet',
+      'Nothing snoozed',
+      'Snoozed items wait here',
+    ]) {
+      expect(page).not.toContain(gone);
+    }
+  });
+
+  it('fix 15: the poll tells the page (detail poll); the page merges only on that event', () => {
+    expect(provider).toContain(
+      'window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT, { detail: POLL_CHANGE_SOURCE }));',
+    );
+    expect(page).toContain(
+      'if (!(event instanceof CustomEvent) || event.detail !== POLL_CHANGE_SOURCE) return;',
+    );
+    expect(page).toContain("void loadActivity('merge');");
+    expect(page).toContain('setItems((prev) => mergeFresh(prev, result.data, sort));');
+    // The provider skips a count refresh for its own poll event.
+    expect(provider).toMatch(
+      /if \(event instanceof CustomEvent && event\.detail === POLL_CHANGE_SOURCE\) return;/,
+    );
+  });
+
+  it('fix 18: a load or load-more that went stale (seq, chip or sort moved on) is dropped', () => {
+    expect(page).toContain('const activitySeqRef = useRef(0);');
+    expect(page).toContain('if (seq !== activitySeqRef.current) return;');
+    expect(page).toMatch(
+      /seq !== activitySeqRef\.current \|\|\s*stateRef\.current !== chip \|\|\s*sortRef\.current !== direction/,
+    );
+    expect(page).toContain('setItems((prev) => appendUnique(prev, result.data));');
+  });
+
+  it('fix 18: only a load bumps the sequence, so the first page is never dropped on mount', () => {
+    // The workspace-reset effect runs right after the first 'reset' load starts:
+    // a bump there would drop page one and leave the feed empty.
+    expect(count(page, 'activitySeqRef.current += 1')).toBe(1);
+    expect(page).toContain("if (mode !== 'merge') activitySeqRef.current += 1;");
+  });
+
+  it('fix 19: every provider read is dropped once its workspace or user is no longer active', () => {
+    expect(provider).toContain('workspaceIdRef.current === ws && userIdRef.current === uid');
+    expect(count(provider, 'if (!stillActive(ws, uid)) return;')).toBeGreaterThanOrEqual(4);
+    expect(provider).toContain('if (workspaceIdRef.current !== ws) return;');
+  });
+
+  it('fix 20: one poll in flight at a time, and a row is toasted once', () => {
+    expect(provider).toContain('if (ws === null || uid === null || inFlightRef.current) return;');
+    expect(provider).toMatch(
+      /inFlightRef\.current = true;\s*void pollNew\(ws, uid\)\.finally\(\(\) => \{\s*inFlightRef\.current = false;/,
+    );
+    expect(provider).toContain('const fresh = unseenRows(summary.newRows, toastedRef.current);');
+    expect(provider).toContain('toastedRef.current = new Set();');
+  });
+
+  it('fix 21: opening an entry marks it read through the reverting batch', () => {
+    expect(page).toContain('if (open.markRead && entry.readAt === null) markEntriesRead([entry]);');
+    expect(page).not.toContain('void markEntryRead(supabase, entry, workspaceId, newTrace());');
+    expect(page).toMatch(
+      /revertRead\(failed, stamp\);\s*toast\?\.show\(\{ title: MARK_READ_FAILED \}\);/,
+    );
+  });
+
+  it('fix 22: a partial failure reverts only the rows whose save failed', () => {
+    expect(page).toContain(
+      'entries.flatMap((entry, i) => (results[i]?.ok === true ? [] : [entry.id])),',
+    );
+    expect(page).toContain(
+      'ids.has(item.id) && item.readAt === stamp ? { ...item, readAt: null } : item,',
+    );
+    expect(page).toContain('if (failed.size < entries.length) {');
+  });
+
+  it('fix 24: a failed refresh with rows on screen keeps them and toasts', () => {
+    expect(page).toContain('if (itemsRef.current.length > 0) push(REFRESH_FAILED);');
+    expect(page).toContain('else setError(true);');
+    expect(page).toContain(') : error && items.length === 0 ? (');
+  });
+
+  it('fix 25: a failed snooze toasts the fixed copy and logs the trace id, never the raw error', () => {
+    expect(page).toMatch(
+      /logger\.warn\('notifications: snooze failed', \{\s*trace_id: traceId,\s*error: result\.error\.message,\s*\}\);\s*push\(SNOOZE_FAILED\);/,
+    );
+    expect(page).not.toContain('push(result.error.message)');
+  });
+
+  it('fix 27: Today and Yesterday follow the workspace timezone and roll over at its midnight', () => {
+    expect(page).toContain('groupDigest(filterByState(items, state, nowMs), sort, { nowMs, tz })');
+    expect(page).toContain('msUntilZonedMidnight(nowMs, tz)');
+    expect(page).toContain('?.timezone ?? null');
+  });
+
+  it('fix 28: the provider seeds its mark from the newest server row, never the device clock', () => {
+    expect(provider).toContain('const highWaterRef = useRef<number | null>(null);');
+    expect(provider).not.toContain('useRef<number>(Date.now())');
+    expect(provider).not.toContain('highWaterRef.current = Date.now()');
+    expect(provider).toContain(
+      'const res = await fetchNewestInboxAt(supabase, { workspaceId: ws, userId: uid });',
+    );
+    expect(provider).toContain('void seedHighWater(workspaceId, userId);');
+  });
+
+  it('fix 29: a chat mention also speaks on the background tab', () => {
+    expect(provider).toContain("pushTabAlert({ kind: 'chat', text: mentionTabText(name) });");
   });
 });

@@ -3,8 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
-import { AvatarStack } from '@/components/pages/activity/AvatarStack';
+import { AvatarStack, STACK_OVERLAP_PX } from '@/components/pages/activity/AvatarStack';
 import { chatMentionPreview, type ActivityItem } from '@/components/pages/activity/data';
+import { avatarFillFor } from '@/components/ui/Avatar';
 import type { PresignCache } from '@/lib/asset-presign';
 
 // The unit env is `node` with no DOM, so events cannot be dispatched. We mock
@@ -25,6 +26,8 @@ vi.mock('react', async (importOriginal) => {
       }
       return [value, () => {}];
     },
+    // Effects never run in SSR; a no-op keeps the plain-function call below hook-safe.
+    useEffect: () => undefined,
   };
 });
 
@@ -92,7 +95,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
 
 const NOW = Date.parse('2026-06-14T01:00:00.000Z');
 
-function renderCard(group: ActivityItem[]): string {
+function renderCard(group: ActivityItem[], extra: { entering?: boolean } = {}): string {
   return renderToStaticMarkup(
     <ActivityCard
       group={group}
@@ -104,6 +107,7 @@ function renderCard(group: ActivityItem[]): string {
       onSnooze={() => {}}
       onMarkRead={() => {}}
       selfName={null}
+      {...extra}
     />,
   );
 }
@@ -233,7 +237,7 @@ describe('ActivityCard', () => {
     ]);
     // The footer container renders even with a single entry.
     expect(html).toContain('min-h-[44px] items-center gap-1.5 px-[14px]');
-    expect(html).toContain('font-mono text-xs text-fg-3');
+    expect(html).toContain('data-activity-time="" class="text-xs tabular-nums text-fg-3"');
     expect(html).not.toContain('more');
   });
 
@@ -242,7 +246,7 @@ describe('ActivityCard', () => {
       item({ id: 'a', eventType: 'comment' }),
       item({ id: 'b', eventType: 'mention' }),
     ]);
-    expect(html).toContain('font-mono text-xs text-fg-3');
+    expect(html).toContain('data-activity-time="" class="text-xs tabular-nums text-fg-3"');
     expect(html).toContain('+1 more');
     // The toggle is an inset touch target, not the old full-width button.
     expect(html).toContain('ml-auto flex min-h-[44px]');
@@ -320,6 +324,16 @@ describe('AvatarStack', () => {
   it('overlaps up to three and shows a +N indicator beyond that', () => {
     const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
     expect(html).toContain('+2');
+  });
+
+  it('fix 2: rings in ring-bg and overlaps by 4px, the +N pill too', () => {
+    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
+    expect(STACK_OVERLAP_PX).toBe(4);
+    expect(count(html, 'rounded-full ring-2 ring-bg')).toBe(3);
+    expect(html).not.toContain('ring-panel');
+    expect(count(html, 'margin-left:-4px')).toBe(2);
+    expect(html).not.toContain('-8px');
+    expect(html).toMatch(/class="ml-\[-4px\][^"]*ring-2 ring-bg"[^>]*>\+2</);
   });
 });
 
@@ -438,7 +452,7 @@ describe('ActivityCard actor rows', () => {
     expect(html).not.toContain('cursor-pointer');
   });
 
-  it('assets_deleted: count 1 names the file; N counts; missing actor is Someone', () => {
+  it('assets_deleted: "a file" for one, "N files" for more; missing actor is Someone', () => {
     const one = renderCard([
       item({
         eventType: 'assets_deleted',
@@ -451,7 +465,9 @@ describe('ActivityCard actor rows', () => {
         filenames: ['brief.pdf'],
       }),
     ]);
-    expect(one).toContain('Asha deleted brief.pdf');
+    expect(one).toContain('Asha deleted a file');
+    // The filename is the card title.
+    expect(one).toMatch(/text-\[15px\][^"]*">brief\.pdf</);
     expect(one).toContain('role="button"');
     const many = renderCard([
       item({
@@ -465,7 +481,8 @@ describe('ActivityCard actor rows', () => {
         filenames: ['a', 'b', 'c'],
       }),
     ]);
-    expect(many).toContain('Someone deleted 3 assets');
+    expect(many).toContain('Someone deleted 3 files');
+    expect(many).not.toContain('>Assets<');
     expect(many).not.toContain('on behalf of the approvers');
   });
 
@@ -682,5 +699,177 @@ describe('ActivityCard names', () => {
     ]);
     expect(html).toContain('Chitra approved for Kiran Shah');
     expect(html).not.toContain('on behalf of the approvers');
+  });
+});
+
+describe('ActivityCard: notifications fixes', () => {
+  it('fix 1: an imageless post tile clamps its body to 3 lines on the card', () => {
+    const html = renderCard([
+      item({ title: 'Q3', format: 'text', caption: 'A long caption for the launch post' }),
+    ]);
+    expect(html).toContain('mt-auto line-clamp-3 text-xs leading-snug text-fg-2');
+    expect(html).not.toContain('line-clamp-4');
+  });
+
+  it('fix 4: an actor row says who did what on the top line, with no body line', () => {
+    const parked = renderCard([
+      item({
+        title: 'Q3 Launch',
+        eventType: 'stage_change',
+        toStage: 'parked',
+        actorName: 'Chitra',
+      }),
+    ]);
+    expect(parked).toContain('>Chitra parked<');
+    expect(count(parked, 'Q3 Launch')).toBe(1);
+    expect(parked).not.toContain('mt-[3px]');
+    const deleted = renderCard([
+      item({ title: 'Old teaser', eventType: 'post_deleted', actorName: 'Chitra' }),
+    ]);
+    expect(deleted).toContain('>Chitra deleted<');
+    expect(deleted).not.toContain('mt-[3px]');
+    const files = renderCard([
+      item({
+        eventType: 'assets_deleted',
+        entityType: 'workspace',
+        entityId: 'w1',
+        scope: 'everything',
+        actorName: 'Chitra',
+        assetCount: 1,
+        filenames: ['deck.pdf'],
+      }),
+    ]);
+    expect(files).toContain('>Chitra deleted a file<');
+    expect(files).not.toContain('mt-[3px]');
+  });
+
+  it('fix 6: a brief card shows the BRIEF text tile with the brief title', () => {
+    const html = renderCard([
+      item({
+        eventType: 'brief_created',
+        entityType: 'brief',
+        entityId: 'b1',
+        scope: 'briefs',
+        title: 'Spring launch brief',
+        actorName: 'Dev',
+      }),
+    ]);
+    expect(html).toMatch(/data-activity-text-tile="Brief"[\s\S]*>Brief<[\s\S]*Spring launch brief/);
+    expect(html).not.toContain('<img');
+  });
+
+  it('fix 7: the card time is tabular-nums and never font-mono', () => {
+    const html = renderCard([item({ eventType: 'comment' })]);
+    const time = /<span data-activity-time="" class="([^"]*)"/.exec(html)?.[1] ?? '';
+    expect(time.split(' ')).toContain('tabular-nums');
+    expect(time).not.toContain('font-mono');
+    expect(html).toMatch(/data-activity-time=""[^>]*>1h</);
+  });
+
+  it('fix 8: a posts row still shows its "Posts" scope tag', () => {
+    const html = renderCard([item({ eventType: 'comment', scope: 'posts' })]);
+    expect(html).toMatch(/text-\[11px\] font-medium text-fg-2">Posts</);
+  });
+
+  it('fix 10: a body line wraps anywhere so a long token never overflows', () => {
+    const long = 'https://example.com/'.concat('a'.repeat(120));
+    const html = renderCard([item({ title: 'Q3', eventType: 'comment', body: long })]);
+    expect(html).toMatch(/<p class="mt-\[3px\][^"]*\[overflow-wrap:anywhere\]">https:\/\/example/);
+  });
+
+  it('fix 15: a live-added card slides up only (motion-safe translate-y), never sideways', () => {
+    const entering = renderCard([item({ id: 'new' })], { entering: true });
+    expect(entering).toContain('data-activity-entering=""');
+    expect(entering).toContain('data-activity-id="new"');
+    const root = /^<div[^>]*data-activity-entering=""[^>]*class="([^"]*)"/.exec(entering)?.[1];
+    expect(root?.split(' ')).toContain('motion-safe:translate-y-2');
+    expect(root).not.toMatch(/translate-x|rotate/);
+    const settled = renderCard([item({ id: 'old' })]);
+    expect(settled).not.toContain('data-activity-entering');
+    expect(settled).not.toContain('motion-safe:translate-y-2');
+  });
+
+  describe('fix 30: deleted files', () => {
+    const deleted = (over: Partial<ActivityItem>): ActivityItem =>
+      item({
+        eventType: 'assets_deleted',
+        entityType: 'workspace',
+        entityId: 'w1',
+        scope: 'everything',
+        actorName: 'Asha',
+        ...over,
+      });
+
+    it('names the first file as the title, lists the others and badges the rest', () => {
+      const html = renderCard([
+        deleted({
+          assetCount: 5,
+          filenames: ['deck.pdf', 'hero.png', 'teaser.mov'],
+          deletedFiles: [
+            { assetVersionId: null, filename: 'deck.pdf', mimeType: 'application/pdf' },
+            { assetVersionId: 'v2', filename: 'hero.png', mimeType: 'image/png' },
+            { assetVersionId: 'v3', filename: 'teaser.mov', mimeType: 'video/quicktime' },
+          ],
+        }),
+      ]);
+      expect(html).toContain('>Asha deleted 5 files<');
+      expect(html).toMatch(/text-\[15px\][^"]*">deck\.pdf</);
+      expect(html).toContain('Also hero.png, teaser.mov and 2 more');
+      expect(html).toContain('data-activity-text-tile="PDF"');
+      expect(html).toMatch(/data-activity-files-badge=""[^>]*>\+4</);
+      expect(html).not.toContain('>Assets<');
+    });
+
+    it('one file: no body line and no badge', () => {
+      const html = renderCard([
+        deleted({
+          assetCount: 1,
+          filenames: ['clip.mp4'],
+          deletedFiles: [{ assetVersionId: null, filename: 'clip.mp4', mimeType: null }],
+        }),
+      ]);
+      expect(html).toContain('>Asha deleted a file<');
+      expect(html).not.toContain('Also ');
+      expect(html).not.toContain('data-activity-files-badge');
+      expect(html).toContain('data-activity-text-tile="VIDEO"');
+    });
+
+    it('an old row with filenames only reads its kind from the name', () => {
+      const html = renderCard([deleted({ assetCount: 2, filenames: ['photo.jpg', 'notes.txt'] })]);
+      expect(html).toContain('data-activity-text-tile="IMAGE"');
+      expect(html).toContain('Also notes.txt');
+      expect(html).toMatch(/data-activity-files-badge=""[^>]*>\+1</);
+    });
+  });
+
+  it('fix 31: a chat mention card shows the chat icon tile, not a blank square', () => {
+    const html = renderCard([
+      item({
+        eventType: 'mention',
+        entityType: 'chat_channel',
+        entityId: 'chan-1',
+        scope: 'people',
+        channelType: 'dm',
+        actorName: 'Bob',
+        body: 'ping',
+      }),
+    ]);
+    expect(html).toContain('data-activity-icon-tile="chat"');
+    expect(html).toMatch(/data-activity-icon-tile="chat"[^>]*><svg/);
+  });
+
+  it('fix 32: the welcome card shows the workspace colour tile with its initial', () => {
+    const html = renderCard([
+      item({
+        eventType: 'system',
+        entityType: 'workspace',
+        entityId: 'w1',
+        welcome: { workspaceName: 'Kite', platform: 'instagram' },
+      }),
+    ]);
+    const tile = /<div data-activity-welcome-tile=""[^>]*class="([^"]*)"[^>]*>([^<]*)</.exec(html);
+    expect(tile?.[1]).toContain(avatarFillFor('Kite'));
+    expect(tile?.[1]).toMatch(/bg-avatar-\d/);
+    expect(tile?.[2]).toBe('K');
   });
 });
