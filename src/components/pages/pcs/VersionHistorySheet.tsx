@@ -6,6 +6,10 @@
 // are two or more versions, each row also gains a leading select control: pick any
 // two and the footer confirms a word-level caption compare. The sheet owns only
 // the transient compare selection; it holds no reads and no writes.
+// At 360px a row holds: at most two 32px-tall thumbs then "+n" (the thumbs give
+// way first), a text column that never drops below 120px (the author name
+// truncates, the date stays), and the list clips sideways overflow so the
+// sheet never pans on the X axis.
 
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -58,7 +62,19 @@ interface VersionHistorySheetModel extends VersionHistorySheetProps {
 }
 
 const ROW_BASE =
-  'flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'flex w-full min-w-0 min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+
+/** Thumbs per row before the "+n" count. */
+export const VERSION_THUMBS_MAX = 2;
+
+/**
+ * The row's thumbs: shrinkable and clipped so they give way before the text
+ * column; the tiles are 32px tall (SnapshotThumbs size 'xs', h-8).
+ */
+export const VERSION_THUMBS_CLASS = 'min-w-0 shrink overflow-hidden';
+
+/** The text column: fills the row and never squeezes below about 120px. */
+export const VERSION_TEXT_CLASS = 'flex min-w-[120px] flex-1 flex-col';
 
 // The app's day formatter (FN7): "11 Jun", with the year once it differs from
 // now's. The sheet has no workspace zone in hand, so it reads the browser's.
@@ -129,7 +145,7 @@ export function versionHistorySheet({
 
   return (
     <Sheet open={open} onClose={onClose} title="Versions" footer={footer}>
-      <ul className="flex flex-col gap-1">
+      <ul data-version-list="" className="flex min-w-0 flex-col gap-1 overflow-x-hidden">
         {ordered.map((version) => {
           const isCurrent = version.versionNumber === currentVersionNumber;
           const selected = selectedIds.includes(version.id);
@@ -141,7 +157,7 @@ export function versionHistorySheet({
               className={showSelect ? cn(ROW_BASE, 'min-w-0 flex-1') : ROW_BASE}
             >
               {thumbs !== undefined ? (
-                <span className="shrink-0">
+                <span className={VERSION_THUMBS_CLASS}>
                   <SnapshotThumbs
                     items={snapshotItems(
                       parseSnapshot(version.snapshot).galleryVersionIds,
@@ -150,18 +166,25 @@ export function versionHistorySheet({
                     cache={thumbs.cache}
                     presignEnabled={thumbs.presignEnabled}
                     ratio={thumbs.ratio}
-                    max={3}
+                    size="xs"
+                    max={VERSION_THUMBS_MAX}
                   />
                 </span>
               ) : null}
-              <span className="flex min-w-0 flex-col">
+              <span data-version-text="" className={VERSION_TEXT_CLASS}>
                 <span className="text-sm font-medium tabular-nums text-fg">
                   v{version.versionNumber}
                 </span>
-                <span className="truncate text-xs text-fg-3">
-                  {resolveAuthor(version.createdBy, version.legacyAuthorName)}
-                  <span aria-hidden> · </span>
-                  {formatTimestamp(version.createdAt)}
+                <span className="flex min-w-0 items-center text-xs text-fg-3">
+                  <span data-version-author="" className="min-w-0 truncate">
+                    {resolveAuthor(version.createdBy, version.legacyAuthorName)}
+                  </span>
+                  <span aria-hidden className="shrink-0 whitespace-pre">
+                    {' · '}
+                  </span>
+                  <span data-version-date="" className="shrink-0 tabular-nums">
+                    {formatTimestamp(version.createdAt)}
+                  </span>
                 </span>
               </span>
               {isCurrent ? (
@@ -185,7 +208,7 @@ export function versionHistorySheet({
             <li
               key={version.id}
               className={cn(
-                'flex items-center gap-1 rounded-lg border border-transparent',
+                'flex min-w-0 items-center gap-1 rounded-lg border border-transparent',
                 selected && 'border-accent-line bg-accent-soft',
               )}
             >

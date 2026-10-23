@@ -818,8 +818,8 @@ export function SnapshotThumbs({
   presignEnabled: boolean;
   /** Platform frame ratio (w / h). */
   ratio: number;
-  /** 'sm' for the sheet rows, 'lg' for the old-version view. */
-  size?: 'sm' | 'lg';
+  /** 'xs' for the versions sheet rows, 'sm' for small rows, 'lg' for the old-version view. */
+  size?: 'xs' | 'sm' | 'lg';
   /** Show at most this many, then a +n count. */
   max?: number;
 }) {
@@ -828,7 +828,7 @@ export function SnapshotThumbs({
   return (
     <div
       data-snapshot-thumbs=""
-      className={cn('flex items-center', size === 'sm' ? 'gap-1' : 'gap-2 overflow-x-auto')}
+      className={cn('flex items-center', size === 'lg' ? 'gap-2 overflow-x-auto' : 'gap-1')}
     >
       {shown.map((item) => (
         <div
@@ -836,7 +836,7 @@ export function SnapshotThumbs({
           style={{ aspectRatio: `${ratio}` }}
           className={cn(
             'shrink-0 overflow-hidden border border-border bg-panel-2',
-            size === 'sm' ? 'h-10 rounded' : 'h-40 rounded-lg',
+            size === 'xs' ? 'h-8 rounded' : size === 'sm' ? 'h-10 rounded' : 'h-40 rounded-lg',
           )}
         >
           <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />

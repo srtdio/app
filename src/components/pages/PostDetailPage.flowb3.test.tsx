@@ -324,7 +324,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('30. approver row: Comment, Reject, Approve', () => {
+describe('30 / C5. approver row: Reject and Approve only', () => {
   it('laptop: the row sits inline in the decision slot (above the caption), and no phone bar', async () => {
     h.role = 'client';
     await render();
@@ -332,7 +332,6 @@ describe('30. approver row: Comment, Reject, Approve', () => {
     expect(row).not.toBeNull();
     expect(document.querySelector('[data-decision-bar]')).toBeNull();
     expect(buttonsIn('[data-decision-row]').map((b) => b.textContent?.trim())).toEqual([
-      'Comment',
       'Reject',
       'Approve',
     ]);
@@ -340,7 +339,7 @@ describe('30. approver row: Comment, Reject, Approve', () => {
     expect(row!.compareDocumentPosition(caption!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('phone: the same row in the sticky bar only, and Comment focuses the comment box', async () => {
+  it('phone: the same row in the sticky bar only, with no Comment (the composer is on the page)', async () => {
     h.role = 'client';
     h.desktop = false;
     await render();
@@ -348,12 +347,10 @@ describe('30. approver row: Comment, Reject, Approve', () => {
     const bar = document.querySelector('[data-decision-bar]');
     expect(bar).not.toBeNull();
     expect(buttonsIn('[data-decision-bar]').map((b) => b.textContent?.trim())).toEqual([
-      'Comment',
       'Reject',
       'Approve',
     ]);
-    await click(byText('Comment', bar!));
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Write a comment');
+    expect(bar?.querySelector('[data-decision-comment]')).toBeNull();
   });
 
   it('B5: the client line above Approve / Reject reads "Review and approve one post at a time."', async () => {

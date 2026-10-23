@@ -3,7 +3,11 @@ import { appPresignCache } from '@/lib/shared-presign';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
+import {
+  ApproveConfirm,
+  APPROVE_CONFIRM_TITLE,
+  approveTargetDate,
+} from '@/components/ui/ApproveConfirm';
 import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
 import { useWorkspaceApprovers } from '@/components/pages/pcs/use-approvers';
 import { briefRoute } from '@/lib/chat/briefs';
@@ -70,7 +74,6 @@ import {
   visibleStageActions,
   type StageReasonConfirmCopy,
 } from '@/components/pages/pcs/stage-actions';
-import { sheetTitle } from '@/components/chat/post-sheet';
 import {
   useApproveGate,
   type ApproveGate,
@@ -281,30 +284,6 @@ export function scrollToCommentsSection(doc: Document = document): void {
 }
 
 /**
- * Flow B 30: the approver's Comment puts the caret in the comment box (the
- * root composer at the end of the comments) and brings it into view. With no
- * box on screen it falls back to scrolling to the comments. Returns whether a
- * box took focus.
- */
-export function focusCommentComposer(doc: Document = document): boolean {
-  const box = doc.querySelector<HTMLElement>(
-    `#${COMMENTS_SECTION_ID} [data-comments-composer] textarea, #${COMMENTS_SECTION_ID} [data-comments-composer] [contenteditable]:not([contenteditable="false"])`,
-  );
-  if (box === null) {
-    scrollToCommentsSection(doc);
-    return false;
-  }
-  const view = doc.defaultView;
-  const reduce =
-    view !== null &&
-    typeof view.matchMedia === 'function' &&
-    view.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  box.focus({ preventScroll: true });
-  box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-  return true;
-}
-
-/**
  * Flow B 34: the page grid, shared by the skeleton and the loaded page so the
  * first paint never jumps. Below lg (phone, tablet portrait) one column: head
  * (title, details, pills), media, body (caption), side (checkpoints). lg and
@@ -339,45 +318,39 @@ export function postPageGrid(embedded: boolean): {
 }
 
 /**
- * The approve confirm (decision 22): the shared Sheet (translateY axis) with the
- * chat-matching confirm in its footer. The question names the post once (spec
- * B8 / D3: no title repeated above it). Open while the approve waits on a
- * confirm or is in flight;
- * a failure keeps it open with the error and Confirm re-armed. Back, the close
- * button, the backdrop and Escape send nothing. Hookless, so it is unit tested
- * by walking the tree.
+ * The approve confirm (decision 22, spec C1): the shared Sheet (translateY
+ * axis) titled "Approve this post?", one line "{n} slides · due {date}" (each
+ * part only when known; never the post title), then Back / Approve. The
+ * confirm sits in the body, not the footer, so no empty band shows above it.
+ * Open while the approve waits on a confirm or is in flight; a failure keeps
+ * it open with the error and Approve re-armed. Back, the close button, the
+ * backdrop and Escape send nothing. Hookless, so it is unit tested by walking
+ * the tree.
  */
 export function PcsApproveConfirm(props: {
   gate: ApproveGate;
   gateState: GateState;
-  format: string;
-  title: string;
   /** Slides in the loaded gallery; null leaves the clause out. */
   mediaCount: number | null;
+  /** The due day ("20 Jul"), or '' to leave it out. */
   targetDate: string;
   busy: boolean;
   error: string | null;
 }) {
   const { gate, gateState } = props;
   return (
-    <Sheet
-      open={gateState.pendingId !== null}
-      onClose={gate.cancel}
-      title={sheetTitle(props.format)}
-      footer={
-        <ApproveConfirm
-          postTitle={props.title}
-          mediaCount={props.mediaCount}
-          targetDate={props.targetDate}
-          error={props.error}
-          busy={props.busy || gateState.sent}
-          onBack={gate.cancel}
-          onConfirm={gate.confirm}
-          induction={INDUCTION_KEYS.postApproveConfirm}
-        />
-      }
-    >
-      {null}
+    <Sheet open={gateState.pendingId !== null} onClose={gate.cancel} title={APPROVE_CONFIRM_TITLE}>
+      <ApproveConfirm
+        mode="summary"
+        postTitle={null}
+        mediaCount={props.mediaCount}
+        targetDate={props.targetDate}
+        error={props.error}
+        busy={props.busy || gateState.sent}
+        onBack={gate.cancel}
+        onConfirm={gate.confirm}
+        induction={INDUCTION_KEYS.postApproveConfirm}
+      />
     </Sheet>
   );
 }
@@ -1970,7 +1943,6 @@ export function PostDetailPage({
         ? {
             kind: 'approver',
             actions: stageActions,
-            onComment: currentStage === 'review' ? () => void focusCommentComposer() : null,
             onPick: pickStage,
           }
         : null
@@ -2650,6 +2622,7 @@ export function PostDetailPage({
           });
         }}
         lockedFields={approvedLocked}
+        platformFormat={`${platformLabel(post.platform)} · ${formatLabel(post.format)}`}
       />
 
       <PlatformPreviewPanel
@@ -2667,8 +2640,6 @@ export function PostDetailPage({
       <PcsApproveConfirm
         gate={approveGate}
         gateState={approveState}
-        format={post.format}
-        title={post.title}
         mediaCount={gallery.length > 0 ? gallery.length : null}
         targetDate={approveTargetDate(post.target_date, approveTimeZone)}
         busy={transitioning}

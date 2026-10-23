@@ -2,7 +2,9 @@
 // the title sub-header. Each row is read-only for the client and tappable for the
 // agency side. Bucket and Owner open picker sub-sheets (existing non-archived
 // buckets, with the create sheet's inline "+ New bucket" form / active
-// members); Due date is a native date overlay. Every write is a single
+// members); Due date is the app's DatePicker (as the create sheet uses). The
+// platform and format ("Instagram · Carousel") sit on a read-only row at the
+// top. Every write is a single
 // postUpdate of ONE field, run by the page (which owns the trace + load
 // refresh); this sheet only reports intent. Closing with an unsaved date or a
 // typed bucket name asks first (Sheet's discard confirm), so nothing is dropped
@@ -13,6 +15,7 @@ import type { ReactNode } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconChevronRight, IconLock } from '@/components/ui/icons';
@@ -35,6 +38,11 @@ interface PostDetailsSheetProps {
   targetDate: string | null;
   /** Active workspace members, for the owner picker (loaded by the page). */
   memberOptions: MemberOption[];
+  /**
+   * The post's platform and format as one read-only line ("Instagram ·
+   * Carousel"), built by the page from its labels. Absent or empty: no row.
+   */
+  platformFormat?: string;
   /** Resolved owner display name (never a raw uuid) and avatar. */
   ownerName: string;
   ownerAvatarUrl: string | null;
@@ -74,6 +82,7 @@ function DetailRow({
   onTap,
   locked = false,
 }: {
+  /** The row's label; empty keeps the label column blank so values stay aligned. */
   label: string;
   value: ReactNode;
   onTap?: (() => void) | undefined;
@@ -129,6 +138,7 @@ export function PostDetailsSheet({
   bucketId,
   ownerUserId,
   targetDate,
+  platformFormat,
   memberOptions,
   ownerName,
   ownerAvatarUrl,
@@ -262,6 +272,16 @@ export function PostDetailsSheet({
         }
       >
         <div className="flex flex-col gap-1">
+          {platformFormat !== undefined && platformFormat !== '' ? (
+            <DetailRow
+              label=""
+              value={
+                <span data-detail-platform-format="" className="truncate">
+                  {platformFormat}
+                </span>
+              }
+            />
+          ) : null}
           <DetailRow
             label="Bucket"
             value={bucketValue}
@@ -277,13 +297,9 @@ export function PostDetailsSheet({
           {isAgencySide ? (
             <div className="flex w-full min-h-[44px] items-center gap-3 px-2 py-2">
               <span className="w-24 shrink-0 text-xs text-fg-3">Due date</span>
-              <input
-                type="date"
-                aria-label="Due date"
-                value={dateDraft}
-                onChange={(event) => setDateDraft(event.target.value)}
-                className="min-h-[44px] min-w-0 flex-1 rounded-md border border-border bg-panel-2 px-3 text-sm text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft"
-              />
+              <div data-details-date="" className="min-w-0 flex-1">
+                <DatePicker label="Due date" value={dateDraft} onChange={setDateDraft} />
+              </div>
               {targetDate !== null ? (
                 <button
                   type="button"
