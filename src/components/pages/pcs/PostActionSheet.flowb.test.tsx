@@ -18,6 +18,7 @@ import {
   DELETE_CONFIRM_BASE,
   PostActionSheet,
   type PostMoveRow,
+  type RemoveImageAction,
 } from '@/components/pages/pcs/PostActionSheet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -41,6 +42,7 @@ async function render(
   moveRows: PostMoveRow[],
   onClose = vi.fn(),
   onDeletePost: () => Promise<void> = async () => {},
+  removeImage?: RemoveImageAction,
 ): Promise<void> {
   await act(async () => {
     root?.render(
@@ -62,6 +64,7 @@ async function render(
         canDelete
         onDeletePost={onDeletePost}
         moveRows={moveRows}
+        removeImage={removeImage}
       />,
     );
     await new Promise((r) => setTimeout(r, 30));
@@ -136,5 +139,46 @@ describe('B7. Delete post deletes at once, no confirm', () => {
         d.querySelector('h2')?.textContent?.includes('Delete post'),
       ),
     ).toBe(false);
+  });
+});
+
+describe('Remove image moved from the picture ⋮ into the header sheet', () => {
+  it('absent unless the page passes it', async () => {
+    await render([]);
+    expect(rowLabels()).not.toContain('Remove image');
+  });
+
+  it('names the shown slide, asks first, and only Remove hands off once', async () => {
+    const onClose = vi.fn();
+    const onRemove = vi.fn();
+    await render([], onClose, async () => {}, { index: 1, count: 3, saving: false, onRemove });
+    expect(rowLabels()).toContain('Remove image');
+    const row = rowNamed('Remove image');
+    expect(row?.textContent).toContain('Image 2 of 3');
+    await act(async () => {
+      row?.click();
+    });
+    expect(onRemove).not.toHaveBeenCalled();
+    const confirm = document.querySelector('[data-remove-image-confirm]');
+    expect(confirm).not.toBeNull();
+    expect(document.body.textContent).toContain('Remove this image?');
+    const buttons = [...(confirm?.querySelectorAll('button') ?? [])];
+    const cancel = buttons.find((b) => b.textContent === 'Cancel');
+    await act(async () => {
+      cancel?.click();
+    });
+    expect(onRemove).not.toHaveBeenCalled();
+    expect(rowLabels()).toContain('Remove image');
+    await act(async () => {
+      rowNamed('Remove image')?.click();
+    });
+    const remove = [
+      ...(document.querySelector('[data-remove-image-confirm]')?.querySelectorAll('button') ?? []),
+    ].find((b) => b.textContent === 'Remove');
+    await act(async () => {
+      remove?.click();
+    });
+    expect(onRemove).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalled();
   });
 });

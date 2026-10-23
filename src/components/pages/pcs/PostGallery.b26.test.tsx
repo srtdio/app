@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   PostGallery,
   galleryToolsRow,
+  galleryView,
+  pinButton,
   reorderView,
   type GalleryToolsModel,
   type ReorderModel,
@@ -95,13 +97,64 @@ function toolsModel(over: Partial<GalleryToolsModel> = {}): GalleryToolsModel {
 }
 
 describe('#26 gallery tools row', () => {
-  it('creators get Add, Replace, Reorder, then the v{n} button pushed right, all 44px', () => {
-    const html = renderToStaticMarkup(galleryToolsRow(toolsModel()));
-    const order = ['>Add<', '>Replace<', '>Reorder<', '>v4<'].map((t) => html.indexOf(t));
+  it('one row: Add, Replace, Reorder, Add pin on the left, v{n} on the right, all 44px', () => {
+    const pin = pinButton(0, null, vi.fn(), vi.fn());
+    const tree = galleryToolsRow(toolsModel({ pin }));
+    expect(tree).not.toBeNull();
+    const html = renderToStaticMarkup(tree!);
+    const order = ['>Add<', '>Replace<', '>Reorder<', 'Add pin<', '>v4<'].map((t) =>
+      html.indexOf(t),
+    );
     expect(order.every((at) => at > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html).toContain('ml-auto');
-    expect(html.match(/min-h-\[44px\]/g)?.length).toBe(4);
+    expect(html.match(/min-h-\[44px\]/g)?.length).toBe(5);
+    // The left group wraps inside its own column; v{n} never wraps away from the right.
+    expect(html).toContain('min-w-0 flex-1 flex-wrap');
+    expect(html).toContain('shrink-0 tabular-nums');
+    expect(html).not.toContain('ml-auto');
+  });
+
+  it('Add pin alone still gets the row (a viewer who can comment)', () => {
+    const pin = pinButton(0, null, vi.fn(), vi.fn());
+    const tree = galleryToolsRow(toolsModel({ canEdit: false, versionNumber: null, pin }));
+    expect(tree).not.toBeNull();
+    expect(renderToStaticMarkup(tree!)).toContain('Add pin');
+    expect(galleryToolsRow(toolsModel({ canEdit: false, versionNumber: null }))).toBeNull();
+  });
+
+  it('approved: one 14px lock in text-fg-3, no edit tools', () => {
+    const tree = galleryToolsRow(toolsModel({ canEdit: false, locked: true }));
+    expect(tree).not.toBeNull();
+    const html = renderToStaticMarkup(tree!);
+    expect(html.split('data-gallery-lock').length - 1).toBe(1);
+    expect(html.match(/<svg/g)?.length).toBe(2); // the lock and the v{n} history icon
+    expect(html).toContain('width="14"');
+    expect(html).toContain('text-fg-3');
+    expect(html).not.toContain('data-gallery-add');
+  });
+
+  it('dots sit directly under the picture; the toolbar comes after them', () => {
+    const html = renderToStaticMarkup(
+      galleryView({
+        items: [item(0), item(1)],
+        cache,
+        presignEnabled: false,
+        onOpen: () => {},
+        toolbar: <div data-test-toolbar="" />,
+      }),
+    );
+    const lastSlide = html.lastIndexOf('View image');
+    const firstDot = html.indexOf('Go to slide 1');
+    const toolbar = html.indexOf('data-test-toolbar');
+    expect(lastSlide).toBeGreaterThan(-1);
+    expect(firstDot).toBeGreaterThan(lastSlide);
+    expect(toolbar).toBeGreaterThan(firstDot);
+  });
+
+  it('Add inserts after the slide on show (the old slide ⋮ Add image after this)', () => {
+    expect(GALLERY).toContain(
+      'if (onAddAfter !== undefined && items.length > 0) onAddAfter(shownIndex);',
+    );
   });
 
   it('approvers and approved posts get only the v{n} button', () => {
@@ -116,7 +169,7 @@ describe('#26 gallery tools row', () => {
     expect(onVersions).toHaveBeenCalledTimes(1);
   });
 
-  it('PostGallery renders no edit tools, no slide ⋯ on an approved post', () => {
+  it('PostGallery renders no edit tools on an approved post, and never a ⋮ circle on the picture', () => {
     const tools = {
       canEdit: false,
       versionNumber: 2,
@@ -154,7 +207,10 @@ describe('#26 gallery tools row', () => {
     expect(open).toContain('data-gallery-add');
     expect(open).toContain('data-gallery-replace');
     expect(open).toContain('data-gallery-reorder');
-    expect(open).toContain('Slide 1 actions');
+    expect(open).not.toContain('Slide 1 actions');
+    expect(open).not.toContain('rounded-full bg-overlay');
+    expect(GALLERY).not.toContain('slideMenuButton');
+    expect(GALLERY).not.toContain('IconMore');
   });
 
   it('the page computes canEdit from the stage (never on approved)', () => {

@@ -21,6 +21,7 @@ let postActionLabels: (opts: {
   openInPipeline: boolean;
   download: boolean;
   canDelete: boolean;
+  removeImage?: boolean;
 }) => string[];
 
 beforeAll(async () => {
@@ -82,6 +83,17 @@ describe('post actions (W9)', () => {
       'Copy link',
       'Delete post',
     ]);
+  });
+
+  it('Remove image (moved from the picture ⋮) sits just before Delete post', () => {
+    expect(
+      postActionLabels({
+        openInPipeline: false,
+        download: true,
+        canDelete: true,
+        removeImage: true,
+      }),
+    ).toEqual(['Send to chat', 'Copy link', 'Download all images', 'Remove image', 'Delete post']);
   });
 
   it('the sheet renders Open in pipeline first, only when the host passes it', () => {

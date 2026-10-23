@@ -670,6 +670,9 @@ export function PostDetailPage({
   const approvers = useWorkspaceApprovers(workspaceId);
 
   const [showDetails, setShowDetails] = useState(false);
+  // Spec A4: the slide on show, so the header ⋮ can remove it (the ⋮ circle
+  // on the picture is gone).
+  const [galleryIndex, setGalleryIndex] = useState(0);
   // Workspace buckets, fetched once per workspace (mirrors PostDetailsSheet);
   // the bucket shows in the details sheet, not on the meta line. A failure
   // leaves the list empty, no spinner, no flash.
@@ -2302,6 +2305,7 @@ export function PostDetailPage({
                       : undefined
                   }
                   onRemove={canEditContent ? handleRemove : undefined}
+                  onActiveIndexChange={setGalleryIndex}
                   saving={gallerySaving}
                   tools={{
                     // #26 / flow B 37: creators edit on draft / review / parked /
@@ -2748,6 +2752,16 @@ export function PostDetailPage({
           canDelete={canDelete}
           onDeletePost={handleDeletePost}
           moveRows={moveRows}
+          removeImage={
+            canEditContent && gallery.length > 0
+              ? {
+                  index: Math.min(galleryIndex, gallery.length - 1),
+                  count: gallery.length,
+                  saving: gallerySaving,
+                  onRemove: () => handleRemove(Math.min(galleryIndex, gallery.length - 1)),
+                }
+              : undefined
+          }
           {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
         />
       ) : null}
