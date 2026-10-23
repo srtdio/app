@@ -675,9 +675,7 @@ describe('E: drag and drop', () => {
   it('a role without approve dropping on Approved: "Only approvers can approve."', () => {
     expect(APPROVE_ROLE_BLOCKED).toBe('Only approvers can approve.');
     expect(moveBlockedReason(null, 'review', 'approved')).toBe('Only approvers can approve.');
-    expect(moveBlockedReason('viewer-unknown', 'review', 'approved')).toBe(
-      'Only approvers can approve.',
-    );
+    expect(moveBlockedReason(null, 'draft', 'approved')).toBe('Only approvers can approve.');
   });
 
   it('a drop on a blocked column calls onBlockedMove with the reason, never the move', () => {

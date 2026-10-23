@@ -384,7 +384,7 @@ describe('MoveSheet targets per role', () => {
     });
     // The move sheet steps aside while the on-behalf sheet is up, with no plain confirm.
     expect((sheetOf(agencyTree).props as { open: boolean }).open).toBe(false);
-    expect(confirmOf(agencyTree)).toBeNull();
+    expect(confirmOf(agencyTree!)).toBeNull();
     // No on-behalf line anywhere: the picker replaces it.
     const all: ReactElement[] = [];
     collect(agencyTree, all);
@@ -399,7 +399,7 @@ describe('MoveSheet targets per role', () => {
       ...view(client, 'client'),
     });
     expect(onBehalfOf(clientTree)).toBeUndefined();
-    expect(confirmOf(clientTree)).not.toBeNull();
+    expect(confirmOf(clientTree!)).not.toBeNull();
   });
 
   it('the on-behalf Approve moves once with the picked approver; Cancel sends nothing', () => {
