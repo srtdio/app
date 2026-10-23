@@ -10,15 +10,14 @@
 //   - Download all -> the same attachment-disposition presigned URL the PCS
 //                     lightbox already uses per image, looped over the gallery.
 // It is mounted in LIVE PCS only (never the read-only old-version view).
-// Embedded in a plan item, the same sheet leads with Open in pipeline. The
-// delete confirm names the post's live plans (one bounded read on opening it).
+// Embedded in a plan item, the same sheet leads with Open in pipeline. Delete
+// post asks nothing (spec B7): the sheet closes and the page deletes behind its
+// 4s "Post deleted" Undo strip.
 
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import type { Result } from '@srtdio/rpc';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
-import { Button } from '@/components/ui/Button';
 import {
   IconCalendar,
   IconDownload,
@@ -39,8 +38,6 @@ import {
 } from '@/lib/post-share';
 import { ConversationPicker } from '@/components/pages/pcs/ConversationPicker';
 import type { GalleryItem } from '@srtdio/posts';
-import { postPlansLine, readPostPlans, type PostPlanRef } from '@/lib/chat/plans';
-import { supabase } from '@/lib/supabase';
 import { MOVE_ROW_LABEL, PostSheetPlanRowsContext } from '@/components/chat/PlanMoveSheet';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
@@ -79,34 +76,24 @@ interface PostActionSheetProps {
   postNumber: number;
   /** Push a toast onto the page's stack. */
   onToast: (message: string) => void;
-  /** Owner, admin or agency (canDeletePost): gates the Delete post row + confirm view. */
+  /** Owner, admin or agency (canDeletePost): gates the Delete post row. */
   canDelete: boolean;
-  /** Soft-delete the post; the page handles the proc call, toast, and navigation. */
-  onDeletePost: () => Promise<void>;
+  /**
+   * Delete the post at once; the page runs the 4s "Post deleted" Undo window,
+   * the proc call, the failure toast and the navigation.
+   */
+  onDeletePost: () => Promise<void> | void;
   /** Embedded in a plan item: the first row, Open in pipeline. Absent elsewhere. */
   onOpenInPipeline?: () => void;
-  /** The delete confirm's plans read; the live read (5s cap) when absent. */
-  readPlans?: (postId: string) => Promise<Result<PostPlanRef[]>>;
   /** Stage moves listed first (creators only); absent or empty shows none. */
   moveRows?: readonly PostMoveRow[];
 }
 
 /**
- * Flow B 38: the one delete line, the same on the menu row and in the confirm:
- * honest about the recovery surface.
+ * Flow B 38: the delete row's line, honest about the recovery surface. There
+ * is no confirm (spec B7); the Undo strip is the safety net.
  */
 export const DELETE_CONFIRM_BASE = 'Moves to Recently deleted. You can restore it there.';
-
-/**
- * The delete confirm's copy: the base, then the plans line once the read
- * settled with one or more plans. Still reading, failed, timed out or no plan:
- * the base alone. Pure.
- */
-export function deleteConfirmText(plans: Result<PostPlanRef[]> | null): string {
-  if (plans === null || !plans.ok) return DELETE_CONFIRM_BASE;
-  const line = postPlansLine(plans.data);
-  return line === null ? DELETE_CONFIRM_BASE : `${DELETE_CONFIRM_BASE} ${line}`;
-}
 
 /** The action rows in order (Open in pipeline first when offered, Delete last). Pure. */
 export function postActionLabels(opts: {
@@ -173,32 +160,11 @@ export function PostActionSheet({
   canDelete,
   onDeletePost,
   onOpenInPipeline,
-  readPlans,
   moveRows = [],
 }: PostActionSheetProps): ReactElement {
   const planRows = useContext(PostSheetPlanRowsContext);
-  const [view, setView] = useState<'actions' | 'chat' | 'confirm-delete'>('actions');
+  const [view, setView] = useState<'actions' | 'chat'>('actions');
   const [downloading, setDownloading] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  // The confirm's plans read: null while it runs (the base copy shows).
-  const [plans, setPlans] = useState<Result<PostPlanRef[]> | null>(null);
-  const confirming = open && view === 'confirm-delete';
-  const readPlansRef = useRef(readPlans);
-  readPlansRef.current = readPlans;
-  useEffect(() => {
-    if (!confirming) {
-      setPlans(null);
-      return;
-    }
-    let live = true;
-    const run = readPlansRef.current ?? ((id: string) => readPostPlans(supabase, id));
-    void run(postId).then((result) => {
-      if (live) setPlans(result);
-    });
-    return () => {
-      live = false;
-    };
-  }, [confirming, postId]);
 
   const images = useMemo(() => gallery.filter(isDownloadableImage), [gallery]);
   const showDownload = canDownloadAll(gallery);
@@ -251,19 +217,14 @@ export function PostActionSheet({
     }
   }
 
-  async function handleConfirmDelete(): Promise<void> {
-    if (deleting) return;
-    setDeleting(true);
-    try {
-      await onDeletePost();
-    } finally {
-      setDeleting(false);
-    }
+  // Spec B7: no confirm. The sheet closes, then the page deletes behind its
+  // Undo strip ("Post deleted" · Undo, 4s).
+  function handleDelete(): void {
     close();
+    void onDeletePost();
   }
 
-  const title =
-    view === 'chat' ? 'Send to chat' : view === 'confirm-delete' ? 'Delete post' : 'Post actions';
+  const title = view === 'chat' ? 'Send to chat' : 'Post actions';
 
   return (
     <Sheet open={open} onClose={close} title={title}>
@@ -275,23 +236,6 @@ export function PostActionSheet({
           onToast={onToast}
           onSent={close}
         />
-      ) : view === 'confirm-delete' ? (
-        <div className="flex flex-col gap-3">
-          <p data-post-delete-text="" className="text-sm text-fg">
-            {deleteConfirmText(plans)}
-          </p>
-          <Button
-            variant="danger"
-            size="lg"
-            disabled={deleting}
-            onClick={() => void handleConfirmDelete()}
-          >
-            {deleting ? 'Deleting…' : 'Delete post'}
-          </Button>
-          <Button variant="ghost" size="lg" disabled={deleting} onClick={() => setView('actions')}>
-            Cancel
-          </Button>
-        </div>
       ) : (
         <div className="flex flex-col gap-1">
           {onOpenInPipeline !== undefined ? (
@@ -359,7 +303,7 @@ export function PostActionSheet({
               icon={<IconTrash size={18} />}
               label="Delete post"
               sub={DELETE_CONFIRM_BASE}
-              onClick={() => setView('confirm-delete')}
+              onClick={handleDelete}
             />
           ) : null}
         </div>

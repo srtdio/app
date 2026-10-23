@@ -16,7 +16,11 @@ export interface StageAction {
   variant: 'primary' | 'default' | 'danger';
 }
 
-/** The extra confirm line an agency-side approver sees (B1): "You are approving on behalf of Zomato." */
+/**
+ * The old on-behalf confirm line: "You are approving on behalf of Zomato."
+ * The post screen now opens OnBehalfApproveSheet instead; kept for the
+ * surfaces that still show the line.
+ */
 export function onBehalfConfirmLine(brand: string | null | undefined): string {
   return `You are approving ${onBehalfOf(brand)}.`;
 }
@@ -52,7 +56,7 @@ export function canRoleMove(role: string | null, from: Stage, to: Stage): boolea
  *   approved  -> "Approve"          (client, or agency side on the client's behalf)
  *   rejected  -> "Reject"           (client, or agency side on the client's behalf)
  *   parked    -> "Park"             (agency side only)
- *   review    -> "Send for review" from draft, "Move to review" otherwise (agency)
+ *   review    -> "Send for review" from draft, parked and rejected (agency)
  * An unknown role keeps nothing, so the caller falls back to a read-only status.
  */
 export function visibleStageActions(stage: Stage, role: string | null): StageAction[] {
@@ -67,11 +71,7 @@ export function visibleStageActions(stage: Stage, role: string | null): StageAct
     } else if (to === 'parked') {
       out.push({ to, label: 'Park', variant: 'default' });
     } else if (to === 'review') {
-      out.push({
-        to,
-        label: stage === 'draft' ? 'Send for review' : 'Move to review',
-        variant: 'primary',
-      });
+      out.push({ to, label: 'Send for review', variant: 'primary' });
     }
   }
   return out;

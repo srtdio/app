@@ -11,11 +11,14 @@ import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 // Comment, Reject, Approve, one row per breakpoint), 31 (no primary Approve for
 // creators; "Approve on their behalf" in the ⋯ sheet), 33 (the creator's one
 // main button, never blocked by open comments, and the single open count), 37 (approved lock and banner), 40 (reject
-// confirm copy), 41 (plain-words errors, once, where tapped). Heavy children
-// (gallery, comments, action sheet) are stubbed and their props captured.
+// confirm copy), 41 (plain-words errors, once, where tapped), and the spec B
+// pass: the approved lock rows, banner and Move to Parked (B4), the client line
+// (B5), the reject reason said once (B6) and the on-behalf sheet (D). Heavy
+// children (gallery, comments, action sheet) are stubbed and their props
+// captured.
 
 type CountsFn = (c: { open: number; resolved: number }) => void;
-type MoveRowLike = { key: string; label: string; onPick: () => void };
+type MoveRowLike = { key: string; label: string; sub?: string; onPick: () => void };
 
 const h = vi.hoisted(() => ({
   stage: 'review' as string,
@@ -24,11 +27,18 @@ const h = vi.hoisted(() => ({
   counts: { open: 0, resolved: 0 },
   approvedBy: null as string | null,
   approvedAt: null as string | null,
-  galleryProps: null as null | { tools?: { canEdit: boolean } },
+  galleryProps: null as null | { tools?: { canEdit: boolean; locked?: boolean } },
   actionSheetProps: null as null | { moveRows?: MoveRowLike[] },
   commentsProps: null as null | { onCountsChange?: CountsFn },
   detailsSheetProps: null as null | { lockedFields?: boolean },
   transitionResult: { ok: true, data: undefined } as unknown,
+}));
+
+// The on-behalf approve goes through @srtdio/posts' stageTransition (it carries onBehalfOf).
+const { postsStageTransition } = vi.hoisted(() => ({
+  postsStageTransition: vi.fn<(...args: unknown[]) => Promise<unknown>>(
+    async () => h.transitionResult,
+  ),
 }));
 
 const { stageTransition, runPostReadyNotify, postCaptionUpdate } = vi.hoisted(() => ({
@@ -130,8 +140,15 @@ vi.mock('@srtdio/posts', async (importOriginal) => {
     }),
     getPostGallery: async () => ({ ok: true, data: [] }),
     postCaptionUpdate,
+    stageTransition: postsStageTransition,
   };
 });
+vi.mock('@/components/pages/pcs/use-approvers', () => ({
+  useWorkspaceApprovers: () => [
+    { userId: 'u7', name: 'Asha Rao' },
+    { userId: 'u8', name: 'Dev Kapoor' },
+  ],
+}));
 vi.mock('@srtdio/rpc', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@srtdio/rpc')>();
   return { ...actual, stageTransition };
@@ -194,9 +211,12 @@ vi.mock('@/components/preview/PlatformPreviewPanel', () => ({
 
 import {
   APPROVE_ON_BEHALF_LABEL,
+  APPROVED_LOCK_LINE,
+  CLIENT_REVIEW_NOTE,
+  MOVE_TO_PARKED_LABEL,
   PostDetailPage,
+  REJECT_REASON_LABEL,
   SENT_AGAIN_TOAST,
-  approvedByLine,
   postActionErrorCopy,
   rejectConfirmBody,
   sendAgainErrorCopy,
@@ -284,6 +304,7 @@ beforeEach(() => {
   h.detailsSheetProps = null;
   h.transitionResult = { ok: true, data: undefined };
   stageTransition.mockClear();
+  postsStageTransition.mockClear();
   runPostReadyNotify.mockClear();
   postCaptionUpdate.mockClear();
   scrollIntoView.mockClear();
@@ -330,6 +351,17 @@ describe('30. approver row: Comment, Reject, Approve', () => {
     await click(byText('Comment', bar!));
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Write a comment');
   });
+
+  it('B5: the client line above Approve / Reject reads "Review and approve one post at a time."', async () => {
+    h.role = 'client';
+    await render();
+    expect(CLIENT_REVIEW_NOTE).toBe('Review and approve one post at a time.');
+    const row = document.querySelector('[data-decision-row]');
+    expect(row?.textContent).toContain('Review and approve one post at a time.');
+    expect(text()).not.toContain('Approval is deliberate');
+    // Once on the page.
+    expect(count(text(), CLIENT_REVIEW_NOTE)).toBe(1);
+  });
 });
 
 describe('31. creators never get a primary Approve', () => {
@@ -349,10 +381,49 @@ describe('31. creators never get a primary Approve', () => {
       await new Promise((r) => setTimeout(r, 30));
     });
     await settle();
-    expect(document.querySelector('[data-approve-on-behalf]')?.textContent).toBe(
-      'You are approving on behalf of Kite and Co.',
-    );
+    // Spec D: the one on-behalf sheet, not the old confirm line.
+    const sheet = document.querySelector('[data-on-behalf-sheet]')?.closest('[role="dialog"]');
+    expect(sheet?.getAttribute('aria-label')).toBe('Approve on their behalf?');
+    expect(document.querySelector('[data-approve-on-behalf]')).toBeNull();
+    expect(text()).not.toContain('You are approving on behalf of');
+    // No post title in the sheet.
+    expect(sheet?.textContent).not.toContain('Monsoon drop: linen in rain');
     expect(stageTransition).not.toHaveBeenCalled();
+    expect(postsStageTransition).not.toHaveBeenCalled();
+  });
+
+  it('D: confirming the on-behalf sheet approves once with onBehalfOf (the first approver preselected)', async () => {
+    await render();
+    const rows = h.actionSheetProps?.moveRows ?? [];
+    await act(async () => {
+      rows.find((r) => r.key === 'approved')?.onPick();
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    await settle();
+    await click(document.querySelector('[data-on-behalf-approve]'));
+    expect(postsStageTransition).toHaveBeenCalledOnce();
+    expect(postsStageTransition.mock.calls[0]?.[1]).toEqual({
+      postId: 'p1',
+      toStage: 'approved',
+      traceId: 'trace-1',
+      onBehalfOf: 'u7',
+    });
+    expect(stageTransition).not.toHaveBeenCalled();
+  });
+
+  it('D: a refused on-behalf approve keeps the sheet open with the error once', async () => {
+    h.transitionResult = { ok: false, error: { code: 'unknown', message: 'pg raw boom' } };
+    await render();
+    await act(async () => {
+      h.actionSheetProps?.moveRows?.find((r) => r.key === 'approved')?.onPick();
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    await settle();
+    await click(document.querySelector('[data-on-behalf-approve]'));
+    expect(document.querySelector('[data-on-behalf-sheet]')).not.toBeNull();
+    expect(document.querySelector('[data-on-behalf-error]')?.textContent).toBe(APPROVE_FAILED);
+    expect(count(text(), APPROVE_FAILED)).toBe(1);
+    expect(text()).not.toContain('pg raw boom');
   });
 });
 
@@ -465,7 +536,7 @@ describe("33. the creator's one main button and the single open count", () => {
 });
 
 describe('37. approved posts are locked', () => {
-  it('no title pencil, no caption Edit, no gallery tools; details keep date and bucket only; the banner says how', async () => {
+  it('B4: locks on title, caption, pictures and owner; date and bucket stay editable; the banner says how', async () => {
     h.stage = 'approved';
     h.approvedBy = 'u3';
     h.approvedAt = '2026-10-21T06:00:00.000Z';
@@ -473,24 +544,51 @@ describe('37. approved posts are locked', () => {
     expect(document.querySelector('[aria-label="Edit title"]')).toBeNull();
     expect(document.querySelector('[data-caption-edit]')).toBeNull();
     expect(h.galleryProps?.tools?.canEdit).toBe(false);
+    // The lock rows: title, caption, pictures (the gallery tools row) and owner.
+    expect(document.querySelector('[data-title-lock]')).not.toBeNull();
+    expect(document.querySelector('[data-caption-lock]')).not.toBeNull();
+    expect(h.galleryProps?.tools?.locked).toBe(true);
+    expect(document.querySelector('[data-detail="owner"] [data-detail-lock]')).not.toBeNull();
     expect(h.detailsSheetProps?.lockedFields).toBe(true);
     // Details Edit stays (due date and bucket).
-    expect(document.querySelector('[data-post-details]')?.tagName).toBe('BUTTON');
+    expect(document.querySelector('[data-post-details-edit]')?.tagName).toBe('BUTTON');
     const banner = document.querySelector('[data-approved-banner]');
-    expect(banner?.textContent).toContain('Approved by Meera Shah on 21 Oct.');
-    expect(banner?.textContent).toContain(
-      "Approved posts can't be edited. To change it, park it first, then send it for review again.",
-    );
+    expect(APPROVED_LOCK_LINE).toBe('To make changes, move it to Parked.');
+    expect(banner?.textContent).toContain('To make changes, move it to Parked.');
+    expect(text()).not.toContain("Approved posts can't be edited");
+    // Who approved is not repeated in the banner.
+    expect(banner?.textContent).not.toContain('Approved by');
+    expect(text()).not.toContain('Meera Shah on');
     // Banner under the title and details.
     const details = document.querySelector('[data-post-details]');
     expect(details!.compareDocumentPosition(banner!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('an approver on an approved post still sees Reject', async () => {
+  it('B4: "Move to Parked" in the banner (agency) opens the park confirm', async () => {
+    h.stage = 'approved';
+    await render();
+    const park = document.querySelector<HTMLButtonElement>('[data-approved-park]');
+    expect(MOVE_TO_PARKED_LABEL).toBe('Move to Parked');
+    expect(park?.textContent?.trim()).toBe('Move to Parked');
+    await click(park);
+    const dialog = [...document.querySelectorAll('[role="dialog"]')].find((d) =>
+      d.textContent?.includes('Park this post?'),
+    );
+    expect(dialog).toBeDefined();
+    expect(stageTransition).not.toHaveBeenCalled();
+  });
+
+  it('an approver on an approved post still sees Reject, and no lock rows or Move to Parked', async () => {
     h.stage = 'approved';
     h.role = 'client';
     await render();
     expect(buttonsIn('[data-decision-row]').map((b) => b.textContent?.trim())).toContain('Reject');
+    expect(document.querySelector('[data-approved-park]')).toBeNull();
+    expect(document.querySelector('[data-title-lock]')).toBeNull();
+    expect(document.querySelector('[data-caption-lock]')).toBeNull();
+    expect(document.querySelector('[data-approved-banner]')?.textContent).toContain(
+      APPROVED_LOCK_LINE,
+    );
   });
 
   it('a draft keeps every edit path and shows no banner', async () => {
@@ -499,11 +597,13 @@ describe('37. approved posts are locked', () => {
     expect(document.querySelector('[aria-label="Edit title"]')).not.toBeNull();
     expect(document.querySelector('[data-caption-edit]')).not.toBeNull();
     expect(h.galleryProps?.tools?.canEdit).toBe(true);
+    expect(h.galleryProps?.tools?.locked).toBe(false);
     expect(h.detailsSheetProps?.lockedFields).toBe(false);
     expect(document.querySelector('[data-approved-banner]')).toBeNull();
+    expect(document.querySelector('[data-title-lock]')).toBeNull();
   });
 
-  it('maps post_approved_locked to plain words; the banner lead needs both name and time', () => {
+  it('maps post_approved_locked to plain words', () => {
     expect(
       postActionErrorCopy({ code: 'unknown', message: 'post_approved_locked' }, 'save the caption'),
     ).toBe("Couldn't save the caption. Approved posts are locked.");
@@ -513,8 +613,6 @@ describe('37. approved posts are locked', () => {
     expect(postActionErrorCopy(new Error('Failed to fetch'))).toBe(
       "Couldn't move the post. You're offline.",
     );
-    expect(approvedByLine(null, '2026-10-21T06:00:00.000Z', 'UTC')).toBeNull();
-    expect(approvedByLine('Meera Shah', null, 'UTC')).toBeNull();
   });
 
   it('the caption save maps the lock through the same copy', () => {
@@ -532,8 +630,8 @@ describe('37. approved posts are locked', () => {
   });
 });
 
-describe('40. reject confirm copy', () => {
-  it('title, who gets it back, "Reason (optional)", "Goes to the comments.", Cancel and Reject', async () => {
+describe('40 / B6. reject confirm copy', () => {
+  it('title, who gets it back, "Reason (optional)" once (no helper, no repeat), Cancel and Reject', async () => {
     h.role = 'client';
     await render();
     await click(byText('Reject', document.querySelector('[data-decision-row]')!));
@@ -542,17 +640,26 @@ describe('40. reject confirm copy', () => {
     );
     expect(dialog).toBeDefined();
     expect(dialog?.querySelector('[data-stage-confirm-body]')?.textContent).toBe(
-      'Riya gets it back to rework. You can send a reason.',
+      'Riya gets it back to rework.',
     );
+    expect(REJECT_REASON_LABEL).toBe('Reason (optional)');
     expect(dialog?.querySelector('textarea')?.getAttribute('aria-label')).toBe('Reason (optional)');
-    expect(dialog?.querySelector('[data-stage-confirm-helper]')?.textContent).toBe(
-      'Goes to the comments.',
-    );
+    expect(dialog?.querySelector('[data-stage-confirm-helper]')).toBeNull();
+    // The idea is said once: the label alone.
+    const dialogText = dialog?.textContent ?? '';
+    expect(count(dialogText, 'Reason (optional)')).toBe(1);
+    expect(dialogText.toLowerCase()).not.toContain('goes to the comments');
+    expect(dialogText).not.toContain('You can send a reason');
     expect(byText('Cancel', dialog!)).toBeDefined();
     expect(byText('Reject', dialog!)).toBeDefined();
-    expect(rejectConfirmBody(null)).toBe(
-      'The creator gets it back to rework. You can send a reason.',
-    );
+    expect(rejectConfirmBody(null)).toBe('The creator gets it back to rework.');
+  });
+
+  it('B6: the ⋯ sheet Reject row carries no reason subtitle', async () => {
+    await render();
+    const reject = (h.actionSheetProps?.moveRows ?? []).find((r) => r.key === 'rejected');
+    expect(reject).toBeDefined();
+    expect(reject?.sub).toBeUndefined();
   });
 });
 

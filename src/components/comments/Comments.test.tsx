@@ -987,32 +987,32 @@ describe('ledger point edit/delete affordance (author-only, frozen at confirmed/
     // Confirmed point (accepted_at set, not locked): edit vs delete wording.
     expect(
       friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: null }, 'edit'),
-    ).toBe('This point is confirmed. It can no longer be edited.');
+    ).toBe('This checkpoint is confirmed. It can no longer be edited.');
     expect(
       friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: null }, 'delete'),
-    ).toBe('This point is confirmed. It can no longer be deleted.');
+    ).toBe('This checkpoint is confirmed. It can no longer be deleted.');
     // Locked post wins even when the point is also confirmed.
     expect(
       friendlyPointFreezeError(frozen, { accepted_at: ACCEPTED, closed_at: CLOSED }, 'edit'),
-    ).toBe('This post is approved. Points are locked.');
+    ).toBe('This post is approved. Checkpoints are locked.');
     for (const action of ['edit', 'delete'] as const) {
       const msg = friendlyPointFreezeError(
         frozen,
         { accepted_at: null, closed_at: CLOSED },
         action,
       );
-      expect(msg).toBe('This post is approved. Points are locked.');
+      expect(msg).toBe('This post is approved. Checkpoints are locked.');
       expect(msg).not.toContain('—');
     }
     // Anything else reads through the shared "Couldn't {action}. {reason}" line.
     const open = { accepted_at: null, closed_at: null };
     const forbidden: DomainError = { code: 'forbidden_role', message: 'forbidden_role' };
     expect(friendlyPointFreezeError(forbidden, open, 'edit')).toBe(
-      "Couldn't edit the point. You don't have access to do this.",
+      "Couldn't edit the checkpoint. You don't have access to do this.",
     );
     const boom: DomainError = { code: 'unknown', message: 'boom' };
     expect(friendlyPointFreezeError(boom, open, 'delete')).toBe(
-      "Couldn't delete the point. Try again.",
+      "Couldn't delete the checkpoint. Try again.",
     );
   });
 });

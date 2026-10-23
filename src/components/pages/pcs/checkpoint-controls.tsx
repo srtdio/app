@@ -72,13 +72,13 @@ export function friendlyPointFreezeError(
   action: 'edit' | 'delete',
 ): string {
   if (error.message === 'checkpoint_frozen') {
-    if (point.closed_at !== null) return 'This post is approved. Points are locked.';
+    if (point.closed_at !== null) return 'This post is approved. Checkpoints are locked.';
     return action === 'delete'
-      ? 'This point is confirmed. It can no longer be deleted.'
-      : 'This point is confirmed. It can no longer be edited.';
+      ? 'This checkpoint is confirmed. It can no longer be deleted.'
+      : 'This checkpoint is confirmed. It can no longer be edited.';
   }
-  if (error.code === 'invalid_payload') return 'Points are limited to 50 words.';
-  return errorText(`${action} the point`, error);
+  if (error.code === 'invalid_payload') return 'Checkpoints are limited to 50 words.';
+  return errorText(`${action} the checkpoint`, error);
 }
 
 /** The filled "resolved" circle: tokens only, never a literal colour. The fill is

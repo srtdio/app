@@ -286,7 +286,7 @@ test('client: OK shows the pill with Undo; Not OK opens the item with the note b
   expectClean(network);
 });
 
-test('agency on an Open plan: read-only client PLAN text, header subtitle, long title, delete confirm names the plan', async ({
+test('agency on an Open plan: read-only client PLAN text, header subtitle, long title, delete with Undo', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -334,13 +334,14 @@ test('agency on an Open plan: read-only client PLAN text, header subtitle, long 
   for (const name of [/Open in pipeline/, /Send to chat/, /Copy link/, /Delete post/]) {
     await expect(sheet.getByRole('button', { name })).toBeVisible();
   }
+  // Spec B7: Delete post asks nothing; the post deletes behind the Undo strip,
+  // and Undo sends nothing.
   await sheet.getByRole('button', { name: /Delete post/ }).click();
-  const confirm = page.getByRole('dialog', { name: 'Delete post', exact: true });
-  await expect(confirm.locator('[data-post-delete-text]')).toHaveText(
-    `Moves to Recently deleted. You can restore it there. It's in ${long} and will leave that plan.`,
-  );
-  await confirm.getByRole('button', { name: 'Cancel' }).click();
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Delete post', exact: true })).toHaveCount(0);
+  const strip = undoStrip(page, 'Post deleted');
+  await expect(strip).toBeVisible();
+  await strip.locator('[data-toast-action]').click();
+  await expect(strip).toHaveCount(0);
   expectClean(network);
 });
 

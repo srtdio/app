@@ -22,7 +22,7 @@ function withKey(network: HarnessNetwork): void {
   if (ws !== undefined) ws.key = KEY;
 }
 
-test('PCS: agency approves with the on-behalf line in the confirm', async ({ page }) => {
+test('PCS: agency approves on their behalf through the on-behalf sheet', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   withKey(network);
   await page.goto(`/posts/${POST_IDS[0]}`);
@@ -38,14 +38,15 @@ test('PCS: agency approves with the on-behalf line in the confirm', async ({ pag
   await expect(sheet.getByRole('button', { name: /Park/ })).toBeVisible();
   await sheet.getByRole('button', { name: /Approve on their behalf/ }).click();
 
-  const line = page.locator('[data-approve-on-behalf]');
-  await expect(line).toHaveText('You are approving on behalf of Harness Studio.');
-  // Codes are not shown: the confirm button reads "Approve" alone.
-  await expect(page.locator('[data-approve-confirm-button]')).toHaveText('Approve');
+  // Spec D: the one on-behalf sheet, no post title and no code in it.
+  const behalf = page.getByRole('dialog', { name: 'Approve on their behalf?', exact: true });
+  await expect(behalf).toBeVisible();
+  await expect(behalf.locator('[data-on-behalf-sheet]')).toContainText('Approving on behalf of');
+  await expect(behalf.locator('[data-on-behalf-approve]')).toHaveText('Approve');
   await expect(page.getByText('HS-101', { exact: false })).toHaveCount(0);
-  // Back sends nothing.
-  await page.locator('[data-approve-back]').click();
-  await expect(line).toHaveCount(0);
+  // Cancel sends nothing.
+  await behalf.locator('[data-on-behalf-cancel]').click();
+  await expect(page.locator('[data-on-behalf-sheet]')).toHaveCount(0);
   expectNoBlocked(network);
 });
 
