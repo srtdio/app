@@ -208,9 +208,10 @@ describe('7. small copy and hit areas', () => {
     expect(PAGE).not.toContain('Tap a slide to view it.');
   });
 
-  it('the bucket chip button is at least 44px tall', () => {
-    const start = PAGE.indexOf('onClick={() => setShowDetails(true)}');
-    expect(PAGE.slice(start, start + 200)).toContain('min-h-[44px]');
+  it('the meta line button that opens the details sheet is at least 44px tall', () => {
+    expect(PAGE).toContain("const metaHeadClass = 'flex min-h-[44px]");
+    const start = PAGE.indexOf('data-post-details-edit=""');
+    expect(PAGE.slice(start, start + 200)).toContain('metaHeadClass');
   });
 
   it('the details sheet target date has a Clear that sends null', () => {

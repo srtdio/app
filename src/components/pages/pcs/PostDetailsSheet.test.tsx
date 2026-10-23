@@ -247,7 +247,7 @@ describe('PostDetailsSheet rows (post screen polish)', () => {
   it('"No bucket" reads in text-fg-3', async () => {
     await mount();
     const empty = [...document.querySelectorAll('span')].find(
-      (el) => el.textContent === 'No bucket',
+      (el) => el.children.length === 0 && el.textContent === 'No bucket',
     );
     expect(empty?.className).toContain('text-fg-3');
   });
