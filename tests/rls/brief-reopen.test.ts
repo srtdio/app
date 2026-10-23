@@ -186,9 +186,10 @@ describe.runIf(RLS_SUITE)('brief_reopen', () => {
   it('a deleted brief raises invalid_payload', async () => {
     const briefId = await createBrief(client);
     await close(owner, briefId);
+    const current = await brief(briefId);
     const del = await g
       .from('briefs')
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ deleted_at: new Date().toISOString(), row_version: current.row_version + 1 })
       .eq('id', briefId);
     if (del.error) throw new Error(`soft delete failed: ${del.error.message}`);
     const res = await reopen(owner, briefId);
