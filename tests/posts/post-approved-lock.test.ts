@@ -75,7 +75,7 @@ describe.runIf(DB_AVAILABLE)('approved-post lock (authenticated role)', () => {
   }
 
   async function readPost(postId: string): Promise<PostRow> {
-    const res = await asGeneric(admin)
+    const res = await admin
       .from('posts')
       .select('title, caption, owner_user_id, target_date, bucket_id')
       .eq('id', postId)
