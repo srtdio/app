@@ -1,12 +1,17 @@
 // The read-only old-version view: the PCS main column while READ-ONLY MODE is
 // active. It renders only what the snapshot carries (caption + gallery), both
 // strictly read-only: no edit affordances and no write wrappers are reachable
-// from here. A historical gallery is shown as a summary count because no existing
-// repo read resolves bare asset_version_ids to thumbnails (and adding one is out
-// of scope). The page owns entering/leaving this mode; Back returns to the live,
-// editable current version.
+// from here. #35: the snapshot's pictures render as platform-shaped thumbnails
+// (each asset_version_id resolves through the same presign cache the live
+// gallery uses); without thumbnail wiring it falls back to a count. The banner
+// is neutral (panel-2 / fg-2): viewing an old version is not a warning. The page
+// owns entering/leaving this mode; Back returns to the live, editable current
+// version.
 
 import { Button } from '@/components/ui/Button';
+import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
+import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
+import type { VersionThumbs } from '@/components/pages/pcs/VersionHistorySheet';
 
 /** "1 image" / "3 images" / "No images". Pure. */
 export function imageCountLabel(count: number): string {
@@ -20,6 +25,10 @@ interface ReadOnlyVersionViewProps {
   caption: string | null;
   /** Count of asset_version_ids in this version's snapshot gallery. */
   imageCount: number;
+  /** #35: the snapshot's asset_version_ids, in order. */
+  galleryVersionIds?: readonly string[];
+  /** #35: how to draw them; absent keeps the count. */
+  thumbs?: VersionThumbs | undefined;
   onBack: () => void;
 }
 
@@ -28,17 +37,21 @@ export function ReadOnlyVersionView({
   currentVersionNumber,
   caption,
   imageCount,
+  galleryVersionIds = [],
+  thumbs,
   onBack,
 }: ReadOnlyVersionViewProps) {
   const hasCaption = caption !== null && caption.trim() !== '';
+  const showPictures = thumbs !== undefined && galleryVersionIds.length > 0;
 
   return (
     <div className="px-4 md:px-6 py-6 flex flex-col gap-6">
       <div
         role="status"
-        className="flex flex-wrap items-center gap-2 rounded-xl border border-warn px-4 py-3 text-sm text-warn"
+        data-version-banner=""
+        className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-panel-2 px-4 py-3 text-sm text-fg-2"
       >
-        <span className="font-medium">Versions can&apos;t be changed</span>
+        <span className="font-medium text-fg">Versions can&apos;t be changed</span>
         <span aria-hidden>·</span>
         <span>Read only, viewing v{versionNumber}</span>
         <Button variant="default" size="lg" className="ml-auto" onClick={onBack}>
@@ -48,9 +61,19 @@ export function ReadOnlyVersionView({
 
       <section>
         <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">Gallery</div>
-        <div className="rounded-lg border border-border bg-panel-2 px-4 py-6 text-center text-sm text-fg-3">
-          {imageCountLabel(imageCount)}
-        </div>
+        {showPictures && thumbs !== undefined ? (
+          <SnapshotThumbs
+            items={snapshotItems(galleryVersionIds, thumbs.gallery)}
+            cache={thumbs.cache}
+            presignEnabled={thumbs.presignEnabled}
+            ratio={thumbs.ratio}
+            size="lg"
+          />
+        ) : (
+          <div className="rounded-lg border border-border bg-panel-2 px-4 py-6 text-center text-sm text-fg-3">
+            {imageCountLabel(imageCount)}
+          </div>
+        )}
       </section>
 
       <section>

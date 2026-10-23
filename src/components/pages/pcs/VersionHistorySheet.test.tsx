@@ -178,12 +178,20 @@ describe('VersionHistorySheet compare selection', () => {
     expect(pressed).toHaveLength(1);
   });
 
-  it('footer is disabled with a prompt label when fewer than two are selected', () => {
-    const tree = render({ versions: twoVersions, currentVersionNumber: 2, selectedIds: [] });
+  it('footer defaults to the two newest versions until two are picked', () => {
+    const onCompare = vi.fn();
+    const tree = render({
+      versions: [...twoVersions, version({ id: 'c', versionNumber: 3 })],
+      currentVersionNumber: 3,
+      selectedIds: ['a'],
+      onCompare,
+    });
     const footer = sheetProps(tree).footer;
-    expect(texts(footer)).toContain('Select two versions');
+    expect(texts(footer)).toContain('Compare v2 and v3');
     const button = elements(footer).find((el) => el.type === 'button');
-    expect((button?.props as { disabled?: boolean }).disabled).toBe(true);
+    expect((button?.props as { disabled?: boolean }).disabled).toBe(false);
+    (button?.props as { onClick: () => void }).onClick();
+    expect(onCompare).toHaveBeenCalledWith('b', 'c');
   });
 
   it('footer enables and labels old -> new regardless of pick order', () => {
@@ -195,7 +203,7 @@ describe('VersionHistorySheet compare selection', () => {
       onCompare,
     });
     const footer = sheetProps(tree).footer;
-    expect(texts(footer)).toContain('Compare v1 → v2');
+    expect(texts(footer)).toContain('Compare v1 and v2');
     const button = elements(footer).find((el) => el.type === 'button');
     expect((button?.props as { disabled?: boolean }).disabled).toBe(false);
     (button?.props as { onClick: () => void }).onClick();
