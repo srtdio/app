@@ -1,11 +1,12 @@
-// The consolidated Pipeline sort control. It folds the date-window presets and a
-// custom range INTO one sort surface, replacing the standalone segmented window
-// row. The responsive shell mirrors SortMenu exactly (a popover under the trigger
-// on desktop, the shared bottom Sheet on mobile) without importing it. The body
-// is identical on both surfaces: two labelled groups built from the same
-// radio-row markup SortMenu uses (role="menuitemradio", aria-checked, an
-// IconCheck on the active row). The "Custom" row opens the floating range
-// calendar, which paints ON TOP and never pushes page content down.
+// The Pipeline's two header controls, each its own button: Sort (the order,
+// every option naming its direction) and the date filter (calendar icon; on a
+// laptop the button shows the active window's label, e.g. "This week"). The
+// responsive shell mirrors SortMenu (a popover under the trigger on desktop,
+// the shared bottom Sheet on mobile) without importing it. Rows share
+// SortMenu's radio-row markup (role="menuitemradio", aria-checked, an
+// IconCheck on the active row) and stay 44px on every screen. The date
+// filter's "Custom" row opens the floating range calendar, which paints ON TOP
+// and never pushes page content down.
 
 import { useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -29,6 +30,9 @@ interface DateRange {
 interface PipelineSortControlProps {
   order: PostSort;
   onOrderChange: (order: PostSort) => void;
+}
+
+interface PipelineDateControlProps {
   dateWindow: DateWindow;
   onDateWindowChange: (window: DateWindow) => void;
   customRange: DateRange | null;
@@ -85,7 +89,7 @@ function radioRow(
       aria-checked={selected}
       onClick={onClick}
       className={cn(
-        'flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-3 text-left text-sm transition-colors md:min-h-0 md:h-9',
+        'flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-3 text-left text-sm transition-colors',
         selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
       )}
     >
@@ -98,77 +102,101 @@ function radioRow(
   );
 }
 
-/** A labelled group header (uppercase token caption above its rows). */
-function groupLabel(text: string): ReactElement {
+/** The Sort body: the order rows. Pure, so the rows are unit tested without a DOM. */
+export function sortControlBody(props: {
+  order: PostSort;
+  onOrderChange: (order: PostSort) => void;
+}): ReactElement {
   return (
-    <div className="px-3 pb-1 pt-1 text-xs font-medium uppercase tracking-wide text-fg-3">
-      {text}
+    <div role="menu" aria-label="Sort" className="flex flex-col">
+      {POST_SORT_OPTIONS.map((option) =>
+        radioRow(option.value, option.label, option.value === props.order, () =>
+          props.onOrderChange(option.value),
+        ),
+      )}
     </div>
   );
 }
 
-/**
- * The grouped body, identical in the desktop popover and the mobile Sheet. Pure
- * (no hooks) so the two groups, the Order/Target-date rows, and the Custom row's
- * open handler are unit-testable without a DOM, mirroring SortMenu's pure
- * `sortOptionButtons`.
- */
-export function sortControlBody(props: {
-  order: PostSort;
-  onOrderChange: (order: PostSort) => void;
+/** The date filter body: the preset windows plus Custom. Pure. */
+export function dateControlBody(props: {
   dateWindow: DateWindow;
   onDateWindowChange: (window: DateWindow) => void;
   customRange: DateRange | null;
   onCustomOpen: () => void;
 }): ReactElement {
-  // role=menu so the body matches the trigger's aria-haspopup="menu": its
-  // groups hold menuitemradio rows.
   return (
-    <div role="menu" aria-label="Sort" className="flex flex-col gap-3">
-      <div role="group" aria-label="Order" className="flex flex-col">
-        {groupLabel('Order')}
-        {POST_SORT_OPTIONS.map((option) =>
-          radioRow(option.value, option.label, option.value === props.order, () =>
-            props.onOrderChange(option.value),
-          ),
-        )}
-      </div>
-      <div role="group" aria-label="Target date" className="flex flex-col">
-        {groupLabel('Target date')}
-        {DATE_WINDOW_OPTIONS.map((option) =>
-          radioRow(option.value, option.label, props.dateWindow === option.value, () =>
-            props.onDateWindowChange(option.value),
-          ),
-        )}
-        {radioRow(
-          'custom',
-          customRangeLabel(props.customRange),
-          props.dateWindow === 'custom',
-          props.onCustomOpen,
-          <IconCalendar size={16} className="shrink-0 text-fg-3" />,
-        )}
-      </div>
+    <div role="menu" aria-label="Due date" className="flex flex-col">
+      {DATE_WINDOW_OPTIONS.map((option) =>
+        radioRow(option.value, option.label, props.dateWindow === option.value, () =>
+          props.onDateWindowChange(option.value),
+        ),
+      )}
+      {radioRow(
+        'custom',
+        customRangeLabel(props.customRange),
+        props.dateWindow === 'custom',
+        props.onCustomOpen,
+        <IconCalendar size={16} className="shrink-0 text-fg-3" />,
+      )}
     </div>
+  );
+}
+
+/** The date button's label: the active window ("This week", "24 Jun to 27 Jun"). */
+export function dateButtonLabel(dateWindow: DateWindow, customRange: DateRange | null): string {
+  if (dateWindow === 'custom')
+    return customRange === null ? 'Any time' : customRangeLabel(customRange);
+  return DATE_WINDOW_OPTIONS.find((option) => option.value === dateWindow)?.label ?? 'Any time';
+}
+
+const TRIGGER =
+  'inline-flex h-11 shrink-0 items-center gap-2 rounded-md border bg-panel px-3 text-sm transition-colors hover:bg-panel-2 hover:text-fg';
+
+/** The responsive shell: a popover on desktop, the shared bottom Sheet on mobile. */
+function MenuShell(props: {
+  isDesktop: boolean;
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  trigger: ReactElement;
+  body: ReactElement;
+  extra?: ReactNode;
+}): ReactElement {
+  if (props.isDesktop) {
+    return (
+      <div className="relative">
+        {props.trigger}
+        {props.open ? (
+          <>
+            <div className="fixed inset-0 z-40" aria-hidden="true" onClick={props.onClose} />
+            <div className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl">
+              {props.body}
+            </div>
+          </>
+        ) : null}
+        {props.extra}
+      </div>
+    );
+  }
+  return (
+    <>
+      {props.trigger}
+      <Sheet open={props.open} onClose={props.onClose} title={props.title}>
+        {props.body}
+      </Sheet>
+      {props.extra}
+    </>
   );
 }
 
 export function PipelineSortControl({
   order,
   onOrderChange,
-  dateWindow,
-  onDateWindowChange,
-  customRange,
-  onCustomRangeChange,
-  weekStartDay,
 }: PipelineSortControlProps): ReactElement {
-  // Declaration order matters: `open` is the first useState, `calendarOpen` the
-  // second. The shell renders the trigger + the active ORDER label, exactly like
-  // SortMenu's trigger.
   const [open, setOpen] = useState(false);
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const activeOrder = POST_SORT_OPTIONS.find((option) => option.value === order);
-
   const trigger = (
     <button
       type="button"
@@ -176,23 +204,64 @@ export function PipelineSortControl({
       aria-expanded={open}
       aria-label="Sort"
       onClick={() => setOpen((prev) => !prev)}
-      className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-border bg-panel px-3 text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg md:h-9"
+      className={cn(TRIGGER, 'border-border text-fg-2')}
     >
       <IconSort size={16} />
       <span className="hidden sm:inline">{activeOrder?.label ?? 'Sort'}</span>
       <IconChevronDown size={14} className="text-fg-3" />
     </button>
   );
+  return (
+    <MenuShell
+      isDesktop={isDesktop}
+      open={open}
+      onClose={() => setOpen(false)}
+      title="Sort"
+      trigger={trigger}
+      body={sortControlBody({
+        order,
+        onOrderChange: (next) => {
+          onOrderChange(next);
+          setOpen(false);
+        },
+      })}
+    />
+  );
+}
 
-  const body = sortControlBody({
-    order,
-    onOrderChange,
-    dateWindow,
-    onDateWindowChange,
-    customRange,
-    onCustomOpen: () => setCalendarOpen(true),
-  });
-
+/**
+ * The date filter as its own button: the calendar icon, and on a laptop the
+ * active window's label. While a window is on it carries the accent outline.
+ */
+export function PipelineDateControl({
+  dateWindow,
+  onDateWindowChange,
+  customRange,
+  onCustomRangeChange,
+  weekStartDay,
+}: PipelineDateControlProps): ReactElement {
+  const [open, setOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const active = dateWindow !== 'any' && !(dateWindow === 'custom' && customRange === null);
+  const label = dateButtonLabel(dateWindow, customRange);
+  const trigger = (
+    <button
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-label={`Due date: ${label}`}
+      data-date-filter=""
+      onClick={() => setOpen((prev) => !prev)}
+      className={cn(
+        TRIGGER,
+        active ? 'border-accent-line bg-accent-soft text-accent' : 'border-border text-fg-2',
+      )}
+    >
+      <IconCalendar size={16} />
+      <span className="hidden md:inline">{label}</span>
+    </button>
+  );
   // Always mounted so it floats above the sheet/popover; its own `open` prop
   // gates the portal. Applying closes both the calendar and the sheet/popover,
   // so the user lands straight back on the filtered board.
@@ -215,31 +284,23 @@ export function PipelineSortControl({
       onClose={() => setCalendarOpen(false)}
     />
   );
-
-  if (isDesktop) {
-    return (
-      <div className="relative">
-        {trigger}
-        {open ? (
-          <>
-            <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl">
-              {body}
-            </div>
-          </>
-        ) : null}
-        {calendar}
-      </div>
-    );
-  }
-
   return (
-    <>
-      {trigger}
-      <Sheet open={open} onClose={() => setOpen(false)} title="Sort">
-        {body}
-      </Sheet>
-      {calendar}
-    </>
+    <MenuShell
+      isDesktop={isDesktop}
+      open={open}
+      onClose={() => setOpen(false)}
+      title="Due date"
+      trigger={trigger}
+      body={dateControlBody({
+        dateWindow,
+        onDateWindowChange: (next) => {
+          onDateWindowChange(next);
+          setOpen(false);
+        },
+        customRange,
+        onCustomOpen: () => setCalendarOpen(true),
+      })}
+      extra={calendar}
+    />
   );
 }

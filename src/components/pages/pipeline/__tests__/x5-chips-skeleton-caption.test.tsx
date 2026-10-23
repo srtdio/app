@@ -1,5 +1,6 @@
 // X5 fix 7: stage chips fade at the scroll edge (FN12); a no-media card shows
-// its caption in fg-3 labelled "Caption" (FN14); loading is card skeletons (N12).
+// its caption in fg-3 with no "Caption:" prefix (FN14, post flow C fix 5);
+// loading is card skeletons (N12).
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -21,7 +22,7 @@ describe('X5 chips fade, caption preview, skeletons', () => {
     expect(chipRowMask(true, true)).not.toMatch(/#[0-9a-f]{3,6}|rgb/i);
   });
 
-  it('a no-media card shows its caption in fg-3, labelled "Caption"', () => {
+  it('a no-media card shows its caption in fg-3, with no "Caption" label', () => {
     const out = renderToStaticMarkup(
       <MemoryRouter>
         <PostCard
@@ -33,7 +34,7 @@ describe('X5 chips fade, caption preview, skeletons', () => {
     );
     const caption = /<p[^>]*data-post-card-caption=""[^>]*>.*?<\/p>/.exec(out)?.[0] ?? '';
     expect(caption).toContain('text-fg-3');
-    expect(caption).toContain('Caption');
+    expect(caption).not.toContain('Caption');
     expect(caption).toContain('Diwali offer copy');
   });
 

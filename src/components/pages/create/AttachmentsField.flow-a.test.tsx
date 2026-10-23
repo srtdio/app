@@ -26,6 +26,7 @@ vi.mock('@/lib/asset-upload', async (orig) => ({
   addAssetLink: mockAddLink,
 }));
 
+import { UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import { AttachmentsField } from './AttachmentsField';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -75,6 +76,12 @@ function setValue(el: HTMLInputElement, value: string): void {
 
 function buttonByText(text: string): HTMLButtonElement | undefined {
   return [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) => (b.textContent ?? '').trim() === text,
+  );
+}
+
+function buttonsByText(text: string): HTMLButtonElement[] {
+  return [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
     (b) => (b.textContent ?? '').trim() === text,
   );
 }
@@ -150,6 +157,42 @@ describe('AttachmentsField flow A (framed)', () => {
     expect(document.querySelector('[data-upload-failed]')).toBeNull();
     expect(document.querySelectorAll('[data-pending-tile]')).toHaveLength(0);
     expect(onFailedChange).toHaveBeenLastCalledWith(0);
+  });
+
+  it("a failed document shows the didn't upload bar with Retry and Remove, and its failure only once", async () => {
+    mockUpload.mockResolvedValue({ ok: false, message: "Couldn't upload. Try again." });
+    await act(async () => {
+      root!.render(
+        <AttachmentsField workspaceId="ws-1" value={[]} onChange={() => {}} frame={FRAME} />,
+      );
+    });
+    const docInput = [...document.querySelectorAll<HTMLInputElement>('input[type="file"]')].find(
+      (el) => el.accept === UPLOAD_ACCEPT,
+    );
+    expect(docInput).toBeDefined();
+    await act(async () =>
+      pick(docInput!, [new File(['x'], 'brief.pdf', { type: 'application/pdf' })]),
+    );
+
+    const bar = document.querySelector('[data-upload-failed]');
+    expect(bar?.textContent).toContain("1 file didn't upload.");
+    const barButtons = [...(bar?.querySelectorAll('button') ?? [])].map((b) =>
+      (b.textContent ?? '').trim(),
+    );
+    expect(barButtons).toEqual(['Retry', 'Remove']);
+
+    // The document row still names the file, but the failure is said once (the bar).
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('brief.pdf');
+    expect(text.split("didn't upload").length - 1).toBe(1);
+    expect(text).not.toContain("Couldn't upload. Try again.");
+    expect(document.querySelector('button[aria-label="Retry brief.pdf"]')).toBeNull();
+    expect(document.querySelector('button[aria-label="Dismiss brief.pdf"]')).toBeNull();
+    expect(buttonsByText('Retry')).toHaveLength(1);
+
+    await act(async () => buttonByText('Remove')!.click());
+    expect(document.querySelector('[data-upload-failed]')).toBeNull();
+    expect(document.body.textContent ?? '').not.toContain('brief.pdf');
   });
 });
 

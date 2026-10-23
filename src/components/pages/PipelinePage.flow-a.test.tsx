@@ -52,6 +52,11 @@ vi.mock('@/components/pages/pipeline/MoveSheet', () => ({ MoveSheet: () => null 
 vi.mock('@/components/pages/pipeline/StageChips', () => ({ StageChips: () => null }));
 vi.mock('@/components/pages/pipeline/PipelineSortControl', () => ({
   PipelineSortControl: () => null,
+  PipelineDateControl: () => null,
+  customRangeLabel: () => '',
+}));
+vi.mock('@/components/pages/pipeline/use-workspace-people', () => ({
+  useWorkspacePeople: () => ({ approverFirstNames: [], names: new Map() }),
 }));
 vi.mock('@/components/pages/CreatePostSheet', () => ({
   CreatePostSheet: (props: SheetProps) => {

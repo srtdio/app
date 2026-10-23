@@ -10,6 +10,7 @@ import {
   firstName,
   indexPostsById,
   mediaPills,
+  postHref,
   postRoute,
   sharedPostViews,
   staleOnVisible,
@@ -56,6 +57,20 @@ function cardRow(id: string, over: Partial<PostCardRow> = {}): PostCardRow {
 describe('postRoute', () => {
   it('points at the existing /posts/:id view', () => {
     expect(postRoute('p1')).toBe('/posts/p1');
+  });
+});
+
+describe('postHref', () => {
+  it('Open post goes to the pretty /p/key-n link when the workspace key is known', () => {
+    expect(postHref('p1', 12, 'GBL')).toBe('/p/gbl-12');
+  });
+
+  it('falls back to /posts/:id when the key or the number is unknown', () => {
+    expect(postHref('p1', 12, null)).toBe('/posts/p1');
+    expect(postHref('p1', 12, undefined)).toBe('/posts/p1');
+    expect(postHref('p1', 12, '')).toBe('/posts/p1');
+    expect(postHref('p1', null, 'GBL')).toBe('/posts/p1');
+    expect(postHref('p1', 0, 'GBL')).toBe('/posts/p1');
   });
 });
 

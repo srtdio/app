@@ -9,10 +9,29 @@ import type { PostCardRow } from '../../../packages/posts/src/reads';
 import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
+import { entityUrlPath } from '@/lib/entityRef';
 
 /** The route a shared post card navigates to (the existing /posts/:id view). */
 export function postRoute(id: string): string {
   return `/posts/${id}`;
+}
+
+/**
+ * Where "Open post" goes: the pretty /p/<key>-<number> link when the workspace
+ * key and the post number are known, else the classic /posts/:id route.
+ */
+export function postHref(
+  id: string,
+  number: number | null | undefined,
+  workspaceKey: string | null | undefined,
+): string {
+  return typeof workspaceKey === 'string' &&
+    workspaceKey !== '' &&
+    typeof number === 'number' &&
+    Number.isInteger(number) &&
+    number > 0
+    ? entityUrlPath('post', workspaceKey, number)
+    : postRoute(id);
 }
 
 /** The render branch for one shared post id. */
@@ -24,6 +43,8 @@ export type SharedPostView =
       approverName: string | null;
       /** The approver's workspace role (one batched read); null or absent when unread or failed. */
       approverRole?: string | null;
+      /** The creator's display name when the caller has it; absent or null reads "The creator". */
+      creatorName?: string | null;
     }
   | { kind: 'not_visible'; postId: string };
 

@@ -1,21 +1,18 @@
-// The mobile move sheet: a long-press on a pipeline card opens this bottom sheet
-// to move the post to another stage. It is presentational only - it never calls
-// the stage-transition proc itself; selecting a valid target calls up to the
-// page's single move handler (PipelinePage owns the proc call + toast + regroup).
+// The move sheet: the card's ⋯ or a long-press opens this sheet to move the
+// post. It is presentational only - it never calls the stage-transition proc
+// itself; picking an action calls up to the page's move handler (PipelinePage
+// owns the confirms, the proc call, the Undo strip and the regroup).
 //
-// Rows mirror the client-side transition map (canTransition) and the viewer's
-// role (canRoleMove): a client only ever sees the Approved and Rejected rows;
-// the agency side sees every stage. Targets that are legal from the post's
-// current stage for this role are enabled, the rest are disabled with their
-// reason: "Not allowed from {stage}" when the stage map blocks the row, the
-// role line when only the role does. While the role is unknown the rows wait
-// (busy), and a failed role read says so with Retry rather than blaming the
-// role. The server proc remains the real guard; this is UI gating only.
+// It lists ONLY the moves this viewer can make from the post's stage (the
+// client-side transition map and canRoleMove), as actions with a one-line
+// helper: "Send for review", "Approve" (approvers) or "Approve on their
+// behalf" (creators), "Park" and "Reject". No greyed rows and no Draft row.
+// While the role is unknown the sheet says it is checking, and a failed role
+// read says so with Retry. The server proc remains the real guard.
 //
-// Approved asks first (decision 22): picking it swaps the rows and Cancel for
-// the shared approve confirm, as the chat post sheet swaps its footer. Only
-// Confirm calls the move handler; Back returns to the rows and Cancel, the
-// backdrop and Escape close with nothing sent. Other targets move at once.
+// Approve asks first (decision 22): picking it swaps the actions for the shared
+// approve confirm (with the on-behalf line for creators). Reject, Park and
+// Send for review from Draft ask first through the page's confirm sheet.
 
 import { useEffect } from 'react';
 import type { ReactElement } from 'react';
@@ -24,18 +21,15 @@ import { Button } from '@/components/ui/Button';
 import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { cn } from '@/lib/cn';
 import { useWorkspace } from '@/lib/workspace-context';
-import { StageDot, moveBlockedReason, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { sendForReviewHelper } from '@/components/pages/pipeline/card-status';
 import {
   useApproveGate,
   type ApproveGate,
   type GateState,
 } from '@/components/pages/pipeline/approve-gate';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
-import {
-  canRoleMove,
-  onBehalfConfirmLine,
-  roleMayTarget,
-} from '@/components/pages/pcs/stage-actions';
+import { canRoleMove, onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import {
   ROLE_READ_ERROR,
   ROLE_READ_PENDING,
@@ -66,6 +60,8 @@ export interface MoveSheetProps {
   roleStatus?: RoleStatus;
   /** Re-runs the role read (the error state's Retry). */
   onRetryRole?: () => void;
+  /** The workspace approvers' first names, for the Send for review helper. */
+  approverFirstNames?: readonly string[];
 }
 
 /**
@@ -109,19 +105,59 @@ export interface MoveSheetViewProps extends Omit<MoveSheetProps, 'onMove'> {
   brand?: string | null;
 }
 
-/** The stages this role sees as rows: a client only Approved and Rejected. */
-export function moveTargets(role: string | null, currentStage: Stage): Stage[] {
-  const others = STAGES.filter((stage) => stage !== currentStage);
-  return isClient(role) ? others.filter((stage) => roleMayTarget(role, stage)) : others;
+/** One move the viewer can make: its target, label, helper and tone. */
+export interface MoveAction {
+  to: Stage;
+  label: string;
+  helper: string | null;
+  tone: 'default' | 'bad';
+}
+
+export const PARK_HELPER = 'Keeps it aside. You can send it for review later.';
+export const REJECT_HELPER = 'You can add a reason. It goes to the comments.';
+
+/**
+ * The moves this role can make from `currentStage`, in transition-map order,
+ * as actions. Only legal, role-allowed targets appear; Draft is never one.
+ * An unknown role gets none. Pure.
+ */
+export function moveActions(
+  role: string | null,
+  currentStage: Stage,
+  approverFirstNames: readonly string[] = [],
+): MoveAction[] {
+  const out: MoveAction[] = [];
+  for (const to of STAGES) {
+    if (to === currentStage || to === 'draft' || !canRoleMove(role, currentStage, to)) continue;
+    if (to === 'review') {
+      out.push({
+        to,
+        label: 'Send for review',
+        helper: sendForReviewHelper(approverFirstNames),
+        tone: 'default',
+      });
+    } else if (to === 'approved') {
+      out.push({
+        to,
+        label: isClient(role) ? 'Approve' : 'Approve on their behalf',
+        helper: null,
+        tone: 'default',
+      });
+    } else if (to === 'parked') {
+      out.push({ to, label: 'Park', helper: PARK_HELPER, tone: 'default' });
+    } else if (to === 'rejected') {
+      out.push({ to, label: 'Reject', helper: REJECT_HELPER, tone: 'bad' });
+    }
+  }
+  return out;
 }
 
 /**
- * Bottom sheet listing every OTHER stage (for a client, only Approved and
- * Rejected) as a move target. Reuses the shared
- * Sheet primitive (bottom on mobile, centered on desktop), the StageDot/label
- * metadata, and the canTransition mirror. Every row is a >=44px touch target;
- * colour comes only through token-backed classes, so light/dark track index.css.
- * Hookless, so the tree is unit tested by walking it.
+ * The sheet: the post title in the header, the post's current stage, and the
+ * viewer's moves as 44px+ action rows. Reuses the shared Sheet primitive
+ * (bottom on mobile, centered on desktop); colour comes only through
+ * token-backed classes, so light/dark track index.css. Hookless, so the tree
+ * is unit tested by walking it.
  */
 export function MoveSheetView({
   open,
@@ -135,21 +171,20 @@ export function MoveSheetView({
   brand = null,
   roleStatus = 'ready',
   onRetryRole,
+  approverFirstNames = [],
 }: MoveSheetViewProps): ReactElement | null {
   if (post === null) {
     return null;
   }
   // posts.stage is a DB text column (typed string); it is one of the Stage values.
   const currentStage = post.stage as Stage;
-  const targets = moveTargets(role, currentStage);
   const confirming = gateState.pendingId === post.id;
-  // Until the role is known, no row is enabled and no row names a reason.
-  const roleKnown = roleStatus === 'ready';
+  const actions = roleStatus === 'ready' ? moveActions(role, currentStage, approverFirstNames) : [];
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title="Move post"
+      title={post.title}
       footer={
         confirming ? (
           <ApproveConfirm
@@ -168,18 +203,10 @@ export function MoveSheetView({
       }
     >
       <div className="flex flex-col gap-3">
-        <div>
-          <div
-            data-move-title=""
-            className="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]"
-          >
-            {post.title}
-          </div>
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-fg-3">
-            <span>Currently in</span>
-            <StageDot stage={currentStage} />
-            <span>{stageLabel(currentStage)}</span>
-          </div>
+        <div className="flex items-center gap-1.5 text-xs text-fg-3">
+          <span>Currently in</span>
+          <StageDot stage={currentStage} />
+          <span>{stageLabel(currentStage)}</span>
         </div>
         {confirming && isAgencySide(role) ? (
           <p data-approve-on-behalf="" className="text-sm text-fg-2">
@@ -203,41 +230,36 @@ export function MoveSheetView({
             </Button>
           </div>
         ) : null}
-        {confirming ? null : (
-          <ul className="flex flex-col gap-1" aria-busy={roleStatus === 'loading'}>
-            {targets.map((target) => {
-              const allowed = roleKnown && canRoleMove(role, currentStage, target);
-              const reason =
-                allowed || !roleKnown ? null : moveBlockedReason(role, currentStage, target);
-              return (
-                <li key={target}>
-                  <button
-                    type="button"
-                    disabled={!allowed || busy}
-                    aria-disabled={!allowed}
-                    data-role-pending-row={roleKnown ? undefined : ''}
-                    onClick={() => gate.request(post.id, target)}
+        {confirming || actions.length === 0 ? null : (
+          <ul className="-mx-1 flex flex-col">
+            {actions.map((action) => (
+              <li key={action.to}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  data-move-action={action.to}
+                  onClick={() => gate.request(post.id, action.to)}
+                  className={cn(
+                    'flex w-full min-h-[52px] flex-col items-start justify-center rounded-lg px-3 py-2 text-left transition-colors',
+                    'hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
+                  )}
+                >
+                  <span
                     className={cn(
-                      'flex w-full min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-left transition-colors',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      allowed
-                        ? 'text-fg hover:bg-panel-2 disabled:opacity-50'
-                        : roleKnown
-                          ? 'cursor-not-allowed text-fg-3'
-                          : 'cursor-wait text-fg-3 opacity-60',
+                      'text-sm font-medium',
+                      action.tone === 'bad' ? 'text-bad' : 'text-fg',
                     )}
                   >
-                    <StageDot stage={target} />
-                    <span className="text-sm font-medium">{stageLabel(target)}</span>
-                    {reason !== null ? (
-                      <span data-blocked-reason="" className="ml-auto text-right text-xs text-fg-3">
-                        {reason}
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })}
+                    {action.label}
+                  </span>
+                  {action.helper !== null ? (
+                    <span data-move-helper="" className="mt-0.5 text-xs text-fg-3">
+                      {action.helper}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
           </ul>
         )}
       </div>

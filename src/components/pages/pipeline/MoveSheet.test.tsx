@@ -8,7 +8,6 @@ import {
   createApproveGate,
   type GateState,
 } from '@/components/pages/pipeline/approve-gate';
-import { stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { STAGE_TRANSITIONS, canTransition } from '@srtdio/posts';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
@@ -87,88 +86,72 @@ function collect(node: ReactNode, found: ReactElement[]): void {
   collect((node.props as { children?: ReactNode }).children, found);
 }
 
-/** The label string carried by a target button (the stage name span). */
-function labelOf(button: ReactElement): string | undefined {
+/** The target stage an action row moves to (its data-move-action), if it is one. */
+function targetOf(button: ReactElement): Stage | undefined {
+  return (button.props as { 'data-move-action'?: Stage })['data-move-action'];
+}
+
+/** The visible label of an action row (its first string span). */
+function labelOf(button: ReactElement): string {
   const inner: ReactElement[] = [];
   collect((button.props as { children?: ReactNode }).children, inner);
   for (const el of inner) {
     const child = (el.props as { children?: ReactNode }).children;
-    if (typeof child === 'string' && STAGES.some((s) => stageLabel(s) === child)) {
-      return child;
-    }
+    if (typeof child === 'string') return child;
   }
-  return undefined;
+  return '';
 }
 
-function targetRows(source: Stage, busy = false): { label: string; disabled: boolean }[] {
+function targetRows(
+  source: Stage,
+  busy = false,
+  role: string | null = 'agency',
+): { to: Stage; label: string; disabled: boolean }[] {
   const tree = MoveSheetView({
     open: true,
     post: makePost(source),
     onClose: () => {},
     busy,
-    ...view(harness()),
+    ...view(harness(), role),
   });
   const all: ReactElement[] = [];
   collect(tree, all);
   return all
-    .filter((el) => el.type === 'button')
+    .filter((el) => el.type === 'button' && targetOf(el) !== undefined)
     .map((button) => ({
-      label: labelOf(button) ?? '',
+      to: targetOf(button)!,
+      label: labelOf(button),
       disabled: Boolean((button.props as { disabled?: boolean }).disabled),
-    }))
-    .filter((row) => row.label !== '');
+    }));
 }
 
 describe('MoveSheet', () => {
-  it('renders one row per OTHER stage with the current stage omitted', () => {
+  it('renders only the allowed moves: never the current stage, never Draft', () => {
     for (const source of STAGES) {
       const rows = targetRows(source);
-      expect(rows.map((r) => r.label).sort()).toEqual(
-        STAGES.filter((s) => s !== source)
-          .map(stageLabel)
-          .sort(),
+      expect(rows.map((r) => r.to)).toEqual(
+        STAGES.filter((s) => s !== source && s !== 'draft' && canTransition(source, s)),
       );
+      expect(rows.some((r) => r.to === 'draft' || r.to === source)).toBe(false);
     }
   });
 
-  it('enables legal targets and disables the rest per the transition map (draft)', () => {
+  it('lists exactly the legal targets per the transition map (draft), all enabled', () => {
     const rows = targetRows('draft');
-    const enabled = rows
-      .filter((r) => !r.disabled)
-      .map((r) => r.label)
-      .sort();
-    const disabled = rows
-      .filter((r) => r.disabled)
-      .map((r) => r.label)
-      .sort();
-    // draft -> review, parked are legal; approved, rejected are not.
-    expect(enabled).toEqual([stageLabel('parked'), stageLabel('review')].sort());
-    expect(disabled).toEqual([stageLabel('approved'), stageLabel('rejected')].sort());
-    // The enabled set matches the canTransition mirror exactly.
-    for (const row of rows) {
-      const stage = STAGES.find((s) => stageLabel(s) === row.label)!;
-      expect(!row.disabled).toBe(canTransition('draft', stage));
-    }
+    // draft -> review, parked are legal; approved, rejected never show.
+    expect(rows.map((r) => r.to)).toEqual(['review', 'parked']);
+    expect(rows.every((r) => !r.disabled)).toBe(true);
+    for (const row of rows) expect(canTransition('draft', row.to)).toBe(true);
   });
 
-  it('enables only the legal target per the transition map (parked)', () => {
+  it('lists only the legal target per the transition map (parked)', () => {
     const rows = targetRows('parked');
-    const enabled = rows
-      .filter((r) => !r.disabled)
-      .map((r) => r.label)
-      .sort();
-    const disabled = rows
-      .filter((r) => r.disabled)
-      .map((r) => r.label)
-      .sort();
     // parked -> review only.
-    expect(enabled).toEqual([stageLabel('review')]);
-    expect(disabled).toEqual(
-      [stageLabel('draft'), stageLabel('approved'), stageLabel('rejected')].sort(),
-    );
+    expect(rows.map((r) => r.to)).toEqual(['review']);
+    expect(rows[0]!.disabled).toBe(false);
   });
 
-  it('a legal row calls onMove with the post id and target stage', () => {
+  it('a row calls onMove with the post id and target stage', () => {
     const h = harness();
     const onMove = h.move;
     const tree = MoveSheetView({
@@ -179,9 +162,7 @@ describe('MoveSheet', () => {
     });
     const all: ReactElement[] = [];
     collect(tree, all);
-    const reviewRow = all.find(
-      (el) => el.type === 'button' && labelOf(el) === stageLabel('review'),
-    )!;
+    const reviewRow = all.find((el) => el.type === 'button' && targetOf(el) === 'review')!;
     (reviewRow.props as { onClick: () => void }).onClick();
     expect(onMove).toHaveBeenCalledWith('p1', 'review');
   });
@@ -224,7 +205,7 @@ function render(h: ReturnType<typeof harness>, post: PipelinePost, busy = false)
 function row(tree: ReactElement, stage: Stage): ReactElement | undefined {
   const all: ReactElement[] = [];
   collect(tree, all);
-  return all.find((el) => el.type === 'button' && labelOf(el) === stageLabel(stage));
+  return all.find((el) => el.type === 'button' && targetOf(el) === stage);
 }
 
 function click(el: ReactElement | undefined): void {
@@ -320,38 +301,27 @@ describe('MoveSheet approve confirm', () => {
 });
 
 describe('MoveSheet targets per role', () => {
-  function rows(source: Stage, role: string | null): { label: string; disabled: boolean }[] {
-    const tree = MoveSheetView({
-      open: true,
-      post: makePost(source),
-      onClose: () => {},
-      ...view(harness(), role),
-    });
-    const all: ReactElement[] = [];
-    collect(tree, all);
-    return all
-      .filter((el) => el.type === 'button')
-      .map((button) => ({
-        label: labelOf(button) ?? '',
-        disabled: Boolean((button.props as { disabled?: boolean }).disabled),
-      }))
-      .filter((row) => row.label !== '');
+  function rows(source: Stage, role: string | null): { to: Stage; label: string }[] {
+    return targetRows(source, false, role).map(({ to, label }) => ({ to, label }));
   }
 
-  it('client sees only Approved and Rejected rows (no Park, no Back to review)', () => {
-    const labels = rows('review', 'client').map((r) => r.label);
-    expect(labels).toEqual([stageLabel('approved'), stageLabel('rejected')]);
-    expect(rows('review', 'client').every((r) => !r.disabled)).toBe(true);
-    const fromApproved = rows('approved', 'client');
-    expect(fromApproved.map((r) => r.label)).toEqual([stageLabel('rejected')]);
-    expect(rows('parked', 'client').every((r) => r.disabled)).toBe(true);
+  it('client sees only Approve and Reject (no Park, no Back to review)', () => {
+    expect(rows('review', 'client')).toEqual([
+      { to: 'approved', label: 'Approve' },
+      { to: 'rejected', label: 'Reject' },
+    ]);
+    expect(targetRows('review', false, 'client').every((r) => !r.disabled)).toBe(true);
+    expect(rows('approved', 'client').map((r) => r.to)).toEqual(['rejected']);
+    // Nothing a client may do from Parked: no rows at all, never greyed ones.
+    expect(rows('parked', 'client')).toEqual([]);
   });
 
-  it('agency sees every other stage with the legal ones enabled', () => {
-    const enabled = rows('review', 'agency')
-      .filter((r) => !r.disabled)
-      .map((r) => r.label);
-    expect(enabled).toEqual([stageLabel('approved'), stageLabel('parked'), stageLabel('rejected')]);
+  it('agency sees the legal moves only, approving on their behalf', () => {
+    expect(rows('review', 'agency')).toEqual([
+      { to: 'approved', label: 'Approve on their behalf' },
+      { to: 'parked', label: 'Park' },
+      { to: 'rejected', label: 'Reject' },
+    ]);
   });
 
   it('agency approve confirm carries the on-behalf line; client confirm does not', () => {
@@ -375,7 +345,7 @@ describe('MoveSheet targets per role', () => {
   });
 });
 
-describe('W4 fix 9: MoveSheet blocked reasons and title', () => {
+describe('W4 fix 9 (revised): MoveSheet has no blocked rows and is titled by the post', () => {
   function sheet(source: Stage, role: string | null = 'agency'): ReactElement {
     return MoveSheetView({
       open: true,
@@ -385,42 +355,19 @@ describe('W4 fix 9: MoveSheet blocked reasons and title', () => {
     })!;
   }
 
-  function reasons(tree: ReactElement): Record<string, string> {
-    const all: ReactElement[] = [];
-    collect(tree, all);
-    const out: Record<string, string> = {};
-    for (const button of all.filter((el) => el.type === 'button')) {
-      const label = labelOf(button);
-      if (label === undefined) continue;
-      const inner: ReactElement[] = [];
-      collect((button.props as { children?: ReactNode }).children, inner);
-      const hint = inner.find((el) => 'data-blocked-reason' in (el.props as object));
-      if (hint !== undefined) out[label] = (hint.props as { children: string }).children;
+  it('no row carries a blocked reason (blocked moves are left out, not greyed)', () => {
+    for (const source of ['draft', 'parked'] as const) {
+      const all: ReactElement[] = [];
+      collect(sheet(source), all);
+      expect(all.some((el) => 'data-blocked-reason' in (el.props as object))).toBe(false);
+      const texts = all.map((el) => (el.props as { children?: unknown }).children);
+      const blocked = texts.some((t) => typeof t === 'string' && t.startsWith('Not allowed from'));
+      expect(blocked).toBe(false);
     }
-    return out;
-  }
-
-  it('a blocked row names the reason from the stage map, not a bare "Blocked"', () => {
-    const r = reasons(sheet('draft'));
-    expect(r.Approved).toBe('Not allowed from Draft');
-    expect(r.Rejected).toBe('Not allowed from Draft');
-    expect(Object.values(r)).not.toContain('Blocked');
-    // Legal targets carry no reason.
-    expect(r.Review).toBeUndefined();
-    expect(r.Parked).toBeUndefined();
   });
 
-  it('a row blocked from Parked names the stage it is blocked from', () => {
-    const r = reasons(sheet('parked'));
-    expect(r.Approved).toBe('Not allowed from Parked');
-  });
-
-  it('the title wraps to two lines instead of truncating', () => {
-    const all: ReactElement[] = [];
-    collect(sheet('review'), all);
-    const title = all.find((el) => 'data-move-title' in (el.props as object))!;
-    const className = (title.props as { className: string }).className;
-    expect(className).toContain('line-clamp-2');
-    expect(className).not.toContain('truncate');
+  it('the sheet title is the post title, not "Move post"', () => {
+    const tree = sheet('review');
+    expect((tree.props as { title: string }).title).toBe('A very long post title that should wrap');
   });
 });

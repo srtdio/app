@@ -141,7 +141,7 @@ describe('PostCard thumbnail frame', () => {
     expect(out).toContain('<svg');
   });
 
-  it('(structural) the meta line is a single row: platform mark + format glyph, no two-pill stack', () => {
+  it('(structural) the meta line is a single row: format glyph only, no platform mark, no two-pill stack', () => {
     const { cache } = makeCache(null);
     const out = render({
       post: makePost({ platform: 'instagram', format: 'single_image', target_date: null }),
@@ -149,12 +149,12 @@ describe('PostCard thumbnail frame', () => {
       presignEnabled: true,
     });
     // One non-wrapping meta row replaces the old two-chip stack.
-    expect(out).toContain('flex items-center gap-1.5');
+    expect(out).toContain('flex min-w-0 items-center gap-1.5');
     expect(out).not.toContain('flex-wrap');
     expect(out).not.toContain('min-w-0 shrink truncate');
-    // The platform mark badge carries the platform as its accessible label.
-    expect(out).toContain('aria-label="instagram"');
-    // A format glyph (svg) sits beside it.
+    // The workspace has one platform: the card carries no platform mark.
+    expect(out).not.toContain('aria-label="instagram"');
+    // A format glyph (svg) sits on the row.
     expect(out).toContain('<svg');
     // The card root can shrink to its track and clips any residual overflow.
     expect(out).toContain('min-w-0');
@@ -169,8 +169,9 @@ describe('PostCard thumbnail frame', () => {
       presignEnabled: true,
     });
     expect(out).toContain('tabular-nums');
-    // The localised date string contains the year; exact format is locale-driven.
-    expect(out).toContain('2026');
+    // The due line reads "Due {d MMM}", day first, no year.
+    expect(out).toContain('Due 15 Mar');
+    expect(out).toContain('data-post-card-due');
   });
 
   it('shows the carousel badge on a carousel post', () => {
@@ -221,7 +222,7 @@ describe('W4 PostCard fixes', () => {
     );
   }
 
-  it('fix 1: a card with onMove carries a 44x44 Move button above the open overlay', () => {
+  it('fix 1: a card with onMove carries a 44x44 move button (the ⋯) above the open overlay', () => {
     const out = renderWith({ post: makePost({}), onMove: () => {} });
     expect(out).toContain('aria-label="Move post Post title"');
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';

@@ -43,6 +43,11 @@ export interface ThumbnailProps {
   presignEnabled: boolean;
   /** Frame aspect ratio. Defaults to square (the locked Pipeline choice). */
   aspect?: 'square' | '4/3';
+  /**
+   * An exact frame ratio (w / h), e.g. the post's platform frame (4:5 for an
+   * Instagram post). When set it wins over `aspect`.
+   */
+  ratio?: number;
   /** What to show when there is no usable image preview. */
   fallback: ThumbnailFallback;
   /** Accessible label for the rendered <img>; usually the asset or post name. */
@@ -131,6 +136,7 @@ export function Thumbnail({
   cache,
   presignEnabled,
   aspect = 'square',
+  ratio,
   fallback,
   alt,
   children,
@@ -176,9 +182,10 @@ export function Thumbnail({
       {...(loading ? { 'data-thumb-loading': '' } : {})}
       className={cn(
         'relative flex w-full items-center justify-center overflow-hidden',
-        ASPECT[aspect],
+        ratio === undefined ? ASPECT[aspect] : null,
         state === 'image' ? 'bg-panel-2' : 'bg-panel-3',
       )}
+      {...(ratio !== undefined ? { style: { aspectRatio: String(ratio) } } : {})}
     >
       <span
         ref={original.ref}

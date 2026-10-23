@@ -986,38 +986,55 @@ export function AttachmentsField({
 
       {pendingRows.length > 0 ? (
         <ul className="flex flex-col gap-2">
-          {pendingRows.map((item) => (
-            <li key={item.id} className={cnPending(item.error)}>
-              <span className="shrink-0 text-fg-3">
-                {item.kind === 'link' ? <IconLink size={16} /> : <IconFile size={16} />}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm text-fg" title={item.name}>
-                {item.name}
-              </span>
-              <span
-                className={item.error !== null ? 'text-[11px] text-bad' : 'text-[11px] text-fg-3'}
-              >
-                {item.error ?? 'Uploading'}
-              </span>
-              {item.error !== null && (item.file !== undefined || item.link !== undefined) ? (
-                <Button
-                  type="button"
-                  size="lg"
-                  variant="ghost"
-                  className="min-w-[44px] shrink-0 px-2 text-accent"
-                  aria-label={`Retry ${item.name}`}
-                  onClick={() => retryPending(item.id)}
+          {pendingRows.map((item) => {
+            // Framed: a failed document is covered by the "didn't upload" bar
+            // (its Retry and Remove), so its row only marks which file failed.
+            const coveredByBar = framed && item.error !== null && item.file !== undefined;
+            return coveredByBar ? (
+              <li key={item.id} data-failed="" className={cnPending(item.error)}>
+                <span className="shrink-0 text-fg-3">
+                  <IconFile size={16} />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm text-fg" title={item.name}>
+                  {item.name}
+                </span>
+              </li>
+            ) : (
+              <li key={item.id} className={cnPending(item.error)}>
+                <span className="shrink-0 text-fg-3">
+                  {item.kind === 'link' ? <IconLink size={16} /> : <IconFile size={16} />}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm text-fg" title={item.name}>
+                  {item.name}
+                </span>
+                <span
+                  className={item.error !== null ? 'text-[11px] text-bad' : 'text-[11px] text-fg-3'}
                 >
-                  Retry
-                </Button>
-              ) : null}
-              {item.error !== null ? (
-                <IconButton label={`Dismiss ${item.name}`} onClick={() => dismissPending(item.id)}>
-                  <IconX size={16} />
-                </IconButton>
-              ) : null}
-            </li>
-          ))}
+                  {item.error ?? 'Uploading'}
+                </span>
+                {item.error !== null && (item.file !== undefined || item.link !== undefined) ? (
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="ghost"
+                    className="min-w-[44px] shrink-0 px-2 text-accent"
+                    aria-label={`Retry ${item.name}`}
+                    onClick={() => retryPending(item.id)}
+                  >
+                    Retry
+                  </Button>
+                ) : null}
+                {item.error !== null ? (
+                  <IconButton
+                    label={`Dismiss ${item.name}`}
+                    onClick={() => dismissPending(item.id)}
+                  >
+                    <IconX size={16} />
+                  </IconButton>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 
