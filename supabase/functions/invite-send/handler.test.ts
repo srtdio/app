@@ -28,7 +28,7 @@ function query(result: { data: unknown; error: unknown }) {
 }
 
 function setup(checkError: string | null, mail: MailDomainResult = 'ok') {
-  const checkMailDomain = vi.fn(async (_domain: string): Promise<MailDomainResult> => mail);
+  const checkMailDomain = vi.fn<(domain: string) => Promise<MailDomainResult>>(async () => mail);
   const createUser = vi.fn(async () => ({ data: { user: { id: 'new-user' } }, error: null }));
   const listUsers = vi.fn(async () => ({ data: { users: [] }, error: null }));
   const callerRpc = vi.fn(async (fn: string) =>

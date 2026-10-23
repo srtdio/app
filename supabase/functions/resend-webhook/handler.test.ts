@@ -14,7 +14,7 @@ type Row = Record<string, string | null> & { id: string };
 // applies them to the rows on .select(), so guards are tested by their effect.
 function fakeDb(rows: Row[]) {
   const updates: Record<string, string>[] = [];
-  const from = vi.fn((_table: string) => {
+  const from = vi.fn<(table: string) => unknown>(() => {
     const filters: ((row: Row) => boolean)[] = [];
     let values: Record<string, string> = {};
     const chain = {
@@ -35,7 +35,7 @@ function fakeDb(rows: Row[]) {
         filters.push((row) => list.includes(String(row[column])));
         return chain;
       },
-      async select(_columns: string) {
+      async select() {
         const matched = rows.filter((row) => filters.every((f) => f(row)));
         for (const row of matched) Object.assign(row, values);
         return { data: matched.map((row) => ({ id: row.id })), error: null };
