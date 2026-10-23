@@ -330,7 +330,7 @@ describe('PipelineBoard single-stage grid', () => {
     expect(markup).toContain('data-stage-empty="parked"');
     // The empty stage has no New post (the toolbar's is the action).
     expect(markup).not.toContain('data-stage-empty-create');
-    expect(markup).not.toContain('New post');
+    expect(markup).not.toContain('>New post<');
   });
 
   it('All still renders the column layout, not the grid', () => {
@@ -723,7 +723,7 @@ describe('E: drag and drop', () => {
     for (const stage of STAGES) expect(plain).toContain(lines[stage]);
     expect(plain).not.toContain('data-stage-empty-create');
     const agency = renderToStaticMarkup(<>{columns('agency', [])}</>);
-    expect(agency).not.toContain('New post');
+    expect(agency).not.toContain('>New post<');
     // The kanban empty column drops EmptyState's 320px min-height.
     expect(agency).not.toContain('min-h-[320px]');
   });

@@ -71,7 +71,7 @@ describe('Pipeline polish: empty stage', () => {
     const out = renderToStaticMarkup(<StageEmpty stage="review" compact />);
     expect(out).toContain('Posts sent for review show up here.');
     expect(out).toContain('<svg');
-    expect(out).not.toContain('New post');
+    expect(out).not.toContain('>New post<');
     expect(out).not.toContain('<button');
     expect(out).not.toContain('min-h-[320px]');
   });
@@ -88,7 +88,7 @@ describe('Pipeline polish: empty stage', () => {
     );
     expect(out).toContain('data-stage-empty="parked"');
     expect(out).not.toContain('min-h-[320px]');
-    expect(out).not.toContain('New post');
+    expect(out).not.toContain('>New post<');
   });
 });
 

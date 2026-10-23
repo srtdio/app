@@ -373,7 +373,7 @@ describe('post flow C: header, count and filters', () => {
     ]);
     for (const row of sortRows) {
       const className = (row.props as { className: string }).className;
-      expect(className).toContain('min-h-[44px]');
+      expect(className).toContain('h-11');
       expect(className).not.toContain('md:h-9');
       expect(className).not.toContain('md:min-h-0');
     }
