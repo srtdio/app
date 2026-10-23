@@ -9,18 +9,20 @@ vi.mock('@/lib/supabase', () => ({ supabase: { functions: { invoke: mockInvoke }
 // without providers and a workspace id is always present.
 vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceId: 'ws-1' }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't-1' }));
-vi.mock('@/components/ui/Textarea', () => ({ Textarea: 'textarea' }));
 
 import {
   MembersInviteForm,
   sendInvite,
   INVITE_ERROR_MESSAGE,
-  INVITE_INVALID_EMAIL_MESSAGE,
+  inviteErrorMessage,
   isValidInviteEmail,
   getInviteRoleOptions,
   parseInviteEmails,
+  replacePendingInvite,
+  suggestEmailFix,
 } from './MembersInviteForm';
-import { FREE_MAIL_APPROVER_MESSAGE, UNCONFIRMED_ACCOUNT_MESSAGE } from './members-data';
+import type { SendInviteResult } from './MembersInviteForm';
+import { UNCONFIRMED_ACCOUNT_MESSAGE } from './members-data';
 
 describe('isValidInviteEmail', () => {
   it.each(['name@example.com', 'name@mail.example.co.uk', 'name@example.technology'])(
@@ -51,6 +53,15 @@ describe('parseInviteEmails', () => {
     });
   });
 
+  it('splits on spaces, commas and new lines alike (a pasted list)', () => {
+    expect(parseInviteEmails('a@brand.com b@brand.com\nc@brand.com,d@brand.com').emails).toEqual([
+      'a@brand.com',
+      'b@brand.com',
+      'c@brand.com',
+      'd@brand.com',
+    ]);
+  });
+
   it('returns invalid addresses without dropping valid addresses', () => {
     expect(parseInviteEmails('valid@example.com, not-an-email')).toEqual({
       emails: ['valid@example.com'],
@@ -73,53 +84,54 @@ describe('invite role options', () => {
   });
 });
 
-describe('MembersInviteForm render', () => {
-  it('keeps individual invites and adds group invites below without invoking on render', () => {
-    mockInvoke.mockReset();
-    const out = renderToStaticMarkup(<MembersInviteForm />);
-    expect(out).toContain('Invite member');
-    // No default role: the trigger asks for one (T86).
-    expect(out).toContain('Choose a role');
-    expect(out).not.toContain('Client (reviewer)');
-    expect(out).toContain('type="email"');
-    expect(out).toContain('Send invite');
-    expect(out).toContain('Invite group members');
-    expect(out).toContain('Add people');
-    expect(out).toContain('<textarea');
-    expect(out).toContain('Add email');
-    expect(out).toContain('Send 0 invitations');
-    expect(out).not.toContain(INVITE_ERROR_MESSAGE);
-    expect(mockInvoke).not.toHaveBeenCalled();
-
-    const individualInviteIndex = out.indexOf('Invite member');
-    const groupInviteIndex = out.indexOf('Invite group members');
-    expect(individualInviteIndex).toBeLessThan(groupInviteIndex);
-    expect(out.indexOf('Choose a role')).toBeLessThan(groupInviteIndex);
+describe('suggestEmailFix', () => {
+  it('suggests the likely domain for a typo', () => {
+    expect(suggestEmailFix('riya@gmial.com')).toBe('riya@gmail.com');
   });
 
-  it('restricts client invite forms to the client role', () => {
-    const out = renderToStaticMarkup(<MembersInviteForm clientOnly />);
-    expect(out).toContain('Invite group members');
-    expect(out.match(/>Approver</g)).toHaveLength(1);
-    expect(out).not.toContain('>Creator<');
-    expect(out).not.toContain('Creator, can manage members');
+  it('suggests nothing for a correct domain or a half-typed address', () => {
+    expect(suggestEmailFix('riya@gmail.com')).toBeNull();
+    expect(suggestEmailFix('riya')).toBeNull();
+    expect(suggestEmailFix('riya@')).toBeNull();
+  });
+});
+
+describe('MembersInviteForm render', () => {
+  it('renders one entry box and the single-person button, without invoking on render', () => {
+    mockInvoke.mockReset();
+    const out = renderToStaticMarkup(<MembersInviteForm />);
+    expect(out).toContain('Invite people');
+    expect(out).toContain('Add one email or many. Press Enter, or paste a list.');
+    expect(out).toContain('placeholder="name@company.com"');
+    expect(out).toContain('type="email"');
+    expect(out).toMatch(/inputmode="email"/i);
+    expect(out).toMatch(/autocomplete="off"/i);
+    expect(out).toMatch(/autocapitalize="none"/i);
+    expect(out).toMatch(/spellcheck="false"/i);
+    expect(out).toContain('id="invite-email"');
+    expect(out).toContain('data-induction="members-invite"');
+    expect(out).toContain('>Send invite<');
+    // The old group form is gone.
+    expect(out).not.toContain('<textarea');
+    expect(out).not.toContain('Add email');
+    expect(out).not.toContain('Invite group members');
+    expect(out).not.toContain(INVITE_ERROR_MESSAGE);
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 });
 
 describe('sendInvite', () => {
-  it('invokes invite-send once with the exact body + trace header and signals success', async () => {
-    const invoke = vi.fn().mockResolvedValue({ error: null });
-    const onSuccess = vi.fn();
-    const onError = vi.fn();
+  it('invokes invite-send once with the exact body + trace header and reads the outcome', async () => {
+    const invoke = vi
+      .fn()
+      .mockResolvedValue({ data: { emailed: true, invite_id: 'm-9' }, error: null });
 
-    await sendInvite({
+    const result = await sendInvite({
       workspaceId: 'ws-1',
       email: 'name@example.com',
       role: 'client',
       traceId: 't-1',
       invoke,
-      onSuccess,
-      onError,
     });
 
     expect(invoke).toHaveBeenCalledTimes(1);
@@ -127,54 +139,39 @@ describe('sendInvite', () => {
       body: { workspace_id: 'ws-1', email: 'name@example.com', role: 'client' },
       headers: { 'x-trace-id': 't-1' },
     });
-    expect(onSuccess).toHaveBeenCalledTimes(1);
-    expect(onError).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: true,
+      outcome: { emailed: true, errorDetail: null, acceptUrl: null, inviteId: 'm-9' },
+    });
   });
 
-  it('signals an error and does not succeed when invoke returns an error', async () => {
+  it('fails without a code when invoke returns an unreadable error', async () => {
     const invoke = vi.fn().mockResolvedValue({ error: new Error('forbidden') });
-    const onSuccess = vi.fn();
-    const onError = vi.fn();
-
-    await sendInvite({
-      workspaceId: 'ws-1',
-      email: 'name@example.com',
-      role: 'admin',
-      traceId: 't-1',
-      invoke,
-      onSuccess,
-      onError,
-    });
-
-    expect(onError).toHaveBeenCalledTimes(1);
-    expect(onSuccess).not.toHaveBeenCalled();
+    await expect(
+      sendInvite({
+        workspaceId: 'ws-1',
+        email: 'name@example.com',
+        role: 'admin',
+        traceId: 't-1',
+        invoke,
+      }),
+    ).resolves.toEqual({ ok: false, code: null });
   });
 
   it('does not invoke invite-send for an invalid domain', async () => {
     const invoke = vi.fn();
-    const onSuccess = vi.fn();
-    const onError = vi.fn();
-
     await sendInvite({
       workspaceId: 'ws-1',
       email: 'name@example',
       role: 'client',
       traceId: 't-1',
       invoke,
-      onSuccess,
-      onError,
     });
-
     expect(invoke).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledWith(INVITE_INVALID_EMAIL_MESSAGE, null);
-    expect(onSuccess).not.toHaveBeenCalled();
   });
 
   it('reports transport failures instead of leaving the invite pending', async () => {
     const invoke = vi.fn().mockRejectedValue(new Error('network failure'));
-    const onSuccess = vi.fn();
-    const onError = vi.fn();
-
     await expect(
       sendInvite({
         workspaceId: 'ws-1',
@@ -182,86 +179,104 @@ describe('sendInvite', () => {
         role: 'client',
         traceId: 't-1',
         invoke,
-        onSuccess,
-        onError,
       }),
-    ).resolves.toEqual({ ok: false, message: INVITE_ERROR_MESSAGE, code: null });
-    expect(onError).toHaveBeenCalledWith(null, null);
-    expect(onSuccess).not.toHaveBeenCalled();
+    ).resolves.toEqual({ ok: false, code: null });
   });
 });
 
-describe('sendInvite error mapping', () => {
-  function failingInvoke(body: Record<string, unknown>) {
-    return vi.fn().mockResolvedValue({
-      error: { context: { json: async () => body } },
-    });
-  }
-
-  async function send(body: Record<string, unknown>) {
-    const onError = vi.fn();
+describe('per-row error mapping', () => {
+  async function codeFor(body: Record<string, unknown>) {
     const result = await sendInvite({
       workspaceId: 'ws-1',
       email: 'name@gmail.com',
       role: 'client',
       traceId: 't-1',
-      invoke: failingInvoke(body),
-      onSuccess: vi.fn(),
-      onError,
+      invoke: vi.fn().mockResolvedValue({ error: { context: { json: async () => body } } }),
     });
-    return { result, onError };
+    return result.ok ? 'sent' : result.code;
   }
 
-  it('words free_mail_client as the work-address line', async () => {
-    const { result, onError } = await send({
-      error: 'free_mail_client',
-      error_detail: 'free_mail_client',
-      trace_id: 't-1',
-    });
-    expect(result).toEqual({
-      ok: false,
-      message: FREE_MAIL_APPROVER_MESSAGE,
-      code: 'free_mail_client',
-    });
-    expect(FREE_MAIL_APPROVER_MESSAGE).toBe(
-      'Approvers need a work email, like name@theirbrand.com. Free emails like Gmail or Yahoo are not allowed.',
+  it('reads the three invite-check codes and words each one', async () => {
+    expect(await codeFor({ error: 'client_domain_mismatch' })).toBe('client_domain_mismatch');
+    expect(await codeFor({ error: 'disposable_email' })).toBe('disposable_email');
+    expect(await codeFor({ error: 'email_domain_unreachable' })).toBe('email_domain_unreachable');
+
+    expect(inviteErrorMessage('client_domain_mismatch', 'brand.com')).toBe(
+      'Use a brand.com email, or a personal one like Gmail.',
     );
-    expect(onError).toHaveBeenCalledWith(FREE_MAIL_APPROVER_MESSAGE, 'free_mail_client');
+    expect(inviteErrorMessage('client_domain_mismatch', '')).toBe(INVITE_ERROR_MESSAGE);
+    expect(inviteErrorMessage('disposable_email', 'brand.com')).toBe(
+      "Temporary emails can't be invited. Use a permanent one.",
+    );
+    expect(inviteErrorMessage('email_domain_unreachable', 'brand.com')).toBe(
+      "This email can't receive mail. Check the part after @.",
+    );
   });
 
   it('words unconfirmed_account as the confirm-first line', async () => {
-    const { result, onError } = await send({
-      error: 'unconfirmed_account',
-      error_detail: 'unconfirmed_account',
-      trace_id: 't-1',
-    });
-    expect(result).toEqual({
-      ok: false,
-      message: UNCONFIRMED_ACCOUNT_MESSAGE,
-      code: 'unconfirmed_account',
-    });
-    expect(UNCONFIRMED_ACCOUNT_MESSAGE).toBe(
-      'This email has an account that was never confirmed. Ask them to open the confirmation email from Sorted, then send the invite again.',
-    );
-    expect(onError).toHaveBeenCalledWith(UNCONFIRMED_ACCOUNT_MESSAGE, 'unconfirmed_account');
+    expect(await codeFor({ error: 'unconfirmed_account' })).toBe('unconfirmed_account');
+    expect(inviteErrorMessage('unconfirmed_account', '')).toBe(UNCONFIRMED_ACCOUNT_MESSAGE);
   });
 
-  it('flags client_domain_mismatch so the panel shows the toast', async () => {
-    const { result, onError } = await send({
-      error: 'client_domain_mismatch',
-      error_detail: 'client_domain_mismatch',
+  it('words other failures (free_mail_client is gone) as the plain line, never the code', async () => {
+    expect(await codeFor({ error: 'forbidden_role' })).toBeNull();
+    expect(await codeFor({ error: 'free_mail_client' })).toBeNull();
+    expect(inviteErrorMessage(null, 'brand.com')).toBe(INVITE_ERROR_MESSAGE);
+  });
+});
+
+describe('replacePendingInvite (Edit on a pending invite)', () => {
+  const sent = (inviteId: string): SendInviteResult => ({
+    ok: true,
+    outcome: { emailed: true, errorDetail: null, acceptUrl: null, inviteId },
+  });
+  const refused: SendInviteResult = { ok: false, code: 'disposable_email' };
+
+  function track(sendResults: SendInviteResult[], removeOk = true) {
+    const calls: string[] = [];
+    const send = vi.fn(async () => {
+      calls.push('send');
+      return sendResults.shift() ?? refused;
     });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.code).toBe('client_domain_mismatch');
-    expect(onError.mock.calls[0]![1]).toBe('client_domain_mismatch');
+    const remove = vi.fn(async () => {
+      calls.push('remove');
+      return removeOk;
+    });
+    return { calls, send, remove };
+  }
+
+  it('a new email sends first, then cancels the old invite', async () => {
+    const t = track([sent('m-new')]);
+    const result = await replacePendingInvite({ memberId: 'm-old', sameEmail: false, ...t });
+    expect(t.calls).toEqual(['send', 'remove']);
+    expect(result).toEqual({ ok: true, inviteId: 'm-new' });
   });
 
-  it('words other failures as the plain line, never the code', async () => {
-    const { result } = await send({ error: 'forbidden_role', error_detail: 'forbidden_role' });
-    expect(result).toEqual({
-      ok: false,
-      message: INVITE_ERROR_MESSAGE,
-      code: null,
-    });
+  it('a refused send keeps the old invite untouched', async () => {
+    const t = track([refused]);
+    const result = await replacePendingInvite({ memberId: 'm-old', sameEmail: false, ...t });
+    expect(t.calls).toEqual(['send']);
+    expect(result).toEqual({ ok: false, code: 'disposable_email', oldCancelled: false });
+  });
+
+  it('a role-only change cancels first, then sends', async () => {
+    const t = track([sent('m-new')]);
+    const result = await replacePendingInvite({ memberId: 'm-old', sameEmail: true, ...t });
+    expect(t.calls).toEqual(['remove', 'send']);
+    expect(result).toEqual({ ok: true, inviteId: 'm-new' });
+  });
+
+  it('falls back to cancel-then-send when invite-send hands back the old invite', async () => {
+    const t = track([sent('m-old'), sent('m-new')]);
+    const result = await replacePendingInvite({ memberId: 'm-old', sameEmail: false, ...t });
+    expect(t.calls).toEqual(['send', 'remove', 'send']);
+    expect(result).toEqual({ ok: true, inviteId: 'm-new' });
+  });
+
+  it('says the old invite was cancelled when the fallback send fails', async () => {
+    const t = track([refused]);
+    const result = await replacePendingInvite({ memberId: 'm-old', sameEmail: true, ...t });
+    expect(t.calls).toEqual(['remove', 'send']);
+    expect(result).toEqual({ ok: false, code: 'disposable_email', oldCancelled: true });
   });
 });

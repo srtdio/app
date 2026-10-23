@@ -6,10 +6,12 @@ import {
   canManageMembers,
   clientDomainLabel,
   clientDomainMismatchMessage,
+  deliveryByMember,
   deriveMembers,
   domainBrandWord,
   formatJoined,
   isActiveMember,
+  isUndelivered,
   isPendingInvite,
   memberRemoveErrorMessage,
   roleLabel,
@@ -198,29 +200,30 @@ describe('client domain copy', () => {
     expect(domainBrandWord('brand.io')).toBe('brand');
   });
 
-  it('prefers workspaces.client_domain, then the first approver email brand word', () => {
-    const approver = {
-      id: 'm',
-      userId: 'u',
-      role: 'client',
-      displayName: 'A',
-      avatarUrl: null,
-      email: 'a@team.brand.co.uk',
-      acceptedAt: null,
-      isOwner: false,
-      isSelf: true,
-    };
-    expect(clientDomainLabel('brand.com', [approver])).toBe('brand.com');
-    expect(clientDomainLabel(null, [{ ...approver, email: null }, approver])).toBe('brand');
-    expect(clientDomainLabel(null, [])).toBe('');
+  it('uses workspaces.client_domain only, with no brand-word fallback', () => {
+    expect(clientDomainLabel('brand.com')).toBe('brand.com');
+    expect(clientDomainLabel(null)).toBe('');
   });
 
-  it('words the one-client toast', () => {
+  it('words the company-email line, and the plain line when no domain is known', () => {
     expect(clientDomainMismatchMessage('brand.com')).toBe(
-      'One brand per workspace. Every approver needs a brand.com address.',
+      'Use a brand.com email, or a personal one like Gmail.',
     );
-    expect(clientDomainMismatchMessage('')).toBe(
-      'One brand per workspace. Every approver needs the same company address.',
-    );
+    expect(clientDomainMismatchMessage('')).toBe("Couldn't send the invite. Try again.");
+  });
+});
+
+describe('invite delivery status', () => {
+  it('maps invite_delivery_list rows by member id and flags only bounced', () => {
+    const map = deliveryByMember([
+      { member_id: 'm-1', status: 'bounced' },
+      { member_id: 'm-2', status: 'delivered' },
+      { member_id: 'm-3', status: 'something_new' },
+    ]);
+    expect(map.get('m-1')).toBe('bounced');
+    expect(map.has('m-3')).toBe(false);
+    expect(isUndelivered(map.get('m-1'))).toBe(true);
+    expect(isUndelivered(map.get('m-2'))).toBe(false);
+    expect(isUndelivered(undefined)).toBe(false);
   });
 });
