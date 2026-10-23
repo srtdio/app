@@ -89,7 +89,17 @@ function setValue(el: HTMLInputElement, value: string): void {
   });
 }
 
-function pick(select: HTMLSelectElement, value: string): void {
+// The DOM lib's HTMLSelectElement does not satisfy querySelector's Element
+// constraint here (remove() overloads), so selects are read structurally.
+type SelectLike = Element & { value: string };
+
+function selectNamed(label: string): SelectLike {
+  const found = document.querySelector(`select[aria-label="${label}"]`);
+  if (found === null) throw new Error(`no ${label} select`);
+  return found as SelectLike;
+}
+
+function pick(select: SelectLike, value: string): void {
   act(() => {
     select.value = value;
     select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -302,9 +312,8 @@ describe('one entry box', () => {
   it('Set all as fills every row, and one row can still change after', () => {
     mount(<MembersInviteForm />);
     paste('a@brand.com b@brand.com c@brand.com');
-    pick(document.querySelector<HTMLSelectElement>('select[aria-label="Set all as"]')!, 'client');
-    const roleOf = (email: string) =>
-      document.querySelector<HTMLSelectElement>(`select[aria-label="Role for ${email}"]`)!;
+    pick(selectNamed('Set all as'), 'client');
+    const roleOf = (email: string) => selectNamed(`Role for ${email}`);
     expect(['a', 'b', 'c'].map((n) => roleOf(`${n}@brand.com`).value)).toEqual([
       'client',
       'client',

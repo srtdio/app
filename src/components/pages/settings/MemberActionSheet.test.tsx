@@ -55,8 +55,12 @@ function mount(member: MemberEntry, canManage: boolean, onChangeRole: MemberRole
   );
 }
 
-function roleSelect(): HTMLSelectElement | null {
-  return document.querySelector<HTMLSelectElement>('select[aria-label="Role"]');
+// The DOM lib's HTMLSelectElement does not satisfy querySelector's Element
+// constraint here (remove() overloads), so the select is read structurally.
+type SelectLike = Element & { value: string; options: ArrayLike<{ value: string }> };
+
+function roleSelect(): SelectLike | null {
+  return document.querySelector('select[aria-label="Role"]') as SelectLike | null;
 }
 
 function saveButton(): HTMLButtonElement | undefined {
