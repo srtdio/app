@@ -181,4 +181,34 @@ describe('readPlanTab', () => {
     const res = await readPlanTab(fake.client, INPUT);
     expect(res.ok && res.data.anyPlan).toBe(false);
   });
+
+  it('reads the tiles alongside the reviews, not after them (one round trip less)', async () => {
+    const fake = fakeClient(world(2, 2, 1));
+    const from = fake.client.from as unknown as (t: string) => Record<string, unknown>;
+    let releaseReviews: () => void = () => undefined;
+    const reviewsGate = new Promise<void>((done) => {
+      releaseReviews = done;
+    });
+    const started: string[] = [];
+    (fake.client as unknown as { from: (t: string) => unknown }).from = (table: string) => {
+      const q = from(table);
+      const then = q.then as (resolve: (v: unknown) => unknown) => Promise<unknown>;
+      q.then = (resolve: (v: unknown) => unknown) => {
+        started.push(table);
+        return table === 'plan_item_reviews'
+          ? reviewsGate.then(() => then(resolve))
+          : then(resolve);
+      };
+      return q;
+    };
+    const pending = readPlanTab(fake.client, INPUT);
+    for (let i = 0; i < 20 && !started.includes('asset_attachments'); i += 1) {
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    // The tiles were asked for while the reviews were still out.
+    expect(started).toContain('asset_attachments');
+    releaseReviews();
+    const res = await pending;
+    expect(res.ok).toBe(true);
+  });
 });

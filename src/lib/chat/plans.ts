@@ -303,7 +303,7 @@ export async function readPlanBundles(
     const [plans, drafts, items] = await Promise.all([
       selectIn<PlanRow>(client, 'plans', PLAN_COLUMNS, 'id', ids, signal),
       readDraftRows(client, ids),
-      readItemsWithReviews(client, ids, signal),
+      readItemsWithReviews(client, ids, signal, () => Promise.resolve(null)),
     ]);
     if (!plans.ok) return plans;
     if (!drafts.ok) return drafts;
@@ -338,32 +338,64 @@ export async function readBundlesOf(
   signal: AbortSignal | undefined,
   timeZone = 'UTC',
 ): Promise<Result<Map<string, PlanBundle>>> {
-  if (plans.length === 0) return { ok: true, data: new Map() };
+  const read = await readBundlesAlongside(client, plans, signal, timeZone, () =>
+    Promise.resolve(null),
+  );
+  return read.ok ? { ok: true, data: read.data.bundles } : read;
+}
+
+/**
+ * readBundlesOf, plus one more read that needs only the plans' items (the
+ * Plan tab's tiles): it starts the moment the items are in and runs alongside
+ * the reviews and post stages, so it costs no extra round trip of waiting.
+ * Never throws.
+ */
+export async function readBundlesAlongside<T>(
+  client: Client,
+  plans: readonly PlanRow[],
+  signal: AbortSignal | undefined,
+  timeZone: string,
+  alongside: (items: readonly PlanItemRow[]) => Promise<T>,
+): Promise<Result<{ bundles: Map<string, PlanBundle>; alongside: T }>> {
+  if (plans.length === 0) {
+    return { ok: true, data: { bundles: new Map(), alongside: await alongside([]) } };
+  }
   const ids = plans.map((p) => p.id);
   const [drafts, items] = await Promise.all([
     readDraftRows(client, ids),
-    readItemsWithReviews(client, ids, signal),
+    readItemsWithReviews(client, ids, signal, alongside),
   ]);
   if (!drafts.ok) return drafts;
   if (!items.ok) return items;
   return {
     ok: true,
-    data: assembleBundles(
-      plans,
-      mergeDraftRows(items.data.items, drafts.data),
-      items.data.reviews,
-      items.data.stages,
-      timeZone,
-    ),
+    data: {
+      bundles: assembleBundles(
+        plans,
+        mergeDraftRows(items.data.items, drafts.data),
+        items.data.reviews,
+        items.data.stages,
+        timeZone,
+      ),
+      alongside: items.data.alongside,
+    },
   };
 }
 
 /** The plans' items, then their reviews and post stages together. Never throws. */
-async function readItemsWithReviews(
+async function readItemsWithReviews<T>(
   client: Client,
   planIds: readonly string[],
   signal: AbortSignal | undefined,
-): Promise<Result<{ items: PlanItemRow[]; reviews: PlanReviewRow[]; stages: PlanPostRow[] }>> {
+  alongside: (items: readonly PlanItemRow[]) => Promise<T>,
+): Promise<
+  Result<{
+    items: PlanItemRow[];
+    reviews: PlanReviewRow[];
+    stages: PlanPostRow[];
+    alongside: T;
+  }>
+> {
   const items = await selectIn<PlanItemRow>(
     client,
     'plan_items',
@@ -374,7 +406,7 @@ async function readItemsWithReviews(
   );
   if (!items.ok) return items;
   const postIds = items.data.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
-  const [reviews, stages] = await Promise.all([
+  const [reviews, stages, side] = await Promise.all([
     selectIn<PlanReviewRow>(
       client,
       'plan_item_reviews',
@@ -391,10 +423,14 @@ async function readItemsWithReviews(
       postIds,
       signal,
     ),
+    alongside(items.data),
   ]);
   if (!reviews.ok) return reviews;
   if (!stages.ok) return stages;
-  return { ok: true, data: { items: items.data, reviews: reviews.data, stages: stages.data } };
+  return {
+    ok: true,
+    data: { items: items.data, reviews: reviews.data, stages: stages.data, alongside: side },
+  };
 }
 
 /** plan_draft_rows over the plan ids: one call per chunk of 100. Never throws. */

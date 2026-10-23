@@ -2,8 +2,9 @@
 // whole weeks, or the week): the plans overlapping it, a one-row probe for any
 // plan at all (the zero state), and the posts dated in it, all at once; then
 // the plans' bundles through the batched plan reads (draft rows, items, then
-// reviews and post stages, each a select by id list, chunked at 100); then
-// every item's and loose post's tile in one asset_attachments read. The phone
+// reviews and post stages, each a select by id list, chunked at 100), with
+// every item's and loose post's tile read alongside the reviews (it needs only
+// the items), so the tab waits three round trips, not four. The phone
 // asks for no range: every plan, no posts. Plans and posts are list reads,
 // paged at 1000 rows (range 0 to 999, then the next page while one is full),
 // so the request count is fixed for any number of rows under a page. A post
@@ -14,9 +15,10 @@ import type { Client, Result } from '@srtdio/rpc';
 import { abortable } from '@/lib/chat-reads';
 import {
   PLAN_COLUMNS,
-  readBundlesOf,
+  readBundlesAlongside,
   readPlanThumbs,
   type PlanBundle,
+  type PlanItemRow,
   type PlanQuery,
   type PlanRow,
   type PlanTable,
@@ -144,7 +146,8 @@ export function plannedPostIds(bundles: readonly PlanBundle[]): Set<string> {
 
 /**
  * The Plan tab's read (see the header): plans, the any-plan probe and the
- * dated posts together; then the bundles; then the tiles. Never throws.
+ * dated posts together; then the items; then reviews, stages and tiles
+ * together. Never throws.
  */
 export async function readPlanTab(
   client: Client,
@@ -165,20 +168,31 @@ export async function readPlanTab(
     if (!plans.ok) return plans;
     if (any !== null && !any.ok) return any;
     if (!dated.ok) return dated;
-    const read = await readBundlesOf(client, plans.data, signal, input.timeZone);
+    // The tiles need only the items (and the loose posts, already in), so they
+    // load alongside the reviews and post stages: one round trip less.
+    const looseOf = (items: readonly PlanItemRow[]): LoosePost[] => {
+      const planned = new Set(items.flatMap((i) => (i.post_id !== null ? [i.post_id] : [])));
+      return dated.data.filter((p) => !planned.has(p.id));
+    };
+    const read = await readBundlesAlongside(client, plans.data, signal, input.timeZone, (items) =>
+      readPlanThumbs(
+        client,
+        [
+          ...items.flatMap((i) => (i.post_id !== null ? [i.post_id] : [])),
+          ...looseOf(items).map((p) => p.id),
+        ],
+        items.flatMap((i) => (i.kind === 'concept' ? [i.id] : [])),
+        signal,
+      ),
+    );
     if (!read.ok) return read;
     const bundles = plans.data.flatMap((p) => {
-      const b = read.data.get(p.id);
+      const b = read.data.bundles.get(p.id);
       return b !== undefined ? [b] : [];
     });
     const planned = plannedPostIds(bundles);
     const posts = dated.data.filter((p) => !planned.has(p.id));
-    const thumbs = await readPlanThumbs(
-      client,
-      [...planned, ...posts.map((p) => p.id)],
-      bundles.flatMap((b) => b.items.flatMap((i) => (i.kind === 'concept' ? [i.id] : []))),
-      signal,
-    );
+    const thumbs = read.data.alongside;
     return {
       ok: true,
       data: {
