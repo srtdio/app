@@ -190,7 +190,9 @@ describe.runIf(DB_AVAILABLE)('approved-post lock (authenticated role)', () => {
   it('a draft still edits caption, title, owner and pictures', async () => {
     const postId = await insertPost('draft');
     expect((await captionUpdate(postId, 'Draft caption')).error).toBeNull();
-    expect((await postUpdate(postId, { title: 'Draft title', owner_user_id: other.id })).error).toBeNull();
+    expect(
+      (await postUpdate(postId, { title: 'Draft title', owner_user_id: other.id })).error,
+    ).toBeNull();
     expect((await gallerySet(postId, [asset.versionId])).error).toBeNull();
     const row = await readPost(postId);
     expect(row.caption).toBe('Draft caption');
