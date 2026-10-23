@@ -2,11 +2,11 @@
 // (index.ts) so it unit-tests under Node with an injected env reader + client
 // factory. Self-contained: NO @srtdio/* imports (see index.ts for why).
 //
-// Resend signs webhooks the Svix way: headers svix-id, svix-timestamp and
-// svix-signature ("v1,<base64>" entries, space-separated). The signature is
-// HMAC-SHA256 over "<svix-id>.<svix-timestamp>.<raw body>" keyed with the
-// base64 part of RESEND_WEBHOOK_SECRET ("whsec_<base64>"). Any v1 entry may
-// match; timestamps more than 300 s from now are refused (replay window).
+// Resend signs webhooks with Svix (headers svix-id, svix-timestamp,
+// svix-signature; secret RESEND_WEBHOOK_SECRET, "whsec_<base64>"). The check
+// is the svix library's Webhook.verify (signature, constant-time compare, 5 min
+// timestamp window), bound in index.ts and passed in as deps.verifySignature,
+// so this handler still unit-tests under Node where svix is not installed.
 //
 // Each event is ONE guarded UPDATE of public.delivery_attempts (provider
 // 'resend', provider_message_id = data.email_id) on the service-role client.
@@ -20,16 +20,15 @@ import type { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 const TRACE_ID_HEADER = 'X-Trace-Id';
-const SECRET_PREFIX = 'whsec_';
-const TOLERANCE_SECONDS = 300;
+const SVIX_HEADERS = ['svix-id', 'svix-timestamp', 'svix-signature'] as const;
 const HANDLED_TYPES = new Set(['email.delivered', 'email.bounced', 'email.complained']);
 
 /** What the handler needs from the runtime; index.ts passes the edge runtime's. */
 export interface ResendWebhookDeps {
   env: (name: string) => string | undefined;
   createClient: typeof createClient;
-  /** Current time in ms; tests pin it. */
-  now?: () => number;
+  /** Throws when the signature does not verify (svix Webhook.verify in index.ts). */
+  verifySignature: (secret: string, body: string, headers: Record<string, string>) => void;
 }
 
 const eventSchema = z.object({
@@ -62,74 +61,6 @@ function json(body: unknown, status: number, traceId: string): Response {
   });
 }
 
-// --- Svix signature verify ---------------------------------------------------
-
-function fromBase64(value: string): Uint8Array | null {
-  try {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  } catch {
-    return null;
-  }
-}
-
-// Constant-time for equal lengths; a length mismatch is not secret.
-function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
-  return diff === 0;
-}
-
-async function hmacSha256(key: Uint8Array, message: string): Promise<Uint8Array> {
-  const cryptoKey = await globalThis.crypto.subtle.importKey(
-    'raw',
-    key,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await globalThis.crypto.subtle.sign(
-    'HMAC',
-    cryptoKey,
-    new TextEncoder().encode(message),
-  );
-  return new Uint8Array(signature);
-}
-
-export async function verifySvixSignature(input: {
-  secret: string;
-  id: string | null;
-  timestamp: string | null;
-  signature: string | null;
-  body: string;
-  nowMs: number;
-}): Promise<boolean> {
-  const { id, timestamp, signature } = input;
-  if (!id || !timestamp || !signature) return false;
-  if (!/^\d+$/.test(timestamp)) return false;
-  if (Math.abs(input.nowMs / 1000 - Number(timestamp)) > TOLERANCE_SECONDS) return false;
-
-  const encodedKey = input.secret.startsWith(SECRET_PREFIX)
-    ? input.secret.slice(SECRET_PREFIX.length)
-    : input.secret;
-  const key = fromBase64(encodedKey);
-  if (!key || key.length === 0) return false;
-
-  const expected = await hmacSha256(key, `${id}.${timestamp}.${input.body}`);
-  let matched = false;
-  for (const entry of signature.split(' ')) {
-    const [version, value] = entry.split(',', 2);
-    if (version !== 'v1' || !value) continue;
-    const candidate = fromBase64(value);
-    // No early exit: every entry is compared.
-    if (candidate && timingSafeEqual(candidate, expected)) matched = true;
-  }
-  return matched;
-}
-
 // --- handler -----------------------------------------------------------------
 
 export async function handleResendWebhook(
@@ -148,15 +79,11 @@ export async function handleResendWebhook(
   }
 
   const body = await req.text();
-  const verified = await verifySvixSignature({
-    secret,
-    id: req.headers.get('svix-id'),
-    timestamp: req.headers.get('svix-timestamp'),
-    signature: req.headers.get('svix-signature'),
-    body,
-    nowMs: (deps.now ?? Date.now)(),
-  });
-  if (!verified) {
+  const headers: Record<string, string> = {};
+  for (const name of SVIX_HEADERS) headers[name] = req.headers.get(name) ?? '';
+  try {
+    deps.verifySignature(secret, body, headers);
+  } catch {
     return json({ error: 'invalid_signature', trace_id: traceId }, 401, traceId);
   }
 

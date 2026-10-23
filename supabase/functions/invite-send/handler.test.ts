@@ -27,7 +27,13 @@ function query(result: { data: unknown; error: unknown }) {
   return chain;
 }
 
+// Stands in for mailchecker (bound in index.ts; not installed under Node).
+function isDisposableStub(email: string): boolean {
+  return /@(?:[^@]+\.)?mailinator\.com$/.test(email);
+}
+
 function setup(checkError: string | null, mail: MailDomainResult = 'ok') {
+  const isDisposableEmail = vi.fn(isDisposableStub);
   const checkMailDomain = vi.fn<(domain: string) => Promise<MailDomainResult>>(async () => mail);
   const createUser = vi.fn(async () => ({ data: { user: { id: 'new-user' } }, error: null }));
   const listUsers = vi.fn(async () => ({ data: { users: [] }, error: null }));
@@ -51,8 +57,10 @@ function setup(checkError: string | null, mail: MailDomainResult = 'ok') {
       env: (name: string) => ENV[name],
       createClient: factory as unknown as typeof createClient,
       checkMailDomain,
+      isDisposableEmail,
     },
     checkMailDomain,
+    isDisposableEmail,
     createUser,
     listUsers,
     callerRpc,
@@ -429,20 +437,30 @@ describe('invite-send email legitimacy checks', () => {
       );
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({ error: 'disposable_email', trace_id: 'trace-1' });
+      // The library check gets the normalised address.
+      expect(s.isDisposableEmail).toHaveBeenCalledWith('x@mailinator.com');
       expect(s.checkMailDomain).not.toHaveBeenCalled();
       expectNothingProvisioned(s);
     },
   );
 
-  it('refuses a sub-domain of a throwaway domain', async () => {
+  it('allows a gmail.com address through the throwaway check', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const s = setup(null);
-    const res = await handleInviteSend(
-      request({ workspace_id: WORKSPACE_ID, email: 'x@inbox.mailinator.com', role: 'agency' }),
+    s.admin.from.mockImplementation(() => {
+      throw new Error('stop after member_invite');
+    });
+    await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: 'person@gmail.com', role: 'agency' }),
       s.deps,
     );
-    expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toBe('disposable_email');
-    expectNothingProvisioned(s);
+    expect(s.isDisposableEmail).toHaveBeenCalledWith('person@gmail.com');
+    expect(s.isDisposableEmail).toHaveReturnedWith(false);
+    expect(s.callerRpc.mock.calls.map((c) => c[0])).toEqual([
+      'member_invite_check',
+      'member_invite',
+    ]);
+    errorSpy.mockRestore();
   });
 
   it('refuses a domain with no mail records with email_domain_unreachable', async () => {

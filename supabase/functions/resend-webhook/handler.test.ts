@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { createClient } from '@supabase/supabase-js';
 import { handleResendWebhook } from './handler.ts';
@@ -47,6 +47,29 @@ function fakeDb(rows: Row[]) {
   return { factory: factory as unknown as typeof createClient, from, updates };
 }
 
+// Test double for svix Webhook.verify (bound in index.ts; svix is not installed
+// under Node): same signing scheme and 300 s window, pinned to NOW_MS. It throws
+// on any failure, as svix does.
+function svixVerify(secret: string, body: string, headers: Record<string, string>): void {
+  const id = headers['svix-id'] ?? '';
+  const timestamp = headers['svix-timestamp'] ?? '';
+  const signature = headers['svix-signature'] ?? '';
+  if (!id || !/^\d+$/.test(timestamp) || !signature) throw new Error('missing headers');
+  if (Math.abs(NOW_S - Number(timestamp)) > 300) throw new Error('timestamp out of window');
+  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+  const expected = createHmac('sha256', key).update(`${id}.${timestamp}.${body}`).digest();
+  const ok = signature.split(' ').some((entry) => {
+    const [version, value] = entry.split(',', 2);
+    const candidate = Buffer.from(value ?? '', 'base64');
+    return (
+      version === 'v1' &&
+      candidate.length === expected.length &&
+      timingSafeEqual(candidate, expected)
+    );
+  });
+  if (!ok) throw new Error('no matching signature');
+}
+
 function deps(db: ReturnType<typeof fakeDb>, env: Record<string, string | undefined> = {}) {
   const values: Record<string, string | undefined> = {
     RESEND_WEBHOOK_SECRET: SECRET,
@@ -54,7 +77,11 @@ function deps(db: ReturnType<typeof fakeDb>, env: Record<string, string | undefi
     SUPABASE_SERVICE_ROLE_KEY: 'service-key',
     ...env,
   };
-  return { env: (name: string) => values[name], createClient: db.factory, now: () => NOW_MS };
+  return {
+    env: (name: string) => values[name],
+    createClient: db.factory,
+    verifySignature: vi.fn(svixVerify),
+  };
 }
 
 function sign(id: string, timestamp: number, body: string, keyBase64 = KEY_BASE64): string {
@@ -106,6 +133,17 @@ describe('resend-webhook signature', () => {
     expect(rows[0]).toMatchObject({
       status: 'delivered',
       delivered_at: '2026-10-23T11:59:00.000Z',
+    });
+  });
+
+  it('hands the verifier the secret, the raw body and the three svix headers', async () => {
+    const body = event('email.delivered');
+    const d = deps(fakeDb([attempt('sent')]));
+    await handleResendWebhook(webhook(body), d);
+    expect(d.verifySignature).toHaveBeenCalledWith(SECRET, body, {
+      'svix-id': 'msg_evt_1',
+      'svix-timestamp': String(NOW_S),
+      'svix-signature': `v1,${sign('msg_evt_1', NOW_S, body)}`,
     });
   });
 

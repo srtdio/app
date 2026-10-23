@@ -12,7 +12,6 @@
 
 import type { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { isDisposableDomain } from './disposable-domains.ts';
 import { checkMailDomain, type MailDomainResult } from './mail-domain.ts';
 
 const TRACE_ID_HEADER = 'X-Trace-Id';
@@ -49,6 +48,8 @@ const inputSchema = z.object({
 export interface InviteSendDeps {
   env: (name: string) => string | undefined;
   createClient: typeof createClient;
+  /** True for a throwaway address: index.ts binds mailchecker (npm, MIT). */
+  isDisposableEmail: (email: string) => boolean;
   /** Mail-record lookup; defaults to checkMailDomain over DoH (tests inject a stub). */
   checkMailDomain?: (domain: string) => Promise<MailDomainResult>;
 }
@@ -397,10 +398,10 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
     // Email legitimacy, before member_invite_check and any provisioning, so a
     // refused address creates nothing. A failed lookup ('unknown') never blocks
     // a real person: it is logged and the invite goes on.
-    const domain = email.slice(email.lastIndexOf('@') + 1);
-    if (isDisposableDomain(domain)) {
+    if (deps.isDisposableEmail(email)) {
       return json({ error: 'disposable_email', trace_id: traceId }, 400, allowedOrigin, traceId);
     }
+    const domain = email.slice(email.lastIndexOf('@') + 1);
     if (!skipsMailLookup(domain)) {
       const lookupMailDomain =
         deps.checkMailDomain ??
