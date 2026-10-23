@@ -20,7 +20,7 @@ vi.mock('@/components/pages/pipeline/PipelineDateRangeCalendar', () => ({
   PipelineDateRangeCalendar: () => null,
 }));
 
-import { PostCard, cardRatio, dueLabel } from '@/components/pages/PostCard';
+import { PostCard, cardCoverKind, cardRatio, dueLabel } from '@/components/pages/PostCard';
 import type { PostCardProps } from '@/components/pages/PostCard';
 import {
   hasAllowedMove,
@@ -30,12 +30,7 @@ import {
   sendForReviewHelper,
   type CardViewer,
 } from '@/components/pages/pipeline/card-status';
-import {
-  MoveSheetView,
-  PARK_HELPER,
-  REJECT_HELPER,
-  moveActions,
-} from '@/components/pages/pipeline/MoveSheet';
+import { MoveSheetView, moveActions } from '@/components/pages/pipeline/MoveSheet';
 import {
   REASON_HINT,
   REASON_LABEL,
@@ -129,29 +124,28 @@ const T0 = '2026-01-01T00:00:00Z';
 const TWO_HOURS_LATER = new Date('2026-01-01T02:00:00Z');
 
 describe('post flow C: Pipeline card', () => {
-  it('fix 1: the picture takes the platform frame (4:5 for an Instagram post), text keeps square', () => {
-    expect(cardRatio({ platform: 'instagram', format: 'single_image' }, null)).toBeCloseTo(0.8);
-    expect(cardRatio({ platform: 'instagram', format: 'single_image' }, undefined)).toBeCloseTo(
-      0.8,
-    );
-    expect(cardRatio({ platform: 'instagram', format: 'reel' }, null)).toBeCloseTo(9 / 16);
-    expect(cardRatio({ platform: 'instagram', format: 'text' }, null)).toBeNull();
-    expect(cardRatio({ platform: 'instagram', format: 'link' }, null)).toBeNull();
-    // A known cover size wins inside the platform's feed range (clamped outside it).
+  it('fix 1: one fixed cover box per workspace platform (4:5 on Instagram), none for a text-only post', () => {
+    expect(cardRatio({ platform: 'instagram' })).toBeCloseTo(0.8);
+    expect(cardRatio({ platform: 'tiktok' })).toBeCloseTo(9 / 16);
+    expect(cardRatio({ platform: 'not-a-platform' })).toBeNull();
     const square: Cover = { assetVersionId: 'av1', kind: 'image', width: 1000, height: 1000 };
-    expect(cardRatio({ platform: 'instagram', format: 'single_image' }, square)).toBeCloseTo(1);
     const wide: Cover = { assetVersionId: 'av1', kind: 'image', width: 3000, height: 1000 };
-    expect(cardRatio({ platform: 'instagram', format: 'single_image' }, wide)).toBeCloseTo(1.91);
+    const video: Cover = { assetVersionId: 'av2', kind: 'video', width: null, height: null };
+    expect(cardCoverKind(x5Post({ thumbnailAssetVersionId: 'av1' }), square)).toBe('image');
+    expect(cardCoverKind(x5Post({ format: 'reel' }), undefined)).toBe('video');
+    expect(cardCoverKind(x5Post({ format: 'single_image' }), video)).toBe('video');
+    expect(cardCoverKind(x5Post({ format: 'text' }), null)).toBe('none');
+    expect(cardCoverKind(x5Post({ format: 'single_image' }), null)).toBe('none');
 
-    // The ratio reaches the Thumbnail frame as an inline aspect-ratio, not the square class.
-    const image = card({ post: x5Post({ format: 'single_image' }) });
-    expect(image).toContain('aspect-ratio:0.8');
-    expect(image).not.toContain('aspect-square');
-    expect(card({ post: x5Post({ format: 'single_image' }), cover: square })).toContain(
-      'aspect-ratio:1',
-    );
+    // The media's own size never changes the box: the same inline ratio for all.
+    const media = x5Post({ format: 'single_image', thumbnailAssetVersionId: 'av1' });
+    for (const cover of [undefined, square, wide]) {
+      const out = card({ post: media, cover });
+      expect(out).toContain('aspect-ratio:0.8');
+      expect(out).not.toContain('aspect-square');
+    }
     const textCard = card({ post: x5Post({ format: 'text', caption: 'Hello' }) });
-    expect(textCard).toContain('aspect-square');
+    expect(textCard).not.toContain('data-post-card-thumb');
     expect(textCard).not.toContain('aspect-ratio');
   });
 
@@ -163,10 +157,11 @@ describe('post flow C: Pipeline card', () => {
     expect(reviewStatus('review', T0, viewer('agency', ['Meera']), TWO_HOURS_LATER)).toEqual({
       tone: 'with',
       text: 'With Meera · 2 hours ago',
+      ago: '2 hours ago',
     });
     for (const role of ['owner', 'admin', 'agency']) {
       expect(reviewStatus('review', T0, viewer(role, ['Meera', 'Arjun']), TWO_HOURS_LATER)).toEqual(
-        { tone: 'with', text: 'With approvers · 2 hours ago' },
+        { tone: 'with', text: 'With approvers · 2 hours ago', ago: '2 hours ago' },
       );
     }
     expect(reviewStatus('review', T0, viewer('owner'), TWO_HOURS_LATER)?.text).toBe(
@@ -194,7 +189,10 @@ describe('post flow C: Pipeline card', () => {
       now: TWO_HOURS_LATER,
     });
     expect(theirs).toContain('data-post-card-status="with"');
-    expect(theirs).toContain('With Meera · 2 hours ago');
+    // The line shows the time only; the full phrase is its title and aria-label.
+    expect(theirs).toContain('aria-label="With Meera · 2 hours ago"');
+    expect(theirs).toContain('title="With Meera · 2 hours ago"');
+    expect(theirs).toContain('>2 hours ago</span>');
     const draft = card({
       post: x5Post({ stage: 'draft' }),
       viewer: viewer('agency'),
@@ -447,7 +445,7 @@ describe('post flow C: header, count and filters', () => {
 });
 
 describe('post flow C: move sheet and confirms', () => {
-  function sheet(stage: Stage, role: string | null, approvers: string[] = []): ReactElement {
+  function sheet(stage: Stage, role: string | null): ReactElement {
     let state = GATE_IDLE;
     const gate = createApproveGate({
       move: vi.fn(),
@@ -464,24 +462,18 @@ describe('post flow C: move sheet and confirms', () => {
       gateState: GATE_IDLE,
       targetDate: '',
       role,
-      approverFirstNames: approvers,
     })!;
   }
 
-  it('fix 39: the move sheet lists only allowed moves as labelled actions with helpers', () => {
-    expect(moveActions('agency', 'draft', ['Meera', 'Arjun'])).toEqual([
-      {
-        to: 'review',
-        label: 'Send for review',
-        helper: 'Meera and Arjun get it to approve.',
-        tone: 'default',
-      },
-      { to: 'parked', label: 'Park', helper: PARK_HELPER, tone: 'default' },
+  it('fix 39: the move sheet lists only allowed moves as one-line labelled actions', () => {
+    expect(moveActions('agency', 'draft')).toEqual([
+      { to: 'review', label: 'Send for review', tone: 'default' },
+      { to: 'parked', label: 'Park', tone: 'default' },
     ]);
     expect(moveActions('owner', 'review')).toEqual([
-      { to: 'approved', label: 'Approve on their behalf', helper: null, tone: 'default' },
-      { to: 'parked', label: 'Park', helper: PARK_HELPER, tone: 'default' },
-      { to: 'rejected', label: 'Reject', helper: REJECT_HELPER, tone: 'bad' },
+      { to: 'approved', label: 'Approve on their behalf', tone: 'default' },
+      { to: 'parked', label: 'Park', tone: 'default' },
+      { to: 'rejected', label: 'Reject', tone: 'bad' },
     ]);
     expect(moveActions('client', 'review').map((a) => a.label)).toEqual(['Approve', 'Reject']);
     expect(moveActions('client', 'draft')).toEqual([]);
@@ -496,15 +488,15 @@ describe('post flow C: move sheet and confirms', () => {
     expect(sendForReviewHelper([])).toBe('Approvers get it to approve.');
     expect(joinNames(['Meera', 'Arjun', 'Kim'])).toBe('Meera, Arjun and Kim');
 
-    // The sheet: titled by the post, one row per action, helpers under labels.
-    const tree = sheet('draft', 'agency', ['Meera', 'Arjun']);
+    // The sheet: titled by the post, one row per action, no helper lines.
+    const tree = sheet('draft', 'agency');
     const moveSheet = all(tree).find((el) => el.type === Sheet)!;
     expect((moveSheet.props as { title: string }).title).toBe('Spring drop');
     const rows = all(tree).filter((el) => 'data-move-action' in (el.props as object));
     const targets = rows.map((row) => (row.props as Record<string, unknown>)['data-move-action']);
     expect(targets).toEqual(['review', 'parked']);
-    const helpers = all(tree).filter((el) => 'data-move-helper' in (el.props as object));
-    expect(helpers.map(text)).toEqual(['Meera and Arjun get it to approve.', PARK_HELPER]);
+    expect(all(tree).some((el) => 'data-move-helper' in (el.props as object))).toBe(false);
+    for (const row of rows) expect(text(row)).not.toContain('.');
     expect(all(tree).some((el) => text(el) === 'Draft' && el.type === 'button')).toBe(false);
   });
 

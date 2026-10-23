@@ -71,6 +71,7 @@ import {
   filteredEmpty,
   moveErrorMessage,
   pipelineHeader,
+  PHONE_TOOLBAR_CLASS,
   pipelineSurface,
   postCountLabel,
   postsSkeleton,
@@ -281,6 +282,26 @@ describe('pipelineHeader', () => {
     expect(props.dateWindow).toBe('any');
     expect(props.customRange).toBeNull();
     expect(props.weekStartDay).toBe(1);
+  });
+
+  it('on a phone the search takes its own full-width row; filters, sort and New post share the next', () => {
+    const tree = header();
+    const props = tree.props as { className: string; 'data-pipeline-toolbar'?: string };
+    expect(tree.type).toBe('div');
+    expect(props['data-pipeline-toolbar']).toBe('');
+    expect(props.className).toBe(PHONE_TOOLBAR_CLASS);
+    // Phone only (max-md): the control row wraps and its first child, the
+    // search field, takes the whole row. Nothing applies at md and up.
+    expect(PHONE_TOOLBAR_CLASS).toContain('max-md:[&>div:first-child]:flex-wrap');
+    expect(PHONE_TOOLBAR_CLASS).toContain('max-md:[&>div:first-child>div:first-child]:basis-full');
+    expect(PHONE_TOOLBAR_CLASS.split(' ').every((c) => c.startsWith('max-md:'))).toBe(true);
+    // The search is still the one SectionHeader field, first in its row.
+    const section = findAll(tree, (el) => el.type === SectionHeader)[0]!;
+    expect((section.props as { search: { placeholder: string } }).search.placeholder).toBe(
+      'Search posts',
+    );
+    const newPost = findAll(tree, isNewPost)[0]!;
+    expect((newPost.props as { className: string }).className).toContain('max-md:ml-auto');
   });
 
   it('dispatches sorted:create-post from the New post action', () => {
@@ -1011,7 +1032,6 @@ describe('E: clients never see Draft', () => {
       onBlockedMove: () => {},
       shownKey: 'pipeline:shown:',
       roleReady: false,
-      canCreate: false,
     });
     const props = tree.props as { stages: Stage[]; roleReady: boolean };
     expect(props.stages).not.toContain('draft');

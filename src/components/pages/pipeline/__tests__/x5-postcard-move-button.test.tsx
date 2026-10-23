@@ -14,7 +14,7 @@ function card(format: string): string {
   return renderToStaticMarkup(
     <MemoryRouter>
       <PostCard
-        post={x5Post({ format, thumbnailAssetVersionId: null })}
+        post={x5Post({ format, thumbnailAssetVersionId: 'av1' })}
         cache={cache}
         presignEnabled={false}
         onMove={() => {}}

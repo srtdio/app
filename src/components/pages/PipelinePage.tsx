@@ -137,6 +137,15 @@ export function stageChipItems(
 }
 
 /**
+ * Phone only (below md): the shared header's control row wraps so the search
+ * field (its first child) takes a full-width row of its own and the due
+ * filter, sort and New post share the second row; the placeholder never cuts.
+ * The laptop row is unchanged.
+ */
+export const PHONE_TOOLBAR_CLASS =
+  'max-md:[&>div:first-child]:flex-wrap max-md:[&>div:first-child]:gap-y-3 max-md:[&>div:first-child>div:first-child]:basis-full';
+
+/**
  * The Pipeline header chrome: the shared SectionHeader (search, sort, accent "+"
  * create) with the horizontal stage chip bar in the filter-chips slot. Each chip
  * carries its label and post count as discrete fields (StageChips renders the
@@ -149,62 +158,68 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
   const hideDraft = props.hideDraft === true;
   const items = stageChipItems(props.counts, hideDraft);
   return (
-    <SectionHeader<PostSort>
-      search={{ value: props.search, onChange: props.onSearchChange, placeholder: 'Search posts' }}
-      sort={{
-        node: (
-          <div className="flex shrink-0 items-center gap-2">
-            <PipelineDateControl
-              dateWindow={props.dateWindow}
-              onDateWindowChange={props.onDateWindowChange}
-              customRange={props.customRange}
-              onCustomRangeChange={props.onCustomRangeChange}
-              weekStartDay={props.weekStartDay}
-            />
-            <PipelineSortControl order={props.sort} onOrderChange={props.onSortChange} />
-          </div>
-        ),
-      }}
-      {...(props.canCreate
-        ? {
-            primaryAction: {
-              node: (
-                <Button
-                  variant="primary"
-                  size="lg"
-                  data-induction={INDUCTION_KEYS.pipelineCreate}
-                  className="shrink-0 whitespace-nowrap"
-                  onClick={() => dispatchSorted('sorted:create-post')}
-                >
-                  New post
-                </Button>
-              ),
-            },
-          }
-        : props.createPending === true
+    <div data-pipeline-toolbar="" className={PHONE_TOOLBAR_CLASS}>
+      <SectionHeader<PostSort>
+        search={{
+          value: props.search,
+          onChange: props.onSearchChange,
+          placeholder: 'Search posts',
+        }}
+        sort={{
+          node: (
+            <div className="flex shrink-0 items-center gap-2">
+              <PipelineDateControl
+                dateWindow={props.dateWindow}
+                onDateWindowChange={props.onDateWindowChange}
+                customRange={props.customRange}
+                onCustomRangeChange={props.onCustomRangeChange}
+                weekStartDay={props.weekStartDay}
+              />
+              <PipelineSortControl order={props.sort} onOrderChange={props.onSortChange} />
+            </div>
+          ),
+        }}
+        {...(props.canCreate
           ? {
               primaryAction: {
                 node: (
                   <Button
                     variant="primary"
                     size="lg"
-                    aria-hidden="true"
-                    tabIndex={-1}
-                    disabled
-                    data-create-placeholder=""
-                    className="invisible shrink-0 whitespace-nowrap"
+                    data-induction={INDUCTION_KEYS.pipelineCreate}
+                    className="shrink-0 whitespace-nowrap max-md:ml-auto"
+                    onClick={() => dispatchSorted('sorted:create-post')}
                   >
                     New post
                   </Button>
                 ),
               },
             }
-          : {})}
-    >
-      <StageRow hideDraft={hideDraft}>
-        <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
-      </StageRow>
-    </SectionHeader>
+          : props.createPending === true
+            ? {
+                primaryAction: {
+                  node: (
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      disabled
+                      data-create-placeholder=""
+                      className="invisible shrink-0 whitespace-nowrap max-md:ml-auto"
+                    >
+                      New post
+                    </Button>
+                  ),
+                },
+              }
+            : {})}
+      >
+        <StageRow hideDraft={hideDraft}>
+          <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
+        </StageRow>
+      </SectionHeader>
+    </div>
   );
 }
 
@@ -493,8 +508,6 @@ export interface PipelineSurfaceProps {
   role: string | null;
   /** The role read has landed: only then are board cards draggable. Default true. */
   roleReady?: boolean;
-  /** post.create granted: an empty stage also offers New post. */
-  canCreate?: boolean;
   /** A desktop drop onto a column the post cannot move to: toast the reason. */
   onBlockedMove: (reason: string) => void;
   /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
@@ -524,7 +537,6 @@ export function visibleStage(stage: string, role: string | null): string {
  * branch is unit-tested by walking the element.
  */
 export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
-  const canCreate = props.canCreate === true;
   if (props.isDesktop) {
     return (
       <PipelineBoard
@@ -540,7 +552,6 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
         onOpenMove={props.onLongPressPost}
         onBlockedMove={props.onBlockedMove}
         roleReady={props.roleReady !== false}
-        canCreate={canCreate}
         {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
         {...(props.covers !== undefined ? { covers: props.covers } : {})}
       />
@@ -555,7 +566,6 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
       workspaceKey={props.workspaceKey}
       onLongPressPost={props.onLongPressPost}
       shownKey={props.shownKey}
-      canCreate={canCreate}
       {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
       {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
       {...(props.covers !== undefined ? { covers: props.covers } : {})}
@@ -1155,7 +1165,6 @@ export function PipelinePage() {
                   onLongPressPost: openMove,
                   role,
                   roleReady: roleStatus === 'ready',
-                  canCreate,
                   onBlockedMove,
                   shownKey,
                   timeZone,
@@ -1171,7 +1180,6 @@ export function PipelinePage() {
         role={role}
         roleStatus={roleStatus}
         onRetryRole={retryRole}
-        approverFirstNames={people.approverFirstNames}
       />
 
       <StageMoveConfirm

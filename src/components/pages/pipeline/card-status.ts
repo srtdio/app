@@ -23,8 +23,14 @@ export interface CardViewer {
   pending?: boolean;
 }
 
-/** A review post's status line: the approver's turn, or who the creator is waiting on. */
-export type ReviewStatus = { tone: 'you'; text: string } | { tone: 'with'; text: string };
+/**
+ * A review post's status line: the approver's turn, or who the creator is
+ * waiting on. For a creator the card shows only `ago` ("2 days ago") beside the
+ * stage dot; the full phrase (`text`) is the line's title and aria-label.
+ */
+export type ReviewStatus =
+  | { tone: 'you'; text: string }
+  | { tone: 'with'; text: string; ago: string };
 
 /** The first word of a display name ("Meera Shah" -> "Meera"); '' for a blank name. */
 export function firstNameOf(displayName: string | null | undefined): string {
@@ -35,7 +41,7 @@ export function firstNameOf(displayName: string | null | undefined): string {
  * The status line for a review post, or null for every other stage or an
  * unknown role. An approver sees "Waiting on you". A creator sees
  * "With {approver first name} · {time in stage}" when the workspace has one
- * approver, else "With approvers · {time}".
+ * approver, else "With approvers · {time}". `ago` is the {time} alone.
  */
 export function reviewStatus(
   stage: Stage,
@@ -48,7 +54,8 @@ export function reviewStatus(
   if (!isAgencySide(viewer.role)) return null;
   const only = viewer.approverFirstNames.length === 1 ? viewer.approverFirstNames[0] : undefined;
   const who = only !== undefined && only !== '' ? only : 'approvers';
-  return { tone: 'with', text: `With ${who} · ${formatAgo(stageEnteredAt, now)}` };
+  const ago = formatAgo(stageEnteredAt, now);
+  return { tone: 'with', text: `With ${who} · ${ago}`, ago };
 }
 
 /** Whether a review card holds its status line's height while the role loads. */

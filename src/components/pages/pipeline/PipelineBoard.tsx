@@ -52,8 +52,6 @@ export interface PipelineBoardProps {
    * bounces silently. Default true.
    */
   roleReady?: boolean;
-  /** post.create granted: an empty stage also offers New post. */
-  canCreate?: boolean;
   /** A card's Move button asks the page to open the move sheet for that post. */
   onOpenMove?: (post: PipelinePost) => void;
   /** A drop onto a column the post cannot move to: the page toasts the reason. */
@@ -258,7 +256,6 @@ export function PipelineBoardView({
   viewer,
   covers,
   roleReady = true,
-  canCreate = false,
 }: PipelineBoardProps): ReactElement {
   const only = stages.length === 1 ? stages[0] : undefined;
   if (only !== undefined) {
@@ -270,7 +267,6 @@ export function PipelineBoardView({
       presignEnabled,
       workspaceKey,
       timeZone,
-      canCreate,
       ...(onOpenMove !== undefined ? { onOpenMove } : {}),
       ...(viewer !== undefined ? { viewer } : {}),
       ...(covers !== undefined ? { covers } : {}),
@@ -304,7 +300,7 @@ export function PipelineBoardView({
               <span className="ml-auto text-xs tabular-nums text-fg-3">{all.length}</span>
             </div>
             {all.length === 0 ? (
-              <div data-column-empty="">{StageEmpty({ stage, canCreate })}</div>
+              <div data-column-empty="">{StageEmpty({ stage, compact: true })}</div>
             ) : (
               <div className="flex flex-col gap-2 p-2">
                 {shown.map((post) => {
@@ -371,7 +367,6 @@ function SingleStageGrid({
   presignEnabled,
   workspaceKey,
   timeZone,
-  canCreate,
   onOpenMove,
   viewer,
   covers,
@@ -382,7 +377,6 @@ function SingleStageGrid({
   presignEnabled: boolean;
   workspaceKey: string | null;
   timeZone: string;
-  canCreate: boolean;
   onOpenMove?: (post: PipelinePost) => void;
   viewer?: CardViewer;
   covers?: CoverLookup;
@@ -390,7 +384,7 @@ function SingleStageGrid({
   if (posts.length === 0) {
     return (
       <div data-board-grid data-stage={stage} className="px-4 md:px-6">
-        {StageEmpty({ stage, canCreate })}
+        {StageEmpty({ stage })}
       </div>
     );
   }
