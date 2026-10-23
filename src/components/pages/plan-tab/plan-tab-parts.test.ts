@@ -62,3 +62,17 @@ describe('the phone card covers', () => {
     expect(covers).toHaveLength(CARD_COVERS);
   });
 });
+
+describe('Plan tab memory', () => {
+  it('keeps the newest ranges, drops the oldest, and forgets on request', async () => {
+    const { rememberPlanTab, rememberedPlanTab, forgetPlanTab, PLAN_TAB_MEMORY_MAX } =
+      await import('./use-plan-tab-data');
+    forgetPlanTab();
+    const data = { bundles: [], posts: [], thumbs: { posts: {}, concepts: {} }, anyPlan: false };
+    for (let i = 0; i <= PLAN_TAB_MEMORY_MAX; i += 1) rememberPlanTab(`k${i}`, data);
+    expect(rememberedPlanTab('k0')).toBeUndefined();
+    expect(rememberedPlanTab(`k${PLAN_TAB_MEMORY_MAX}`)).toBe(data);
+    forgetPlanTab();
+    expect(rememberedPlanTab(`k${PLAN_TAB_MEMORY_MAX}`)).toBeUndefined();
+  });
+});
