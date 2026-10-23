@@ -28,6 +28,17 @@
 //     storage CORS. Any other version (pptx included) is a 400.
 // A body without either field is handled byte-for-byte as before.
 //
+// Fast file route (served on srtd.io/f/* through a zone route, and on the
+// workers.dev URL):
+//   POST /link-key -> { key, expires_at }: a day-long link key for the verified
+//     caller (see file-links.ts). It names the user only and grants nothing.
+//   GET /f/{asset_version_id}/{thumb|full}?k={key}[&dl=1] -> the file's bytes.
+//     The key is verified, then the SAME authorizeVersion gate runs live on every
+//     request, cache hits included, so a removed member is refused at once. The
+//     bytes come from Cloudflare's edge cache (keyed by version and kind only,
+//     never by user) and fall back to R2 on a miss. Every response is sandboxed
+//     by CSP so a file opened on srtd.io can never run script on the app origin.
+//
 // This is a read/query endpoint: no idempotency key, no state mutation, no
 // audit row. Expected failures (missing/invalid token, unknown version,
 // non-member) are returned as typed Results and mapped to 4xx; system faults
@@ -48,6 +59,7 @@ import { extractTraceId } from '@/server/trace';
 import { logger } from '@/server/logger';
 import { TRACE_ID_HEADER } from '@/lib/trace';
 import { isPreviewOrigin } from '@/server/preview-origin';
+import { deriveLinkSigningKey, issueLinkKey, verifyLinkKey } from '@/server/workers/file-links';
 
 /** Signed-URL lifetime: 15 minutes. */
 const URL_TTL_SECONDS = 900;
@@ -533,8 +545,8 @@ function preflightResponse(request: Request, env: AssetReadEnv): Response {
     resolveAllowedOrigin(request, env) ?? allowedOrigins(env)[0] ?? DEFAULT_ALLOWED_ORIGINS[0];
   const headers = new Headers({
     'Access-Control-Allow-Origin': acao,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': `authorization, content-type, ${TRACE_ID_HEADER.toLowerCase()}`,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': `authorization, content-type, range, ${TRACE_ID_HEADER.toLowerCase()}`,
     'Access-Control-Max-Age': String(CORS_MAX_AGE_SECONDS),
     Vary: 'Origin',
   });
@@ -794,8 +806,372 @@ async function handlePost(
   return json(200, result.value, traceId, acao);
 }
 
+// ---------------------------------------------------------------------------
+// Fast file route: GET /f/{asset_version_id}/{thumb|full}?k={link key}
+// ---------------------------------------------------------------------------
+
+/** The two things a file URL can name: the 320px small copy or the original. */
+export type FileKind = 'thumb' | 'full';
+
+/** Edge copy lifetime: 30 days (a version's bytes never change). */
+const EDGE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+/** Browser copy lifetime: one day, matching the link key's repeat window. */
+const BROWSER_CACHE_CONTROL = 'private, max-age=86400';
+/** Largest object stored in the edge cache (bigger files stream from R2). */
+const EDGE_CACHE_MAX_BYTES = 100 * 1024 * 1024;
+/** Files are data, never pages: no script, no plugins, an opaque origin. */
+const FILE_CSP =
+  "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox";
+/** Headers the browser may read on a cross-origin file response. */
+const FILE_EXPOSE_HEADERS = 'Content-Length, Content-Range, Accept-Ranges, Content-Type';
+/** Upstream headers a file response passes back. */
+const FILE_PASS_HEADERS = ['Content-Length', 'Content-Range', 'Accept-Ranges', 'ETag'] as const;
+
+const FILE_PATH =
+  /^\/f\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/(thumb|full)$/i;
+
+/** The parsed file path, or null when the path is not a file URL. Pure. */
+export function parseFilePath(pathname: string): { assetVersionId: string; kind: FileKind } | null {
+  const match = FILE_PATH.exec(pathname);
+  if (match === null) return null;
+  const [, id, kind] = match;
+  if (id === undefined || (kind !== 'thumb' && kind !== 'full')) return null;
+  return { assetVersionId: id.toLowerCase(), kind };
+}
+
+/**
+ * The internal edge-cache key for a version's bytes. It names the version and
+ * kind only, never the user or the link key, so one cached copy serves every
+ * member; the cache is read only after that member's own gate has passed.
+ */
+export function fileCacheKey(origin: string, assetVersionId: string, kind: FileKind): string {
+  return `${origin}/f/__c/${assetVersionId}/${kind}`;
+}
+
+/** The cache surface the file route needs; caches.default fits it. */
+export interface FileCache {
+  match(key: string): Promise<Response | undefined>;
+  put(key: string, response: Response): Promise<void>;
+}
+
+export interface FileRouteDeps {
+  store: AssetReadStore;
+  renditions: RenditionReader;
+  signer: PresignedUrlSigner;
+  /** Fetches an object's bytes from a presigned URL; Range passes through. */
+  fetchObject: ObjectFetcher;
+  cache: FileCache;
+  signingKey: CryptoKey;
+  /** Keeps the edge-cache write alive after the response is returned. */
+  waitUntil: (work: Promise<unknown>) => void;
+  nowMs: () => number;
+}
+
+export interface FileRequest {
+  /** The request URL's origin; sample files redirect to it and cache keys use it. */
+  origin: string;
+  assetVersionId: string;
+  kind: FileKind;
+  key: string | null;
+  download: boolean;
+  range: string | null;
+}
+
+function fileError(status: 401 | 403 | 404, message: string): Response {
+  return new Response(message, {
+    status,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'private, no-store',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+  });
+}
+
+/** Headers every successful file response carries. */
+function fileHeaders(input: {
+  contentType: string | null;
+  disposition: string;
+  upstream: Headers;
+}): Headers {
+  const headers = new Headers({
+    'Cache-Control': BROWSER_CACHE_CONTROL,
+    'Content-Disposition': input.disposition,
+    'Content-Security-Policy': FILE_CSP,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Robots-Tag': 'noindex, nofollow',
+    'Accept-Ranges': 'bytes',
+  });
+  const contentType = input.contentType ?? input.upstream.get('Content-Type');
+  if (contentType !== null && contentType !== '') headers.set('Content-Type', contentType);
+  for (const name of FILE_PASS_HEADERS) {
+    const value = input.upstream.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  return headers;
+}
+
+function inlineDisposition(): string {
+  return 'inline';
+}
+
+function attachmentDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+/**
+ * Serve one file. Order is fixed: the link key is verified, then the caller's
+ * own gate (authorizeVersion: workspace membership, or chat readability for a
+ * chat file) runs live, and only then is the edge cache read or R2 fetched. A
+ * cache hit therefore never skips the gate. Errors never say which check
+ * failed beyond 401 / 403 / 404.
+ */
+export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<Response> {
+  if (req.key === null || req.key === '') {
+    return fileError(401, 'Missing link key.');
+  }
+  const userId = await verifyLinkKey({
+    key: req.key,
+    nowMs: deps.nowMs(),
+    signingKey: deps.signingKey,
+  });
+  if (userId === null) {
+    return fileError(401, 'Invalid or expired link key.');
+  }
+
+  // The gate and the rendition lookup are independent reads: run them together.
+  // The rendition row is used only after the gate passes.
+  const [readable, rendition] = await Promise.all([
+    authorizeVersion(deps.store, { userId, assetVersionId: req.assetVersionId }),
+    req.kind === 'thumb'
+      ? deps.renditions.findRendition(req.assetVersionId, 'thumbnail')
+      : Promise.resolve(null),
+  ]);
+  if (!readable.ok) {
+    if (readable.error.code === 'forbidden') {
+      logger.warn('file read denied', { asset_version_id: req.assetVersionId });
+      return fileError(403, 'Not allowed.');
+    }
+    return fileError(404, 'Not found.');
+  }
+  const { version, bucket, r2Key } = readable.value;
+
+  // Onboarding sample files ship with the site itself (public/induction-sample).
+  if (isSampleKey(r2Key)) {
+    const target = req.kind === 'thumb' ? sampleThumbKey(r2Key) : r2Key;
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: `${req.origin}/${target}`,
+        'Cache-Control': BROWSER_CACHE_CONTROL,
+        'X-Robots-Tag': 'noindex, nofollow',
+      },
+    });
+  }
+
+  let objectKey = r2Key;
+  if (req.kind === 'thumb') {
+    if (rendition === null) {
+      return fileError(404, 'No small copy.');
+    }
+    objectKey = rendition.r2Key;
+  }
+
+  const disposition =
+    req.download && req.kind === 'full'
+      ? attachmentDisposition(buildDownloadFilename(version))
+      : inlineDisposition();
+  // The small copy's type comes from R2 (stored at upload); the original's from
+  // the version row.
+  const contentType = req.kind === 'full' ? (version.mimeType ?? null) : null;
+  const cacheKey = fileCacheKey(req.origin, req.assetVersionId, req.kind);
+
+  // A Range request (video seek) goes straight to R2 and is never cached.
+  if (req.range === null) {
+    const cached = await deps.cache.match(cacheKey);
+    if (cached !== undefined && cached.status === 200) {
+      return new Response(cached.body, {
+        status: 200,
+        headers: fileHeaders({ contentType, disposition, upstream: cached.headers }),
+      });
+    }
+  }
+
+  const url = await deps.signer.presignGetUrl({
+    bucket,
+    key: objectKey,
+    expiresInSeconds: URL_TTL_SECONDS,
+  });
+  const upstream = await deps.fetchObject(url, req.range);
+  if (upstream.status === 404) {
+    await upstream.body?.cancel();
+    return fileError(404, 'Not found.');
+  }
+  if (upstream.status === 416) {
+    await upstream.body?.cancel();
+    return new Response(null, {
+      status: 416,
+      headers: { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow' },
+    });
+  }
+  if (upstream.status !== 200 && upstream.status !== 206) {
+    await upstream.body?.cancel();
+    throw new Error(`object fetch failed with status ${upstream.status}`);
+  }
+
+  const headers = fileHeaders({ contentType, disposition, upstream: upstream.headers });
+  const length = Number(upstream.headers.get('Content-Length') ?? 'NaN');
+  const cacheable =
+    req.range === null &&
+    upstream.status === 200 &&
+    upstream.body !== null &&
+    Number.isFinite(length) &&
+    length <= EDGE_CACHE_MAX_BYTES;
+  if (!cacheable) {
+    return new Response(upstream.body, { status: upstream.status, headers });
+  }
+
+  // One stream to the browser, one into the edge cache (keyed by version only).
+  const [toBrowser, toCache] = (upstream.body as ReadableStream<Uint8Array>).tee();
+  const stored = new Headers({ 'Cache-Control': `public, s-maxage=${EDGE_MAX_AGE_SECONDS}` });
+  for (const name of ['Content-Type', 'Content-Length', 'ETag'] as const) {
+    const value = upstream.headers.get(name);
+    if (value !== null) stored.set(name, value);
+  }
+  deps.waitUntil(
+    deps.cache
+      .put(cacheKey, new Response(toCache, { status: 200, headers: stored }))
+      .catch((error) => {
+        logger.warn('file cache write failed', {
+          asset_version_id: req.assetVersionId,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }),
+  );
+  return new Response(toBrowser, { status: 200, headers });
+}
+
+// Per-isolate state for the file route: one service-role client set and one
+// derived signing key, built on first use (never at module eval).
+let isolateFileState:
+  | {
+      secret: string;
+      url: string;
+      store: AssetReadStore;
+      renditions: RenditionReader;
+      signingKey: Promise<CryptoKey>;
+    }
+  | undefined;
+
+function fileState(env: AssetReadEnv): NonNullable<typeof isolateFileState> {
+  if (
+    isolateFileState === undefined ||
+    isolateFileState.secret !== env.SUPABASE_SECRET_KEY ||
+    isolateFileState.url !== env.SUPABASE_URL
+  ) {
+    isolateFileState = {
+      secret: env.SUPABASE_SECRET_KEY,
+      url: env.SUPABASE_URL,
+      store: createSupabaseAssetReadStore(env),
+      renditions: createSupabaseRenditionStore(env),
+      signingKey: deriveLinkSigningKey(env.SUPABASE_SECRET_KEY),
+    };
+  }
+  return isolateFileState;
+}
+
+function r2Signer(env: AssetReadEnv): PresignedUrlSigner {
+  return new R2StorageClient(
+    {
+      CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
+      CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+    },
+    tracedFetch,
+  );
+}
+
+// The Workers runtime adds caches.default; the DOM lib typing lacks it. Read
+// lazily, on first use, so nothing touches the global at module eval or before
+// a request has passed its gate.
+const edgeCache: FileCache = {
+  match: (key) => (caches as unknown as { default: Cache }).default.match(key),
+  put: (key, response) => (caches as unknown as { default: Cache }).default.put(key, response),
+};
+
+async function handleFileGet(
+  request: Request,
+  env: AssetReadEnv,
+  ctx: { waitUntil(work: Promise<unknown>): void } | undefined,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const parsed = parseFilePath(url.pathname);
+  // The internal cache namespace (/f/__c/...) and any other path are not files.
+  const response =
+    parsed === null
+      ? fileError(404, 'Not found.')
+      : await serveFile(
+          {
+            store: fileState(env).store,
+            renditions: fileState(env).renditions,
+            signer: r2Signer(env),
+            fetchObject: (objectUrl, range) =>
+              tracedFetch(objectUrl, range !== null ? { headers: { Range: range } } : {}, traceId),
+            cache: edgeCache,
+            signingKey: await fileState(env).signingKey,
+            waitUntil: (work) => {
+              if (ctx !== undefined) ctx.waitUntil(work);
+            },
+            nowMs: () => Date.now(),
+          },
+          {
+            origin: url.origin,
+            assetVersionId: parsed.assetVersionId,
+            kind: parsed.kind,
+            key: url.searchParams.get('k'),
+            download: url.searchParams.get('dl') === '1',
+            range: request.headers.get('Range'),
+          },
+        );
+  const headers = new Headers(response.headers);
+  headers.set(TRACE_ID_HEADER, traceId);
+  applyCors(headers, acao);
+  if (acao !== null) headers.set('Access-Control-Expose-Headers', FILE_EXPOSE_HEADERS);
+  return new Response(response.body, { status: response.status, headers });
+}
+
+async function handleLinkKey(
+  request: Request,
+  env: AssetReadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return fail(caller.error, traceId, acao);
+  }
+  const minted = await issueLinkKey({
+    userId: caller.value,
+    nowMs: Date.now(),
+    signingKey: await fileState(env).signingKey,
+  });
+  return json(200, { key: minted.key, expires_at: minted.expiresAt }, traceId, acao);
+}
+
+/** True when the path names the link-key endpoint (with or without a prefix). */
+function isLinkKeyPath(pathname: string): boolean {
+  return pathname === '/link-key' || pathname.endsWith('/link-key');
+}
+
 export default {
-  async fetch(request: Request, env: AssetReadEnv): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: AssetReadEnv,
+    ctx?: { waitUntil(work: Promise<unknown>): void },
+  ): Promise<Response> {
     const traceId = extractTraceId(request);
     logger.setTraceId(traceId);
     const acao = resolveAllowedOrigin(request, env);
@@ -803,8 +1179,15 @@ export default {
       if (request.method === 'OPTIONS') {
         return preflightResponse(request, env);
       }
+      const pathname = new URL(request.url).pathname;
+      if (request.method === 'GET' && pathname.startsWith('/f/')) {
+        return await handleFileGet(request, env, ctx, traceId, acao);
+      }
       if (request.method !== 'POST') {
         return fail({ code: 'bad_request', message: 'Use POST.' }, traceId, acao);
+      }
+      if (isLinkKeyPath(pathname)) {
+        return await handleLinkKey(request, env, traceId, acao);
       }
       return await handlePost(request, env, traceId, acao);
     } catch (error) {

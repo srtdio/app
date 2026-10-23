@@ -4,6 +4,16 @@ main = "../../src/server/workers/asset-read.ts"
 compatibility_date = "2026-05-16"
 compatibility_flags = ["nodejs_compat"]
 
+# Fast file route: srtd.io/f/* is served by this Worker (zone routes take
+# precedence over the Pages site, as with og-preview). Files load from the
+# app's own domain through Cloudflare's edge cache; the workers.dev URL keeps
+# serving the POST endpoints and /link-key.
+# workers_dev stays on explicitly: the app calls the POST endpoints there.
+workers_dev = true
+routes = [
+  { pattern = "srtd.io/f/*", zone_name = "srtd.io" },
+]
+
 [vars]
 ALLOWED_ORIGINS = "https://srtd.io,https://srtdio-app.pages.dev"
 

@@ -456,9 +456,9 @@ describe('worker.fetch CORS', () => {
     const res = await worker.fetch(preflight(ALLOWED_ORIGIN), env);
     expect(res.status).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(ALLOWED_ORIGIN);
-    expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
+    expect(res.headers.get('Access-Control-Allow-Methods')).toBe('GET, POST, OPTIONS');
     expect(res.headers.get('Access-Control-Allow-Headers')).toBe(
-      'authorization, content-type, x-trace-id',
+      'authorization, content-type, range, x-trace-id',
     );
     expect(res.headers.get('Access-Control-Max-Age')).toBe('86400');
     expect(res.headers.get('Vary')).toBe('Origin');
