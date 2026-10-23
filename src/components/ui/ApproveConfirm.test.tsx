@@ -2,11 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import {
   ApproveConfirm,
-  approveRef,
   approveTargetDate,
   type ApproveConfirmProps,
 } from '@/components/ui/ApproveConfirm';
-import { confirmCopy } from '@/components/chat/post-sheet';
+import { confirmCopy, postSubject } from '@/components/chat/post-sheet';
 
 function collect(node: ReactNode, found: ReactElement[]): void {
   if (Array.isArray(node)) {
@@ -32,7 +31,7 @@ function texts(props: ApproveConfirmProps): string[] {
 
 function base(over: Partial<ApproveConfirmProps> = {}): ApproveConfirmProps {
   return {
-    refLabel: 'GBL-7',
+    postTitle: 'Launch teaser',
     mediaCount: 4,
     targetDate: 'Oct 2',
     busy: false,
@@ -43,30 +42,47 @@ function base(over: Partial<ApproveConfirmProps> = {}): ApproveConfirmProps {
 }
 
 describe('ApproveConfirm', () => {
-  it('T6: names KEY-N, the slide count and the target date when loaded (chat copy)', () => {
+  it('T6: names the post title, the slide count and the target date when loaded (chat copy)', () => {
     expect(texts(base())).toEqual([
-      'Approve GBL-7, all 4 slides, for Oct 2?',
+      'Approve Launch teaser, all 4 slides, for Oct 2?',
       'This is logged as your approval and the creators are notified.',
       'Back',
-      'Approve GBL-7',
+      'Approve',
     ]);
-    const chat = confirmCopy('approve', { ref: 'GBL-7', mediaCount: 4, targetDate: 'Oct 2' });
+    const chat = confirmCopy('approve', {
+      subject: postSubject('Launch teaser'),
+      mediaCount: 4,
+      targetDate: 'Oct 2',
+    });
     expect(texts(base())).toContain(chat.question);
   });
 
   it('T6: leaves slide count and target date out when not loaded', () => {
-    expect(texts(base({ mediaCount: null, targetDate: '' }))[0]).toBe('Approve GBL-7?');
-    expect(texts(base({ mediaCount: null }))[0]).toBe('Approve GBL-7, for Oct 2?');
-    expect(texts(base({ targetDate: '' }))[0]).toBe('Approve GBL-7, all 4 slides?');
+    expect(texts(base({ mediaCount: null, targetDate: '' }))[0]).toBe('Approve Launch teaser?');
+    expect(texts(base({ mediaCount: null }))[0]).toBe('Approve Launch teaser, for Oct 2?');
+    expect(texts(base({ targetDate: '' }))[0]).toBe('Approve Launch teaser, all 4 slides?');
+  });
+
+  it('falls back to "this post" for an empty or missing title', () => {
+    expect(texts(base({ postTitle: null, mediaCount: null, targetDate: '' }))[0]).toBe(
+      'Approve this post?',
+    );
+    expect(texts(base({ postTitle: '   ', mediaCount: null, targetDate: '' }))[0]).toBe(
+      'Approve this post?',
+    );
+  });
+
+  it('never shows a KEY-N code', () => {
+    for (const text of texts(base())) expect(text).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
   it('shows a failed approve above the buttons as the chat sheet does, none by default', () => {
     expect(texts(base({ error: 'Could not approve.' }))).toEqual([
-      'Approve GBL-7, all 4 slides, for Oct 2?',
+      'Approve Launch teaser, all 4 slides, for Oct 2?',
       'This is logged as your approval and the creators are notified.',
       'Could not approve.',
       'Back',
-      'Approve GBL-7',
+      'Approve',
     ]);
     const alert = elements(base({ error: 'x' })).find(
       (el) => (el.props as { role?: string }).role === 'alert',
@@ -97,9 +113,7 @@ describe('ApproveConfirm', () => {
     expect(`${back} ${approve}`).not.toMatch(/#[0-9a-f]{3,6}|dark:/i);
   });
 
-  it('formats the ref and the target date as the chat sheet does', () => {
-    expect(approveRef('gbl', 12)).toBe('GBL-12');
-    expect(approveRef(null, 12)).toBe('Post 12');
+  it('formats the target date as the chat sheet does', () => {
     expect(approveTargetDate(null, 'UTC')).toBe('');
     expect(approveTargetDate('2026-10-02T06:30:00Z', 'Asia/Kolkata')).toBe('Oct 2');
   });

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Database } from '@srtdio/schemas';
 import {
+  BRIEF_REOPENED_EVENT,
+  BRIEFS_SCOPE,
+  SELF_ACTOR,
+  UNKNOWN_ACTOR,
   activityLine,
   bucketActorNames,
   cardBodyLine,
@@ -1926,5 +1930,110 @@ describe('mapEntry own rows', () => {
     expect(mine.title).toBe('Launch reel');
     expect(mine.fromBriefTitle).toBe('Diwali campaign');
     expect(mapEntry({ ...base, actor_user_id: 'u2' }).own).toBe(false);
+  });
+});
+
+describe('brief reopened rows', () => {
+  type QueryResult = { data: Record<string, unknown>[] | null; error: { message: string } | null };
+  type FakeClient = Parameters<typeof fetchActivityEntries>[0];
+
+  /** One chainable per table that resolves (a thenable) to its canned rows. */
+  function fakeClient(tables: Record<string, Record<string, unknown>[]>): FakeClient {
+    const members = (tables.users ?? []).map((u) => ({ user_id: u.id, role: 'agency' }));
+    const from = (table: string) => {
+      const result: QueryResult = {
+        data: table === 'workspace_members' ? members : (tables[table] ?? []),
+        error: null,
+      };
+      const self: Record<string, unknown> = {};
+      const methods = ['select', 'eq', 'is', 'order', 'limit', 'lt', 'like', 'in', 'not', 'or'];
+      for (const method of methods) self[method] = () => self;
+      self.then = (
+        onfulfilled: (value: QueryResult) => unknown,
+        onrejected?: (reason: unknown) => unknown,
+      ) => Promise.resolve(result).then(onfulfilled, onrejected);
+      return self;
+    };
+    return { from } as unknown as FakeClient;
+  }
+
+  /** brief_reopen's row: event_type 'system', payload.kind 'brief_reopened', scope briefs. */
+  function reopenRow(over: Partial<InboxEntryRow> = {}): InboxEntryRow {
+    return row({
+      event_type: 'system',
+      entity_type: 'brief',
+      entity_id: 'b1',
+      scope: BRIEFS_SCOPE,
+      actor_user_id: 'u-asha',
+      payload: { kind: 'brief_reopened', title: 'Diwali brief', created_by: 'u-creator' },
+      ...over,
+    });
+  }
+
+  it('mapEntry lifts the system row to brief_reopened, in the Briefs scope', () => {
+    const mapped = mapEntry(reopenRow());
+    expect(BRIEF_REOPENED_EVENT).toBe('brief_reopened');
+    expect(mapped.eventType).toBe(BRIEF_REOPENED_EVENT);
+    expect(mapped.entityType).toBe('brief');
+    expect(mapped.entityId).toBe('b1');
+    expect(mapped.scope).toBe(BRIEFS_SCOPE);
+    expect(mapped.title).toBe('Diwali brief');
+    expect(mapped.actorId).toBe('u-asha');
+    expect(filterByState([mapped], 'briefs', Date.now())).toHaveLength(1);
+    expect(entityHref(mapped)).toBe('/briefs/b1');
+  });
+
+  it('a reopen row never takes payload.created_by (the creator) as its actor', () => {
+    expect(mapEntry(reopenRow({ actor_user_id: null })).actorId).toBeNull();
+  });
+
+  it('a system row of another kind is not a reopen', () => {
+    const other = mapEntry(reopenRow({ payload: { kind: 'something_else', title: 'X' } }));
+    expect(other.eventType).toBe('system');
+    const noKind = mapEntry(reopenRow({ payload: {} }));
+    expect(noKind.eventType).toBe('system');
+  });
+
+  it('reads "{name} reopened {title}", with null-safe fallbacks', () => {
+    const base = { eventType: BRIEF_REOPENED_EVENT, entityType: 'brief', entityId: 'b1' };
+    expect(activityLine(item({ ...base, actorName: 'Asha', title: 'Diwali brief' }))).toBe(
+      'Asha reopened Diwali brief',
+    );
+    expect(activityLine(item({ ...base, actorName: null, title: 'Diwali brief' }))).toBe(
+      `${UNKNOWN_ACTOR} reopened Diwali brief`,
+    );
+    expect(activityLine(item({ ...base, actorName: 'Asha', title: null }))).toBe(
+      'Asha reopened a brief',
+    );
+    expect(shortLine(item({ ...base, actorName: 'Asha', title: 'Diwali brief' }))).toBe(
+      'Brief reopened',
+    );
+    const line = activityLine(item({ ...base, actorName: 'Asha', title: 'Diwali brief' }));
+    expect(line).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
+    expect(line).not.toContain('\u2014');
+  });
+
+  it('the reopener reads their own row as "You", like brief_closed', async () => {
+    const client = fakeClient({
+      inbox_entries: [
+        reopenRow({ id: 'own', user_id: 'u-asha', actor_user_id: 'u-asha' }),
+        reopenRow({ id: 'other', user_id: 'u-bo', actor_user_id: 'u-asha' }),
+        reopenRow({ id: 'closed', event_type: 'brief_closed', user_id: 'u-asha' }),
+      ].map((r) => r as unknown as Record<string, unknown>),
+      briefs: [{ id: 'b1', title: 'Diwali brief', number: 3 }],
+      users: [{ id: 'u-asha', display_name: 'Asha Rao', avatar_url: null }],
+    });
+    const res = await fetchActivityEntries(client, 'w1');
+    if (!res.ok) throw new Error('load failed');
+    const byId = new Map(res.data.map((entry) => [entry.id, entry]));
+    const own = byId.get('own');
+    expect(own?.eventType).toBe(BRIEF_REOPENED_EVENT);
+    expect(own?.actorName).toBe(SELF_ACTOR);
+    expect(activityLine(own ?? item({}))).toBe('You reopened Diwali brief');
+    const other = byId.get('other');
+    expect(other?.actorName).toBe('Asha Rao');
+    expect(activityLine(other ?? item({}))).toBe('Asha Rao reopened Diwali brief');
+    // brief_closed follows the same own-row rule.
+    expect(activityLine(byId.get('closed') ?? item({}))).toBe('You closed Diwali brief');
   });
 });

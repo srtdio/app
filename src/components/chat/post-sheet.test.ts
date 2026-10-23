@@ -12,6 +12,7 @@ import {
   dispatchPostChanged,
   durationLabel,
   friendlyCommentError,
+  postSubject,
   reelLabel,
   runStageChange,
   sheetActions,
@@ -87,11 +88,11 @@ describe('sheetActions', () => {
 
 describe('labels and copy', () => {
   it('action labels', () => {
-    expect(actionLabel('approve', 'GBL-12')).toBe('Approve GBL-12');
-    expect(actionLabel('comment', 'GBL-12')).toBe('Comment on this post');
-    expect(actionLabel('open_post', 'GBL-12')).toBe('Open full post');
-    expect(actionLabel('send_review', 'GBL-12')).toBe('Send for review');
-    expect(actionLabel('open_pipeline', 'GBL-12')).toBe('Open in pipeline');
+    expect(actionLabel('approve')).toBe('Approve');
+    expect(actionLabel('comment')).toBe('Comment on this post');
+    expect(actionLabel('open_post')).toBe('Open full post');
+    expect(actionLabel('send_review')).toBe('Send for review');
+    expect(actionLabel('open_pipeline')).toBe('Open in pipeline');
   });
 
   it('approved pill names the approver when known', () => {
@@ -100,24 +101,34 @@ describe('labels and copy', () => {
   });
 
   it('approve confirm names the post, every slide and the target date', () => {
-    const copy = confirmCopy('approve', { ref: 'GBL-12', mediaCount: 5, targetDate: 'Oct 2' });
-    expect(copy.question).toBe('Approve GBL-12, all 5 slides, for Oct 2?');
+    const copy = confirmCopy('approve', {
+      subject: 'Diwali carousel',
+      mediaCount: 5,
+      targetDate: 'Oct 2',
+    });
+    expect(copy.question).toBe('Approve Diwali carousel, all 5 slides, for Oct 2?');
     expect(copy.detail).toBe('This is logged as your approval and the creators are notified.');
-    expect(copy.confirmLabel).toBe('Approve GBL-12');
+    expect(copy.confirmLabel).toBe('Approve');
   });
 
   it('approve confirm drops the slide and date clauses it has no value for', () => {
-    expect(confirmCopy('approve', { ref: 'GBL-12', mediaCount: 1, targetDate: '' }).question).toBe(
-      'Approve GBL-12, 1 slide?',
-    );
-    expect(confirmCopy('approve', { ref: 'GBL-12', mediaCount: 0, targetDate: '' }).question).toBe(
-      'Approve GBL-12?',
-    );
+    expect(
+      confirmCopy('approve', { subject: 'Diwali carousel', mediaCount: 1, targetDate: '' })
+        .question,
+    ).toBe('Approve Diwali carousel, 1 slide?');
+    expect(
+      confirmCopy('approve', { subject: 'Diwali carousel', mediaCount: 0, targetDate: '' })
+        .question,
+    ).toBe('Approve Diwali carousel?');
   });
 
   it('send-for-review confirm has its own copy', () => {
-    const copy = confirmCopy('send_review', { ref: 'GBL-12', mediaCount: 3, targetDate: 'Oct 2' });
-    expect(copy.question).toBe('Send GBL-12 to the approvers for review?');
+    const copy = confirmCopy('send_review', {
+      subject: 'Diwali carousel',
+      mediaCount: 3,
+      targetDate: 'Oct 2',
+    });
+    expect(copy.question).toBe('Send Diwali carousel to the approvers for review?');
     expect(copy.detail).toBe(
       'It leaves draft, and approvers can approve it or comment, or you can approve on their behalf.',
     );
@@ -127,9 +138,39 @@ describe('labels and copy', () => {
   it('confirm targets and toasts', () => {
     expect(confirmTarget('approve')).toBe('approved');
     expect(confirmTarget('send_review')).toBe('review');
-    expect(successToast('approve', 'GBL-12')).toBe('GBL-12 approved');
-    expect(successToast('send_review', 'GBL-12')).toBe('GBL-12 sent for review');
-    expect(commentToast('GBL-12')).toBe('Comment added to GBL-12');
+    expect(successToast('approve')).toBe('Post approved');
+    expect(successToast('send_review')).toBe('Post sent for review');
+    expect(commentToast()).toBe('Comment added');
+  });
+
+  it('postSubject: the trimmed title, or "this post" when there is none', () => {
+    expect(postSubject('Diwali carousel')).toBe('Diwali carousel');
+    expect(postSubject('  Diwali carousel  ')).toBe('Diwali carousel');
+    expect(postSubject('')).toBe('this post');
+    expect(postSubject('   ')).toBe('this post');
+    expect(postSubject(null)).toBe('this post');
+    expect(postSubject(undefined)).toBe('this post');
+    expect(confirmCopy('approve', { subject: postSubject(null), mediaCount: 0, targetDate: '' }))
+      .toMatchObject({ question: 'Approve this post?', confirmLabel: 'Approve' });
+  });
+
+  it('no label, confirm or toast carries a KEY-N code', () => {
+    const code = /\b[A-Z]{2,}-\d+\b/;
+    const lines = [
+      actionLabel('approve'),
+      actionLabel('send_review'),
+      ...Object.values(
+        confirmCopy('approve', { subject: 'Launch', mediaCount: 2, targetDate: '' }),
+      ),
+      ...Object.values(
+        confirmCopy('send_review', { subject: 'Launch', mediaCount: 2, targetDate: '' }),
+      ),
+      successToast('approve'),
+      successToast('send_review'),
+      commentToast(),
+      sheetTitle('carousel'),
+    ];
+    for (const line of lines) expect(line).not.toMatch(code);
   });
 
   it('comment errors map to plain copy', () => {
@@ -140,16 +181,21 @@ describe('labels and copy', () => {
   it('no user-facing copy carries an em-dash', () => {
     const copy = [
       CLIENT_REVIEW_HINT,
-      ...Object.values(confirmCopy('approve', { ref: 'K-1', mediaCount: 2, targetDate: 'Oct 2' })),
-      ...Object.values(confirmCopy('send_review', { ref: 'K-1', mediaCount: 2, targetDate: '' })),
+      ...Object.values(
+        confirmCopy('approve', { subject: 'Launch', mediaCount: 2, targetDate: 'Oct 2' }),
+      ),
+      ...Object.values(
+        confirmCopy('send_review', { subject: 'Launch', mediaCount: 2, targetDate: '' }),
+      ),
       friendlyCommentError('invalid_stage'),
       friendlyCommentError('x'),
     ];
     for (const line of copy) expect(line).not.toContain('—');
   });
 
-  it('title is KEY · format label', () => {
-    expect(sheetTitle('GBL-12', 'carousel')).toMatch(/^GBL-12 · \S/);
+  it('title is the format label alone', () => {
+    expect(sheetTitle('carousel')).toBe('Carousel');
+    expect(sheetTitle('carousel')).not.toContain(' · ');
   });
 
   it('strip counter', () => {
@@ -230,7 +276,6 @@ describe('runStageChange', () => {
     const error = await runStageChange(deps, {
       kind: 'approve',
       postId: 'p1',
-      ref: 'GBL-12',
       traceId: 't-1',
     });
     expect(error).toBeNull();
@@ -242,15 +287,15 @@ describe('runStageChange', () => {
     });
     expect(events).toEqual([{ postId: 'p1' }]);
     expect(deps.close).toHaveBeenCalledTimes(1);
-    expect(deps.toast).toHaveBeenCalledWith('GBL-12 approved');
+    expect(deps.toast).toHaveBeenCalledWith('Post approved');
   });
 
   it('send for review moves to review and toasts its own line', async () => {
     const { deps, events } = fakeDeps({ ok: true, data: 'p1' });
-    await runStageChange(deps, { kind: 'send_review', postId: 'p1', ref: 'GBL-12', traceId: 't' });
+    await runStageChange(deps, { kind: 'send_review', postId: 'p1', traceId: 't' });
     expect(deps.transition).toHaveBeenCalledWith(expect.objectContaining({ toStage: 'review' }));
     expect(events).toEqual([{ postId: 'p1' }]);
-    expect(deps.toast).toHaveBeenCalledWith('GBL-12 sent for review');
+    expect(deps.toast).toHaveBeenCalledWith('Post sent for review');
   });
 
   it('a failure returns the friendly copy and announces nothing', async () => {
@@ -261,7 +306,6 @@ describe('runStageChange', () => {
     const error = await runStageChange(deps, {
       kind: 'approve',
       postId: 'p1',
-      ref: 'GBL-12',
       traceId: 't',
     });
     expect(error).toBe('You do not have permission to make this change.');
@@ -277,7 +321,6 @@ describe('runStageChange', () => {
     const error = await runStageChange(deps, {
       kind: 'approve',
       postId: 'p1',
-      ref: 'K',
       traceId: 't',
     });
     expect(error).toBe('Something went wrong. Please try again.');

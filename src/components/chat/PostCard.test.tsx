@@ -18,7 +18,6 @@ import {
   CARD_SKELETON,
   NotVisibleCard,
   cardTapHandlers,
-  keyTapHandler,
   POST_CARD,
   SHARED_CARD,
   SharedPostCardList,
@@ -96,7 +95,13 @@ function cardRow(id: string, over: Partial<PostCardRow> = {}): PostCardRow {
   };
 }
 
-const CONTEXT: CardContext = { side: 'agency', workspaceKey: 'gbl', timeZone: 'UTC' };
+const CONTEXT: CardContext = { side: 'agency', timeZone: 'UTC' };
+
+/** A KEY-N code anywhere in the visible text (tags stripped). */
+const CODE = /\b[A-Z]{2,}-\d+\b/;
+function visibleText(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ');
+}
 
 function render(
   ids: string[],
@@ -113,14 +118,16 @@ function render(
 }
 
 describe('SharedPostCardList', () => {
-  it('no thumbnail: no media box, the KEY sits inline before the title', () => {
+  it('no thumbnail: no media box, the title alone with no KEY-N code', () => {
     const html = render(['p1'], [cardRow('p1', { title: 'Launch teaser' })]);
     expect(html).not.toContain('data-card-media');
     expect(html).not.toContain('data-frame-ratio');
-    expect(html).toMatch(/data-card-ref=""[^>]*>GBL-12<\/span>Launch teaser/);
+    expect(html).toMatch(/title="Launch teaser">Launch teaser<\/span>/);
+    expect(html).not.toContain('data-card-ref');
+    expect(visibleText(html)).not.toMatch(CODE);
   });
 
-  it('thumbnail: platform-framed media box with KEY, format and slides pills; no inline KEY', () => {
+  it('thumbnail: platform-framed media box with format and slides pills; no KEY pill', () => {
     const html = render(
       ['p1'],
       [cardRow('p1', { thumbnailAssetVersionId: 'v1', firstMedia: IMAGE, mediaCount: 3 })],
@@ -129,8 +136,9 @@ describe('SharedPostCardList', () => {
     // Instagram carousel before any size is known: the 4:5 portrait default.
     expect(html).toContain('data-frame-ratio="0.8"');
     expect(html).toContain('width:min(100%, calc(320px * 0.8))');
-    expect(html).toContain('GBL-12');
+    expect(html).not.toContain('data-card-pill-ref');
     expect(html).not.toContain('data-card-ref');
+    expect(visibleText(html)).not.toMatch(CODE);
     expect(html).toContain('Carousel');
     expect(html).toContain('3 slides');
     expect(html).not.toContain('Reel');
@@ -370,21 +378,20 @@ describe('card long-press: talk about the post', () => {
     vi.useRealTimers();
   });
 
-  it('with onOpenThread the KEY is a button that opens the thread', () => {
+  it('a card carries no KEY button: nothing on it opens the thread', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <SharedPostCardList
           views={sharedPostViews(['p1'], indexPostsById([cardRow('p1')]))}
           {...CONTEXT}
-          onOpenThread={() => {}}
           onTalkAbout={() => {}}
         />
       </MemoryRouter>,
     );
-    expect(html).toMatch(/<button[^>]*data-card-ref=""[^>]*>GBL-12<\/button>/);
-    expect(html).toContain('aria-label="Open the thread about GBL-12"');
-    // Without it (a card that heads no thread) the KEY stays plain text.
-    expect(render(['p1'], [cardRow('p1')])).not.toContain('Open the thread');
+    expect(html).not.toContain('data-card-ref');
+    expect(html).not.toContain('Open the thread');
+    expect(html).not.toMatch(/<button\b/);
+    expect(visibleText(html)).not.toMatch(CODE);
   });
 });
 
@@ -395,7 +402,7 @@ describe('post sheet: Talk about', () => {
       <PostSheetActions
         set={sheetActions('agency', post, 'UTC')}
         mode={{ kind: 'actions' }}
-        refLabel="GBL-12"
+        subject="Post p1"
         approverName={null}
         mediaCount={0}
         targetDate=""
@@ -409,52 +416,16 @@ describe('post sheet: Talk about', () => {
     );
   }
 
-  it('shows a soft "Talk about <KEY>" button when the thread offers it', () => {
-    expect(talkAboutLabel('GBL-12')).toBe('Talk about GBL-12');
+  it('shows a soft "Talk about this post" button when the thread offers it', () => {
+    expect(talkAboutLabel()).toBe('Talk about this post');
     expect(ACTION_SOFT).toContain('bg-accent-soft');
     const html = actions(() => {});
-    expect(html).toMatch(/data-sheet-talk-about=""[^>]*>Talk about GBL-12</);
+    expect(html).toMatch(/data-sheet-talk-about=""[^>]*>Talk about this post</);
     expect(html).toContain('bg-accent-soft text-accent');
   });
 
   it('is absent without the hook', () => {
     expect(actions()).not.toContain('Talk about');
-  });
-});
-
-describe('F9: a hold that starts on the KEY', () => {
-  it('talks about the post once, swallows the release, and the next card tap opens the sheet', () => {
-    vi.useFakeTimers();
-    const onTalkAbout = vi.fn();
-    const openSheet = vi.fn();
-    const onOpenThread = vi.fn();
-    // The KEY sits inside the card: its pointer events reach the card's hold.
-    const hold = createLongPressController({ onLongPress: onTalkAbout, ...CARD_HOLD });
-    const card = cardTapHandlers(openSheet, hold.consumeClickSuppression);
-    const key = keyTapHandler(onOpenThread, hold.consumeClickSuppression);
-    const stop = { stopPropagation: vi.fn() };
-
-    hold.handlers.onPointerDown({ clientX: 0, clientY: 0, pointerType: 'touch' });
-    vi.advanceTimersByTime(450);
-    hold.handlers.onPointerUp();
-    key(stop); // the release click lands on the KEY
-    expect(onTalkAbout).toHaveBeenCalledTimes(1);
-    expect(onOpenThread).not.toHaveBeenCalled();
-    expect(openSheet).not.toHaveBeenCalled();
-    expect(stop.stopPropagation).toHaveBeenCalled();
-
-    // No flag left behind: a plain tap on the card opens the sheet.
-    hold.handlers.onPointerDown({ clientX: 0, clientY: 0, pointerType: 'touch' });
-    vi.advanceTimersByTime(100);
-    hold.handlers.onPointerUp();
-    card.onClick();
-    expect(openSheet).toHaveBeenCalledTimes(1);
-
-    // And a plain tap on the KEY opens the thread.
-    key(stop);
-    expect(onOpenThread).toHaveBeenCalledTimes(1);
-    expect(onTalkAbout).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
   });
 });
 
@@ -540,7 +511,8 @@ describe('chat post card platform frame', () => {
         ],
       );
       expect(html).not.toContain('data-card-media');
-      expect(html).toMatch(/data-card-ref=""[^>]*>GBL-12<\/span>/);
+      expect(html).not.toContain('data-card-ref');
+      expect(visibleText(html)).not.toMatch(CODE);
     }
   });
 });

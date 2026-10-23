@@ -646,6 +646,8 @@ describe('ActivityCard names', () => {
       [{ eventType: 'checkpoint_reopened' }, 'Dev reopened a point'],
       [{ eventType: 'brief_created', entityType: 'brief' }, '>Dev<'],
       [{ eventType: 'brief_closed', entityType: 'brief' }, '>Dev<'],
+      [{ eventType: 'brief_reopened', entityType: 'brief' }, '>Dev<'],
+      [{ eventType: 'brief_reopened', entityType: 'brief' }, 'Brief reopened'],
       [{ eventType: 'asset_uploaded', entityType: null, entityId: null }, '>Dev<'],
     ];
     for (const [over, text] of cases) {

@@ -7,7 +7,7 @@ import {
   PostSheetDetails,
   PostSheetMedia,
   STRIP_BOX,
-  sheetRef,
+  talkAboutLabel,
   type PostSheetActionsProps,
   type SheetGallery,
 } from '@/components/chat/PostSheet';
@@ -44,7 +44,7 @@ function actions(
     <PostSheetActions
       set={sheetActions(side, post, 'UTC')}
       mode={{ kind: 'actions' }}
-      refLabel="GBL-12"
+      subject="Diwali launch"
       approverName={null}
       mediaCount={post.mediaCount}
       targetDate="Oct 2"
@@ -67,7 +67,7 @@ describe('PostSheetActions by side and stage', () => {
   it('client in review: approve (good), comment, open full post, and the hint', () => {
     const html = actions('client', row({ stage: 'review' }));
     expect(actionIds(html)).toEqual(['approve', 'comment', 'open_post']);
-    expect(html).toContain('Approve GBL-12');
+    expect(html).toContain('>Approve<');
     expect(html).toContain('Comment on this post');
     expect(html).toContain('Open full post');
     expect(html).toContain('One post at a time. Comments keep it in review.');
@@ -97,7 +97,7 @@ describe('PostSheetActions by side and stage', () => {
   it('agency in review: approve (good), open in pipeline and the waiting hint', () => {
     const html = actions('agency', row({ stage: 'review' }));
     expect(actionIds(html)).toEqual(['approve', 'open_pipeline']);
-    expect(html).toContain('Approve GBL-12');
+    expect(html).toContain('>Approve<');
     expect(html).toContain('Waiting on approvers since Sep 20');
     expect(html).toContain('bg-good');
   });
@@ -120,7 +120,7 @@ describe('PostSheetActions by side and stage', () => {
       mediaCount: 5,
       onBehalf: true,
     });
-    expect(html).toContain('Approve GBL-12, all 5 slides, for Oct 2?');
+    expect(html).toContain('Approve Diwali launch, all 5 slides, for Oct 2?');
     expect(html).toContain('You are approving on behalf of the approvers.');
   });
 
@@ -163,10 +163,10 @@ describe('PostSheetActions confirm and error', () => {
       mediaCount: 5,
     });
     expect(html).toContain('data-sheet-confirm="approve"');
-    expect(html).toContain('Approve GBL-12, all 5 slides, for Oct 2?');
+    expect(html).toContain('Approve Diwali launch, all 5 slides, for Oct 2?');
     expect(html).toContain('This is logged as your approval and the creators are notified.');
     expect(html).toContain('>Back<');
-    expect(html).toContain('>Approve GBL-12<');
+    expect(html).toContain('>Approve<');
     expect(actionIds(html)).toEqual([]);
     expect(html).not.toContain('Comment on this post');
   });
@@ -176,7 +176,7 @@ describe('PostSheetActions confirm and error', () => {
       mode: { kind: 'confirm', confirm: 'send_review' },
     });
     expect(html).toContain('data-sheet-confirm="send_review"');
-    expect(html).toContain('Send GBL-12 to the approvers for review?');
+    expect(html).toContain('Send Diwali launch to the approvers for review?');
   });
 
   it('shows the mapped error copy in the confirm block', () => {
@@ -354,9 +354,32 @@ describe('PostSheetDetails', () => {
   });
 });
 
-describe('sheetRef', () => {
-  it('KEY-N once the key resolves, a plain fallback before', () => {
-    expect(sheetRef('GBL', 12)).toMatch(/^GBL-?12$/);
-    expect(sheetRef(null, 12)).toBe('Post 12');
+describe('no KEY-N codes in the sheet', () => {
+  const CODE = /\b[A-Z]{2,}-\d+\b/;
+
+  it('talk about names this post, never a code', () => {
+    expect(talkAboutLabel()).toBe('Talk about this post');
+  });
+
+  it('actions, confirms and the approved pill render no KEY-N code', () => {
+    const htmls = [
+      actions('client', row({ stage: 'review' })),
+      actions('agency', row({ stage: 'review' }), { onTalkAbout: vi.fn() }),
+      actions('agency', row({ stage: 'draft' })),
+      actions('client', row({ stage: 'approved' }), { approverName: 'Asha' }),
+      actions('client', row({ stage: 'review', mediaCount: 3 }), {
+        mode: { kind: 'confirm', confirm: 'approve' },
+        mediaCount: 3,
+      }),
+      actions('agency', row({ stage: 'draft' }), {
+        mode: { kind: 'confirm', confirm: 'send_review' },
+      }),
+    ];
+    for (const html of htmls) expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(CODE);
+  });
+
+  it('the talk-about button reads "Talk about this post"', () => {
+    const html = actions('agency', row({ stage: 'review' }), { onTalkAbout: vi.fn() });
+    expect(html).toContain('Talk about this post');
   });
 });

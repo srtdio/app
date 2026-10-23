@@ -91,7 +91,6 @@ function isHead(read: Read): boolean {
 const ctx: PostRowContext = {
   selected: [],
   onToggle: () => undefined,
-  workspaceKey: 'GBL',
   timeZone: 'UTC',
 };
 
@@ -310,7 +309,9 @@ describe('sections render', () => {
     expect(html).not.toContain('Drafts');
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html).toContain('GBL-1');
+    // Rows name the post by title only, never a KEY-N code.
+    expect(html).not.toContain('GBL-1');
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
     expect(html).toContain('Post 1');
     expect(html).toContain('212 older approved posts · type a word or number to find one');
   });

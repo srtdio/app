@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   assetDelete,
   assetDeleteMany,
+  briefReopen,
   memberRemove,
   planDraftRows,
   planItemMove,
@@ -55,6 +56,45 @@ describe('assetDelete', () => {
   it('maps an unexpected transport error to code "unknown"', async () => {
     const { client } = makeClient({ data: null, error: { message: 'network down' } });
     const result = await assetDelete(client, args);
+    expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
+  });
+});
+
+describe('briefReopen', () => {
+  const args = {
+    p_brief_id: '11111111-1111-1111-1111-111111111111',
+    p_trace_id: '22222222-2222-2222-2222-222222222222',
+  };
+
+  it('returns ok and forwards the proc name + args (with p_trace_id) unchanged', async () => {
+    const { client, rpc } = makeClient({ data: null, error: null });
+    const result = await briefReopen(client, args);
+    expect(result).toEqual({ ok: true, data: null });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('brief_reopen', args);
+  });
+
+  it('maps the invalid_payload exception (not closed, or missing) to a domain error', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'invalid_payload' } });
+    const result = await briefReopen(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'invalid_payload', message: 'invalid_payload' },
+    });
+  });
+
+  it('maps the workspace_member_only exception to a domain error', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'workspace_member_only' } });
+    const result = await briefReopen(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'workspace_member_only', message: 'workspace_member_only' },
+    });
+  });
+
+  it('maps an unexpected transport error to code "unknown"', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'network down' } });
+    const result = await briefReopen(client, args);
     expect(result).toEqual({ ok: false, error: { code: 'unknown', message: 'network down' } });
   });
 });

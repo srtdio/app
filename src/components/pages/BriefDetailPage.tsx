@@ -401,7 +401,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     };
   }, [briefId]);
 
-  // Close behind a 7s Undo: the badge flips to Closed at once, Undo puts it
+  // Close behind a 4s Undo: the badge flips to Closed at once, Undo puts it
   // back, and brief_close runs only once the window passes. A failed close
   // restores Open and says so in plain words.
   function closeWithUndo(): void {

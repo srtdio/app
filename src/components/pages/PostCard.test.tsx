@@ -249,3 +249,29 @@ describe('W4 PostCard fixes', () => {
     expect(title).not.toContain('truncate');
   });
 });
+
+describe('pipeline card shows no KEY-N code', () => {
+  it('names the post by title only, with the workspace key known, in every stage and format', () => {
+    const { cache } = makeCache(null);
+    for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected']) {
+      for (const format of ['text', 'carousel', 'reel']) {
+        const out = renderToStaticMarkup(
+          <MemoryRouter>
+            <PostCard
+              post={makePost({ number: 12, stage, format, title: 'Launch teaser' })}
+              cache={cache}
+              presignEnabled={false}
+              workspaceKey="gbl"
+              showStage
+              onMove={() => {}}
+            />
+          </MemoryRouter>,
+        );
+        expect(out).toContain('Launch teaser');
+        expect(out).not.toContain('GBL-12');
+        expect(out.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
+        expect(out).not.toMatch(/aria-label="[^"]*\b[A-Z]{2,}-\d+\b/);
+      }
+    }
+  });
+});

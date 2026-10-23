@@ -212,12 +212,12 @@ function openPost(over: Partial<OpenPostRow> = {}): OpenPostRow {
 }
 
 describe('Open tab posts section', () => {
-  it('row lines: KEY · title, then format · target date · where it is', () => {
-    expect(openPostLines(openPost(), 'gbl', true, 'UTC')).toEqual({
-      title: 'GBL-12 · Launch teaser',
+  it('row lines: the title (no KEY-N code), then format · target date · where it is', () => {
+    expect(openPostLines(openPost(), true, 'UTC')).toEqual({
+      title: 'Launch teaser',
       meta: 'Carousel · Oct 2 · in this chat',
     });
-    expect(openPostLines(openPost({ target_date: null }), null, false, 'UTC')).toEqual({
+    expect(openPostLines(openPost({ target_date: null }), false, 'UTC')).toEqual({
       title: 'Launch teaser',
       meta: 'Carousel · not shared here yet',
     });
@@ -225,15 +225,14 @@ describe('Open tab posts section', () => {
 
   it('P6: a timestamptz target date renders in the workspace zone (never blank)', () => {
     const post = openPost({ target_date: '2026-10-02T20:30:00+00:00' });
-    expect(openPostLines(post, 'gbl', true, 'UTC').meta).toBe('Carousel · Oct 2 · in this chat');
+    expect(openPostLines(post, true, 'UTC').meta).toBe('Carousel · Oct 2 · in this chat');
     // 20:30 UTC is already Oct 3 in Kolkata.
-    expect(openPostLines(post, 'gbl', true, 'Asia/Kolkata').meta).toBe(
+    expect(openPostLines(post, true, 'Asia/Kolkata').meta).toBe(
       'Carousel · Oct 3 · in this chat',
     );
     const html = renderToStaticMarkup(
       <OpenPostSheetRow
         post={post}
-        workspaceKey="gbl"
         shared={false}
         timeZone="UTC"
         onJump={() => {}}
@@ -248,7 +247,6 @@ describe('Open tab posts section', () => {
     const onShare = vi.fn();
     const shared = OpenPostSheetRow({
       post: openPost(),
-      workspaceKey: 'gbl',
       shared: true,
       timeZone: 'UTC',
       onJump,
@@ -262,7 +260,6 @@ describe('Open tab posts section', () => {
 
     const other = OpenPostSheetRow({
       post: openPost(),
-      workspaceKey: 'gbl',
       shared: false,
       timeZone: 'UTC',
       onJump,
@@ -275,11 +272,10 @@ describe('Open tab posts section', () => {
     expect(onShare).toHaveBeenCalledTimes(1);
   });
 
-  it('rows are 64px with a 44px thumb; no cover shows the KEY monogram', () => {
+  it('rows are 64px with a 44px thumb; no cover shows a post glyph, never a KEY monogram', () => {
     const html = renderToStaticMarkup(
       <OpenPostSheetRow
         post={openPost()}
-        workspaceKey="gbl"
         shared={false}
         timeZone="UTC"
         onJump={() => {}}
@@ -287,7 +283,9 @@ describe('Open tab posts section', () => {
       />,
     );
     expect(html).toContain('h-16');
-    expect(html).toMatch(/data-open-post-thumb=""[^>]*h-11 w-11[^>]*>GBL</);
+    expect(html).toMatch(/data-open-post-thumb=""[^>]*h-11 w-11[^>]*><svg/);
+    expect(html).not.toMatch(/data-open-post-thumb=""[^>]*>GBL/);
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
   it('lists under the side heading, marking which posts are shared here', () => {
@@ -297,7 +295,6 @@ describe('Open tab posts section', () => {
       <OpenPostsList
         heading="Posts waiting on you"
         posts={[openPost(), openPost({ id: 'p2', number: 13, title: 'Reel cut' })]}
-        workspaceKey="gbl"
         sharedIds={new Set(['p2'])}
         timeZone="UTC"
         onJump={onJump}
@@ -313,7 +310,6 @@ describe('Open tab posts section', () => {
   it('renders nothing with no posts waiting or before the read lands', () => {
     const base = {
       heading: 'x',
-      workspaceKey: 'gbl',
       sharedIds: new Set<string>(),
       timeZone: 'UTC',
       onJump: vi.fn(),

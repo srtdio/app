@@ -292,13 +292,12 @@ describe('E11 + T5: card footer and the failed card', () => {
         views={[view]}
         side="unknown"
         sideKnown={false}
-        workspaceKey="gbl"
         timeZone="UTC"
       />,
     );
     expect(unknown).not.toContain('data-card-footer');
     const known = renderToStaticMarkup(
-      <SharedPostCardList views={[view]} side="client" workspaceKey="gbl" timeZone="UTC" />,
+      <SharedPostCardList views={[view]} side="client" timeZone="UTC" />,
     );
     expect(known).toContain('data-card-footer');
   });
@@ -311,7 +310,6 @@ describe('E11 + T5: card footer and the failed card', () => {
         failed={['p1']}
         onRetry={onRetry}
         side="client"
-        workspaceKey="gbl"
         timeZone="UTC"
       />,
     );

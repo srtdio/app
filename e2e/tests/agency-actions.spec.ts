@@ -15,7 +15,7 @@ function expectNoBlocked(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 }
 
-/** Give the fixture workspace a key so refs read KEY-N (spec-local world edit). */
+/** Give the fixture workspace a key, so a regression would print KEY-N (spec-local world edit). */
 function withKey(network: HarnessNetwork): void {
   const ws = network.world.tables.workspaces?.[0];
   if (ws !== undefined) ws.key = KEY;
@@ -39,7 +39,9 @@ test('PCS: agency approves with the on-behalf line in the confirm', async ({ pag
 
   const line = page.locator('[data-approve-on-behalf]');
   await expect(line).toHaveText('You are approving on behalf of Harness Studio.');
-  await expect(page.locator('[data-approve-confirm-button]')).toHaveText('Approve HS-101');
+  // Codes are not shown: the confirm button reads "Approve" alone.
+  await expect(page.locator('[data-approve-confirm-button]')).toHaveText('Approve');
+  await expect(page.getByText('HS-101', { exact: false })).toHaveCount(0);
   // Back sends nothing.
   await page.locator('[data-approve-back]').click();
   await expect(line).toHaveCount(0);

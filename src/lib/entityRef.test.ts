@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parseEntityRef, formatEntityRef, entityUrlPath } from '@/lib/entityRef';
+import * as entityRef from '@/lib/entityRef';
+
+const { parseEntityRef, entityUrlPath } = entityRef;
 
 describe('parseEntityRef', () => {
   it('parses a valid reference and uppercases the key', () => {
@@ -49,10 +51,9 @@ describe('parseEntityRef', () => {
   });
 });
 
-describe('formatEntityRef', () => {
-  it('renders KEY-N uppercase with no leading zeros', () => {
-    expect(formatEntityRef('gbl', 142)).toBe('GBL-142');
-    expect(formatEntityRef('CV', 7)).toBe('CV-7');
+describe('no display formatter', () => {
+  it('exports no KEY-N display formatter (codes are not shown in the UI)', () => {
+    expect('formatEntityRef' in entityRef).toBe(false);
   });
 });
 

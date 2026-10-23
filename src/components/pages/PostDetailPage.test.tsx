@@ -85,7 +85,6 @@ function sheet(
   return PcsApproveConfirm({
     gate: h.gate,
     gateState: h.state(),
-    refLabel: 'GBL-4',
     format: 'carousel',
     title: 'Diwali teaser',
     mediaCount: 3,
@@ -173,12 +172,23 @@ describe('PCS approve confirm', () => {
   it('T6: slide count from the loaded gallery and the target date when set; omitted when not', () => {
     const h = harness();
     press(rail(h, 'review', 'client'), 'Approve');
-    expect(question(confirmOf(sheet(h)))).toBe('Approve GBL-4, all 3 slides, for Oct 2?');
-    expect(question(confirmOf(sheet(h, { mediaCount: null })))).toBe('Approve GBL-4, for Oct 2?');
-    expect(question(confirmOf(sheet(h, { mediaCount: null, targetDate: '' })))).toBe(
-      'Approve GBL-4?',
+    expect(question(confirmOf(sheet(h)))).toBe('Approve Diwali teaser, all 3 slides, for Oct 2?');
+    expect(question(confirmOf(sheet(h, { mediaCount: null })))).toBe(
+      'Approve Diwali teaser, for Oct 2?',
     );
-    expect((sheet(h).props as { title: string }).title).toBe('GBL-4 · Carousel');
+    expect(question(confirmOf(sheet(h, { mediaCount: null, targetDate: '' })))).toBe(
+      'Approve Diwali teaser?',
+    );
+    expect((sheet(h).props as { title: string }).title).toBe('Carousel');
+  });
+
+  it('the confirm names the post by title, never a KEY-N code', () => {
+    const h = harness();
+    press(rail(h, 'review', 'client'), 'Approve');
+    const confirm = confirmOf(sheet(h));
+    expect(confirm.postTitle).toBe('Diwali teaser');
+    expect(question(confirm)).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
+    expect((sheet(h).props as { title: string }).title).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });
 
   it('T7: agency approves with the same two-step confirm plus the on-behalf line', () => {

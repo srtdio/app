@@ -48,7 +48,6 @@ function sheet(overrides: Partial<MoveSheetViewProps>): ReactElement {
     onClose: () => {},
     gate,
     gateState: GATE_IDLE,
-    refLabel: 'GBL-1',
     targetDate: '',
     role: 'owner',
     ...overrides,

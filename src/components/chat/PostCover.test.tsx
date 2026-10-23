@@ -40,7 +40,6 @@ describe('PostRow cover', () => {
   const ctx: PostRowContext = {
     selected: [],
     onToggle: () => undefined,
-    workspaceKey: 'GBL',
     timeZone: 'Asia/Kolkata',
   };
   const post = {

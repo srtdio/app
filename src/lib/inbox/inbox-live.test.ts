@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  REOPEN_VERB,
+  actionKey,
   eventLabel,
   eventVerb,
   stageChangeLabel,
@@ -560,5 +562,59 @@ describe('activityToneWanted in a background tab', () => {
     const { activityToneWanted } = await import('@/lib/inbox/inbox-live');
     expect(activityToneWanted(1, '/notifications', true)).toBe(true);
     expect(activityToneWanted(0, '/notifications', true)).toBe(false);
+  });
+});
+
+describe('brief reopened live toast', () => {
+  const reopened = (over: Partial<NonNullable<EnrichedNew['lead']>> = {}): EnrichedNew['lead'] => ({
+    eventType: 'brief_reopened',
+    actorName: 'Asha Rao',
+    actorAvatarUrl: null,
+    body: null,
+    title: 'Diwali brief',
+    mentionNames: new Map(),
+    verb: eventVerb({ eventType: 'brief_reopened' }),
+    ...over,
+  });
+
+  it('the verb is "reopened" and it takes the title directly', () => {
+    expect(REOPEN_VERB).toBe('reopened');
+    expect(eventVerb({ eventType: 'brief_reopened' })).toBe(REOPEN_VERB);
+    expect(actionKey({ eventType: 'brief_reopened' })).toBe('brief_reopened');
+  });
+
+  it('one reopen reads "{name} reopened {title}", never "reopened on"', () => {
+    const spec = toastFromEnriched({ count: 1, lead: reopened() });
+    expect(spec?.title).toBe('Asha Rao reopened Diwali brief');
+    expect(spec?.title).not.toContain('reopened on');
+    expect(spec?.actorName).toBe('Asha Rao');
+  });
+
+  it('no title: "{name} reopened"', () => {
+    expect(toastFromEnriched({ count: 1, lead: reopened({ title: null }) })?.title).toBe(
+      'Asha Rao reopened',
+    );
+    expect(toastFromEnriched({ count: 1, lead: reopened({ title: '  ' }) })?.title).toBe(
+      'Asha Rao reopened',
+    );
+  });
+
+  it('no actor name: the neutral "Brief reopened" label, the title as line 2', () => {
+    expect(eventLabel('brief_reopened')).toBe('Brief reopened');
+    const spec = toastFromEnriched({ count: 1, lead: reopened({ actorName: null }) });
+    expect(spec?.title).toBe('Brief reopened');
+    expect(spec?.description).toBe('Diwali brief');
+  });
+
+  it('grouped reopens keep the "reopened {title}" grammar', () => {
+    const up = (actorId: string): ToastUpdate => ({
+      actorId,
+      entityKey: 'brief:b1',
+      action: 'brief_reopened',
+    });
+    const grouped = (updates: ToastUpdate[]) =>
+      toastFromEnriched({ count: 2, lead: reopened(), updates })?.title;
+    expect(grouped([up('a'), up('a')])).toBe('Asha Rao reopened Diwali brief 2 times');
+    expect(grouped([up('a'), up('b')])).toBe('Asha Rao and 1 other reopened Diwali brief');
   });
 });

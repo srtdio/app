@@ -67,11 +67,10 @@ function view(
 ): {
   gate: ReturnType<typeof createApproveGate>;
   gateState: GateState;
-  refLabel: string;
   targetDate: string;
   role: string | null;
 } {
-  return { gate: h.gate, gateState: h.state(), refLabel: 'GBL-1', targetDate: 'Oct 2', role };
+  return { gate: h.gate, gateState: h.state(), targetDate: 'Oct 2', role };
 }
 
 function isElement(node: ReactNode): node is ReactElement {
@@ -306,16 +305,17 @@ describe('MoveSheet approve confirm', () => {
     }
   });
 
-  it('T6: the confirm names KEY-N and the target date when set, and omits slides', () => {
+  it('T6: the confirm names the post title and the target date when set, and omits slides', () => {
     const h = harness();
     const dated = { ...makePost('review'), target_date: '2026-10-02T06:30:00Z' };
     click(row(render(h, dated), 'approved'));
     const withDate = confirmOf(render(h, dated));
-    expect(withDate).toMatchObject({ refLabel: 'GBL-1', mediaCount: null, targetDate: 'Oct 2' });
-    expect(confirmText(withDate as ConfirmProps)).toContain('Approve GBL-1, for Oct 2?');
+    expect(withDate).toMatchObject({ postTitle: 'A post', mediaCount: null, targetDate: 'Oct 2' });
+    expect(confirmText(withDate as ConfirmProps)).toContain('Approve A post, for Oct 2?');
+    expect(confirmText(withDate as ConfirmProps).join(' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
     const undated = confirmOf(render(h, makePost('review')));
     expect(undated?.targetDate).toBe('');
-    expect(confirmText(undated as ConfirmProps)).toContain('Approve GBL-1?');
+    expect(confirmText(undated as ConfirmProps)).toContain('Approve A post?');
   });
 });
 
