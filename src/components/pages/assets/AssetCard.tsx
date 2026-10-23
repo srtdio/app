@@ -80,13 +80,13 @@ export function AssetCard({
           <span
             aria-hidden="true"
             className={cn(
-              'absolute left-3 top-3 z-10 flex h-5 w-5 items-center justify-center rounded',
+              'absolute left-3.5 top-3.5 z-10 flex h-4 w-4 items-center justify-center rounded',
               selected
                 ? 'bg-accent text-white'
-                : 'border-2 border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]',
+                : 'border-[1.5px] border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]',
             )}
           >
-            {selected ? <IconCheck size={12} /> : null}
+            {selected ? <IconCheck size={11} /> : null}
           </span>
         ) : null}
 
@@ -117,9 +117,11 @@ export function AssetCard({
 }
 
 /**
- * The visible ⋯ on a card: a 44px hit area in the top-right corner holding a
- * small chip, a sibling of the card button (buttons never nest). Opens the same
- * menu as a long-press. Shared by the folder card.
+ * The visible ⋯ on a card: a 44px hit area in the card's bottom-right corner,
+ * on the size line, a sibling of the card button (buttons never nest). The bare
+ * dots line up with the right edge of the kind label above and sit centred on
+ * the size line; the hit area reaches 2px past the card edge so the card's own
+ * spacing stays even. Opens the same menu as a long-press.
  */
 export function CardMenuButton({ name, onPress }: { name: string; onPress: () => void }) {
   return (
@@ -128,18 +130,16 @@ export function CardMenuButton({ name, onPress }: { name: string; onPress: () =>
       aria-label={`More actions for ${name}`}
       data-card-menu=""
       onClick={onPress}
-      className="absolute right-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="absolute -bottom-0.5 -right-0.5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-xl text-fg-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-panel text-fg shadow-sm">
-        <IconEllipsis size={16} />
-      </span>
+      <IconEllipsis size={18} />
     </button>
   );
 }
 
 /**
  * The round select box on a card: a 44px hit area in the top-left corner
- * holding an empty 20px square, a sibling of the card button (buttons never
+ * holding an empty 16px square, a sibling of the card button (buttons never
  * nest). One tap starts selecting with this card ticked. The square sits in the
  * same spot as the select-mode tick, so the tap lands where the tick appears.
  */
@@ -152,7 +152,7 @@ export function CardSelectBox({ name, onPress }: { name: string; onPress: () => 
       onClick={onPress}
       className="absolute left-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <span className="h-5 w-5 rounded border-2 border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]" />
+      <span className="h-4 w-4 rounded border-[1.5px] border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]" />
     </button>
   );
 }
@@ -180,19 +180,23 @@ function AssetMedia({
         alt={name}
       />
 
-      <div className="flex items-start gap-2 border-t border-border px-2.5 py-2">
-        <span className="line-clamp-2 flex-1 break-words text-xs font-medium" title={name}>
-          {name}
-        </span>
-        {item.kind === 'image' ? (
-          <span className="shrink-0 rounded bg-panel-2 px-1.5 py-0.5 text-[10px] font-medium text-fg-3">
-            {mimeBadge(item.mimeType)}
+      <div className="flex flex-col gap-1.5 border-t border-border p-2.5">
+        <div className="flex items-start gap-2">
+          <span className="line-clamp-2 flex-1 break-words text-xs font-medium" title={name}>
+            {name}
           </span>
-        ) : null}
-      </div>
-
-      <div className="px-2.5 pb-2 text-[11px] tabular-nums text-fg-3">
-        {item.kind === 'link' ? linkDomain(item.externalUrl) : humanizeSize(item.sizeBytes)}
+          {item.kind === 'image' ? (
+            <span className="shrink-0 rounded bg-panel-2 px-1.5 py-px text-[10px] font-medium leading-[14px] text-fg-3">
+              {mimeBadge(item.mimeType)}
+            </span>
+          ) : null}
+        </div>
+        {/* One 20px line, room on the right for the card's ⋯. */}
+        <div className="flex h-5 items-center pr-8 text-[11px] tabular-nums text-fg-3">
+          <span className="truncate">
+            {item.kind === 'link' ? linkDomain(item.externalUrl) : humanizeSize(item.sizeBytes)}
+          </span>
+        </div>
       </div>
     </>
   );

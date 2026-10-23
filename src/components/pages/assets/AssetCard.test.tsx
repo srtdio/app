@@ -165,7 +165,8 @@ describe('AssetCard select mode', () => {
   it('shows an empty square and no check when not selected', () => {
     const out = renderSelect(false);
     expect(out).toContain('aria-pressed="false"');
-    expect(out).toContain('border-2 border-white');
+    expect(out).toContain('h-4 w-4');
+    expect(out).toContain('border-[1.5px] border-white');
     expect(out).toContain('bg-black/15');
   });
 
@@ -218,5 +219,39 @@ describe('AssetCard select box', () => {
   it('hides the box when onStartSelect is absent or already selecting', () => {
     expect(renderBox(false)).not.toContain('data-card-select');
     expect(renderBox(true, true)).not.toContain('data-card-select');
+  });
+});
+
+describe('AssetCard ⋯ at the bottom, smaller select box', () => {
+  it('puts the ⋯ in the bottom-right corner as bare dots, with a 44px hit area', () => {
+    const { cache } = makeCache(null);
+    const out = renderToStaticMarkup(
+      <AssetCard
+        item={makeAsset({ kind: 'image', filename: 'photo.png', mimeType: 'image/png' })}
+        cache={cache}
+        presignEnabled={false}
+        onOpen={vi.fn()}
+        onLongPress={vi.fn()}
+      />,
+    );
+    expect(out).toMatch(/data-card-menu=""[^>]*-bottom-0\.5 -right-0\.5[^>]*h-11 w-11/);
+    expect(out).not.toMatch(/data-card-menu=""[^>]*top-0/);
+    // The size line keeps room on the right so text never runs under the ⋯.
+    expect(out).toContain('flex h-5 items-center pr-8');
+  });
+
+  it('draws a 16px select box', () => {
+    const { cache } = makeCache(null);
+    const out = renderToStaticMarkup(
+      <AssetCard
+        item={makeAsset({ filename: 'report.pdf' })}
+        cache={cache}
+        presignEnabled={false}
+        onOpen={vi.fn()}
+        onLongPress={vi.fn()}
+        onStartSelect={vi.fn()}
+      />,
+    );
+    expect(out).toMatch(/data-card-select=""[^]*h-4 w-4 rounded border-\[1\.5px\]/);
   });
 });
