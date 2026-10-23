@@ -13,6 +13,7 @@ import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import type { IconProps } from '@/components/ui/icons';
@@ -105,9 +106,10 @@ export function formatDisplay(value: string): string {
 }
 
 /**
- * Day cell buttons for the calendar grid. The selected day uses the accent fill;
- * today (when not selected) carries an accent ring. Pure (no hooks) so picking a
- * day and the markers are unit-testable.
+ * Day cell buttons for the calendar grid: 44x44 touch targets. The selected day
+ * uses the accent fill; today (when not selected) carries an accent ring. Days
+ * before minISO (when given) are greyed and cannot be picked. Pure (no hooks) so
+ * picking a day and the markers are unit-testable.
  */
 export function dayCells(
   year: number,
@@ -115,23 +117,33 @@ export function dayCells(
   selectedISO: string,
   todayISO: string,
   onPick: (iso: string) => void,
+  minISO?: string,
 ): ReactElement[] {
   return monthGrid(year, monthIndex).map((day, index) => {
     if (day === null) return <span key={`blank-${index}`} aria-hidden="true" />;
     const iso = toISO(year, monthIndex, day);
     const selected = iso === selectedISO;
     const isToday = iso === todayISO;
+    const past = minISO !== undefined && minISO !== '' && iso < minISO;
     return (
       <button
         key={iso}
         type="button"
         role="gridcell"
         aria-selected={selected}
-        onClick={() => onPick(iso)}
+        disabled={past}
+        aria-disabled={past ? 'true' : undefined}
+        onClick={() => {
+          if (!past) onPick(iso);
+        }}
         className={cn(
-          'flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors',
-          selected ? 'bg-accent text-accent-fg' : 'text-fg hover:bg-panel-2',
-          !selected && isToday ? 'border border-accent-line' : '',
+          'flex h-11 w-11 items-center justify-center rounded-md text-sm tabular-nums transition-colors',
+          past
+            ? 'cursor-default text-fg-3 opacity-50'
+            : selected
+              ? 'bg-accent text-accent-fg'
+              : 'text-fg hover:bg-panel-2',
+          !selected && !past && isToday ? 'border border-accent-line' : '',
         )}
       >
         {day}
@@ -147,6 +159,10 @@ interface DatePickerProps {
   placeholder?: string;
   /** Accessible label for the trigger. */
   label?: string;
+  /** Days before today are greyed and cannot be picked. */
+  disablePast?: boolean;
+  /** Show the "Clear date" and "Done" buttons under the grid. */
+  actions?: boolean;
 }
 
 export function DatePicker({
@@ -154,6 +170,8 @@ export function DatePicker({
   onChange,
   placeholder = 'Select a date',
   label,
+  disablePast = false,
+  actions = false,
 }: DatePickerProps): ReactElement {
   const [open, setOpen] = useState(false);
   const now = new Date();
@@ -249,14 +267,37 @@ export function DatePicker({
                     <IconChevronRight size={16} />
                   </IconButton>
                 </div>
-                <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] text-fg-3">
+                <div className="grid grid-cols-7 place-items-center gap-0.5 text-center text-[11px] text-fg-3">
                   {WEEKDAYS.map((weekday, index) => (
                     <span key={`${weekday}-${index}`}>{weekday}</span>
                   ))}
                 </div>
                 <div className="mt-1 grid grid-cols-7 place-items-center gap-0.5">
-                  {dayCells(view.year, view.monthIndex, value, todayISO, pick)}
+                  {dayCells(
+                    view.year,
+                    view.monthIndex,
+                    value,
+                    todayISO,
+                    pick,
+                    disablePast ? todayISO : undefined,
+                  )}
                 </div>
+                {actions ? (
+                  <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
+                    <Button
+                      type="button"
+                      size="lg"
+                      variant="ghost"
+                      disabled={value === ''}
+                      onClick={() => pick('')}
+                    >
+                      Clear date
+                    </Button>
+                    <Button type="button" size="lg" onClick={() => setOpen(false)}>
+                      Done
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </>,
             document.body,
@@ -266,9 +307,9 @@ export function DatePicker({
   );
 }
 
-/** The calendar's own size: wide enough for the 7-column grid, tall enough for 6 weeks. */
-const POPOVER_MIN_WIDTH = 288;
-const POPOVER_HEIGHT = 330;
+/** The calendar's own size: wide enough for seven 44px day cells, tall enough for 6 weeks and the actions. */
+const POPOVER_MIN_WIDTH = 336;
+const POPOVER_HEIGHT = 420;
 const POPOVER_GAP = 6;
 const VIEWPORT_EDGE = 8;
 

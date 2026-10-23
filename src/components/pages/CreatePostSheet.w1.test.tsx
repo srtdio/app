@@ -31,7 +31,11 @@ vi.mock('@/components/pages/create/AttachmentsField', () => ({
   attachmentVersionIds: () => [],
 }));
 vi.mock('@/components/ui/DatePicker', () => ({ DatePicker: () => null }));
-vi.mock('@srtdio/rpc', () => ({ postCreate: mockPostCreate, gallerySet: vi.fn() }));
+vi.mock('@srtdio/rpc', () => ({
+  postCreate: mockPostCreate,
+  gallerySet: vi.fn(),
+  stageTransition: vi.fn(),
+}));
 
 import {
   CreatePostSheet,
@@ -90,6 +94,17 @@ function button(text: string): HTMLButtonElement {
 const caption = (): HTMLTextAreaElement =>
   document.querySelector<HTMLTextAreaElement>('#post-caption')!;
 
+/** Unfold the "More options" row (Title, Bucket, Due date, Brief live inside it). */
+async function openMoreOptions(): Promise<void> {
+  const more = document.querySelector<HTMLButtonElement>('button[data-more-options]')!;
+  if (more.getAttribute('aria-expanded') !== 'true') await act(async () => more.click());
+}
+
+/** True when a sits before b in the document. */
+function before(a: Element, b: Element): boolean {
+  return (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
 describe('CreatePostSheet W1', () => {
   it('fix 1: closing with a caption asks "Discard this post?"', async () => {
     expect(
@@ -110,11 +125,11 @@ describe('CreatePostSheet W1', () => {
       document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click(),
     );
     expect(document.body.textContent).toContain('Discard this post?');
-    expect(document.body.textContent).toContain('Your caption and files will be lost.');
+    expect(document.body.textContent).toContain('Your caption and 0 files will be removed.');
     expect(document.body.textContent).toContain('Keep editing');
   });
 
-  it('fix 2: mid-upload the primary says "Uploading N files…", stays enabled, and refuses to submit', async () => {
+  it('fix 2: mid-upload Save as draft says "Uploading N files…", stays enabled, and refuses to submit', async () => {
     expect(uploadingLabel(1)).toBe('Uploading 1 file…');
     await renderSheet();
     await act(async () => setValue(caption(), 'Hello'));
@@ -135,21 +150,24 @@ describe('CreatePostSheet W1', () => {
     expect(mockPostCreate).not.toHaveBeenCalled();
   });
 
-  it('fix 4: fields run Format, Media, Caption, Title, Bucket, Target date, Brief; an empty title uses the caption', async () => {
+  it('fix 4: fields run Files, Format, Caption, then More options (Title, Bucket, Due date, Brief); an empty title uses the caption', async () => {
     expect(resolvedTitle('', 'First line\nsecond')).toBe('First line');
     await renderSheet();
-    const labels = [...document.querySelectorAll('label')].map((l) =>
-      (l.textContent ?? '').replace('*', '').trim(),
-    );
-    expect(labels).toEqual([
-      'Format',
-      'Media',
-      'Caption',
-      'Title (optional)',
-      'Bucket (optional)',
-      'Target date (optional)',
-      'Brief (optional)',
-    ]);
+    const files = document.querySelector('[data-attachments]')!;
+    const format = document.querySelector('[data-format-row]')!;
+    const more = document.querySelector('button[data-more-options]')!;
+    expect(before(files, format)).toBe(true);
+    expect(before(format, caption())).toBe(true);
+    expect(before(caption(), more)).toBe(true);
+    const labels = (): string[] =>
+      [...document.querySelectorAll('label')].map((l) =>
+        (l.textContent ?? '').replace('*', '').trim(),
+      );
+    // Folded: only the caption has a label.
+    expect(labels()).toEqual(['Caption']);
+    await openMoreOptions();
+    expect(labels()).toEqual(['Caption', 'Title', 'Bucket', 'Due date', 'Brief']);
+    expect(document.body.textContent).not.toContain('Target date (optional)');
     mockPostCreate.mockResolvedValue({ ok: true, data: 'p1' });
     await act(async () => setValue(caption(), 'Launch day\nMore words'));
     await act(async () => button('Save as draft').click());
@@ -157,8 +175,18 @@ describe('CreatePostSheet W1', () => {
     expect(args.p_payload).toMatchObject({ title: 'Launch day' });
   });
 
-  it('fix 5: "+ New bucket" creates inline, selects it, and words errors', async () => {
+  it('fix 4b: the footer has Cancel, Save as draft and Send for review', async () => {
     await renderSheet();
+    const draft = document.querySelector('button[data-submit="draft"]');
+    const review = document.querySelector('button[data-submit="review"]');
+    expect(draft?.textContent).toBe('Save as draft');
+    expect(review?.textContent).toContain('Send for review');
+    expect(button('Cancel')).toBeDefined();
+  });
+
+  it('fix 5: "+ New bucket" creates inline, selects it, and words errors plainly', async () => {
+    await renderSheet();
+    await openMoreOptions();
     await act(async () =>
       document.querySelector<HTMLButtonElement>('button[aria-label="Bucket"]')!.click(),
     );
@@ -173,7 +201,8 @@ describe('CreatePostSheet W1', () => {
     });
     await act(async () => setValue(name, 'Launch'));
     await act(async () => button('Create').click());
-    expect(document.body.textContent).toContain("That name's already taken.");
+    expect(document.body.textContent).toContain("Couldn't create the bucket. Try again.");
+    expect(document.body.textContent).not.toContain("That name's already taken.");
     mockCreateBucket.mockResolvedValueOnce({
       ok: true,
       data: { id: 'b9', name: 'Launch', colorHex: '#123456', position: 0 },

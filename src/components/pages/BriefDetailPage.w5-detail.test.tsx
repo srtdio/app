@@ -9,7 +9,7 @@
 // rule; Back pops in-app history or goes to /briefs.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import {
@@ -574,5 +574,69 @@ describe('Brief detail Back', () => {
     h.getBrief.mockResolvedValue(detail());
     await mount();
     expect(byLabel('Back')?.querySelector('svg')).not.toBeNull();
+  });
+});
+
+// Post flow A fix 23: a creator starts a post from an open brief.
+function PipelineSpy() {
+  const location = useLocation();
+  return <div data-pipeline-at={`${location.pathname}${location.search}`} />;
+}
+
+async function mountWithPipeline() {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => {
+    root?.render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={['/briefs/b1']}>
+          <Routes>
+            <Route path="/briefs/:briefId" element={<BriefDetailPage />} />
+            <Route path="/pipeline" element={<PipelineSpy />} />
+          </Routes>
+        </MemoryRouter>
+        <ToastViewport />
+      </ToastProvider>,
+    );
+  });
+  await flush();
+}
+
+describe('Brief detail New post from this brief', () => {
+  it('fix 23: a creator on an open brief sees it, and it opens the sheet on this brief', async () => {
+    h.caps = { 'post.create': true, 'brief.create': false };
+    h.getBrief.mockResolvedValue(detail());
+    await mountWithPipeline();
+    const start = button('New post from this brief');
+    expect(start).toBeDefined();
+    await act(async () => start!.click());
+    expect(
+      document.querySelector('[data-pipeline-at]')?.getAttribute('data-pipeline-at'),
+    ).toBe('/pipeline?new=1&brief=b1');
+  });
+
+  it('fix 23: hidden for approvers', async () => {
+    h.caps = { 'post.create': true, 'brief.create': true };
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    expect(text()).toContain('Festive drop');
+    expect(button('New post from this brief')).toBeUndefined();
+  });
+
+  it('fix 23: hidden on a closed brief', async () => {
+    h.caps = { 'post.create': true };
+    h.getBrief.mockResolvedValue(
+      detail({ status: 'closed', closed_at: '2026-10-05T10:00:00Z', closed_by: 'u1' }),
+    );
+    await mount();
+    expect(text()).toContain('Festive drop');
+    expect(button('New post from this brief')).toBeUndefined();
+  });
+
+  it('fix 23: hidden without post.create', async () => {
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    expect(button('New post from this brief')).toBeUndefined();
   });
 });

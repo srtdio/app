@@ -64,11 +64,12 @@ describe('AttachmentsField uploads', () => {
   });
 
   it('reports the pending count for every picked file, and a failed row retries', async () => {
-    let release: (() => void) | null = null;
+    // Up to three upload at once: each call parks until the test releases it.
+    const releases: (() => void)[] = [];
     mockUpload.mockImplementation(
       () =>
         new Promise((resolve) => {
-          release = () => resolve({ ok: false, message: "Couldn't upload. Try again." });
+          releases.push(() => resolve({ ok: false, message: "Couldn't upload. Try again." }));
         }),
     );
     const onPendingChange = vi.fn();
@@ -86,7 +87,9 @@ describe('AttachmentsField uploads', () => {
     await act(async () => pick(photoInput(), files));
     expect(onPendingChange).toHaveBeenLastCalledWith(3);
 
-    await act(async () => release?.());
+    expect(mockUpload).toHaveBeenCalledTimes(3);
+    // The first picked file (a.png) fails; b and c are still uploading.
+    await act(async () => releases[0]?.());
     expect(onPendingChange).toHaveBeenLastCalledWith(2);
     const retry = document.querySelector<HTMLButtonElement>('button[aria-label="Retry a.png"]');
     expect(retry).not.toBeNull();

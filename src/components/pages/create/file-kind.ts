@@ -109,3 +109,34 @@ export function mismatchedFiles<T extends { kind: string; mime?: string }>(
       isMismatch(platform, format, fileKindOf(item.mime)),
   );
 }
+
+/**
+ * The format a first file sets while the person has not touched Format: the
+ * platform's first format that carries only that kind (image: its single-image
+ * format, video: its video format). null when the platform has none (keep the
+ * current format). Reads the same table as the soft prompt above.
+ */
+export function formatForFile(
+  platform: string,
+  formats: readonly string[],
+  kind: FileKind,
+): string | null {
+  if (kind !== 'image' && kind !== 'video') return null;
+  for (const format of formats) {
+    const expected = expectedKinds(platform, format);
+    if (expected !== null && expected.length === 1 && expected[0] === kind) return format;
+  }
+  return null;
+}
+
+/**
+ * The full sheet's format before any file: the platform's first format, unless
+ * that one needs a video and the platform has a single-image format (Instagram
+ * opens on Single image, not Reel).
+ */
+export function untouchedDefaultFormat(platform: string, formats: readonly string[]): string {
+  const first = formats[0] ?? '';
+  const needsVideo = expectedKinds(platform, first)?.every((kind) => kind === 'video') === true;
+  if (needsVideo && formats.includes('single_image')) return 'single_image';
+  return first;
+}
