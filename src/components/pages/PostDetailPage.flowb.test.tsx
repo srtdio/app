@@ -35,6 +35,7 @@ const h = vi.hoisted(() => ({
   galleryResults: [] as unknown[],
   counts: { resolved: 0, total: 0 },
   desktop: false,
+  wide: false,
   galleryProps: null as null | { onPinClick?: (commentId: string) => void },
 }));
 
@@ -60,7 +61,9 @@ vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'u1' } } }),
 }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => h.desktop }));
+vi.mock('@/lib/use-media-query', () => ({
+  useMediaQuery: (query: string) => (query === '(min-width: 1024px)' ? h.wide : h.desktop),
+}));
 vi.mock('@/lib/search/jump', () => ({ useSearchJump: () => ({ words: [] }) }));
 vi.mock('@/components/pages/pcs/use-post-members', () => ({
   usePostMembers: () => ({
@@ -247,6 +250,7 @@ beforeEach(() => {
   h.galleryResults = [];
   h.counts = { resolved: 0, total: 0 };
   h.desktop = false;
+  h.wide = false;
   h.galleryProps = null;
   navLog.length = 0;
   getPostGallery.mockClear();
@@ -290,8 +294,8 @@ describe('25. one correct first paint', () => {
     expect(document.querySelector('[data-gallery-stub]')).not.toBeNull();
     // The owner is a name on the first paint, never blank.
     expect(document.querySelector('[data-detail="owner"]')?.textContent).toContain('Riya Menon');
-    // Creator's Edit is there on the first paint (role known).
-    expect(document.querySelector('[data-post-details]')?.textContent).toContain('Edit');
+    // The creator's tappable meta line is there on the first paint (role known).
+    expect(document.querySelector('[data-post-details-edit]')?.tagName).toBe('BUTTON');
   });
 });
 
@@ -321,36 +325,41 @@ describe('36. gallery load failure', () => {
   });
 });
 
-describe('27. stage once (top bar), platform and format once (details row)', () => {
-  it('has no stage pill and one "Instagram · Carousel"', async () => {
+describe('27. stage once (top bar), platform and format in the details sheet', () => {
+  it('has no stage pill and no "Instagram · Carousel" row on the page', async () => {
     await render();
     const page = text();
-    expect(count(page, 'Instagram · Carousel')).toBe(1);
-    expect(document.querySelector('[data-detail="platform"]')?.textContent).toBe(
-      'Instagram · Carousel',
-    );
+    expect(count(page, 'Instagram · Carousel')).toBe(0);
+    expect(document.querySelector('[data-detail="platform"]')).toBeNull();
     // "In review" appears only in the top bar status line.
     expect(count(page, 'In review')).toBe(1);
     expect(page).not.toContain('Status: ');
   });
 });
 
-describe('28. visible details row', () => {
-  it('shows owner, "Due 28 Oct", bucket, brief and platform; creators get Edit that opens the sheet', async () => {
+describe('28. one meta line', () => {
+  it('A1: owner, "Due 28 Oct" and the brief on one line; no bucket, platform or Edit; tapping it opens the sheet', async () => {
     await render();
     const row = document.querySelector<HTMLElement>('[data-post-details]');
     expect(row).not.toBeNull();
     const rowText = row?.textContent ?? '';
     expect(rowText).toContain('Riya Menon');
     expect(rowText).toContain('Due 28 Oct');
-    expect(rowText).toContain('Monsoon drop');
     expect(rowText).toContain('Monsoon edit');
-    expect(rowText).toContain('Instagram · Carousel');
-    expect(rowText).toContain('Edit');
-    // The row holds the brief link, so it is a plain line with its own Edit.
-    expect(row?.tagName).toBe('DIV');
+    expect(rowText).not.toContain('Monsoon drop');
+    expect(rowText).not.toContain('Instagram');
+    expect(rowText).not.toContain('Edit');
+    // One line that truncates, never wrapping into a second row.
+    expect(row?.className).toContain('flex-nowrap');
+    expect(row?.className).not.toContain('flex-wrap ');
+    // No row starts with a stray dot.
+    expect(rowText.trim().startsWith('·')).toBe(false);
+    // The brief is a link, so the tappable part is the owner and due.
     const edit = row?.querySelector<HTMLButtonElement>('[data-post-details-edit]');
-    expect(edit?.textContent?.trim()).toBe('Edit');
+    expect(edit?.tagName).toBe('BUTTON');
+    expect(edit?.querySelector('[data-detail="owner"]')).not.toBeNull();
+    expect(edit?.querySelector('[data-detail="due"]')).not.toBeNull();
+    expect(edit?.querySelector('a')).toBeNull();
 
     await act(async () => {
       edit?.click();
@@ -371,7 +380,7 @@ describe('28. visible details row', () => {
     expect(due!.compareDocumentPosition(brief!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('omits the due date when there is none; approvers get no Edit', async () => {
+  it('omits the due date when there is none; approvers cannot open the sheet from it', async () => {
     h.targetDate = null;
     h.role = 'client';
     await render();
@@ -379,21 +388,28 @@ describe('28. visible details row', () => {
     expect(row?.tagName).toBe('DIV');
     expect(document.querySelector('[data-detail="due"]')).toBeNull();
     expect(row?.textContent ?? '').not.toContain('Due');
-    expect(row?.textContent ?? '').not.toContain('Edit');
+    expect(document.querySelector('[data-post-details-edit]')).toBeNull();
+  });
+
+  it('A2: the preview pill and the open checkpoints pill share one row', async () => {
+    h.counts = { resolved: 1, total: 3 };
+    await render();
+    const chip = document.querySelector('[data-open-comments-chip]');
+    expect(chip?.parentElement?.hasAttribute('data-post-pills')).toBe(true);
   });
 });
 
-describe('29. open-comments chip', () => {
-  it('reads "{n} open comments" (singular at 1), hidden at 0', () => {
-    expect(openCommentsLabel(2)).toBe('2 open comments');
-    expect(openCommentsLabel(1)).toBe('1 open comment');
+describe('29. open checkpoints pill', () => {
+  it('reads "{n} open checkpoints" (singular at 1), hidden at 0', () => {
+    expect(openCommentsLabel(8)).toBe('8 open checkpoints');
+    expect(openCommentsLabel(1)).toBe('1 open checkpoint');
   });
 
   it('sits under the title in review and scrolls smoothly to the comments', async () => {
     h.counts = { resolved: 1, total: 3 };
     await render();
     const chip = document.querySelector<HTMLButtonElement>('[data-open-comments-chip]');
-    expect(chip?.textContent).toContain('2 open comments');
+    expect(chip?.textContent).toContain('2 open checkpoints');
     const h1 = document.querySelector('h1');
     expect(h1?.compareDocumentPosition(chip!) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 
@@ -429,19 +445,32 @@ describe('29. open-comments chip', () => {
 });
 
 describe('34. laptop two columns, one grid for skeleton and page', () => {
-  it('lg: picture left at most 520px, page at most 1120px centred; below lg one column', () => {
+  it('D1 lg: two columns, gallery and caption left, checkpoints right from the top, sticky; below lg one column', () => {
     const grid = postPageGrid(false);
     expect(grid.page).toContain('grid-cols-1');
-    expect(grid.page).toContain('lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)]');
+    expect(grid.page).toContain('lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]');
     expect(grid.page).toContain('max-w-[1120px]');
     expect(grid.page).toContain('mx-auto');
+    expect(grid.head).toContain('lg:col-start-1');
     expect(grid.media).toContain('lg:col-start-1');
-    expect(grid.head).toContain('lg:col-start-2');
-    expect(grid.body).toContain('lg:col-start-2');
+    expect(grid.body).toContain('lg:col-start-1');
+    expect(grid.side).toContain('lg:col-start-2');
+    expect(grid.side).toContain('lg:row-start-1');
+    expect(grid.side).toContain('lg:sticky');
+    expect(grid.side).toContain('lg:overflow-y-auto');
     expect(postPageGrid(true).page).not.toContain('lg:');
+    expect(postPageGrid(true).side).not.toContain('lg:');
   });
 
-  it('the skeleton and the loaded page share the same grid; the right column reads title, details, decision slot, chip, caption, comments', async () => {
+  it('D1: the checkpoints section sits in its own column, not under the caption', async () => {
+    await render();
+    const side = document.querySelector('[data-post-side]');
+    expect(side?.className).toBe(postPageGrid(false).side);
+    expect(side?.contains(document.getElementById(COMMENTS_SECTION_ID))).toBe(true);
+    expect(side?.contains(document.querySelector('[data-caption-block]'))).toBe(false);
+  });
+
+  it('the skeleton and the loaded page share the same grid; reading order is title, details, pill, caption, checkpoints', async () => {
     const gallery = deferred<void>();
     h.galleryGate = gallery.promise;
     h.desktop = true;
