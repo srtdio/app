@@ -82,6 +82,8 @@ function harness(env: Record<string, string>) {
     deps: {
       env: (name: string) => env[name],
       createClient: factory as unknown as typeof createClient,
+      // The mail-record lookup is stubbed so the global fetch mock sees only Resend.
+      checkMailDomain: async () => 'ok' as const,
     },
   };
 }
