@@ -1,0 +1,81 @@
+name: Supabase images cache
+description: >-
+  Restore or save the local Supabase stack's Docker images so DB suites skip
+  the registry pull. Run with mode restore before the suite and mode save after
+  it (only when restore missed).
+
+inputs:
+  mode:
+    description: restore | save
+    required: true
+
+outputs:
+  cache-hit:
+    description: "'true' when restore found and loaded the cached images"
+    value: ${{ steps.restore.outputs.cache-hit == 'true' && steps.load.outcome == 'success' }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compute cache key
+      id: key
+      shell: bash
+      run: |
+        set -euo pipefail
+        cli=$(jq -r '.devDependencies.supabase // .dependencies.supabase' package.json)
+        echo "key=supabase-images-${RUNNER_OS}-${cli}-${{ hashFiles('packages/test-utils/supabase-exclude.ts', 'supabase/config.toml') }}" >> "$GITHUB_OUTPUT"
+        echo "path=${RUNNER_TEMP}/supabase-images.tar.zst" >> "$GITHUB_OUTPUT"
+
+    - name: Restore image tarball
+      id: restore
+      if: inputs.mode == 'restore'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.key.outputs.path }}
+        key: ${{ steps.key.outputs.key }}
+
+    - name: Load images
+      id: load
+      if: inputs.mode == 'restore' && steps.restore.outputs.cache-hit == 'true'
+      # A corrupt tarball falls back to a normal registry pull.
+      continue-on-error: true
+      shell: bash
+      run: |
+        set -euo pipefail
+        start=$(date +%s)
+        zstd -dc "${{ steps.key.outputs.path }}" | docker load
+        rm -f "${{ steps.key.outputs.path }}"
+        echo "[images] docker load $(( $(date +%s) - start ))s"
+
+    - name: Export images
+      id: export
+      if: inputs.mode == 'save'
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Supabase stack images only (ECR mirror or Docker Hub fallback names).
+        images=$(docker images --format '{{.Repository}}:{{.Tag}}' \
+          | grep -v '<none>' \
+          | grep -E '(^|/)(supabase|postgrest|kong|axllent)/|(^|/)kong:' || true)
+        # Skip when the db image never arrived, so a half-pulled stack is not cached.
+        if ! grep -q '/postgres:' <<< "$images"; then
+          echo "[images] no Supabase db image present, not saving"
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "$images"
+        start=$(date +%s)
+        # shellcheck disable=SC2086
+        docker save $images | zstd -T0 -3 -q -o "${{ steps.key.outputs.path }}"
+        echo "[images] docker save $(( $(date +%s) - start ))s, $(du -h "${{ steps.key.outputs.path }}" | cut -f1)"
+        echo "ready=true" >> "$GITHUB_OUTPUT"
+
+    # Parallel suites miss together on the first run; whichever saves first wins
+    # and the rest fail to reserve the key, which is fine.
+    - name: Save image tarball
+      if: inputs.mode == 'save' && steps.export.outputs.ready == 'true'
+      continue-on-error: true
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.key.outputs.path }}
+        key: ${{ steps.key.outputs.key }}

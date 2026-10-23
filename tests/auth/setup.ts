@@ -11,19 +11,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { authEnvFile, type AuthTestEnv } from './env';
+import { SUPABASE_EXCLUDE_WITH_MAIL } from '../../packages/test-utils/supabase-exclude';
 
 // Heavy/unstartable containers excluded; the mail catcher is intentionally kept.
-const EXCLUDE = [
-  'edge-runtime',
-  'studio',
-  'imgproxy',
-  'storage-api',
-  'realtime',
-  'vector',
-  'logflare',
-  'supavisor',
-  'postgres-meta',
-].join(',');
+const EXCLUDE = SUPABASE_EXCLUDE_WITH_MAIL;
 
 const supabaseBin = resolve(process.cwd(), 'node_modules/.bin/supabase');
 
@@ -56,6 +47,11 @@ function parseEnv(envOutput: string): AuthTestEnv {
 }
 
 let startedHere = false;
+
+/** One timing line for CI logs; stdout, not console. */
+function logTiming(label: string, since: number): void {
+  process.stdout.write(`[setup] ${label} ${((performance.now() - since) / 1000).toFixed(1)}s\n`);
+}
 
 /** The CLI's registry override (viper INTERNAL_IMAGE_REGISTRY, SUPABASE_ env prefix). */
 const REGISTRY_ENV = 'SUPABASE_INTERNAL_IMAGE_REGISTRY';
@@ -124,6 +120,7 @@ function relaxEmailRateLimit(): void {
 }
 
 export async function setup(): Promise<void> {
+  const setupAt = performance.now();
   if (!existsSync(resolve(process.cwd(), 'supabase/config.toml'))) {
     try {
       supabase(['init']);
@@ -135,12 +132,17 @@ export async function setup(): Promise<void> {
   relaxEmailRateLimit();
 
   if (!isRunning()) {
+    const startAt = performance.now();
+    process.stdout.write('[setup] supabase start begin\n');
     startWithRetry();
+    logTiming('supabase start', startAt);
     startedHere = true;
   }
 
   const env = parseEnv(supabase(['status', '-o', 'env']));
   writeFileSync(authEnvFile, JSON.stringify(env), 'utf8');
+  // `supabase start` applies supabase/migrations/, so this is post-migrations.
+  logTiming('total', setupAt);
 }
 
 export async function teardown(): Promise<void> {

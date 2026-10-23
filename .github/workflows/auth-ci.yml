@@ -109,6 +109,13 @@ jobs:
         if: env.RUN == 'true'
         run: pnpm exec tsc -p tests/auth/tsconfig.json --noEmit
 
+      - name: Restore Supabase images
+        id: supabase-images
+        if: env.RUN == 'true'
+        uses: ./.github/actions/supabase-images
+        with:
+          mode: restore
+
       - name: Run auth E2E suite
         if: env.RUN == 'true'
         run: pnpm exec vitest run --config tests/auth/vitest.config.ts
@@ -116,3 +123,9 @@ jobs:
       - name: Stop local Supabase
         if: always() && env.RUN == 'true'
         run: pnpm exec supabase stop --no-backup || true
+
+      - name: Save Supabase images
+        if: always() && env.RUN == 'true' && steps.supabase-images.outputs.cache-hit != 'true'
+        uses: ./.github/actions/supabase-images
+        with:
+          mode: save
