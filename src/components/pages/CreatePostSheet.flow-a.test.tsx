@@ -528,7 +528,7 @@ describe('CreatePostSheet flow A', () => {
     });
     await act(async () => draftButton().click());
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(
-      "You don't have permission to do that.",
+      "Couldn't save the post. You don't have access to do this.",
     );
     expect(text()).not.toContain('forbidden_role');
   });

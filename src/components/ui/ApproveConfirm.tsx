@@ -10,7 +10,7 @@
 
 import type { ReactElement } from 'react';
 import { confirmCopy, postSubject } from '@/components/chat/post-sheet';
-import { formatShortDate } from '@/lib/chat/time-format';
+import { formatDay } from '@/lib/display-date';
 import { cn } from '@/lib/cn';
 
 /** 48px buttons, mirroring the chat post sheet's ACTION_BASE. */
@@ -20,9 +20,16 @@ const ACTION_BASE =
 const ACTION_GOOD = `${ACTION_BASE} bg-good-solid text-white hover:opacity-90`;
 const ACTION_GHOST = `${ACTION_BASE} border border-border bg-panel text-fg hover:bg-panel-2`;
 
-/** The target date as the chat confirm prints it ("Oct 2"); empty when not set. */
-export function approveTargetDate(targetDate: string | null, timeZone: string): string {
-  return targetDate !== null ? formatShortDate(targetDate, timeZone) : '';
+/**
+ * The target date in the app's day format ("2 Oct", "4 Jan 2027" outside now's
+ * year), read in the workspace zone; empty when not set.
+ */
+export function approveTargetDate(
+  targetDate: string | null,
+  timeZone: string,
+  now: Date = new Date(),
+): string {
+  return targetDate !== null ? formatDay(targetDate, timeZone, now) : '';
 }
 
 export interface ApproveConfirmProps {

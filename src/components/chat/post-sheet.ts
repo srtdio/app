@@ -10,6 +10,7 @@ import type { StageTransitionInput } from '../../../packages/posts/src/stage-mac
 import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatLabel } from '@/lib/post-detail-presentation';
+import { errorText } from '@/lib/error-copy';
 import { friendlyTransitionError } from '@/lib/post-transition-errors';
 import { POST_CHANGED_EVENT, firstName } from '@/components/chat/post-card';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
@@ -215,12 +216,10 @@ export function friendlyCommentError(code: string): string {
   switch (code) {
     case 'invalid_stage':
       return 'Comments open once the post is in review.';
-    case 'forbidden_role':
-      return 'You do not have permission to comment on this post.';
     case 'invalid_payload':
       return 'Each point needs 1 to 50 words.';
     default:
-      return 'Could not add the comment. Please try again.';
+      return errorText('add the comment', code);
   }
 }
 
@@ -273,7 +272,7 @@ export interface DetailRow {
   value: string;
 }
 
-/** "Oct 2 2:05 pm" (device hour cycle, workspace zone), or '' for an unparseable instant. */
+/** "2 Oct 2:05 pm" (device hour cycle, workspace zone), or '' for an unparseable instant. */
 function dateTime(iso: string, timeZone: string): string {
   const date = formatShortDate(iso, timeZone);
   return date === '' ? '' : `${date} ${formatClockTime(iso, timeZone)}`;
@@ -281,7 +280,7 @@ function dateTime(iso: string, timeZone: string): string {
 
 /**
  * The rows after Stage: target date, format (with "· N slides" past one item),
- * and the approval. With an approver on record the value is "Name · Oct 2 2:05 pm"
+ * and the approval. With an approver on record the value is "Name · 2 Oct 2:05 pm"
  * ("Name on behalf of client · ..." for an agency-side approver); an approved
  * post with no approver reads the date it entered approved.
  */
@@ -366,7 +365,12 @@ export async function runStageChange(
     result = { ok: false, error: { code: 'unknown', message: 'unknown' } as DomainError };
   }
   if (!result.ok) {
-    return args.kind === 'reject' ? REJECT_ERROR : friendlyTransitionError(result.error);
+    return args.kind === 'reject'
+      ? REJECT_ERROR
+      : friendlyTransitionError(
+          result.error,
+          args.kind === 'approve' ? 'approve the post' : 'send the post for review',
+        );
   }
   dispatchPostChanged(deps.target, args.postId);
   deps.close();

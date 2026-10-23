@@ -71,9 +71,10 @@ describe('notify copy and gating', () => {
       'Some checkpoints are still open. Resolve them all first.',
     );
     expect(notifyErrorMessage('forbidden_role')).toBe('Only creators can send this.');
-    expect(notifyErrorMessage('invalid_stage')).toBe('This post is not in review anymore.');
-    expect(notifyErrorMessage('network down')).toBe(
-      'Could not notify the approvers. Please try again.',
+    expect(notifyErrorMessage('invalid_stage')).toBe("This post isn't in review anymore.");
+    expect(notifyErrorMessage('boom')).toBe("Couldn't notify the approvers. Try again.");
+    expect(notifyErrorMessage('Failed to fetch')).toBe(
+      "Couldn't notify the approvers. You're offline.",
     );
   });
 

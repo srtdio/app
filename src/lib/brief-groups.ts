@@ -7,6 +7,7 @@
 // reuses the shared helpers (src/lib/list-sort.ts, src/lib/plan-week.ts); nothing
 // here does zone maths of its own.
 
+import { formatDay } from '@/lib/display-date';
 import { addCivilDays, civilDate } from '@/lib/list-sort';
 import { weekBounds } from '@/lib/plan-week';
 
@@ -64,8 +65,8 @@ function civilDayOf(iso: string, zone: string): string {
 }
 
 /**
- * Group briefs into time sections, newest-first. Sections are ordered This Week,
- * Last Week, then calendar months descending; empty sections are never emitted.
+ * Group briefs into time sections, newest-first. Sections are ordered This week,
+ * Last week, then calendar months descending; empty sections are never emitted.
  * Items inside every section stay newest-first. `now` is injected so callers (and
  * tests) control "today", and `calendar` supplies the workspace zone and week
  * start, so no comparison reads the browser clock or the browser's zone. Every
@@ -95,7 +96,7 @@ export function groupBriefsByTime<T extends { created_at: string }>(
   const nowYear = civilDate(now, zone).slice(0, 4);
 
   // Insertion order over the newest-first list yields exactly the required
-  // section order (This Week, Last Week, months descending): time is monotonic,
+  // section order (This week, Last week, months descending): time is monotonic,
   // so each key is first seen in that order.
   const groups: BriefGroup<T>[] = [];
   const byKey = new Map<string, BriefGroup<T>>();
@@ -107,10 +108,10 @@ export function groupBriefsByTime<T extends { created_at: string }>(
     let label: string;
     if (day >= thisWeekStart) {
       key = 'w0';
-      label = 'This Week';
+      label = 'This week';
     } else if (day >= lastWeekStart) {
       key = 'w1';
-      label = 'Last Week';
+      label = 'Last week';
     } else {
       const year = day.slice(0, 4);
       const month = day.slice(5, 7);
@@ -133,38 +134,18 @@ export function groupBriefsByTime<T extends { created_at: string }>(
 }
 
 /**
- * A stored timestamp as the day it was raised in the workspace zone, e.g.
- * "Tuesday 22 Sep". One Intl formatter, read back through formatToParts and
- * re-assembled by part type, so the output is identical whatever the browser's
- * locale or part order. 'en-US' is the reference locale (plan-week.ts uses it for
- * the same reason): current CLDR abbreviates September as "Sept" in en-GB, which
- * would make the label drift between engines. An unparseable timestamp is
- * returned unchanged rather than handed to Intl.format; an unknown zone degrades
- * to UTC.
- */
-export function formatRaisedDay(iso: string, timeZone: string): string {
-  const instant = new Date(iso);
-  if (Number.isNaN(instant.getTime())) return iso;
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: safeZone(timeZone),
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-  }).formatToParts(instant);
-  const read = (type: string): string => parts.find((part) => part.type === type)?.value ?? '';
-  return `${read('weekday')} ${read('day')} ${read('month')}`;
-}
-
-/**
  * Split ONE time section's items into its civil days in the workspace zone. The
  * input is already newest-first, so first-seen order is newest-day-first and no
  * sorting happens here: the caller's order survives inside every day. Keys are
  * stable ("d-YYYY-MM-DD"); the label is the day the first item of that day was
- * raised (see {@link formatRaisedDay}). Pure, and empty in gives empty out.
+ * raised, in the app day format ("22 Sep", "4 Jan 2027" outside now's year; an
+ * unknown zone degrades to UTC, an unparseable timestamp shows as stored). Pure,
+ * and empty in gives empty out.
  */
 export function groupBriefsByDay<T extends { created_at: string }>(
   items: T[],
   timeZone: string,
+  now: Date,
 ): BriefGroup<T>[] {
   const zone = safeZone(timeZone);
   const groups: BriefGroup<T>[] = [];
@@ -179,7 +160,7 @@ export function groupBriefsByDay<T extends { created_at: string }>(
     }
     const group: BriefGroup<T> = {
       key,
-      label: formatRaisedDay(item.created_at, zone),
+      label: formatDay(item.created_at, zone, now) || item.created_at,
       items: [item],
     };
     byKey.set(key, group);
@@ -187,22 +168,4 @@ export function groupBriefsByDay<T extends { created_at: string }>(
   }
 
   return groups;
-}
-
-/**
- * A date-only column value ("YYYY-MM-DD", briefs.target_date) as "Oct 8", or
- * "Oct 8, 2026" with the year. The string's own parts are read, never
- * new Date(value) in the browser zone, so the day never shifts west of UTC.
- * Anything that is not a valid civil date is returned unchanged. Pure.
- */
-export function formatCivilDay(value: string, withYear = false): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (match === null) return value;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const name = MONTH_NAMES[month - 1];
-  if (name === undefined || day < 1 || day > 31) return value;
-  const short = `${name.slice(0, 3)} ${day}`;
-  return withYear ? `${short}, ${year}` : short;
 }

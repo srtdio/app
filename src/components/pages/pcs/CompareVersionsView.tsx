@@ -10,6 +10,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
+import { browserTimeZone } from '@/lib/chat/time-format';
+import { formatDateTime } from '@/lib/display-date';
 import { diffSegments, type DiffKind, type DiffResult, type DiffSegment } from '@/lib/text-diff';
 
 export type CompareViewMode = 'auto' | 'inline' | 'side';
@@ -55,10 +57,12 @@ function isEmptyCaption(caption: string | null): boolean {
   return caption === null || caption.trim() === '';
 }
 
+// "23 Oct, 2:14 PM" via the app formatter, in the browser zone (the view has no
+// workspace zone in hand). Falls back to the raw value if unparseable.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return formatDateTime(value, browserTimeZone(), new Date());
 }
 
 const NO_CAPTION = <span className="text-fg-3">No caption in this version.</span>;

@@ -12,6 +12,7 @@ import {
   type CardViewer,
 } from '@/components/pages/pipeline/card-status';
 import { civilDate } from '@/lib/list-sort';
+import { formatDue } from '@/lib/display-date';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
 import type { CardFirstMedia } from '../../../packages/posts/src/reads';
@@ -51,10 +52,13 @@ export interface PostCardProps {
 }
 
 /**
- * The card's due line: "Due 15 Mar" (day and short month, in that order), the
- * day read in the workspace zone by {@link formatTargetDate}.
+ * The card's due line via the app formatter: "Due 15 Mar" ("Due 4 Jan 2027"
+ * outside now's year). The instant is read to its civil day in the workspace
+ * zone (civilDate, the filter's own reading; a bad zone reads as UTC), and that
+ * date-only day is formatted so the browser zone can never shift it. An
+ * unparseable value shows as stored.
  */
-export function dueLabel(value: string, timeZone = 'UTC'): string {
+export function dueLabel(value: string, timeZone = 'UTC', now: Date = new Date()): string {
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return `Due ${value}`;
   let civil: string;
@@ -63,24 +67,8 @@ export function dueLabel(value: string, timeZone = 'UTC'): string {
   } catch {
     civil = civilDate(instant, 'UTC');
   }
-  const [, m, d] = civil.split('-').map((part) => Number(part));
-  return `Due ${d!} ${DUE_MONTHS[m! - 1] ?? ''}`.trimEnd();
+  return formatDue(civil, 'UTC', now);
 }
-
-const DUE_MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
 
 /**
  * The card's picture frame ratio (w / h): the post's platform + format frame
@@ -99,32 +87,6 @@ export function cardRatio(
     first === null ? null : { kind: first.kind, w: first.width, h: first.height },
   );
   return frame === null ? null : frame.ratio;
-}
-
-/**
- * The target date's day in the workspace zone, as a date only ("15 Mar 2026",
- * locale-ordered). The instant is read to a civil 'YYYY-MM-DD' in `timeZone`
- * (civilDate, the filter's own reading), then that civil day is formatted at
- * UTC so the browser zone can never shift it. A bad zone reads as UTC; an
- * unparseable value is shown as stored.
- */
-export function formatTargetDate(value: string, timeZone = 'UTC'): string {
-  const instant = new Date(value);
-  if (Number.isNaN(instant.getTime())) return value;
-  let civil: string;
-  try {
-    civil = civilDate(instant, timeZone);
-  } catch {
-    civil = civilDate(instant, 'UTC');
-  }
-  const [y, m, d] = civil.split('-').map((part) => Number(part));
-  const day = new Date(Date.UTC(y!, m! - 1, d!));
-  return day.toLocaleDateString(undefined, {
-    timeZone: 'UTC',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 /** A post with no media of its own: the tile is the format fallback. */
@@ -359,7 +321,7 @@ export function PostCard({
           </span>
           {post.target_date !== null ? (
             <span data-post-card-due="" className="ml-auto truncate text-xs tabular-nums text-fg-3">
-              {dueLabel(post.target_date, timeZone)}
+              {dueLabel(post.target_date, timeZone, now ?? new Date())}
             </span>
           ) : null}
         </div>

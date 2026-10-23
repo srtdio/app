@@ -4,7 +4,8 @@
 // an unknown value title-cases its raw token rather than rendering blank.
 
 import type { Stage } from '@srtdio/posts';
-import { relativeShort, shortDate } from './relative-time';
+import { browserTimeZone } from './chat/time-format';
+import { formatAgo, formatDay } from './display-date';
 
 const PLATFORM_LABELS = {
   linkedin: 'LinkedIn',
@@ -42,28 +43,26 @@ export function formatLabel(f: string): string {
 /**
  * The single-line status read for the post-detail header, per stage. Draft tracks
  * the last edit (updated_at); review tracks how long it has waited
- * (stage_entered_at); approved/parked/rejected read as a dated event.
+ * (stage_entered_at); approved/parked/rejected read as a dated event, its day
+ * read in `timeZone` (the workspace zone; the browser's when omitted).
  */
 export function postStatusLine(
   stage: Stage,
   updatedAt: string,
   stageEnteredAt: string,
   now: Date,
+  timeZone: string = browserTimeZone(),
 ): string {
   switch (stage) {
-    case 'draft': {
-      const tok = relativeShort(updatedAt, now);
-      return tok === 'just now' ? 'Updated just now' : `Updated ${tok} ago`;
-    }
-    case 'review': {
-      const tok = relativeShort(stageEnteredAt, now);
-      return tok === 'just now' ? 'In review · just now' : `In review · ${tok}`;
-    }
+    case 'draft':
+      return `Updated ${formatAgo(updatedAt, now)}`;
+    case 'review':
+      return `In review · ${formatAgo(stageEnteredAt, now)}`;
     case 'approved':
-      return `Approved ${shortDate(stageEnteredAt, now)}`;
+      return `Approved ${formatDay(stageEnteredAt, timeZone, now)}`;
     case 'parked':
-      return `Parked ${shortDate(stageEnteredAt, now)}`;
+      return `Parked ${formatDay(stageEnteredAt, timeZone, now)}`;
     case 'rejected':
-      return `Rejected ${shortDate(stageEnteredAt, now)}`;
+      return `Rejected ${formatDay(stageEnteredAt, timeZone, now)}`;
   }
 }

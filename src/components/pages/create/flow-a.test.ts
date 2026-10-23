@@ -31,7 +31,6 @@ import {
   POST_SAVE_FAILED,
 } from '@/components/pages/create/errors';
 import { RemoveButton } from '@/components/pages/create/RemoveButton';
-import { plainError } from '@/lib/error-copy';
 
 /** Let promise chains (then/finally) settle. */
 async function flush(): Promise<void> {
@@ -204,14 +203,10 @@ describe('Post flow A helpers', () => {
       'That format is not available here.',
     );
     expect(createSheetErrorMessage('forbidden_role', 'instagram')).toBe(
-      plainError('forbidden_role'),
+      "Couldn't save the post. You don't have access to do this.",
     );
-    expect(createSheetErrorMessage('forbidden_role', 'instagram')).toBe(
-      "You don't have permission to do that.",
-    );
-    expect(createSheetErrorMessage('boom', 'x', BUCKET_SAVE_FAILED)).toBe(
-      "Couldn't create the bucket. Try again.",
-    );
+    expect(createSheetErrorMessage('boom', 'x', 'create the bucket')).toBe(BUCKET_SAVE_FAILED);
+    expect(BUCKET_SAVE_FAILED).toBe("Couldn't create the bucket. Try again.");
   });
 
   it('extra: RemoveButton keeps a 44x44 tap area with a small 20px visible circle', () => {

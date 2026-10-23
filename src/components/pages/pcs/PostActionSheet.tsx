@@ -43,6 +43,7 @@ import { postPlansLine, readPostPlans, type PostPlanRef } from '@/lib/chat/plans
 import { supabase } from '@/lib/supabase';
 import { MOVE_ROW_LABEL, PostSheetPlanRowsContext } from '@/components/chat/PlanMoveSheet';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import { errorText } from '@/lib/error-copy';
 
 /**
  * One stage move offered in the sheet (flow B 31): the creator's Approve on
@@ -230,7 +231,7 @@ export function PostActionSheet({
       );
       const descriptors = toDownloadDescriptors(resolved);
       if (descriptors.length === 0) {
-        onToast('Could not prepare the images for download.');
+        onToast(errorText('prepare the images for download', null));
         return;
       }
       for (let i = 0; i < descriptors.length; i += 1) {
@@ -241,8 +242,8 @@ export function PostActionSheet({
       }
       onToast(
         descriptors.length < images.length
-          ? 'Some images could not be downloaded.'
-          : `Downloading ${descriptors.length} image${descriptors.length === 1 ? '' : 's'}.`,
+          ? "Some images couldn't be downloaded"
+          : `Downloading ${descriptors.length} image${descriptors.length === 1 ? '' : 's'}`,
       );
       close();
     } finally {
@@ -285,7 +286,7 @@ export function PostActionSheet({
             disabled={deleting}
             onClick={() => void handleConfirmDelete()}
           >
-            {deleting ? 'Deleting' : 'Delete post'}
+            {deleting ? 'Deleting…' : 'Delete post'}
           </Button>
           <Button variant="ghost" size="lg" disabled={deleting} onClick={() => setView('actions')}>
             Cancel

@@ -27,6 +27,7 @@ import { sharePostToChannel } from '@/lib/chat/share-post';
 import { createInFlightGuard } from '@/lib/chat/thread-actions';
 import { generateTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
+import { errorText } from '@/lib/error-copy';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { IconChat } from '@/components/ui/icons';
 
@@ -119,7 +120,7 @@ export function ConversationPicker({
     if (!result.ok && result.reason === 'busy') return;
     setSendingId(null);
     if (result.ok) {
-      onToast('Post sent to chat.');
+      onToast('Post sent to chat');
       onSent();
       return;
     }
@@ -127,7 +128,7 @@ export function ConversationPicker({
       channel_id: channel.channelId,
       error: result.message,
     });
-    onToast('Could not send the post. Please try again.');
+    onToast(errorText('send the post', result.message));
   }
 
   return conversationPickerBody(load, sendingId, (channel) => void send(channel));
@@ -209,7 +210,7 @@ export function conversationPickerBody(
       <div className={BODY_BOX}>
         <p className="flex h-full items-center justify-center px-3 text-center text-sm text-fg-3">
           {load.status === 'error'
-            ? 'Could not load conversations. Please try again.'
+            ? errorText('load conversations', null)
             : 'No conversations yet'}
         </p>
       </div>
@@ -224,7 +225,7 @@ export function conversationPickerBody(
             key={channel.channelId}
             icon={<IconChat size={18} />}
             label={channel.title}
-            sub={sendingId === channel.channelId ? 'Sending' : channelTypeLabel(channel)}
+            sub={sendingId === channel.channelId ? 'Sending…' : channelTypeLabel(channel)}
             onClick={() => onSend(channel)}
           />
         ))}

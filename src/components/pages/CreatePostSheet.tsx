@@ -42,11 +42,8 @@ import {
   captionCounterText,
   captionOverLimit,
 } from '@/components/pages/create/caption-limits';
-import {
-  BUCKET_SAVE_FAILED,
-  createSheetErrorMessage,
-  POST_SAVE_FAILED,
-} from '@/components/pages/create/errors';
+import { createSheetErrorMessage } from '@/components/pages/create/errors';
+import { errorText, REASON_COPY } from '@/lib/error-copy';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
@@ -156,8 +153,8 @@ export function presetPrimaryLabel(input: {
   submitting: boolean;
   savedDraft: boolean;
 }): string {
-  if (input.preset.primary === 'save_draft') return input.submitting ? 'Saving' : 'Save as draft';
-  if (input.submitting) return 'Sending';
+  if (input.preset.primary === 'save_draft') return input.submitting ? 'Saving…' : 'Save as draft';
+  if (input.submitting) return 'Sending…';
   return input.savedDraft ? 'Send for review again' : 'Send for review';
 }
 
@@ -198,7 +195,7 @@ export function defaultFormatFor(platform: PostPlatform): string {
  * again." Raw server text is never shown.
  */
 export function postCreateErrorMessage(message: string, platform: PostPlatform | null): string {
-  return createSheetErrorMessage(message, platform, POST_SAVE_FAILED);
+  return createSheetErrorMessage(message, platform, 'save the post');
 }
 
 /**
@@ -314,6 +311,17 @@ export function requiredFieldErrors(
   return errors;
 }
 
+/**
+ * A payload field the schema refused, in plain words (never the Zod message):
+ * the title says what to fix; any other field reads as the save retry line. Pure.
+ */
+export function payloadFieldError(key: string, title: string): string {
+  if (key === 'title') {
+    return title === '' ? REASON_COPY.title_required : 'Titles can be up to 200 characters.';
+  }
+  return errorText('save the post', null);
+}
+
 /** Drop one field's error the moment the person types a fix. Pure. */
 export function clearFieldError(
   errors: Record<string, string>,
@@ -410,9 +418,10 @@ export function buildPostCreatePayload(
   const parsed = PostCreatePayloadSchema.safeParse(candidate);
   const errors: Record<string, string> = {};
   if (!parsed.success) {
+    // Plain words per field; the Zod message itself is never shown.
     for (const issue of parsed.error.issues) {
       const key = String(issue.path[0] ?? 'form');
-      if (errors[key] === undefined) errors[key] = issue.message;
+      if (errors[key] === undefined) errors[key] = payloadFieldError(key, candidate.title);
     }
   }
   // brief_id is required when the post originates from a brief; the proc would
@@ -814,7 +823,7 @@ export function CreatePostSheet({
     setNewBucketBusy(false);
     if (!res.ok) {
       setNewBucketError(
-        createSheetErrorMessage(res.error.message, workspacePlatform, BUCKET_SAVE_FAILED),
+        createSheetErrorMessage(res.error.message, workspacePlatform, 'create the bucket'),
       );
       return;
     }
@@ -942,6 +951,7 @@ export function CreatePostSheet({
       toast?.show({
         title: "Your photo didn't attach",
         description: 'The post is in review. Try again to add the photo.',
+        tone: 'error',
         durationMs: null,
         action: { label: 'Try again', onPress: () => void finishInBackground(postId, items) },
       });
@@ -1436,7 +1446,7 @@ export function CreatePostSheet({
                           disabled={newBucketBusy}
                           onClick={() => void submitNewBucket()}
                         >
-                          {newBucketBusy ? 'Creating' : 'Create'}
+                          {newBucketBusy ? 'Creating…' : 'Create'}
                         </Button>
                         <Button
                           type="button"

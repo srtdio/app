@@ -2,7 +2,7 @@
 // as the fallback when the workspace has none).
 // Every formatter takes an explicit IANA zone and hands it to
 // Intl.DateTimeFormat, the same approach src/lib/list-sort.ts (civilDate) and
-// src/lib/brief-groups.ts (formatRaisedDay) use for briefs. Dates use 'en-US'
+// src/lib/display-date.ts (the app day formatter) use. Dates use 'en-US'
 // as the reference locale so the output is identical whatever the browser's
 // locale, with parts re-assembled by type so part order never drifts between
 // engines; the chat clock time (formatClockTime) follows the device locale.

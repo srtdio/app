@@ -215,7 +215,7 @@ describe('Open tab posts section', () => {
   it('row lines: the title (no KEY-N code), then format · target date · where it is', () => {
     expect(openPostLines(openPost(), true, 'UTC')).toEqual({
       title: 'Launch teaser',
-      meta: 'Carousel · Oct 2 · in this chat',
+      meta: 'Carousel · 2 Oct · in this chat',
     });
     expect(openPostLines(openPost({ target_date: null }), false, 'UTC')).toEqual({
       title: 'Launch teaser',
@@ -225,9 +225,9 @@ describe('Open tab posts section', () => {
 
   it('P6: a timestamptz target date renders in the workspace zone (never blank)', () => {
     const post = openPost({ target_date: '2026-10-02T20:30:00+00:00' });
-    expect(openPostLines(post, true, 'UTC').meta).toBe('Carousel · Oct 2 · in this chat');
-    // 20:30 UTC is already Oct 3 in Kolkata.
-    expect(openPostLines(post, true, 'Asia/Kolkata').meta).toBe('Carousel · Oct 3 · in this chat');
+    expect(openPostLines(post, true, 'UTC').meta).toBe('Carousel · 2 Oct · in this chat');
+    // 20:30 UTC is already 3 Oct in Kolkata.
+    expect(openPostLines(post, true, 'Asia/Kolkata').meta).toBe('Carousel · 3 Oct · in this chat');
     const html = renderToStaticMarkup(
       <OpenPostSheetRow
         post={post}
@@ -237,7 +237,7 @@ describe('Open tab posts section', () => {
         onShare={() => {}}
       />,
     );
-    expect(html).toContain('Oct 2');
+    expect(html).toContain('2 Oct');
   });
 
   it('Jump when a card is in this chat, Share here otherwise', () => {

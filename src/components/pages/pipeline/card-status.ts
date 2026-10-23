@@ -3,7 +3,7 @@
 // in the reject confirm. "Approver" is the client role, "creator" the agency
 // side (owner, admin, agency). No React, so every line is unit tested.
 
-import { relativeShort } from '@/lib/relative-time';
+import { formatAgo } from '@/lib/display-date';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import { canRoleMove } from '@/components/pages/pcs/stage-actions';
 import { STAGE_TRANSITIONS } from '@srtdio/posts';
@@ -43,7 +43,7 @@ export function reviewStatus(
   if (!isAgencySide(viewer.role)) return null;
   const only = viewer.approverFirstNames.length === 1 ? viewer.approverFirstNames[0] : undefined;
   const who = only !== undefined && only !== '' ? only : 'approvers';
-  return { tone: 'with', text: `With ${who} · ${relativeShort(stageEnteredAt, now)}` };
+  return { tone: 'with', text: `With ${who} · ${formatAgo(stageEnteredAt, now)}` };
 }
 
 /** Whether this viewer may make any move at all from `stage` (the card's ⋯ shows only then). */

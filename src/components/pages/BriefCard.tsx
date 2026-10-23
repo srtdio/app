@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { IconBriefs } from '@/components/ui/icons';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Thumbnail } from '@/components/media';
-import { formatCivilDay } from '@/lib/brief-groups';
+import { formatDue } from '@/lib/display-date';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
@@ -28,9 +28,12 @@ export function briefCardLink(brief: BriefWithThumbnail): ExternalLink | null {
   return toExternalLinks(brief.reference_links)[0] ?? null;
 }
 
-/** The card's due line: "Due Oct 8", read off the date-only string itself. */
-export function briefDueLabel(targetDate: string): string {
-  return `Due ${formatCivilDay(targetDate)}`;
+/**
+ * The card's due line: "Due 8 Oct" ("Due 4 Jan 2027" outside now's year), read
+ * off the date-only string itself so no zone can shift the day.
+ */
+export function briefDueLabel(targetDate: string, now: Date = new Date()): string {
+  return formatDue(targetDate, 'UTC', now);
 }
 
 interface BriefCardProps {

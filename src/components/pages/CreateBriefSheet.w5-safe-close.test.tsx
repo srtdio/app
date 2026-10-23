@@ -259,7 +259,7 @@ describe('CreateBriefSheet: Create and uploads', () => {
     await fillRequired();
     await act(async () => createButton()?.click());
     expect(document.body.textContent).not.toContain('duplicate key');
-    expect(document.body.textContent).toContain('Something went wrong. Try again.');
+    expect(document.body.textContent).toContain("Couldn't create the brief. Try again.");
   });
 });
 

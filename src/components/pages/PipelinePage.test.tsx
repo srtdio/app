@@ -509,6 +509,48 @@ describe('runMovePost', () => {
     expect(h.deps.inFlight.has('p1')).toBe(false);
   });
 
+  it('offline: a fetch failure toasts "Couldn\'t move the post. You\'re offline." with Retry', async () => {
+    stMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const h = harness([makePost('p1', 'draft')]);
+    const failures: Array<{ message: string; retry: boolean }> = [];
+    const deps: MovePostDeps = {
+      ...h.deps,
+      toast: (message, failure) => failures.push({ message, retry: failure?.retry !== undefined }),
+    };
+
+    await runMovePost(deps, 'p1', 'review');
+
+    expect(failures).toEqual([{ message: "Couldn't move the post. You're offline.", retry: true }]);
+  });
+
+  it('a refusal toasts as a failure with no Retry', async () => {
+    stMock.mockResolvedValue({
+      ok: false,
+      error: { code: 'forbidden_role', message: 'forbidden_role' },
+    } satisfies Result<string>);
+    const h = harness([makePost('p1', 'draft')]);
+    const failures: Array<{ message: string; failed: boolean; retry: boolean }> = [];
+    const deps: MovePostDeps = {
+      ...h.deps,
+      toast: (message, failure) =>
+        failures.push({
+          message,
+          failed: failure !== undefined,
+          retry: failure?.retry !== undefined,
+        }),
+    };
+
+    await runMovePost(deps, 'p1', 'review');
+
+    expect(failures).toEqual([
+      {
+        message: "Couldn't move the post. You don't have access to do this.",
+        failed: true,
+        retry: false,
+      },
+    ]);
+  });
+
   it('double-fire guard: two rapid calls for the same post fire the proc once', async () => {
     let resolve: ((value: Result<string>) => void) | undefined;
     stMock.mockReturnValue(

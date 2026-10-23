@@ -36,6 +36,8 @@ describe('formatShortDate', () => {
   it('adds the year only when it is not the current year', () => {
     const now = new Date('2027-02-01T12:00:00Z');
     expect(formatShortDate(CREATED_AT, 'Europe/London', now)).toBe('22 Sep 2026');
+    // No clock passed: never a year, so the output is deterministic.
+    expect(formatShortDate(CREATED_AT, 'Europe/London')).toBe('22 Sep');
   });
 });
 

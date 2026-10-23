@@ -20,7 +20,6 @@ import {
   reopenErrorCopy,
 } from '@/components/pages/BriefDetailPage';
 import { WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
-import { plainError } from '@/lib/error-copy';
 import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -460,12 +459,14 @@ describe('Brief detail reopen', () => {
     expect(text()).toContain('This brief is already open.');
   });
 
-  it('reopenErrorCopy: invalid_payload reads as already open, the rest via plainError', () => {
+  it('reopenErrorCopy: invalid_payload reads as already open, the rest via errorText', () => {
     expect(reopenErrorCopy({ code: 'invalid_payload', message: 'x' })).toBe(
       'This brief is already open.',
     );
     const member = { code: 'workspace_member_only', message: 'workspace_member_only' } as const;
-    expect(reopenErrorCopy(member)).toBe(plainError(member));
+    expect(reopenErrorCopy(member)).toBe(
+      "Couldn't reopen the brief. You don't have access to do this.",
+    );
     expect(reopenErrorCopy(member)).not.toBe('This brief is already open.');
   });
 });
@@ -559,7 +560,8 @@ describe('Brief detail content', () => {
   it('the due date reads the picked day', async () => {
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-10-08' }));
     await mount();
-    expect(text()).toContain('Oct 8, 2026');
+    // "8 Oct" in 2026, "8 Oct 2026" from a later year: both contain the day.
+    expect(text()).toContain('8 Oct');
   });
 });
 

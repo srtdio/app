@@ -184,6 +184,8 @@ interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
   groups: BriefGroup<BriefWithThumbnail>[];
   /** The workspace zone the day headings inside each section are read in. */
   timeZone: string;
+  /** The clock the day headings' year rule reads. Default: now. */
+  now?: Date;
 }
 
 // Sticky per-section header: pinned to the top of the scroll area (below the app
@@ -210,7 +212,7 @@ const DAY_HEADING_CLASS = 'pt-3 pb-1 text-xs font-medium text-fg-2';
  * unit-tested by walking the tree, mirroring briefCardList.
  */
 export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
-  const { groups, timeZone, ...cardDeps } = deps;
+  const { groups, timeZone, now = new Date(), ...cardDeps } = deps;
   return groups.map((group) => (
     <section key={group.key}>
       <div className={SECTION_HEADER_CLASS}>
@@ -219,7 +221,7 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
           {group.items.length} {briefUnit(group.items.length)}
         </span>
       </div>
-      {groupBriefsByDay(group.items, timeZone).flatMap((day) => [
+      {groupBriefsByDay(group.items, timeZone, now).flatMap((day) => [
         <div key={`${day.key}-label`} className={DAY_HEADING_CLASS}>
           {day.label}
         </div>,
@@ -342,7 +344,8 @@ export function BriefsPage() {
       title: created.noteFailed
         ? "Brief created, but your note didn't post. Add it in the comments."
         : 'Brief created',
-      tone: 'success',
+      // A lost note is a partial failure: the error tone, never the success one.
+      tone: created.noteFailed ? 'error' : 'success',
       action: { label: 'Open', onPress: () => navigate(`/briefs/${created.briefId}`) },
     });
   }

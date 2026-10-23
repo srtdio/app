@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
-import { relativeLong } from '@/lib/relative-time';
+import { formatAgo } from '@/lib/display-date';
 import { supabase } from '@/lib/supabase';
 import { personName, resolvePeople } from '@/lib/people-names';
 import { useNewTrace } from '@/lib/trace-context';
@@ -92,9 +92,9 @@ export function notifyErrorMessage(message: string): string {
     case 'forbidden_role':
       return 'Only creators can send this.';
     case 'invalid_stage':
-      return 'This post is not in review anymore.';
+      return "This post isn't in review anymore.";
     default:
-      return 'Could not notify the approvers. Please try again.';
+      return errorText('notify the approvers', message);
   }
 }
 
@@ -212,7 +212,7 @@ export function PostReadyNotice({
         <div className="flex flex-col gap-1">
           <p className="text-sm font-medium text-fg">{view.headline}</p>
           <p className="text-xs tabular-nums text-fg-3">
-            {relativeLong(view.latest.sent_at, new Date())}
+            {formatAgo(view.latest.sent_at, new Date())}
             {' · '}
             {checkpointCountLabel(view.latest.checkpoint_count)}
             {view.latest.sent_by !== null && resolveName(profiles, view.latest.sent_by) !== null
@@ -223,7 +223,7 @@ export function PostReadyNotice({
             <ul className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
               {view.earlier.map((notif) => (
                 <li key={notif.id} className="text-xs tabular-nums text-fg-3">
-                  {relativeLong(notif.sent_at, new Date())}
+                  {formatAgo(notif.sent_at, new Date())}
                   {' · '}
                   {checkpointCountLabel(notif.checkpoint_count)}
                 </li>
@@ -241,7 +241,7 @@ export function PostReadyNotice({
             disabled={openCount > 0 || sending}
             onClick={() => void handleNotify()}
           >
-            {sending ? 'Sending' : NOTIFY_LABEL}
+            {sending ? 'Sending…' : NOTIFY_LABEL}
           </Button>
           {openCount > 0 ? (
             <p className="text-xs text-fg-3">{notifyDisabledReason(openCount)}</p>

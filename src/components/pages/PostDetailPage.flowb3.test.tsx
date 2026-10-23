@@ -194,10 +194,8 @@ vi.mock('@/components/preview/PlatformPreviewPanel', () => ({
 
 import {
   APPROVE_ON_BEHALF_LABEL,
-  APPROVED_LOCKED_COPY,
   PostDetailPage,
   SENT_AGAIN_TOAST,
-  UNKNOWN_ERROR_COPY,
   approvedByLine,
   postActionErrorCopy,
   rejectConfirmBody,
@@ -267,6 +265,9 @@ function byText(
 ): HTMLButtonElement | undefined {
   return [...scope.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
 }
+
+const SEND_FAILED = "Couldn't send the post for review. Try again.";
+const APPROVE_FAILED = "Couldn't approve the post. Try again.";
 
 const scrollIntoView = vi.fn();
 
@@ -401,8 +402,8 @@ describe("33. the creator's one main button and the single open count", () => {
     expect(runPostReadyNotify).toHaveBeenCalledOnce();
     expect(runPostReadyNotify.mock.calls[0]?.[1]).toEqual({ postId: 'p1', traceId: 'trace-1' });
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-    expect(text()).toContain('Sent for review again.');
-    expect(SENT_AGAIN_TOAST).toBe('Sent for review again.');
+    expect(text()).toContain('Sent for review again');
+    expect(SENT_AGAIN_TOAST).toBe('Sent for review again');
     expect(sendAnywayTitle(1)).toBe('1 comment is still open. Send anyway?');
     expect(sendAnywayTitle(3)).toBe('3 comments are still open. Send anyway?');
   });
@@ -455,11 +456,11 @@ describe("33. the creator's one main button and the single open count", () => {
     });
     await render();
     await click(document.querySelector('[data-decision-main]'));
-    expect(count(text(), UNKNOWN_ERROR_COPY)).toBe(1);
+    expect(count(text(), SEND_FAILED)).toBe(1);
     expect(text()).not.toContain('some raw text');
     // Open comments no longer block the proc; a stray checkpoints_open falls to
-    // the unknown copy.
-    expect(sendAgainErrorCopy('checkpoints_open')).toBe(UNKNOWN_ERROR_COPY);
+    // the retry copy.
+    expect(sendAgainErrorCopy('checkpoints_open')).toBe(SEND_FAILED);
   });
 });
 
@@ -503,14 +504,15 @@ describe('37. approved posts are locked', () => {
   });
 
   it('maps post_approved_locked to plain words; the banner lead needs both name and time', () => {
-    expect(postActionErrorCopy({ code: 'unknown', message: 'post_approved_locked' })).toBe(
-      APPROVED_LOCKED_COPY,
-    );
-    expect(APPROVED_LOCKED_COPY).toBe("Approved posts can't be edited.");
+    expect(
+      postActionErrorCopy({ code: 'unknown', message: 'post_approved_locked' }, 'save the caption'),
+    ).toBe("Couldn't save the caption. Approved posts are locked.");
     expect(postActionErrorCopy({ code: 'unknown', message: 'P0001 boom' })).toBe(
-      "Couldn't do that. Try again.",
+      "Couldn't move the post. Try again.",
     );
-    expect(postActionErrorCopy(new Error('Failed to fetch'))).toBe(UNKNOWN_ERROR_COPY);
+    expect(postActionErrorCopy(new Error('Failed to fetch'))).toBe(
+      "Couldn't move the post. You're offline.",
+    );
     expect(approvedByLine(null, '2026-10-21T06:00:00.000Z', 'UTC')).toBeNull();
     expect(approvedByLine('Meera Shah', null, 'UTC')).toBeNull();
   });
@@ -523,8 +525,10 @@ describe('37. approved posts are locked', () => {
       ),
       'utf8',
     );
-    expect(src).toContain('setCaptionError(postActionErrorCopy(result.error));');
-    expect(src).toContain('push(postActionErrorCopy(result.error));');
+    expect(src).toContain(
+      "setCaptionError(postActionErrorCopy(result.error, 'save the caption'));",
+    );
+    expect(src).toContain("pushError(postActionErrorCopy(result.error, 'save the details'));");
   });
 });
 
@@ -553,15 +557,15 @@ describe('40. reject confirm copy', () => {
 });
 
 describe('41. a failed approve shows once, inside the approve confirm', () => {
-  it('unknown error reads "Couldn\'t do that. Try again." once, never the raw text', async () => {
+  it('unknown error reads the approve retry line once, never the raw text', async () => {
     h.role = 'client';
     h.transitionResult = { ok: false, error: { code: 'unknown', message: 'pg raw boom' } };
     await render();
     await click(byText('Approve', document.querySelector('[data-decision-row]')!));
     await click(document.querySelector('[data-approve-confirm-button]'));
     expect(stageTransition).toHaveBeenCalledOnce();
-    expect(count(text(), UNKNOWN_ERROR_COPY)).toBe(1);
-    expect(document.querySelector('[data-approve-error]')?.textContent).toBe(UNKNOWN_ERROR_COPY);
+    expect(count(text(), APPROVE_FAILED)).toBe(1);
+    expect(document.querySelector('[data-approve-error]')?.textContent).toBe(APPROVE_FAILED);
     expect(document.querySelector('[data-decision-error]')).toBeNull();
     expect(text()).not.toContain('pg raw boom');
   });

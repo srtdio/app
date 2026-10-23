@@ -164,15 +164,15 @@ describe('post flow C: Pipeline card', () => {
     });
     expect(reviewStatus('review', T0, viewer('agency', ['Meera']), TWO_HOURS_LATER)).toEqual({
       tone: 'with',
-      text: 'With Meera · 2h',
+      text: 'With Meera · 2 hours ago',
     });
     for (const role of ['owner', 'admin', 'agency']) {
       expect(reviewStatus('review', T0, viewer(role, ['Meera', 'Arjun']), TWO_HOURS_LATER)).toEqual(
-        { tone: 'with', text: 'With approvers · 2h' },
+        { tone: 'with', text: 'With approvers · 2 hours ago' },
       );
     }
     expect(reviewStatus('review', T0, viewer('owner'), TWO_HOURS_LATER)?.text).toBe(
-      'With approvers · 2h',
+      'With approvers · 2 hours ago',
     );
     // Only Review has a status line; an unknown role gets none.
     expect(reviewStatus('approved', T0, viewer('client'), TWO_HOURS_LATER)).toBeNull();
@@ -196,7 +196,7 @@ describe('post flow C: Pipeline card', () => {
       now: TWO_HOURS_LATER,
     });
     expect(theirs).toContain('data-post-card-status="with"');
-    expect(theirs).toContain('With Meera · 2h');
+    expect(theirs).toContain('With Meera · 2 hours ago');
     const draft = card({
       post: x5Post({ stage: 'draft' }),
       viewer: viewer('agency'),
@@ -240,13 +240,19 @@ describe('post flow C: Pipeline card', () => {
     expect(shown).toContain('data-post-card-move');
   });
 
-  it('fix 4: date reads Due d MMM', () => {
-    expect(dueLabel('2026-03-15T02:00:00Z', 'Asia/Kolkata')).toBe('Due 15 Mar');
-    expect(dueLabel('2026-03-15T02:00:00Z', 'America/New_York')).toBe('Due 14 Mar');
-    expect(dueLabel('2026-12-01T00:00:00Z')).toBe('Due 1 Dec');
-    expect(dueLabel('2026-03-15T02:00:00Z', 'Not/AZone')).toBe('Due 15 Mar');
+  it('fix 4: date reads Due d MMM, the year only outside now', () => {
+    const now = new Date('2026-06-01T00:00:00Z');
+    expect(dueLabel('2026-03-15T02:00:00Z', 'Asia/Kolkata', now)).toBe('Due 15 Mar');
+    expect(dueLabel('2026-03-15T02:00:00Z', 'America/New_York', now)).toBe('Due 14 Mar');
+    expect(dueLabel('2026-12-01T00:00:00Z', 'UTC', now)).toBe('Due 1 Dec');
+    expect(dueLabel('2027-01-04T00:00:00Z', 'UTC', now)).toBe('Due 4 Jan 2027');
+    expect(dueLabel('2026-03-15T02:00:00Z', 'Not/AZone', now)).toBe('Due 15 Mar');
     expect(dueLabel('soon')).toBe('Due soon');
-    const out = card({ post: x5Post({ target_date: '2026-03-15T02:00:00Z' }), timeZone: 'UTC' });
+    const out = card({
+      post: x5Post({ target_date: '2026-03-15T02:00:00Z' }),
+      timeZone: 'UTC',
+      now,
+    });
     expect(out).toMatch(/<span[^>]*data-post-card-due=""[^>]*>Due 15 Mar<\/span>/);
     expect(out).not.toContain('2026');
     expect(card({ post: x5Post({ target_date: null }) })).not.toContain('data-post-card-due');
@@ -663,15 +669,15 @@ describe('post flow C: the move itself', () => {
     expect(none).not.toHaveBeenCalled();
   });
 
-  it('fix 41: every failed move reads "Couldn\'t move the post. Try again." and posts no reason', async () => {
+  it('fix 41: a failed move reads "Couldn\'t move the post. {reason}" and posts no reason', async () => {
     expect(MOVE_FALLBACK_MESSAGE).toBe("Couldn't move the post. Try again.");
-    const codes: DomainErrorCode[] = [
-      'invalid_stage_transition',
-      'forbidden_role',
-      'workspace_member_only',
-      'unknown',
-    ];
+    const codes: DomainErrorCode[] = ['invalid_stage_transition', 'unknown'];
     for (const code of codes) expect(moveErrorMessage(code)).toBe(MOVE_FALLBACK_MESSAGE);
+    for (const code of ['forbidden_role', 'workspace_member_only'] as DomainErrorCode[]) {
+      expect(moveErrorMessage(code)).toBe(
+        "Couldn't move the post. You don't have access to do this.",
+      );
+    }
 
     stMock.mockResolvedValue({
       ok: false,

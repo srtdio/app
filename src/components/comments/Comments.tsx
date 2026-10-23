@@ -26,7 +26,8 @@ import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { relativeLong, relativeShort, shortDate } from '@/lib/relative-time';
+import { browserTimeZone } from '@/lib/chat/time-format';
+import { formatAgo, formatDateTime } from '@/lib/display-date';
 import { UNDO_WINDOW_MS, useUndoableAction } from '@/lib/use-undoable-action';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -258,12 +259,13 @@ export function annotationChip(
   );
 }
 
-// Format a stored timestamp as a localized date and time. Falls back to the raw
-// value if it is somehow unparseable so nothing is silently dropped.
+// Format a stored timestamp with the app formatter ("23 Oct, 2:14 PM", browser
+// zone: comments carry no workspace zone). Falls back to the raw value if it is
+// somehow unparseable so nothing is silently dropped.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return formatDateTime(value, browserTimeZone(), new Date());
 }
 
 // ---------------------------------------------------------------------------
@@ -698,15 +700,10 @@ export function pointActions(
   return base;
 }
 
-/** The clock time of an edit: "2:14 pm" on the same day, else the calendar date
- *  ("Jun 11"). Unparseable input yields '' so nothing raw is shown. */
+/** When an edit happened, via the app formatter: "1 Mar, 2:14 PM" (browser
+ *  zone). Unparseable input yields '' so nothing raw is shown. */
 export function editedTime(ts: string, now: Date): string {
-  const date = new Date(ts);
-  if (Number.isNaN(date.getTime())) return '';
-  if (date.toDateString() !== now.toDateString()) return shortDate(ts, now);
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${hours % 12 === 0 ? 12 : hours % 12}:${minutes} ${hours < 12 ? 'am' : 'pm'}`;
+  return formatDateTime(ts, browserTimeZone(), now);
 }
 
 /** The "edited <time>" marker shared by comments and ledger points, or null when
@@ -1722,7 +1719,7 @@ export function Comments({
             ·
           </span>
           <span className="shrink-0 text-xs text-fg-3 tabular-nums">
-            {relativeLong(comment.created_at, new Date())}
+            {formatAgo(comment.created_at, new Date())}
           </span>
           {!editing && pointMenuMode(actions) === 'menu' ? (
             <div className="relative ml-auto shrink-0">
@@ -1855,7 +1852,7 @@ export function Comments({
                 isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
               }
             >
-              {isResolving ? 'Saving' : isResolved ? 'Reopen' : 'Resolve'}
+              {isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}
             </Button>
           ) : null}
           {!tombstone ? copyControl(comment) : null}
@@ -2094,7 +2091,7 @@ export function Comments({
                       {label.text}
                     </span>
                     <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-fg-3">
-                      {relativeShort(comment.created_at, new Date())}
+                      {formatAgo(comment.created_at, new Date())}
                     </span>
                     {!tombstone ? (
                       <Button
@@ -2155,7 +2152,7 @@ export function Comments({
                         disabled={busy}
                         onClick={() => void handleCheckpointNotDone(comment)}
                       >
-                        {busy ? 'Saving' : 'Not done'}
+                        {busy ? 'Saving…' : 'Not done'}
                       </QuietTextButton>
                     </div>
                   ) : null}

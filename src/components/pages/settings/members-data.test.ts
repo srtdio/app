@@ -185,7 +185,10 @@ describe('roleLabel / memberRemoveErrorMessage / formatJoined', () => {
   });
 
   it('formats an accepted date and returns null for missing/invalid input', () => {
-    expect(formatJoined('2026-01-15T00:00:00Z')).not.toBeNull();
+    expect(formatJoined('2026-01-15T12:00:00Z')).not.toBeNull();
+    expect(formatJoined('2025-01-15T12:00:00Z', new Date('2026-10-23T12:00:00Z'))).toBe(
+      '15 Jan 2025',
+    );
     expect(formatJoined(null)).toBeNull();
     expect(formatJoined('not-a-date')).toBeNull();
   });

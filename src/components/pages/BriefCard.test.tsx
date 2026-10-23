@@ -200,7 +200,7 @@ describe('BriefCard thumbnail tile', () => {
     const out = render(makeBrief({ status: 'open', target_date: '2026-07-01' }), cache);
     expect(out).toContain('Spring launch');
     expect(out).toContain('Open');
-    expect(out).toContain('Due Jul 1');
+    expect(out).toContain('Due 1 Jul');
   });
 
   it('shows the Closed marker for a closed brief', () => {

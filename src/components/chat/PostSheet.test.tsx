@@ -105,7 +105,7 @@ describe('PostSheetActions by side and stage', () => {
     const html = actions('agency', row({ stage: 'review' }));
     expect(actionIds(html)).toEqual(['approve', 'open_pipeline']);
     expect(html).toContain('>Approve<');
-    expect(html).toContain('Waiting on approvers since Sep 20');
+    expect(html).toContain('Waiting on approvers since 20 Sep');
     expect(html).toContain('bg-good');
   });
 
@@ -369,7 +369,7 @@ describe('PostSheetDetails', () => {
     expect(html).toContain('>Stage<');
     expect(html).toContain('>Review<');
     expect(html).toContain('Target date');
-    expect(html).toContain('Oct 2');
+    expect(html).toContain('2 Oct');
     expect(html).toMatch(/· 4 slides/);
   });
 
@@ -384,7 +384,7 @@ describe('PostSheetDetails', () => {
       />,
     );
     expect(html).toContain('data-sheet-row="approved"');
-    expect(html).toContain('Asha · Oct 1');
+    expect(html).toContain('Asha · 1 Oct');
   });
 });
 

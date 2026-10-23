@@ -207,17 +207,17 @@ describe('SharedPostCardList', () => {
         new Map([['u1', 'Asha Rao']]),
       );
     deviceLocale('en-IN');
-    expect(named()).toContain('Approved by Asha · Sep 21 2:05 pm');
+    expect(named()).toContain('Approved by Asha · 21 Sep 2:05 pm');
     vi.restoreAllMocks();
     deviceLocale('en-GB');
-    expect(named()).toContain('Approved by Asha · Sep 21 14:05');
+    expect(named()).toContain('Approved by Asha · 21 Sep 14:05');
     const fallback = render(['p1'], [cardRow('p1', { stage: 'approved' })]);
-    expect(fallback).toContain('Approved · Sep 20');
+    expect(fallback).toContain('Approved · 20 Sep');
   });
 
   it('shows the target date when set', () => {
     const html = render(['p1'], [cardRow('p1', { target_date: '2026-10-02T09:00:00Z' })]);
-    expect(html).toMatch(/data-card-target="">Oct 2</);
+    expect(html).toMatch(/data-card-target="">2 Oct</);
   });
 
   it('preserves postIds order and keeps not-visible cards in place', () => {

@@ -17,7 +17,8 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
 import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
-import { shortDate } from '@/lib/relative-time';
+import { browserTimeZone } from '@/lib/chat/time-format';
+import { formatDay } from '@/lib/display-date';
 
 interface VersionHistorySheetProps {
   open: boolean;
@@ -59,12 +60,13 @@ interface VersionHistorySheetModel extends VersionHistorySheetProps {
 const ROW_BASE =
   'flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
-// The app's calendar formatter (FN7): "Jun 11", with the year once it differs
-// from now's. Falls back to the raw value if unparseable.
+// The app's day formatter (FN7): "11 Jun", with the year once it differs from
+// now's. The sheet has no workspace zone in hand, so it reads the browser's.
+// Falls back to the raw value if unparseable.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return shortDate(value, new Date());
+  return formatDay(value, browserTimeZone(), new Date());
 }
 
 /** Toggle an id in the compare selection, a max-two queue: re-picking a selected

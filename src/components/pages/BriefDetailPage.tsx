@@ -31,10 +31,9 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
-import { civilDate } from '@/lib/list-sort';
-import { formatCivilDay, formatRaisedDay } from '@/lib/brief-groups';
+import { formatDay } from '@/lib/display-date';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
-import { plainError } from '@/lib/error-copy';
+import { errorText } from '@/lib/error-copy';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { hasPreviousEntry } from '@/lib/chat/use-history-step';
 import { useSession } from '@/lib/session-context';
@@ -60,11 +59,12 @@ function statusLabel(status: string): string {
 }
 
 /**
- * briefs.target_date is a date-only column: "2026-10-08" reads "Oct 8, 2026" on
- * every machine, whatever the browser zone (never new Date(value)). Pure.
+ * briefs.target_date is a date-only column: "2026-10-08" reads "8 Oct" ("8 Oct
+ * 2027" outside now's year) on every machine, whatever the browser zone (the
+ * string's own parts, never new Date(value)).
  */
-export function briefDueDateLabel(targetDate: string | null): string {
-  return targetDate !== null ? formatCivilDay(targetDate, true) : 'Not set';
+export function briefDueDateLabel(targetDate: string | null, now: Date = new Date()): string {
+  return targetDate !== null ? formatDay(targetDate, 'UTC', now) || targetDate : 'Not set';
 }
 
 /**
@@ -87,24 +87,17 @@ export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
 }
 
 /**
- * The day this brief was raised, read in the WORKSPACE zone and carrying the
- * four-digit year: "Tuesday 22 Sep 2026". The day itself comes from the Briefs
- * list formatter, so the detail row and the list's day headings can never
- * disagree; the year is the same civil reading, sliced off the civil date. An
- * unparseable created_at is returned unchanged (never handed to Intl.format), and
- * an unknown zone degrades to UTC rather than throwing. Pure, so the label is
- * unit-tested without rendering the page.
+ * The day this brief was raised, read in the WORKSPACE zone with the app day
+ * format: "22 Sep", or "22 Sep 2025" outside now's year (the same formatter as
+ * the list's day headings, so the two can never disagree). An unparseable
+ * created_at is returned unchanged, and an unknown zone never throws.
  */
-export function briefRaisedLabel(createdAt: string, timeZone: string): string {
-  const instant = new Date(createdAt);
-  if (Number.isNaN(instant.getTime())) return createdAt;
-  let year: string;
-  try {
-    year = civilDate(instant, timeZone).slice(0, 4);
-  } catch {
-    year = civilDate(instant, 'UTC').slice(0, 4);
-  }
-  return `${formatRaisedDay(createdAt, timeZone)} ${year}`;
+export function briefRaisedLabel(
+  createdAt: string,
+  timeZone: string,
+  now: Date = new Date(),
+): string {
+  return formatDay(createdAt, timeZone, now) || createdAt;
 }
 
 /**
@@ -165,11 +158,14 @@ function CopyHeading({ label, onCopy }: { label: string; onCopy: () => void }): 
 
 /**
  * A failed reopen in plain words: invalid_payload means the brief is no longer
- * closed (someone reopened it first); anything else reads through plainError
- * (workspace_member_only, offline, a timeout). Pure.
+ * closed (someone reopened it first); anything else reads through the shared
+ * "Couldn't reopen the brief. {reason}" line (workspace_member_only, offline).
+ * Pure.
  */
 export function reopenErrorCopy(error: DomainError): string {
-  return error.code === 'invalid_payload' ? 'This brief is already open.' : plainError(error);
+  return error.code === 'invalid_payload'
+    ? 'This brief is already open.'
+    : errorText('reopen the brief', error);
 }
 
 /**
@@ -420,7 +416,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
         const result = await briefClose(supabase, { p_brief_id: briefId, p_trace_id: newTrace() });
         if (!result.ok) {
           setStatus(before);
-          toast?.show({ title: plainError(result.error) });
+          toast?.show({ title: errorText('close the brief', result.error), tone: 'error' });
           return;
         }
         // Lists and counts that read on mount (Briefs, the chat status drawer)
@@ -448,7 +444,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
         const result = await reopenBrief(supabase, { briefId }, newTrace());
         if (!result.ok) {
           setStatus(before);
-          toast?.show({ title: reopenErrorCopy(result.error) });
+          toast?.show({ title: reopenErrorCopy(result.error), tone: 'error' });
           return;
         }
         dispatchWorkspaceDataChanged();
