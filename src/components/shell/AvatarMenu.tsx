@@ -10,7 +10,6 @@ import {
   IconSun,
   IconSwitch,
   IconTrash,
-  IconUser,
 } from '@/components/ui/icons';
 import { useInduction } from '@/components/induction/InductionProvider';
 import { dispatchSorted } from '@/lib/events';
@@ -43,11 +42,6 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
           onClose();
           dispatchSorted('sorted:switch-workspace');
         }}
-      />
-      <MenuItem
-        icon={<IconUser size={18} />}
-        label="Profile"
-        onClick={() => go('/settings?panel=profile')}
       />
       <MenuItem
         icon={<IconSettings size={18} />}

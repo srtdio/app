@@ -58,7 +58,6 @@ describe('AvatarMenu rows', () => {
     mount();
     expect(labels()).toEqual([
       'Switch workspace',
-      'Profile',
       'Settings',
       'Recently deleted',
       'Appearance',
@@ -72,7 +71,6 @@ describe('AvatarMenu rows', () => {
     mount();
     expect(labels()).toEqual([
       'Switch workspace',
-      'Profile',
       'Settings',
       'Recently deleted',
       'Appearance',
@@ -82,12 +80,13 @@ describe('AvatarMenu rows', () => {
     ]);
   });
 
-  it('opens the profile panel from Profile', () => {
+  it('has no Profile row and Settings routes to /settings', () => {
     mount();
-    const profile = Array.from(document.querySelectorAll('[role="menuitem"]')).find(
-      (el) => el.textContent === 'Profile',
+    expect(labels()).not.toContain('Profile');
+    const settings = Array.from(document.querySelectorAll('[role="menuitem"]')).find(
+      (el) => el.textContent === 'Settings',
     );
-    act(() => (profile as HTMLButtonElement).click());
-    expect(navigate).toHaveBeenCalledWith('/settings?panel=profile');
+    act(() => (settings as HTMLButtonElement).click());
+    expect(navigate).toHaveBeenCalledWith('/settings');
   });
 });
