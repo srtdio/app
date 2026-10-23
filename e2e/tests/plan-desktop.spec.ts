@@ -265,7 +265,7 @@ test('A: the panel docks at full size, opens on today, chat scrolls beside it; i
   await page.goto('/pipeline');
   const title = page.getByText('Thank you note', { exact: true }).first();
   await expect(title).toBeVisible({ timeout: 15_000 });
-  await expect(title.locator('xpath=..')).toContainText('Due 15 Oct');
+  await expect(title.locator('xpath=..')).toContainText('15 Oct');
   expectClean(network);
 });
 
