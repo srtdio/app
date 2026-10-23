@@ -324,7 +324,7 @@ export function PendingChip({
         </span>
         <span className={error ? 'truncate text-[11px] text-bad' : 'text-[11px] text-fg-3'}>
           {item.status.state === 'uploading'
-            ? 'Uploading…'
+            ? 'Uploading'
             : item.status.state === 'error'
               ? item.status.message
               : fileExtension(item.file.name)}
