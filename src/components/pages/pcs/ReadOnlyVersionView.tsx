@@ -60,7 +60,7 @@ export function ReadOnlyVersionView({
       </div>
 
       <section>
-        <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">Gallery</div>
+        <div className="text-xs font-medium text-fg-3 mb-2">Gallery</div>
         {showPictures && thumbs !== undefined ? (
           <SnapshotThumbs
             items={snapshotItems(galleryVersionIds, thumbs.gallery)}
@@ -77,7 +77,7 @@ export function ReadOnlyVersionView({
       </section>
 
       <section>
-        <div className="text-xs font-medium uppercase tracking-wide text-fg-3 mb-2">Caption</div>
+        <div className="text-xs font-medium text-fg-3 mb-2">Caption</div>
         {hasCaption ? (
           <p className="whitespace-pre-wrap text-sm text-fg">{caption}</p>
         ) : (

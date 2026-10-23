@@ -148,8 +148,8 @@ function formatToken(format: string): FormatGlyphToken {
 }
 
 /**
- * The format-aware fallback tile for a post with no usable image: a premium
- * gradient tile carrying the format eyebrow plus a clamped body snippet (the
+ * The format-aware fallback tile for a post with no usable image: a plain
+ * panel tile carrying the format icon plus a clamped body snippet (the
  * caption when present, else the title). Video/link posts use the centred 'media'
  * layout; everything else uses the text-forward layout. When the post has a
  * thumbnail this is only used if the presign fails or is disabled.

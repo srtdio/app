@@ -222,7 +222,7 @@ export function PipelineDateRangeCalendar({
           </button>
         </div>
 
-        <div className="grid grid-cols-7 text-center text-[11px] font-medium text-fg-3">
+        <div className="grid grid-cols-7 text-center text-xs font-medium text-fg-3">
           {weekdayHeader.map((letter, index) => (
             <span key={`${letter}-${index}`} className="py-1">
               {letter}
@@ -248,7 +248,7 @@ export function PipelineDateRangeCalendar({
                 aria-pressed={isEndpoint || single}
                 onClick={() => pick(iso)}
                 className={cn(
-                  'flex min-h-[44px] items-center justify-center font-mono text-sm tabular-nums transition-colors',
+                  'flex min-h-[44px] items-center justify-center font-sans text-sm tabular-nums transition-colors',
                   isEndpoint
                     ? 'rounded-md bg-accent font-semibold text-accent-fg'
                     : between

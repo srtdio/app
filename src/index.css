@@ -207,6 +207,10 @@
   body {
     color: var(--fg);
     touch-action: manipulation;
+    /* A long unbroken string (a pasted link) wraps instead of pushing the page
+       sideways. Inherited; break-word, never anywhere, so min-content sizing
+       of flex and grid children is unchanged. */
+    overflow-wrap: break-word;
     font-family:
       'Inter',
       -apple-system,

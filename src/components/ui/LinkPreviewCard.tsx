@@ -256,7 +256,7 @@ function CompactSkeleton(props: { tone: CardTone }): ReactElement {
       aria-hidden="true"
       className={cn('flex h-16 items-center gap-2.5 rounded-xl border px-2.5', SURFACE[props.tone])}
     >
-      <SkeletonBar className="h-10 w-10 shrink-0 rounded-[10px]" />
+      <SkeletonBar className="h-10 w-10 shrink-0 rounded-xl" />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <SkeletonBar className="h-3 w-2/3" />
         <SkeletonBar className="h-2.5 w-1/2" />
@@ -424,7 +424,7 @@ function Compact(props: {
       <LetterTile
         letter={preview.letter}
         tone={tone}
-        className="h-10 w-10 rounded-[10px] text-sm"
+        className="h-10 w-10 rounded-xl text-sm"
       />
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-[13.5px] font-semibold leading-[17px]">
@@ -540,7 +540,7 @@ function Draft(props: {
           data-card-remove=""
           onClick={props.onRemove}
           className={cn(
-            'grid h-11 w-11 shrink-0 place-items-center rounded-[10px] text-fg-2',
+            'grid h-11 w-11 shrink-0 place-items-center rounded-xl text-fg-2',
             FOCUS,
           )}
         >

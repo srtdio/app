@@ -19,7 +19,7 @@ export function Field({ label, htmlFor, required = false, hint, children }: Fiel
         {required ? <span className="text-bad ml-0.5">*</span> : null}
       </label>
       {children}
-      {hint !== undefined ? <p className="text-[11px] text-fg-3 mt-1.5">{hint}</p> : null}
+      {hint !== undefined ? <p className="text-xs text-fg-3 mt-1.5">{hint}</p> : null}
     </div>
   );
 }
