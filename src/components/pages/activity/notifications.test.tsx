@@ -801,4 +801,3 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(provider).toContain("pushTabAlert({ kind: 'chat', text: mentionTabText(name) });");
   });
 });
-

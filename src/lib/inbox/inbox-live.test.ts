@@ -642,4 +642,3 @@ describe('notifications fixes: the live layer', () => {
     expect(mentionTabText(null)).toBe('Someone mentioned you');
   });
 });
-

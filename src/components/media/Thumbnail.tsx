@@ -87,9 +87,7 @@ function FallbackTile({
     return (
       <div className="flex h-full w-full flex-col p-3">
         <span className="text-fg-3">{formatIcon(fallback.glyph, 16)}</span>
-        {fallback.body !== null ? (
-          <p className={BODY_CLASS[bodyLines]}>{fallback.body}</p>
-        ) : null}
+        {fallback.body !== null ? <p className={BODY_CLASS[bodyLines]}>{fallback.body}</p> : null}
       </div>
     );
   }

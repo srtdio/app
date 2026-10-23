@@ -714,7 +714,17 @@ export function deletedFilesBody(
   return `Also ${others.slice(0, -1).join(', ')} and ${others[others.length - 1] ?? ''}`;
 }
 
-const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'svg', 'avif']);
+const IMAGE_EXTENSIONS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'heic',
+  'heif',
+  'svg',
+  'avif',
+]);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv']);
 
 /** A deleted file's kind for its text tile: PDF, IMAGE, VIDEO or FILE. Pure. */
@@ -728,7 +738,6 @@ export function fileKindLabel(file: Pick<DeletedFile, 'filename' | 'mimeType'>):
   if (mime.startsWith('video/') || VIDEO_EXTENSIONS.has(ext)) return 'VIDEO';
   return 'FILE';
 }
-
 
 /**
  * The human-readable line for a row. Null-safe: a missing actor name drops the

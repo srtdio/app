@@ -544,4 +544,3 @@ test('fix 6 and 30: a brief row shows the BRIEF text tile; deleted files show a 
   await expect(badge).toHaveText('+2');
   expectClean(network);
 });
-

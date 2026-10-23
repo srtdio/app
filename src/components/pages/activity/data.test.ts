@@ -2325,4 +2325,3 @@ describe('notifications fixes: pure helpers', () => {
     });
   });
 });
-

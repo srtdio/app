@@ -568,4 +568,3 @@ describe('fix 28: fetchNewestInboxAt seeds the live mark from the server clock',
     if (!failed.ok) expect(failed.error.message).toContain('boom');
   });
 });
-
