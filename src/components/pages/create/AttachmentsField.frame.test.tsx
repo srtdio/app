@@ -42,13 +42,14 @@ const frameEl = (): HTMLElement | null => document.querySelector('[data-frame-ra
 const ratio = (): number => Number(frameEl()?.getAttribute('data-frame-ratio'));
 
 describe('AttachmentsField platform frame (standard composer)', () => {
-  it('shows the empty frame at the format shape before any upload; tapping it opens the picker', async () => {
+  it('shows the empty frame at the format shape before any upload; its Photo opens the picker', async () => {
     const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
     await show({ platform: 'instagram', format: 'reel' });
     expect(frameEl()?.hasAttribute('data-frame-empty')).toBe(true);
     expect(ratio()).toBeCloseTo(9 / 16);
+    // The add buttons sit inside the empty frame; Photo takes a photo or video.
     const target = frameEl()!.querySelector('button')!;
-    expect(target.className).toContain('inset-0');
+    expect(target.textContent?.trim()).toBe('Photo');
     await act(async () => target.click());
     expect(click).toHaveBeenCalledTimes(1);
     expect(click.mock.contexts[0]).toHaveProperty('accept', expect.stringContaining('video/'));
@@ -70,7 +71,8 @@ describe('AttachmentsField platform frame (standard composer)', () => {
     expect(frameEl()?.hasAttribute('data-frame-empty')).toBe(false);
     await show({ platform: 'instagram', format: 'story' }, [photo]);
     expect(ratio()).toBeCloseTo(9 / 16);
-    expect(frameEl()?.style.width).toBe('min(100%, 33.75vh)');
+    // The create sheet's cap: min(60vh, 440px) times the 9:16 ratio.
+    expect(frameEl()?.style.width).toBe('min(100%, calc(min(60vh, 440px) *0.5625))');
   });
 
   it('no frame for a text post or a brief: no box', async () => {
@@ -113,7 +115,7 @@ describe('AttachmentsField platform frame (standard composer)', () => {
 });
 
 describe('AttachmentsField create dropzone', () => {
-  const labels = (root: ParentNode): string[] =>
+  const labels = (root: Element): string[] =>
     [...root.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim());
 
   it('Photo, Document and Link sit inside the empty frame, with no row below it', async () => {
