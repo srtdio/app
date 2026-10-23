@@ -2522,7 +2522,6 @@ export function PostDetailPage({
       {confirmSendAnyway ? (
         <ConfirmDialog
           title={sendAnywayTitle(openCount)}
-          message=""
           confirmLabel={SEND_ANYWAY_LABEL}
           cancelLabel="Cancel"
           onConfirm={() => {
