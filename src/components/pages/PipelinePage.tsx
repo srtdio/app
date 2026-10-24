@@ -8,16 +8,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconCalendar, IconPipeline } from '@/components/ui/icons';
+import { IconCalendar, IconPipeline, IconPlus } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
-import {
-  PipelineDateControl,
-  PipelineSortControl,
-} from '@/components/pages/pipeline/PipelineSortControl';
+import { PipelineFilterControl } from '@/components/pages/pipeline/PipelineSortControl';
 import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
 import {
   StageMoveConfirm,
@@ -136,29 +133,25 @@ export function stageChipItems(
   ];
 }
 
-/**
- * Phone only (below md): the shared header's control row wraps so the search
- * field (its first child) takes a full-width row of its own and the due
- * filter, sort and New post share the second row; the placeholder never cuts.
- * The laptop row is unchanged.
- */
-export const PHONE_TOOLBAR_CLASS =
-  'max-md:[&>div:first-child]:flex-wrap max-md:[&>div:first-child]:gap-y-3 max-md:[&>div:first-child>div:first-child]:basis-full';
+/** The New post button's classes: one row on every screen, never wraps or shrinks. */
+const NEW_POST_CLASS = 'shrink-0 gap-1.5 whitespace-nowrap pl-3 pr-3.5';
 
 /**
- * The Pipeline header chrome: the shared SectionHeader (search, sort, accent "+"
- * create) with the horizontal stage chip bar in the filter-chips slot. Each chip
- * carries its label and post count as discrete fields (StageChips renders the
- * count as a trailing badge). Pure (no hooks) so the wiring is unit-tested by
- * walking the returned tree, mirroring SectionHeader's own tests; the page owns
- * the state and re-fetch.
+ * The Pipeline header chrome: the shared SectionHeader with, on ONE row at
+ * every width, the search field (flex-1, shrinks), the single filter-and-sort
+ * icon button, and the labelled New post button (plus icon + "New post"); the
+ * horizontal stage chip bar sits in the filter-chips slot. Each chip carries
+ * its label and post count as discrete fields (StageChips renders the count as
+ * a trailing badge). Pure (no hooks) so the wiring is unit-tested by walking
+ * the returned tree, mirroring SectionHeader's own tests; the page owns the
+ * state and re-fetch.
  */
 export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
   // The stages keep their transition-map order, All closes the row.
   const hideDraft = props.hideDraft === true;
   const items = stageChipItems(props.counts, hideDraft);
   return (
-    <div data-pipeline-toolbar="" className={PHONE_TOOLBAR_CLASS}>
+    <div data-pipeline-toolbar="">
       <SectionHeader<PostSort>
         search={{
           value: props.search,
@@ -167,16 +160,15 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
         }}
         sort={{
           node: (
-            <div className="flex shrink-0 items-center gap-2">
-              <PipelineDateControl
-                dateWindow={props.dateWindow}
-                onDateWindowChange={props.onDateWindowChange}
-                customRange={props.customRange}
-                onCustomRangeChange={props.onCustomRangeChange}
-                weekStartDay={props.weekStartDay}
-              />
-              <PipelineSortControl order={props.sort} onOrderChange={props.onSortChange} />
-            </div>
+            <PipelineFilterControl
+              order={props.sort}
+              onOrderChange={props.onSortChange}
+              dateWindow={props.dateWindow}
+              onDateWindowChange={props.onDateWindowChange}
+              customRange={props.customRange}
+              onCustomRangeChange={props.onCustomRangeChange}
+              weekStartDay={props.weekStartDay}
+            />
           ),
         }}
         {...(props.canCreate
@@ -186,9 +178,10 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                   <Button
                     variant="primary"
                     data-induction={INDUCTION_KEYS.pipelineCreate}
-                    className="shrink-0 whitespace-nowrap max-md:ml-auto"
+                    className={NEW_POST_CLASS}
                     onClick={() => dispatchSorted('sorted:create-post')}
                   >
+                    <IconPlus size={18} />
                     New post
                   </Button>
                 ),
@@ -204,8 +197,9 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                       tabIndex={-1}
                       disabled
                       data-create-placeholder=""
-                      className="invisible shrink-0 whitespace-nowrap max-md:ml-auto"
+                      className={cn('invisible', NEW_POST_CLASS)}
                     >
+                      <IconPlus size={18} />
                       New post
                     </Button>
                   ),
