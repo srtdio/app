@@ -9,6 +9,7 @@
 // the strip renders nothing.
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { ReactElement } from 'react';
 import {
   checkpointProgressText,
@@ -92,13 +93,12 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
     const state = chipState(row);
     const seq = row.ledger_seq ?? 0;
     return (
-      <button
+      <PressableRow
         key={row.id}
-        type="button"
         aria-label={`Jump to checkpoint ${seq}`}
         onClick={() => flashNode(commentDomId(row.id))}
         // axis: none. Chips never translate, rotate or scale.
-        className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex h-11 !w-11 min-w-[44px] shrink-0 items-center justify-center hover:!bg-transparent"
       >
         <span
           aria-hidden
@@ -112,7 +112,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
         >
           {state === 'open' ? seq : <IconCheck size={ICON_SIZE.inline} />}
         </span>
-      </button>
+      </PressableRow>
     );
   });
 }

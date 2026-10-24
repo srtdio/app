@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
@@ -593,11 +594,10 @@ export function AssetLightbox({
       {/* Info: bottom sheet sliding up inside the lightbox. */}
       {infoOpen ? (
         <div className="absolute inset-0 z-10 flex items-end">
-          <button
-            type="button"
+          <PressableRow
             aria-label="Close details"
             onClick={() => setInfoOpen(false)}
-            className="absolute inset-0 bg-scrim"
+            className="absolute inset-0 !rounded-none bg-scrim hover:!bg-scrim"
           />
           <div
             role="dialog"

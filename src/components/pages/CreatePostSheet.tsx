@@ -1880,15 +1880,14 @@ function ShareToggle({
   return (
     <div className="flex min-h-[44px] items-center justify-between gap-3 text-base">
       <span className="[text-wrap:pretty]">{label}</span>
-      <button
-        type="button"
+      <PressableRow
         role="switch"
         aria-checked={checked}
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative inline-flex h-11 w-[60px] shrink-0 items-center rounded-full px-1 transition-colors motion-reduce:transition-none',
-          checked ? 'bg-accent' : 'bg-panel-3',
+          'relative inline-flex h-11 !w-[60px] shrink-0 items-center !rounded-full px-1 transition-colors motion-reduce:transition-none',
+          checked ? 'bg-accent hover:!bg-accent' : 'bg-panel-3 hover:!bg-panel-3',
         )}
       >
         <span
@@ -1897,7 +1896,7 @@ function ShareToggle({
             checked ? 'translate-x-[24px]' : 'translate-x-0',
           )}
         />
-      </button>
+      </PressableRow>
     </div>
   );
 }

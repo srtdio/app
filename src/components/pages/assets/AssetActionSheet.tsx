@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Button } from '@/components/ui/Button';
 import {
   ICON_SIZE,
@@ -149,11 +150,10 @@ export function AssetActionSheet({
 
   return (
     <div className="fixed inset-0 z-40 flex items-end">
-      <button
-        type="button"
+      <PressableRow
         aria-label="Close actions"
         onClick={onClose}
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 !rounded-none bg-black/40 hover:!bg-black/40"
       />
       <div
         role="dialog"

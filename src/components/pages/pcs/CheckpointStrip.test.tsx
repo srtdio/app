@@ -31,6 +31,7 @@ import type {
   CheckpointStripProps,
 } from '@/components/pages/pcs/CheckpointStrip';
 import { commentDomId } from '@/components/comments/Comments';
+import { PressableRow } from '@/components/ui/PressableRow';
 
 // Node unit environment (no DOM renderer): walk the JSX the hookless helpers
 // return and assert structure / classes, mirroring PcsTabs.test.tsx.
@@ -140,9 +141,9 @@ describe('checkpointChips', () => {
     ]);
   });
 
-  it('every chip is a real button carrying a 44px minimum touch target', () => {
+  it('every chip is a PressableRow button carrying a 44px minimum touch target', () => {
     for (const chip of checkpointChips(rows)) {
-      expect(chip.type).toBe('button');
+      expect(chip.type).toBe(PressableRow);
       const cls = (chip.props as { className: string }).className;
       expect(cls).toContain('min-h-[44px]');
       expect(cls).toContain('min-w-[44px]');
