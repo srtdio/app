@@ -355,9 +355,7 @@ function FileRow(props: {
           <span title={name} className="truncate text-base font-medium text-fg">
             {middleTruncate(name, VIEWER_NAME_BUDGET)}
           </span>
-          <span className="truncate text-sm text-fg-2">
-            {fileMetaLine(item, props.timeZone)}
-          </span>
+          <span className="truncate text-sm text-fg-2">{fileMetaLine(item, props.timeZone)}</span>
         </span>
       </button>
       {open && source !== null ? (
@@ -468,10 +466,7 @@ export function FeedBody<T>(props: {
   }
   if (feed.status === 'error') {
     return (
-      <div
-        data-feed="error"
-        className="flex flex-col items-center gap-2 py-10 text-base text-fg-3"
-      >
+      <div data-feed="error" className="flex flex-col items-center gap-2 py-10 text-base text-fg-3">
         <span>Could not load</span>
         <Button onClick={props.onRetry}>Try again</Button>
       </div>

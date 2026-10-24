@@ -458,9 +458,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-base font-medium text-fg">{member.name}</span>
                   {member.username !== null ? (
-                    <span className="truncate font-mono text-sm text-fg-2">
-                      @{member.username}
-                    </span>
+                    <span className="truncate font-mono text-sm text-fg-2">@{member.username}</span>
                   ) : null}
                 </span>
                 {member.role !== '' ? (

@@ -168,9 +168,7 @@ function quoteLines(
         <span
           className={cn(
             'line-clamp-1 [overflow-wrap:anywhere]',
-            inBubble !== undefined
-              ? sized(QUOTE_AUTHOR_TYPE, inBubble)
-              : 'text-sm font-medium',
+            inBubble !== undefined ? sized(QUOTE_AUTHOR_TYPE, inBubble) : 'text-sm font-medium',
             tone === 'warn' ? 'text-warn' : 'text-accent',
           )}
         >

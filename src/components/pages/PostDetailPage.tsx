@@ -2386,9 +2386,7 @@ export function PostDetailPage({
                     </span>
                   </div>
                   {captionSaveNote(currentVersionNumber) !== null ? (
-                    <p className="text-sm text-fg-3">
-                      {captionSaveNote(currentVersionNumber)}
-                    </p>
+                    <p className="text-sm text-fg-3">{captionSaveNote(currentVersionNumber)}</p>
                   ) : null}
                 </div>
               ) : hasCaption ? (

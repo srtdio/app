@@ -21,16 +21,7 @@ function tokens(cls: string): string[] {
   return cls.split(/\s+/).filter(Boolean);
 }
 
-const BAD = [
-  'h-8',
-  'h-9',
-  'h-10',
-  'h-12',
-  'rounded-md',
-  'rounded-xl',
-  'font-semibold',
-  'text-sm',
-];
+const BAD = ['h-8', 'h-9', 'h-10', 'h-12', 'rounded-md', 'rounded-xl', 'font-semibold', 'text-sm'];
 
 describe('Comments row actions', () => {
   it('a ghost row action renders 44 tall, 8px radius, 14 / 500, 44 wide minimum', () => {

@@ -65,7 +65,13 @@ describe('CommandPalette type roles', () => {
   it('the group heading is the section label', async () => {
     await mount();
     const label = classesOf(RECENT_LABEL);
-    for (const want of ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']) {
+    for (const want of [
+      'text-sm',
+      'font-semibold',
+      'uppercase',
+      'tracking-[0.06em]',
+      'text-fg-2',
+    ]) {
       expect(label).toContain(want);
     }
     expect(label).not.toContain('tracking-wide');

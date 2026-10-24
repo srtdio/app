@@ -1003,9 +1003,7 @@ function Heading({ title, lead }: { title: string; lead: string }): ReactElement
   const stepLabel = useContext(StepLabel);
   return (
     <div>
-      <h1 className="text-lg font-semibold tracking-tight text-fg [text-wrap:balance]">
-        {title}
-      </h1>
+      <h1 className="text-lg font-semibold tracking-tight text-fg [text-wrap:balance]">{title}</h1>
       {stepLabel !== null ? (
         <p data-onboarding-step="" className="mt-1 text-sm text-fg-3">
           {stepLabel}
@@ -1174,9 +1172,7 @@ function PreviewCard({ label, children }: { label: string; children: ReactNode }
 }
 
 function PreviewLabel({ children }: { children: ReactNode }): ReactElement {
-  return (
-    <p className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{children}</p>
-  );
+  return <p className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{children}</p>;
 }
 
 function PersonPreview({

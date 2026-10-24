@@ -559,10 +559,7 @@ export function AttachmentsFallback(props: {
               <IconFile size={18} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span
-                className="text-base font-medium text-fg [overflow-wrap:anywhere]"
-                title={name}
-              >
+              <span className="text-base font-medium text-fg [overflow-wrap:anywhere]" title={name}>
                 {middleTruncate(name)}
               </span>
               <span className="text-sm text-fg-3">{ATTACHMENT_FALLBACK}</span>

@@ -363,10 +363,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
             </button>
             {createBlocked ? (
               <>
-                <p
-                  id="workspace-limit-note"
-                  className="px-3 pb-2 text-base leading-snug text-fg-2"
-                >
+                <p id="workspace-limit-note" className="px-3 pb-2 text-base leading-snug text-fg-2">
                   {WORKSPACE_LIMIT_MESSAGE}
                 </p>
                 <SupportRows

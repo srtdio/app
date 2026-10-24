@@ -1411,11 +1411,7 @@ export function CreatePostSheet({
         className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6"
       >
         {failedUploads > 0 ? (
-          <p
-            data-upload-failed-footer=""
-            role="status"
-            className="text-sm text-bad lg:col-span-2"
-          >
+          <p data-upload-failed-footer="" role="status" className="text-sm text-bad lg:col-span-2">
             {FAILED_UPLOAD_FOOTER}
           </p>
         ) : uploadWait && pendingUploads > 0 ? (
@@ -1620,10 +1616,7 @@ export function CreatePostSheet({
           ) : null}
 
           {submitError !== null ? (
-            <div
-              role="alert"
-              className="rounded-md border border-bad px-3 py-2 text-base text-bad"
-            >
+            <div role="alert" className="rounded-md border border-bad px-3 py-2 text-base text-bad">
               {submitError}
             </div>
           ) : null}

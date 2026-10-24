@@ -65,9 +65,7 @@ function PrivacyPolicyContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold text-fg">
-          3. What we don&apos;t collect
-        </h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">3. What we don&apos;t collect</h2>
         <ul className="list-disc pl-6">
           <li>
             We don&apos;t ask for your social media account passwords. We do not see or store your
@@ -78,9 +76,7 @@ function PrivacyPolicyContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold text-fg">
-          4. Cookies and local storage
-        </h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">4. Cookies and local storage</h2>
         <p>
           We use only what the app needs to work: keeping you signed in (session tokens in your
           browser storage or cookies), remembering preferences such as the active workspace, and
@@ -202,9 +198,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold text-fg">
-          5. Subscription and payments
-        </h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">5. Subscription and payments</h2>
         <p>
           Certain features may require a paid plan or subscription. Fees, billing periods, and
           payment terms will be disclosed before you confirm your purchase.

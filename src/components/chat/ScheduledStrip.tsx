@@ -139,9 +139,7 @@ export function ScheduledAttachments(props: {
           )}
         >
           <IconFile size={strip ? 14 : 16} className="shrink-0 text-fg-3" />
-          <span className="truncate text-sm">
-            {file.name.trim() !== '' ? file.name : 'File'}
-          </span>
+          <span className="truncate text-sm">{file.name.trim() !== '' ? file.name : 'File'}</span>
         </span>
       ))}
     </span>
@@ -209,9 +207,7 @@ export function ScheduleModeStrip(props: { label: string; onStop: () => void }):
         )}
       >
         <IconCalendarClock size={18} className="shrink-0 text-accent" />
-        <span className="flex-1 truncate text-base font-medium text-fg">
-          Sends {props.label}
-        </span>
+        <span className="flex-1 truncate text-base font-medium text-fg">Sends {props.label}</span>
         <IconButton label="Stop scheduling" className="shrink-0" onClick={props.onStop}>
           <IconX size={16} />
         </IconButton>

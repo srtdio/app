@@ -228,11 +228,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
   function missingLine(): ReactElement | null {
     if (missing === null) return null;
     return (
-      <p
-        data-new-chat-missing=""
-        role="alert"
-        className="ml-auto text-right text-base text-bad"
-      >
+      <p data-new-chat-missing="" role="alert" className="ml-auto text-right text-base text-bad">
         {missing}
       </p>
     );

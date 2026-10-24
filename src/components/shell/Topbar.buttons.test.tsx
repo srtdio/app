@@ -42,16 +42,7 @@ function tokens(el: ReactElement): string[] {
   return ((el.props as { className?: string }).className ?? '').split(/\s+/).filter(Boolean);
 }
 
-const BAD = [
-  'h-8',
-  'h-9',
-  'h-10',
-  'h-12',
-  'rounded-md',
-  'rounded-xl',
-  'font-semibold',
-  'text-sm',
-];
+const BAD = ['h-8', 'h-9', 'h-10', 'h-12', 'rounded-md', 'rounded-xl', 'font-semibold', 'text-sm'];
 
 function expectSystem(el: ReactElement): void {
   const t = tokens(el);

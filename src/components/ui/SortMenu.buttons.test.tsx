@@ -21,15 +21,7 @@ function classOf(el: ReactElement): string[] {
   return ((el.props as { className?: string }).className ?? '').split(/\s+/).filter(Boolean);
 }
 
-const BAD = [
-  'h-9',
-  'md:h-9',
-  'h-12',
-  'rounded-md',
-  'rounded-xl',
-  'font-semibold',
-  'text-sm',
-];
+const BAD = ['h-9', 'md:h-9', 'h-12', 'rounded-md', 'rounded-xl', 'font-semibold', 'text-sm'];
 
 describe('SortMenu buttons', () => {
   it('the trigger is a 44px, 8px-radius secondary button at every width', () => {

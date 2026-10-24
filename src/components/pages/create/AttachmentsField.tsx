@@ -1043,9 +1043,7 @@ export function AttachmentsField({
                 <span className="min-w-0 flex-1 truncate text-base text-fg" title={item.name}>
                   {item.name}
                 </span>
-                <span
-                  className={item.error !== null ? 'text-sm text-bad' : 'text-sm text-fg-3'}
-                >
+                <span className={item.error !== null ? 'text-sm text-bad' : 'text-sm text-fg-3'}>
                   {item.error ?? 'Uploading'}
                 </span>
                 {item.error !== null && (item.file !== undefined || item.link !== undefined) ? (

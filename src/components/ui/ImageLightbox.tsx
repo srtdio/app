@@ -726,9 +726,7 @@ export function ImageLightbox({
       {details !== undefined ? (
         <div className="relative flex h-16 shrink-0 items-center gap-3 px-4 pb-[env(safe-area-inset-bottom)]">
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-base font-medium text-overlay-fg">
-              {details.sender}
-            </span>
+            <span className="truncate text-base font-medium text-overlay-fg">{details.sender}</span>
             <span className="font-mono text-sm tabular-nums text-overlay-fg-dim">
               {details.time}
             </span>

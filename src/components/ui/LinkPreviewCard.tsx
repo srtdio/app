@@ -207,9 +207,7 @@ function TallBody(props: {
         />
         <span className="min-w-0 truncate">{props.site}</span>
       </div>
-      <div className="line-clamp-2 h-9 text-base font-medium leading-tight">
-        {props.title}
-      </div>
+      <div className="line-clamp-2 h-9 text-base font-medium leading-tight">{props.title}</div>
       <div className="line-clamp-2 h-8 text-sm leading-4 opacity-80">{props.detail}</div>
     </div>
   );
@@ -406,9 +404,7 @@ function Compact(props: {
       >
         <IconAlertTriangle size={20} className="shrink-0" />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-base font-medium">
-            This link may be unsafe
-          </span>
+          <span className="truncate text-base font-medium">This link may be unsafe</span>
           <span className="truncate text-sm leading-4 opacity-90">{`${preview.domain} · tap to check`}</span>
         </span>
       </button>
@@ -423,30 +419,20 @@ function Compact(props: {
       type={preview.type}
       className={cn('flex h-16 items-center gap-2.5 px-2.5', SURFACE[tone])}
     >
-      <LetterTile
-        letter={preview.letter}
-        tone={tone}
-        className="h-10 w-10 rounded-xl text-base"
-      />
+      <LetterTile letter={preview.letter} tone={tone} className="h-10 w-10 rounded-xl text-base" />
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-base font-medium">
           {titled ? preview.title : preview.domain}
         </span>
         {via ? (
-          <span className="truncate font-mono text-sm opacity-70">
-            {siteText(preview)}
-          </span>
+          <span className="truncate font-mono text-sm opacity-70">{siteText(preview)}</span>
         ) : titled ? (
           <span className="truncate text-sm opacity-75">{preview.domain}</span>
         ) : preview.path !== '' ? (
-          <span className="truncate font-mono text-sm opacity-70">
-            {preview.path}
-          </span>
+          <span className="truncate font-mono text-sm opacity-70">{preview.path}</span>
         ) : null}
         {preview.type === 'login' ? (
-          <span className="truncate text-sm opacity-75">
-            Sign-in needed to preview
-          </span>
+          <span className="truncate text-sm opacity-75">Sign-in needed to preview</span>
         ) : null}
       </span>
     </CardLink>
@@ -480,9 +466,7 @@ function Draft(props: {
     );
     lines = (
       <>
-        <span className="block truncate text-base font-medium">
-          This link may be unsafe
-        </span>
+        <span className="block truncate text-base font-medium">This link may be unsafe</span>
         <span className="block truncate text-sm leading-4 opacity-90">{preview.domain}</span>
       </>
     );
@@ -510,9 +494,7 @@ function Draft(props: {
     const titled = preview.type === 'full' || preview.type === 'text';
     lines = (
       <>
-        <span className="block truncate text-sm leading-4 opacity-75">
-          {siteText(preview)}
-        </span>
+        <span className="block truncate text-sm leading-4 opacity-75">{siteText(preview)}</span>
         <span className="line-clamp-2 text-base font-medium leading-tight">
           {titled
             ? preview.title

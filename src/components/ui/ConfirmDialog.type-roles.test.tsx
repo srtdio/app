@@ -44,9 +44,7 @@ describe('ConfirmDialog type roles', () => {
     expect(body).toContain('text-base');
     expect(body).toContain('text-fg-2');
 
-    const confirm = [...dialog.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Discard',
-    );
+    const confirm = [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Discard');
     const label = (confirm?.className ?? '').split(/\s+/);
     expect(label).toContain('text-base');
     expect(label).toContain('font-medium');

@@ -97,9 +97,7 @@ function DetailRow({
         className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
-        <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">
-          {value}
-        </span>
+        <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
         <span className="ml-auto shrink-0 text-fg-3">
           <IconChevronRight size={18} />
         </span>
@@ -418,9 +416,7 @@ export function PostDetailsSheet({
 
       <Sheet open={picker === 'owner'} onClose={() => setPicker(null)} title="Choose an owner">
         {memberOptions.length === 0 ? (
-          <p className="px-1 py-6 text-center text-base text-fg-3">
-            No active members to assign.
-          </p>
+          <p className="px-1 py-6 text-center text-base text-fg-3">No active members to assign.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {memberOptions.map((member) => (

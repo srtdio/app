@@ -1269,11 +1269,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           <div className="pointer-events-none absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] flex justify-center">
             <span
               data-page-counter=""
-              className={cn(
-                'rounded-full px-3 py-1 font-mono text-sm',
-                tone.chip,
-                NO_SELECT,
-              )}
+              className={cn('rounded-full px-3 py-1 font-mono text-sm', tone.chip, NO_SELECT)}
             >
               {pageCounter(pages.page, pages.total)}
             </span>

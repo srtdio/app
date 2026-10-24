@@ -364,13 +364,9 @@ export function GuideCard({
       style={placed.style}
     >
       {copy.eyebrow !== '' ? (
-        <p className={`font-mono text-xs ${hero ? 'opacity-80' : 'text-fg-3'}`}>
-          {copy.eyebrow}
-        </p>
+        <p className={`font-mono text-xs ${hero ? 'opacity-80' : 'text-fg-3'}`}>{copy.eyebrow}</p>
       ) : null}
-      <p className="mt-1 text-xl font-semibold leading-snug [text-wrap:balance]">
-        {copy.title}
-      </p>
+      <p className="mt-1 text-xl font-semibold leading-snug [text-wrap:balance]">{copy.title}</p>
       <p
         className={`mt-1 text-base leading-snug [text-wrap:pretty] ${hero ? 'opacity-90' : 'text-fg-2'}`}
       >

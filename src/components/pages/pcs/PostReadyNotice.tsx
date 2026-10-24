@@ -247,10 +247,7 @@ export function PostReadyNotice({
             <p className="text-sm text-fg-3">{notifyDisabledReason(openCount)}</p>
           ) : null}
           {error !== null ? (
-            <div
-              role="alert"
-              className="rounded-md border border-bad px-3 py-2 text-base text-bad"
-            >
+            <div role="alert" className="rounded-md border border-bad px-3 py-2 text-base text-bad">
               {error}
             </div>
           ) : null}

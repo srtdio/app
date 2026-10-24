@@ -275,9 +275,7 @@ export function annotationChip(
         data-caption-quote="stale"
         className="mb-2 min-w-0 border-l-2 border-border pl-3 text-base text-fg-2"
       >
-        <span className="block text-xs text-fg-3">
-          copy changed · v{annotation.versionNumber}
-        </span>
+        <span className="block text-xs text-fg-3">copy changed · v{annotation.versionNumber}</span>
         {annotation.quote !== '' ? (
           <span className="block [overflow-wrap:anywhere]">{annotation.quote}</span>
         ) : null}
@@ -1855,10 +1853,7 @@ export function Comments({
           {formatAgo(comment.created_at, new Date())}
         </span>
         {opts.seq !== null ? (
-          <span
-            data-checkpoint-seq=""
-            className="whitespace-nowrap text-sm tabular-nums text-fg-3"
-          >
+          <span data-checkpoint-seq="" className="whitespace-nowrap text-sm tabular-nums text-fg-3">
             #{opts.seq}
           </span>
         ) : null}

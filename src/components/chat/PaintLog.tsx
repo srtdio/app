@@ -270,10 +270,7 @@ function PaintLogPanel(): ReactElement {
           className="h-[30vh] w-full resize-none bg-panel-2 p-2 font-mono text-xs leading-4 text-fg"
         />
       ) : open ? (
-        <ol
-          ref={listRef}
-          className="max-h-[30vh] overflow-y-auto p-2 font-mono text-xs leading-4"
-        >
+        <ol ref={listRef} className="max-h-[30vh] overflow-y-auto p-2 font-mono text-xs leading-4">
           {entries.map((e, i) => (
             <li key={i} className="whitespace-pre-wrap break-all">
               <span className="text-fg-3">{e.at.toFixed(1)}</span> {e.what}
