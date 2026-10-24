@@ -237,6 +237,19 @@ describe('SignUpPage', () => {
     expect(signInWithOtp).toHaveBeenCalledTimes(2);
   });
 
+  it('agree row: checkbox and label text share one 44px flex row', async () => {
+    await render();
+    const checkbox = document.querySelector<HTMLInputElement>('#signup-policy-consent')!;
+    const label = checkbox.closest('label')!;
+    expect(label).not.toBeNull();
+    expect(label.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['flex', 'items-center', 'gap-3', 'min-h-11']),
+    );
+    expect(checkbox.parentElement).toBe(label);
+    expect(label.textContent).toContain('I agree to the');
+    expect(checkbox.className.split(/\s+/)).toContain('m-0');
+  });
+
   it('Use a different email goes back to the form with the email kept and editable', async () => {
     await render();
     await submit();

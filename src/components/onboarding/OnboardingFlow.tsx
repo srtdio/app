@@ -938,7 +938,7 @@ export function OnboardingFlow({
             <StepLabel.Provider
               value={progressAt >= 0 ? setupCounter(progressAt + 1, progress.length) : null}
             >
-              <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_-12px_rgba(0,0,0,0.12)]">
+              <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-[var(--shadow-card)]">
                 {body}
                 {photoNotice !== null && (step === 'brand' || readyForShell) ? (
                   <p role="status" className="text-base text-fg-2 [text-wrap:pretty]">

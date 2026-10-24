@@ -283,7 +283,7 @@ export function SignUpPage(): ReactElement {
         <div className="flex flex-wrap items-center gap-x-1 text-base text-fg-2">
           <label
             htmlFor="signup-policy-consent"
-            className="flex min-h-11 cursor-pointer items-center gap-2"
+            className="flex min-h-11 cursor-pointer items-center gap-3"
           >
             <input
               id="signup-policy-consent"
@@ -294,7 +294,7 @@ export function SignUpPage(): ReactElement {
                 if (event.target.checked && error === POLICY_CONSENT_MESSAGE) setError(null);
               }}
               aria-label="Agree to the Terms and Privacy Policy"
-              className="h-4 w-4 shrink-0 accent-accent"
+              className="m-0 h-4 w-4 shrink-0 accent-accent"
             />
             <span>I agree to the</span>
           </label>

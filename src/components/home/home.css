@@ -22,28 +22,43 @@
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+/* App tokens: the light values of src/index.css :root, same names (keep in
+   sync). The guest bundle loads no app CSS (src/main.tsx), so the homepage
+   declares the ones it reads. html:has(.home) outranks .dark, so the page stays
+   light only under a dark choice, and nothing applies once the homepage
+   unmounts. The canvas is --panel (white), what index.html and the prerender
+   paint for a guest. */
 html:has(.home) {
-  background: #ffffff;
+  --panel: #ffffff;
+  --panel-rgb: 255 255 255;
+  --panel-2: #f2f3f5;
+  --border: #e6e8eb;
+  --fg: #1b1c20;
+  --fg-2: #62666d;
+  --fg-3: #6b6f76;
+  --accent: #5e6ad2;
+  --accent-text: #5560d0;
+  --accent-fill: #5e6ad2;
+  --accent-hover: #4f5ac0;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(94, 106, 210, 0.1);
+  --scrim: rgba(20, 22, 30, 0.45);
+  --bad: #c2392b;
+  --shadow-card: 0 1px 2px rgba(20, 22, 30, 0.04), 0 8px 24px rgba(20, 22, 30, 0.08);
+  background: var(--panel);
   color-scheme: light;
   scroll-behavior: smooth;
 }
 
 html:has(.home) body {
   margin: 0;
-  background: #ffffff;
+  background: var(--panel);
   overflow-x: hidden;
 }
 
 .home {
-  --bg: #ffffff;
-  --ink: #16161d;
-  --ink-2: #3b3b47;
-  --muted: #6b6b7c;
-  --line: #e6e6ee;
-  --wash: #f6f6f9;
-  --accent: #5e6ad2;
-  --accent-ink: #3f49a8;
-  --accent-soft: #eceefb;
+  /* Feature tints: one pastel fill and its ink per story colour. No app token
+     covers these; each ink is 7:1 or more on its fill. */
   --t1: #eceefb;
   --t1-ink: #2f378f;
   --t2: #f5eee2;
@@ -54,15 +69,18 @@ html:has(.home) body {
   --t4-ink: #1d4b78;
   --t5: #e0f2f0;
   --t5-ink: #155e57;
+  /* The signup band's own dark surface. */
   --band: #16161d;
   --band-2: #1f1f29;
   --band-line: #3a3a48;
   --band-muted: #a9a9b8;
-  --bad: #b42318;
-  --shadow: 0 14px 40px rgba(22, 22, 40, 0.1), 0 2px 6px rgba(22, 22, 40, 0.06);
+  --band-fg: #ffffff;
+  --shadow: var(--shadow-card);
+  /* Phone frame shadow under the mock screenshots and clips. */
+  --shadow-frame: 0 16px 40px rgba(22, 22, 40, 0.14), 0 2px 6px rgba(22, 22, 40, 0.06);
   --display: 'Bricolage Grotesque Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono: ui-monospace, Menlo, monospace;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
   --g: clamp(16px, 4vw, 64px);
   /* Sticky header height; the feature cards size themselves against it. */
   --top-h: 68px;
@@ -71,13 +89,13 @@ html:has(.home) body {
   --screen: calc(100vh - var(--top-h) - 1px);
   color-scheme: light;
   min-height: 100%;
-  background: var(--bg);
-  color: var(--ink);
+  background: var(--panel);
+  color: var(--fg);
   font-family: var(--sans);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
   letter-spacing: -0.006em;
   line-height: 1.5;
-  font-size: 16px;
+  font-size: 15px;
   text-align: center;
   overflow-x: clip;
 }
@@ -121,49 +139,41 @@ html:has(.home) body {
   font-variation-settings: 'opsz' 96;
 }
 
-/* buttons */
+/* buttons: the app's Button (src/components/ui/Button.tsx). Primary is the
+   accent fill, .line is secondary. 44 tall, 8px radius, 14/500 Inter. */
 .home .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 46px;
+  height: 44px;
   min-width: 168px;
   padding: 0 20px;
-  border-radius: 12px;
-  font: 600 15px var(--sans);
+  border-radius: 8px;
+  font: 500 14px var(--sans);
   text-decoration: none;
   cursor: pointer;
-  border: 1px solid var(--ink);
-  background: var(--ink);
-  color: var(--bg);
+  border: 1px solid transparent;
+  background: var(--accent-fill);
+  color: var(--accent-fg);
   white-space: nowrap;
 }
 .home .btn:hover {
-  background: #000;
+  background: var(--accent-hover);
 }
 .home .btn.sm {
-  height: 44px;
   min-width: 0;
   padding: 0 14px;
-  font-size: 14px;
-  border-radius: 10px;
 }
-.home .btn.ghost {
-  background: var(--bg);
-  color: var(--ink);
-  border-color: var(--line);
-}
-.home .btn.ghost:hover {
-  background: var(--wash);
-}
+.home .btn.ghost,
 .home .btn.line {
-  background: #fff;
-  color: var(--ink);
-  border: 1.5px solid var(--ink);
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
 }
+.home .btn.ghost:hover,
 .home .btn.line:hover {
-  background: var(--wash);
+  background: var(--panel-2);
 }
 .home .btn:focus-visible,
 .home .icon-btn:focus-visible,
@@ -181,17 +191,12 @@ html:has(.home) body {
 }
 .home .note {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--fg-3);
   margin-top: 14px;
 }
 .home .tick {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 16px;
+  height: 16px;
   flex: none;
 }
 
@@ -203,7 +208,7 @@ html:has(.home) body {
   font-size: 30px;
   line-height: 1;
   text-decoration: none;
-  color: var(--ink);
+  color: var(--fg);
 }
 .home .mark {
   display: block;
@@ -220,13 +225,13 @@ html:has(.home) body {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
   z-index: 50;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgb(var(--panel-rgb) / 0.9);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid transparent;
 }
 .home .top.on {
-  border-bottom-color: var(--line);
+  border-bottom-color: var(--border);
 }
 .home .top .wrap {
   height: var(--top-h);
@@ -241,8 +246,8 @@ html:has(.home) body {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--bg);
+  border: 1px solid var(--border);
+  background: var(--panel);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -252,7 +257,7 @@ html:has(.home) body {
 .home .icon-btn svg {
   width: 20px;
   height: 20px;
-  stroke: var(--ink);
+  stroke: var(--fg);
   stroke-width: 1.7;
   fill: none;
   stroke-linecap: round;
@@ -260,7 +265,7 @@ html:has(.home) body {
 @media (max-width: 420px) {
   .home .top .btn.sm {
     padding: 0 11px;
-    font-size: 13.5px;
+    font-size: 13px;
   }
   .home .top .wrap {
     gap: 6px;
@@ -275,7 +280,7 @@ html:has(.home) body {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(22, 22, 29, 0.42);
+  background: var(--scrim);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -295,7 +300,7 @@ html:has(.home) body {
   top: 0;
   bottom: 0;
   width: min(420px, 100%);
-  background: var(--bg);
+  background: var(--panel);
   display: flex;
   flex-direction: column;
   text-align: left;
@@ -330,7 +335,7 @@ html:has(.home) body {
   padding: 10px 12px;
   border-radius: 14px;
   text-decoration: none;
-  font: 700 16px var(--display);
+  font: 700 15px var(--display);
   letter-spacing: -0.01em;
 }
 .home .nav-feat a small {
@@ -344,7 +349,7 @@ html:has(.home) body {
 .home .nav-main {
   margin-top: 24px;
   padding-top: 12px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
   display: grid;
   gap: 2px;
 }
@@ -356,16 +361,16 @@ html:has(.home) body {
   padding: 0 12px;
   border-radius: 12px;
   text-decoration: none;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
 }
 .home .nav-main a:hover {
-  background: var(--wash);
+  background: var(--panel-2);
 }
 .home .nav-main a span {
   font-size: 13px;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--fg-3);
 }
 .home .panel .foot {
   margin-top: auto;
@@ -384,7 +389,7 @@ html:has(.home) body {
   list-style: none;
   margin: 24px 0 0;
   padding: 24px 0 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
   display: grid;
   gap: 8px;
 }
@@ -396,7 +401,7 @@ html:has(.home) body {
   row-gap: 8px;
   align-items: start;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 14px;
 }
 .home .story .badge {
@@ -407,7 +412,7 @@ html:has(.home) body {
   height: 44px;
   border-radius: 12px;
   background: var(--accent-soft);
-  color: var(--accent-ink);
+  color: var(--accent-text);
   font: 800 15px var(--display);
 }
 .home .story .st {
@@ -419,13 +424,13 @@ html:has(.home) body {
   font: 500 11px var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--fg-3);
 }
 .home .story .title {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
-  color: var(--ink);
+  color: var(--fg);
 }
 .home .story .soon {
   justify-self: start;
@@ -433,8 +438,8 @@ html:has(.home) body {
   font-weight: 600;
   padding: 3px 9px;
   border-radius: 999px;
-  background: var(--wash);
-  color: var(--muted);
+  background: var(--panel-2);
+  color: var(--fg-3);
 }
 
 /* hero */
@@ -453,12 +458,12 @@ html:has(.home) body {
 .home .hero h1 em,
 .home .close h2 em {
   font-style: normal;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .home .hero p {
-  font-size: 19px;
+  font-size: 20px;
   line-height: 1.5;
-  color: var(--ink-2);
+  color: var(--fg-2);
   max-width: 46ch;
   margin: 22px auto 0;
 }
@@ -484,9 +489,7 @@ html:has(.home) body {
   margin: 0 auto;
   border-radius: 28px;
   overflow: hidden;
-  box-shadow:
-    0 24px 60px rgba(22, 22, 40, 0.14),
-    0 2px 8px rgba(22, 22, 40, 0.06);
+  box-shadow: var(--shadow-frame);
   /* Static fill under the clip until a frame is decoded. */
   background: var(--t2);
 }
@@ -534,7 +537,7 @@ html:has(.home) body {
 .home .sec .head p {
   margin: 14px auto 0;
   font-size: 17px;
-  color: var(--ink-2);
+  color: var(--fg-2);
   max-width: 50ch;
 }
 @media (max-width: 800px) {
@@ -614,14 +617,14 @@ html:has(.home) body {
   font-size: 14px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  background: #fff;
+  background: var(--panel);
   padding: 7px 12px;
   border-radius: 9px;
-  box-shadow: 0 1px 2px rgba(22, 22, 40, 0.08);
+  box-shadow: var(--shadow-card);
 }
 .home .card h3 {
   font-family: var(--display);
-  font-size: 32px;
+  font-size: 28px;
   line-height: 1.06;
   letter-spacing: -0.03em;
   font-weight: 700;
@@ -646,11 +649,9 @@ html:has(.home) body {
   height: auto;
   aspect-ratio: 390 / 620;
   border-radius: 22px;
-  border: 1px solid rgba(22, 22, 40, 0.1);
-  box-shadow:
-    0 16px 40px rgba(22, 22, 40, 0.14),
-    0 2px 6px rgba(22, 22, 40, 0.06);
-  background: #f7f8f9;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-frame);
+  background: var(--panel-2);
 }
 .home .card .shot {
   width: min(100%, 280px);
@@ -666,10 +667,8 @@ html:has(.home) body {
   /* Static fill and frame shadow under the clip until a frame is decoded; the
      clip itself stays transparent until then. */
   border-radius: 22px;
-  background: var(--wash);
-  box-shadow:
-    0 16px 40px rgba(22, 22, 40, 0.14),
-    0 2px 6px rgba(22, 22, 40, 0.06);
+  background: var(--panel-2);
+  box-shadow: var(--shadow-frame);
 }
 .home .clip {
   width: 100%;
@@ -755,7 +754,7 @@ html:has(.home) body {
 /* signup band */
 .home .band {
   background: var(--band);
-  color: #fff;
+  color: var(--band-fg);
   padding-block: 68px;
 }
 .home .band h2 {
@@ -765,7 +764,7 @@ html:has(.home) body {
 .home .band p {
   margin: 12px auto 0;
   color: var(--band-muted);
-  font-size: 16px;
+  font-size: 15px;
   max-width: 40ch;
 }
 .home .band form {
@@ -780,27 +779,30 @@ html:has(.home) body {
   flex: 1;
   min-width: 0;
   width: 100%;
-  height: 52px;
-  border-radius: 12px;
+  height: 44px;
+  border-radius: 8px;
   border: 1px solid var(--band-line);
   background: var(--band-2);
-  color: #fff;
+  color: var(--band-fg);
   padding: 0 16px;
   font: 500 16px var(--sans);
 }
 .home .band input::placeholder {
-  color: #8a8a9a;
+  color: var(--band-muted);
 }
 .home .band .btn {
-  background: #000;
-  color: #fff;
-  border: 1.5px solid rgba(255, 255, 255, 0.88);
-  height: 52px;
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  border: 1px solid transparent;
+  height: 44px;
+}
+.home .band .btn:hover {
+  background: var(--accent-hover);
 }
 .home .band .btn.line {
-  background: #fff;
-  color: var(--ink);
-  border: 1.5px solid var(--ink);
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
 }
 .home .band .alt {
   display: flex;
@@ -827,8 +829,8 @@ html:has(.home) body {
 .home .sb {
   position: sticky;
   top: calc(84px + env(safe-area-inset-top, 0px));
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: 28px;
   padding: 16px;
   display: grid;
@@ -868,7 +870,7 @@ html:has(.home) body {
   margin: 0;
   font-size: 17px;
   line-height: 1.55;
-  color: var(--ink-2);
+  color: var(--fg-2);
   max-width: 42ch;
 }
 .home .sb .proof {
@@ -877,10 +879,10 @@ html:has(.home) body {
   align-items: center;
   margin-top: 6px;
   padding-top: 16px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
   font-size: 14px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--fg);
 }
 .home .sb .proof .tick {
   width: 16px;
@@ -1004,10 +1006,10 @@ html:has(.home) body {
   margin-top: 28px;
 }
 .home footer {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border);
   padding-block: 28px;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--fg-3);
   text-align: left;
 }
 .home footer .wrap {
@@ -1038,10 +1040,10 @@ html:has(.home) body {
   padding-inline: 4px;
   margin-inline: -4px;
   text-decoration: none;
-  color: var(--muted);
+  color: var(--fg-3);
 }
 .home footer a:hover {
-  color: var(--ink);
+  color: var(--fg);
 }
 .home footer .cp {
   margin-left: auto;
@@ -1101,7 +1103,7 @@ html:has(.home) body {
   }
   .home .card p {
     grid-area: 4 / 1;
-    font-size: 18px;
+    font-size: 17px;
     max-width: 42ch;
   }
   /* The mockup takes the card's full height and scales with it. */
@@ -1136,24 +1138,22 @@ html:has(.home) body {
   text-decoration: none;
   font-size: 15px;
   font-weight: 600;
-  color: var(--ink-2);
+  color: var(--fg-2);
 }
 .home .back:hover {
-  color: var(--ink);
+  color: var(--fg);
 }
-.home .back svg,
+.home .back svg {
+  width: 16px;
+  height: 16px;
+}
 .home .rail-nav svg,
 .home .cal-head svg {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  stroke-width: 2;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 20px;
+  height: 20px;
 }
 .home .cal-head svg {
-  stroke: var(--ink);
+  stroke: var(--fg);
 }
 .home .points li {
   display: flex;
@@ -1162,7 +1162,7 @@ html:has(.home) body {
 }
 .home .points .tick {
   margin-top: 4px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .home .demo-grid {
@@ -1177,8 +1177,8 @@ html:has(.home) body {
 .home .demo-intro p {
   margin: 18px 0 0;
   max-width: 46ch;
-  font-size: 18px;
-  color: var(--ink-2);
+  font-size: 17px;
+  color: var(--fg-2);
 }
 .home .points {
   list-style: none;
@@ -1186,7 +1186,7 @@ html:has(.home) body {
   padding: 0;
   display: grid;
   gap: 12px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
 }
 .home .demo-form {
@@ -1204,16 +1204,16 @@ html:has(.home) body {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--fg);
 }
 .home .demo-form input {
   width: 100%;
   min-width: 0;
   height: 48px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--bg);
-  color: var(--ink);
+  background: var(--panel);
+  color: var(--fg);
   padding: 0 14px;
   font: 500 16px var(--sans);
 }
@@ -1223,7 +1223,7 @@ html:has(.home) body {
 }
 .home .tel {
   display: flex;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -1242,10 +1242,10 @@ html:has(.home) body {
   display: grid;
   place-items: center;
   padding: 0 12px;
-  background: var(--wash);
-  border-right: 1px solid var(--line);
+  background: var(--panel-2);
+  border-right: 1px solid var(--border);
   font-weight: 600;
-  color: var(--ink-2);
+  color: var(--fg-2);
 }
 .home .err {
   margin: 0;
@@ -1260,7 +1260,7 @@ html:has(.home) body {
   margin-bottom: 8px;
 }
 .home .cal-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
 }
 .home .cal-grid {
@@ -1281,21 +1281,21 @@ html:has(.home) body {
   text-align: center;
   font: 500 11px var(--mono);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--fg-3);
 }
 .home .cal-day {
   min-width: 44px;
   min-height: 44px;
   border: 1px solid transparent;
   border-radius: 12px;
-  background: var(--wash);
-  color: var(--ink);
+  background: var(--panel-2);
+  color: var(--fg);
   font: 600 15px var(--sans);
   cursor: pointer;
 }
 .home .cal-day:disabled {
   background: transparent;
-  color: var(--muted);
+  color: var(--fg-3);
   opacity: 0.55;
   cursor: default;
 }
@@ -1303,7 +1303,7 @@ html:has(.home) body {
   display: grid;
   place-items: center;
   min-height: 44px;
-  color: var(--muted);
+  color: var(--fg-3);
   font: 400 15px var(--sans);
   opacity: 0.45;
   pointer-events: none;
@@ -1315,9 +1315,9 @@ html:has(.home) body {
 }
 .home .cal-day[aria-pressed='true'],
 .home .slot[aria-pressed='true'] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--bg);
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--panel);
 }
 .home .slots {
   display: flex;
@@ -1328,43 +1328,42 @@ html:has(.home) body {
   min-width: 44px;
   min-height: 44px;
   padding: 0 16px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--bg);
-  color: var(--ink);
+  background: var(--panel);
+  color: var(--fg);
   font: 600 15px var(--sans);
   cursor: pointer;
 }
 .home .hint {
   margin: 0;
   font-size: 14px;
-  color: var(--muted);
+  color: var(--fg-3);
 }
 .home .summary {
   margin: 0;
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--accent-soft);
-  color: var(--accent-ink);
+  color: var(--accent-text);
   font-size: 15px;
   font-weight: 600;
 }
 .home .demo-form .btn {
   width: 100%;
-  height: 52px;
 }
 .home .notice {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--fg);
 }
 @media (min-width: 640px) {
   .home .demo-form {
     padding: clamp(20px, 3vw, 36px);
-    border: 1px solid var(--line);
+    border: 1px solid var(--border);
     border-radius: 24px;
-    background: var(--bg);
+    background: var(--panel);
     box-shadow: var(--shadow);
   }
 }

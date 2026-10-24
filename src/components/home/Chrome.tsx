@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useModalFocus } from '@/lib/modal-focus';
+import { IconCheck, IconChevronLeft, IconX } from '@/components/ui/icons';
 import { DEMO_HREF } from './config';
 import { FEATURES, featureId, showFeature, type FeatureKey } from './features';
 import { Wordmark } from './Wordmark';
@@ -37,20 +38,14 @@ export function homeHref(surface: HomeSurface, hash: string): string {
 }
 
 export function Tick() {
-  return (
-    <svg className="tick" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4 10.5l4 4 8-9" />
-    </svg>
-  );
+  return <IconCheck className="tick" size={16} />;
 }
 
 /** /demo: back to "/" (the app, for a signed-in visitor). */
 export function BackHome() {
   return (
     <a className="back" href="/">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M15 5l-7 7 7 7" />
-      </svg>
+      <IconChevronLeft size={16} />
       Back to home
     </a>
   );
@@ -119,9 +114,7 @@ function Menu({
             aria-label="Close menu"
             onClick={onClose}
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            <IconX size={20} />
           </button>
         </div>
 
@@ -227,6 +220,7 @@ export function SiteShell({ surface, children }: { surface: HomeSurface; childre
             aria-controls="home-menu"
             onClick={() => setMenuOpen(true)}
           >
+            {/* Hamburger: no shared glyph in ui/icons.tsx; same 1.7 stroke. */}
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 7h16M4 12h16M4 17h16" />
             </svg>
