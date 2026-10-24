@@ -29,20 +29,44 @@ export function expectMinTouchTarget(
 }
 
 /**
- * Asserts every visible button inside `scope` (a Page or a Locator) is at least
- * 44x44. Buttons that are not laid out (null or zero-size box) are skipped, so a
- * hidden-but-visible-per-Playwright edge case cannot fail the run.
+ * Asserts every visible button inside `scope` (a Page or a Locator) has a hit
+ * area of at least 44x44. The hit area is the button's box grown by any
+ * absolutely positioned ::before / ::after expander (the `before:-inset-3`
+ * pattern), since taps on those land on the button. Buttons that are not laid
+ * out (null or zero-size box) are skipped, as are buttons matching `exclude`.
+ * A failure names the button.
  */
 export async function expectAllVisibleControlsTouchSized(
   scope: Page | Locator,
-  opts?: { min?: number },
+  opts?: { min?: number; exclude?: string },
 ): Promise<number> {
-  const buttons = await scope.locator('button:visible').all();
+  const min = opts?.min ?? 44;
+  const selector = opts?.exclude ? `button:visible:not(${opts.exclude})` : 'button:visible';
+  const buttons = await scope.locator(selector).all();
   let checked = 0;
   for (const button of buttons) {
-    const box = await button.boundingBox();
-    if (box === null || box.width === 0 || box.height === 0) continue;
-    expectMinTouchTarget(box, opts);
+    const hit = await button.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      let { left, top, right, bottom } = r;
+      for (const pseudo of ['::before', '::after']) {
+        const cs = getComputedStyle(el, pseudo);
+        if (cs.content === 'none' || cs.position !== 'absolute') continue;
+        const px = (v: string): number => (v.endsWith('px') ? parseFloat(v) : 0);
+        left = Math.min(left, r.left + px(cs.left));
+        top = Math.min(top, r.top + px(cs.top));
+        right = Math.max(right, r.right - px(cs.right));
+        bottom = Math.max(bottom, r.bottom - px(cs.bottom));
+      }
+      const name = el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 40) ?? '';
+      return { width: right - left, height: bottom - top, raw: r.width * r.height, name };
+    });
+    if (hit.raw === 0) continue;
+    expect(hit.width, `touch target width: "${hit.name}"`).toBeGreaterThanOrEqual(
+      min - SUBPIXEL_TOLERANCE,
+    );
+    expect(hit.height, `touch target height: "${hit.name}"`).toBeGreaterThanOrEqual(
+      min - SUBPIXEL_TOLERANCE,
+    );
     checked += 1;
   }
   return checked;
