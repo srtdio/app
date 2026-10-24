@@ -204,7 +204,7 @@ describe('Thumbnail', () => {
         bodyLines={3}
       />,
     );
-    expect(three).toContain('class="mt-auto line-clamp-3 text-legacy-xs leading-snug text-fg-2"');
+    expect(three).toContain('class="mt-auto line-clamp-3 text-sm leading-snug text-fg-2"');
     expect(three).not.toContain('line-clamp-4');
     const pipeline = renderToStaticMarkup(
       <Thumbnail
@@ -216,7 +216,7 @@ describe('Thumbnail', () => {
       />,
     );
     expect(pipeline).toContain(
-      'class="mt-auto line-clamp-4 text-legacy-xs leading-snug text-fg-2"',
+      'class="mt-auto line-clamp-4 text-sm leading-snug text-fg-2"',
     );
     expect(pipeline).not.toContain('line-clamp-3');
   });

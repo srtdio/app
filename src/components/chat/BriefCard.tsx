@@ -92,7 +92,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3">
           <IconBriefs size={18} />
         </span>
-        <span className="text-legacy-sm font-medium">Brief unavailable</span>
+        <span className="text-base font-medium">Brief unavailable</span>
       </div>
     );
   }
@@ -107,7 +107,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
         <IconBriefs size={18} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-legacy-sm font-medium text-fg" title={view.title}>
+        <span className="truncate text-base font-medium text-fg" title={view.title}>
           {view.title}
         </span>
         {/* The same pill as the Briefs list and detail: Open (accent, dot) and

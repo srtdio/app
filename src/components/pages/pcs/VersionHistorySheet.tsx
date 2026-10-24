@@ -171,10 +171,10 @@ export function versionHistorySheet({
                 </span>
               ) : null}
               <span data-version-text="" className={VERSION_TEXT_CLASS}>
-                <span className="text-legacy-sm font-medium tabular-nums text-fg">
+                <span className="text-base font-medium tabular-nums text-fg">
                   v{version.versionNumber}
                 </span>
-                <span className="flex min-w-0 items-center text-legacy-xs text-fg-3">
+                <span className="flex min-w-0 items-center text-sm text-fg-3">
                   <span data-version-author="" className="min-w-0 truncate">
                     {resolveAuthor(version.createdBy, version.legacyAuthorName)}
                   </span>
@@ -187,7 +187,7 @@ export function versionHistorySheet({
                 </span>
               </span>
               {isCurrent ? (
-                <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-legacy-xs font-medium text-accent">
+                <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-sm font-medium text-accent">
                   <IconCheck size={14} />
                   Current
                 </span>

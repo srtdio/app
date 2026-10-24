@@ -73,8 +73,8 @@ describe('R12: the conversation picker is never connection-gated', () => {
       'px-3',
       'py-2',
       'gap-3',
-      'text-legacy-sm font-medium leading-snug',
-      'text-legacy-xs leading-snug',
+      'text-base font-medium leading-snug',
+      'text-sm leading-snug',
     ]) {
       expect(skeleton).toContain(cls);
       expect(rows).toContain(cls);

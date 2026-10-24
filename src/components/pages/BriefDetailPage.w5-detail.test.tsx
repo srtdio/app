@@ -798,7 +798,7 @@ describe('Brief detail polish', () => {
     await mount();
     const titles = document.querySelectorAll('h1');
     expect(titles).toHaveLength(1);
-    expect(titles[0]?.className).toContain('text-[28px]');
+    expect(titles[0]?.className).toContain('text-3xl');
     expect(titles[0]?.className).toContain('break-words');
     expect(titles[0]?.className).toContain('min-w-0');
   });

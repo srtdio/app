@@ -174,7 +174,7 @@ function MediaSlot(props: {
           <LetterTile
             letter={props.letter}
             tone={props.tone}
-            className="h-14 w-14 rounded-2xl text-legacy-2xl"
+            className="h-14 w-14 rounded-2xl text-3xl"
           />
         </span>
       )}
@@ -199,18 +199,18 @@ function TallBody(props: {
 }): ReactElement {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 px-2.5 pb-[9px] pt-2">
-      <div className="flex h-4 min-w-0 items-center gap-1.5 text-[11.5px] leading-4 opacity-75">
+      <div className="flex h-4 min-w-0 items-center gap-1.5 text-xs leading-4 opacity-75">
         <LetterTile
           letter={props.letter}
           tone={props.tone}
-          className="h-3.5 w-3.5 rounded text-[8px]"
+          className="h-3.5 w-3.5 rounded text-xs"
         />
         <span className="min-w-0 truncate">{props.site}</span>
       </div>
-      <div className="line-clamp-2 h-9 text-legacy-sm font-semibold leading-[18px]">
+      <div className="line-clamp-2 h-9 text-base font-semibold">
         {props.title}
       </div>
-      <div className="line-clamp-2 h-8 text-[12.5px] leading-4 opacity-80">{props.detail}</div>
+      <div className="line-clamp-2 h-8 text-sm leading-4 opacity-80">{props.detail}</div>
     </div>
   );
 }
@@ -369,7 +369,7 @@ function Tall(props: {
         site={site}
         title={
           preview.path !== '' ? (
-            <span className="break-all font-mono text-legacy-xs font-normal leading-[18px] opacity-80">
+            <span className="break-all font-mono text-sm font-normal opacity-80">
               {preview.path}
             </span>
           ) : (
@@ -406,10 +406,10 @@ function Compact(props: {
       >
         <IconAlertTriangle size={20} className="shrink-0" />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-[13.5px] font-semibold leading-[17px]">
+          <span className="truncate text-md font-semibold">
             This link may be unsafe
           </span>
-          <span className="truncate text-legacy-xs leading-4 opacity-90">{`${preview.domain} · tap to check`}</span>
+          <span className="truncate text-sm leading-4 opacity-90">{`${preview.domain} · tap to check`}</span>
         </span>
       </button>
     );
@@ -426,25 +426,25 @@ function Compact(props: {
       <LetterTile
         letter={preview.letter}
         tone={tone}
-        className="h-10 w-10 rounded-xl text-legacy-sm"
+        className="h-10 w-10 rounded-xl text-base"
       />
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-[13.5px] font-semibold leading-[17px]">
+        <span className="truncate text-md font-semibold">
           {titled ? preview.title : preview.domain}
         </span>
         {via ? (
-          <span className="truncate font-mono text-[10.5px] leading-[14px] opacity-70">
+          <span className="truncate font-mono text-xs opacity-70">
             {siteText(preview)}
           </span>
         ) : titled ? (
-          <span className="truncate text-[11.5px] leading-[15px] opacity-75">{preview.domain}</span>
+          <span className="truncate text-xs opacity-75">{preview.domain}</span>
         ) : preview.path !== '' ? (
-          <span className="truncate font-mono text-[11px] leading-[14px] opacity-70">
+          <span className="truncate font-mono text-xs opacity-70">
             {preview.path}
           </span>
         ) : null}
         {preview.type === 'login' ? (
-          <span className="truncate text-[11.5px] leading-[15px] opacity-75">
+          <span className="truncate text-xs opacity-75">
             Sign-in needed to preview
           </span>
         ) : null}
@@ -480,10 +480,10 @@ function Draft(props: {
     );
     lines = (
       <>
-        <span className="block truncate text-[13px] font-semibold leading-4">
+        <span className="block truncate text-md font-semibold leading-4">
           This link may be unsafe
         </span>
-        <span className="block truncate text-legacy-xs leading-4 opacity-90">{preview.domain}</span>
+        <span className="block truncate text-sm leading-4 opacity-90">{preview.domain}</span>
       </>
     );
   } else {
@@ -504,16 +504,16 @@ function Draft(props: {
         <LetterTile
           letter={preview.letter}
           tone="plain"
-          className="h-[52px] w-[52px] rounded-lg text-legacy-lg"
+          className="h-[52px] w-[52px] rounded-lg text-lg"
         />
       );
     const titled = preview.type === 'full' || preview.type === 'text';
     lines = (
       <>
-        <span className="block truncate text-[11.5px] leading-4 opacity-75">
+        <span className="block truncate text-xs leading-4 opacity-75">
           {siteText(preview)}
         </span>
-        <span className="line-clamp-2 text-[13px] font-semibold leading-4">
+        <span className="line-clamp-2 text-md font-semibold leading-4">
           {titled
             ? preview.title
             : preview.type === 'login'

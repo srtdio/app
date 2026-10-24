@@ -51,7 +51,7 @@ const TONE_CLASS: Record<MeterTone, string> = {
   bad: 'bg-bad',
 };
 
-const SECTION_LABEL = 'px-3 text-legacy-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
+const SECTION_LABEL = 'px-3 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 function mb(bytes: number): string {
   return `${wholeMb(bytes)} MB`;
@@ -59,7 +59,7 @@ function mb(bytes: number): string {
 
 function UsageLine(props: { label: string; bytes: number }) {
   return (
-    <div className="flex min-h-[44px] items-center gap-3 px-3 text-legacy-sm">
+    <div className="flex min-h-[44px] items-center gap-3 px-3 text-base">
       <span className="min-w-0 flex-1 truncate text-fg">{props.label}</span>
       <span className="shrink-0 tabular-nums text-fg-2">{mb(props.bytes)}</span>
     </div>
@@ -100,10 +100,10 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
     <div className="flex max-w-[520px] flex-col gap-6">
       <div className="flex flex-col gap-2.5">
         <p className="flex items-baseline gap-2">
-          <span className="text-legacy-3xl font-semibold tabular-nums text-fg">
+          <span className="text-3xl font-semibold tabular-nums text-fg">
             {mb(usedBytes)}
           </span>
-          <span className="text-legacy-sm text-fg-3">of 1 GB</span>
+          <span className="text-base text-fg-3">of 1 GB</span>
         </p>
         <div
           role="meter"
@@ -119,7 +119,7 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
             style={{ width: `${fill * 100}%` }}
           />
         </div>
-        <p className="text-[13px] text-fg-3">{workspace} · everything in this workspace counts</p>
+        <p className="text-md text-fg-3">{workspace} · everything in this workspace counts</p>
       </div>
 
       {breakdown !== null ? (
@@ -135,7 +135,7 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
       {showsNeedMoreSpace(usedBytes, usage) ? (
         <section className="-mx-3 flex flex-col gap-1">
           <h3 className={SECTION_LABEL}>NEED MORE SPACE?</h3>
-          <p className="px-3 pb-1 text-[13px] leading-snug text-fg-3">
+          <p className="px-3 pb-1 text-md leading-snug text-fg-3">
             Free up space in Recently deleted, or talk to us about more storage for {workspace}.
           </p>
           <ActionRow

@@ -30,7 +30,7 @@ const buttons = (html: string): string[] => html.match(/<button[^>]*>/g) ?? [];
 function expectOnSystem(t: string): void {
   expect(t).toContain('h-11');
   expect(t).toContain('rounded-lg');
-  expect(t).toContain('text-legacy-sm font-medium');
+  expect(t).toContain('text-base font-medium');
   expect(t).not.toMatch(/\bh-9\b|\bh-12\b|rounded-md|font-semibold/);
 }
 

@@ -152,11 +152,11 @@ export function Sheet({
         )}
       >
         <div className="flex items-center gap-2.5 px-[18px] py-[15px] border-b border-border">
-          <h2 className="line-clamp-2 min-w-0 font-semibold text-[15px] [overflow-wrap:anywhere]">
+          <h2 className="line-clamp-2 min-w-0 font-semibold text-lg [overflow-wrap:anywhere]">
             {title}
           </h2>
           <span className="ml-auto flex items-center gap-2">
-            {busy ? <span className="text-legacy-xs text-fg-3">{busyLabel}</span> : null}
+            {busy ? <span className="text-sm text-fg-3">{busyLabel}</span> : null}
             <IconButton
               label="Close"
               onClick={requestClose}

@@ -127,11 +127,11 @@ describe('F2: a failed or pending role read never blocks the rename', () => {
 });
 
 describe('F10: the admin-only notice', () => {
-  it('uses the chat sheet notice size (13/18/400), not text-legacy-sm', () => {
+  it('uses the chat sheet notice size (13/18/400), not text-base', () => {
     const notice = GroupInfoNotice();
     const props = notice.props as { className: string; children: string };
     expect({ className: props.className, text: props.children }).toMatchSnapshot();
-    expect(renderToStaticMarkup(notice)).not.toContain('text-legacy-sm');
+    expect(renderToStaticMarkup(notice)).not.toContain('text-base');
   });
 });
 

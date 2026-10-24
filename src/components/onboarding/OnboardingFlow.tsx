@@ -668,8 +668,8 @@ export function OnboardingFlow({
                   : 'border-border bg-panel-2',
               )}
             >
-              <span className="text-legacy-sm font-semibold text-fg">{tile.title}</span>
-              <span className="text-legacy-xs text-fg-2">{tile.sub}</span>
+              <span className="text-base font-semibold text-fg">{tile.title}</span>
+              <span className="text-sm text-fg-2">{tile.sub}</span>
             </button>
           ))}
         </div>
@@ -722,7 +722,7 @@ export function OnboardingFlow({
             <Button onClick={() => photoInputRef.current?.click()}>
               {photoPreview !== null ? ONBOARDING_COPY.changePhoto : ONBOARDING_COPY.addPhoto}
             </Button>
-            <p className="text-legacy-xs text-fg-3">{ONBOARDING_COPY.photoHint}</p>
+            <p className="text-sm text-fg-3">{ONBOARDING_COPY.photoHint}</p>
           </div>
           <input
             ref={photoInputRef}
@@ -751,11 +751,11 @@ export function OnboardingFlow({
           />
         </Labeled>
         <div>
-          <label htmlFor="ob-username" className="mb-1.5 block text-legacy-sm font-medium">
+          <label htmlFor="ob-username" className="mb-1.5 block text-base font-medium">
             Username
           </label>
           <div className="flex h-11 items-center rounded-lg border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
-            <span className="text-legacy-sm text-fg-3">@</span>
+            <span className="text-base text-fg-3">@</span>
             <input
               id="ob-username"
               autoCapitalize="off"
@@ -767,10 +767,10 @@ export function OnboardingFlow({
                 setUsernameEdited(true);
                 setUsername(normalizeUsernameInput(event.target.value));
               }}
-              className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-legacy-sm text-fg outline-none placeholder:text-fg-3"
+              className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-base text-fg outline-none placeholder:text-fg-3"
             />
           </div>
-          <p className={cn('mt-1.5 text-legacy-xs', hintTone)} aria-live="polite">
+          <p className={cn('mt-1.5 text-sm', hintTone)} aria-live="polite">
             {hint}
           </p>
         </div>
@@ -800,7 +800,7 @@ export function OnboardingFlow({
       <>
         <Heading title="Your title" lead="It shows under your name, so people know who to ask." />
         <div>
-          <p className="mb-1.5 block text-legacy-sm font-medium">{ONBOARDING_COPY.jobTitleLabel}</p>
+          <p className="mb-1.5 block text-base font-medium">{ONBOARDING_COPY.jobTitleLabel}</p>
           <Select
             label="Job title"
             value={role}
@@ -941,12 +941,12 @@ export function OnboardingFlow({
               <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_-12px_rgba(0,0,0,0.12)]">
                 {body}
                 {photoNotice !== null && (step === 'brand' || readyForShell) ? (
-                  <p role="status" className="text-legacy-sm text-fg-2 [text-wrap:pretty]">
+                  <p role="status" className="text-base text-fg-2 [text-wrap:pretty]">
                     {photoNotice}
                   </p>
                 ) : null}
                 {error !== null ? (
-                  <p role="alert" className="text-legacy-sm text-bad [text-wrap:pretty]">
+                  <p role="alert" className="text-base text-bad [text-wrap:pretty]">
                     {error}
                   </p>
                 ) : null}
@@ -1003,15 +1003,15 @@ function Heading({ title, lead }: { title: string; lead: string }): ReactElement
   const stepLabel = useContext(StepLabel);
   return (
     <div>
-      <h1 className="text-legacy-lg font-semibold tracking-tight text-fg [text-wrap:balance]">
+      <h1 className="text-lg font-semibold tracking-tight text-fg [text-wrap:balance]">
         {title}
       </h1>
       {stepLabel !== null ? (
-        <p data-onboarding-step="" className="mt-1 text-legacy-sm text-fg-3">
+        <p data-onboarding-step="" className="mt-1 text-base text-fg-3">
           {stepLabel}
         </p>
       ) : null}
-      <p className="mt-2 text-legacy-sm text-fg-2 [text-wrap:balance]">{lead}</p>
+      <p className="mt-2 text-base text-fg-2 [text-wrap:balance]">{lead}</p>
     </div>
   );
 }
@@ -1029,11 +1029,11 @@ function Labeled({
 }): ReactElement {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-legacy-sm font-medium">
+      <label htmlFor={htmlFor} className="mb-1.5 block text-base font-medium">
         {label}
       </label>
       {children}
-      {hint !== undefined ? <p className="mt-1.5 text-legacy-xs text-fg-3">{hint}</p> : null}
+      {hint !== undefined ? <p className="mt-1.5 text-sm text-fg-3">{hint}</p> : null}
     </div>
   );
 }
@@ -1091,7 +1091,7 @@ function TextAction({
 function PlatformTag({ platform }: { platform: string }): ReactElement {
   const label = isPostPlatform(platform) ? PLATFORM_LABELS[platform] : platform;
   return (
-    <span className="inline-flex items-center gap-1.5 text-legacy-sm font-medium text-fg-2">
+    <span className="inline-flex items-center gap-1.5 text-base font-medium text-fg-2">
       <PlatformMark platform={platform} />
       <span>{label}</span>
     </span>
@@ -1111,14 +1111,14 @@ function WelcomeBody({
 }): ReactElement {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-legacy-lg font-semibold tracking-tight text-fg [text-wrap:balance]">
+      <h1 className="text-lg font-semibold tracking-tight text-fg [text-wrap:balance]">
         {heading}
       </h1>
       {platform !== '' ? <PlatformTag platform={platform} /> : null}
-      <p className="min-h-[20px] text-legacy-sm text-fg-2 [text-wrap:balance]" aria-live="polite">
+      <p className="min-h-[20px] text-base text-fg-2 [text-wrap:balance]" aria-live="polite">
         {subline}
       </p>
-      <p className="rounded-lg border border-border bg-panel px-4 py-3 text-legacy-sm text-fg">
+      <p className="rounded-lg border border-border bg-panel px-4 py-3 text-base text-fg">
         {joiningAs}
       </p>
     </div>
@@ -1148,15 +1148,15 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
             key={line}
             className="flex items-center gap-3 rounded-lg border border-border bg-panel p-3.5"
           >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft font-mono text-legacy-sm font-semibold text-accent">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft font-mono text-base font-semibold text-accent">
               {i + 1}
             </span>
-            <span className="text-legacy-sm text-fg [text-wrap:pretty]">{line}</span>
+            <span className="text-base text-fg [text-wrap:pretty]">{line}</span>
           </li>
         ))}
       </ol>
       {email !== '' ? (
-        <p className="text-legacy-sm text-fg-2" aria-live="polite">
+        <p className="text-base text-fg-2" aria-live="polite">
           {resent ? `Sent again to ${email}.` : `We asked ${email}.`}
         </p>
       ) : null}
@@ -1167,7 +1167,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
 function PreviewCard({ label, children }: { label: string; children: ReactNode }): ReactElement {
   return (
     <div className="w-full max-w-[340px] rounded-2xl border border-border bg-panel p-3.5 shadow-[0_12px_30px_-16px_rgba(17,17,20,0.25)]">
-      <p className="mb-2 text-legacy-xs text-fg-3">{label}</p>
+      <p className="mb-2 text-sm text-fg-3">{label}</p>
       {children}
     </div>
   );
@@ -1175,7 +1175,7 @@ function PreviewCard({ label, children }: { label: string; children: ReactNode }
 
 function PreviewLabel({ children }: { children: ReactNode }): ReactElement {
   return (
-    <p className="text-legacy-xs font-semibold uppercase tracking-[0.06em] text-fg-3">{children}</p>
+    <p className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-3">{children}</p>
   );
 }
 
@@ -1207,24 +1207,24 @@ function PersonPreview({
         <div className="flex gap-2.5">
           {avatar}
           <div className="min-w-0">
-            <p className="text-legacy-sm font-semibold text-fg">
+            <p className="text-base font-semibold text-fg">
               {shown}
               {role !== '' ? <span className="font-normal text-fg-3"> · {role}</span> : null}
             </p>
-            <p className="text-legacy-sm text-fg [text-wrap:balance]">
+            <p className="text-base text-fg [text-wrap:balance]">
               Warm the skin tone here, please.
             </p>
           </div>
         </div>
       </PreviewCard>
       <PreviewCard label={`Chat in ${where}`}>
-        <p className="text-legacy-sm text-fg [text-wrap:balance]">
+        <p className="text-base text-fg [text-wrap:balance]">
           Thanks <span className="font-semibold text-accent">@{username || 'you'}</span>, updating
           it now.
         </p>
       </PreviewCard>
       <PreviewCard label="Notification">
-        <p className="text-legacy-sm text-fg [text-wrap:balance]">
+        <p className="text-base text-fg [text-wrap:balance]">
           <span className="font-semibold">{shown}</span> approved a post in {where}.
         </p>
       </PreviewCard>
@@ -1237,7 +1237,7 @@ function WaitingPreview(): ReactElement {
     <>
       <PreviewLabel>What comes next</PreviewLabel>
       <PreviewCard label="Review">
-        <p className="text-legacy-sm text-fg-2">
+        <p className="text-base text-fg-2">
           Your first post waits here with its caption and creative, ready for your approval.
         </p>
       </PreviewCard>

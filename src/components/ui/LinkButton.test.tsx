@@ -75,7 +75,7 @@ describe('LinkButton', () => {
     const out = render('https://srtd.io/x');
     expect(out).toContain('h-11');
     expect(out).toContain('rounded-lg');
-    expect(out).toContain('text-legacy-sm');
+    expect(out).toContain('text-base');
     expect(out).toContain('font-medium');
     expect(out).not.toContain('rounded-md');
     expect(out).not.toMatch(/\bh-9\b/);

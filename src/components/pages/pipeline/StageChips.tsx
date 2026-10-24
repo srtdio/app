@@ -98,7 +98,7 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
             {item.count !== undefined ? (
               <span
                 className={cn(
-                  'text-legacy-xs tabular-nums',
+                  'text-sm tabular-nums',
                   isActive ? 'text-accent' : 'text-fg-3',
                 )}
               >

@@ -59,8 +59,8 @@ const ASPECT: Record<NonNullable<ThumbnailProps['aspect']>, string> = {
 
 // Full class strings, so the default (Pipeline's) markup stays exactly as it was.
 const BODY_CLASS: Record<NonNullable<ThumbnailProps['bodyLines']>, string> = {
-  3: 'mt-auto line-clamp-3 text-legacy-xs leading-snug text-fg-2',
-  4: 'mt-auto line-clamp-4 text-legacy-xs leading-snug text-fg-2',
+  3: 'mt-auto line-clamp-3 text-sm leading-snug text-fg-2',
+  4: 'mt-auto line-clamp-4 text-sm leading-snug text-fg-2',
 };
 
 /** The glyph/label/caption tile shown when there is no usable image preview. */
@@ -79,7 +79,7 @@ function FallbackTile({
         <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 p-3 text-center">
           <span className="text-fg-3">{formatIcon(fallback.glyph, 26)}</span>
           {fallback.body !== null ? (
-            <p className="line-clamp-2 text-legacy-xs leading-snug text-fg-2">{fallback.body}</p>
+            <p className="line-clamp-2 text-sm leading-snug text-fg-2">{fallback.body}</p>
           ) : null}
         </div>
       );
@@ -94,7 +94,7 @@ function FallbackTile({
   if (fallback.kind === 'text') {
     return (
       <div className="h-full w-full overflow-hidden p-3">
-        <p className="line-clamp-4 text-legacy-xs italic leading-snug text-fg-2">
+        <p className="line-clamp-4 text-sm italic leading-snug text-fg-2">
           {fallback.caption}
         </p>
       </div>
@@ -105,7 +105,7 @@ function FallbackTile({
       <div className="flex flex-col items-center gap-1 px-3 text-center text-fg-2">
         <IconLink size={22} />
         {fallback.label !== '' ? (
-          <span className="max-w-full truncate text-legacy-xs">{fallback.label}</span>
+          <span className="max-w-full truncate text-sm">{fallback.label}</span>
         ) : null}
       </div>
     );
@@ -114,7 +114,7 @@ function FallbackTile({
   return (
     <div className="flex flex-col items-center gap-1 text-fg-2">
       <IconFile size={24} />
-      {ext !== '' ? <span className="text-legacy-xs font-medium tabular-nums">{ext}</span> : null}
+      {ext !== '' ? <span className="text-sm font-medium tabular-nums">{ext}</span> : null}
     </div>
   );
 }

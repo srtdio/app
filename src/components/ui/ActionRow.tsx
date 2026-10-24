@@ -44,9 +44,9 @@ export function ActionRow({
         {icon}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-legacy-sm font-medium leading-snug">{label}</span>
+        <span className="truncate text-base font-medium leading-snug">{label}</span>
         {sub !== undefined ? (
-          <span className="truncate text-legacy-xs leading-snug text-fg-3">{sub}</span>
+          <span className="truncate text-sm leading-snug text-fg-3">{sub}</span>
         ) : null}
       </span>
       {chevron ? (

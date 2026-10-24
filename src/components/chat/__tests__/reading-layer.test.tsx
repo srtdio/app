@@ -214,7 +214,7 @@ describe('reading layer elements', () => {
 
   it('Seen line is 11/15 muted with a mono time', () => {
     const html = renderToStaticMarkup(<SeenLine readAt="2026-10-02T10:05:00Z" timeZone="UTC" />);
-    expect(html).toContain('text-[11px] leading-[15px]');
+    expect(html).toContain('text-xs');
     expect(html).toContain('Seen');
     expect(html).toContain('font-mono');
   });
@@ -256,7 +256,7 @@ describe('reading layer elements', () => {
       />,
     );
     expect(html).toContain(formatClockTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
-    expect(html.match(/font-mono text-legacy-xs tabular-nums/g)?.length).toBe(1);
+    expect(html.match(/font-mono text-sm tabular-nums/g)?.length).toBe(1);
   });
 
   it('Read by line is a real button with a 44px hit area', () => {

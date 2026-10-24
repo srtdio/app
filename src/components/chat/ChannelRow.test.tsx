@@ -153,7 +153,7 @@ describe('chat home sections', () => {
     const markup = html(view([group, dm]));
     expect(markup).toContain(`data-section-label="people" class="${SECTION_LABEL_TYPE} px-1 pt-3"`);
     for (const t of [
-      'text-legacy-xs',
+      'text-sm',
       'font-semibold',
       'uppercase',
       'tracking-[0.06em]',

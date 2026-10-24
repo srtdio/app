@@ -141,7 +141,7 @@ export function ConversationPicker({
  */
 export const CONVERSATION_BODY_PX = 288;
 
-/** One ActionRow's box: py-2 plus the text-legacy-sm and text-legacy-xs snug line boxes. */
+/** One ActionRow's box: py-2 plus the text-base and text-sm snug line boxes. */
 const CONVERSATION_ROW_PX = 16 + 14 * 1.375 + 12 * 1.375;
 /** The gap-1 between rows. */
 const CONVERSATION_ROW_GAP_PX = 4;
@@ -167,10 +167,10 @@ function ConversationSkeletonRow(): ReactElement {
     >
       <span className="h-[18px] w-[18px] shrink-0 rounded bg-panel-2" />
       <span className="flex min-w-0 flex-col">
-        <span className="text-legacy-sm font-medium leading-snug">
+        <span className="text-base font-medium leading-snug">
           <span className="inline-block h-3 w-32 rounded bg-panel-2 align-middle" />
         </span>
-        <span className="text-legacy-xs leading-snug">
+        <span className="text-sm leading-snug">
           <span className="inline-block h-2.5 w-20 rounded bg-panel-2 align-middle" />
         </span>
       </span>
@@ -208,7 +208,7 @@ export function conversationPickerBody(
   if (load.status === 'error' || load.channels.length === 0) {
     return (
       <div className={BODY_BOX}>
-        <p className="flex h-full items-center justify-center px-3 text-center text-legacy-sm text-fg-3">
+        <p className="flex h-full items-center justify-center px-3 text-center text-base text-fg-3">
           {load.status === 'error' ? errorText('load conversations', null) : 'No conversations yet'}
         </p>
       </div>

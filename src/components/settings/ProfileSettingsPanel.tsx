@@ -470,13 +470,13 @@ export function ProfileSettingsPanel(): React.ReactElement {
 
   const mode = panelMode(loading, profile);
   if (mode === 'loading') {
-    return <div className="max-w-[520px] text-legacy-sm text-fg-3">Loading</div>;
+    return <div className="max-w-[520px] text-base text-fg-3">Loading</div>;
   }
 
   if (mode === 'error' || profile === null) {
     return (
       <div className="max-w-[520px] flex flex-col gap-3">
-        <p className="text-legacy-sm text-bad">Could not load your profile.</p>
+        <p className="text-base text-bad">Could not load your profile.</p>
         <div>
           <Button onClick={refetch}>Retry</Button>
         </div>
@@ -560,7 +560,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
         />
       </Field>
 
-      {formError !== null ? <p className="text-legacy-sm text-bad">{formError}</p> : null}
+      {formError !== null ? <p className="text-base text-bad">{formError}</p> : null}
 
       <div className="flex items-center gap-3">
         <Button
@@ -571,7 +571,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
         >
           {submitting ? 'Saving...' : 'Save profile'}
         </Button>
-        {saved ? <span className="text-legacy-sm text-fg-2">Saved</span> : null}
+        {saved ? <span className="text-base text-fg-2">Saved</span> : null}
       </div>
     </div>
   );

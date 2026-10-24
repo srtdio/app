@@ -182,7 +182,7 @@ export function attachmentItemList(
         <span className="shrink-0 text-fg-3">
           {item.kind === 'link' ? <IconLink size={16} /> : <IconFile size={16} />}
         </span>
-        <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg" title={item.name}>
+        <span className="min-w-0 flex-1 truncate text-base text-fg" title={item.name}>
           {item.name}
         </span>
         <IconButton label={`Remove ${item.name}`} onClick={() => onRemove(index)}>
@@ -460,7 +460,7 @@ export function ComposerMediaFrame({
             <span
               data-frame-counter=""
               aria-live="polite"
-              className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white"
+              className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium tabular-nums text-white"
             >
               {slideCounterText(navIndex, count)}
             </span>
@@ -483,7 +483,7 @@ export function ComposerMediaFrame({
         ) : null}
       </div>
       {cut !== null ? (
-        <p data-frame-cut className="text-[13px] text-fg-2">
+        <p data-frame-cut className="text-md text-fg-2">
           {cut}
         </p>
       ) : null}
@@ -957,7 +957,7 @@ export function AttachmentsField({
           role="alert"
           className="flex flex-wrap items-center gap-2 rounded-md border border-bad bg-bad-soft px-3 py-1"
         >
-          <p className="min-w-0 flex-1 text-legacy-sm text-bad">{failedFilesLine(failedCount)}</p>
+          <p className="min-w-0 flex-1 text-base text-bad">{failedFilesLine(failedCount)}</p>
           <Button type="button" variant="link" className="shrink-0" onClick={retryFailed}>
             Retry
           </Button>
@@ -1031,7 +1031,7 @@ export function AttachmentsField({
                 <span className="shrink-0 text-fg-3">
                   <IconFile size={16} />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg" title={item.name}>
+                <span className="min-w-0 flex-1 truncate text-base text-fg" title={item.name}>
                   {item.name}
                 </span>
               </li>
@@ -1040,11 +1040,11 @@ export function AttachmentsField({
                 <span className="shrink-0 text-fg-3">
                   {item.kind === 'link' ? <IconLink size={16} /> : <IconFile size={16} />}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg" title={item.name}>
+                <span className="min-w-0 flex-1 truncate text-base text-fg" title={item.name}>
                   {item.name}
                 </span>
                 <span
-                  className={item.error !== null ? 'text-[11px] text-bad' : 'text-[11px] text-fg-3'}
+                  className={item.error !== null ? 'text-xs text-bad' : 'text-xs text-fg-3'}
                 >
                   {item.error ?? 'Uploading'}
                 </span>

@@ -21,12 +21,12 @@ export function AuthShell({ title, subtitle, children, footer, wide = false }: A
       <div className={`w-full ${wide ? 'max-w-3xl' : 'max-w-[400px]'}`}>
         <div className="rounded-2xl border border-border bg-panel p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_-12px_rgba(0,0,0,0.12)]">
           <div className="mb-6">
-            <div className="text-legacy-lg font-semibold tracking-tight">{title}</div>
-            <p className="mt-1 text-legacy-sm text-fg-2">{subtitle}</p>
+            <div className="text-lg font-semibold tracking-tight">{title}</div>
+            <p className="mt-1 text-base text-fg-2">{subtitle}</p>
           </div>
           {children}
         </div>
-        <div className="mt-4 text-center text-legacy-sm text-fg-2">{footer}</div>
+        <div className="mt-4 text-center text-base text-fg-2">{footer}</div>
       </div>
     </div>
   );

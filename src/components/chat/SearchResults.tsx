@@ -90,7 +90,7 @@ export function useFadeIn(ref: RefObject<HTMLElement>): void {
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
-const RESULT_LABEL = 'px-1 pt-1 text-legacy-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
+const RESULT_LABEL = 'px-1 pt-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(
@@ -202,7 +202,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         type="button"
         data-search-retry=""
         onClick={props.onRetry}
-        className="flex min-h-[44px] w-full items-center justify-center rounded-lg px-3 text-legacy-sm text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] w-full items-center justify-center rounded-lg px-3 text-base text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {SEARCH_FAILED_COPY}
       </button>
@@ -226,7 +226,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                   className={RESULT_ROW}
                 >
                   {resultAvatar(channel)}
-                  <span className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-5 text-fg">
+                  <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
                     {highlightName(channel.title, query)}
                   </span>
                 </button>
@@ -252,7 +252,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         ) : failed ? (
           retryRow
         ) : rows.length === 0 ? (
-          <li data-search-empty="" className="px-2 py-6 text-center text-legacy-sm text-fg-2">
+          <li data-search-empty="" className="px-2 py-6 text-center text-base text-fg-2">
             {SEARCH_EMPTY_COPY}
           </li>
         ) : (
@@ -280,19 +280,19 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                   {resultAvatar(channel)}
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex min-w-0 items-baseline gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-5 text-fg">
+                      <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
                         {channel.title}
                       </span>
                       <span
                         data-search-date=""
-                        className="shrink-0 font-mono text-legacy-xs tabular-nums text-fg-2"
+                        className="shrink-0 font-mono text-sm tabular-nums text-fg-2"
                       >
                         {searchDateLabel(hit.createdAt, props.nowMs, props.timeZone)}
                       </span>
                     </span>
                     <span
                       data-search-snippet=""
-                      className="line-clamp-2 break-words text-[14px] leading-[19px] text-fg-2"
+                      className="line-clamp-2 break-words text-base text-fg-2"
                     >
                       {prefix !== '' ? <span>{prefix}</span> : null}
                       {hit.body.trim() === '' && hit.mediaLine !== undefined && hit.mediaLine !== ''

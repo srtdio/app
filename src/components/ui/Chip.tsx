@@ -36,7 +36,7 @@ export function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border text-legacy-sm font-normal transition-colors',
+        'inline-flex items-center gap-1.5 rounded-lg border text-base font-normal transition-colors',
         sizes[size],
         'border-border text-fg-2 hover:bg-panel-2',
         selected && 'bg-accent-soft text-accent border-accent-line',

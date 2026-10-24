@@ -49,7 +49,7 @@ export function WorkspaceFullSheet() {
         }
       >
         <div className="flex flex-col gap-3">
-          <p className="text-legacy-sm leading-relaxed text-fg-2">
+          <p className="text-base leading-relaxed text-fg-2">
             {workspaceFullCopy(shownBytes)}
           </p>
           <div className="-mx-3 flex flex-col">

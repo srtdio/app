@@ -105,7 +105,7 @@ export function windowMerges(
 const CELL =
   'h-7 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-2 align-middle';
 const HEAD =
-  'border-b border-r border-border bg-panel-2 px-1 text-center text-[11px] font-medium text-fg-3';
+  'border-b border-r border-border bg-panel-2 px-1 text-center text-xs font-medium text-fg-3';
 
 /** The <td>s of one row; a merge renders once from its first row (or the window's first). */
 function rowCells(
@@ -216,7 +216,7 @@ function SheetGrid(props: {
     >
       <table
         data-sheet-grid=""
-        className="border-separate border-spacing-0 text-legacy-xs text-fg [table-layout:fixed]"
+        className="border-separate border-spacing-0 text-sm text-fg [table-layout:fixed]"
         style={{ width: `${width}px` }}
       >
         <colgroup>
@@ -269,7 +269,7 @@ export function SheetViewer(props: {
     >
       <p
         data-sheet-title=""
-        className="shrink-0 truncate border-b border-border px-4 py-2 font-mono text-legacy-xs text-fg-2"
+        className="shrink-0 truncate border-b border-border px-4 py-2 font-mono text-sm text-fg-2"
       >
         {sheetTitle(sheet)}
       </p>
@@ -277,7 +277,7 @@ export function SheetViewer(props: {
       {note !== null ? (
         <p
           data-sheet-cap=""
-          className="shrink-0 border-t border-border px-3 py-2 text-legacy-xs leading-snug text-fg-2"
+          className="shrink-0 border-t border-border px-3 py-2 text-sm leading-snug text-fg-2"
         >
           {note}
         </p>
@@ -298,7 +298,7 @@ export function SheetViewer(props: {
               data-sheet-tab={s.name}
               onClick={() => setActive(i)}
               className={cn(
-                'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-legacy-sm',
+                'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 selected ? 'bg-panel-2 font-medium text-fg' : 'text-fg-2 hover:bg-panel-2',
               )}

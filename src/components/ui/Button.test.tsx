@@ -31,7 +31,7 @@ describe('Button design system', () => {
       const t = tokens(classOf({ variant }));
       expect(t).toContain('h-11');
       expect(t).toContain('rounded-lg');
-      expect(t).toContain('text-legacy-sm');
+      expect(t).toContain('text-base');
       expect(t).toContain('font-medium');
       for (const bad of [
         'h-8',
@@ -39,7 +39,7 @@ describe('Button design system', () => {
         'h-12',
         'rounded-md',
         'rounded-xl',
-        'text-legacy-xs',
+        'text-sm',
         'font-semibold',
       ]) {
         expect(t).not.toContain(bad);
@@ -58,7 +58,7 @@ describe('Button design system', () => {
       const t = tokens(classOf({ size }));
       expect(t).toContain('h-11');
       expect(t).toContain('px-4');
-      expect(t).toContain('text-legacy-sm');
+      expect(t).toContain('text-base');
     }
     expect(classOf({ size: 'sm' })).toBe(classOf({ size: 'lg' }));
   });

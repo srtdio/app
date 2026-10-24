@@ -323,14 +323,14 @@ export function PostCard({
       <div data-post-card-body="" className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
         <div
           data-post-card-title=""
-          className="line-clamp-2 min-h-[2.75em] text-legacy-sm font-medium leading-snug [overflow-wrap:anywhere]"
+          className="line-clamp-2 min-h-[2.75em] text-base font-medium leading-snug [overflow-wrap:anywhere]"
         >
           {post.title}
         </div>
         {caption !== null ? (
           <p
             data-post-card-caption=""
-            className="line-clamp-2 text-legacy-xs leading-snug text-fg-3 [overflow-wrap:anywhere]"
+            className="line-clamp-2 text-sm leading-snug text-fg-3 [overflow-wrap:anywhere]"
           >
             {caption}
           </p>
@@ -342,7 +342,7 @@ export function PostCard({
             data-post-card-status={status.tone}
             {...(status.tone === 'with' ? { title: status.text, 'aria-label': status.text } : {})}
             className={cn(
-              'flex h-4 min-w-0 items-center gap-1.5 text-legacy-xs',
+              'flex h-4 min-w-0 items-center gap-1.5 text-sm',
               status.tone === 'you' ? 'font-semibold text-accent' : 'text-fg-2',
             )}
           >
@@ -364,7 +364,7 @@ export function PostCard({
           {showStage && !inColumn && status === null ? (
             <span
               data-post-card-stage=""
-              className="inline-flex shrink-0 items-center gap-1.5 text-legacy-xs text-fg-2"
+              className="inline-flex shrink-0 items-center gap-1.5 text-sm text-fg-2"
             >
               <StageDot stage={stage} />
               {stageLabel(stage)}
@@ -374,7 +374,7 @@ export function PostCard({
             <span
               data-post-card-due={due.overdue ? 'overdue' : ''}
               className={cn(
-                'min-w-0 truncate whitespace-nowrap text-legacy-xs tabular-nums',
+                'min-w-0 truncate whitespace-nowrap text-sm tabular-nums',
                 due.overdue ? 'text-bad' : 'text-fg-3',
               )}
             >

@@ -154,7 +154,7 @@ export function PlanDropHere(props: { over: boolean }): ReactElement {
       data-plan-drop-here=""
       {...(props.over ? { 'data-plan-drop-slot': '' } : {})}
       className={cn(
-        'flex min-h-[44px] items-center justify-center rounded-lg border-[1.5px] border-dashed text-[13px]',
+        'flex min-h-[44px] items-center justify-center rounded-lg border-[1.5px] border-dashed text-md',
         props.over ? 'border-accent text-accent' : 'border-border-strong text-fg-3',
       )}
     >
@@ -166,7 +166,7 @@ export function PlanDropHere(props: { over: boolean }): ReactElement {
 /** The slim hint line in the laptop footer (agency, edit mode only). */
 export function PlanKeyHints(): ReactElement {
   return (
-    <p data-plan-key-hints="" className="text-legacy-xs leading-4 text-fg-3">
+    <p data-plan-key-hints="" className="text-sm leading-4 text-fg-3">
       {KEY_HINTS}
     </p>
   );

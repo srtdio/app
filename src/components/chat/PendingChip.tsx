@@ -27,10 +27,10 @@ export function PendingChip(props: {
         {props.thumb}
       </span>
       <span className="flex min-w-0 max-w-[180px] flex-col">
-        <span className="truncate text-legacy-xs font-medium text-fg" title={props.title}>
+        <span className="truncate text-sm font-medium text-fg" title={props.title}>
           {props.title}
         </span>
-        <span className={cn('truncate text-[11px]', error ? 'text-bad' : 'text-fg-3')}>
+        <span className={cn('truncate text-xs', error ? 'text-bad' : 'text-fg-3')}>
           {props.meta}
         </span>
       </span>

@@ -35,7 +35,7 @@ export function isTagDot(value: string): value is TagDot {
 
 /** Classes for a tag in a tone. */
 export function tagClass(tone: TagTone): string {
-  return cn('inline-flex h-5 items-center rounded-md px-2 text-[11px] font-medium', TAG_TONE[tone]);
+  return cn('inline-flex h-5 items-center rounded-md px-2 text-xs font-medium', TAG_TONE[tone]);
 }
 
 /** A static, non-interactive pill for a stage, status or mark. */

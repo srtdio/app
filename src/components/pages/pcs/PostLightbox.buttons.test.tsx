@@ -78,7 +78,7 @@ function expectShared(tag: string): void {
     'rounded-md',
     'rounded-xl',
     'font-semibold',
-    'text-legacy-xs',
+    'text-sm',
   ]) {
     expect(cls).not.toContain(old);
   }

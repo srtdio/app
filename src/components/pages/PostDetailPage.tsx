@@ -410,19 +410,19 @@ export function StageReasonConfirm(props: {
       }
     >
       {body !== null ? (
-        <p data-stage-confirm-body="" className="mb-3 text-legacy-sm text-fg-2">
+        <p data-stage-confirm-body="" className="mb-3 text-base text-fg-2">
           {body}
         </p>
       ) : null}
       <label className="flex flex-col gap-2">
-        <span className="text-legacy-sm text-fg-2">{label}</span>
+        <span className="text-base text-fg-2">{label}</span>
         <Textarea
           aria-label={label}
           value={props.reason}
           onChange={(event) => props.onReasonChange(event.target.value)}
         />
         {helper !== null ? (
-          <span data-stage-confirm-helper="" className="text-legacy-xs text-fg-3">
+          <span data-stage-confirm-helper="" className="text-sm text-fg-3">
             {helper}
           </span>
         ) : null}
@@ -1877,7 +1877,7 @@ export function PostDetailPage({
     metaHead.length > 0 || briefLink !== null ? (
       <div
         data-post-details=""
-        className="flex min-h-[44px] min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-[13px] text-fg-2"
+        className="flex min-h-[44px] min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-md text-fg-2"
       >
         {metaHead.length > 0 ? (
           detailsEditable ? (
@@ -2029,7 +2029,7 @@ export function PostDetailPage({
   const phoneStageNotes =
     stageHelper !== null ? (
       <section className="rounded-xl border border-border bg-panel-2 p-4">
-        <p className="text-legacy-sm text-fg-2">{stageHelper}</p>
+        <p className="text-base text-fg-2">{stageHelper}</p>
       </section>
     ) : null;
   const decisionBar =
@@ -2046,7 +2046,7 @@ export function PostDetailPage({
     approvedLocked && !readOnly ? (
       <div
         data-approved-banner=""
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-legacy-sm text-fg"
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-base text-fg"
       >
         <span aria-hidden className="shrink-0 text-good">
           <IconLock size={18} />
@@ -2070,7 +2070,7 @@ export function PostDetailPage({
               aria-hidden
               className={`h-[7px] w-[7px] shrink-0 rounded-full ${STAGE_DOT[currentStage]}`}
             />
-            <span className="truncate text-[15px] font-semibold">
+            <span className="truncate text-lg font-semibold">
               {postStatusLine(
                 currentStage,
                 post.updated_at,
@@ -2101,7 +2101,7 @@ export function PostDetailPage({
       {readOnly ? (
         <div className={cn(grid.page, 'pb-0')}>
           <div className={grid.head}>
-            <h1 className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
+            <h1 className="text-3xl font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
               <Highlight text={post.title} />
             </h1>
           </div>
@@ -2146,7 +2146,7 @@ export function PostDetailPage({
                     // 44px floor as the tappable title, with no border (the
                     // ring draws outside the box), so entering edit never
                     // shifts the page.
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-md border-0 bg-panel-2 px-2 py-1 text-[28px] font-semibold leading-tight tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-md border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold leading-tight tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
@@ -2182,7 +2182,7 @@ export function PostDetailPage({
                 // Spec A3: the title itself is the edit target (no pencil
                 // tile): at least 44px tall, a visible focus ring, and the
                 // same padding as the editor so tapping never shifts the page.
-                <h1 className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
+                <h1 className="text-3xl font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
                   <button
                     type="button"
                     data-title-edit=""
@@ -2196,7 +2196,7 @@ export function PostDetailPage({
             ) : (
               <h1
                 data-post-title=""
-                className="text-[28px] font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]"
+                className="text-3xl font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]"
               >
                 <Highlight text={post.title} />
                 {approvedLocked && agencySide ? (
@@ -2289,14 +2289,14 @@ export function PostDetailPage({
                 />
               )}
               {gallerySaving ? (
-                <p aria-live="polite" className="mt-2.5 text-legacy-xs text-fg-3">
+                <p aria-live="polite" className="mt-2.5 text-sm text-fg-3">
                   Saving…
                 </p>
               ) : null}
               {pinError !== null ? (
                 <div
                   role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-base text-bad"
                 >
                   {pinError}
                 </div>
@@ -2316,7 +2316,7 @@ export function PostDetailPage({
               <div className="flex items-center gap-3">
                 <Avatar name={workspaceName ?? ''} size="md" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-legacy-sm font-semibold text-fg">
+                  <div className="truncate text-base font-semibold text-fg">
                     {workspaceName ?? ''}
                   </div>
                 </div>
@@ -2366,7 +2366,7 @@ export function PostDetailPage({
                     onChange={(event) => setCaptionDraft(event.target.value)}
                   />
                   {captionError !== null ? (
-                    <div role="alert" className="text-legacy-sm text-bad">
+                    <div role="alert" className="text-base text-bad">
                       {captionError}
                     </div>
                   ) : null}
@@ -2381,12 +2381,12 @@ export function PostDetailPage({
                     <Button variant="ghost" disabled={captionSaving} onClick={cancelCaptionEdit}>
                       Cancel
                     </Button>
-                    <span className="ml-auto text-legacy-xs tabular-nums text-fg-3">
+                    <span className="ml-auto text-sm tabular-nums text-fg-3">
                       {captionDraft.trim().length}/5000
                     </span>
                   </div>
                   {captionSaveNote(currentVersionNumber) !== null ? (
-                    <p className="text-legacy-xs text-fg-3">
+                    <p className="text-sm text-fg-3">
                       {captionSaveNote(currentVersionNumber)}
                     </p>
                   ) : null}
@@ -2404,7 +2404,7 @@ export function PostDetailPage({
                   {captionTipOpen ? (
                     <div
                       data-caption-tip=""
-                      className="mt-2 flex items-center gap-2 text-legacy-xs text-fg-3"
+                      className="mt-2 flex items-center gap-2 text-sm text-fg-3"
                     >
                       <span>{CAPTION_TIP_TEXT}</span>
                       <Button
@@ -2422,12 +2422,12 @@ export function PostDetailPage({
                   ) : null}
                 </>
               ) : (
-                <p className="mt-3 text-legacy-sm text-fg-3">No caption yet.</p>
+                <p className="mt-3 text-base text-fg-3">No caption yet.</p>
               )}
               {annotateError !== null ? (
                 <div
                   role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-base text-bad"
                 >
                   {annotateError}
                 </div>
@@ -2472,7 +2472,7 @@ export function PostDetailPage({
                   />
                 </div>
               ) : (
-                <div className="px-4 py-8 text-center text-legacy-sm text-fg-3">
+                <div className="px-4 py-8 text-center text-base text-fg-3">
                   Select a workspace to view comments.
                 </div>
               )}

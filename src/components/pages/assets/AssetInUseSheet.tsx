@@ -43,7 +43,7 @@ export function AssetInUseSheet({ state, onOpenParent, onClose }: AssetInUseShee
         </div>
       }
     >
-      <p className="text-legacy-sm text-fg-2 [overflow-wrap:anywhere]">
+      <p className="text-base text-fg-2 [overflow-wrap:anywhere]">
         {shown.current?.message ?? ''}
       </p>
     </Sheet>

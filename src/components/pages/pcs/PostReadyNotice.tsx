@@ -211,8 +211,8 @@ export function PostReadyNotice({
     <section className="flex flex-col gap-3 rounded-xl border border-border bg-panel-2 p-4">
       {view !== null ? (
         <div className="flex flex-col gap-1">
-          <p className="text-legacy-sm font-medium text-fg">{view.headline}</p>
-          <p className="text-legacy-xs tabular-nums text-fg-3">
+          <p className="text-base font-medium text-fg">{view.headline}</p>
+          <p className="text-sm tabular-nums text-fg-3">
             {formatAgo(view.latest.sent_at, new Date())}
             {' · '}
             {checkpointCountLabel(view.latest.checkpoint_count)}
@@ -223,7 +223,7 @@ export function PostReadyNotice({
           {view.earlier.length > 0 ? (
             <ul className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
               {view.earlier.map((notif) => (
-                <li key={notif.id} className="text-legacy-xs tabular-nums text-fg-3">
+                <li key={notif.id} className="text-sm tabular-nums text-fg-3">
                   {formatAgo(notif.sent_at, new Date())}
                   {' · '}
                   {checkpointCountLabel(notif.checkpoint_count)}
@@ -244,12 +244,12 @@ export function PostReadyNotice({
             {sending ? 'Sending…' : NOTIFY_LABEL}
           </Button>
           {openCount > 0 ? (
-            <p className="text-legacy-xs text-fg-3">{notifyDisabledReason(openCount)}</p>
+            <p className="text-sm text-fg-3">{notifyDisabledReason(openCount)}</p>
           ) : null}
           {error !== null ? (
             <div
               role="alert"
-              className="rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+              className="rounded-md border border-bad px-3 py-2 text-base text-bad"
             >
               {error}
             </div>

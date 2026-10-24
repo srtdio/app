@@ -123,7 +123,7 @@ describe('Open / All filter (item 2)', () => {
     expect(SRC).toContain('showHeader = false');
     expect(SRC).toContain('{showHeader ? (');
     expect(SRC).toContain(
-      '<h3 className="text-legacy-sm font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>',
+      '<h3 className="text-base font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>',
     );
     expect(CHECKPOINTS_TITLE).toBe('Checkpoints');
     expect(SRC).not.toContain('>Comments</h3>');

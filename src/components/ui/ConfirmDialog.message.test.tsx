@@ -52,6 +52,6 @@ describe('ConfirmDialog optional message', () => {
     const body = dialog.querySelector<HTMLParagraphElement>('[data-confirm-message]');
     expect(body?.tagName).toBe('P');
     expect(body?.textContent).toBe('This cannot be undone.');
-    expect(body?.className).toBe('mt-2 text-legacy-sm text-fg-2');
+    expect(body?.className).toBe('mt-2 text-base text-fg-2');
   });
 });

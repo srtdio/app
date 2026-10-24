@@ -93,7 +93,7 @@ export function AssetRenameSheet({
       discard={ASSET_RENAME_DISCARD}
     >
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-medium text-fg-2">Name</span>
+        <span className="text-md font-medium text-fg-2">Name</span>
         <Input
           aria-label="File name"
           value={name}

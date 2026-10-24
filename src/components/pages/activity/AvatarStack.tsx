@@ -36,7 +36,7 @@ export function AvatarStack({ names, size = 'sm' }: AvatarStackProps) {
       ))}
       {extra > 0 ? (
         <span
-          className="ml-[-4px] inline-flex h-6 items-center rounded-full bg-panel-2 px-1.5 text-[11px] font-medium text-fg-3 ring-2 ring-bg"
+          className="ml-[-4px] inline-flex h-6 items-center rounded-full bg-panel-2 px-1.5 text-xs font-medium text-fg-3 ring-2 ring-bg"
           aria-label={`${extra} more`}
         >
           +{extra}

@@ -79,7 +79,7 @@ export function ScheduleOptions(props: OptionsProps): ReactElement {
   return (
     <div data-schedule-options={step} className={cn('flex flex-col', NO_TOUCH_SELECT)}>
       {props.preview !== null ? (
-        <p data-schedule-preview="" className="mb-2 truncate px-2 text-legacy-sm text-fg-2">
+        <p data-schedule-preview="" className="mb-2 truncate px-2 text-base text-fg-2">
           {props.preview}
         </p>
       ) : null}
@@ -102,7 +102,7 @@ export function ScheduleOptions(props: OptionsProps): ReactElement {
       ) : (
         <div data-schedule-custom="" className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-legacy-xs font-medium text-fg-2">
+            <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
               Date
               <input
                 type="date"
@@ -111,24 +111,24 @@ export function ScheduleOptions(props: OptionsProps): ReactElement {
                 min={dateInputValue(now)}
                 max={dateInputValue(new Date(now.getTime() + MAX_LEAD_MS))}
                 onChange={(event) => setDate(event.target.value)}
-                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-legacy-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
             </label>
-            <label className="flex flex-col gap-1 text-legacy-xs font-medium text-fg-2">
+            <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
               Time
               <input
                 type="time"
                 aria-label="Time"
                 value={time}
                 onChange={(event) => setTime(event.target.value)}
-                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-legacy-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
             </label>
           </div>
-          <p data-schedule-summary="" className="min-h-5 text-legacy-sm font-medium text-fg">
+          <p data-schedule-summary="" className="min-h-5 text-base font-medium text-fg">
             {chosen !== null ? customSummary(chosen, now) : ''}
           </p>
-          <p className="text-legacy-xs text-fg-3">{SCHEDULE_HELPER}</p>
+          <p className="text-sm text-fg-3">{SCHEDULE_HELPER}</p>
           <Button
             type="button"
             variant="primary"
@@ -164,9 +164,9 @@ function PresetRow(props: {
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2">
           <IconCalendarClock size={20} />
         </span>
-        <span className="flex-1 text-[15px] font-medium">{props.label}</span>
+        <span className="flex-1 text-lg font-medium">{props.label}</span>
         {props.detail !== undefined ? (
-          <span className="font-mono text-legacy-xs tabular-nums text-fg-2">{props.detail}</span>
+          <span className="font-mono text-sm tabular-nums text-fg-2">{props.detail}</span>
         ) : (
           <IconChevronRight size={16} className="text-fg-3" />
         )}
@@ -178,7 +178,7 @@ function PresetRow(props: {
 function ScheduleFooter(props: { onCancel: () => void }): ReactElement {
   return (
     <>
-      <span data-schedule-zone="" className="flex-1 text-legacy-xs text-fg-2">
+      <span data-schedule-zone="" className="flex-1 text-sm text-fg-2">
         {zoneLine(new Date())}
       </span>
       <Button type="button" variant="ghost" onClick={props.onCancel}>
@@ -270,7 +270,7 @@ export function ScheduleMenu(props: {
         shown ? 'opacity-100' : 'opacity-0',
       )}
     >
-      <h2 className="px-4 pb-1 pt-3 text-[15px] font-semibold text-fg">{SCHEDULE_SHEET_TITLE}</h2>
+      <h2 className="px-4 pb-1 pt-3 text-lg font-semibold text-fg">{SCHEDULE_SHEET_TITLE}</h2>
       <div className="px-2 pb-2">
         <ScheduleOptions preview={props.preview} onPick={props.onPick} />
       </div>

@@ -128,7 +128,7 @@ export function PlatformFrameUpload({
         type="button"
         disabled={disabled}
         onClick={onPick}
-        className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-legacy-sm text-fg-2 transition-colors hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none"
+        className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-base text-fg-2 transition-colors hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none"
       >
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-panel-3 text-accent">
           <IconImagePlus size={22} />

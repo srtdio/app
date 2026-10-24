@@ -157,7 +157,7 @@ export const GuideLabel = forwardRef<
       key={nudge}
       data-induction-label=""
       data-guide-nudge={nudge > 0 ? 'on' : 'off'}
-      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-[14px] font-[650] leading-tight ${LABEL_EDGE} ${LABEL_GLOW} ${AMBER_BG} ${AMBER_INK}`}
+      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-base font-semibold leading-tight ${LABEL_EDGE} ${LABEL_GLOW} ${AMBER_BG} ${AMBER_INK}`}
       style={{ top: at.top, left: at.left }}
     >
       {text}
@@ -244,7 +244,7 @@ export const GuideBar = forwardRef<
         <div className="min-w-0 flex-1">
           <PhaseRow copy={copy} />
           {copy.why !== '' ? (
-            <p className="text-[13px] leading-snug text-fg [text-wrap:pretty]">{copy.why}</p>
+            <p className="text-md leading-snug text-fg [text-wrap:pretty]">{copy.why}</p>
           ) : null}
         </div>
         <BarButtons copy={copy} actions={actions} />
@@ -255,11 +255,11 @@ export const GuideBar = forwardRef<
 
 function PhaseRow({ copy }: { copy: BarCopy }): ReactElement {
   if (copy.phase !== '') {
-    return <p className="font-mono text-[11px] text-fg-3">{copy.phase}</p>;
+    return <p className="font-mono text-xs text-fg-3">{copy.phase}</p>;
   }
   const { names, current } = copy.chapters;
   return (
-    <p className="flex items-center gap-1.5 text-[11px] text-fg-3">
+    <p className="flex items-center gap-1.5 text-xs text-fg-3">
       {names.map((name, i) => (
         <span
           key={name}
@@ -364,15 +364,15 @@ export function GuideCard({
       style={placed.style}
     >
       {copy.eyebrow !== '' ? (
-        <p className={`font-mono text-[11px] ${hero ? 'opacity-80' : 'text-fg-3'}`}>
+        <p className={`font-mono text-xs ${hero ? 'opacity-80' : 'text-fg-3'}`}>
           {copy.eyebrow}
         </p>
       ) : null}
-      <p className="mt-1 text-[17px] font-semibold leading-snug [text-wrap:balance]">
+      <p className="mt-1 text-xl font-semibold leading-snug [text-wrap:balance]">
         {copy.title}
       </p>
       <p
-        className={`mt-1 text-[13px] leading-snug [text-wrap:pretty] ${hero ? 'opacity-90' : 'text-fg-2'}`}
+        className={`mt-1 text-md leading-snug [text-wrap:pretty] ${hero ? 'opacity-90' : 'text-fg-2'}`}
       >
         {copy.body}
       </p>
@@ -380,8 +380,8 @@ export function GuideCard({
         <div className="mt-3 flex gap-3">
           {copy.stats.map((stat) => (
             <div key={stat.label} className="flex-1 rounded-lg bg-panel-2 px-3 py-2.5">
-              <p className="text-[20px] font-semibold tabular-nums text-accent">{stat.value}</p>
-              <p className="text-[12px] text-fg-2">{stat.label}</p>
+              <p className="text-2xl font-semibold tabular-nums text-accent">{stat.value}</p>
+              <p className="text-sm text-fg-2">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -391,7 +391,7 @@ export function GuideCard({
           {copy.pills.map((pill) => (
             <span
               key={pill}
-              className="rounded-full bg-[var(--overlay-surface)] px-2.5 py-1 text-[12px] font-semibold"
+              className="rounded-full bg-[var(--overlay-surface)] px-2.5 py-1 text-sm font-semibold"
             >
               {pill}
             </span>

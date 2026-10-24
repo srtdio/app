@@ -803,7 +803,7 @@ describe('MessageBubble forwarded label', () => {
     const label = ForwardedLabel();
     const cls = (label.props as { className: string }).className;
     expect(cls).toContain('text-fg-2');
-    expect(cls).toContain('text-legacy-xs');
+    expect(cls).toContain('text-sm');
     expect((label.props as { children: unknown[] }).children).toContain('Forwarded');
     // On the solid accent the label takes the bubble's on-accent ink.
     const own = ForwardedLabel({ mine: true });
@@ -1553,8 +1553,8 @@ describe('bubble text sizes', () => {
   it('body text comes from chat-type: 17/22 touch, 14.2/19 laptop', () => {
     expect(bodyText('touch')).toContain(BUBBLE_BODY_TYPE.touch);
     expect(bodyText('laptop')).toContain(BUBBLE_BODY_TYPE.laptop);
-    expect(BUBBLE_BODY_TYPE.touch).toContain('text-[17px] leading-[22px]');
-    expect(BUBBLE_BODY_TYPE.laptop).toContain('text-[14.2px] leading-[19px]');
+    expect(BUBBLE_BODY_TYPE.touch).toContain('text-xl');
+    expect(BUBBLE_BODY_TYPE.laptop).toContain('text-base');
   });
 
   it('the in-bubble quote uses the chat-type quote sizes; the composer bar keeps its own', () => {
@@ -1591,7 +1591,7 @@ describe('bubble text sizes', () => {
 
   it('meta, day pill and typing row sizes come from chat-type', () => {
     expect(renderStrip(renderBubble(makeMessage({})))).toContain(BUBBLE_META_TYPE);
-    expect(BUBBLE_META_TYPE).toContain('text-[11px] leading-[15px]');
+    expect(BUBBLE_META_TYPE).toContain('text-xs');
     let pill = '';
     walk(DayPill({ label: 'Today', layout: 'touch' }), (el) => {
       const c = (el.props as { className?: string }).className ?? '';
@@ -3267,12 +3267,12 @@ describe('@mentions in bubbles', () => {
   it('styles like the bubble link colour (own and peer) and bolds a mention of me', () => {
     expect(mentionClass(true, false)).toContain('text-accent-fg');
     expect(mentionClass(false, false)).toContain('text-accent');
-    expect(mentionClass(false, true)).toContain('font-bold');
+    expect(mentionClass(false, true)).toContain('font-semibold');
     const own = markup(true);
     const peer = markup(false);
     expect(own).toContain('text-accent-fg');
     expect(peer).not.toContain('text-accent-fg');
-    expect(peer).toMatch(/data-mention="11111111[^"]*" class="[^"]*font-bold/);
+    expect(peer).toMatch(/data-mention="11111111[^"]*" class="[^"]*font-semibold/);
   });
 
   it('tapping another person opens the DM via the opener; my own name is inert', () => {
@@ -3430,10 +3430,10 @@ describe('F5 mentions are bold and the peer ink clears 4.5:1 in both themes', ()
     expect(selfDark).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('F5 every mention is font-bold in own and peer bubbles; a mention of me adds accent-soft', () => {
+  it('F5 every mention is font-semibold in own and peer bubbles; a mention of me adds accent-soft', () => {
     for (const mine of [true, false]) {
-      expect(mentionClass(mine, false)).toContain('font-bold');
-      expect(mentionClass(mine, true)).toContain('font-bold');
+      expect(mentionClass(mine, false)).toContain('font-semibold');
+      expect(mentionClass(mine, true)).toContain('font-semibold');
       expect(mentionClass(mine, true)).toContain('bg-accent-soft');
       expect(mentionClass(mine, false)).not.toContain('bg-accent-soft');
     }
@@ -3464,7 +3464,7 @@ describe('A3 "@all" renders bold, as a mention of me for recipients, and inert',
     expect(html).not.toContain('@[');
     expect(html).not.toContain('<button');
     expect(html).toContain(mentionClass(false, true));
-    expect(mentionClass(false, true)).toContain('font-bold');
+    expect(mentionClass(false, true)).toContain('font-semibold');
     expect(mentionClass(false, true)).toContain('bg-accent-soft');
   });
 
@@ -3477,7 +3477,7 @@ describe('A3 "@all" renders bold, as a mention of me for recipients, and inert',
 
   it('A3 list preview and draft line draw "@all" bold', () => {
     const html = renderStrip(<span>{boldAllMentions(draftLine('@[all] ship it', 'w1'))}</span>);
-    expect(html).toContain('<span data-mention-all="" class="font-bold">@all</span> ship it');
+    expect(html).toContain('<span data-mention-all="" class="font-semibold">@all</span> ship it');
     expect(boldAllMentions('no everyone here')).toBe('no everyone here');
   });
 
@@ -3578,16 +3578,16 @@ describe('J7 only a real "@[all]" token draws bold', () => {
       expect(html).toContain('@all standup');
       expect(html).not.toContain('data-mention-all');
       expect(html).not.toContain('data-mention="all"');
-      expect(html).not.toContain('font-bold">@all');
+      expect(html).not.toContain('font-semibold">@all');
       expect(html).not.toContain(ALL_MARK);
     }
     for (const html of [list(token), draft(token), activity(token)]) {
-      expect(html).toMatch(/<span data-mention-all="" class="font-bold[^"]*">@all<\/span>/);
+      expect(html).toMatch(/<span data-mention-all="" class="font-semibold[^"]*">@all<\/span>/);
       expect(html).not.toContain(ALL_MARK);
       expect(html).not.toContain('@[');
     }
     expect(bubble(token)).toContain(`data-mention="all" class="${mentionClass(false, true)}">@all`);
-    expect(mentionClass(false, true)).toContain('font-bold');
+    expect(mentionClass(false, true)).toContain('font-semibold');
   });
 });
 
@@ -3614,11 +3614,11 @@ describe('J8 the mention-of-me tint follows the stored mentions', () => {
       true,
     );
     expect(forwarded).toContain(`class="${mentionClass(false, false)}">@all`);
-    expect(forwarded).toContain('font-bold');
+    expect(forwarded).toContain('font-semibold');
     expect(forwarded).not.toContain('bg-accent-soft');
     // A DM with a stray @[all]: the server stored no mention of me.
     const dm = render({ body: '@[all] hi', mine: false, mentions: [] }, false);
-    expect(dm).toContain('font-bold');
+    expect(dm).toContain('font-semibold');
     expect(dm).not.toContain('bg-accent-soft');
     // A live DM row (not read yet) predicts the same: no tint.
     expect(mentionsMe({ body: '@[all] hi', mine: false }, 'me', false)).toBe(false);

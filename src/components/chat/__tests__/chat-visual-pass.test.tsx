@@ -88,7 +88,7 @@ describe('chat visual pass', () => {
   it('contact info uses the same avatar fill as the list and header', () => {
     const sheet = read('../ContactSheet.tsx');
     expect(sheet).toContain('avatarFillFor(props.name)');
-    expect(sheet).not.toContain('rounded-full bg-panel-3 text-legacy-xl font-semibold text-fg-2');
+    expect(sheet).not.toContain('rounded-full bg-panel-3 text-2xl font-semibold text-fg-2');
   });
 
   it('info tabs stay on one row', () => {

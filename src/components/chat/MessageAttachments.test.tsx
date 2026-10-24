@@ -522,7 +522,7 @@ describe('album grid', () => {
     );
     expect(html).toContain('+2');
     expect(html).toContain('bg-black/50');
-    expect(html).toContain('text-[22px] font-semibold text-white');
+    expect(html).toContain('text-2xl font-semibold text-white');
     expect(html).toContain('gap-[2px]');
     expect(html).toContain('rounded-[15px]');
     expect(html.match(/<button/g)).toHaveLength(4);

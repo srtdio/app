@@ -288,7 +288,7 @@ describe('thread controls', () => {
     );
     expect(own).toContain('justify-end');
     expect(own).toContain('min-h-[44px]');
-    expect(own).toContain('text-[13px] font-semibold text-accent');
+    expect(own).toContain('text-md font-semibold text-accent');
     expect(own).toContain('data-rail="through"');
     const left = html(
       <RepliesButtonRow
@@ -308,7 +308,7 @@ describe('thread controls', () => {
   it('the view separator is a muted 12px line, not a button', () => {
     const out = html(<RepliesSeparatorRow label="2 replies" through />);
     expect(out).toContain('role="separator"');
-    expect(out).toContain('text-legacy-xs text-fg-3');
+    expect(out).toContain('text-sm text-fg-3');
     expect(out).not.toContain('<button');
   });
 

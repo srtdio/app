@@ -795,7 +795,7 @@ export function PlanItemScreen(props: {
               {askingChanges ? (
                 <div
                   data-plan-ask-hint=""
-                  className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-[13px] leading-[18px] text-fg-2"
+                  className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-md text-fg-2"
                 >
                   <p className="min-w-0 flex-1 py-2">{ASK_CHANGES_HINT}</p>
                   <IconButton
@@ -810,12 +810,12 @@ export function PlanItemScreen(props: {
                 </div>
               ) : null}
               {sendError !== null ? (
-                <p role="alert" className="text-[13px] text-bad">
+                <p role="alert" className="text-md text-bad">
                   {sendError}
                 </p>
               ) : null}
               {actionError !== null && askingChanges ? (
-                <p role="alert" className="text-[13px] text-bad">
+                <p role="alert" className="text-md text-bad">
                   {actionError}
                 </p>
               ) : null}
@@ -836,7 +836,7 @@ export function PlanItemScreen(props: {
                         : 'Comment for everyone'
                   }
                   className={cn(
-                    'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-legacy-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     teamNote ? 'border-warn' : askingChanges ? 'border-accent' : 'border-border',
                   )}
                 />
@@ -886,7 +886,7 @@ export function PlanItemScreen(props: {
             <ItemMedia read={read} />
             <div className="flex flex-col gap-1.5">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="min-w-0 break-words pt-[9px] text-legacy-xl font-semibold leading-[26px] text-fg">
+                <h3 className="min-w-0 break-words pt-[9px] text-2xl font-semibold text-fg">
                   {title}
                 </h3>
                 {editable ? (
@@ -902,7 +902,7 @@ export function PlanItemScreen(props: {
                 ) : null}
               </div>
               {description !== '' ? (
-                <p className="whitespace-pre-wrap text-[15px] leading-[21px] text-fg-2">
+                <p className="whitespace-pre-wrap text-lg text-fg-2">
                   {description}
                 </p>
               ) : null}
@@ -913,11 +913,11 @@ export function PlanItemScreen(props: {
               className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
             >
               <div className="flex min-h-[28px] items-center justify-between gap-2">
-                <span className="text-legacy-sm text-fg-3">Date</span>
+                <span className="text-base text-fg-3">Date</span>
                 <span className="flex items-center gap-1">
                   <span
                     data-plan-item-date={date.dated ? 'dated' : 'none'}
-                    className={cn('text-[13px]', date.dated ? 'font-mono text-fg-2' : 'text-fg-3')}
+                    className={cn('text-md', date.dated ? 'font-mono text-fg-2' : 'text-fg-3')}
                   >
                     {date.label}
                   </span>
@@ -940,7 +940,7 @@ export function PlanItemScreen(props: {
                   key={row.label}
                   className="flex min-h-[28px] items-center justify-between gap-2"
                 >
-                  <span className="text-legacy-sm text-fg-3">{row.label}</span>
+                  <span className="text-base text-fg-3">{row.label}</span>
                   <PlanPill
                     pill={{
                       label: row.value,
@@ -975,20 +975,20 @@ export function PlanItemScreen(props: {
                   </Button>
                 </div>
                 {actionError !== null && !confirmOpen && !askingChanges ? (
-                  <p role="alert" className="text-[13px] text-bad">
+                  <p role="alert" className="text-md text-bad">
                     {actionError}
                   </p>
                 ) : null}
               </div>
             ) : null}
             <section className="flex flex-col gap-2.5" aria-label="Comments">
-              <h4 className="text-[15px] font-semibold text-fg">Comments</h4>
+              <h4 className="text-lg font-semibold text-fg">Comments</h4>
               {read.status === 'loading' ? (
                 <div className="h-[72px] animate-pulse rounded-lg bg-panel-2" />
               ) : read.status === 'error' ? (
                 <ScreenFailed onRetry={reload} />
               ) : shown.length === 0 ? (
-                <p className="text-[13px] text-fg-3">No comments yet.</p>
+                <p className="text-md text-fg-3">No comments yet.</p>
               ) : (
                 shown.map((c) =>
                   c.id === highlightId ? (
@@ -1112,7 +1112,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="empty"
-        className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel text-[13px] text-fg-3"
+        className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel text-md text-fg-3"
       >
         No files
       </div>
@@ -1160,20 +1160,20 @@ function CommentRow(props: {
           'ring-2 ring-accent transition-shadow duration-slow motion-reduce:transition-none',
       )}
     >
-      <div className="flex items-center gap-1.5 text-[13px]">
+      <div className="flex items-center gap-1.5 text-md">
         <span className="font-semibold text-fg">{c.authorName}</span>
         {team ? (
-          <span className="inline-flex items-center gap-1 text-legacy-xs text-warn">
+          <span className="inline-flex items-center gap-1 text-sm text-warn">
             <IconLock size={12} />
             {TEAM_ONLY_LABEL}
           </span>
         ) : null}
-        <time className="ml-auto font-mono text-legacy-xs text-fg-3">
+        <time className="ml-auto font-mono text-sm text-fg-3">
           {formatClockTime(c.createdAt, props.timeZone)}
         </time>
       </div>
       {/* No mention picker here, but a typed token reads "@username" (or "@Former member"), never raw. */}
-      <p className="whitespace-pre-wrap text-[15px] leading-[21px] text-fg">
+      <p className="whitespace-pre-wrap text-lg text-fg">
         {resolvePersonMentionText(c.body, props.workspaceId)}
       </p>
     </div>

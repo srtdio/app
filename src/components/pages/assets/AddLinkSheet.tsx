@@ -106,7 +106,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
     >
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-fg-2">Link</span>
+          <span className="text-md font-medium text-fg-2">Link</span>
           <Input
             type="url"
             inputMode="url"
@@ -119,14 +119,14 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
             onBlur={() => setUrlTouched(true)}
           />
           {showUrlError ? (
-            <span className="text-legacy-xs text-bad">
+            <span className="text-sm text-bad">
               Enter a full link starting with https://
             </span>
           ) : null}
         </label>
 
         <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-fg-2">Name</span>
+          <span className="text-md font-medium text-fg-2">Name</span>
           <Input
             placeholder="What should this link be called?"
             value={name}
@@ -136,7 +136,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
             onBlur={() => setNameTouched(true)}
           />
           {showNameError ? (
-            <span className="text-legacy-xs text-bad">The link needs a name</span>
+            <span className="text-sm text-bad">The link needs a name</span>
           ) : null}
         </label>
       </div>

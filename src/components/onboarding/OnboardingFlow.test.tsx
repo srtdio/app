@@ -438,7 +438,7 @@ describe('pre-app screens', () => {
   // W11 fix 7: hints are 12px or larger.
   it('draws no 11px hint on the name screen', async () => {
     await toNameScreen('Creator');
-    expect(document.querySelector('[class*="text-[11px]"]')).toBeNull();
+    expect(document.querySelector('[class*="text-xs"]')).toBeNull();
   });
 
   it('takes free text for Something else, with no age range and no How did you hear', async () => {

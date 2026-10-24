@@ -121,8 +121,8 @@ export function OpenPostSheetRow(props: {
     >
       <OpenPostThumb assetVersionId={props.post.thumbnailAssetVersionId} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-legacy-sm font-medium text-fg">{lines.title}</span>
-        <span className="truncate text-legacy-xs text-fg-3">{lines.meta}</span>
+        <span className="truncate text-base font-medium text-fg">{lines.title}</span>
+        <span className="truncate text-sm text-fg-3">{lines.meta}</span>
       </span>
       <Button
         type="button"
@@ -152,7 +152,7 @@ export function OpenPostsList(props: OpenPostsSection & { timeZone: string }): R
   if (props.posts === null || props.posts.length === 0) return null;
   return (
     <section data-open-posts="" className="flex flex-col gap-1">
-      <h3 className="px-2 text-legacy-xs font-semibold text-fg-3">{props.heading}</h3>
+      <h3 className="px-2 text-sm font-semibold text-fg-3">{props.heading}</h3>
       <ul className="flex max-h-[40vh] flex-col overflow-y-auto">
         {props.posts.map((post) => (
           <OpenPostSheetRow
@@ -282,20 +282,20 @@ export function MarkSheetRow(props: {
           onClick={props.onJump}
           className="flex min-h-[44px] min-w-0 flex-1 flex-col gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <span className="flex min-w-0 items-center gap-2 text-legacy-xs text-fg-3">
+          <span className="flex min-w-0 items-center gap-2 text-sm text-fg-3">
             <Tag label={TYPE_LABEL[mark.type]} tone={MARK_TONE[mark.type]} className="shrink-0" />
             {priority !== '' ? <Tag label={priority} tone="warn" className="shrink-0" /> : null}
             <span className="truncate font-medium text-fg">{props.sender}</span>
             <span className="ml-auto shrink-0">{props.when}</span>
           </span>
-          <span className="line-clamp-2 [overflow-wrap:anywhere] text-legacy-sm text-fg-2">
+          <span className="line-clamp-2 [overflow-wrap:anywhere] text-base text-fg-2">
             {props.text}
           </span>
         </button>
         {props.resolver !== undefined ? (
           <div data-mark-history="" className="flex shrink-0 flex-col items-end gap-1 text-right">
-            <span className="text-legacy-xs font-semibold text-fg">{STAMP_WORD[mark.type]}</span>
-            <span className="text-[11px] text-fg-3">
+            <span className="text-sm font-semibold text-fg">{STAMP_WORD[mark.type]}</span>
+            <span className="text-xs text-fg-3">
               {`${props.resolver.name} · ${props.resolver.when}`}
             </span>
             <Button
@@ -331,7 +331,7 @@ export function MarkSheetRow(props: {
           data-mark-confirm={action}
           className="mx-2 mb-1 flex flex-wrap items-center gap-2 rounded-md border border-border bg-panel-2 px-3 py-2"
         >
-          <span className="min-w-0 flex-1 text-legacy-sm text-fg">
+          <span className="min-w-0 flex-1 text-base text-fg">
             {markConfirmCopy(mark.type, action)}
           </span>
           <Button variant="ghost" disabled={props.busy} onClick={props.onCancel}>
@@ -445,7 +445,7 @@ export function MarksList(props: MarksListProps): ReactElement {
         <OpenPostsList {...props.openPosts} timeZone={props.timeZone} />
       ) : null}
       {body === 'no-open-marks' ? (
-        <p data-no-open-marks="" className="px-2 text-legacy-xs text-fg-3">
+        <p data-no-open-marks="" className="px-2 text-sm text-fg-3">
           {NO_OPEN_MARKS}
         </p>
       ) : body === 'empty' ? (

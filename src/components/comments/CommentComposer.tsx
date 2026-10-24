@@ -225,7 +225,7 @@ export function CommentComposer({
       />
 
       {tooLong ? (
-        <p role="alert" className="text-legacy-xs text-bad">
+        <p role="alert" className="text-sm text-bad">
           Comments must be at most {MAX_BODY.toLocaleString('en-US')} characters.
         </p>
       ) : null}
@@ -273,7 +273,7 @@ export function CommentComposer({
       {error !== null ? (
         <div
           role="alert"
-          className="rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+          className="rounded-md border border-bad px-3 py-2 text-base text-bad"
         >
           {error}
         </div>
@@ -321,10 +321,10 @@ export function PendingChip({
         )}
       </span>
       <span className="flex min-w-0 max-w-[180px] flex-col">
-        <span className="truncate text-legacy-xs font-medium text-fg" title={item.file.name}>
+        <span className="truncate text-sm font-medium text-fg" title={item.file.name}>
           {item.file.name}
         </span>
-        <span className={error ? 'truncate text-[11px] text-bad' : 'text-[11px] text-fg-3'}>
+        <span className={error ? 'truncate text-xs text-bad' : 'text-xs text-fg-3'}>
           {item.status.state === 'uploading'
             ? 'Uploading'
             : item.status.state === 'error'

@@ -374,7 +374,7 @@ export function EmojiGrid(props: {
 }): ReactElement {
   if (props.rows === null) {
     return (
-      <p data-emoji-empty="" className="px-4 py-6 text-center text-legacy-sm text-fg-3">
+      <p data-emoji-empty="" className="px-4 py-6 text-center text-base text-fg-3">
         {EMOJI_NO_RESULTS}
       </p>
     );

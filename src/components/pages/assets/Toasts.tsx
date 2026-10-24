@@ -18,7 +18,7 @@ export function Toasts({ toasts, onDismiss }: ToastsProps) {
           key={toast.id}
           type="button"
           onClick={() => onDismiss(toast.id)}
-          className="pointer-events-auto max-w-sm rounded-lg border border-border bg-panel px-4 py-2.5 text-legacy-sm text-fg shadow-lg"
+          className="pointer-events-auto max-w-sm rounded-lg border border-border bg-panel px-4 py-2.5 text-base text-fg shadow-lg"
         >
           {toast.message}
         </button>

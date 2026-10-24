@@ -81,12 +81,12 @@ export function PlanMoveSheet(props: {
                 disabled={props.busy}
                 onClick={() => props.onPick(d.day)}
                 className={cn(
-                  'flex min-h-[48px] w-full items-center justify-between rounded-lg px-3 text-left text-[15px] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
+                  'flex min-h-[48px] w-full items-center justify-between rounded-lg px-3 text-left text-lg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
                   current ? 'text-fg-3' : 'text-fg',
                 )}
               >
                 <span>{d.label}</span>
-                {current ? <span className="text-legacy-xs text-fg-3">Current</span> : null}
+                {current ? <span className="text-sm text-fg-3">Current</span> : null}
               </button>
             </li>
           );
@@ -107,7 +107,7 @@ export function PlanRemoveSheet(props: {
   return (
     <Sheet open={props.open} onClose={props.onClose} title="Remove from plan?">
       <div data-plan-remove-sheet="" className="flex flex-col gap-3">
-        <p className="text-legacy-sm text-fg">
+        <p className="text-base text-fg">
           {`"${props.title}" leaves the plan. Its comments stay with it.`}
         </p>
         <Button
@@ -142,7 +142,7 @@ export function PlanKeepApprovalSheet(props: {
   return (
     <Sheet open={props.open} onClose={props.onCancel} title={props.title}>
       <div data-plan-keep-sheet="" className="flex flex-col gap-3">
-        <p className="text-[15px] leading-[21px] text-fg-2">{props.body}</p>
+        <p className="text-lg text-fg-2">{props.body}</p>
         <Button variant="primary" data-plan-keep-yes="" onClick={() => props.onKeep(true)}>
           <IconCheck size={16} />
           {KEEP_APPROVAL_YES}

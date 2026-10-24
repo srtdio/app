@@ -59,10 +59,10 @@ export function UnsubscribePage() {
     >
       {state === 'subscribed' && (
         <Card>
-          <h1 className="text-legacy-lg font-semibold tracking-tight text-fg">
+          <h1 className="text-lg font-semibold tracking-tight text-fg">
             Stop catch-up emails?
           </h1>
-          <div className="mt-3 space-y-3 text-legacy-sm leading-6 text-fg-2">
+          <div className="mt-3 space-y-3 text-base leading-6 text-fg-2">
             <p>
               {
                 "You won't get catch-ups from any of your Sorted workspaces. Everything stays in Sorted; you'll just check it yourself."
@@ -86,7 +86,7 @@ export function UnsubscribePage() {
               Keep getting catch-ups
             </Link>
           </div>
-          <p className="mt-4 text-center text-legacy-xs text-fg-3">No login needed.</p>
+          <p className="mt-4 text-center text-sm text-fg-3">No login needed.</p>
         </Card>
       )}
       {state === 'unsubscribed' && (
@@ -94,10 +94,10 @@ export function UnsubscribePage() {
           <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-good-soft text-good">
             <IconCheck size={22} />
           </div>
-          <h1 className="text-legacy-lg font-semibold tracking-tight text-fg">
+          <h1 className="text-lg font-semibold tracking-tight text-fg">
             {"You're unsubscribed"}
           </h1>
-          <div className="mt-3 space-y-3 text-legacy-sm leading-6 text-fg-2">
+          <div className="mt-3 space-y-3 text-base leading-6 text-fg-2">
             <p>No more catch-up emails from any Sorted workspace, starting now.</p>
             <p>
               {
@@ -116,14 +116,14 @@ export function UnsubscribePage() {
               Turn catch-ups back on
             </Button>
           </div>
-          <p className="mt-4 text-center text-legacy-xs text-fg-3">
+          <p className="mt-4 text-center text-sm text-fg-3">
             Invites, login links and password resets still arrive.
           </p>
         </Card>
       )}
       {state === 'invalid' && (
         <Card>
-          <p className="text-legacy-sm leading-6 text-fg">{"This link isn't valid."}</p>
+          <p className="text-base leading-6 text-fg">{"This link isn't valid."}</p>
         </Card>
       )}
     </div>

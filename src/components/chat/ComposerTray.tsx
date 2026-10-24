@@ -266,7 +266,7 @@ export function TrayGrid(props: {
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg">
             <tile.Icon size={22} />
           </span>
-          <span className="text-legacy-xs font-medium">{tile.label}</span>
+          <span className="text-sm font-medium">{tile.label}</span>
         </button>
       ))}
     </div>

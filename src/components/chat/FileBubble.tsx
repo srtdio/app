@@ -198,11 +198,11 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           <span
             data-file-name=""
             title={props.name}
-            className="text-legacy-sm font-medium leading-5 text-fg [overflow-wrap:anywhere]"
+            className="text-base font-medium leading-5 text-fg [overflow-wrap:anywhere]"
           >
             {middleTruncate(props.name, BUBBLE_NAME_BUDGET)}
           </span>
-          <span className="text-legacy-xs text-fg-3">
+          <span className="text-sm text-fg-3">
             {props.meta.map((part, i) => (
               <span key={i}>
                 {i > 0 ? ' · ' : null}
@@ -211,7 +211,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
             ))}
           </span>
           {failed ? (
-            <span data-file-error="" role="status" className="text-legacy-xs font-medium text-bad">
+            <span data-file-error="" role="status" className="text-sm font-medium text-bad">
               {VIEWER_ERROR}
             </span>
           ) : null}

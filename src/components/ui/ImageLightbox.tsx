@@ -258,7 +258,7 @@ const ARROW_BUTTON =
 
 // The Try again control on the failure state: auto width, same token palette.
 const RETRY_BUTTON =
-  'inline-flex h-11 min-h-[44px] items-center justify-center rounded-lg px-4 text-legacy-sm font-medium text-overlay-fg ' +
+  'inline-flex h-11 min-h-[44px] items-center justify-center rounded-lg px-4 text-base font-medium text-overlay-fg ' +
   'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
   'focus-visible:ring-overlay-fg/70';
 
@@ -312,7 +312,7 @@ function LightboxMedia({
   if (failed) {
     return (
       <div className="flex flex-col items-center gap-3">
-        <p className="text-legacy-sm text-overlay-fg-dim">This image did not load.</p>
+        <p className="text-base text-overlay-fg-dim">This image did not load.</p>
         <button type="button" onClick={onRetry} className={RETRY_BUTTON}>
           Try again
         </button>
@@ -372,7 +372,7 @@ function DownloadControl({
   return (
     <>
       {failed ? (
-        <span role="status" className="shrink-0 text-legacy-xs text-overlay-fg-dim">
+        <span role="status" className="shrink-0 text-sm text-overlay-fg-dim">
           {VIEWER_ERROR}
         </span>
       ) : null}
@@ -648,7 +648,7 @@ export function ImageLightbox({
       />
       <div className="relative flex h-14 shrink-0 items-center gap-2 px-3">
         {multiple ? (
-          <span className="shrink-0 font-mono text-[13px] tabular-nums text-overlay-fg">
+          <span className="shrink-0 font-mono text-md tabular-nums text-overlay-fg">
             {lightboxCounter(index, count)}
           </span>
         ) : null}
@@ -718,7 +718,7 @@ export function ImageLightbox({
       </div>
 
       {caption !== undefined && caption !== '' ? (
-        <div className="relative shrink-0 px-4 pb-4 text-center text-legacy-sm text-overlay-fg-dim">
+        <div className="relative shrink-0 px-4 pb-4 text-center text-base text-overlay-fg-dim">
           {caption}
         </div>
       ) : null}
@@ -726,10 +726,10 @@ export function ImageLightbox({
       {details !== undefined ? (
         <div className="relative flex h-16 shrink-0 items-center gap-3 px-4 pb-[env(safe-area-inset-bottom)]">
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-legacy-sm font-medium text-overlay-fg">
+            <span className="truncate text-base font-medium text-overlay-fg">
               {details.sender}
             </span>
-            <span className="font-mono text-legacy-xs tabular-nums text-overlay-fg-dim">
+            <span className="font-mono text-sm tabular-nums text-overlay-fg-dim">
               {details.time}
             </span>
           </span>

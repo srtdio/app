@@ -81,7 +81,7 @@ function ChoiceRow(props: { label: string; selected: boolean; onSelect: () => vo
       aria-checked={props.selected}
       onClick={props.onSelect}
       className={cn(
-        'flex min-h-[44px] w-full items-center gap-3 rounded-lg border px-3 text-left text-legacy-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex min-h-[44px] w-full items-center gap-3 rounded-lg border px-3 text-left text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         props.selected
           ? 'border-accent bg-accent-soft text-accent'
           : 'border-border text-fg hover:bg-panel-2',
@@ -145,7 +145,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
           </Button>
         }
       >
-        <p className="text-legacy-sm leading-relaxed text-fg-2">
+        <p className="text-base leading-relaxed text-fg-2">
           {booked}. The team sends a Google Meet link to your email before the call.
         </p>
       </Sheet>
@@ -169,7 +169,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="text-legacy-sm leading-relaxed text-fg-2">
+        <p className="text-base leading-relaxed text-fg-2">
           Pick a time. We send a Google Meet link to your email.
         </p>
         <div role="radiogroup" aria-label="Book a call" className="flex flex-col gap-2">
@@ -205,11 +205,11 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
                 onChange={(e) => setTime(e.target.value)}
               />
             </div>
-            <p className="text-[11px] text-fg-3">Your time zone. We confirm by email.</p>
+            <p className="text-xs text-fg-3">Your time zone. We confirm by email.</p>
           </div>
         ) : null}
         {failed ? (
-          <p role="alert" className="text-legacy-sm text-bad">
+          <p role="alert" className="text-base text-bad">
             {SEND_FAILED}
           </p>
         ) : null}

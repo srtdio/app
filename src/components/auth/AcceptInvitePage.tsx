@@ -179,7 +179,7 @@ export function AcceptFailureView(props: {
   if (props.failure === 'wrong-account') {
     return (
       <>
-        <p className="text-legacy-sm text-bad">{RECOVERY_COPY.wrongAccount}</p>
+        <p className="text-base text-bad">{RECOVERY_COPY.wrongAccount}</p>
         <Button variant="primary" className="w-full" onClick={props.actions.switchAccount}>
           {RECOVERY_COPY.differentEmail}
         </Button>
@@ -188,7 +188,7 @@ export function AcceptFailureView(props: {
   }
   return (
     <>
-      <p className="text-legacy-sm text-bad">{ACCEPT_ERROR_MESSAGE}</p>
+      <p className="text-base text-bad">{ACCEPT_ERROR_MESSAGE}</p>
       {/* Retry reuses the same accept path the mount effect runs. */}
       <Button
         variant="primary"
@@ -288,7 +288,7 @@ export function AcceptInvitePage() {
     return (
       <AuthShell title="Invite link" subtitle="We couldn't read this invitation." footer={null}>
         <div className="flex flex-col gap-4">
-          <p className="text-legacy-sm text-bad">This invite link is invalid.</p>
+          <p className="text-base text-bad">This invite link is invalid.</p>
           <Link to="/signin" className={buttonClass('primary', 'default', 'w-full')}>
             Go to sign in
           </Link>
@@ -359,7 +359,7 @@ export function AcceptInvitePage() {
       footer={footer}
     >
       <div className="flex flex-col gap-4">
-        {failureView ?? <p className="text-legacy-sm text-fg-2">Joining your workspace…</p>}
+        {failureView ?? <p className="text-base text-fg-2">Joining your workspace…</p>}
       </div>
     </AuthShell>
   );

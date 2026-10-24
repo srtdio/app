@@ -93,7 +93,7 @@ export function boldAllMentions(text: string): ReactNode {
   if (runs.every((run) => !run.all)) return text;
   return runs.map((run, i) =>
     run.all ? (
-      <span key={i} data-mention-all="" className="font-bold">
+      <span key={i} data-mention-all="" className="font-semibold">
         {run.text}
       </span>
     ) : (
@@ -226,8 +226,8 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   if (props.channels.length === 0) {
     return (
       <div className="px-4 py-12 text-center">
-        <p className="text-legacy-sm text-fg-2">{`No chats called "${(props.search ?? '').trim()}"`}</p>
-        <p className="mt-1 text-legacy-xs text-fg-3">Try a different name or clear the search.</p>
+        <p className="text-base text-fg-2">{`No chats called "${(props.search ?? '').trim()}"`}</p>
+        <p className="mt-1 text-sm text-fg-3">Try a different name or clear the search.</p>
       </div>
     );
   }
@@ -446,7 +446,7 @@ export const PEOPLE_TILE_GRID =
 
 /** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
 export const SECTION_LABEL_TYPE =
-  'text-legacy-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
+  'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /** The label's padding: 4px 4px 0 for the first section, 12px 4px 0 after. */
 export function sectionLabelClass(first: boolean): string {
@@ -454,11 +454,11 @@ export function sectionLabelClass(first: boolean): string {
 }
 
 /** Tile type. Group: name 17/600, preview 14/19. Person: name 15/600, preview 13/18. Time 12. */
-export const GROUP_NAME_TYPE = 'text-[17px] leading-[22px] font-semibold';
-export const GROUP_PREVIEW_TYPE = 'text-[14px] leading-[19px] font-normal';
-export const PERSON_NAME_TYPE = 'text-[15px] leading-[20px] font-semibold';
-export const PERSON_PREVIEW_TYPE = 'text-[13px] leading-[18px] font-normal';
-export const TILE_TIME_TYPE = 'font-mono text-legacy-xs font-normal tabular-nums';
+export const GROUP_NAME_TYPE = 'text-xl font-semibold';
+export const GROUP_PREVIEW_TYPE = 'text-base font-normal';
+export const PERSON_NAME_TYPE = 'text-lg font-semibold';
+export const PERSON_PREVIEW_TYPE = 'text-md font-normal';
+export const TILE_TIME_TYPE = 'font-mono text-sm font-normal tabular-nums';
 
 /**
  * The wide tile's 76px rounded-square (radius 18) group photo: the shared
@@ -466,15 +466,15 @@ export const TILE_TIME_TYPE = 'font-mono text-legacy-xs font-normal tabular-nums
  * is final on first paint.
  */
 export const GROUP_TILE_PHOTO =
-  'flex h-[76px] w-[76px] shrink-0 [&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-[18px] [&>*]:!text-legacy-xl';
+  'flex h-[76px] w-[76px] shrink-0 [&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-[18px] [&>*]:!text-2xl';
 
 /** The square tile's 72px circular photo: the shared Avatar resized in place. */
 export const PERSON_TILE_PHOTO =
-  'flex h-[72px] w-[72px] shrink-0 [&>*]:!h-[72px] [&>*]:!w-[72px] [&>*]:!text-legacy-xl';
+  'flex h-[72px] w-[72px] shrink-0 [&>*]:!h-[72px] [&>*]:!w-[72px] [&>*]:!text-2xl';
 
 /** The unread pill: 22px min, radius 11, accent fill, 12/700. */
 export const TILE_PILL =
-  'inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-[11px] bg-accent px-1.5 text-legacy-xs font-bold leading-none tabular-nums text-accent-fg';
+  'inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-[11px] bg-accent px-1.5 text-sm font-semibold leading-none tabular-nums text-accent-fg';
 
 /**
  * A tile's box: hairline border, radius 18 and its fixed height. Wide: 100 tall
@@ -852,7 +852,7 @@ export function notesTile(props: {
               {notes.title}
             </span>
             {last !== null && last.time !== '' ? (
-              <span data-notes-time="" className="shrink-0 text-legacy-xs tabular-nums text-fg-3">
+              <span data-notes-time="" className="shrink-0 text-sm tabular-nums text-fg-3">
                 {last.time}
               </span>
             ) : null}
@@ -1020,7 +1020,7 @@ export function visibleChannels(
 function selectHeader(select: ChannelSelectMode): ReactElement {
   return (
     <div className="flex items-center gap-2 border-b border-border px-4 py-3 md:px-6">
-      <span className="min-w-0 flex-1 truncate text-legacy-sm font-semibold text-fg">
+      <span className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
         {`${select.selectedIds.size} selected`}
       </span>
       <Button variant="ghost" onClick={select.onCancel}>

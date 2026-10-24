@@ -92,23 +92,23 @@ export function ApprovedAddressesSection({
       className="flex flex-col gap-3 rounded-xl border border-border bg-panel p-4"
     >
       <div>
-        <h3 id="approved-addresses-title" className="text-legacy-sm font-semibold text-fg">
+        <h3 id="approved-addresses-title" className="text-base font-semibold text-fg">
           Approved approver addresses
         </h3>
-        <p className="mt-1 text-[13px] leading-snug text-fg-3">
+        <p className="mt-1 text-md leading-snug text-fg-3">
           {approverAddressIntro(clientDomain)}
         </p>
       </div>
 
       {loadError ? (
-        <p className="text-legacy-sm text-bad">
+        <p className="text-base text-bad">
           Couldn&apos;t load addresses. Refresh and try again.
         </p>
       ) : domains.length > 0 ? (
         <ul aria-label="Approved addresses" className="flex flex-col divide-y divide-border">
           {domains.map((domain) => (
             <li key={domain} className="flex items-center gap-3 py-1">
-              <span className="min-w-0 flex-1 break-all text-legacy-sm text-fg">{domain}</span>
+              <span className="min-w-0 flex-1 break-all text-base text-fg">{domain}</span>
               <Button
                 type="button"
                 variant="ghost"
@@ -139,7 +139,7 @@ export function ApprovedAddressesSection({
           />
         </Field>
         {error !== null ? (
-          <p role="alert" className="text-legacy-xs text-bad">
+          <p role="alert" className="text-sm text-bad">
             {error}
           </p>
         ) : null}

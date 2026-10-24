@@ -75,7 +75,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       value={value}
       className={cn(
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
-        'w-full px-3 rounded-lg border border-border bg-panel-2 text-fg text-legacy-base md:text-legacy-sm placeholder:text-fg-3 outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft py-2.5 h-auto',
+        'w-full px-3 rounded-lg border border-border bg-panel-2 text-fg text-base md:text-base placeholder:text-fg-3 outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft py-2.5 h-auto',
         compact ? 'min-h-[44px] max-h-[120px]' : 'min-h-[74px]',
         className,
       )}

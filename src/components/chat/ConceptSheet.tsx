@@ -64,7 +64,7 @@ export const EMPTY_CONCEPT: ConceptForm = { title: '', description: '', files: [
 export const CONCEPT_DESCRIPTION_MAX = 5000;
 
 export const FIELD =
-  'min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-3.5 text-legacy-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60';
+  'min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60';
 
 /** The hint once the files reach the cap (library picks and uploads together). */
 export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} files.`;
@@ -308,7 +308,7 @@ export function ConceptSheet(props: {
         footer={
           <div className="flex w-full flex-col gap-2">
             {props.note !== undefined && props.note !== null ? (
-              <p data-plan-concept-reset="" className="text-[13px] leading-[18px] text-fg-3">
+              <p data-plan-concept-reset="" className="text-md text-fg-3">
                 {props.note}
               </p>
             ) : null}
@@ -336,7 +336,7 @@ export function ConceptSheet(props: {
       >
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[13px] text-fg-3">Title</span>
+            <span className="text-md text-fg-3">Title</span>
             <input
               data-plan-concept-title=""
               value={form.title}
@@ -353,7 +353,7 @@ export function ConceptSheet(props: {
           </label>
           <div className="flex flex-col gap-1">
             <label className="flex flex-col gap-1">
-              <span className="text-[13px] text-fg-3">Description</span>
+              <span className="text-md text-fg-3">Description</span>
               <textarea
                 data-plan-concept-description=""
                 value={form.description}
@@ -372,7 +372,7 @@ export function ConceptSheet(props: {
               data-plan-concept-words={words.over ? 'over' : 'ok'}
               aria-live="polite"
               className={cn(
-                'text-right font-mono text-[11.5px] tabular-nums',
+                'text-right font-mono text-xs tabular-nums',
                 words.over ? 'text-warn' : 'text-fg-3',
               )}
             >
@@ -397,7 +397,7 @@ export function ConceptSheet(props: {
               data-plan-concept-files-failed=""
               className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border border-border bg-panel px-3.5"
             >
-              <p className="text-legacy-sm text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
+              <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
               <Button data-plan-concept-files-retry="" onClick={props.onRetryFiles}>
                 Retry
               </Button>
@@ -471,7 +471,7 @@ export function ConceptSheet(props: {
               {atLimit ? (
                 <p
                   data-plan-concept-files-limit=""
-                  className="text-[13px] leading-[18px] text-fg-3"
+                  className="text-md text-fg-3"
                 >
                   {CONCEPT_FILES_LIMIT_HINT}
                 </p>
@@ -521,7 +521,7 @@ export function ConceptSheet(props: {
           )}
           {props.range !== undefined ? (
             <div className="flex flex-col gap-2">
-              <span className="text-[13px] text-fg-3">Day</span>
+              <span className="text-md text-fg-3">Day</span>
               <PlanDayTiles
                 range={props.range}
                 selected={conceptTileDay(form.date, props.range)}

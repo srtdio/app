@@ -37,7 +37,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             <span className="flex-1 h-4 rounded bg-panel-3 animate-pulse" aria-hidden />
           ) : (
             // "<Brand> - <Platform>": wrap (up to three lines) rather than clip the platform.
-            <span className="flex-1 min-w-0 font-semibold text-legacy-sm leading-tight line-clamp-3 break-words">
+            <span className="flex-1 min-w-0 font-semibold text-base leading-tight line-clamp-3 break-words">
               {workspaceName}
             </span>
           )}
@@ -52,7 +52,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-legacy-sm font-medium transition-colors',
+                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-base font-medium transition-colors',
                 isActive
                   ? 'bg-accent-soft text-accent'
                   : 'text-fg-2 hover:bg-panel-2 hover:text-fg',

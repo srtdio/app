@@ -99,9 +99,9 @@ function Panel({ label, children }: { label?: string; children: ReactNode }): Re
   return (
     <div className="rounded-xl border border-border bg-panel p-[18px]">
       {label !== undefined ? (
-        <div className="mb-2 font-mono text-[11px] uppercase tracking-wide text-fg-3">{label}</div>
+        <div className="mb-2 font-mono text-xs uppercase tracking-wide text-fg-3">{label}</div>
       ) : null}
-      <p className="whitespace-pre-wrap text-legacy-sm leading-relaxed text-fg">{children}</p>
+      <p className="whitespace-pre-wrap text-base leading-relaxed text-fg">{children}</p>
     </div>
   );
 }
@@ -154,14 +154,14 @@ export function compareVersionsView({
     <div className="flex flex-col gap-6 px-4 py-6 md:px-6">
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-accent-line bg-accent-soft px-4 py-3 text-accent">
         <div className="flex min-w-0 flex-col">
-          <span className="text-legacy-sm font-medium">
+          <span className="text-base font-medium">
             Comparing v{fromVersionNumber} → v{toVersionNumber}
           </span>
-          <span className="text-legacy-xs text-fg-2">
+          <span className="text-sm text-fg-2">
             {formatTimestamp(fromCreatedAt)} → {formatTimestamp(toCreatedAt)}
           </span>
         </div>
-        <span className="ml-auto font-mono text-legacy-sm tabular-nums">
+        <span className="ml-auto font-mono text-base tabular-nums">
           <span className="text-good">+{diff.addedWords}</span>{' '}
           <span className="text-bad">−{diff.removedWords}</span>{' '}
           <span className="text-fg-2">{diff.changedPct}% changed</span>
@@ -172,7 +172,7 @@ export function compareVersionsView({
       </div>
 
       {guarded ? (
-        <p className="text-legacy-xs text-fg-3">
+        <p className="text-sm text-fg-3">
           These captions are too long to mark word by word; showing both in full.
         </p>
       ) : (
@@ -196,14 +196,14 @@ export function compareVersionsView({
               })}
             </div>
             {mode === 'auto' ? (
-              <span className="text-legacy-xs text-fg-3">
+              <span className="text-sm text-fg-3">
                 Auto chose {resolved === 'side' ? 'side by side' : 'inline'} for a {diff.changedPct}
                 % change.
               </span>
             ) : null}
           </div>
 
-          <div className="flex items-center gap-4 text-legacy-xs text-fg-3">
+          <div className="flex items-center gap-4 text-sm text-fg-3">
             <span className="inline-flex items-center gap-1.5">
               <span aria-hidden className="h-3 w-3 rounded-[3px] bg-good-soft" />
               Added

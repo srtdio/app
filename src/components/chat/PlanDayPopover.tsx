@@ -170,7 +170,7 @@ export function PlanDayPopover(props: {
     next?.focus();
   };
   const item =
-    'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg px-2.5 text-left text-legacy-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+    'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg px-2.5 text-left text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
   return createPortal(
     <div
       ref={ref}
@@ -191,7 +191,7 @@ export function PlanDayPopover(props: {
         ...(pos?.maxHeight != null ? { maxHeight: pos.maxHeight } : {}),
       }}
     >
-      <p className="px-2.5 pb-1 pt-1.5 text-legacy-xs font-semibold uppercase tracking-[.06em] text-fg-3">
+      <p className="px-2.5 pb-1 pt-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-3">
         {MOVE_TO_HEADING}
       </p>
       {props.days.map((d) => {
@@ -211,7 +211,7 @@ export function PlanDayPopover(props: {
             )}
           >
             <span className="truncate">{d.label}</span>
-            <span className="shrink-0 font-mono text-[11px] text-fg-3">
+            <span className="shrink-0 font-mono text-xs text-fg-3">
               {d.count > 0 ? d.count : ''}
             </span>
           </button>

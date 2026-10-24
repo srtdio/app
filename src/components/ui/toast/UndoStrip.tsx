@@ -156,7 +156,7 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
       onPointerCancel={onPointerEnd}
       className="pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-[70] flex min-h-[50px] touch-none select-none items-center gap-3 rounded-[14px] border border-[var(--strip-border)] bg-[var(--strip-bg)] py-0 pl-[18px] pr-[5px] shadow-[var(--strip-shadow)] md:inset-x-0 md:bottom-6 md:mx-auto md:w-[480px]"
     >
-      <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-[var(--strip-fg)]">
+      <span className="min-w-0 flex-1 truncate text-lg font-medium text-[var(--strip-fg)]">
         {title}
       </span>
       {action !== undefined ? (
@@ -164,7 +164,7 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
           type="button"
           data-toast-action=""
           onClick={() => onAction(id)}
-          className="flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-legacy-sm font-medium text-[var(--strip-action)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--strip-action)]"
+          className="flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium text-[var(--strip-action)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--strip-action)]"
         >
           {action.label}
         </button>

@@ -50,7 +50,7 @@ const BAD = [
   'rounded-md',
   'rounded-xl',
   'font-semibold',
-  'text-legacy-xs',
+  'text-sm',
 ];
 
 function expectSystem(el: ReactElement): void {

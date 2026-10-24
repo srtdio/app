@@ -128,7 +128,7 @@ describe('StarredRowView', () => {
     expect(out).toContain('h-7 w-7');
     expect(out).toContain('Chitra');
     expect(out).toContain('›  Diwali shoot');
-    expect(out).toContain('font-mono text-legacy-xs tabular-nums text-fg-3');
+    expect(out).toContain('font-mono text-sm tabular-nums text-fg-3');
     expect(out).toContain('data-starred-bubble="peer"');
     expect(out).toContain('bg-panel-2 text-fg');
     expect(out).toContain('line-clamp-3');

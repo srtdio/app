@@ -302,7 +302,7 @@ export function PresetMediaField({
       </div>
       <p
         aria-live="polite"
-        className={upload.phase === 'failed' ? 'text-[12px] text-bad' : 'text-[12px] text-fg-3'}
+        className={upload.phase === 'failed' ? 'text-sm text-bad' : 'text-sm text-fg-3'}
       >
         {upload.phase === 'sending'
           ? uploadLine(upload.percent, upload.retrying)

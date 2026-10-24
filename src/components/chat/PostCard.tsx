@@ -344,8 +344,8 @@ export function CouldntLoadCard(props: { onRetry: () => void }): ReactElement {
       className={`${SHARED_CARD_BOX} min-w-[44px] bg-panel-2 text-left text-fg-2 hover:bg-panel-3`}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-legacy-sm font-medium">{CARD_LOAD_FAILED}</span>
-        <span className="truncate text-legacy-xs">Tap to try again</span>
+        <span className="truncate text-base font-medium">{CARD_LOAD_FAILED}</span>
+        <span className="truncate text-sm">Tap to try again</span>
       </span>
     </button>
   );
@@ -604,7 +604,7 @@ export const CARD_SKELETON = 'h-[118px] w-[240px] rounded-lg border border-borde
 
 /** A small pill laid over the cover image. */
 const MEDIA_PILL =
-  'inline-flex h-5 items-center gap-1 rounded-md bg-panel px-1.5 text-[11px] font-medium text-fg';
+  'inline-flex h-5 items-center gap-1 rounded-md bg-panel px-1.5 text-xs font-medium text-fg';
 
 /**
  * The card's tap and Enter key: both open its sheet, neither navigates (the sheet
@@ -809,7 +809,7 @@ export function PostCardItem(
         {props.sideKnown !== false ? (
           <div
             data-card-footer=""
-            className="flex h-[44px] items-center justify-between gap-2 border-t border-border px-3 text-legacy-xs"
+            className="flex h-[44px] items-center justify-between gap-2 border-t border-border px-3 text-sm"
           >
             <span
               className={cn(
@@ -1065,8 +1065,8 @@ export function NotVisibleCard(): ReactElement {
   return (
     <div className={`${SHARED_CARD_BOX} bg-panel-2 text-fg-2`}>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-legacy-sm font-medium">{NOT_VISIBLE_TITLE}</span>
-        <span className="truncate text-legacy-xs">{NOT_VISIBLE_BODY}</span>
+        <span className="truncate text-base font-medium">{NOT_VISIBLE_TITLE}</span>
+        <span className="truncate text-sm">{NOT_VISIBLE_BODY}</span>
       </span>
     </div>
   );

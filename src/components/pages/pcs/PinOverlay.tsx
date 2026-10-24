@@ -27,7 +27,7 @@ export function PinOverlay({ pins, onPinClick }: PinOverlayProps): ReactElement 
           style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
           className="pointer-events-auto absolute flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line"
         >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-[11px] font-semibold tabular-nums text-fg shadow">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-xs font-semibold tabular-nums text-fg shadow">
             {pin.n}
           </span>
         </button>

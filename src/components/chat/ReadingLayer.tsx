@@ -59,7 +59,7 @@ export function UnreadDivider({ count }: { count: number }): ReactElement {
       className={cn('flex items-center gap-3 px-4 pb-1 pt-3', NO_TOUCH_SELECT)}
     >
       <span aria-hidden="true" className="h-px flex-1 bg-accent-line" />
-      <span className="text-legacy-xs font-medium text-accent">
+      <span className="text-sm font-medium text-accent">
         <span className="font-mono tabular-nums">{count}</span> unread
       </span>
       <span aria-hidden="true" className="h-px flex-1 bg-accent-line" />
@@ -84,7 +84,7 @@ export function UnreadPill(props: {
         onClick={props.onJump}
         onContextMenu={(e) => e.preventDefault()}
         className={cn(
-          'flex h-11 items-center gap-1.5 rounded-full px-4 text-legacy-sm text-fg shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'flex h-11 items-center gap-1.5 rounded-full px-4 text-base text-fg shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           FLOAT_SURFACE_CLASS,
           NO_TOUCH_SELECT,
           FADE,
@@ -126,7 +126,7 @@ export function LatestButton(props: {
       {props.count > 0 ? (
         <span
           data-latest-count=""
-          className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 font-mono text-[11px] leading-none tabular-nums text-accent-fg"
+          className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 font-mono text-xs leading-none tabular-nums text-accent-fg"
         >
           {props.count}
         </span>
@@ -233,7 +233,7 @@ export function SheetAvatar(props: {
     <span
       aria-hidden="true"
       className={cn(
-        'flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-panel-3 text-legacy-xs font-medium text-fg-2',
+        'flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-panel-3 text-sm font-medium text-fg-2',
         props.dimmed === true && 'opacity-50',
       )}
     >
@@ -275,10 +275,10 @@ export function MessageInfoSheet(props: {
   return (
     <Sheet open={props.open} onClose={props.onClose} title="Message info">
       <div className={cn('flex flex-col', NO_TOUCH_SELECT)} data-message-info="">
-        <p className="pb-3 text-legacy-sm text-fg-2">
+        <p className="pb-3 text-base text-fg-2">
           {sentLine(props.createdAt, props.timeZone, props.nowMs)}
         </p>
-        <h3 className="py-2 text-legacy-xs font-medium text-fg-3">
+        <h3 className="py-2 text-sm font-medium text-fg-3">
           Read by <span className="font-mono">{props.read.length}</span>
         </h3>
         <ul>
@@ -288,11 +288,11 @@ export function MessageInfoSheet(props: {
                 name={nameOf(pos.userId)}
                 src={byId.get(pos.userId)?.avatarUrl ?? null}
               />
-              <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg">
+              <span className="min-w-0 flex-1 truncate text-base text-fg">
                 {nameOf(pos.userId)}
               </span>
               {pos.readAt !== null ? (
-                <span className="font-mono text-legacy-xs tabular-nums text-fg-3">
+                <span className="font-mono text-sm tabular-nums text-fg-3">
                   {formatClockTime(pos.readAt, props.timeZone)}
                 </span>
               ) : null}
@@ -300,14 +300,14 @@ export function MessageInfoSheet(props: {
           ))}
         </ul>
         <div className="my-2 h-px bg-border" aria-hidden="true" />
-        <h3 className="py-2 text-legacy-xs font-medium text-fg-3">
+        <h3 className="py-2 text-sm font-medium text-fg-3">
           Not read yet <span className="font-mono">{props.unread.length}</span>
         </h3>
         <ul>
           {props.unread.map((id) => (
             <li key={id} className="flex min-h-[52px] items-center gap-3 py-1">
               <SheetAvatar name={nameOf(id)} src={byId.get(id)?.avatarUrl ?? null} dimmed />
-              <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg-3">{nameOf(id)}</span>
+              <span className="min-w-0 flex-1 truncate text-base text-fg-3">{nameOf(id)}</span>
             </li>
           ))}
         </ul>
@@ -389,7 +389,7 @@ export function WhoReactedSheet(props: {
       <div className={cn('flex flex-col', NO_TOUCH_SELECT)} data-who-reacted="">
         {state.kind === 'failed' ? (
           <div className="flex flex-col items-center gap-3 py-6">
-            <p className="text-legacy-sm text-fg-2">{SHEET_LOAD_FAILED}</p>
+            <p className="text-base text-fg-2">{SHEET_LOAD_FAILED}</p>
             <Button variant="primary" className="min-w-[44px]" onClick={retry}>
               Retry
             </Button>
@@ -406,7 +406,7 @@ export function WhoReactedSheet(props: {
                   data-reactor-tab={t.key}
                   onClick={() => setTab(t.key)}
                   className={cn(
-                    'flex min-h-[44px] items-center gap-1.5 rounded-lg border px-4 text-legacy-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    'flex min-h-[44px] items-center gap-1.5 rounded-lg border px-4 text-base font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     tab === t.key
                       ? 'border-accent-line bg-accent-soft text-accent'
                       : 'border-border text-fg-2 hover:bg-panel-2',
@@ -423,12 +423,12 @@ export function WhoReactedSheet(props: {
                   <>
                     <SheetAvatar name={row.name} src={row.avatarUrl} />
                     <span className="flex min-w-0 flex-1 flex-col text-left">
-                      <span className="truncate text-legacy-sm text-fg">{row.name}</span>
+                      <span className="truncate text-base text-fg">{row.name}</span>
                       {row.mine ? (
-                        <span className="text-legacy-xs text-fg-3">Tap to remove</span>
+                        <span className="text-sm text-fg-3">Tap to remove</span>
                       ) : null}
                     </span>
-                    <span aria-hidden="true" className="text-[20px] leading-none">
+                    <span aria-hidden="true" className="text-2xl leading-none">
                       {row.emoji}
                     </span>
                   </>

@@ -312,7 +312,7 @@ describe('week list layout (L1-L4)', () => {
     expect(numberClasses).toEqual(
       expect.arrayContaining([
         'whitespace-nowrap',
-        'text-[11px]',
+        'text-xs',
         'leading-[14px]',
         'font-semibold',
         'text-fg-2',
@@ -331,7 +331,7 @@ describe('week list layout (L1-L4)', () => {
     const number = html.match(/<span data-plan-day-number="" class="([^"]*)">([^<]*)<\/span>/);
     expect(number?.[2]).toBe('15');
     expect((number?.[1] ?? '').split(' ')).toEqual(
-      expect.arrayContaining(['font-mono', 'text-[20px]', 'tabular-nums', 'text-fg']),
+      expect.arrayContaining(['font-mono', 'text-2xl', 'tabular-nums', 'text-fg']),
     );
   });
 

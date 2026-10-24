@@ -28,7 +28,7 @@ const BAD = [
   'rounded-md',
   'rounded-xl',
   'font-semibold',
-  'text-legacy-xs',
+  'text-sm',
 ];
 
 describe('SortMenu buttons', () => {
@@ -39,7 +39,7 @@ describe('SortMenu buttons', () => {
     const trigger = /<button[^>]*aria-haspopup="menu"[^>]*>/.exec(html)?.[0] ?? '';
     expect(trigger).toContain('h-11');
     expect(trigger).toContain('rounded-lg');
-    expect(trigger).toContain('text-legacy-sm');
+    expect(trigger).toContain('text-base');
     expect(trigger).toContain('font-medium');
     for (const bad of BAD) expect(trigger.split(/[\s"]/)).not.toContain(bad);
   });
@@ -90,7 +90,7 @@ describe('Toast buttons', () => {
       expect(t).toContain('rounded-lg');
       for (const bad of BAD) expect(t).not.toContain(bad);
     }
-    expect(classOf(action!)).toContain('text-legacy-sm');
+    expect(classOf(action!)).toContain('text-base');
     expect(classOf(action!)).toContain('font-medium');
   });
 });

@@ -115,7 +115,7 @@ export function ScheduledListSheet(
             >
               <div className={cn('flex items-center gap-2 text-fg-2', NO_TOUCH_SELECT)}>
                 <IconCalendarClock size={16} className="text-accent" />
-                <span className="font-mono text-legacy-xs tabular-nums">
+                <span className="font-mono text-sm tabular-nums">
                   {formatSendLabel(new Date(row.send_at), now)}
                 </span>
               </div>
@@ -138,7 +138,7 @@ export function ScheduledListSheet(
                     <div className="flex justify-end">
                       <p
                         data-scheduled-preview=""
-                        className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-[4px] bg-bubble-own px-3 py-2 text-[15px] leading-snug text-accent-fg"
+                        className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-[4px] bg-bubble-own px-3 py-2 text-lg leading-snug text-accent-fg"
                       >
                         {scheduledPreviewText(row, props.nameOf)}
                       </p>
@@ -212,7 +212,7 @@ export function ScheduledListSheet(
           </div>
         }
       >
-        <p className="truncate text-legacy-sm text-fg-2">
+        <p className="truncate text-base text-fg-2">
           {cancelFor !== null ? scheduledPreviewText(cancelFor, props.nameOf) : ''}
         </p>
       </Sheet>
@@ -240,7 +240,7 @@ function CardAction(props: {
       disabled={props.disabled}
       onClick={props.onClick}
       className={cn(
-        'inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap rounded-md px-1 text-[13px] font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap rounded-md px-1 text-md font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50',
         CARD_ACTION_TONE[props.tone ?? 'plain'],
       )}
     >
@@ -275,7 +275,7 @@ export function BodyEditor(props: {
       {hasFiles ? (
         <div data-scheduled-files-readonly="" className="flex flex-col gap-1.5">
           <ScheduledAttachments row={props.row} size="card" />
-          <p className="text-legacy-xs text-fg-3">{SCHEDULED_FILES_READONLY_COPY}</p>
+          <p className="text-sm text-fg-3">{SCHEDULED_FILES_READONLY_COPY}</p>
         </div>
       ) : null}
       <Textarea
@@ -283,7 +283,7 @@ export function BodyEditor(props: {
         value={text}
         autoGrow
         onChange={(event) => setText(event.target.value)}
-        className="text-legacy-base"
+        className="text-base"
       />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={props.onDone}>

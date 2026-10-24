@@ -1245,7 +1245,7 @@ export function CreatePostSheet({
 
   function gridError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-legacy-xs text-bad">{fieldErrors[key]}</p>
+      <p className="mt-1.5 text-sm text-bad">{fieldErrors[key]}</p>
     ) : null;
   }
 
@@ -1371,7 +1371,7 @@ export function CreatePostSheet({
             {submitError !== null ? (
               <div
                 role="alert"
-                className="rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+                className="rounded-md border border-bad px-3 py-2 text-base text-bad"
               >
                 {submitError}
               </div>
@@ -1383,7 +1383,7 @@ export function CreatePostSheet({
               aria-label={previewChipLabel(preview.platform)}
               className="hidden lg:sticky lg:top-0 lg:flex lg:flex-col lg:gap-3"
             >
-              <h3 className="text-[13px] font-semibold text-fg-2">
+              <h3 className="text-md font-semibold text-fg-2">
                 {previewChipLabel(preview.platform)}
               </h3>
               <PreviewBody {...preview} />
@@ -1414,12 +1414,12 @@ export function CreatePostSheet({
           <p
             data-upload-failed-footer=""
             role="status"
-            className="text-legacy-xs text-bad lg:col-span-2"
+            className="text-sm text-bad lg:col-span-2"
           >
             {FAILED_UPLOAD_FOOTER}
           </p>
         ) : uploadWait && pendingUploads > 0 ? (
-          <p data-upload-wait="" role="status" className="text-[11px] text-fg-2 lg:col-span-2">
+          <p data-upload-wait="" role="status" className="text-xs text-fg-2 lg:col-span-2">
             {waitForUploadsMessage(pendingUploads)}
           </p>
         ) : null}
@@ -1441,7 +1441,7 @@ export function CreatePostSheet({
               <p
                 id="post-title-count"
                 data-title-count=""
-                className="mt-1.5 text-right text-[11px] tabular-nums text-fg-3"
+                className="mt-1.5 text-right text-xs tabular-nums text-fg-3"
               >
                 {captionCounterText(form.title.length, TITLE_MAX)}
               </p>
@@ -1491,7 +1491,7 @@ export function CreatePostSheet({
                 data-caption-count=""
                 {...(captionOver ? { 'data-over': '' } : {})}
                 className={cn(
-                  'pointer-events-none absolute bottom-2 right-3 text-[11px] tabular-nums',
+                  'pointer-events-none absolute bottom-2 right-3 text-xs tabular-nums',
                   captionOver ? 'text-bad' : 'text-fg-3',
                 )}
               >
@@ -1519,8 +1519,8 @@ export function CreatePostSheet({
             className="flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-border bg-panel-2 px-3 py-2 text-left transition-colors hover:bg-panel-3"
           >
             <span className="min-w-0 flex-1">
-              <span className="block text-legacy-sm font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
-              <span className="block truncate text-[13px] text-fg-3">{MORE_OPTIONS_HINT}</span>
+              <span className="block text-base font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
+              <span className="block truncate text-md text-fg-3">{MORE_OPTIONS_HINT}</span>
             </span>
             <IconChevronDown
               size={16}
@@ -1565,7 +1565,7 @@ export function CreatePostSheet({
                       }}
                     />
                     {newBucketError !== null ? (
-                      <p role="alert" className="text-legacy-xs text-bad">
+                      <p role="alert" className="text-sm text-bad">
                         {newBucketError}
                       </p>
                     ) : null}
@@ -1622,7 +1622,7 @@ export function CreatePostSheet({
           {submitError !== null ? (
             <div
               role="alert"
-              className="rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+              className="rounded-md border border-bad px-3 py-2 text-base text-bad"
             >
               {submitError}
             </div>
@@ -1693,14 +1693,14 @@ export function FormatRow({
   const name = platform !== null && format !== '' ? formatLabel(platform, format) : '';
   return (
     <div data-format-row="" className="relative flex min-h-[44px] min-w-0 items-center gap-3">
-      <span className="shrink-0 text-legacy-sm font-medium text-fg">Format</span>
+      <span className="shrink-0 text-base font-medium text-fg">Format</span>
       <span
         data-format-pill=""
-        className="inline-flex h-7 shrink-0 items-center rounded-full border border-border bg-panel-2 px-3 text-[13px] font-medium text-fg"
+        className="inline-flex h-7 shrink-0 items-center rounded-full border border-border bg-panel-2 px-3 text-md font-medium text-fg"
       >
         {name}
       </span>
-      <span data-format-source="" className="min-w-0 flex-1 truncate text-[13px] text-fg-3">
+      <span data-format-source="" className="min-w-0 flex-1 truncate text-md text-fg-3">
         {source !== null ? formatSourceLine(source) : ''}
       </span>
       <button
@@ -1859,7 +1859,7 @@ function PresetFields(props: {
       </Field>
 
       {preset.share === 'no_group' ? (
-        <p className="text-[13px] text-fg-3">
+        <p className="text-md text-fg-3">
           This workspace has no chat group yet, so the post is not shared in chat.
         </p>
       ) : (
@@ -1883,7 +1883,7 @@ function ShareToggle({
   onChange: (value: boolean) => void;
 }): ReactElement {
   return (
-    <div className="flex min-h-[44px] items-center justify-between gap-3 text-legacy-sm">
+    <div className="flex min-h-[44px] items-center justify-between gap-3 text-base">
       <span className="[text-wrap:pretty]">{label}</span>
       <button
         type="button"

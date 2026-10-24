@@ -180,7 +180,7 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
           data-file-name=""
           title={props.name}
           className={cn(
-            'line-clamp-2 text-legacy-xs font-medium leading-4 text-fg [overflow-wrap:anywhere]',
+            'line-clamp-2 text-sm font-medium leading-4 text-fg [overflow-wrap:anywhere]',
             card && 'h-8',
           )}
         >
@@ -189,7 +189,7 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
         <span
           data-file-meta=""
           className={cn(
-            'truncate text-[11px] leading-4 text-fg-3',
+            'truncate text-xs leading-4 text-fg-3',
             card && 'flex h-5 items-center pr-8',
           )}
         >

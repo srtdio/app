@@ -29,7 +29,7 @@ const BAD = [
   'rounded-md',
   'rounded-xl',
   'font-semibold',
-  'text-legacy-xs',
+  'text-sm',
 ];
 
 describe('Comments row actions', () => {
@@ -40,7 +40,7 @@ describe('Comments row actions', () => {
       'min-h-[44px]',
       'min-w-[44px]',
       'rounded-lg',
-      'text-legacy-sm',
+      'text-base',
       'font-medium',
     ]) {
       expect(t).toContain(want);
@@ -55,7 +55,7 @@ describe('Comments row actions', () => {
 
   it('the passive checkbox matches the button box', () => {
     const t = tokens(ROW_ACTION_STATIC_CLASS);
-    for (const want of ['h-11', 'min-h-[44px]', 'px-4', 'text-legacy-sm', 'font-medium']) {
+    for (const want of ['h-11', 'min-h-[44px]', 'px-4', 'text-base', 'font-medium']) {
       expect(t).toContain(want);
     }
   });

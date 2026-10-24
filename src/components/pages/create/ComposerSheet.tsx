@@ -147,7 +147,7 @@ export function ComposerSheet({
           >
             <IconX />
           </IconButton>
-          <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg">{title}</h2>
+          <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">{title}</h2>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">{actions}</div>
         </div>
         <div className="overflow-y-auto px-[18px] py-4 pb-[max(16px,env(safe-area-inset-bottom))]">

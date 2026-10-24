@@ -75,7 +75,7 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
     const body = approveConfirmBody({ slides: props.mediaCount, dueDay: props.targetDate });
     lines =
       body !== '' ? (
-        <p data-approve-summary="" className="text-legacy-sm text-fg-2">
+        <p data-approve-summary="" className="text-base text-fg-2">
           {body}
         </p>
       ) : null;
@@ -87,8 +87,8 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
     });
     lines = (
       <>
-        <p className="text-legacy-sm font-medium text-fg">{copy.question}</p>
-        <p className="text-legacy-sm text-fg-2">{copy.detail}</p>
+        <p className="text-base font-medium text-fg">{copy.question}</p>
+        <p className="text-base text-fg-2">{copy.detail}</p>
       </>
     );
   }
@@ -96,7 +96,7 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
     <div data-approve-confirm="" className="flex w-full flex-col gap-2">
       {lines}
       {props.error !== undefined && props.error !== null ? (
-        <p role="alert" data-approve-error="" className="text-legacy-sm text-bad">
+        <p role="alert" data-approve-error="" className="text-base text-bad">
           {props.error}
         </p>
       ) : null}

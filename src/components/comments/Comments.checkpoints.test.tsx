@@ -350,9 +350,9 @@ describe('one row template for checkpoints and comments', () => {
       const time = el?.querySelector('[data-comment-header] [data-comment-time]');
       expect(time).toBeTruthy();
       // 12px regular, never monospace.
-      expect(time?.className).toContain('text-legacy-xs');
+      expect(time?.className).toContain('text-sm');
       expect(time?.className).not.toContain('font-mono');
-      expect(time?.className).not.toContain('text-[11px]');
+      expect(time?.className).not.toContain('text-xs');
       expect(el?.innerHTML ?? '').not.toContain('font-mono');
       // Every action the same ghost height, 44px targets.
       for (const control of Array.from(el?.querySelectorAll('[data-comment-actions] > *') ?? [])) {

@@ -237,7 +237,7 @@ describe('ActivityCard', () => {
     ]);
     // The footer container renders even with a single entry.
     expect(html).toContain('min-h-[44px] items-center gap-1.5 px-[14px]');
-    expect(html).toContain('data-activity-time="" class="text-legacy-xs tabular-nums text-fg-3"');
+    expect(html).toContain('data-activity-time="" class="text-sm tabular-nums text-fg-3"');
     expect(html).not.toContain('more');
   });
 
@@ -246,7 +246,7 @@ describe('ActivityCard', () => {
       item({ id: 'a', eventType: 'comment' }),
       item({ id: 'b', eventType: 'mention' }),
     ]);
-    expect(html).toContain('data-activity-time="" class="text-legacy-xs tabular-nums text-fg-3"');
+    expect(html).toContain('data-activity-time="" class="text-sm tabular-nums text-fg-3"');
     expect(html).toContain('+1 more');
     // The toggle is an inset touch target, not the old full-width button.
     expect(html).toMatch(
@@ -392,7 +392,7 @@ describe('A3 @all in the Activity preview', () => {
         body: chatMentionPreview('@[all] standup in 5', () => undefined),
       }),
     ]);
-    expect(html).toMatch(/<span data-mention-all="" class="font-bold text-accent">@all<\/span>/);
+    expect(html).toMatch(/<span data-mention-all="" class="font-semibold text-accent">@all<\/span>/);
     expect(html).not.toContain('@[');
   });
 });
@@ -709,7 +709,7 @@ describe('ActivityCard: notifications fixes', () => {
     const html = renderCard([
       item({ title: 'Q3', format: 'text', caption: 'A long caption for the launch post' }),
     ]);
-    expect(html).toContain('mt-auto line-clamp-3 text-legacy-xs leading-snug text-fg-2');
+    expect(html).toContain('mt-auto line-clamp-3 text-sm leading-snug text-fg-2');
     expect(html).not.toContain('line-clamp-4');
   });
 
