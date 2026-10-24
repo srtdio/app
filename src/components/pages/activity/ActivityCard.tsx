@@ -317,7 +317,7 @@ export function TextTile({
     <div data-activity-text-tile={eyebrow} className="flex h-full w-full flex-col p-3">
       <span className="flex items-center gap-1 text-fg-3">
         {icon}
-        <span className="text-xs font-semibold uppercase tracking-wide">{eyebrow}</span>
+        <span className="text-xs font-semibold uppercase tracking-[0.06em]">{eyebrow}</span>
       </span>
       <p className="mt-auto line-clamp-3 text-sm leading-snug text-fg-2 [overflow-wrap:anywhere]">
         {body}
@@ -551,30 +551,30 @@ export function ActivityCard({
               ) : null}
             </div>
 
-            <p className="truncate text-lg font-semibold leading-[1.3] text-fg">
+            <p className="truncate text-base font-medium text-fg">
               {alert !== null ? <AlertTitle item={lead} alert={alert} side={side} /> : title}
             </p>
 
             {alertLine !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {alertLine}
               </p>
             ) : null}
 
             {showsBody ? (
-              <p className="mt-[3px] line-clamp-2 text-base leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {cardBodyLine(lead)}
               </p>
             ) : null}
 
             {filesBody !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {filesBody}
               </p>
             ) : null}
 
             {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {mentionPreview(lead.body, selfName, isChatMention(lead))}
               </p>
             ) : null}
@@ -709,9 +709,7 @@ export function ActivityCard({
                     {/* The author line above already names who: the text never repeats it. */}
                     {cardBodyLine(entry, { name: entry.actorName === null })}
                   </p>
-                  <p className="mt-0.5 text-sm text-fg-3">
-                    {relativeTime(entry.createdAt, nowMs)}
-                  </p>
+                  <p className="mt-0.5 text-sm text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
                 </div>
                 {entry.readAt === null ? (
                   <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" />
@@ -783,10 +781,8 @@ export function UpcomingCard({
                 {upcomingTag(item)}
               </span>
             </div>
-            <p className="truncate text-lg font-semibold leading-[1.3] text-fg">
-              {upcomingChat(item)}
-            </p>
-            <p className="mt-[3px] line-clamp-2 text-base leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+            <p className="truncate text-base font-medium text-fg">{upcomingChat(item)}</p>
+            <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
               {item.preview}
             </p>
           </div>

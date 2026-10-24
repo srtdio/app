@@ -183,7 +183,7 @@ function AssetMedia({
 
       <div className="flex flex-col gap-1.5 border-t border-border p-2.5">
         <div className="flex items-start gap-2">
-          <span className="line-clamp-2 flex-1 break-words text-sm font-medium" title={name}>
+          <span className="line-clamp-2 flex-1 break-words text-base font-medium" title={name}>
             {name}
           </span>
           {item.kind === 'image' ? (
@@ -193,7 +193,7 @@ function AssetMedia({
           ) : null}
         </div>
         {/* One 20px line, room on the right for the card's ⋯. */}
-        <div className="flex h-5 items-center pr-8 text-xs tabular-nums text-fg-3">
+        <div className="flex h-5 items-center pr-8 text-sm tabular-nums text-fg-3">
           <span className="truncate">
             {item.kind === 'link' ? linkDomain(item.externalUrl) : humanizeSize(item.sizeBytes)}
           </span>

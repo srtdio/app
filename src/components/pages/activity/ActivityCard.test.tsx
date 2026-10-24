@@ -392,7 +392,9 @@ describe('A3 @all in the Activity preview', () => {
         body: chatMentionPreview('@[all] standup in 5', () => undefined),
       }),
     ]);
-    expect(html).toMatch(/<span data-mention-all="" class="font-semibold text-accent">@all<\/span>/);
+    expect(html).toMatch(
+      /<span data-mention-all="" class="font-semibold text-accent">@all<\/span>/,
+    );
     expect(html).not.toContain('@[');
   });
 });
@@ -770,7 +772,7 @@ describe('ActivityCard: notifications fixes', () => {
 
   it('fix 8: a posts row still shows its "Posts" scope tag', () => {
     const html = renderCard([item({ eventType: 'comment', scope: 'posts' })]);
-    expect(html).toMatch(/text-\[11px\] font-medium text-fg-2">Posts</);
+    expect(html).toMatch(/text-xs font-medium text-fg-2">Posts</);
   });
 
   it('fix 10: a body line wraps anywhere so a long token never overflows', () => {

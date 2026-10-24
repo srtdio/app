@@ -244,12 +244,8 @@ export function InviteNotSent(props: { email: string; acceptUrl: string | null }
           >
             Copy link
           </Button>
-          {copied === 'copied' ? (
-            <span className="text-base text-good">Link copied</span>
-          ) : null}
-          {copied === 'failed' ? (
-            <span className="text-base text-bad">{COPY_FAILED}</span>
-          ) : null}
+          {copied === 'copied' ? <span className="text-base text-good">Link copied</span> : null}
+          {copied === 'failed' ? <span className="text-base text-bad">{COPY_FAILED}</span> : null}
         </div>
       ) : null}
     </div>
@@ -409,7 +405,7 @@ export function RolePicker({
         onChange={(event) => {
           if (isInviteRole(event.target.value)) onChange(event.target.value);
         }}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none text-base opacity-0 disabled:cursor-default"
+        className="absolute inset-0 h-full w-full cursor-pointer appearance-none text-input opacity-0 disabled:cursor-default"
       >
         <option value="" disabled>
           {ROLE_PLACEHOLDER}
@@ -660,10 +656,13 @@ export function MembersInviteForm({
     <section aria-labelledby="invite-people-title" className="flex max-w-[520px] flex-col gap-4">
       <style>{ROW_KEYFRAMES}</style>
       <div>
-        <h3 id="invite-people-title" className="text-base font-semibold text-fg">
+        <h3
+          id="invite-people-title"
+          className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
+        >
           Invite people
         </h3>
-        <p className="mt-0.5 text-base text-fg-3">
+        <p className="mt-0.5 text-base text-fg-2">
           Add one email or many. Press Enter, or paste a list.
         </p>
       </div>
@@ -747,7 +746,7 @@ export function MembersInviteForm({
                       onChange={(event) =>
                         updateRow(row.key, { email: event.target.value, error: null })
                       }
-                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-base text-fg outline-none transition-colors duration-fast hover:border-dashed hover:border-border-strong focus:border-solid focus:border-accent md:text-base"
+                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-input text-fg outline-none transition-colors duration-fast hover:border-dashed hover:border-border-strong focus:border-solid focus:border-accent md:text-base"
                     />
                     <RolePicker
                       label={`Role for ${row.email}`}

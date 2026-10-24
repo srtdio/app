@@ -584,7 +584,7 @@ export function AssetUploadSheet({
         <div className="flex flex-col gap-2.5">
           {/* One file takes one name; several share one base name. */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={`${inputId}-name`} className="text-sm font-medium text-fg-2">
+            <label htmlFor={`${inputId}-name`} className="text-base font-medium text-fg-2">
               {mode === 'root-bulk' ? 'Name these files' : 'Name'}
             </label>
             <Input
@@ -597,7 +597,7 @@ export function AssetUploadSheet({
               className="h-11"
             />
             {mode === 'root-bulk' && nameInput.trim() !== '' ? (
-              <span className="truncate text-xs text-fg-3">{previewNames.join(', ')}</span>
+              <span className="truncate text-sm text-fg-3">{previewNames.join(', ')}</span>
             ) : null}
           </div>
 
@@ -615,18 +615,14 @@ export function AssetUploadSheet({
                     <div className="flex flex-col items-center gap-0.5">
                       <IconFile size={20} />
                       {fileExtension(item.file.name) !== '' ? (
-                        <span className="text-xs font-medium">
-                          {fileExtension(item.file.name)}
-                        </span>
+                        <span className="text-xs font-medium">{fileExtension(item.file.name)}</span>
                       ) : null}
                     </div>
                   )}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-base text-fg">{item.file.name}</span>
-                  <span className="truncate text-xs text-fg-3">
-                    {humanizeSize(item.file.size)}
-                  </span>
+                  <span className="truncate text-sm text-fg-3">{humanizeSize(item.file.size)}</span>
                   <UploadStatusRow
                     status={status}
                     onRetry={() => void startRun([item])}
@@ -694,18 +690,18 @@ function UploadStatusRow({
   }
   if (status.state === 'done') {
     return (
-      <span className="flex items-center gap-1 text-xs text-good">
+      <span className="flex items-center gap-1 text-sm text-good">
         <IconCheck size={13} />
         Uploaded
       </span>
     );
   }
   if (status.state === 'stopped') {
-    return <span className="text-xs text-fg-3">{STOPPED_MESSAGE}</span>;
+    return <span className="text-sm text-fg-3">{STOPPED_MESSAGE}</span>;
   }
   if (status.state === 'error') {
     return (
-      <span className="flex items-center justify-between gap-2 text-xs text-bad">
+      <span className="flex items-center justify-between gap-2 text-sm text-bad">
         <span className="min-w-0 truncate">{status.message}</span>
         <Button
           variant="ghost"

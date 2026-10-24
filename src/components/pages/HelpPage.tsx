@@ -160,9 +160,7 @@ export function HelpPage() {
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
         <section className="rounded-2xl border border-border bg-panel-2 p-5 md:p-8">
           <p className="text-base font-medium text-accent">Sorted Help Center</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-3xl">
-            Find your way through the workflow
-          </h2>
+          <h2 className="mt-2 text-lg font-semibold">Find your way through the workflow</h2>
           <p className="mt-2 max-w-2xl text-base leading-6 text-fg-2">
             Quick answers about pipeline, briefs, posts, approvals, assets, and chat with your team.
           </p>
@@ -193,10 +191,13 @@ export function HelpPage() {
 
         <section className="mt-8" aria-labelledby="help-articles-heading">
           <div className="flex flex-col gap-1">
-            <h2 id="help-articles-heading" className="text-lg font-semibold">
+            <h2
+              id="help-articles-heading"
+              className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
+            >
               Help articles
             </h2>
-            <p className="text-base text-fg-3">
+            <p className="text-sm text-fg-3">
               {articles.length} {articles.length === 1 ? 'article' : 'articles'}
             </p>
           </div>
@@ -242,8 +243,8 @@ export function HelpPage() {
             </div>
           ) : (
             <div className="mt-2 rounded-xl border border-border bg-panel px-4 py-8 text-center">
-              <p className="text-base font-medium">No help articles like that</p>
-              <p className="mt-1 text-base text-fg-3">
+              <p className="text-lg font-semibold">No help articles like that</p>
+              <p className="mt-1 text-base text-fg-2">
                 Try another search or choose a different topic.
               </p>
             </div>

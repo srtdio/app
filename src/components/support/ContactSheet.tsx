@@ -54,7 +54,7 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
         <p className="text-base leading-relaxed text-fg-2">
           Tell us what you need. Someone from the team replies by email.
         </p>
-        <div className="flex min-w-0 items-center gap-2 rounded-[10px] border border-border bg-panel-2 py-1 pl-3 pr-1">
+        <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 py-1 pl-3 pr-1">
           <span className="min-w-0 flex-1 break-all text-base font-medium text-fg">
             {SUPPORT_EMAIL}
           </span>
@@ -63,7 +63,7 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
           </Button>
         </div>
         <div className="flex flex-col gap-1">
-          <p className="text-xs text-fg-3">Suggested line, copied with the address:</p>
+          <p className="text-sm text-fg-3">Suggested line, copied with the address:</p>
           <p className="text-base text-fg">{anotherWorkspaceBody(workspaceName)}</p>
         </div>
       </div>

@@ -69,17 +69,14 @@ export function RecentlyDeletedView({
 }: RecentlyDeletedViewProps) {
   return (
     <div className="px-4 md:px-6 py-4">
-      <p className="text-base text-fg-3">
+      <p className="text-base text-fg-2">
         Files stay here 31 days, then are deleted for good. They still count toward storage until
         then.
       </p>
 
       {failed ? (
         <div className="mt-4">
-          <div
-            role="alert"
-            className="rounded-xl border border-bad px-4 py-3 text-base text-bad"
-          >
+          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-base text-bad">
             Could not load assets.
           </div>
           <div className="mt-3">

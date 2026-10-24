@@ -165,7 +165,7 @@ export function viewerName(items: readonly AssetListItem[], asset: AssetListItem
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-xs uppercase tracking-wide text-fg-3">{label}</dt>
+      <dt className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{label}</dt>
       <dd className="text-base text-fg break-words">{value}</dd>
     </div>
   );
@@ -537,7 +537,7 @@ export function AssetLightbox({
             data-file-card=""
             className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl"
           >
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold tracking-wide text-fg-2">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold tracking-[0.06em] text-fg-2">
               {typeLabel(kind)}
             </div>
             <div className="min-w-0">
@@ -588,7 +588,7 @@ export function AssetLightbox({
             className="relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t border-border bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"
           >
             <div className="flex items-center gap-2">
-              <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{name}</h2>
+              <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{name}</h2>
               <IconButton label="Close details" onClick={() => setInfoOpen(false)}>
                 <IconX size={20} />
               </IconButton>
@@ -596,7 +596,9 @@ export function AssetLightbox({
 
             <dl className="mt-3 flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
-                <dt className="text-xs uppercase tracking-wide text-fg-3">Name</dt>
+                <dt className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+                  Name
+                </dt>
                 {editingName ? (
                   <div className="mt-1 flex flex-col gap-2">
                     <Input
@@ -626,9 +628,7 @@ export function AssetLightbox({
                   </div>
                 ) : (
                   <dd className="flex items-center gap-1">
-                    <span className="min-w-0 flex-1 break-words text-base text-fg">
-                      {name}
-                    </span>
+                    <span className="min-w-0 flex-1 break-words text-base text-fg">{name}</span>
                     {canRename ? (
                       <IconButton
                         type="button"

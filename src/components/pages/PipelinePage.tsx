@@ -594,10 +594,7 @@ export function undatedHiddenLine(label: string, count: number): string {
 export function undatedHint(label: string, count: number, onShow: () => void): ReactElement | null {
   if (count <= 0) return null;
   return (
-    <p
-      data-undated-hint=""
-      className="flex flex-wrap items-center gap-x-2 text-base text-fg-2"
-    >
+    <p data-undated-hint="" className="flex flex-wrap items-center gap-x-2 text-base text-fg-2">
       <IconCalendar size={15} className="shrink-0 text-fg-3" />
       <span>{undatedHiddenLine(label, count)}</span>
       <Button

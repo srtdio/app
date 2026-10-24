@@ -887,14 +887,11 @@ export function NotificationsPage() {
             return (
               <section key={bucket.key} className="mt-4">
                 <div className="flex items-center gap-2.5 px-4 md:px-6">
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-fg-3">
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
                     {bucket.label}
                   </h2>
                   <AvatarStack names={bucketActorNames(entries)} />
-                  <span
-                    data-bucket-count=""
-                    className="ml-auto text-sm tabular-nums text-fg-3"
-                  >
+                  <span data-bucket-count="" className="ml-auto text-sm tabular-nums text-fg-3">
                     {updatesLabel(entries.length)}
                   </span>
                 </div>

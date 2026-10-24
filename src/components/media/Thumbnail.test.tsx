@@ -215,9 +215,7 @@ describe('Thumbnail', () => {
         fallback={fallback}
       />,
     );
-    expect(pipeline).toContain(
-      'class="mt-auto line-clamp-4 text-sm leading-snug text-fg-2"',
-    );
+    expect(pipeline).toContain('class="mt-auto line-clamp-4 text-sm leading-snug text-fg-2"');
     expect(pipeline).not.toContain('line-clamp-3');
   });
 

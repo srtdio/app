@@ -94,9 +94,7 @@ function FallbackTile({
   if (fallback.kind === 'text') {
     return (
       <div className="h-full w-full overflow-hidden p-3">
-        <p className="line-clamp-4 text-sm italic leading-snug text-fg-2">
-          {fallback.caption}
-        </p>
+        <p className="line-clamp-4 text-sm italic leading-snug text-fg-2">{fallback.caption}</p>
       </div>
     );
   }

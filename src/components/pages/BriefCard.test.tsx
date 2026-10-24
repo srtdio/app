@@ -229,7 +229,7 @@ describe('BriefCard thumbnail tile', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({}), cache);
     expect(out).toContain('min-w-0 flex-1 break-words');
-    expect(out).toContain('min-w-0 break-words text-base text-fg-3');
+    expect(out).toContain('min-w-0 break-words text-base text-fg-2');
   });
 });
 

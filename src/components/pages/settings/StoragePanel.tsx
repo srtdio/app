@@ -100,10 +100,8 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
     <div className="flex max-w-[520px] flex-col gap-6">
       <div className="flex flex-col gap-2.5">
         <p className="flex items-baseline gap-2">
-          <span className="text-3xl font-semibold tabular-nums text-fg">
-            {mb(usedBytes)}
-          </span>
-          <span className="text-base text-fg-3">of 1 GB</span>
+          <span className="text-3xl font-semibold tabular-nums text-fg">{mb(usedBytes)}</span>
+          <span className="text-sm text-fg-3">of 1 GB</span>
         </p>
         <div
           role="meter"
@@ -119,7 +117,7 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
             style={{ width: `${fill * 100}%` }}
           />
         </div>
-        <p className="text-md text-fg-3">{workspace} · everything in this workspace counts</p>
+        <p className="text-sm text-fg-3">{workspace} · everything in this workspace counts</p>
       </div>
 
       {breakdown !== null ? (
@@ -135,7 +133,7 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
       {showsNeedMoreSpace(usedBytes, usage) ? (
         <section className="-mx-3 flex flex-col gap-1">
           <h3 className={SECTION_LABEL}>NEED MORE SPACE?</h3>
-          <p className="px-3 pb-1 text-md leading-snug text-fg-3">
+          <p className="px-3 pb-1 text-base text-fg-2">
             Free up space in Recently deleted, or talk to us about more storage for {workspace}.
           </p>
           <ActionRow

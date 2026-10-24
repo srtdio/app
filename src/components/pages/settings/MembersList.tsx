@@ -88,9 +88,7 @@ function MemberRowItem({ member, canManage, onOpenActions }: RowProps) {
         ) : null}
       </div>
       <RoleBadge role={member.role} />
-      {joined !== null ? (
-        <span className="hidden text-sm text-fg-3 sm:block">{joined}</span>
-      ) : null}
+      {joined !== null ? <span className="hidden text-sm text-fg-3 sm:block">{joined}</span> : null}
       {member.isOwner ? (
         <span
           className="inline-flex h-11 w-11 items-center justify-center text-fg-3"
@@ -154,9 +152,7 @@ function PendingRowItem({
         <>
           <div className="min-w-0 flex-1 self-center">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="min-w-0 truncate text-base font-medium text-fg">
-                {info.email}
-              </span>
+              <span className="min-w-0 truncate text-base font-medium text-fg">{info.email}</span>
               <span className="inline-flex items-center rounded-md bg-panel-2 px-1.5 py-0.5 text-xs font-medium text-fg-3">
                 Invited
               </span>
@@ -271,7 +267,7 @@ function PendingEditFields({
             setEmail(event.target.value);
             setError(null);
           }}
-          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-base text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-base"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-base"
         />
         <RolePicker
           label={`Role for ${trimmed}`}
@@ -294,9 +290,7 @@ function PendingEditFields({
           {error}
         </p>
       ) : null}
-      <p className="text-sm text-fg-3">
-        Saving sends a fresh invite. The old link stops working.
-      </p>
+      <p className="text-sm text-fg-3">Saving sends a fresh invite. The old link stops working.</p>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="primary" type="submit" disabled={saving}>
           Save
@@ -329,7 +323,7 @@ function Group({
     >
       <header className="border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-base font-semibold text-fg">{title}</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{title}</h3>
           <span className="text-sm text-fg-3">{count}</span>
         </div>
         {subtitle !== undefined && subtitle !== '' ? (
@@ -337,7 +331,7 @@ function Group({
         ) : null}
       </header>
       <div className="divide-y divide-border">
-        {count === 0 ? <p className="px-4 py-3 text-base text-fg-3">{emptyText}</p> : children}
+        {count === 0 ? <p className="px-4 py-3 text-base text-fg-2">{emptyText}</p> : children}
       </div>
     </section>
   );

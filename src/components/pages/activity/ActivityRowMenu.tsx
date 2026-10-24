@@ -109,7 +109,7 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
   const list = (
     <div role="menu" aria-label="Activity options" className="flex flex-col">
       {unread ? item('mark-read', 'Mark as read', <IconCheck size={16} />, pickMarkRead) : null}
-      <p className="px-3 pb-1 pt-2 text-sm font-semibold uppercase tracking-wide text-fg-3">
+      <p className="px-3 pb-1 pt-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
         Snooze
       </p>
       {SNOOZE_OPTIONS.map((option) =>

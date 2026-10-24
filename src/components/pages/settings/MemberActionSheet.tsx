@@ -104,9 +104,7 @@ export function MemberActionSheet({
               size="xl"
             />
             <div className="min-w-0">
-              <div className="truncate text-base font-medium text-fg">
-                {member.displayName}
-              </div>
+              <div className="truncate text-base font-medium text-fg">{member.displayName}</div>
               {member.email !== null ? (
                 <div className="truncate text-sm text-fg-3">{member.email}</div>
               ) : null}

@@ -661,15 +661,13 @@ export function AssetsPage() {
         ) : visible.length === 0 ? (
           searching ? (
             <div className="px-4 md:px-6 py-12 text-center">
-              <p className="text-base text-fg-2">
+              <p className="text-lg font-semibold text-fg">
                 No assets match &quot;{search.trim()}&quot;
               </p>
-              <p className="mt-1 text-sm text-fg-3">
-                Try a different name or clear the search.
-              </p>
+              <p className="mt-1 text-base text-fg-2">Try a different name or clear the search.</p>
             </div>
           ) : tab !== 'all' ? (
-            <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-base text-fg-3">
+            <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-base text-fg-2">
               {TAB_EMPTY[tab]}
             </div>
           ) : null

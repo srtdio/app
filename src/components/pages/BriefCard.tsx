@@ -135,9 +135,7 @@ export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps
           <BriefStatusPill status={brief.status} />
         </div>
 
-        <p className="min-w-0 break-words text-base text-fg-3 line-clamp-2">
-          {brief.objective}
-        </p>
+        <p className="min-w-0 break-words text-base text-fg-2 line-clamp-2">{brief.objective}</p>
 
         {/* Above the card link, so a tap follows this link only. */}
         {link !== null ? (

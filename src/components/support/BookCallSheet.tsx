@@ -205,7 +205,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
                 onChange={(e) => setTime(e.target.value)}
               />
             </div>
-            <p className="text-xs text-fg-3">Your time zone. We confirm by email.</p>
+            <p className="text-sm text-fg-3">Your time zone. We confirm by email.</p>
           </div>
         ) : null}
         {failed ? (

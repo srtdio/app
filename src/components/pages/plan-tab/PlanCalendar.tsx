@@ -553,11 +553,11 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
         ) : null}
       </span>
       <span className="flex min-w-0 flex-col gap-1 p-2">
-        <span className="line-clamp-2 text-md font-semibold text-fg [overflow-wrap:anywhere]">
+        <span className="line-clamp-2 text-base font-medium text-fg [overflow-wrap:anywhere]">
           {entry.title}
         </span>
         {entry.kind === 'item' ? (
-          <span className="flex min-w-0 items-start gap-1.5 text-xs leading-4 text-fg-2">
+          <span className="flex min-w-0 items-start gap-1.5 text-sm text-fg-2">
             <span aria-hidden="true" className={cn('mt-1 h-2 w-2 shrink-0', look.dot)} />
             <span className="line-clamp-2 [overflow-wrap:anywhere]">{entry.bundle.plan.title}</span>
           </span>
@@ -573,7 +573,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
             {pill.label}
           </span>
         ) : null}
-        <span className="truncate text-xs leading-4 text-fg-3">
+        <span className="truncate text-sm text-fg-3">
           {entry.kind === 'item'
             ? postStageLine(entry.bundle, entry.item)
             : `Post: ${entry.post.stage}`}
@@ -598,9 +598,7 @@ function LiftedEntry(props: { drag: Drag }): ReactElement {
       style={{ left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.width }}
       className="pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-md bg-panel shadow-2xl ring-1 ring-border-strong"
     >
-      <span
-        className={cn('flex h-full items-center gap-1.5 px-2 text-sm text-fg', look.soft)}
-      >
+      <span className={cn('flex h-full items-center gap-1.5 px-2 text-sm text-fg', look.soft)}>
         <span className={cn('h-2 w-2 shrink-0', look.dot)} />
         <span className="truncate">{drag.entry.title}</span>
       </span>

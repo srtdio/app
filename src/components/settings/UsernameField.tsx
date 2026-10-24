@@ -119,7 +119,7 @@ export function UsernameField({
               setMessage(null);
               setValue(normalizeUsernameInput(event.target.value));
             }}
-            className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-base text-fg outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-input text-fg outline-none md:text-base"
           />
         </div>
         {!unchanged ? (
@@ -128,10 +128,7 @@ export function UsernameField({
           </Button>
         ) : null}
       </div>
-      <p
-        className={cn('mt-1.5 text-xs', message !== null ? 'text-fg-2' : tone)}
-        aria-live="polite"
-      >
+      <p className={cn('mt-1.5 text-sm', message !== null ? 'text-fg-2' : tone)} aria-live="polite">
         {message ?? hint}
       </p>
     </div>

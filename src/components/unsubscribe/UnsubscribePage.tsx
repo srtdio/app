@@ -59,9 +59,7 @@ export function UnsubscribePage() {
     >
       {state === 'subscribed' && (
         <Card>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">
-            Stop catch-up emails?
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight text-fg">Stop catch-up emails?</h1>
           <div className="mt-3 space-y-3 text-base leading-6 text-fg-2">
             <p>
               {
@@ -94,9 +92,7 @@ export function UnsubscribePage() {
           <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-good-soft text-good">
             <IconCheck size={22} />
           </div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">
-            {"You're unsubscribed"}
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight text-fg">{"You're unsubscribed"}</h1>
           <div className="mt-3 space-y-3 text-base leading-6 text-fg-2">
             <p>No more catch-up emails from any Sorted workspace, starting now.</p>
             <p>

@@ -43,7 +43,7 @@ export function PlanTabList(props: {
           data-plan-tab-section={section.key}
           className="flex flex-col gap-2"
         >
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-fg-3">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
             {section.label}
           </h2>
           {section.bundles.map((bundle) => (

@@ -230,16 +230,17 @@ export function WorkspaceSettingsPanel() {
         aria-labelledby="workspace-danger-title"
         className="flex flex-col gap-3 rounded-xl border border-border bg-panel p-4"
       >
-        <h3 id="workspace-danger-title" className="text-base font-semibold text-fg">
+        <h3
+          id="workspace-danger-title"
+          className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
+        >
           Danger
         </h3>
         {isOwner && session !== null ? (
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-base text-fg">Delete workspace</p>
-              <p className="mt-0.5 text-md leading-snug text-fg-3">
-                Permanent. Nothing is saved.
-              </p>
+              <p className="mt-0.5 text-base text-fg-2">Permanent. Nothing is saved.</p>
             </div>
             <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
               Delete
@@ -253,7 +254,7 @@ export function WorkspaceSettingsPanel() {
             />
           </div>
         ) : (
-          <p className="text-md leading-snug text-fg-3">{DELETE_OWNER_ONLY_LINE}</p>
+          <p className="text-base text-fg-2">{DELETE_OWNER_ONLY_LINE}</p>
         )}
       </section>
     </div>

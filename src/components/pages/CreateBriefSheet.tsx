@@ -478,10 +478,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
         </Field>
 
         {submitError !== null ? (
-          <div
-            role="alert"
-            className="rounded-md border border-bad px-3 py-2 text-base text-bad"
-          >
+          <div role="alert" className="rounded-md border border-bad px-3 py-2 text-base text-bad">
             {submitError}
           </div>
         ) : null}

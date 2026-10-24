@@ -51,7 +51,7 @@ export const CLOSED_BRIEF_LINE = 'Closed briefs stay readable and open to commen
 // The brief title matches the post title on the same screen size (Post detail
 // uses this exact size on phone and desktop). It wraps, never scrolls sideways.
 export const BRIEF_TITLE_CLASS =
-  'min-w-0 break-words text-3xl font-semibold leading-tight tracking-tight text-fg';
+  'min-w-0 break-words text-3xl font-semibold tracking-tight text-fg';
 
 /**
  * The comment box inside the Comments section, for "Add note" (the note failed
@@ -281,7 +281,7 @@ export function briefAuthorLabel(
   return hasCreator && !membersLoaded ? '' : FORMER_MEMBER;
 }
 
-const SECTION_LABEL = 'text-sm font-medium uppercase tracking-wide text-fg-3';
+const SECTION_LABEL = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /**
  * A failed reopen in plain words: invalid_payload means the brief is no longer
@@ -838,7 +838,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             <h1 className={BRIEF_TITLE_CLASS}>
               <Highlight text={brief.title} />
             </h1>
-            {closed ? <p className="text-base text-fg-3">{CLOSED_BRIEF_LINE}</p> : null}
+            {closed ? <p className="text-base text-fg-2">{CLOSED_BRIEF_LINE}</p> : null}
             <div data-brief-details="phone" className="md:hidden">
               {detailsLines}
             </div>
