@@ -28,6 +28,10 @@ import { HomeGate } from '@/components/home/HomeGate';
 import { SessionProvider } from '@/lib/session-context';
 import { WorkspaceProvider } from '@/lib/workspace-context';
 import { ChatProvider } from '@/lib/chat';
+import { warmMonoFont } from '@/lib/fonts';
+
+// Chat times and dates are mono: load the face at boot, before any thread paints.
+warmMonoFont();
 
 // The active workspace resolves only for signed-in users, so WorkspaceProvider
 // is mounted inside RequireAuth (never around the auth routes), wrapping the
