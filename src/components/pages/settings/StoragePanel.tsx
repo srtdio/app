@@ -13,7 +13,7 @@ import { BookCallSheet } from '@/components/support/BookCallSheet';
 import { ContactSheet } from '@/components/support/ContactSheet';
 import { SupportRows } from '@/components/support/SupportRows';
 import { ActionRow } from '@/components/ui/ActionRow';
-import { IconTrash } from '@/components/ui/icons';
+import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { CAP_BYTES } from '@/lib/storage-limits';
 import { logger } from '@/lib/logger';
@@ -137,7 +137,7 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
             Free up space in Recently deleted, or talk to us about more storage for {workspace}.
           </p>
           <ActionRow
-            icon={<IconTrash size={18} />}
+            icon={<IconTrash size={ICON_SIZE.nav} />}
             label="Recently deleted"
             sub={`${mb(breakdown?.deleted_bytes ?? 0)} can be freed now`}
             onClick={() => navigate(RECENTLY_DELETED_PATH)}

@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
-import { IconFile, IconFileText, IconPlay, IconVideo } from '@/components/ui/icons';
+import { IconFile, IconPlay, IconVideo, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { humanizeSize } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -23,7 +23,6 @@ export const NEAR_VIEWPORT_MARGIN = '200px';
 /** The kind glyph shared by the chat file bubble and the file tiles. */
 export function KindIcon(props: { kind: FileKind; size: number }): ReactElement {
   if (props.kind === 'video') return <IconVideo size={props.size} />;
-  if (props.kind === 'pdf' || props.kind === 'office') return <IconFileText size={props.size} />;
   return <IconFile size={props.size} />;
 }
 
@@ -156,14 +155,14 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
             className="absolute inset-0 flex items-center justify-center text-fg-3"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-panel-2">
-              <KindIcon kind={kind} size={20} />
+              <KindIcon kind={kind} size={ICON_SIZE.control} />
             </span>
           </span>
         )}
         {kind === 'video' && thumbUrl !== null ? (
           <span className="absolute inset-0 flex items-center justify-center">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg">
-              <IconPlay size={16} />
+              <IconPlay size={ICON_SIZE.inline} />
             </span>
           </span>
         ) : null}

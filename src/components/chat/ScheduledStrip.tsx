@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
+  ICON_SIZE,
   IconCalendarClock,
   IconChevronRight,
   IconFile,
@@ -84,7 +85,7 @@ function Thumb(props: {
           className="h-full w-full object-cover"
         />
       ) : (
-        <IconImage size={props.size === 'strip' ? 14 : 18} />
+        <IconImage size={props.size === 'strip' ? ICON_SIZE.inline : ICON_SIZE.nav} />
       )}
       {props.more > 0 ? (
         <span
@@ -138,7 +139,7 @@ export function ScheduledAttachments(props: {
             !strip && 'max-w-[85%] rounded-md border border-border bg-panel px-2 py-1.5',
           )}
         >
-          <IconFile size={strip ? 14 : 16} className="shrink-0 text-fg-3" />
+          <IconFile size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
           <span className="truncate text-sm">{file.name.trim() !== '' ? file.name : 'File'}</span>
         </span>
       ))}
@@ -176,7 +177,7 @@ export function ScheduledStrip(props: {
         NO_TOUCH_SELECT,
       )}
     >
-      <IconCalendarClock size={20} className="shrink-0 text-accent" />
+      <IconCalendarClock size={ICON_SIZE.control} className="shrink-0 text-accent" />
       <span className="truncate text-base font-semibold text-fg">
         {scheduledCountLabel(props.rows.length)}
       </span>
@@ -184,7 +185,7 @@ export function ScheduledStrip(props: {
       <span className="ml-auto truncate font-mono text-sm tabular-nums text-fg-2">
         {formatSendLabel(new Date(next.send_at), props.now ?? new Date())}
       </span>
-      <IconChevronRight size={16} className="shrink-0 text-fg-2" />
+      <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg-2" />
     </button>
   );
 }
@@ -206,10 +207,10 @@ export function ScheduleModeStrip(props: { label: string; onStop: () => void }):
           NO_TOUCH_SELECT,
         )}
       >
-        <IconCalendarClock size={18} className="shrink-0 text-accent" />
+        <IconCalendarClock size={ICON_SIZE.nav} className="shrink-0 text-accent" />
         <span className="flex-1 truncate text-base font-medium text-fg">Sends {props.label}</span>
         <IconButton label="Stop scheduling" className="shrink-0" onClick={props.onStop}>
-          <IconX size={16} />
+          <IconX size={ICON_SIZE.inline} />
         </IconButton>
       </div>
     </div>

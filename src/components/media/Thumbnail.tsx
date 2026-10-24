@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { IconFile, IconLink } from '@/components/ui/icons';
+import { ICON_SIZE, IconFile, IconLink } from '@/components/ui/icons';
 import { formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
 import { imageTileState } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -101,7 +101,7 @@ function FallbackTile({
   if (fallback.kind === 'link') {
     return (
       <div className="flex flex-col items-center gap-1 px-3 text-center text-fg-2">
-        <IconLink size={22} />
+        <IconLink size={ICON_SIZE.tray} />
         {fallback.label !== '' ? (
           <span className="max-w-full truncate text-sm">{fallback.label}</span>
         ) : null}
@@ -111,7 +111,7 @@ function FallbackTile({
   const ext = fallback.kind === 'file' ? fallback.extension : '';
   return (
     <div className="flex flex-col items-center gap-1 text-fg-2">
-      <IconFile size={24} />
+      <IconFile size={ICON_SIZE.status} />
       {ext !== '' ? <span className="text-sm font-medium tabular-nums">{ext}</span> : null}
     </div>
   );

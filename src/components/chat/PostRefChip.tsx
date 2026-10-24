@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { IconPipeline } from '@/components/ui/icons';
+import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { cn } from '@/lib/cn';
@@ -163,7 +163,7 @@ export function PostRefThumb(props: {
           className="h-full w-full object-cover"
         />
       ) : (
-        <IconPipeline size={props.size <= 20 ? 11 : 16} />
+        <IconPipeline size={props.size <= 20 ? 12 : ICON_SIZE.inline} />
       )}
     </span>
   );

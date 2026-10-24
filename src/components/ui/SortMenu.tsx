@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconCheck, IconChevronDown, IconSort } from '@/components/ui/icons';
+import { IconCheck, IconChevronDown, IconSort, ICON_SIZE } from '@/components/ui/icons';
 import { useMediaQuery } from '@/lib/use-media-query';
 
 export interface SortOption<T extends string = string> {
@@ -37,7 +37,7 @@ export function sortOptionButtons<T extends string>(
         )}
       >
         <span className="flex h-4 w-4 shrink-0 items-center justify-center text-accent">
-          {selected ? <IconCheck size={16} /> : null}
+          {selected ? <IconCheck size={ICON_SIZE.inline} /> : null}
         </span>
         <span className="flex-1">{option.label}</span>
       </button>
@@ -82,9 +82,9 @@ export function SortMenu<T extends string>({
       onClick={() => setOpen((prev) => !prev)}
       className="shrink-0"
     >
-      <IconSort size={16} />
+      <IconSort size={ICON_SIZE.inline} />
       <span className="hidden sm:inline">{active?.label ?? label}</span>
-      <IconChevronDown size={16} className="text-fg-3" />
+      <IconChevronDown size={ICON_SIZE.inline} className="text-fg-3" />
     </Button>
   );
 

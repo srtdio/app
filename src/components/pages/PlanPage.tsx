@@ -26,7 +26,7 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router-dom';
-import { IconPlan } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { readSearchJump } from '@/lib/search/jump';
 import { PLAN_NOT_AVAILABLE } from '@/components/chat/plan-card';
@@ -150,7 +150,7 @@ export function PlanPage(props: { fallback: string }): ReactElement {
         onBack={close}
       >
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-fg-2">
-          <IconPlan size={22} />
+          <IconPlan size={ICON_SIZE.tray} />
           <p className="text-base">{PLAN_NOT_AVAILABLE}</p>
         </div>
       </PlanFrame>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Button } from '@/components/ui/Button';
-import { IconLink, IconUpload } from '@/components/ui/icons';
+import { ICON_SIZE, IconLink, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 /** A menu row: the shared ghost button, full width, text from the left. */
@@ -51,7 +51,7 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
           className={MENU_ITEM}
         >
           <span className="shrink-0 text-fg-3">
-            <IconUpload size={16} />
+            <IconUpload size={ICON_SIZE.inline} />
           </span>
           <span>Upload files</span>
         </Button>
@@ -67,7 +67,7 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
           className={MENU_ITEM}
         >
           <span className="shrink-0 text-fg-3">
-            <IconLink size={16} />
+            <IconLink size={ICON_SIZE.inline} />
           </span>
           <span>Add link</span>
         </Button>

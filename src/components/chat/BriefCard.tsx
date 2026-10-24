@@ -17,7 +17,7 @@ import {
   useThreadCardCache,
   type ThreadCardCache,
 } from '@/components/chat/PostCard';
-import { IconBriefs } from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
 import { BriefStatusPill } from '@/components/pages/BriefCard';
 import { briefRoute, sharedBriefViews, type SharedBriefView } from '@/lib/chat/briefs';
 
@@ -90,7 +90,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
     return (
       <div className={`${SHARED_CARD} text-fg-3`}>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3">
-          <IconBriefs size={18} />
+          <IconBriefs size={ICON_SIZE.nav} />
         </span>
         <span className="text-base font-medium">Brief unavailable</span>
       </div>
@@ -104,7 +104,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
       className={`${SHARED_CARD} text-left transition-colors hover:bg-panel-2`}
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3 text-fg-3">
-        <IconBriefs size={18} />
+        <IconBriefs size={ICON_SIZE.nav} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate text-base font-medium text-fg" title={view.title}>

@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
-import { IconAlarmClock, IconChevronRight, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconAlarmClock, IconChevronRight, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useReminderOptional } from '@/components/chat/ReminderContext';
@@ -158,13 +158,13 @@ function PresetRow(props: {
         className="flex min-h-[56px] w-full items-center gap-3 rounded-md px-2 text-left text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2">
-          <IconAlarmClock size={20} />
+          <IconAlarmClock size={ICON_SIZE.control} />
         </span>
         <span className="flex-1 text-lg font-medium">{props.label}</span>
         {props.detail !== undefined ? (
           <span className="font-mono text-sm tabular-nums text-fg-2">{props.detail}</span>
         ) : (
-          <IconChevronRight size={16} className="text-fg-3" />
+          <IconChevronRight size={ICON_SIZE.inline} className="text-fg-3" />
         )}
       </button>
     </li>
@@ -182,7 +182,7 @@ function CancelReminderRow(props: { onClick: () => void }): ReactElement {
         className="flex min-h-[56px] w-full items-center gap-3 rounded-md px-2 text-left text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bad-soft text-bad">
-          <IconX size={20} />
+          <IconX size={ICON_SIZE.control} />
         </span>
         <span className="flex-1 text-lg font-medium">{CANCEL_REMINDER_LABEL}</span>
       </button>

@@ -10,7 +10,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
-import { IconTrash } from '@/components/ui/icons';
+import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { MOVE_TO_HEADING, REMOVE_LABEL } from '@/lib/chat/plan-keyboard-move';
 import { cn } from '@/lib/cn';
@@ -227,7 +227,7 @@ export function PlanDayPopover(props: {
             onClick={props.onRemove}
             className={cn(item, 'justify-start gap-2.5 font-medium text-bad hover:bg-bad-soft')}
           >
-            <IconTrash size={16} />
+            <IconTrash size={ICON_SIZE.inline} />
             {REMOVE_LABEL}
           </button>
         </>

@@ -9,7 +9,7 @@ import type {
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconSearch, IconX } from '@/components/ui/icons';
+import { IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
@@ -673,7 +673,7 @@ export function CommandPalette({
         )}
       >
         <div className="flex shrink-0 items-center gap-2.5 px-4 border-b border-border pt-[env(safe-area-inset-top)] sm:pt-0">
-          <IconSearch size={18} className="text-fg-3" />
+          <IconSearch size={ICON_SIZE.nav} className="text-fg-3" />
           <input
             ref={inputRef}
             value={query}
@@ -697,7 +697,7 @@ export function CommandPalette({
               }}
               className="shrink-0"
             >
-              <IconX size={16} />
+              <IconX size={ICON_SIZE.inline} />
             </IconButton>
           ) : null}
           <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1.5 py-0.5">

@@ -41,7 +41,7 @@ import {
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import { ACTIVITY_PATH } from '@/lib/inbox/inbox-live';
 import { useToast } from '@/components/ui/toast';
-import { IconAlarmClock } from '@/components/ui/icons';
+import { ICON_SIZE, IconAlarmClock } from '@/components/ui/icons';
 
 /** The toast's open affordance. */
 export const RING_TOAST_ACTION = 'Open';
@@ -132,7 +132,7 @@ export function ReminderRing(props: { workspaceId: string; userId: string }): nu
       toastRef.current.show({
         title,
         description: RING_TOAST_ACTION,
-        icon: <IconAlarmClock size={18} className="text-accent" />,
+        icon: <IconAlarmClock size={ICON_SIZE.nav} className="text-accent" />,
         durationMs: RING_TOAST_MS,
         onPress: () => {
           chime.stop();
@@ -196,7 +196,7 @@ export function ReminderRing(props: { workspaceId: string; userId: string }): nu
       toastRef.current.show({
         title,
         description: RING_TOAST_ACTION,
-        icon: <IconAlarmClock size={18} className="text-accent" />,
+        icon: <IconAlarmClock size={ICON_SIZE.nav} className="text-accent" />,
         durationMs: RING_TOAST_MS,
         onPress: () => {
           chime.stop();

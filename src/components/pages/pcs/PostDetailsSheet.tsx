@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconChevronRight, IconLock } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronRight, IconLock } from '@/components/ui/icons';
 import { supabase } from '@/lib/supabase';
 import { BUCKET_NAME_MAX, listBuckets, type BucketOption } from '@/lib/buckets';
 import type { MemberOption } from '@/components/chat/member-picker';
@@ -99,7 +99,7 @@ function DetailRow({
         <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
         <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
         <span className="ml-auto shrink-0 text-fg-3">
-          <IconChevronRight size={18} />
+          <IconChevronRight size={ICON_SIZE.nav} />
         </span>
       </button>
     );
@@ -110,7 +110,7 @@ function DetailRow({
       <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
       {locked ? (
         <span aria-hidden data-detail-row-lock="" className="ml-auto shrink-0 text-fg-3">
-          <IconLock size={16} />
+          <IconLock size={ICON_SIZE.inline} />
         </span>
       ) : null}
     </div>

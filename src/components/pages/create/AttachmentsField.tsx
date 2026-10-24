@@ -16,7 +16,7 @@ import { platformLabel } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { IconFile, IconImagePlus, IconLink, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconFile, IconImagePlus, IconLink, IconX } from '@/components/ui/icons';
 import { frameFor, type Frame, type FrameMedia } from '@/lib/platform-specs';
 import {
   COMPOSER_FRAME_MAX_HEIGHT,
@@ -156,7 +156,7 @@ export function attachmentItemList(
         >
           {item.previewUrl === undefined ? (
             <span className="flex h-full w-full items-center justify-center text-fg-3">
-              <IconFile size={20} />
+              <IconFile size={ICON_SIZE.control} />
             </span>
           ) : item.kind === 'image' ? (
             <img src={item.previewUrl} alt={item.name} className="h-full w-full object-cover" />
@@ -180,13 +180,17 @@ export function attachmentItemList(
         className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-border bg-panel-2 px-3 py-2"
       >
         <span className="shrink-0 text-fg-3">
-          {item.kind === 'link' ? <IconLink size={16} /> : <IconFile size={16} />}
+          {item.kind === 'link' ? (
+            <IconLink size={ICON_SIZE.inline} />
+          ) : (
+            <IconFile size={ICON_SIZE.inline} />
+          )}
         </span>
         <span className="min-w-0 flex-1 truncate text-base text-fg" title={item.name}>
           {item.name}
         </span>
         <IconButton label={`Remove ${item.name}`} onClick={() => onRemove(index)}>
-          <IconX size={16} />
+          <IconX size={ICON_SIZE.inline} />
         </IconButton>
       </li>
     );
@@ -237,7 +241,7 @@ function FramedMediaTile({
     >
       {src === undefined ? (
         <span className="relative flex h-full w-full items-center justify-center text-fg-3">
-          <IconFile size={22} />
+          <IconFile size={ICON_SIZE.tray} />
         </span>
       ) : video ? (
         <video
@@ -365,7 +369,7 @@ export function ComposerMediaFrame({
               aria-hidden="true"
               className="flex h-11 w-11 items-center justify-center rounded-xl bg-panel-3 text-accent"
             >
-              <IconImagePlus size={22} />
+              <IconImagePlus size={ICON_SIZE.tray} />
             </span>
             {dropzone}
           </div>
@@ -909,7 +913,7 @@ export function AttachmentsField({
         Document
       </Button>
       <Button type="button" onClick={() => setLinkOpen((prev) => !prev)}>
-        <IconLink size={16} />
+        <IconLink size={ICON_SIZE.inline} />
         Link
       </Button>
     </div>
@@ -1029,7 +1033,7 @@ export function AttachmentsField({
             return coveredByBar ? (
               <li key={item.id} data-failed="" className={cnPending(item.error)}>
                 <span className="shrink-0 text-fg-3">
-                  <IconFile size={16} />
+                  <IconFile size={ICON_SIZE.inline} />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-base text-fg" title={item.name}>
                   {item.name}
@@ -1038,7 +1042,11 @@ export function AttachmentsField({
             ) : (
               <li key={item.id} className={cnPending(item.error)}>
                 <span className="shrink-0 text-fg-3">
-                  {item.kind === 'link' ? <IconLink size={16} /> : <IconFile size={16} />}
+                  {item.kind === 'link' ? (
+                    <IconLink size={ICON_SIZE.inline} />
+                  ) : (
+                    <IconFile size={ICON_SIZE.inline} />
+                  )}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-base text-fg" title={item.name}>
                   {item.name}
@@ -1062,7 +1070,7 @@ export function AttachmentsField({
                     label={`Dismiss ${item.name}`}
                     onClick={() => dismissPending(item.id)}
                   >
-                    <IconX size={16} />
+                    <IconX size={ICON_SIZE.inline} />
                   </IconButton>
                 ) : null}
               </li>

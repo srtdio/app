@@ -19,8 +19,7 @@ import { SelectCheck } from '@/components/ui/SelectCheck';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ActionRow, useLongPress } from '@/components/ui';
-import { IconChat, IconEllipsis, IconStarFilled } from '@/components/ui/icons';
-import { IconEyeOff } from '@/components/chat/chat-icons';
+import { ICON_SIZE, IconChat, IconEyeOff, IconMore, IconStarFilled } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -212,7 +211,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   if (!props.hasChannels) {
     return (
       <EmptyState
-        icon={<IconChat size={24} />}
+        icon={<IconChat size={ICON_SIZE.status} />}
         title="No conversations yet"
         description="Messages from your team will show up here."
         action={
@@ -359,7 +358,7 @@ export function channelListSkeleton(): ReactElement {
 export function channelListError(onRetry: () => void): ReactElement {
   return (
     <EmptyState
-      icon={<IconChat size={24} />}
+      icon={<IconChat size={ICON_SIZE.status} />}
       title="Couldn't load chats"
       action={
         <Button variant="primary" onClick={onRetry}>
@@ -794,7 +793,7 @@ export function ChannelCard(props: {
           onClick={(e) => openMenu(e.currentTarget.getBoundingClientRect())}
           className={rowMoreClass(tileKind(channel))}
         >
-          <IconEllipsis size={20} />
+          <IconMore size={ICON_SIZE.control} />
         </IconButton>
       ) : null}
     </div>
@@ -942,7 +941,7 @@ export function searchChips(props: {
             )}
           >
             {chip.kind === 'starred' ? (
-              <IconStarFilled size={16} className="shrink-0 text-accent" />
+              <IconStarFilled size={ICON_SIZE.inline} className="shrink-0 text-accent" />
             ) : null}
             {chip.label}
           </button>
@@ -1041,7 +1040,7 @@ function selectBar(select: ChannelSelectMode): ReactElement {
         disabled={select.selectedIds.size === 0}
         onClick={select.onDelete}
       >
-        <IconEyeOff size={16} />
+        <IconEyeOff size={ICON_SIZE.inline} />
         Hide
       </Button>
     </div>

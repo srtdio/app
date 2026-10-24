@@ -2,8 +2,17 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Button, buttonClass } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { IconChevronRight, IconCopy, IconDownload, IconTrash, IconX } from '@/components/ui/icons';
-import { IconChevronLeft, IconEdit, IconInfo } from '@/components/pages/assets/viewerIcons';
+import {
+  ICON_SIZE,
+  IconChevronLeft,
+  IconChevronRight,
+  IconCopy,
+  IconDownload,
+  IconEdit,
+  IconInfo,
+  IconTrash,
+  IconX,
+} from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { RenameOutcome } from '@/lib/asset-upload';
 import { displayLabel, humanizeSize, type AssetListItem } from '@/lib/assets';
@@ -388,7 +397,7 @@ export function AssetLightbox({
         disabled={busy}
         className={barClass}
       >
-        <IconDownload size={20} />
+        <IconDownload size={ICON_SIZE.control} />
       </button>
       <button
         type="button"
@@ -397,10 +406,10 @@ export function AssetLightbox({
         disabled={busy}
         className={barClass}
       >
-        <IconCopy size={20} />
+        <IconCopy size={ICON_SIZE.control} />
       </button>
       <button type="button" aria-label="Info" onClick={onInfo} className={barClass}>
-        <IconInfo size={20} />
+        <IconInfo size={ICON_SIZE.control} />
       </button>
       <button
         type="button"
@@ -408,7 +417,7 @@ export function AssetLightbox({
         onClick={handleDelete}
         className={cn(barClass, BAD)}
       >
-        <IconTrash size={20} />
+        <IconTrash size={ICON_SIZE.control} />
       </button>
     </>
   );
@@ -483,7 +492,7 @@ export function AssetLightbox({
           onClick={onClose}
           className={BAR_BUTTON}
         >
-          <IconX size={20} />
+          <IconX size={ICON_SIZE.control} />
         </button>
         <div className="min-w-0 flex-1 px-1 text-center">
           <p className="truncate text-base font-medium">
@@ -513,7 +522,7 @@ export function AssetLightbox({
               onClick={() => go(-1)}
               className={cn('left-2', STAGE_ARROW)}
             >
-              <IconChevronLeft size={20} />
+              <IconChevronLeft size={ICON_SIZE.control} />
             </IconButton>
             <IconButton
               type="button"
@@ -521,7 +530,7 @@ export function AssetLightbox({
               onClick={() => go(1)}
               className={cn('right-2', STAGE_ARROW)}
             >
-              <IconChevronRight size={20} />
+              <IconChevronRight size={ICON_SIZE.control} />
             </IconButton>
           </>
         ) : null}
@@ -565,7 +574,7 @@ export function AssetLightbox({
               </button>
             ) : (
               <Button variant="primary" type="button" onClick={handleDownload} disabled={busy}>
-                <IconDownload size={16} />
+                <IconDownload size={ICON_SIZE.inline} />
                 {isInlineRenderable(kind) ? 'Download to view' : 'Download'}
               </Button>
             )}
@@ -590,7 +599,7 @@ export function AssetLightbox({
             <div className="flex items-center gap-2">
               <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{name}</h2>
               <IconButton label="Close details" onClick={() => setInfoOpen(false)}>
-                <IconX size={20} />
+                <IconX size={ICON_SIZE.control} />
               </IconButton>
             </div>
 
@@ -639,7 +648,7 @@ export function AssetLightbox({
                         }}
                         className="shrink-0"
                       >
-                        <IconEdit size={20} />
+                        <IconEdit size={ICON_SIZE.control} />
                       </IconButton>
                     ) : null}
                   </dd>

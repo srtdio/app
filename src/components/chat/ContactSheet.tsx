@@ -8,7 +8,7 @@ import type { ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { avatarFillFor } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
-import { IconChevronLeft } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 import {
   ChatInfoTabs,
   ChatInfoTabsView,
@@ -82,7 +82,7 @@ function contactPage(props: {
     >
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel px-2 md:px-4">
         <IconButton label={`Close ${props.heading.toLowerCase()}`} onClick={props.onClose}>
-          <IconChevronLeft size={20} />
+          <IconChevronLeft size={ICON_SIZE.control} />
         </IconButton>
         <h2 className="truncate text-lg font-semibold text-fg">{props.heading}</h2>
       </div>

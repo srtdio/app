@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
-import { IconCheck, IconChevronDown } from '@/components/ui/icons';
+import { IconCheck, IconChevronDown, ICON_SIZE } from '@/components/ui/icons';
 
 export interface SelectOption {
   value: string;
@@ -64,7 +64,7 @@ export function selectOptionRows(
         ) : null}
         <span className="min-w-0 flex-1 truncate">{option.label}</span>
         <span className="flex h-4 w-4 shrink-0 items-center justify-center text-accent">
-          {selected ? <IconCheck size={16} /> : null}
+          {selected ? <IconCheck size={ICON_SIZE.inline} /> : null}
         </span>
       </button>
     );
@@ -236,7 +236,7 @@ export function Select({
         >
           {selected?.label ?? placeholder}
         </span>
-        <IconChevronDown size={16} className="shrink-0 text-fg-3" />
+        <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
       </button>
       {open ? (
         <SelectMenu

@@ -11,7 +11,7 @@
 // presigns through the shared cache, its box painted from the first frame.
 
 import type { ReactElement, ReactNode } from 'react';
-import { IconCamera, IconFile, IconMic, IconVideo } from '@/components/ui/icons';
+import { ICON_SIZE, IconCamera, IconFile, IconMic, IconVideo } from '@/components/ui/icons';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import type { PresignCache } from '@/lib/asset-presign';
 import { cn } from '@/lib/cn';
@@ -40,7 +40,7 @@ export function SummaryGlyph(props: {
   className?: string;
 }): ReactElement {
   const glyph = {
-    size: props.size ?? 14,
+    size: props.size ?? ICON_SIZE.inline,
     inline: true,
     ...(props.className !== undefined ? { className: props.className } : {}),
   };

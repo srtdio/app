@@ -8,7 +8,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { IconSmile } from '@/components/ui/icons';
+import { IconSmile, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { insertAtCaret } from '@/lib/chat/emoji-list';
@@ -104,7 +104,7 @@ export function CommentEmojiButton(props: {
           props.className,
         )}
       >
-        <IconSmile size={20} />
+        <IconSmile size={ICON_SIZE.control} />
       </button>
       <EmojiPickerShell
         open={open}

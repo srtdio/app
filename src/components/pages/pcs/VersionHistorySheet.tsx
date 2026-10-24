@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconCheck, IconChevronRight } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconChevronRight } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { parseSnapshot, sortVersionsDesc, type PostVersionView } from '@/lib/post-versions';
@@ -188,12 +188,12 @@ export function versionHistorySheet({
               </span>
               {isCurrent ? (
                 <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-sm font-medium text-accent">
-                  <IconCheck size={14} />
+                  <IconCheck size={ICON_SIZE.inline} />
                   Current
                 </span>
               ) : (
                 <span className="ml-auto shrink-0 text-fg-3">
-                  <IconChevronRight size={16} />
+                  <IconChevronRight size={ICON_SIZE.inline} />
                 </span>
               )}
             </button>

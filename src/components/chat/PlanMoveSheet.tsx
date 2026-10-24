@@ -10,7 +10,7 @@ import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
-import { IconCalendar, IconCheck, IconEdit, IconTrash } from '@/components/ui/icons';
+import { ICON_SIZE, IconCalendar, IconCheck, IconEdit, IconTrash } from '@/components/ui/icons';
 import { KEEP_APPROVAL_NO, KEEP_APPROVAL_YES } from '@/components/chat/plan-card';
 import { cn } from '@/lib/cn';
 
@@ -48,11 +48,15 @@ export function PlanConceptActionsSheet(props: {
     <Sheet open={props.open} onClose={props.onClose} title={props.title}>
       <div data-plan-item-actions="" className="flex flex-col gap-1">
         <ActionRow
-          icon={<IconCalendar size={18} />}
+          icon={<IconCalendar size={ICON_SIZE.nav} />}
           label={MOVE_ROW_LABEL}
           onClick={props.onMove}
         />
-        <ActionRow icon={<IconEdit size={18} />} label="Edit concept" onClick={props.onEdit} />
+        <ActionRow
+          icon={<IconEdit size={ICON_SIZE.nav} />}
+          label="Edit concept"
+          onClick={props.onEdit}
+        />
       </div>
     </Sheet>
   );
@@ -144,7 +148,7 @@ export function PlanKeepApprovalSheet(props: {
       <div data-plan-keep-sheet="" className="flex flex-col gap-3">
         <p className="text-lg text-fg-2">{props.body}</p>
         <Button variant="primary" data-plan-keep-yes="" onClick={() => props.onKeep(true)}>
-          <IconCheck size={16} />
+          <IconCheck size={ICON_SIZE.inline} />
           {KEEP_APPROVAL_YES}
         </Button>
         <Button data-plan-keep-no="" onClick={() => props.onKeep(false)}>
@@ -168,7 +172,7 @@ export function RemoveFromPlanButton(props: { busy: boolean; onClick: () => void
       disabled={props.busy}
       onClick={props.onClick}
     >
-      <IconTrash size={16} />
+      <IconTrash size={ICON_SIZE.inline} />
       {REMOVE_ROW_LABEL}
     </Button>
   );

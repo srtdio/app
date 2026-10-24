@@ -12,7 +12,7 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FocusEvent, ReactElement, ReactNode } from 'react';
-import { IconSearch } from '@/components/ui/icons';
+import { ICON_SIZE, IconSearch } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { EMOJI, EMOJI_GROUPS, type EmojiEntry } from '@/components/chat/emoji-data';
 import {
@@ -235,7 +235,7 @@ export function EmojiSearchField(props: {
   return (
     <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
       <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-fg-3 focus-within:ring-2 focus-within:ring-accent">
-        <IconSearch size={16} />
+        <IconSearch size={ICON_SIZE.inline} />
         <input
           type="search"
           data-emoji-search=""

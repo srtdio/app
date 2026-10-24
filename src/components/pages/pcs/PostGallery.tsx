@@ -6,6 +6,7 @@ import type {
 } from 'react';
 import type { CSSProperties, ReactElement, ReactNode, Ref } from 'react';
 import {
+  ICON_SIZE,
   IconAssets,
   IconChevronLeft,
   IconChevronRight,
@@ -175,7 +176,7 @@ function GalleryThumb({
   // (presignEnabled false), so a tile never renders blank.
   return (
     <div className="flex h-full w-full items-center justify-center bg-panel-3 text-fg-3">
-      <IconAssets size={22} />
+      <IconAssets size={ICON_SIZE.tray} />
     </div>
   );
 }
@@ -518,7 +519,7 @@ export function pinButton(
   if (onArmPin === undefined) return null;
   return pinArmedIndex === null ? (
     <Button type="button" variant="secondary" data-add-pin="" onClick={() => onArmPin(active)}>
-      <IconPin size={16} />
+      <IconPin size={ICON_SIZE.inline} />
       Add pin
     </Button>
   ) : (
@@ -586,7 +587,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
               data-gallery-lock=""
               className="inline-flex h-11 w-11 items-center justify-center text-fg-3"
             >
-              <IconLock size={14} />
+              <IconLock size={ICON_SIZE.inline} />
             </span>
           ) : null}
           {canEdit ? (
@@ -598,7 +599,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 onClick={model.onAdd}
                 variant="secondary"
               >
-                <IconPlus size={16} />
+                <IconPlus size={ICON_SIZE.inline} />
                 Add
               </Button>
               <Button
@@ -608,7 +609,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 onClick={model.onReplace}
                 variant="secondary"
               >
-                <IconSwitch size={16} />
+                <IconSwitch size={ICON_SIZE.inline} />
                 Replace
               </Button>
               <Button
@@ -618,7 +619,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
                 onClick={model.onReorder}
                 variant="secondary"
               >
-                <IconGrip size={16} />
+                <IconGrip size={ICON_SIZE.inline} />
                 Reorder
               </Button>
             </>
@@ -635,7 +636,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
             variant="secondary"
             className="shrink-0 tabular-nums"
           >
-            <IconHistory size={16} />
+            <IconHistory size={ICON_SIZE.inline} />
             {`v${versionNumber}`}
           </Button>
         ) : null}
@@ -751,7 +752,7 @@ export function reorderView(model: ReorderModel): ReactElement {
           }}
           variant="secondary"
         >
-          <IconChevronLeft size={16} />
+          <IconChevronLeft size={ICON_SIZE.inline} />
           Move left
         </Button>
         <Button
@@ -764,7 +765,7 @@ export function reorderView(model: ReorderModel): ReactElement {
           variant="secondary"
         >
           Move right
-          <IconChevronRight size={16} />
+          <IconChevronRight size={ICON_SIZE.inline} />
         </Button>
         <span className="flex-1" />
         <Button
@@ -903,7 +904,7 @@ export function galleryView({
           className="flex min-h-[44px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 px-4 py-10 text-center transition-colors hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-panel-3 text-accent">
-            <IconImagePlus size={26} />
+            <IconImagePlus size={ICON_SIZE.status} />
           </span>
           <span className="text-base font-medium text-fg">Add images</span>
           <span className="text-sm text-fg-3">Tap to upload</span>
@@ -958,7 +959,7 @@ export function galleryView({
               ) : null}
               {pinCount > 0 ? (
                 <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg">
-                  <IconPin size={11} />
+                  <IconPin size={ICON_SIZE.inline} />
                   {pinCount}
                 </span>
               ) : null}
@@ -1079,7 +1080,7 @@ export function galleryView({
                     {pinsFor !== undefined ? framePins(pinsFor(item), map, onPinClick) : null}
                     {pinsFor === undefined && pinCount > 0 ? (
                       <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg">
-                        <IconPin size={11} />
+                        <IconPin size={ICON_SIZE.inline} />
                         {pinCount}
                       </span>
                     ) : null}
@@ -1176,7 +1177,7 @@ export function galleryView({
                   />
                   {pinCount > 0 ? (
                     <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg">
-                      <IconPin size={11} />
+                      <IconPin size={ICON_SIZE.inline} />
                       {pinCount}
                     </span>
                   ) : null}

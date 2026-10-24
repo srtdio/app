@@ -17,7 +17,13 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconBookmark, IconCheck, IconPipeline, IconRotateCcw } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconBookmark,
+  IconCheck,
+  IconPipeline,
+  IconRotateCcw,
+} from '@/components/ui/icons';
 import { Tag } from '@/components/ui/Tag';
 import { useToast } from '@/components/ui/toast';
 import { MARK_TONE } from '@/components/chat/MarkBits';
@@ -80,7 +86,7 @@ function OpenPostThumb(props: { assetVersionId: string | null }) {
           className="h-full w-full object-cover"
         />
       ) : (
-        <IconPipeline size={16} />
+        <IconPipeline size={ICON_SIZE.inline} />
       )}
     </span>
   );
@@ -308,7 +314,7 @@ export function MarkSheetRow(props: {
               onClick={props.onAsk}
               className={ROW_ACTION}
             >
-              <IconRotateCcw size={16} />
+              <IconRotateCcw size={ICON_SIZE.inline} />
               <span>Reopen</span>
             </Button>
           </div>
@@ -321,7 +327,7 @@ export function MarkSheetRow(props: {
             onClick={props.onAsk}
             className={ROW_ACTION}
           >
-            <IconCheck size={16} />
+            <IconCheck size={ICON_SIZE.inline} />
             <span>{STAMP_WORD[mark.type]}</span>
           </Button>
         )}
@@ -452,7 +458,7 @@ export function MarksList(props: MarksListProps): ReactElement {
         </p>
       ) : body === 'empty' ? (
         <EmptyState
-          icon={<IconBookmark size={22} />}
+          icon={<IconBookmark size={ICON_SIZE.tray} />}
           title="All clear"
           description={
             tab === 'open' ? 'No open marks in this chat.' : 'Nothing has been stamped yet.'

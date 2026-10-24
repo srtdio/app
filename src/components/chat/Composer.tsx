@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import {
+  ICON_SIZE,
   IconBriefs,
   IconCalendarClock,
   IconChevronDown,
@@ -445,7 +446,7 @@ export function EditingBar(props: { text: string; onCancel: () => void }): React
       tone="warn"
       trailing={
         <IconButton label="Cancel editing" className="shrink-0" onClick={props.onCancel}>
-          <IconX size={20} />
+          <IconX size={ICON_SIZE.control} />
         </IconButton>
       }
     />
@@ -500,7 +501,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
         )}
       </span>
       <IconButton label="Close about" className="shrink-0" onClick={props.onCancel}>
-        <IconX size={20} />
+        <IconX size={ICON_SIZE.control} />
       </IconButton>
     </div>
   );
@@ -543,7 +544,7 @@ export function ReplyBar(props: {
       className={NO_TOUCH_SELECT}
       trailing={
         <IconButton label="Cancel reply" className="shrink-0" onClick={props.onCancel}>
-          <IconX size={20} />
+          <IconX size={ICON_SIZE.control} />
         </IconButton>
       }
     />
@@ -998,7 +999,7 @@ function PendingThumb(props: {
           className={cn('h-full w-full object-cover', uploading && 'opacity-50')}
         />
       ) : (
-        <IconFile size={16} className={cn(uploading && 'opacity-50')} />
+        <IconFile size={ICON_SIZE.inline} className={cn(uploading && 'opacity-50')} />
       )}
       {uploading ? (
         <span
@@ -2061,7 +2062,7 @@ export function Composer(props: ComposerProps): ReactElement {
             {sharedBriefs.map((brief) => (
               <PendingChip
                 key={brief.id}
-                thumb={<IconBriefs size={16} />}
+                thumb={<IconBriefs size={ICON_SIZE.inline} />}
                 title={brief.title}
                 meta={briefStatusLabel(brief.status)}
                 onRemove={() => toggleSharedBrief(brief)}
@@ -2131,7 +2132,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 className="shrink-0 text-bad hover:bg-bad-soft hover:text-bad"
                 onClick={cancel}
               >
-                <IconTrash size={20} />
+                <IconTrash size={ICON_SIZE.control} />
               </IconButton>
               <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3">
                 <span
@@ -2151,7 +2152,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 className="shrink-0"
                 onClick={() => void stopSend()}
               >
-                <IconSend size={20} />
+                <IconSend size={ICON_SIZE.control} />
               </Button>
             </>
           ) : voiceBusy ? (
@@ -2245,7 +2246,7 @@ export function Composer(props: ComposerProps): ReactElement {
                   className="shrink-0"
                   onClick={() => void start()}
                 >
-                  <IconMic size={20} />
+                  <IconMic size={ICON_SIZE.control} />
                 </Button>
               ) : (
                 <div className="flex shrink-0">
@@ -2286,9 +2287,9 @@ export function Composer(props: ComposerProps): ReactElement {
                         {SCHEDULING_LABEL}
                       </span>
                     ) : scheduling ? (
-                      <IconCalendarClock size={20} />
+                      <IconCalendarClock size={ICON_SIZE.control} />
                     ) : (
-                      <IconSend size={20} />
+                      <IconSend size={ICON_SIZE.control} />
                     )}
                   </Button>
                   {showChevron ? (
@@ -2308,7 +2309,7 @@ export function Composer(props: ComposerProps): ReactElement {
                             scheduleOpen !== null ? setScheduleOpen(null) : openSchedule()
                           }
                         >
-                          <IconChevronDown size={20} />
+                          <IconChevronDown size={ICON_SIZE.control} />
                         </Button>
                       </span>
                     </>

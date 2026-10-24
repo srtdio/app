@@ -44,7 +44,13 @@ import type {
 import { Avatar } from '@/components/ui/Avatar';
 import { UploadRing } from '@/components/chat/UploadRing';
 import { sized, useChatLayout, type ChatSize } from '@/components/chat/chat-type';
-import { IconAlertTriangle, IconMic, IconPauseFill, IconPlay } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconAlertTriangle,
+  IconMic,
+  IconPauseFill,
+  IconPlay,
+} from '@/components/ui/icons';
 import {
   cancelPendingLongPressesWithin,
   LONG_PRESS_MS,
@@ -1192,7 +1198,7 @@ export function VoiceNote({
             ),
       )}
     >
-      {active ? <IconPauseFill size={20} /> : <IconPlay size={20} />}
+      {active ? <IconPauseFill size={ICON_SIZE.control} /> : <IconPlay size={ICON_SIZE.control} />}
     </button>
   );
   // An own note sent this session: the play spot holds the ring while it
@@ -1263,7 +1269,7 @@ export function VoiceNote({
                   : 'bg-accent text-accent-fg',
             )}
           >
-            <IconMic size={9} />
+            <IconMic size={12} />
           </span>
         </span>
       ) : null}
@@ -1381,7 +1387,7 @@ export function VoiceNote({
           )}
           {...STOP_POINTER}
         >
-          <IconAlertTriangle size={14} className="shrink-0" />
+          <IconAlertTriangle size={ICON_SIZE.inline} className="shrink-0" />
           <span>Can&apos;t play here.</span>
           {canOpenTranscript ? (
             <button

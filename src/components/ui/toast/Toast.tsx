@@ -1,4 +1,4 @@
-import { IconAlertTriangle, IconCheck, IconX } from '@/components/ui/icons';
+import { IconAlertTriangle, IconCheck, IconX, ICON_SIZE } from '@/components/ui/icons';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 
 interface ToastProps {
@@ -45,11 +45,11 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         </span>
       ) : error ? (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center text-white">
-          <IconAlertTriangle size={16} />
+          <IconAlertTriangle size={ICON_SIZE.inline} />
         </span>
       ) : success ? (
         <span className="flex h-6 w-6 shrink-0 items-center justify-center text-good">
-          <IconCheck size={16} />
+          <IconCheck size={ICON_SIZE.inline} />
         </span>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col">

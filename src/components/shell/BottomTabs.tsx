@@ -4,6 +4,7 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { cn } from '@/lib/cn';
+import { ICON_SIZE } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 export function BottomTabs() {
@@ -21,7 +22,7 @@ export function BottomTabs() {
           className={({ isActive }) =>
             cn(
               'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-xs font-medium transition-colors',
-              isActive ? 'text-accent' : 'text-fg-3',
+              isActive ? 'text-accent' : 'text-fg-2',
             )
           }
         >
@@ -32,7 +33,7 @@ export function BottomTabs() {
             className="flex flex-col items-center gap-1 rounded-lg px-1.5 py-0.5"
           >
             <span className="relative">
-              <item.Icon size={20} />
+              <item.Icon size={ICON_SIZE.control} />
               {item.showChatBadge && total > 0 ? (
                 <CountBadge
                   count={total}

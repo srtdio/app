@@ -9,7 +9,7 @@ import { ContactSheet } from '@/components/support/ContactSheet';
 import { SupportRows } from '@/components/support/SupportRows';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
-import { IconTrash } from '@/components/ui/icons';
+import { IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { Sheet } from '@/components/ui/Sheet';
 import { humanizeSize } from '@/lib/assets';
 import { useWorkspaceFullSheet } from '@/lib/storage-full';
@@ -52,7 +52,7 @@ export function WorkspaceFullSheet() {
           <p className="text-base leading-relaxed text-fg-2">{workspaceFullCopy(shownBytes)}</p>
           <div className="-mx-3 flex flex-col">
             <ActionRow
-              icon={<IconTrash size={18} />}
+              icon={<IconTrash size={ICON_SIZE.nav} />}
               label="Recently deleted"
               sub="Free up space now"
               onClick={() => {

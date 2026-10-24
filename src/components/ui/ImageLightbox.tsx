@@ -18,7 +18,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
-import { IconChevronLeft, IconChevronRight, IconDownload, IconX } from '@/components/ui/icons';
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconDownload,
+  IconX,
+  ICON_SIZE,
+} from '@/components/ui/icons';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -383,7 +389,7 @@ function DownloadControl({
         onClick={onDownload}
         className={cn(TOOLBAR_BUTTON, 'disabled:opacity-40')}
       >
-        <IconDownload size={20} />
+        <IconDownload size={ICON_SIZE.control} />
       </button>
     </>
   );
@@ -659,7 +665,7 @@ export function ImageLightbox({
           onClick={onClose}
           className={cn(TOOLBAR_BUTTON, 'ml-auto')}
         >
-          <IconX size={20} />
+          <IconX size={ICON_SIZE.control} />
         </button>
       </div>
 
@@ -679,7 +685,7 @@ export function ImageLightbox({
               onClick={() => go(-1)}
               className={cn(ARROW_BUTTON, 'left-2 z-10')}
             >
-              <IconChevronLeft size={20} />
+              <IconChevronLeft size={ICON_SIZE.control} />
             </button>
             <button
               type="button"
@@ -687,7 +693,7 @@ export function ImageLightbox({
               onClick={() => go(1)}
               className={cn(ARROW_BUTTON, 'right-2 z-10')}
             >
-              <IconChevronRight size={20} />
+              <IconChevronRight size={ICON_SIZE.control} />
             </button>
           </>
         ) : null}

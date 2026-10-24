@@ -107,7 +107,7 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
   it('ThreadView dismiss is a 44px chevron', () => {
     const view = source('../ThreadView.tsx');
     expect(view).toContain('aria-label="Close thread"');
-    expect(view).toContain('<IconChevronLeft size={20} />');
+    expect(view).toContain('<IconChevronLeft size={ICON_SIZE.control} />');
   });
 
   it('group photo errors are plain words; rename has Save / Cancel and never saves on blur', () => {

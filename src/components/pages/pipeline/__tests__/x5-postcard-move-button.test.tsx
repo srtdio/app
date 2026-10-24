@@ -76,8 +76,8 @@ describe('X5 PostCard move button placement (the ⋯ at the right end of the due
     const meta = /<div[^>]*data-post-card-meta=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(meta).toContain('h-5');
     const glyph = /<button[^>]*data-post-card-move=""[^>]*>(<svg[^>]*>)/.exec(out)?.[1] ?? '';
-    expect(glyph).toContain('width="18"');
-    expect(glyph).toContain('height="18"');
+    expect(glyph).toContain('width="20"');
+    expect(glyph).toContain('height="20"');
     // It sits after the picture, inside the body.
     expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-post-card-body'));
   });

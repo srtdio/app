@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconPause, IconPlay, IconSend, IconTrash } from '@/components/ui/icons';
+import { ICON_SIZE, IconPause, IconPlay, IconSend, IconTrash } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -40,7 +40,11 @@ export function voiceDraftView(props: {
         onClick={props.onPlay}
         className={cn('shrink-0 hover:bg-panel-3', FOCUS_RING)}
       >
-        {props.playing ? <IconPause size={20} /> : <IconPlay size={20} />}
+        {props.playing ? (
+          <IconPause size={ICON_SIZE.control} />
+        ) : (
+          <IconPlay size={ICON_SIZE.control} />
+        )}
       </IconButton>
       <span className="min-w-0 flex-1 truncate text-base text-fg-2 tabular-nums">{label}</span>
       <IconButton
@@ -54,7 +58,7 @@ export function voiceDraftView(props: {
           FOCUS_RING,
         )}
       >
-        <IconTrash size={20} />
+        <IconTrash size={ICON_SIZE.control} />
       </IconButton>
       <Button
         type="button"
@@ -66,7 +70,7 @@ export function voiceDraftView(props: {
         onClick={props.onSend}
         className={cn('shrink-0', FOCUS_RING)}
       >
-        <IconSend size={20} />
+        <IconSend size={ICON_SIZE.control} />
       </Button>
     </div>
   );

@@ -18,7 +18,7 @@
 // Only opacity and the ring's stroke ever change.
 
 import type { ReactElement } from 'react';
-import { IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 
 export type UploadRingVariant = 'voice' | 'image' | 'file';
@@ -46,7 +46,7 @@ const HIT_CLASS: Readonly<Record<UploadRingVariant, string>> = {
 
 const STROKE = 3;
 /** The X inside the ring (px). */
-export const UPLOAD_RING_X = 16;
+export const UPLOAD_RING_X = ICON_SIZE.inline;
 /** The indeterminate arc's share of the ring. */
 const ARC = 0.25;
 

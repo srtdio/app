@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
-import { IconPlay } from '@/components/ui/icons';
+import { ICON_SIZE, IconCarousel, IconMore, IconPlay } from '@/components/ui/icons';
 import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath } from '@/lib/entityRef';
@@ -185,31 +185,8 @@ function CarouselBadge() {
       aria-label="Carousel"
       className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-md bg-overlay-badge text-overlay-fg"
     >
-      <svg
-        width={14}
-        height={14}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.7}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x={8} y={8} width={11} height={11} rx={2} />
-        <path d="M5 15V5a1 1 0 0 1 1-1h9" />
-      </svg>
+      <IconCarousel size={ICON_SIZE.inline} />
     </span>
-  );
-}
-
-/** Three dots in a row: the plain 18px ⋯ glyph at the right end of the due row. */
-function MoreIcon() {
-  return (
-    <svg aria-hidden width={18} height={18} viewBox="0 0 24 24" fill="currentColor">
-      <circle cx={5} cy={12} r={1.75} />
-      <circle cx={12} cy={12} r={1.75} />
-      <circle cx={19} cy={12} r={1.75} />
-    </svg>
   );
 }
 
@@ -220,7 +197,7 @@ function PlayBadge() {
       aria-label="Video"
       className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg"
     >
-      <IconPlay size={18} />
+      <IconPlay size={ICON_SIZE.control} />
     </span>
   );
 }
@@ -315,7 +292,7 @@ export function PostCard({
             {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
           >
             <span role="img" aria-label="Video" className="inline-flex">
-              <IconPlay size={28} />
+              <IconPlay size={ICON_SIZE.status} />
             </span>
           </div>
         </div>
@@ -394,7 +371,7 @@ export function PostCard({
               onClick={() => onMove(post)}
               className="relative z-10 -my-3 -mr-3 ml-auto shrink-0 text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <MoreIcon />
+              <IconMore size={ICON_SIZE.control} />
             </IconButton>
           ) : null}
         </div>

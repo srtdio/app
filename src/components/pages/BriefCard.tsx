@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { ReactElement } from 'react';
-import { IconBriefs, IconLock } from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs, IconLock } from '@/components/ui/icons';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Thumbnail } from '@/components/media';
 import { formatDue } from '@/lib/display-date';
@@ -36,7 +36,7 @@ export function BriefStatusPill({ status }: { status: string }): ReactElement {
     >
       {closed ? (
         <span aria-hidden="true">
-          <IconLock size={12} />
+          <IconLock size={ICON_SIZE.inline} />
         </span>
       ) : (
         <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
@@ -119,7 +119,7 @@ export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps
             data-brief-tile="icon"
             className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
           >
-            <IconBriefs size={22} />
+            <IconBriefs size={ICON_SIZE.tray} />
           </div>
         )}
       </div>

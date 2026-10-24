@@ -38,7 +38,7 @@ import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { Tag, isTagDot } from '@/components/ui/Tag';
-import { IconBriefs, IconCheck, IconPipeline, IconSearch } from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs, IconCheck, IconPipeline, IconSearch } from '@/components/ui/icons';
 import { stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { fetchMemberRole } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
@@ -683,7 +683,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
         <Field label="Search">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
-              <IconSearch size={16} />
+              <IconSearch size={ICON_SIZE.inline} />
             </span>
             <Input
               value={query}
@@ -808,7 +808,7 @@ export function PostSectionsView(
   const footer = olderApprovedFooter(props.data.olderApprovedCount);
   if (props.data.sections.length === 0 && footer === null) {
     const empty = sectionsEmptyCopy(props.mode ?? 'posts');
-    return <EmptyState icon={<IconPipeline size={22} />} {...empty} />;
+    return <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} {...empty} />;
   }
   return (
     <ul className={LIST_CLASS}>
@@ -859,7 +859,12 @@ export function SearchResultsView(
   },
 ): ReactElement {
   if (props.rows.length === 0) {
-    return <EmptyState icon={<IconPipeline size={22} />} title={searchEmptyTitle(props.query)} />;
+    return (
+      <EmptyState
+        icon={<IconPipeline size={ICON_SIZE.tray} />}
+        title={searchEmptyTitle(props.query)}
+      />
+    );
   }
   return (
     <ul className={LIST_CLASS}>
@@ -923,7 +928,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
           ) : null}
           {active ? (
             <span className="text-accent">
-              <IconCheck size={18} />
+              <IconCheck size={ICON_SIZE.nav} />
             </span>
           ) : null}
         </span>
@@ -956,7 +961,7 @@ export function BriefPickerList(props: {
   if (props.briefs.length === 0) {
     return (
       <EmptyState
-        icon={<IconBriefs size={22} />}
+        icon={<IconBriefs size={ICON_SIZE.tray} />}
         title="No briefs"
         description={BRIEFS_EMPTY_COPY}
       />
@@ -1005,7 +1010,7 @@ export function BriefPickerList(props: {
               </span>
               {active ? (
                 <span className="shrink-0 pt-0.5 text-accent">
-                  <IconCheck size={18} />
+                  <IconCheck size={ICON_SIZE.nav} />
                 </span>
               ) : null}
             </button>

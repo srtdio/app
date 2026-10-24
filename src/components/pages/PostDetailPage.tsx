@@ -32,13 +32,16 @@ import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
+  ICON_SIZE,
   IconCalendar,
   IconChat,
+  IconCheck,
   IconChevronDown,
   IconChevronLeft,
-  IconCheck,
   IconCopy,
+  IconEdit,
   IconLock,
+  IconMore,
   IconPause,
   IconPipeline,
   IconX,
@@ -83,7 +86,6 @@ import {
   type ApproveGate,
   type GateState,
 } from '@/components/pages/pipeline/approve-gate';
-import { IconPencil, IconMoreVertical } from '@/components/pages/pcs/post-icons';
 import { PostActionSheet, type PostMoveRow } from '@/components/pages/pcs/PostActionSheet';
 import {
   append,
@@ -1651,7 +1653,7 @@ export function PostDetailPage({
 
   const backButton = (
     <IconButton label="Back" className="shrink-0" onClick={leave}>
-      <IconChevronLeft size={20} />
+      <IconChevronLeft size={ICON_SIZE.control} />
     </IconButton>
   );
 
@@ -1727,7 +1729,7 @@ export function PostDetailPage({
           </div>
         )}
         <EmptyState
-          icon={<IconPipeline size={22} />}
+          icon={<IconPipeline size={ICON_SIZE.tray} />}
           title="Post not found"
           description="This post may have been removed, or you may not have access to it."
           action={
@@ -1848,7 +1850,7 @@ export function PostDetailPage({
         <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
         {approvedLocked && agencySide ? (
           <span aria-hidden data-detail-lock="" className="shrink-0 text-fg-3">
-            <IconLock size={14} />
+            <IconLock size={ICON_SIZE.inline} />
           </span>
         ) : null}
       </span>,
@@ -1908,7 +1910,7 @@ export function PostDetailPage({
         onClick={() => setShowDetails(true)}
         className="text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconCalendar size={20} />
+        <IconCalendar size={ICON_SIZE.control} />
       </IconButton>
     ) : null;
 
@@ -1923,9 +1925,9 @@ export function PostDetailPage({
         onClick={() => scrollToCommentsSection()}
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconChat size={16} />
+        <IconChat size={ICON_SIZE.inline} />
         {openCommentsLabel(openCount)}
-        <IconChevronDown size={16} />
+        <IconChevronDown size={ICON_SIZE.inline} />
       </Button>
     ) : null;
 
@@ -1978,7 +1980,7 @@ export function PostDetailPage({
             if (action.to === 'approved') {
               return {
                 key: 'approved',
-                icon: <IconCheck size={18} />,
+                icon: <IconCheck size={ICON_SIZE.nav} />,
                 label: APPROVE_ON_BEHALF_LABEL,
                 onPick: openOnBehalf,
               };
@@ -1986,7 +1988,7 @@ export function PostDetailPage({
             if (action.to === 'rejected') {
               return {
                 key: 'rejected',
-                icon: <IconX size={18} />,
+                icon: <IconX size={ICON_SIZE.nav} />,
                 label: action.label,
                 danger: true,
                 onPick: () => pickStage('rejected'),
@@ -1994,7 +1996,7 @@ export function PostDetailPage({
             }
             return {
               key: action.to,
-              icon: <IconPause size={18} />,
+              icon: <IconPause size={ICON_SIZE.nav} />,
               label: action.label,
               sub: 'Keeps it aside. You can send it for review later.',
               onPick: () => pickStage(action.to),
@@ -2049,7 +2051,7 @@ export function PostDetailPage({
         className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-base text-fg"
       >
         <span aria-hidden className="shrink-0 text-good">
-          <IconLock size={18} />
+          <IconLock size={ICON_SIZE.nav} />
         </span>
         <p className="min-w-0 flex-1 py-2">{APPROVED_LOCK_LINE}</p>
         {canParkApproved ? (
@@ -2088,7 +2090,7 @@ export function PostDetailPage({
               onClick={() => setActionsOpen(true)}
               className="shrink-0 text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <IconMoreVertical size={20} />
+              <IconMore size={ICON_SIZE.control} />
             </IconButton>
           ) : (
             <div className="h-11 w-11 shrink-0" />
@@ -2205,7 +2207,7 @@ export function PostDetailPage({
                     data-title-lock=""
                     className="ml-2 inline-flex align-middle text-fg-3"
                   >
-                    <IconLock size={14} />
+                    <IconLock size={ICON_SIZE.inline} />
                   </span>
                 ) : null}
               </h1>
@@ -2330,7 +2332,7 @@ export function PostDetailPage({
                       });
                     }}
                   >
-                    <IconCopy size={18} />
+                    <IconCopy size={ICON_SIZE.nav} />
                   </IconButton>
                 ) : null}
                 {agencySide && approvedLocked ? (
@@ -2339,7 +2341,7 @@ export function PostDetailPage({
                     data-caption-lock=""
                     className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-fg-3"
                   >
-                    <IconLock size={14} />
+                    <IconLock size={ICON_SIZE.inline} />
                   </span>
                 ) : null}
                 {canEditContent && !editingCaption ? (
@@ -2350,7 +2352,7 @@ export function PostDetailPage({
                     onClick={openCaptionEditor}
                     className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
-                    <IconPencil size={16} />
+                    <IconEdit size={ICON_SIZE.inline} />
                     Edit
                   </Button>
                 ) : null}

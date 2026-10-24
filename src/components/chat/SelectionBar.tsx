@@ -13,7 +13,7 @@ import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { IconForward, IconStar, IconTrash } from '@/components/ui/icons';
+import { ICON_SIZE, IconForward, IconStar, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { DELETE_BLOCK_COPY, type DeleteBlock } from '@/lib/chat/forward';
@@ -100,7 +100,7 @@ export function SelectionBarView(props: {
             disabled={props.count === 0}
             onClick={props.onForward}
           >
-            <IconForward size={16} />
+            <IconForward size={ICON_SIZE.inline} />
             Forward
           </Button>
         ) : (
@@ -113,7 +113,7 @@ export function SelectionBarView(props: {
             disabled={props.count === 0}
             onClick={star.onRun}
           >
-            <IconStar size={16} />
+            <IconStar size={ICON_SIZE.inline} />
             {star.action === 'unstar' ? UNSTAR_LABEL : STAR_LABEL}
           </Button>
         ) : null}
@@ -125,7 +125,7 @@ export function SelectionBarView(props: {
           disabled={!props.canDelete}
           onClick={props.onDeleteTap}
         >
-          <IconTrash size={16} />
+          <IconTrash size={ICON_SIZE.inline} />
           Delete
         </Button>
       </div>

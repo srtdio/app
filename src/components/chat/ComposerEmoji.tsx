@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { IconSmile } from '@/components/ui/icons';
+import { ICON_SIZE, IconSmile } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { EMOJI_LIST, readRecents, rememberRecent } from '@/lib/chat/emoji-list';
 import { buttonClass } from '@/components/ui/Button';
@@ -87,7 +87,7 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
           ),
         )}
       >
-        <IconSmile size={20} />
+        <IconSmile size={ICON_SIZE.control} />
       </button>
       {open ? (
         <div

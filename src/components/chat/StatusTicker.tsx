@@ -21,7 +21,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactElement,
 } from 'react';
-import { IconCheck, IconChevronDown } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconChevronDown } from '@/components/ui/icons';
 import {
   DrawerPostSheet,
   NO_CALLOUT,
@@ -113,7 +113,7 @@ function TickerItem(props: {
     );
   const parts = (
     <>
-      <Icon size={16} className={cn('shrink-0', ICON_TONE[item.tone])} />
+      <Icon size={ICON_SIZE.inline} className={cn('shrink-0', ICON_TONE[item.tone])} />
       {lead}
       <span
         data-status-number=""
@@ -284,7 +284,7 @@ export function StatusTickerBar(props: {
         data-status-ticker="empty"
         className={cn(BAR, 'gap-1 text-sm leading-4 text-fg-3', NO_CALLOUT)}
       >
-        <IconCheck size={16} className="shrink-0 text-fg-3" />
+        <IconCheck size={ICON_SIZE.inline} className="shrink-0" />
         <span>{NOTHING_OPEN_LINE}</span>
       </div>
     );
@@ -359,7 +359,7 @@ export function StatusTickerBar(props: {
           className="flex transition-transform duration-200 motion-reduce:transition-none"
           style={open ? { transform: 'rotate(180deg)' } : undefined}
         >
-          <IconChevronDown size={16} />
+          <IconChevronDown size={ICON_SIZE.inline} />
         </span>
       </button>
     </div>

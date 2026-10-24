@@ -29,7 +29,7 @@
 import { IconButton } from '@/components/ui/IconButton';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { IconDownload, IconFile, IconImage } from '@/components/ui/icons';
+import { ICON_SIZE, IconDownload, IconFile, IconImage } from '@/components/ui/icons';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
 import { VoiceNote } from '@/components/chat/VoiceNote';
@@ -424,7 +424,7 @@ function AlbumTileImage({
         />
       ) : view.kind === 'file' && progress === null ? (
         <span className="absolute inset-0 flex items-center justify-center text-fg-3">
-          <IconImage size={22} />
+          <IconImage size={ICON_SIZE.tray} />
         </span>
       ) : null}
     </>
@@ -556,7 +556,7 @@ export function AttachmentsFallback(props: {
             className="flex min-w-0 items-center gap-2.5 rounded-xl border border-border bg-panel px-3 py-2"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
-              <IconFile size={18} />
+              <IconFile size={ICON_SIZE.nav} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-base font-medium text-fg [overflow-wrap:anywhere]" title={name}>
@@ -573,7 +573,7 @@ export function AttachmentsFallback(props: {
                 }
                 className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                <IconDownload size={20} />
+                <IconDownload size={ICON_SIZE.control} />
               </IconButton>
             ) : null}
           </div>

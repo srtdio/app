@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChevronDown, IconChevronLeft } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronDown, IconChevronLeft } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import {
   normalizeQuery,
@@ -202,7 +202,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
       className="relative flex min-w-0 flex-1 items-center gap-1"
     >
       <IconButton label="Close search" onClick={close}>
-        <IconChevronLeft size={20} />
+        <IconChevronLeft size={ICON_SIZE.control} />
       </IconButton>
       <input
         type="search"
@@ -246,7 +246,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
         onClick={() => void older()}
         className="disabled:opacity-40"
       >
-        <IconChevronDown size={20} className="-scale-y-100" />
+        <IconChevronDown size={ICON_SIZE.control} className="-scale-y-100" />
       </IconButton>
       <IconButton
         label="Newer match"
@@ -254,7 +254,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
         onClick={newer}
         className="disabled:opacity-40"
       >
-        <IconChevronDown size={20} />
+        <IconChevronDown size={ICON_SIZE.control} />
       </IconButton>
       {failed ? (
         <button

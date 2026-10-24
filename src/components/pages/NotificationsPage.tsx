@@ -7,6 +7,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { PageHead } from '@/components/shell/PageHead';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import {
+  ICON_SIZE,
   IconActivity,
   IconAlarmClock,
   IconAt,
@@ -845,7 +846,7 @@ export function NotificationsPage() {
         ) : workspaceId === null || !upcomingLoaded ? (
           <div className="px-4 md:px-6 py-10 text-base text-fg-3">{LOADING_NOTIFICATIONS}</div>
         ) : visibleUpcoming.length === 0 ? (
-          <EmptyState icon={<IconCalendarClock size={24} />} title={UPCOMING_EMPTY} />
+          <EmptyState icon={<IconCalendarClock size={ICON_SIZE.status} />} title={UPCOMING_EMPTY} />
         ) : (
           <div data-upcoming-list="" className="mt-4 flex flex-col gap-2 px-4 pb-6 md:px-6">
             {visibleUpcoming.map((item) => (
@@ -866,16 +867,19 @@ export function NotificationsPage() {
         <div className="px-4 md:px-6 py-10 text-base text-fg-3">{LOADING_NOTIFICATIONS}</div>
       ) : buckets.length === 0 ? (
         state === 'mentions' ? (
-          <EmptyState icon={<IconAt size={24} />} title={EMPTY_LINES.mentions} />
+          <EmptyState icon={<IconAt size={ICON_SIZE.status} />} title={EMPTY_LINES.mentions} />
         ) : state === 'briefs' ? (
-          <EmptyState icon={<IconBriefs size={24} />} title={EMPTY_LINES.briefs} />
+          <EmptyState icon={<IconBriefs size={ICON_SIZE.status} />} title={EMPTY_LINES.briefs} />
         ) : state === 'plans' ? (
-          <EmptyState icon={<IconPlan size={24} />} title={EMPTY_LINES.plans} />
+          <EmptyState icon={<IconPlan size={ICON_SIZE.status} />} title={EMPTY_LINES.plans} />
         ) : state === 'snoozed' ? (
-          <EmptyState icon={<IconAlarmClock size={24} />} title={EMPTY_LINES.snoozed} />
+          <EmptyState
+            icon={<IconAlarmClock size={ICON_SIZE.status} />}
+            title={EMPTY_LINES.snoozed}
+          />
         ) : (
           <EmptyState
-            icon={<IconActivity size={24} />}
+            icon={<IconActivity size={ICON_SIZE.status} />}
             title="You are all caught up"
             description="Activity across posts, briefs and people will appear here."
           />

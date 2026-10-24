@@ -20,7 +20,7 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
-import { IconChat, IconPlan } from '@/components/ui/icons';
+import { ICON_SIZE, IconChat, IconPlan } from '@/components/ui/icons';
 import { CouldntLoadCard, SHARED_CARD } from '@/components/chat/PostCard';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { usePaintLogCommit } from '@/components/chat/PaintLog';
@@ -187,7 +187,7 @@ export function PlanCardTop(props: {
   return (
     <>
       <span className="flex h-4 items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-accent">
-        <IconPlan size={16} />
+        <IconPlan size={ICON_SIZE.inline} />
         {PLAN_EYEBROW}
       </span>
       <span
@@ -243,7 +243,7 @@ export function PlanCardBody(props: {
     return (
       <div data-plan-card="unavailable" className={cn(SHARED_CARD, 'bg-panel-2 text-fg-2')}>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3 text-fg-3">
-          <IconPlan size={18} />
+          <IconPlan size={ICON_SIZE.nav} />
         </span>
         <span className="truncate text-base font-medium">{PLAN_DELETED}</span>
       </div>
@@ -481,7 +481,7 @@ function forwardList(
             className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <span className="flex shrink-0 items-center justify-center text-fg-2">
-              <IconChat size={18} />
+              <IconChat size={ICON_SIZE.nav} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-base font-medium leading-snug">{channel.title}</span>

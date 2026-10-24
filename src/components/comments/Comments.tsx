@@ -19,7 +19,7 @@ import { checkLink } from '@/lib/links/safety';
 import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { glowById, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
-import { IconCheck, IconMore } from '@/components/ui/icons';
+import { IconCheck, IconMore, ICON_SIZE } from '@/components/ui/icons';
 import { LoadError } from '@/components/ui/LoadError';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import { MenuPopover } from '@/components/shell/MenuPopover';
@@ -672,7 +672,7 @@ export function checkpointBox(checked: boolean, confirmed: boolean): ReactElemen
           checked ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-0',
         )}
       >
-        <IconCheck size={14} />
+        <IconCheck size={ICON_SIZE.inline} />
       </span>
     </span>
   );
@@ -1786,7 +1786,7 @@ export function Comments({
           label={label}
           onClick={() => setMenuOpenId((current) => (current === comment.id ? null : comment.id))}
         >
-          <IconMore size={20} />
+          <IconMore size={ICON_SIZE.control} />
         </IconButton>
         <MenuPopover open={menuOpenId === comment.id} onClose={closeMenu} align="right">
           {actions.canEdit ? (

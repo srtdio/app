@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconX } from '@/components/ui/icons';
 
 /**
  * A remove control on a tile's corner: a 44x44 tap area with a small visible
@@ -24,7 +24,7 @@ export function RemoveButton({
         aria-hidden="true"
         className="flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
       >
-        <IconX size={12} />
+        <IconX size={ICON_SIZE.inline} />
       </span>
     </button>
   );

@@ -21,7 +21,7 @@ import {
   RESOLVED_FILL_CLASS,
   RESOLVED_HOLLOW_CLASS,
 } from '@/components/pages/pcs/checkpoint-controls';
-import { IconCheck } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import type { CommentRow } from '@srtdio/comments';
@@ -110,7 +110,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
             chipCircleClass(state, row.accepted_at !== null),
           )}
         >
-          {state === 'open' ? seq : <IconCheck size={14} />}
+          {state === 'open' ? seq : <IconCheck size={ICON_SIZE.inline} />}
         </span>
       </button>
     );

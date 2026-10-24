@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { IconCopy, IconDownload, IconEdit, IconLink, IconTrash } from '@/components/ui/icons';
-import { IconInfo } from '@/components/pages/assets/viewerIcons';
+import {
+  ICON_SIZE,
+  IconCopy,
+  IconDownload,
+  IconEdit,
+  IconInfo,
+  IconLink,
+  IconTrash,
+} from '@/components/ui/icons';
 import { displayLabel, linkDomain, type AssetListItem } from '@/lib/assets';
 import { downloadFile, openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { assetLink } from '@/components/pages/assets/assets-nav';
@@ -160,7 +167,13 @@ export function AssetActionSheet({
               return (
                 <Row
                   key={row}
-                  icon={isLink ? <IconLink size={18} /> : <IconDownload size={18} />}
+                  icon={
+                    isLink ? (
+                      <IconLink size={ICON_SIZE.nav} />
+                    ) : (
+                      <IconDownload size={ICON_SIZE.nav} />
+                    )
+                  }
                   label={isLink ? `Open ${linkDomain(item.externalUrl)}` : 'Download'}
                   onClick={handlePrimary}
                   disabled={!canDownload || busy}
@@ -170,7 +183,7 @@ export function AssetActionSheet({
               return (
                 <Row
                   key={row}
-                  icon={<IconCopy size={18} />}
+                  icon={<IconCopy size={ICON_SIZE.nav} />}
                   label="Copy link"
                   onClick={handleCopy}
                   disabled={!canCopy || busy}
@@ -180,7 +193,7 @@ export function AssetActionSheet({
               return (
                 <Row
                   key={row}
-                  icon={<IconEdit size={18} />}
+                  icon={<IconEdit size={ICON_SIZE.nav} />}
                   label="Rename"
                   onClick={() => onRename?.(item)}
                 />
@@ -189,7 +202,7 @@ export function AssetActionSheet({
               return (
                 <Row
                   key={row}
-                  icon={<IconInfo size={18} />}
+                  icon={<IconInfo size={ICON_SIZE.nav} />}
                   label="Info"
                   onClick={() => onInfo(item)}
                 />
@@ -198,7 +211,7 @@ export function AssetActionSheet({
               return (
                 <Row
                   key={row}
-                  icon={<IconTrash size={18} />}
+                  icon={<IconTrash size={ICON_SIZE.nav} />}
                   label="Delete"
                   onClick={() => onDelete?.(item)}
                   destructive

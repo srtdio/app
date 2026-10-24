@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button, buttonClass } from '@/components/ui/Button';
-import { IconCheck } from '@/components/ui/icons';
+import { IconCheck, ICON_SIZE } from '@/components/ui/icons';
 import { fetchUnsubscribeStatus, postUnsubscribeAction } from './api';
 
 type PageState = 'loading' | 'subscribed' | 'unsubscribed' | 'invalid';
@@ -90,7 +90,7 @@ export function UnsubscribePage() {
       {state === 'unsubscribed' && (
         <Card>
           <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-good-soft text-good">
-            <IconCheck size={22} />
+            <IconCheck size={ICON_SIZE.tray} />
           </div>
           <h1 className="text-lg font-semibold tracking-tight text-fg">{"You're unsubscribed"}</h1>
           <div className="mt-3 space-y-3 text-base leading-6 text-fg-2">

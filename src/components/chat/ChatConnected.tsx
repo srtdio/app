@@ -54,7 +54,7 @@ import { useChatPresence } from '@/lib/chat/use-chat-presence';
 import { ROSTER_READ_BUDGET_MS, useChatStore } from '@/components/chat/ChatStoreProvider';
 import type { ChatConnection, ChatStatus } from '@/lib/chat/types';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconChat } from '@/components/ui/icons';
+import { ICON_SIZE, IconChat } from '@/components/ui/icons';
 import { ChannelList } from '@/components/chat/ChannelList';
 import {
   MessageThread,
@@ -2180,7 +2180,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             </SharedCardsProvider>
           ) : (
             <div className="flex h-full flex-col justify-center bg-bg">
-              <EmptyState icon={<IconChat size={22} />} title="Select a conversation" />
+              <EmptyState icon={<IconChat size={ICON_SIZE.tray} />} title="Select a conversation" />
             </div>
           )}
           <PlanSharedNotice

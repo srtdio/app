@@ -14,7 +14,7 @@ import {
   type SelectOption,
 } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { IconChevronDown } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { COMPOSER_DISCARD_TITLE, ComposerSheet } from '@/components/pages/create/ComposerSheet';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import {
@@ -1519,7 +1519,7 @@ export function CreatePostSheet({
               <span className="block truncate text-sm text-fg-3">{MORE_OPTIONS_HINT}</span>
             </span>
             <IconChevronDown
-              size={16}
+              size={ICON_SIZE.inline}
               className={cn(
                 'shrink-0 text-fg-3 transition-transform motion-reduce:transition-none',
                 moreOpen && 'rotate-180',

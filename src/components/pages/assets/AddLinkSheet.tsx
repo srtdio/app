@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconLink } from '@/components/ui/icons';
+import { ICON_SIZE, IconLink } from '@/components/ui/icons';
 import { isValidLinkUrl, type LinkOutcome } from '@/lib/asset-upload';
 
 /** The Sheet's discard confirm for a typed link. */
@@ -87,7 +87,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
         Cancel
       </Button>
       <Button variant="primary" disabled={!canSubmit} onClick={() => void submit()}>
-        <IconLink size={16} />
+        <IconLink size={ICON_SIZE.inline} />
         {submitting ? 'Adding' : 'Add link'}
       </Button>
     </span>

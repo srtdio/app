@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconFileText } from '@/components/ui/icons';
+import { ICON_SIZE, IconFile } from '@/components/ui/icons';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -31,7 +31,7 @@ describe('EmptyState type roles', () => {
     await act(async () => {
       root?.render(
         <EmptyState
-          icon={<IconFileText size={20} />}
+          icon={<IconFile size={ICON_SIZE.control} />}
           title="No briefs yet"
           description="Briefs from the client show up here."
         />,

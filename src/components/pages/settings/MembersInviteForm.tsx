@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { run as suggestEmail } from '@zootools/email-spell-checker';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChevronDown, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronDown, IconX } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import type { SelectOption } from '@/components/ui/Select';
 import { cn } from '@/lib/cn';
@@ -396,7 +396,7 @@ export function RolePicker({
       <span aria-hidden="true" className="min-w-0 leading-tight">
         {current ?? ROLE_PLACEHOLDER}
       </span>
-      <IconChevronDown size={16} className="shrink-0 text-fg-3" />
+      <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
       <select
         aria-label={label}
         aria-invalid={invalid || undefined}

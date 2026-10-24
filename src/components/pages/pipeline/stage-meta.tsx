@@ -5,7 +5,7 @@
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconPipeline } from '@/components/ui/icons';
+import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
 import { canRoleMove, roleMayTarget } from '@/components/pages/pcs/stage-actions';
 import { STAGE_TRANSITIONS } from '@srtdio/posts';
 import type { Stage } from '@srtdio/posts';
@@ -104,7 +104,7 @@ export function StageEmpty({
   return (
     <div data-stage-empty={stage}>
       <EmptyState
-        icon={<IconPipeline size={22} />}
+        icon={<IconPipeline size={ICON_SIZE.tray} />}
         title={emptyStageMessage(stage)}
         compact={compact}
       />

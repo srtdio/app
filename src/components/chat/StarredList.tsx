@@ -19,7 +19,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { SelectCheck } from '@/components/ui/SelectCheck';
-import { IconChevronLeft, IconChevronRight, IconStar } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronLeft, IconChevronRight, IconStar } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
@@ -325,7 +325,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
             >
               {props.date}
             </span>
-            <IconChevronRight size={16} className="shrink-0 text-fg-3" />
+            <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
           </span>
           <span
             data-starred-bubble={props.mine ? 'own' : 'peer'}
@@ -659,7 +659,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
             disabled={selectedCount === 0 || props.busy}
             onClick={props.onUnstar}
           >
-            <IconStar size={16} />
+            <IconStar size={ICON_SIZE.inline} />
             {unstarLabel(selectedCount)}
           </Button>
         </div>
@@ -707,7 +707,7 @@ export function StarredSheet(props: {
     >
       <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-panel px-2 md:px-4">
         <IconButton label="Back" onClick={onClose}>
-          <IconChevronLeft size={20} />
+          <IconChevronLeft size={ICON_SIZE.control} />
         </IconButton>
         <div className="flex min-w-0 flex-1 flex-col">
           <h2 className="truncate text-lg font-semibold leading-5 text-fg">{STARRED_TITLE}</h2>

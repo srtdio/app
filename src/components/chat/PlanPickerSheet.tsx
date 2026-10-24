@@ -12,7 +12,7 @@ import { useMemo } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconChevronRight, IconPlan, IconPlus } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronRight, IconPlan, IconPlus } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useScreenRead } from '@/components/chat/PlanScreen';
 import {
@@ -127,7 +127,7 @@ export function PlanPickerSheet(props: {
                     className="flex min-h-[72px] w-full items-center gap-3 border-b border-border py-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-                      <IconPlan size={20} />
+                      <IconPlan size={ICON_SIZE.control} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="truncate text-lg font-semibold leading-5 text-fg">
@@ -167,7 +167,7 @@ export function PlanPickerSheet(props: {
                 className="flex min-h-[48px] w-full items-center gap-3 py-2 text-left text-lg font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-2">
-                  <IconPlus size={20} />
+                  <IconPlus size={ICON_SIZE.control} />
                 </span>
                 <span className="flex-1">{NEW_PLAN_LABEL}</span>
                 <span className="shrink-0 text-fg-3">

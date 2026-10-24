@@ -14,7 +14,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { removeImageConfirmCopy } from '@/components/pages/pcs/PostLightbox';
-import { IconPlus, IconTrash } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlus, IconTrash } from '@/components/ui/icons';
 
 interface SlideActionsSheetProps {
   open: boolean;
@@ -111,12 +111,12 @@ export function SlideActionsSheet({
       ) : (
         <div className="flex flex-col gap-1">
           <SlideRow
-            icon={<IconPlus size={18} />}
+            icon={<IconPlus size={ICON_SIZE.nav} />}
             label="Add image after this"
             onClick={() => run(onAddAfter)}
           />
           <SlideRow
-            icon={<IconTrash size={18} />}
+            icon={<IconTrash size={ICON_SIZE.nav} />}
             label="Remove image"
             danger
             disabled={saving}

@@ -11,7 +11,7 @@
 
 import { useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { IconPipeline, IconPlay } from '@/components/ui/icons';
+import { ICON_SIZE, IconPipeline, IconPlay } from '@/components/ui/icons';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
 import { PRESIGN_ENABLED, firstFrameSrc, sharedCardPresignCache } from '@/components/chat/PostCard';
@@ -50,7 +50,7 @@ export function PostCoverContent(props: {
 }): ReactElement | null {
   const { cover } = props;
   if (cover === undefined) return null;
-  const glyph = props.fallback ?? <IconPipeline size={18} />;
+  const glyph = props.fallback ?? <IconPipeline size={ICON_SIZE.nav} />;
   if (cover === null) return <>{glyph}</>;
   return (
     <CoverMedia
@@ -134,7 +134,7 @@ function CoverMedia(props: {
           data-post-cover-play=""
           className="pointer-events-none absolute bottom-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-overlay text-overlay-fg"
         >
-          <IconPlay size={8} />
+          <IconPlay size={12} />
         </span>
       ) : null}
     </span>

@@ -14,7 +14,7 @@
 
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { IconSend } from '@/components/ui/icons';
+import { ICON_SIZE, IconSend } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import type { StageAction } from '@/components/pages/pcs/stage-actions';
 import type { Stage } from '@srtdio/posts';
@@ -103,7 +103,7 @@ function creatorButton(
         onClick={model.onPress}
         className="w-full"
       >
-        <IconSend size={16} />
+        <IconSend size={ICON_SIZE.inline} />
         {model.label}
       </Button>
       {model.helper !== null ? (

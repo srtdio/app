@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
 
@@ -208,7 +208,7 @@ export function PipelineDateRangeCalendar({
             label="Previous month"
             onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, -1))}
           >
-            <IconChevronLeft size={20} />
+            <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
           <span className="text-base font-semibold text-fg">
             {MONTHS[view.monthIndex]} {view.year}
@@ -218,7 +218,7 @@ export function PipelineDateRangeCalendar({
             label="Next month"
             onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, 1))}
           >
-            <IconChevronRight size={20} />
+            <IconChevronRight size={ICON_SIZE.control} />
           </IconButton>
         </div>
 

@@ -10,6 +10,7 @@ import {
   IconSun,
   IconSwitch,
   IconTrash,
+  ICON_SIZE,
 } from '@/components/ui/icons';
 import { useInduction } from '@/components/induction/InductionProvider';
 import { dispatchSorted } from '@/lib/events';
@@ -36,7 +37,7 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
   const rows = (
     <>
       <MenuItem
-        icon={<IconSwitch size={18} />}
+        icon={<IconSwitch size={ICON_SIZE.nav} />}
         label="Switch workspace"
         onClick={() => {
           onClose();
@@ -44,24 +45,30 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
         }}
       />
       <MenuItem
-        icon={<IconSettings size={18} />}
+        icon={<IconSettings size={ICON_SIZE.nav} />}
         label="Settings"
         onClick={() => go('/settings')}
       />
       <MenuItem
-        icon={<IconTrash size={18} />}
+        icon={<IconTrash size={ICON_SIZE.nav} />}
         label="Recently deleted"
         onClick={() => go('/deleted')}
       />
       <MenuItem
-        icon={theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+        icon={
+          theme === 'dark' ? <IconSun size={ICON_SIZE.nav} /> : <IconMoon size={ICON_SIZE.nav} />
+        }
         label="Appearance"
         onClick={toggle}
       />
-      <MenuItem icon={<IconScrollText size={18} />} label="Help" onClick={() => go('/help')} />
+      <MenuItem
+        icon={<IconScrollText size={ICON_SIZE.nav} />}
+        label="Help"
+        onClick={() => go('/help')}
+      />
       {restartTour !== undefined ? (
         <MenuItem
-          icon={<IconRotateCcw size={18} />}
+          icon={<IconRotateCcw size={ICON_SIZE.nav} />}
           label={GUIDE_CHROME.restart}
           onClick={() => {
             onClose();
@@ -71,7 +78,7 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
       ) : null}
       <div className="my-1 h-px bg-border" />
       <MenuItem
-        icon={<IconSignOut size={18} />}
+        icon={<IconSignOut size={ICON_SIZE.nav} />}
         label="Sign out"
         onClick={() => {
           onClose();

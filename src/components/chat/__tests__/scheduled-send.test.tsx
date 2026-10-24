@@ -110,7 +110,7 @@ describe('S2: phone hold and laptop chevron wiring', () => {
 
   it('schedule mode swaps the Send icon and label', () => {
     expect(composer).toMatch(/scheduling\s+\? 'Schedule message'\s+: 'Send'/);
-    expect(composer).toContain('<IconCalendarClock size={20} />');
+    expect(composer).toContain('<IconCalendarClock size={ICON_SIZE.control} />');
   });
 });
 
