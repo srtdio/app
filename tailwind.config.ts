@@ -36,6 +36,7 @@ export default {
         'warn-soft': 'var(--warn-soft)',
         'annotation-bg': 'var(--annotation-bg)',
         'annotation-line': 'var(--annotation-line)',
+        'search-mark': 'var(--search-mark-bg)',
         'stage-review': 'var(--stage-review)',
         'stage-approved': 'var(--stage-approved)',
         'stage-rejected': 'var(--stage-rejected)',

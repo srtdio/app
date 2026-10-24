@@ -8,8 +8,8 @@ import { createContext, useContext, type ReactElement, type ReactNode } from 're
 import { matchRuns } from '@/lib/chat/search';
 import { DUR_SLOW_MS } from '@/lib/motion';
 
-/** A searched word: the annotation fill, --fg ink on either theme. */
-export const SEARCH_MARK_CLASS = 'rounded-sm bg-annotation-bg [color:var(--fg)]';
+/** A searched word: the search-mark fill and its dark ink, readable on every surface in both themes. */
+export const SEARCH_MARK_CLASS = 'rounded-sm bg-search-mark [color:var(--search-mark-fg)]';
 
 /** Text with every searched word wrapped in a <mark>. Pure. */
 export function highlightNodes(text: string, words: readonly string[]): ReactNode[] {

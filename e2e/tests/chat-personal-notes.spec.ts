@@ -186,10 +186,10 @@ test.describe('laptop', () => {
     seedNotes(network.world);
     await firstPaintTile(page);
     // The search box keeps a usable width beside Select, the bell and +.
-    const box = await page.getByPlaceholder('Search conversations').boundingBox();
+    const box = await page.getByRole('searchbox', { name: 'Search conversations' }).boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(200);
     // One clear control only: the native search cancel button is hidden.
-    await page.getByPlaceholder('Search conversations').fill('hook');
+    await page.getByRole('searchbox', { name: 'Search conversations' }).fill('hook');
     const native = await page.evaluate(() =>
       [...document.styleSheets].some((sheet) => {
         try {

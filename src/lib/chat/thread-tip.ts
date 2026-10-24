@@ -12,6 +12,8 @@ export interface TipStorage {
 }
 
 export const HOLD_TIP_TEXT = 'Tip: press and hold a message to reply, copy or delete.';
+/** The laptop wording: a mouse right-clicks instead of holding. */
+export const HOLD_TIP_TEXT_LAPTOP = 'Tip: right-click a message to reply, copy or delete.';
 export const HOLD_TIP_DISMISS = 'Got it';
 
 /** The per-user storage key. Pure. */

@@ -477,7 +477,7 @@ describe('message search wiring (S1)', () => {
     const headers = findAll(content('sh'), (el) => el.type === SectionHeader);
     expect(headers).toHaveLength(1);
     expect((headers[0]!.props as { search: { placeholder: string } }).search.placeholder).toBe(
-      'Search conversations',
+      'Search',
     );
   });
 });

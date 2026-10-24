@@ -1348,7 +1348,11 @@ function metaParts(meta: BubbleMeta, mine = true, spacer = false): ReactElement 
         )
       ) : null}
       {meta.edited ? <span data-edited="">{EDITED_LABEL}</span> : null}
-      {meta.time !== '' ? <span aria-hidden="true">{meta.time}</span> : null}
+      {meta.time !== '' ? (
+        <span aria-hidden="true" className="font-mono">
+          {meta.time}
+        </span>
+      ) : null}
       {tick !== null ? <MetaGlyph status={tick} /> : null}
     </>
   );
@@ -1618,7 +1622,7 @@ export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-10 bg-
  * stays a solid dark circle, never a translucent tile.
  */
 export const OWN_BUBBLE_CONTENT = cn(
-  '[&_.bg-panel]:bg-white/[.16] [&_.bg-panel-3]:bg-white/[.16] [&_.border-border]:border-white/[.16]',
+  '[&_.bg-panel]:bg-white/[.16] [&_.bg-panel-2]:bg-white/[.16] [&_.bg-panel-3]:bg-white/[.16] [&_.border-border]:border-white/[.16]',
   '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-white/[.24] [&_a:hover>span]:bg-white/[.24]',
   '[&_.bg-accent]:bg-white/70 [&_.bg-accent.text-accent-fg]:bg-white/[.16] [&_.bg-fg-3]:bg-white/40',
   '[&_.text-fg]:text-accent-fg [&_.text-accent]:text-accent-fg',
@@ -1755,9 +1759,9 @@ export function mentionsMe(
  */
 export function mentionClass(mine: boolean, self: boolean): string {
   return cn(
-    'font-bold',
+    'whitespace-nowrap font-bold',
     mine ? 'text-accent-fg' : 'text-accent-hover',
-    self && 'rounded-sm bg-accent-soft',
+    self && 'rounded-sm bg-accent-soft px-[3px]',
   );
 }
 
@@ -6345,7 +6349,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       ) : null}
       <TypingIndicator ids={props.typingUserIds} profiles={props.profiles} />
       {view === null && selectionBar === null && (props.currentUserId ?? '') !== '' ? (
-        <ThreadHoldTip userId={props.currentUserId ?? ''} />
+        <ThreadHoldTip
+          userId={props.currentUserId ?? ''}
+          layout={layout}
+          empty={props.messages.length === 0}
+        />
       ) : null}
       {view === null && selectionBar !== null ? (
         selectionBar

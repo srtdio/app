@@ -701,7 +701,7 @@ export function StatusDrawerPanel(props: {
         data-status-scrim=""
         aria-hidden="true"
         onClick={props.onScrim}
-        className={cn('absolute inset-0 bg-overlay transition-opacity', transition)}
+        className={cn('absolute inset-0 bg-scrim transition-opacity', transition)}
         style={{ opacity: props.scrim }}
       />
       <div

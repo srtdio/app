@@ -639,12 +639,16 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
 
   return (
     <>
-      <div className="flex flex-wrap gap-2" role="tablist">
+      <div
+        className="-mx-1 flex flex-nowrap gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="tablist"
+      >
         {CONTACT_TABS.map((option) => (
           <Chip
             key={option.key}
             label={option.label}
             size="tap"
+            className="shrink-0 !px-3"
             selected={props.tab === option.key}
             onClick={() => props.onTab(option.key)}
           />

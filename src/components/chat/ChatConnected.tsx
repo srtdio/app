@@ -1922,7 +1922,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       {showList ? (
         <div
           className={cn(
-            'h-full w-full border-border md:w-72 md:border-r',
+            'h-full w-full border-border md:w-[352px] md:border-r',
             // 768 to 891px: the open plan panel takes the list's room; the
             // list is set aside in place (not unmounted), so it returns on
             // close with its scroll.
