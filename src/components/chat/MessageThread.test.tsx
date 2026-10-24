@@ -3668,8 +3668,10 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     local: { key: 'local-t12f', file: null, previewUrl: null, progress: 0.6, uploading: true },
   };
   function ring(html: string): string {
-    // The ring is a PressableRow: its opening tag starts before data-upload-ring.
-    const at = html.lastIndexOf('<button', html.indexOf('data-upload-ring'));
+    // The ring is a PressableRow: its opening tag starts before the
+    // data-upload-ring attribute. Match the attribute, not the own bubble's
+    // class selectors that also name it.
+    const at = html.lastIndexOf('<button', html.indexOf('data-upload-ring=""'));
     return html.slice(at, html.indexOf('</button>', at) + '</button>'.length);
   }
   function paint(attachments: MessageAttachment[], mine: boolean, theme: 'light' | 'dark') {

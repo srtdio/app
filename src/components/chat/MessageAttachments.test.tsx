@@ -303,7 +303,10 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toContain('data-voice-play-slot="upload"');
     expect(html).toContain('aria-label="Cancel upload"');
     expect(html).toContain('data-upload-progress="25"');
-    expect(html).toMatch(/aria-hidden="true" tabindex="-1"[^>]*invisible opacity-0/);
+    // Attribute order follows the primitive (class renders first).
+    expect(html).toMatch(
+      /<button(?=[^>]*aria-hidden="true")(?=[^>]*tabindex="-1")(?=[^>]*invisible opacity-0)/,
+    );
     // A plain flat line; the bars are not visible.
     expect(html).toContain('data-voice-flat="shown"');
     expect(html).toMatch(/data-voice-bars="peaks" class="[^"]*invisible opacity-0/);
