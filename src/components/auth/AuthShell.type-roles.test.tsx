@@ -38,6 +38,14 @@ describe('AuthShell type roles', () => {
     expect(title).toContain('text-3xl');
     expect(title).toContain('font-semibold');
     expect(title).toContain('tracking-tight');
+
+    const subtitle = classesOf('Welcome back to Sorted.');
+    expect(subtitle).toContain('text-base');
+    expect(subtitle).toContain('text-fg-2');
+
+    const footer = classesOf('New here? Sign up');
+    expect(footer).toContain('text-base');
+    expect(footer).toContain('text-fg-2');
   });
 
   it('card uses the shared card shadow token and the 12px card radius', async () => {
@@ -55,13 +63,5 @@ describe('AuthShell type roles', () => {
     expect(card.className).toContain('shadow-[var(--shadow-card)]');
     expect(card.className).toContain('rounded-xl');
     expect(card.className).not.toContain('rgba(');
-
-    const subtitle = classesOf('Welcome back to Sorted.');
-    expect(subtitle).toContain('text-base');
-    expect(subtitle).toContain('text-fg-2');
-
-    const footer = classesOf('New here? Sign up');
-    expect(footer).toContain('text-base');
-    expect(footer).toContain('text-fg-2');
   });
 });
