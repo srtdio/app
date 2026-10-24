@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { MoveSheetView, type MoveSheetViewProps } from '@/components/pages/pipeline/MoveSheet';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { GATE_IDLE, createApproveGate } from '@/components/pages/pipeline/approve-gate';
 import { APPROVE_ROLE_BLOCKED, moveBlockedReason } from '@/components/pages/pipeline/stage-meta';
 import { ROLE_READ_ERROR, ROLE_READ_PENDING } from '@/components/pages/pipeline/member-role';
@@ -57,7 +58,7 @@ function sheet(overrides: Partial<MoveSheetViewProps>): ReactElement {
 
 function rows(tree: ReactElement): ReactElement[] {
   return all(tree).filter(
-    (el) => el.type === 'button' && 'data-move-action' in (el.props as object),
+    (el) => el.type === PressableRow && 'data-move-action' in (el.props as object),
   );
 }
 

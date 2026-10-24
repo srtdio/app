@@ -207,19 +207,20 @@ function ViewSwitch(props: {
   return (
     <div className="flex overflow-hidden rounded-lg border border-border bg-panel-2">
       {options.map((o) => (
-        <button
+        <Button
           key={o.view}
           type="button"
+          variant="ghost"
           data-plan-tab-view={o.view}
           aria-pressed={props.view === o.view}
           onClick={() => props.onView(o.view)}
           className={cn(
-            'h-11 min-w-[64px] px-3 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-            props.view === o.view ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:text-fg',
+            'min-w-[64px] !rounded-none !px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+            props.view === o.view && 'bg-accent-soft !text-accent hover:!bg-accent-soft',
           )}
         >
           {o.label}
-        </button>
+        </Button>
       ))}
     </div>
   );

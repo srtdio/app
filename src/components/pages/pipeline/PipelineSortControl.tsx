@@ -12,6 +12,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import {
   ICON_SIZE,
   IconCalendar,
@@ -104,15 +105,15 @@ function radioRow(
   trailing?: ReactNode,
 ): ReactElement {
   return (
-    <button
+    <PressableRow
       key={key}
       type="button"
       role="menuitemradio"
       aria-checked={selected}
       onClick={onClick}
       className={cn(
-        'flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-base transition-colors',
-        selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
+        'flex h-11 items-center gap-2.5 px-3 text-base transition-colors',
+        selected ? 'text-fg' : 'text-fg-2',
       )}
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-accent">
@@ -120,7 +121,7 @@ function radioRow(
       </span>
       <span className="flex-1">{label}</span>
       {trailing}
-    </button>
+    </PressableRow>
   );
 }
 

@@ -11,6 +11,7 @@ import { planRangeLabel } from '@/components/chat/plan-card';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
   NEW_PLAN_ROW_LABEL,
@@ -105,13 +106,13 @@ export function PlanDayMenu(props: {
           {addOnLabel(props.day)}
         </p>
         {props.plans.map((bundle) => (
-          <button
+          <PressableRow
             key={bundle.plan.id}
             type="button"
             role="menuitem"
             data-plan-tab-menu-plan={bundle.plan.id}
             onClick={() => props.onPick(bundle)}
-            className="flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-panel-2 focus-visible:bg-panel-2 focus-visible:outline-none"
+            className="flex items-center gap-2.5 px-2.5 py-1.5 transition-colors focus-visible:bg-panel-2"
           >
             <span
               aria-hidden="true"
@@ -132,7 +133,7 @@ export function PlanDayMenu(props: {
               </span>
             </span>
             {isDraftPlan(bundle.plan) ? <DraftTag /> : null}
-          </button>
+          </PressableRow>
         ))}
         <div className="my-1 border-t border-border" />
         <Button

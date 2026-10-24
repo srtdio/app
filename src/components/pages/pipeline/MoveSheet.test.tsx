@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { MoveSheetView } from '@/components/pages/pipeline/MoveSheet';
 import { ApproveConfirm } from '@/components/ui/ApproveConfirm';
 import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import {
   GATE_IDLE,
@@ -137,7 +138,7 @@ function targetRows(
   const all: ReactElement[] = [];
   collect(tree, all);
   return all
-    .filter((el) => el.type === 'button' && targetOf(el) !== undefined)
+    .filter((el) => el.type === PressableRow && targetOf(el) !== undefined)
     .map((button) => ({
       to: targetOf(button)!,
       label: labelOf(button),
@@ -182,7 +183,7 @@ describe('MoveSheet', () => {
     });
     const all: ReactElement[] = [];
     collect(tree, all);
-    const reviewRow = all.find((el) => el.type === 'button' && targetOf(el) === 'review')!;
+    const reviewRow = all.find((el) => el.type === PressableRow && targetOf(el) === 'review')!;
     (reviewRow.props as { onClick: () => void }).onClick();
     expect(onMove).toHaveBeenCalledWith('p1', 'review');
   });
@@ -230,7 +231,7 @@ function render(
 function row(tree: ReactElement, stage: Stage): ReactElement | undefined {
   const all: ReactElement[] = [];
   collect(tree, all);
-  return all.find((el) => el.type === 'button' && targetOf(el) === stage);
+  return all.find((el) => el.type === PressableRow && targetOf(el) === stage);
 }
 
 function click(el: ReactElement | undefined): void {

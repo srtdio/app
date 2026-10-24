@@ -41,6 +41,7 @@ import {
 } from '@/components/pages/pipeline/StageMoveConfirm';
 import { BoardApproveConfirm } from '@/components/pages/pipeline/PipelineBoard';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import {
   PipelineDateControl,
@@ -498,7 +499,11 @@ describe('post flow C: move sheet and confirms', () => {
     expect(targets).toEqual(['review', 'parked']);
     expect(all(tree).some((el) => 'data-move-helper' in (el.props as object))).toBe(false);
     for (const row of rows) expect(text(row)).not.toContain('.');
-    expect(all(tree).some((el) => text(el) === 'Draft' && el.type === 'button')).toBe(false);
+    expect(
+      all(tree).some(
+        (el) => text(el) === 'Draft' && (el.type === 'button' || el.type === PressableRow),
+      ),
+    ).toBe(false);
   });
 
   it('fix 40: Reject and Park ask first; Reject takes an optional reason that goes to the comments', () => {

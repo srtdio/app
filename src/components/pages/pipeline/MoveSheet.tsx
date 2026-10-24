@@ -21,6 +21,7 @@ import { useEffect } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { OnBehalfApproveSheet, type ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
 import { cn } from '@/lib/cn';
@@ -225,15 +226,12 @@ export function MoveSheetView({
             <ul className="-mx-1 flex flex-col">
               {actions.map((action) => (
                 <li key={action.to}>
-                  <button
+                  <PressableRow
                     type="button"
                     disabled={busy}
                     data-move-action={action.to}
                     onClick={() => gate.request(post.id, action.to)}
-                    className={cn(
-                      'flex w-full min-h-[44px] items-center rounded-lg px-3 py-2 text-left transition-colors',
-                      'hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
-                    )}
+                    className="flex items-center px-3 py-2 transition-colors"
                   >
                     <span
                       className={cn(
@@ -243,7 +241,7 @@ export function MoveSheetView({
                     >
                       {action.label}
                     </span>
-                  </button>
+                  </PressableRow>
                 </li>
               ))}
             </ul>

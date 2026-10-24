@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Input } from '@/components/ui/Input';
 import { IconCheck, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -75,21 +76,21 @@ async function sendBookCall(input: {
 
 function ChoiceRow(props: { label: string; selected: boolean; onSelect: () => void }) {
   return (
-    <button
+    <PressableRow
       type="button"
       role="radio"
       aria-checked={props.selected}
       onClick={props.onSelect}
       className={cn(
-        'flex min-h-[44px] w-full items-center gap-3 rounded-lg border px-3 text-left text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex items-center gap-3 border px-3 text-base font-medium transition-colors',
         props.selected
-          ? 'border-accent bg-accent-soft text-accent'
-          : 'border-border text-fg hover:bg-panel-2',
+          ? 'border-accent bg-accent-soft text-accent hover:!bg-accent-soft'
+          : 'border-border text-fg',
       )}
     >
       <span className="min-w-0 flex-1 break-words">{props.label}</span>
       {props.selected ? <IconCheck size={ICON_SIZE.nav} className="shrink-0" /> : null}
-    </button>
+    </PressableRow>
   );
 }
 

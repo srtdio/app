@@ -43,6 +43,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Select } from '@/components/ui/Select';
 import { Sheet } from '@/components/ui/Sheet';
 import { uploadAvatarFile } from '@/lib/avatar-upload';
@@ -655,22 +656,22 @@ export function OnboardingFlow({
           className="flex flex-col gap-3"
         >
           {SIDE_TILES.map((tile) => (
-            <button
+            <PressableRow
               key={tile.side}
               type="button"
               role="radio"
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex min-h-[56px] flex-col items-start justify-center gap-0.5 rounded-lg border px-3.5 py-2.5 text-left',
+                'flex !min-h-[56px] flex-col items-start justify-center gap-0.5 border px-3.5 py-2.5',
                 side === tile.side
-                  ? 'border-accent bg-accent-soft ring-1 ring-accent'
+                  ? 'border-accent bg-accent-soft ring-1 ring-accent hover:!bg-accent-soft'
                   : 'border-border bg-panel-2',
               )}
             >
               <span className="text-base font-medium text-fg">{tile.title}</span>
               <span className="text-sm text-fg-2">{tile.sub}</span>
-            </button>
+            </PressableRow>
           ))}
         </div>
       </>

@@ -10,6 +10,7 @@ import { PlanCardBar, PlanCardTop } from '@/components/chat/PlanCard';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { PLAN_DRAFT_LABEL } from '@/components/chat/plan-card';
 import { Thumbnail } from '@/components/media/Thumbnail';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { planCardMeta, planSections } from '@/lib/plan-tab';
 
@@ -68,11 +69,11 @@ export function PlanTabCard(props: {
 }): ReactElement {
   const meta = planCardMeta(props.bundle);
   return (
-    <button
+    <PressableRow
       type="button"
       data-plan-tab-card={props.bundle.plan.id}
       onClick={props.onOpen}
-      className="flex w-full flex-col gap-2 rounded-lg border border-border bg-panel px-3.5 pb-3 pt-3 text-left transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="flex flex-col gap-2 border border-border bg-panel px-3.5 pb-3 pt-3 transition-colors"
     >
       <PlanCardTop plan={props.bundle.plan} wrapTitle />
       {props.covers.length > 0 ? (
@@ -115,7 +116,7 @@ export function PlanTabCard(props: {
           </span>
         </span>
       )}
-    </button>
+    </PressableRow>
   );
 }
 

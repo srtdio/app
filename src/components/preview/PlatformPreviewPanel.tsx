@@ -12,6 +12,7 @@ import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'reac
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -328,22 +329,22 @@ function SizePicker({
       {sizes.map((size) => {
         const selected = size.label === value;
         return (
-          <button
+          <PressableRow
             key={size.label}
             type="button"
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(size.label)}
             className={cn(
-              'flex min-h-[44px] flex-col items-start justify-center rounded-lg border px-3 py-1.5 text-left transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              'flex flex-col items-start justify-center border px-3 py-1.5 transition-colors motion-reduce:transition-none',
               selected
-                ? 'border-accent-line bg-accent-soft text-fg'
-                : 'border-border bg-panel-2 text-fg-2 hover:bg-panel-3',
+                ? 'border-accent-line bg-accent-soft text-fg hover:!bg-accent-soft'
+                : 'border-border bg-panel-2 text-fg-2 hover:!bg-panel-3',
             )}
           >
             <span className="text-base font-medium">{size.label}</span>
             <span className="text-sm text-fg-3">{sizeMeta(size)}</span>
-          </button>
+          </PressableRow>
         );
       })}
     </div>
