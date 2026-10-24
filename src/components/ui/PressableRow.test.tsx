@@ -41,6 +41,18 @@ describe('PressableRow', () => {
     expect(el.props.className.endsWith('flex gap-3 px-3')).toBe(true);
   });
 
+  it('inline shrinks to content, flat squares the corners, align centres the text', () => {
+    const inline = tokens(render({ inline: true }));
+    expect(inline).toContain('w-auto');
+    expect(inline).not.toContain('w-full');
+    const flat = tokens(render({ flat: true }));
+    expect(flat).toContain('rounded-none');
+    expect(flat).not.toContain('rounded-lg');
+    const centred = tokens(render({ align: 'center' }));
+    expect(centred).toContain('text-center');
+    expect(centred).not.toContain('text-left');
+  });
+
   it('adds no colour, type or height classes of its own', () => {
     for (const bad of ['text-fg', 'text-fg-2', 'text-base', 'bg-panel', 'border', 'h-11']) {
       expect(tokens(render())).not.toContain(bad);

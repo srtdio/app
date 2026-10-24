@@ -26,8 +26,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 // One height (44), one radius (8), one type (14 / 500). Tokens only, so light
 // and dark match. cn() does not merge classes, so the radius and padding live in
-// the shape classes (never both rounded-lg and rounded-full on one element) and
-// a caller overriding a base property must use the ! modifier (e.g. !justify-start).
+// the shape classes (never both rounded-lg and rounded-full on one element).
+// Callers never override a base property with the ! modifier (no-raw-button
+// test): pick another variant or primitive instead.
 export const BUTTON_BASE =
   'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none';
 
