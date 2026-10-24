@@ -22,6 +22,7 @@ import type {
   ReactElement,
 } from 'react';
 import { ICON_SIZE, IconCheck, IconChevronDown } from '@/components/ui/icons';
+import { PressableRow } from '@/components/ui/PressableRow';
 import {
   DrawerPostSheet,
   NO_CALLOUT,
@@ -139,7 +140,8 @@ function TickerItem(props: {
   );
   if (props.measure === true) return <span className={cn(box, 'h-9')}>{parts}</span>;
   return (
-    <button
+    <PressableRow
+      inline
       type="button"
       data-status-item={item.key}
       aria-label={item.aria}
@@ -150,11 +152,10 @@ function TickerItem(props: {
         // the pseudo element still widens it by half the gap each side.
         "relative -my-1 h-11 before:absolute before:-inset-y-1 before:content-['']",
         compact ? 'before:-inset-x-1' : 'before:-inset-x-1.5',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
     >
       {parts}
-    </button>
+    </PressableRow>
   );
 }
 
@@ -347,7 +348,8 @@ export function StatusTickerBar(props: {
           {TITLE_ELLIPSIS}
         </span>
       </div>
-      <button
+      <PressableRow
+        inline
         type="button"
         data-status-chevron=""
         aria-label={open ? 'Hide open items' : 'Show open items'}
@@ -361,7 +363,7 @@ export function StatusTickerBar(props: {
         >
           <IconChevronDown size={ICON_SIZE.inline} />
         </span>
-      </button>
+      </PressableRow>
     </div>
   );
 }

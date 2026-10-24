@@ -12,6 +12,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent, Ref } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Backdrop } from '@/components/ui/Backdrop';
+import { PressableRow } from '@/components/ui/PressableRow';
 import {
   ICON_SIZE,
   IconBriefs,
@@ -137,8 +139,9 @@ export interface StatusDrawerActions {
   onSeeAllMarks: () => void;
 }
 
-const ROW =
-  'flex min-h-[44px] w-full items-center gap-3 rounded-lg py-1 text-left transition-colors active:bg-panel-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+// Layout and colour only: PressableRow provides width, 44px height, radius,
+// left alignment, hover and the focus ring.
+const ROW = 'flex items-center gap-3 py-1 transition-colors active:bg-panel-2';
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
 const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
@@ -164,7 +167,7 @@ function Chevron(): ReactElement {
 
 function SeeAllRow(props: { total: number; onClick: () => void; attr: string }): ReactElement {
   return (
-    <button
+    <PressableRow
       type="button"
       data-see-all={props.attr}
       onClick={props.onClick}
@@ -172,7 +175,7 @@ function SeeAllRow(props: { total: number; onClick: () => void; attr: string }):
     >
       <span className="min-w-0 flex-1">{`See all ${props.total}`}</span>
       <Chevron />
-    </button>
+    </PressableRow>
   );
 }
 
@@ -306,7 +309,7 @@ export function PlanBlock(props: {
       data-plan-block={bundle.plan.id}
       className={cn(!props.first && 'mt-3 border-t border-dashed border-border pt-3')}
     >
-      <button type="button" data-plan-open="" onClick={props.onOpen} className={ROW}>
+      <PressableRow type="button" data-plan-open="" onClick={props.onOpen} className={ROW}>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-lg font-semibold leading-5 text-fg">
             {bundle.plan.title}
@@ -316,7 +319,7 @@ export function PlanBlock(props: {
           </span>
         </span>
         <Chevron />
-      </button>
+      </PressableRow>
       <div aria-hidden="true" data-plan-bar="" className="mt-1 flex h-1.5 gap-0.5">
         {bundle.items.map((item) => {
           const seg = itemSegment(bundle, item, side);
@@ -334,7 +337,7 @@ export function PlanBlock(props: {
         const seg = itemSegment(bundle, item, side);
         const date = itemDateLabel(bundle, item);
         return (
-          <button
+          <PressableRow
             key={item.id}
             type="button"
             data-plan-item={item.id}
@@ -365,7 +368,7 @@ export function PlanBlock(props: {
               </span>
             )}
             <Chevron />
-          </button>
+          </PressableRow>
         );
       })}
       {seeAll !== null ? (
@@ -401,7 +404,7 @@ export function StatusMarkRow(props: {
   return (
     <div data-status-mark={mark.messageId} className="flex flex-col">
       <div className="flex items-center gap-3">
-        <button
+        <PressableRow
           type="button"
           data-mark-jump=""
           onClick={props.onJump}
@@ -417,7 +420,7 @@ export function StatusMarkRow(props: {
             </span>
           ) : null}
           <Chevron />
-        </button>
+        </PressableRow>
         {props.canStamp ? (
           <Button
             type="button"
@@ -571,7 +574,7 @@ export function StatusDrawerList(
                 const lines = openPostLines(post, false, props.timeZone);
                 const busy = props.busyPostId === post.id;
                 return (
-                  <button
+                  <PressableRow
                     key={post.id}
                     type="button"
                     data-status-post={post.id}
@@ -589,7 +592,7 @@ export function StatusDrawerList(
                     <span className={cn('flex shrink-0', busy && 'animate-pulse')}>
                       <Chevron />
                     </span>
-                  </button>
+                  </PressableRow>
                 );
               })}
               {seeAll !== null ? (
@@ -605,7 +608,7 @@ export function StatusDrawerList(
             String(props.briefs.count),
             <>
               {rows.map((brief) => (
-                <button
+                <PressableRow
                   key={brief.id}
                   type="button"
                   data-status-brief={brief.id}
@@ -617,7 +620,7 @@ export function StatusDrawerList(
                     <span className={ROW_TITLE}>{brief.title}</span>
                   </span>
                   <Chevron />
-                </button>
+                </PressableRow>
               ))}
               {seeAll !== null ? (
                 <SeeAllRow total={seeAll} onClick={props.onSeeAllBriefs} attr="briefs" />
@@ -697,13 +700,14 @@ export function StatusDrawerPanel(props: {
       )}
       style={{ top: props.top }}
     >
+      {/* The one scrim (Backdrop); this wrapper carries the drag-linked opacity. */}
       <div
         data-status-scrim=""
-        aria-hidden="true"
-        onClick={props.onScrim}
-        className={cn('absolute inset-0 bg-scrim transition-opacity', transition)}
+        className={cn('absolute inset-0 transition-opacity', transition)}
         style={{ opacity: props.scrim }}
-      />
+      >
+        <Backdrop aria-label="Close open items" position="absolute" onClick={props.onScrim} />
+      </div>
       <div
         ref={props.panelRef}
         data-motion-axis="y"

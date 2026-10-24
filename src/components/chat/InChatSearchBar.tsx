@@ -1,8 +1,8 @@
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconChevronDown, IconChevronLeft } from '@/components/ui/icons';
-import { cn } from '@/lib/cn';
 import {
   normalizeQuery,
   queryWords,
@@ -257,17 +257,15 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
         <IconChevronDown size={ICON_SIZE.control} />
       </IconButton>
       {failed ? (
-        <button
+        <PressableRow
           type="button"
           data-search-retry=""
           onClick={() => runner?.retry()}
-          className={cn(
-            'absolute left-0 right-0 top-full z-10 mt-px flex min-h-[44px] items-center justify-center border-b border-border bg-panel px-3 text-base text-fg-2',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          )}
+          flat
+          className="absolute left-0 right-0 top-full z-10 mt-px flex items-center justify-center border-b border-border bg-panel px-3 text-base text-fg-2"
         >
           {SEARCH_FAILED_COPY}
-        </button>
+        </PressableRow>
       ) : null}
     </div>
   );

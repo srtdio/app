@@ -18,6 +18,7 @@ import type { ReactElement, ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { ICON_SIZE, IconChevronLeft, IconChevronRight, IconStar } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -295,7 +296,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
   const label = props.chat !== null ? `${props.sender} in ${props.chat}` : props.sender;
   return (
     <li className="min-w-0">
-      <button
+      <PressableRow
         type="button"
         data-starred-row={row.id}
         aria-label={`Open starred message from ${label}`}
@@ -303,7 +304,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
         onClick={selecting !== undefined ? selecting.onToggle : props.onOpen}
         onContextMenu={noCallout}
         className={cn(
-          'flex min-h-[44px] w-full min-w-0 items-center gap-3 rounded-2xl border border-border bg-panel p-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-panel p-3',
           NO_TOUCH_SELECT,
         )}
       >
@@ -340,7 +341,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
             {props.text}
           </span>
         </span>
-      </button>
+      </PressableRow>
     </li>
   );
 }
@@ -560,14 +561,14 @@ export function starredListView(props: StarredListViewProps): ReactElement {
   const canPage = starredCanPage(feed, props.preview !== undefined);
   const retryRow = (
     <li>
-      <button
+      <PressableRow
         type="button"
         data-starred-retry=""
         onClick={props.onRetry}
-        className="flex min-h-[44px] w-full items-center justify-center rounded-[14px] px-3 text-base text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex items-center justify-center px-3 text-base text-fg-2"
       >
         Couldn&apos;t load. Try again.
-      </button>
+      </PressableRow>
     </li>
   );
 

@@ -268,9 +268,10 @@ describe('ChatInfoTabsView preview', () => {
 
   it('See all is the 44px full-width secondary button', () => {
     const row = SeeAllRow({ onClick: vi.fn() });
+    // The shared Button primitive (44px tall, 8px radius) in its secondary variant.
+    expect(row.type).toBe(Button);
+    expect(row.props.variant).toBe('secondary');
     const className = String(row.props.className);
-    expect(className).toContain('h-11');
-    expect(className).toContain('rounded-lg');
     expect(className).not.toContain('min-h-[48px]');
     expect(className).not.toContain('rounded-md');
     expect(className).toContain('w-full');

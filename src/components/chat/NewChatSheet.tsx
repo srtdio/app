@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { ICON_SIZE, IconChat, IconUser } from '@/components/ui/icons';
@@ -238,14 +239,20 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     if (mode === 'choose') {
       return (
         <div className="flex flex-col gap-2">
-          <Button className="!justify-start" onClick={() => setMode('dm')}>
+          <PressableRow
+            className="flex items-center gap-2 border border-border bg-panel px-4 text-base font-medium text-fg"
+            onClick={() => setMode('dm')}
+          >
             <IconUser size={ICON_SIZE.inline} />
             New direct message
-          </Button>
-          <Button className="!justify-start" onClick={() => setMode('group')}>
+          </PressableRow>
+          <PressableRow
+            className="flex items-center gap-2 border border-border bg-panel px-4 text-base font-medium text-fg"
+            onClick={() => setMode('group')}
+          >
             <IconChat size={ICON_SIZE.inline} />
             New group
-          </Button>
+          </PressableRow>
         </div>
       );
     }

@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -254,17 +255,17 @@ export function AssetGrid(props: {
         ))}
       </ul>
       {props.rows.length < props.count ? (
-        <button
+        <PressableRow
           type="button"
           onClick={props.onLoadMore}
           disabled={props.loadingMore}
-          className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-base font-medium text-accent transition-colors hover:bg-panel-2 disabled:text-fg-3"
+          className="flex items-center justify-between gap-3 px-3 py-2 text-base font-medium text-accent transition-colors disabled:text-fg-3"
         >
           <span>{`Load ${ASSET_PAGE_SIZE} more`}</span>
           <span className="text-sm font-normal tabular-nums text-fg-3">
             {assetsShownOf(props.rows.length, props.count)}
           </span>
-        </button>
+        </PressableRow>
       ) : null}
     </div>
   );
@@ -280,15 +281,15 @@ export function AssetTile(props: {
   const image = isLibraryImage(asset);
   return (
     <li>
-      <button
+      <PressableRow
         type="button"
         aria-pressed={props.active}
         aria-label={asset.name}
         data-asset-tile={asset.assetId}
         onClick={() => props.onToggle(asset)}
         className={cn(
-          'flex min-h-[44px] w-full flex-col gap-1 rounded-lg p-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          props.active ? 'bg-accent-soft' : 'hover:bg-panel-2',
+          'flex flex-col gap-1 p-1 transition-colors',
+          props.active && 'bg-accent-soft',
         )}
       >
         <span className="relative block overflow-hidden rounded-md">
@@ -306,7 +307,7 @@ export function AssetTile(props: {
           ) : null}
         </span>
         <span className="truncate px-0.5 text-sm text-fg-2">{asset.name}</span>
-      </button>
+      </PressableRow>
     </li>
   );
 }

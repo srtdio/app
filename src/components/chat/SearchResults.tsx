@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import type { ChannelSummary } from '@/lib/chat-reads';
@@ -94,7 +95,7 @@ const RESULT_LABEL = 'px-1 pt-1 text-sm font-semibold uppercase tracking-[0.06em
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(
-  'group/notes-row flex min-h-[64px] w-full min-w-0 items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'group/notes-row flex min-h-[64px] min-w-0 items-center gap-3 px-2 py-2',
   NO_TOUCH_SELECT,
 );
 
@@ -196,14 +197,14 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
   });
   const retryRow = (
     <li>
-      <button
+      <PressableRow
         type="button"
         data-search-retry=""
         onClick={props.onRetry}
-        className="flex min-h-[44px] w-full items-center justify-center rounded-lg px-3 text-base text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex items-center justify-center px-3 text-base text-fg-2"
       >
         {SEARCH_FAILED_COPY}
-      </button>
+      </PressableRow>
     </li>
   );
   return (
@@ -216,7 +217,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
           <ul data-section="chats" className="flex flex-col">
             {props.chats.map((channel) => (
               <li key={channel.channelId} className="min-w-0">
-                <button
+                <PressableRow
                   type="button"
                   aria-label={`Open ${channel.title}`}
                   onClick={() => props.onOpenChat(channel)}
@@ -227,7 +228,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                   <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
                     {highlightName(channel.title, query)}
                   </span>
-                </button>
+                </PressableRow>
               </li>
             ))}
           </ul>
@@ -267,7 +268,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                   });
             return (
               <li key={hit.id} className="min-w-0">
-                <button
+                <PressableRow
                   type="button"
                   data-search-hit={hit.id}
                   aria-label={`Open message in ${channel.title}`}
@@ -298,7 +299,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                         : boldMatches(snippetText(hit.body, words, props.nameOf), words)}
                     </span>
                   </span>
-                </button>
+                </PressableRow>
               </li>
             );
           })
