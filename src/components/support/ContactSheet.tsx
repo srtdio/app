@@ -3,7 +3,7 @@
 // the address and the suggested line on the clipboard together.
 
 import { Sheet } from '@/components/ui/Sheet';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { useOptionalToast } from '@/components/ui/toast';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { anotherWorkspaceBody, anotherWorkspaceMailto, SUPPORT_EMAIL } from '@/lib/support';
@@ -39,7 +39,11 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
           </Button>
           <a
             href={anotherWorkspaceMailto(workspaceName)}
-            className="inline-flex h-11 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg no-underline transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className={buttonClass(
+              'primary',
+              'default',
+              'no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            )}
           >
             Open email
           </a>

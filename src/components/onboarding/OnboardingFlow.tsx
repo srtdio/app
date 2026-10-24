@@ -754,7 +754,7 @@ export function OnboardingFlow({
           <label htmlFor="ob-username" className="mb-1.5 block text-sm font-medium">
             Username
           </label>
-          <div className="flex h-11 items-center rounded-md border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
+          <div className="flex h-11 items-center rounded-lg border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
             <span className="text-sm text-fg-3">@</span>
             <input
               id="ob-username"
