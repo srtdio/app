@@ -546,7 +546,7 @@ export function PlanComposeScreen(props: {
           </div>
 
           <section className="flex flex-col gap-2" aria-label="Items">
-            <h3 className="mx-1 text-sm uppercase tracking-[0.06em] text-fg-3">
+            <h3 className="mx-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
               Items · <span className="font-mono tabular-nums">{items.length}</span>
             </h3>
             {items.length === 0 ? (
@@ -756,9 +756,7 @@ export function ComposeItemRow(props: {
         </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (
-        <p className="line-clamp-2 px-0.5 text-md leading-[1.45] text-fg-3">
-          {item.description}
-        </p>
+        <p className="line-clamp-2 px-0.5 text-md leading-[1.45] text-fg-3">{item.description}</p>
       ) : null}
       <Button
         type="button"

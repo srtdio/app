@@ -226,8 +226,10 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   if (props.channels.length === 0) {
     return (
       <div className="px-4 py-12 text-center">
-        <p className="text-base text-fg-2">{`No chats called "${(props.search ?? '').trim()}"`}</p>
-        <p className="mt-1 text-sm text-fg-3">Try a different name or clear the search.</p>
+        <p className="text-lg font-semibold text-fg">
+          {`No chats called "${(props.search ?? '').trim()}"`}
+        </p>
+        <p className="mt-1 text-base text-fg-2">Try a different name or clear the search.</p>
       </div>
     );
   }
@@ -445,15 +447,14 @@ export const PEOPLE_TILE_GRID =
   'grid grid-cols-[repeat(2,minmax(0,1fr))] auto-rows-[168px] gap-[10px]';
 
 /** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
-export const SECTION_LABEL_TYPE =
-  'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+export const SECTION_LABEL_TYPE = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /** The label's padding: 4px 4px 0 for the first section, 12px 4px 0 after. */
 export function sectionLabelClass(first: boolean): string {
   return cn(SECTION_LABEL_TYPE, first ? 'px-1 pt-1' : 'px-1 pt-3');
 }
 
-/** Tile type. Group: name 17/600, preview 14/19. Person: name 15/600, preview 13/18. Time 12. */
+/** Tile type. Group: name 17/600, preview 14/20. Person: name 15/600, preview 13/18. Time 12. */
 export const GROUP_NAME_TYPE = 'text-xl font-semibold';
 export const GROUP_PREVIEW_TYPE = 'text-base font-normal';
 export const PERSON_NAME_TYPE = 'text-lg font-semibold';
@@ -472,7 +473,7 @@ export const GROUP_TILE_PHOTO =
 export const PERSON_TILE_PHOTO =
   'flex h-[72px] w-[72px] shrink-0 [&>*]:!h-[72px] [&>*]:!w-[72px] [&>*]:!text-2xl';
 
-/** The unread pill: 22px min, radius 11, accent fill, 12/700. */
+/** The unread pill: 22px min, radius 11, accent fill, 12/600. */
 export const TILE_PILL =
   'inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-[11px] bg-accent px-1.5 text-sm font-semibold leading-none tabular-nums text-accent-fg';
 

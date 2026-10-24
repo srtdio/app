@@ -100,8 +100,8 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
   });
 
   it('in-chat search input is 16px on a phone', () => {
-    expect(BAR_INPUT).toContain('text-base');
-    expect(BAR_INPUT).toContain('sm:text-base');
+    expect(BAR_INPUT.split(' ')).toEqual(expect.arrayContaining(['text-input', 'md:text-base']));
+    expect(BAR_INPUT).not.toContain('sm:text-');
   });
 
   it('ThreadView dismiss is a 44px chevron', () => {

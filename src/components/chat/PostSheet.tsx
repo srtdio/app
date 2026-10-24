@@ -374,7 +374,7 @@ export function PostSheetDetails(props: {
   const rows = detailRows(post, approverName, props.timeZone, approverRole ?? null, props.brand);
   return (
     <div className="flex flex-col gap-3">
-      <h3 data-sheet-title="" className="text-xl font-semibold leading-6 text-fg">
+      <h3 data-sheet-title="" className="text-lg font-semibold text-fg">
         {post.title}
       </h3>
       <dl className="flex flex-col text-base">

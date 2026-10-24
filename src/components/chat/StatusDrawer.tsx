@@ -141,8 +141,7 @@ const ROW =
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
 const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
-const PILL =
-  'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-4';
+const PILL = 'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-4';
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
@@ -185,10 +184,10 @@ function SectionHeader(props: {
   return (
     <div className="mb-2 flex h-5 items-center gap-2 text-fg-2">
       <Icon size={16} className="shrink-0" />
-      <h3 className="min-w-0 flex-1 truncate text-sm font-semibold uppercase leading-4 tracking-wide">
+      <h3 className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-[0.06em]">
         {props.label}
       </h3>
-      <span className="font-mono text-sm font-semibold tabular-nums">{props.count}</span>
+      <span className="font-mono text-sm font-medium tabular-nums">{props.count}</span>
     </div>
   );
 }
@@ -329,9 +328,7 @@ export function PlanBlock(props: {
           );
         })}
       </div>
-      <p className="mb-1 mt-2 text-sm leading-4 text-fg-2">
-        {progressLabel(progress, side)}
-      </p>
+      <p className="mb-1 mt-2 text-sm leading-4 text-fg-2">{progressLabel(progress, side)}</p>
       {rows.map((item) => {
         const seg = itemSegment(bundle, item, side);
         const date = itemDateLabel(bundle, item);

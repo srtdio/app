@@ -104,9 +104,7 @@ function resultAvatar(channel: ChannelSummary): ReactElement {
     return <NotesAvatar size="small" src={channel.avatarUrl} surface="bg" hoverSurface="panel-2" />;
   }
   return (
-    <span
-      className={cn('flex shrink-0', channel.channelType === 'group' && '[&>*]:!rounded-[12px]')}
-    >
+    <span className={cn('flex shrink-0', channel.channelType === 'group' && '[&>*]:!rounded-xl')}>
       <Avatar
         name={channel.title}
         {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}

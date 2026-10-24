@@ -553,7 +553,7 @@ export function PlanPage(props: {
           <div data-plan-header-line="2" className="flex min-h-[44px] items-center gap-2">
             <span
               {...(props.subtitle !== undefined ? { 'data-plan-page-subtitle': '' } : {})}
-              className="min-w-0 flex-1 truncate text-md font-medium text-fg-2"
+              className="min-w-0 flex-1 truncate text-sm text-fg-3"
             >
               {props.subtitle}
             </span>
@@ -575,15 +575,12 @@ export function PlanPage(props: {
             className="flex min-w-0 flex-1 flex-col rounded-md focus:outline-none"
           >
             {props.titleSlot ?? (
-              <h2 className="truncate text-xl font-semibold text-fg">
+              <h2 className="truncate text-lg font-semibold text-fg">
                 <Highlight text={props.title} />
               </h2>
             )}
             {props.subtitle !== undefined ? (
-              <span
-                data-plan-page-subtitle=""
-                className="truncate text-md text-fg-3"
-              >
+              <span data-plan-page-subtitle="" className="truncate text-sm text-fg-3">
                 {props.subtitle}
               </span>
             ) : null}
@@ -720,7 +717,7 @@ export function ConceptDateField(props: {
           value={props.value}
           disabled={props.disabled === true}
           onChange={(e) => props.onChange(e.target.value)}
-          className="h-11 min-h-[44px] w-full min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3.5 font-mono text-lg text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+          className="h-11 min-h-[44px] w-full min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3.5 font-mono text-input text-fg placeholder:text-fg-3 md:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
         />
         {props.value !== '' ? (
           <IconButton
@@ -804,7 +801,7 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
           data-plan-screen-progress={box.key}
           className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3"
         >
-          <span className="text-xs font-semibold uppercase tracking-[0.06em] text-fg-2">
+          <span className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
             {box.label}
           </span>
           <span className="truncate font-mono text-md text-fg">{box.text}</span>
@@ -2005,10 +2002,7 @@ export function PlanScreen(props: {
       />
     ) : undefined;
   const editHeaderSlot = (
-    <h2
-      data-plan-editing-title=""
-      className="truncate text-xl font-semibold text-fg"
-    >
+    <h2 data-plan-editing-title="" className="truncate text-lg font-semibold text-fg">
       {EDITING_TITLE}
     </h2>
   );
@@ -2506,9 +2500,8 @@ export function PlanEditHeader(props: {
   );
 }
 
-/** The view header's title: 28/34 bold, 2 lines at most, wrapping at word breaks. */
-const PLAN_HEADER_TITLE =
-  'line-clamp-2 break-normal text-3xl font-semibold tracking-[-0.02em] text-fg';
+/** The view header's title: the page title role (28/34, 600, tight), 2 lines at most. */
+const PLAN_HEADER_TITLE = 'line-clamp-2 break-normal text-3xl font-semibold tracking-tight text-fg';
 
 /**
  * The agency's header title: a button with a chevron (18px, 6px gap) that
@@ -2669,7 +2662,7 @@ export function RenameField(props: {
           if (e.key === 'Enter' && valid) props.onDone();
           if (e.key === 'Escape') props.onCancel();
         }}
-        className="h-11 min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-base font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+        className="h-11 min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-input font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60 md:text-base"
       />
       <IconButton
         type="button"
@@ -2994,12 +2987,10 @@ function DragCard(props: {
           muted={false}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-lg font-semibold leading-5 text-fg">
+          <span className="truncate text-base font-medium text-fg">
             {rowTitle(props.bundle, item)}
           </span>
-          <span className="truncate text-md text-fg-3">
-            {rowMeta(props.bundle, item)}
-          </span>
+          <span className="truncate text-sm text-fg-3">{rowMeta(props.bundle, item)}</span>
         </span>
       </div>
     </div>,
@@ -3121,7 +3112,7 @@ export function PlanBody(props: {
             {week.label !== null ? (
               <h3
                 data-plan-week-header=""
-                className="sticky top-0 z-10 border-b border-border bg-bg px-4 py-2 text-md font-semibold text-fg-2 md:bg-panel"
+                className="sticky top-0 z-10 border-b border-border bg-bg px-4 py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2 md:bg-panel"
               >
                 {week.label}
               </h3>
@@ -3311,9 +3302,8 @@ export function DayColumn(props: {
   );
 }
 
-/** The PLAN / POST line label: 36px column, 11px/14px, 600, uppercase, .06em. */
-const LINE_LABEL =
-  'w-9 shrink-0 text-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
+/** The PLAN / POST line label: 36px column, the section label (12/16, 600, uppercase). */
+const LINE_LABEL = 'w-9 shrink-0 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /**
  * The PLAN switch: "OK" and "Not OK" joined (36px visual, min 84px each,
@@ -3658,7 +3648,7 @@ function PlanRow(props: {
     <span
       data-plan-row-title=""
       className={cn(
-        'line-clamp-2 break-words text-lg font-semibold leading-5',
+        'line-clamp-2 break-words text-base font-medium',
         muted ? 'text-fg-2' : 'text-fg',
       )}
     >
@@ -3680,7 +3670,7 @@ function PlanRow(props: {
         >
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             {titleText(true)}
-            <span className="truncate text-md text-fg-2">{DRAFT_NOT_READY}</span>
+            <span className="truncate text-sm text-fg-3">{DRAFT_NOT_READY}</span>
             {dateLine}
           </span>
           <RowTile item={props.item} thumb={null} muted />
@@ -3711,7 +3701,7 @@ function PlanRow(props: {
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         {titleText(false)}
         {meta !== '' ? (
-          <span data-plan-row-meta="" className="truncate text-md text-fg-2">
+          <span data-plan-row-meta="" className="truncate text-sm text-fg-3">
             {meta}
           </span>
         ) : null}

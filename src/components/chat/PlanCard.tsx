@@ -186,7 +186,7 @@ export function PlanCardTop(props: {
 }): ReactElement {
   return (
     <>
-      <span className="flex h-4 items-center gap-1.5 text-sm font-semibold leading-4 tracking-wide text-accent">
+      <span className="flex h-4 items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-accent">
         <IconPlan size={16} />
         {PLAN_EYEBROW}
       </span>
@@ -484,9 +484,7 @@ function forwardList(
               <IconChat size={18} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-base font-medium leading-snug">
-                {channel.title}
-              </span>
+              <span className="truncate text-base font-medium leading-snug">{channel.title}</span>
               <span className="truncate text-sm leading-snug text-fg-3">
                 {sendingId === channel.channelId
                   ? 'Sending'

@@ -34,8 +34,8 @@ export function NotesGlyph(props: { size?: number }): ReactElement {
 /** The notes photo slot: 76px tile (radius 18), 40px header and 44px picker/search (radius 12). */
 const NOTES_AVATAR_BOX = {
   tile: 'h-[76px] w-[76px] rounded-[18px]',
-  header: 'h-10 w-10 rounded-[12px]',
-  small: 'h-11 w-11 rounded-[12px]',
+  header: 'h-10 w-10 rounded-xl',
+  small: 'h-11 w-11 rounded-xl',
 } as const;
 
 export type NotesAvatarSize = keyof typeof NOTES_AVATAR_BOX;

@@ -303,7 +303,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
         onClick={selecting !== undefined ? selecting.onToggle : props.onOpen}
         onContextMenu={noCallout}
         className={cn(
-          'flex min-h-[44px] w-full min-w-0 items-center gap-3 rounded-[16px] border border-border bg-panel p-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'flex min-h-[44px] w-full min-w-0 items-center gap-3 rounded-2xl border border-border bg-panel p-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           NO_TOUCH_SELECT,
         )}
       >
@@ -578,10 +578,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
     body = (
       <ul data-starred-loading="" className="flex flex-col gap-2.5">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
-          <li
-            key={i}
-            className="flex flex-col gap-2 rounded-[16px] border border-border bg-panel p-3"
-          >
+          <li key={i} className="flex flex-col gap-2 rounded-2xl border border-border bg-panel p-3">
             <div className="flex items-center gap-2">
               <div className="h-7 w-7 shrink-0 rounded-full bg-panel-2" />
               <div className="h-3.5 w-1/3 rounded bg-panel-2" />

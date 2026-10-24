@@ -160,7 +160,9 @@ export function SeenLine(props: {
         {props.readAt !== null ? (
           <>
             {' '}
-            <span className="font-mono">{formatClockTime(props.readAt, props.timeZone)}</span>
+            <span className="font-sans tabular-nums">
+              {formatClockTime(props.readAt, props.timeZone)}
+            </span>
           </>
         ) : null}
       </span>
@@ -278,7 +280,7 @@ export function MessageInfoSheet(props: {
         <p className="pb-3 text-base text-fg-2">
           {sentLine(props.createdAt, props.timeZone, props.nowMs)}
         </p>
-        <h3 className="py-2 text-sm font-medium text-fg-3">
+        <h3 className="py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
           Read by <span className="font-mono">{props.read.length}</span>
         </h3>
         <ul>
@@ -300,7 +302,7 @@ export function MessageInfoSheet(props: {
           ))}
         </ul>
         <div className="my-2 h-px bg-border" aria-hidden="true" />
-        <h3 className="py-2 text-sm font-medium text-fg-3">
+        <h3 className="py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
           Not read yet <span className="font-mono">{props.unread.length}</span>
         </h3>
         <ul>
@@ -424,9 +426,7 @@ export function WhoReactedSheet(props: {
                     <SheetAvatar name={row.name} src={row.avatarUrl} />
                     <span className="flex min-w-0 flex-1 flex-col text-left">
                       <span className="truncate text-base text-fg">{row.name}</span>
-                      {row.mine ? (
-                        <span className="text-sm text-fg-3">Tap to remove</span>
-                      ) : null}
+                      {row.mine ? <span className="text-sm text-fg-3">Tap to remove</span> : null}
                     </span>
                     <span aria-hidden="true" className="text-2xl leading-none">
                       {row.emoji}

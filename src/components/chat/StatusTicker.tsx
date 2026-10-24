@@ -118,7 +118,7 @@ function TickerItem(props: {
       <span
         data-status-number=""
         className={cn(
-          'shrink-0 font-mono font-semibold tabular-nums',
+          'shrink-0 font-mono font-medium tabular-nums',
           compact && 'tracking-tighter',
           NUMBER_TONE[item.tone],
         )}
@@ -127,7 +127,7 @@ function TickerItem(props: {
       </span>
       {!compact && item.word !== null ? <span data-status-word="">{item.word}</span> : null}
       {!compact && item.more > 0 ? (
-        <span data-status-more="" className="font-mono font-semibold tabular-nums text-fg-3">
+        <span data-status-more="" className="font-mono font-medium tabular-nums text-fg-3">
           {`+${item.more}`}
         </span>
       ) : null}

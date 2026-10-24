@@ -1550,11 +1550,11 @@ describe('swipe to reply', () => {
 });
 
 describe('bubble text sizes', () => {
-  it('body text comes from chat-type: 17/22 touch, 14.2/19 laptop', () => {
+  it('body text comes from chat-type: 17/22 touch, 14/19 laptop', () => {
     expect(bodyText('touch')).toContain(BUBBLE_BODY_TYPE.touch);
     expect(bodyText('laptop')).toContain(BUBBLE_BODY_TYPE.laptop);
-    expect(BUBBLE_BODY_TYPE.touch).toContain('text-xl');
-    expect(BUBBLE_BODY_TYPE.laptop).toContain('text-base');
+    expect(BUBBLE_BODY_TYPE.touch).toContain('text-[17px] leading-[22px]');
+    expect(BUBBLE_BODY_TYPE.laptop).toContain('text-[14px] leading-[19px]');
   });
 
   it('the in-bubble quote uses the chat-type quote sizes; the composer bar keeps its own', () => {
@@ -1591,7 +1591,7 @@ describe('bubble text sizes', () => {
 
   it('meta, day pill and typing row sizes come from chat-type', () => {
     expect(renderStrip(renderBubble(makeMessage({})))).toContain(BUBBLE_META_TYPE);
-    expect(BUBBLE_META_TYPE).toContain('text-xs');
+    expect(BUBBLE_META_TYPE).toContain('text-[11px] leading-[15px]');
     let pill = '';
     walk(DayPill({ label: 'Today', layout: 'touch' }), (el) => {
       const c = (el.props as { className?: string }).className ?? '';

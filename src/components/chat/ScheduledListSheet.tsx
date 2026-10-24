@@ -283,7 +283,6 @@ export function BodyEditor(props: {
         value={text}
         autoGrow
         onChange={(event) => setText(event.target.value)}
-        className="text-base"
       />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={props.onDone}>

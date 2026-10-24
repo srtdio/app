@@ -152,7 +152,9 @@ export function OpenPostsList(props: OpenPostsSection & { timeZone: string }): R
   if (props.posts === null || props.posts.length === 0) return null;
   return (
     <section data-open-posts="" className="flex flex-col gap-1">
-      <h3 className="px-2 text-sm font-semibold text-fg-3">{props.heading}</h3>
+      <h3 className="px-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        {props.heading}
+      </h3>
       <ul className="flex max-h-[40vh] flex-col overflow-y-auto">
         {props.posts.map((post) => (
           <OpenPostSheetRow

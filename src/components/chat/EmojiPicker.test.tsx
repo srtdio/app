@@ -97,7 +97,7 @@ describe('EmojiPicker parts', () => {
     const onQuery = vi.fn();
     const field = EmojiSearchField({ query: '', onQuery, layout: 'touch' });
     const input = all(field).find((e) => e.type === 'input');
-    expect(String(input?.props.className)).toContain('text-xl');
+    expect(String(input?.props.className)).toContain('text-[17px]');
     (input?.props.onChange as (e: { target: { value: string } }) => void)({
       target: { value: 'cat' },
     });

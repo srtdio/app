@@ -197,11 +197,7 @@ function PriorityMenu(props: {
             NO_TOUCH_SELECT,
           )}
         >
-          <span
-            className={cn('rounded-[5px] px-1.5 font-mono text-sm', P_TAG[p])}
-          >
-            P{p}
-          </span>
+          <span className={cn('rounded-[5px] px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>
           {p === props.current ? <IconCheck size={16} className="text-accent" /> : null}
         </button>
@@ -281,7 +277,7 @@ function TitleCell(props: {
             inputRef.current?.blur();
           }
         }}
-        className="min-h-[44px] min-w-0 flex-1 bg-transparent text-lg font-medium text-fg focus:outline-none"
+        className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input font-medium text-fg focus:outline-none md:text-base"
       />
     );
   }
@@ -292,7 +288,7 @@ function TitleCell(props: {
       onClick={begin}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        'min-h-[44px] min-w-0 flex-1 py-[11px] text-left text-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        'min-h-[44px] min-w-0 flex-1 py-3 text-left text-base font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
         props.done ? 'text-fg-3 line-through' : 'text-fg',
       )}
     >
@@ -394,7 +390,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           {props.number ?? ''}
         </span>
         {props.queuedDelete ? (
-          <span className="min-h-[44px] min-w-0 flex-1 py-[11px] text-lg text-fg-3 line-through">
+          <span className="min-h-[44px] min-w-0 flex-1 py-3 text-base font-medium text-fg-3 line-through">
             {props.title}
           </span>
         ) : (
@@ -437,7 +433,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
       {props.marks.length > 0 ? (
         <p
           data-task-mark=""
-          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-[80px] pr-3 text-sm text-fg-2"
+          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-[80px] pr-3 text-sm text-fg-3"
         >
           {props.marks.map((m, k) => (
             <MarkLine key={k} mark={m} />

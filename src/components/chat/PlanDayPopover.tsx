@@ -191,7 +191,7 @@ export function PlanDayPopover(props: {
         ...(pos?.maxHeight != null ? { maxHeight: pos.maxHeight } : {}),
       }}
     >
-      <p className="px-2.5 pb-1 pt-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-3">
+      <p className="px-2.5 pb-1 pt-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
         {MOVE_TO_HEADING}
       </p>
       {props.days.map((d) => {

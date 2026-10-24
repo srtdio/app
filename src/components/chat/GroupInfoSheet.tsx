@@ -393,9 +393,7 @@ export function GroupHero(props: {
       ) : (
         photo
       )}
-      <span className="mt-2 max-w-full truncate text-lg font-semibold text-fg">
-        {props.name}
-      </span>
+      <span className="mt-2 max-w-full truncate text-lg font-semibold text-fg">{props.name}</span>
       <span data-group-subtitle="" className="max-w-full truncate text-base text-fg-2">
         {props.subtitle}
       </span>
@@ -459,7 +457,7 @@ export function groupInfoPage(props: {
 /** A section heading: small caps label over its rows. */
 function SectionLabel(props: { children: string }): ReactElement {
   return (
-    <p className="mb-1 px-1 text-sm font-medium uppercase tracking-wide text-fg-3">
+    <p className="mb-1 px-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
       {props.children}
     </p>
   );

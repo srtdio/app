@@ -836,7 +836,7 @@ export function PlanItemScreen(props: {
                         : 'Comment for everyone'
                   }
                   className={cn(
-                    'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-input text-fg placeholder:text-fg-3 md:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     teamNote ? 'border-warn' : askingChanges ? 'border-accent' : 'border-border',
                   )}
                 />
@@ -886,9 +886,7 @@ export function PlanItemScreen(props: {
             <ItemMedia read={read} />
             <div className="flex flex-col gap-1.5">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="min-w-0 break-words pt-[9px] text-2xl font-semibold text-fg">
-                  {title}
-                </h3>
+                <h3 className="min-w-0 break-words pt-3 text-lg font-semibold text-fg">{title}</h3>
                 {editable ? (
                   <Button
                     type="button"
@@ -902,9 +900,7 @@ export function PlanItemScreen(props: {
                 ) : null}
               </div>
               {description !== '' ? (
-                <p className="whitespace-pre-wrap text-lg text-fg-2">
-                  {description}
-                </p>
+                <p className="whitespace-pre-wrap text-base text-fg-2">{description}</p>
               ) : null}
               <ConceptLinkCard text={description} />
             </div>
@@ -982,7 +978,9 @@ export function PlanItemScreen(props: {
               </div>
             ) : null}
             <section className="flex flex-col gap-2.5" aria-label="Comments">
-              <h4 className="text-lg font-semibold text-fg">Comments</h4>
+              <h4 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+                Comments
+              </h4>
               {read.status === 'loading' ? (
                 <div className="h-[72px] animate-pulse rounded-lg bg-panel-2" />
               ) : read.status === 'error' ? (
@@ -1160,20 +1158,20 @@ function CommentRow(props: {
           'ring-2 ring-accent transition-shadow duration-slow motion-reduce:transition-none',
       )}
     >
-      <div className="flex items-center gap-1.5 text-md">
-        <span className="font-semibold text-fg">{c.authorName}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-base font-medium text-fg">{c.authorName}</span>
         {team ? (
           <span className="inline-flex items-center gap-1 text-sm text-warn">
             <IconLock size={12} />
             {TEAM_ONLY_LABEL}
           </span>
         ) : null}
-        <time className="ml-auto font-mono text-sm text-fg-3">
+        <time className="ml-auto font-sans text-sm tabular-nums text-fg-3">
           {formatClockTime(c.createdAt, props.timeZone)}
         </time>
       </div>
       {/* No mention picker here, but a typed token reads "@username" (or "@Former member"), never raw. */}
-      <p className="whitespace-pre-wrap text-lg text-fg">
+      <p className="whitespace-pre-wrap text-base text-fg">
         {resolvePersonMentionText(c.body, props.workspaceId)}
       </p>
     </div>

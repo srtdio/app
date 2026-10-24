@@ -107,7 +107,7 @@ export function ReminderOptions(props: {
                 min={dateInputValue(now)}
                 max={dateInputValue(new Date(now.getTime() + MAX_LEAD_MS))}
                 onChange={(event) => setDate(event.target.value)}
-                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-input text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:text-base"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
@@ -117,7 +117,7 @@ export function ReminderOptions(props: {
                 aria-label="Time"
                 value={time}
                 onChange={(event) => setTime(event.target.value)}
-                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-input text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:text-base"
               />
             </label>
           </div>

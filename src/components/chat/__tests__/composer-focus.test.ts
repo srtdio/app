@@ -46,9 +46,9 @@ describe('composer focus on open', () => {
 describe('F7: composer input size by input, never under 16px on touch', () => {
   it('coarse pointer at 1024px (iPad) is 17px; fine pointer at 1280px is 15px', () => {
     const ipad = sized(COMPOSER_INPUT_TYPE, chatLayout({ finePointer: false, widthPx: 1024 }));
-    expect(ipad).toContain('!text-xl !leading-[22px]');
+    expect(ipad).toContain('!text-[17px] !leading-[22px]');
     const laptop = sized(COMPOSER_INPUT_TYPE, chatLayout({ finePointer: true, widthPx: 1280 }));
-    expect(laptop).toContain('!text-lg !leading-[20px]');
+    expect(laptop).toContain('!text-[15px] !leading-[20px]');
   });
 
   it('every touch width stays at 16px or more, with no width breakpoint', () => {

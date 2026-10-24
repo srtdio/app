@@ -163,7 +163,7 @@ export function StopRecordingDialog(props: {
         tabIndex={-1}
         className="w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
       >
-        <h2 className="text-base font-semibold text-fg">{STOP_RECORDING_TITLE}</h2>
+        <h2 className="text-lg font-semibold text-fg">{STOP_RECORDING_TITLE}</h2>
         <div className="mt-5 flex flex-col gap-2">
           <Button variant="primary" onClick={props.onKeep}>
             {STOP_RECORDING_KEEP}
