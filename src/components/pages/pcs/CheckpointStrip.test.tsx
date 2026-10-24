@@ -153,7 +153,8 @@ describe('checkpointChips', () => {
   it('shows the ledger_seq number and no glyph component on an open chip', () => {
     const open = checkpointChips([row('y', 5, null, null)])[0]!;
     expect(collectText(open)).toContain('5');
-    expect(elements(open).some((el) => typeof el.type === 'function')).toBe(false);
+    // The root is the PressableRow; no glyph component renders inside it.
+    expect(elements(open).some((el) => el !== open && typeof el.type === 'function')).toBe(false);
   });
 
   it('shows a tick glyph and NOT the number on a resolved chip, accepted or not', () => {

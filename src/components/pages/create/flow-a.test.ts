@@ -1,6 +1,7 @@
 // Post flow A: the New post sheet's pure helpers, one regression per fix.
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
+import { IconButton } from '@/components/ui/IconButton';
 import { FORMATS_BY_PLATFORM } from '@srtdio/posts';
 import { formatForFile, untouchedDefaultFormat } from '@/components/pages/create/file-kind';
 import { createLimiter, UPLOAD_CONCURRENCY } from '@/components/pages/create/limiter';
@@ -227,7 +228,11 @@ describe('Post flow A helpers', () => {
 
   it('extra: RemoveButton keeps a 44x44 tap area with a small 20px visible circle', () => {
     const onRemove = vi.fn();
-    const el = RemoveButton({ label: 'Remove a.png', onRemove }) as ReactElement<{
+    const wrapper = RemoveButton({ label: 'Remove a.png', onRemove }) as ReactElement<
+      Parameters<typeof IconButton>[0]
+    >;
+    expect(wrapper.type).toBe(IconButton);
+    const el = IconButton(wrapper.props) as ReactElement<{
       className: string;
       'aria-label': string;
       onClick: () => void;
