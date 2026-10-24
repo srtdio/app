@@ -1750,7 +1750,7 @@ export function Comments({
           value={editBody}
           onChange={(event) => setEditBody(event.target.value)}
           aria-label="Edit comment body"
-          className="w-full px-3 rounded-md border border-border bg-panel-2 text-fg text-base placeholder:text-fg-3 outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[74px] py-2.5 h-auto"
+          className="w-full px-3 rounded-md border border-border bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[74px] py-2.5 h-auto"
         />
         <div className="flex items-center gap-2">
           <Button

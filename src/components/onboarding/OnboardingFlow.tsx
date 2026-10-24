@@ -668,7 +668,7 @@ export function OnboardingFlow({
                   : 'border-border bg-panel-2',
               )}
             >
-              <span className="text-base font-semibold text-fg">{tile.title}</span>
+              <span className="text-base font-medium text-fg">{tile.title}</span>
               <span className="text-sm text-fg-2">{tile.sub}</span>
             </button>
           ))}
@@ -767,7 +767,7 @@ export function OnboardingFlow({
                 setUsernameEdited(true);
                 setUsername(normalizeUsernameInput(event.target.value));
               }}
-              className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-base text-fg outline-none placeholder:text-fg-3"
+              className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-input md:text-base text-fg outline-none placeholder:text-fg-3"
             />
           </div>
           <p className={cn('mt-1.5 text-sm', hintTone)} aria-live="polite">
@@ -1007,7 +1007,7 @@ function Heading({ title, lead }: { title: string; lead: string }): ReactElement
         {title}
       </h1>
       {stepLabel !== null ? (
-        <p data-onboarding-step="" className="mt-1 text-base text-fg-3">
+        <p data-onboarding-step="" className="mt-1 text-sm text-fg-3">
           {stepLabel}
         </p>
       ) : null}
@@ -1148,7 +1148,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
             key={line}
             className="flex items-center gap-3 rounded-lg border border-border bg-panel p-3.5"
           >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft font-mono text-base font-semibold text-accent">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft font-mono text-base font-medium text-accent">
               {i + 1}
             </span>
             <span className="text-base text-fg [text-wrap:pretty]">{line}</span>
@@ -1175,7 +1175,7 @@ function PreviewCard({ label, children }: { label: string; children: ReactNode }
 
 function PreviewLabel({ children }: { children: ReactNode }): ReactElement {
   return (
-    <p className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-3">{children}</p>
+    <p className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{children}</p>
   );
 }
 

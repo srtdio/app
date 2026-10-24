@@ -365,7 +365,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               <>
                 <p
                   id="workspace-limit-note"
-                  className="px-3 pb-2 text-md leading-snug text-fg-3"
+                  className="px-3 pb-2 text-base leading-snug text-fg-2"
                 >
                   {WORKSPACE_LIMIT_MESSAGE}
                 </p>
@@ -379,7 +379,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         ) : mode === 'create' ? (
           <form onSubmit={submitDetails} className="flex flex-col gap-4 overflow-y-auto p-[18px]">
             {deletedWorkspace !== null ? (
-              <p className="text-md leading-snug text-fg-3">
+              <p className="text-base leading-snug text-fg-2">
                 {deletedWorkspace.name} is gone. Start a new one.
               </p>
             ) : null}
@@ -425,7 +425,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               </div>
             </div>
             {preview !== null ? (
-              <p className="text-md leading-snug text-fg-3">
+              <p className="text-base leading-snug text-fg-2">
                 Shown as <span className="font-medium text-fg">{preview}</span>. The chat group
                 takes the same name.
               </p>

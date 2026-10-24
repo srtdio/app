@@ -244,7 +244,7 @@ export const GuideBar = forwardRef<
         <div className="min-w-0 flex-1">
           <PhaseRow copy={copy} />
           {copy.why !== '' ? (
-            <p className="text-md leading-snug text-fg [text-wrap:pretty]">{copy.why}</p>
+            <p className="text-base leading-snug text-fg [text-wrap:pretty]">{copy.why}</p>
           ) : null}
         </div>
         <BarButtons copy={copy} actions={actions} />
@@ -372,7 +372,7 @@ export function GuideCard({
         {copy.title}
       </p>
       <p
-        className={`mt-1 text-md leading-snug [text-wrap:pretty] ${hero ? 'opacity-90' : 'text-fg-2'}`}
+        className={`mt-1 text-base leading-snug [text-wrap:pretty] ${hero ? 'opacity-90' : 'text-fg-2'}`}
       >
         {copy.body}
       </p>

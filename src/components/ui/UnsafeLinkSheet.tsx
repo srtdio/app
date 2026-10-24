@@ -127,7 +127,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
           <div aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 rounded-sm bg-border-strong" />
           <h2
             id="unsafe-link-title"
-            className="flex items-center gap-2 text-xl font-semibold text-[color:var(--warn-ink)]"
+            className="flex items-center gap-2 text-lg font-semibold text-[color:var(--warn-ink)]"
           >
             <IconAlertTriangle size={22} />
             Check before opening
@@ -140,7 +140,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
           {url}
         </p>
         {reasons.length > 0 ? (
-          <ul className="flex flex-col gap-1.5 text-md">
+          <ul className="flex flex-col gap-1.5 text-base">
             {reasons.map((reason) => (
               <li key={reason} className="flex gap-2">
                 <span

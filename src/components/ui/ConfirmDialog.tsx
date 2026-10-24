@@ -94,7 +94,7 @@ export function ConfirmDialog({
           entered ? 'translate-y-0 opacity-100 ease-enter' : 'translate-y-2 opacity-0 ease-exit',
         )}
       >
-        <h2 className="text-base font-semibold text-fg">{title}</h2>
+        <h2 className="text-lg font-semibold text-fg">{title}</h2>
         {message !== undefined && message !== '' ? (
           <p data-confirm-message="" className="mt-2 text-base text-fg-2">
             {message}

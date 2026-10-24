@@ -364,7 +364,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           data-palette-group={section.label}
           className="px-2 pb-1"
         >
-          <div className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-fg-3">
+          <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
             {section.label}
           </div>
           {section.items.map((item) => {
@@ -682,7 +682,7 @@ export function CommandPalette({
             placeholder="Search anything"
             aria-label="Search this workspace"
             enterKeyHint="search"
-            className="flex-1 min-w-0 h-12 bg-transparent outline-none text-base sm:text-base placeholder:text-fg-3"
+            className="flex-1 min-w-0 h-12 bg-transparent outline-none text-input sm:text-base placeholder:text-fg-3"
           />
           {query !== '' ? (
             <IconButton

@@ -154,7 +154,7 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
-      className="pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-[70] flex min-h-[50px] touch-none select-none items-center gap-3 rounded-[14px] border border-[var(--strip-border)] bg-[var(--strip-bg)] py-0 pl-[18px] pr-[5px] shadow-[var(--strip-shadow)] md:inset-x-0 md:bottom-6 md:mx-auto md:w-[480px]"
+      className="pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-[70] flex min-h-[50px] touch-none select-none items-center gap-3 rounded-xl border border-[var(--strip-border)] bg-[var(--strip-bg)] py-0 pl-[18px] pr-[5px] shadow-[var(--strip-shadow)] md:inset-x-0 md:bottom-6 md:mx-auto md:w-[480px]"
     >
       <span className="min-w-0 flex-1 truncate text-lg font-medium text-[var(--strip-fg)]">
         {title}

@@ -429,7 +429,7 @@ function UnavailableRenderer(props: RendererProps): ReactElement {
       <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-overlay-fg">
         <IconFileText size={30} />
       </span>
-      <p className="text-base font-medium text-overlay-fg">{PREVIEW_UNAVAILABLE}</p>
+      <p className="text-lg font-semibold text-overlay-fg">{PREVIEW_UNAVAILABLE}</p>
       <p className="max-w-full text-base text-overlay-fg-dim [overflow-wrap:anywhere]">
         {middleTruncate(props.name)}
         {props.size !== undefined && props.size > 0 ? (

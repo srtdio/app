@@ -32,13 +32,14 @@ afterEach(() => {
 });
 
 // iOS Safari zooms the page when a focused field's text is under 16px. Every
-// field is 16px (text-base) below md and keeps 14px (text-base) from md up.
+// field is 16px (text-input) below md and keeps 14px (text-base) from md up.
 function expectSixteenBelowMd(el: Element | null): void {
   if (el === null) throw new Error('missing field');
   const classes = el.className.split(/\s+/);
-  expect(classes).toContain('text-base');
+  expect(classes).toContain('text-input');
   expect(classes).toContain('md:text-base');
   expect(classes).not.toContain('text-base');
+  expect(classes).not.toContain('text-lg');
 }
 
 describe('T8/FT2: 16px fields below md (no iOS zoom on focus)', () => {
