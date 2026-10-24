@@ -486,11 +486,11 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
           </Button>
           <Button
             type="button"
-            variant="danger"
+            variant="secondary"
             data-sheet-reject-confirm=""
             disabled={props.busy}
             onClick={props.onConfirm}
-            className="flex-1"
+            className="flex-1 text-bad"
           >
             {copy.confirmLabel}
           </Button>

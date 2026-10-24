@@ -201,7 +201,7 @@ describe('PostSheetActions confirm and error', () => {
     expect(html).toContain('Wrong logo');
     expect(html).toContain('>Cancel<');
     expect(html).toMatch(/data-sheet-reject-confirm=""[^>]*>Reject</);
-    expect(html).toMatch(/<button[^>]*bg-bad-solid[^>]*data-sheet-reject-confirm=""/);
+    expect(html).toMatch(/<button[^>]*text-bad[^>]*data-sheet-reject-confirm=""/);
     expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/client|agency/i);
     expect(actionIds(html)).toEqual([]);
   });

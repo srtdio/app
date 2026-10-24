@@ -198,7 +198,8 @@ describe('approver Reject', () => {
     expect(text).toContain('Goes to the comments.');
     const buttons = [...(confirm?.querySelectorAll('button') ?? [])].map((b) => b.textContent);
     expect(buttons).toEqual(['Cancel', 'Reject']);
-    expect(q('[data-sheet-reject-confirm]')?.className).toContain('bg-bad');
+    expect(q('[data-sheet-reject-confirm]')?.className).toContain('text-bad');
+    expect(q('[data-sheet-reject-confirm]')?.className).not.toContain('bg-bad-solid');
     expect(text).not.toMatch(/client|agency/i);
     expect(mocks.stageTransition).not.toHaveBeenCalled();
   });
