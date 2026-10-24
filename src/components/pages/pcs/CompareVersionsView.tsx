@@ -78,13 +78,13 @@ function renderMarked(
     if (!include(seg.kind)) return;
     if (seg.kind === 'add') {
       out.push(
-        <span key={i} className="rounded-[3px] bg-good-soft text-good">
+        <span key={i} className="rounded-sm bg-good-soft text-good">
           {seg.text}
         </span>,
       );
     } else if (seg.kind === 'del') {
       out.push(
-        <span key={i} className="rounded-[3px] bg-bad-soft text-bad line-through">
+        <span key={i} className="rounded-sm bg-bad-soft text-bad line-through">
           {seg.text}
         </span>,
       );
@@ -99,7 +99,9 @@ function Panel({ label, children }: { label?: string; children: ReactNode }): Re
   return (
     <div className="rounded-xl border border-border bg-panel p-[18px]">
       {label !== undefined ? (
-        <div className="mb-2 font-mono text-xs uppercase tracking-wide text-fg-3">{label}</div>
+        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+          {label}
+        </div>
       ) : null}
       <p className="whitespace-pre-wrap text-base leading-relaxed text-fg">{children}</p>
     </div>
@@ -205,11 +207,11 @@ export function compareVersionsView({
 
           <div className="flex items-center gap-4 text-sm text-fg-3">
             <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden className="h-3 w-3 rounded-[3px] bg-good-soft" />
+              <span aria-hidden className="h-3 w-3 rounded-sm bg-good-soft" />
               Added
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden className="h-3 w-3 rounded-[3px] bg-bad-soft" />
+              <span aria-hidden className="h-3 w-3 rounded-sm bg-bad-soft" />
               Removed
             </span>
           </div>

@@ -106,7 +106,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
             state === 'open' ? 'open' : row.accepted_at !== null ? 'filled' : 'hollow'
           }
           className={cn(
-            'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-sm font-semibold tabular-nums',
+            'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-sm font-medium tabular-nums',
             chipCircleClass(state, row.accepted_at !== null),
           )}
         >

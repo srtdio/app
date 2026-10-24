@@ -483,7 +483,7 @@ export function ComposerMediaFrame({
         ) : null}
       </div>
       {cut !== null ? (
-        <p data-frame-cut className="text-md text-fg-2">
+        <p data-frame-cut className="text-base text-fg-2">
           {cut}
         </p>
       ) : null}
@@ -1044,7 +1044,7 @@ export function AttachmentsField({
                   {item.name}
                 </span>
                 <span
-                  className={item.error !== null ? 'text-xs text-bad' : 'text-xs text-fg-3'}
+                  className={item.error !== null ? 'text-sm text-bad' : 'text-sm text-fg-3'}
                 >
                   {item.error ?? 'Uploading'}
                 </span>

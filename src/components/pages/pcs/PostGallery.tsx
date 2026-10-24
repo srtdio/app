@@ -1103,13 +1103,13 @@ export function galleryView({
             type="button"
             data-frame-cut
             onClick={() => onOpen(active)}
-            className="mt-1 flex min-h-[44px] w-full items-center text-left text-md text-fg-2 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="mt-1 flex min-h-[44px] w-full items-center text-left text-base text-fg-2 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {cutLine}
           </button>
         ) : null}
         {frameNote !== null ? (
-          <p data-frame-note className="mt-1 text-md text-fg-2">
+          <p data-frame-note className="mt-1 text-base text-fg-2">
             {frameNote}
           </p>
         ) : null}

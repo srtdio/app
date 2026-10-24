@@ -258,7 +258,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
             {firstMedia?.filename}
           </span>
         </div>
-        <p className="text-md text-fg-2">
+        <p className="text-base text-fg-2">
           {spec?.documentNote ?? 'Document pages are shown as-is, with no crop.'}
         </p>
       </div>
@@ -301,7 +301,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
       {sizes.length > 0 ? (
         <SizePicker sizes={sizes} value={size.label} onChange={setLabel} />
       ) : null}
-      {note !== undefined ? <p className="text-md text-fg-3">{note}</p> : null}
+      {note !== undefined ? <p className="text-base text-fg-2">{note}</p> : null}
 
       <LayoutMock
         size={size}
@@ -343,8 +343,8 @@ function SizePicker({
                 : 'border-border bg-panel-2 text-fg-2 hover:bg-panel-3',
             )}
           >
-            <span className="text-base font-semibold">{size.label}</span>
-            <span className="text-xs text-fg-3">{sizeMeta(size)}</span>
+            <span className="text-base font-medium">{size.label}</span>
+            <span className="text-sm text-fg-3">{sizeMeta(size)}</span>
           </button>
         );
       })}
@@ -383,7 +383,7 @@ function LayoutMock({
     </span>
   );
   const placeholder = (
-    <span className="flex h-full w-full items-center justify-center text-md text-fg-3">
+    <span className="flex h-full w-full items-center justify-center text-sm text-fg-3">
       {hasMedia ? 'Loading' : 'No media yet'}
     </span>
   );
@@ -488,12 +488,12 @@ function CropBox({
   media: ReactNode;
 }): ReactElement {
   if (dims === null) {
-    return <p className="text-md text-fg-3">Measuring the original.</p>;
+    return <p className="text-sm text-fg-3">Measuring the original.</p>;
   }
   const result = cropFor(dims, size);
   return (
     <section aria-label="Crop" className="flex flex-col gap-2">
-      <h3 className="text-md font-semibold text-fg-2">
+      <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
         Original · {dims.w} x {dims.h}
       </h3>
       <div

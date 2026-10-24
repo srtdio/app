@@ -545,12 +545,14 @@ describe('A3. the title is the edit target', () => {
     const title = h1?.querySelector<HTMLButtonElement>('[data-title-edit]');
     expect(title?.className).toContain('min-h-[44px]');
     expect(title?.className).toContain('focus-visible:ring-2');
-    expect(title?.className).toContain('leading-tight');
+    expect(title?.className).toContain('tracking-tight');
+    expect(title?.className).not.toContain('leading-');
     await click(title ?? null);
     const input = document.querySelector<HTMLInputElement>('input[aria-label="Post title"]');
     expect(input).not.toBeNull();
     expect(input?.className).toContain('min-h-[44px]');
-    expect(input?.className).toContain('leading-tight');
+    expect(input?.className).toContain('text-3xl');
+    expect(input?.className).not.toContain('leading-');
   });
 
   it('approvers get a plain title, no edit target', async () => {

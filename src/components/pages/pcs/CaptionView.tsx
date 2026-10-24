@@ -199,7 +199,7 @@ export function captionView({
         role="button"
         tabIndex={0}
         aria-label={`Comment on "${quote}"`}
-        className="rounded-[3px] bg-annotation-bg px-0.5 text-fg cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-annotation-line"
+        className="rounded-sm bg-annotation-bg px-0.5 text-fg cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-annotation-line"
         onClick={() => onHighlightClick(a.commentId)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {

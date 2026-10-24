@@ -352,7 +352,9 @@ export function filterControlBody(props: {
 }): ReactElement {
   return (
     <div data-filter-body="" className="flex flex-col">
-      <p className="px-3 pb-1 pt-1.5 text-sm font-semibold text-fg-3">Due date</p>
+      <p className="px-3 pb-1 pt-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        Due date
+      </p>
       {dateControlBody({
         dateWindow: props.dateWindow,
         onDateWindowChange: props.onDateWindowChange,
@@ -360,7 +362,9 @@ export function filterControlBody(props: {
         onCustomOpen: props.onCustomOpen,
       })}
       <div className="my-1.5 border-t border-border" aria-hidden="true" />
-      <p className="px-3 pb-1 pt-1.5 text-sm font-semibold text-fg-3">Sort</p>
+      <p className="px-3 pb-1 pt-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        Sort
+      </p>
       {sortControlBody({ order: props.order, onOrderChange: props.onOrderChange })}
     </div>
   );

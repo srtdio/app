@@ -1877,7 +1877,7 @@ export function PostDetailPage({
     metaHead.length > 0 || briefLink !== null ? (
       <div
         data-post-details=""
-        className="flex min-h-[44px] min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-md text-fg-2"
+        className="flex min-h-[44px] min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-sm text-fg-3"
       >
         {metaHead.length > 0 ? (
           detailsEditable ? (
@@ -2101,7 +2101,7 @@ export function PostDetailPage({
       {readOnly ? (
         <div className={cn(grid.page, 'pb-0')}>
           <div className={grid.head}>
-            <h1 className="text-3xl font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
+            <h1 className="text-3xl font-semibold tracking-tight break-words [overflow-wrap:anywhere]">
               <Highlight text={post.title} />
             </h1>
           </div>
@@ -2146,7 +2146,7 @@ export function PostDetailPage({
                     // 44px floor as the tappable title, with no border (the
                     // ring draws outside the box), so entering edit never
                     // shifts the page.
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-md border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold leading-tight tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-md border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
@@ -2182,12 +2182,12 @@ export function PostDetailPage({
                 // Spec A3: the title itself is the edit target (no pencil
                 // tile): at least 44px tall, a visible focus ring, and the
                 // same padding as the editor so tapping never shifts the page.
-                <h1 className="text-3xl font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]">
+                <h1 className="text-3xl font-semibold tracking-tight break-words [overflow-wrap:anywhere]">
                   <button
                     type="button"
                     data-title-edit=""
                     onClick={openTitleEditor}
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg px-2 py-1 text-left font-semibold leading-tight tracking-tight transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg px-2 py-1 text-left font-semibold tracking-tight transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <Highlight text={post.title} />
                   </button>
@@ -2196,7 +2196,7 @@ export function PostDetailPage({
             ) : (
               <h1
                 data-post-title=""
-                className="text-3xl font-semibold leading-tight tracking-tight break-words [overflow-wrap:anywhere]"
+                className="text-3xl font-semibold tracking-tight break-words [overflow-wrap:anywhere]"
               >
                 <Highlight text={post.title} />
                 {approvedLocked && agencySide ? (
@@ -2316,7 +2316,7 @@ export function PostDetailPage({
               <div className="flex items-center gap-3">
                 <Avatar name={workspaceName ?? ''} size="md" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-base font-semibold text-fg">
+                  <div className="truncate text-base font-medium text-fg">
                     {workspaceName ?? ''}
                   </div>
                 </div>
@@ -2422,7 +2422,7 @@ export function PostDetailPage({
                   ) : null}
                 </>
               ) : (
-                <p className="mt-3 text-base text-fg-3">No caption yet.</p>
+                <p className="mt-3 text-base text-fg-2">No caption yet.</p>
               )}
               {annotateError !== null ? (
                 <div
@@ -2472,7 +2472,7 @@ export function PostDetailPage({
                   />
                 </div>
               ) : (
-                <div className="px-4 py-8 text-center text-base text-fg-3">
+                <div className="px-4 py-8 text-center text-base text-fg-2">
                   Select a workspace to view comments.
                 </div>
               )}
