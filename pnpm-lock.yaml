@@ -20,6 +20,9 @@ importers:
       '@fontsource/jetbrains-mono':
         specifier: ^5.2.8
         version: 5.2.8
+      '@heroicons/react':
+        specifier: 2.2.0
+        version: 2.2.0(react@18.3.1)
       '@sentry/react':
         specifier: ^8
         version: 8.55.2(react@18.3.1)
@@ -973,6 +976,11 @@ packages:
 
   '@fontsource/jetbrains-mono@5.2.8':
     resolution: {integrity: sha512-6w8/SG4kqvIMu7xd7wt6x3idn1Qux3p9N62s6G3rfldOUYHpWcc2FKrqf+Vo44jRvqWj2oAtTHrZXEP23oSKwQ==}
+
+  '@heroicons/react@2.2.0':
+    resolution: {integrity: sha512-LMcepvRaS9LYHJGsF0zzmgKCUim/X3N/DQKc4jepAXJ7l8QxJ1PmxJzqplF2Z3FE4PqBAIGyJAQ/w4B5dsqbtQ==}
+    peerDependencies:
+      react: '>= 16 || ^19.0.0-rc'
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -3953,6 +3961,10 @@ snapshots:
   '@fontsource/inter@5.2.8': {}
 
   '@fontsource/jetbrains-mono@5.2.8': {}
+
+  '@heroicons/react@2.2.0(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
 
   '@humanfs/core@0.19.2':
     dependencies:

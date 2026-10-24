@@ -70,6 +70,41 @@ test('Pipeline: every button is 44 tall with an 8px radius or round', async ({ p
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 
+test(
+  'Pipeline tab bar: the five Heroicons tab icons are 20px, the active one in accent',
+  { tag: '@theme' },
+  async ({ page }) => {
+    await installHarnessNetwork(page);
+    await page.goto('/pipeline');
+    const tabs = page.locator('nav[data-undo-anchor] a');
+    await expect(tabs).toHaveCount(5);
+    const icons = tabs.locator('svg').first();
+    await expect(icons).toBeVisible();
+    for (let i = 0; i < 5; i += 1) {
+      const box = await tabs.nth(i).locator('svg').first().boundingBox();
+      expect(box?.width).toBeCloseTo(20, 0);
+      expect(box?.height).toBeCloseTo(20, 0);
+    }
+    // The accent token's resolved colour, read from a probe in this theme.
+    const accent = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.className = 'text-accent';
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    const active = page.locator('nav[data-undo-anchor] a[aria-current="page"]');
+    await expect(active).toHaveCount(1);
+    expect(
+      await active
+        .locator('svg')
+        .first()
+        .evaluate((el) => getComputedStyle(el).color),
+    ).toBe(accent);
+  },
+);
+
 test('2: a layer is one step: thread view, contact sheet, Starred close on back and stay in the chat', async ({
   page,
 }) => {
