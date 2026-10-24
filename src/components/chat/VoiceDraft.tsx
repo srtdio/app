@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
+import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconPause, IconPlay, IconSend, IconTrash } from '@/components/ui/icons';
@@ -154,18 +155,17 @@ export function StopRecordingDialog(props: {
   return createPortal(
     <div
       data-stop-recording=""
-      onClick={(event) => {
-        if (event.target === event.currentTarget) props.onKeep();
-      }}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-scrim px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center"
     >
+      {/* A tap outside the panel keeps recording, like Escape. */}
+      <Backdrop aria-label={STOP_RECORDING_KEEP} onClick={props.onKeep} position="absolute" />
       <div
         ref={panelRef}
         role="alertdialog"
         aria-modal="true"
         aria-label={STOP_RECORDING_TITLE}
         tabIndex={-1}
-        className="w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
+        className="relative w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
       >
         <h2 className="text-lg font-semibold text-fg">{STOP_RECORDING_TITLE}</h2>
         <div className="mt-5 flex flex-col gap-2">

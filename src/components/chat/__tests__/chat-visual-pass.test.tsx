@@ -44,8 +44,9 @@ describe('chat visual pass', () => {
 
   it('the in-review drawer dims with the sheet scrim, not the lightbox overlay', () => {
     const drawer = read('../StatusDrawer.tsx');
-    expect(drawer).toContain("'absolute inset-0 bg-scrim transition-opacity'");
-    expect(drawer).not.toContain("'absolute inset-0 bg-overlay transition-opacity'");
+    expect(drawer).toContain('<Backdrop');
+    expect(drawer).not.toContain('bg-overlay');
+    expect(read('../../ui/Backdrop.tsx')).toContain('bg-scrim');
   });
 
   it('the list column is 352px from 1280px (288px below, so the plan panel never covers it) and a tile time stays clear of the ⋯', () => {

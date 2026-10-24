@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import type { CommentRow } from '@srtdio/comments';
+import { PressableRow } from '@/components/ui/PressableRow';
 
 // The comment panel pulls the chat attachment hook, whose import graph reaches
 // the agora-chat browser SDK; mock it so the pure exports load in node.
@@ -35,6 +36,11 @@ function collect(node: ReactNode, out: ReactElement[]): void {
   const el = node as ReactElement;
   out.push(el);
   collect((el.props as { children?: ReactNode }).children, out);
+}
+
+/** A host <button> or a PressableRow (which renders one). */
+function isButtonEl(el: ReactElement): boolean {
+  return el.type === 'button' || el.type === PressableRow;
 }
 
 function elements(tree: ReactNode): ReactElement[] {
@@ -140,7 +146,7 @@ describe('caption quote inside the comment (item 3)', () => {
       { n: 2, quote: 'great hook', stale: false, versionNumber: 3 },
       onClick,
     );
-    const button = elements(tree).find((el) => el.type === 'button')!;
+    const button = elements(tree).find(isButtonEl)!;
     const className = (button.props as { className: string }).className;
     expect(className).toContain('border-l-2');
     expect(className).toContain('text-fg-2');
@@ -153,7 +159,7 @@ describe('caption quote inside the comment (item 3)', () => {
 
   it('a stale quote is inert, quoted the same way, and names the version', () => {
     const tree = annotationChip('c2', { n: 0, quote: 'old copy', stale: true, versionNumber: 1 });
-    expect(elements(tree).some((el) => el.type === 'button')).toBe(false);
+    expect(elements(tree).some(isButtonEl)).toBe(false);
     const root = tree as ReactElement<{ className: string }>;
     expect(root.props.className).toContain('border-l-2');
     expect(text(tree)).toContain('copy changed · v1');

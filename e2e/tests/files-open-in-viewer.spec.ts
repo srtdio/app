@@ -5,7 +5,7 @@ import {
   type HarnessNetwork,
 } from '../fixtures/harness-routes';
 import { ME, POST_IDS, WORKSPACE_ID } from '../fixtures/chat-data';
-import { expectMinTouchTarget } from '../helpers/touch-target';
+import { expectAllVisibleControlsTouchSized, expectMinTouchTarget } from '../helpers/touch-target';
 
 // PDFs open in the in-app FileViewer from a brief, a post and Assets: pdf.js
 // page 1 and "1 / N", closable, and nothing opens a new tab or window. The page
@@ -234,6 +234,25 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
 
   // Nothing left the tab, and no request escaped the fixtures.
   expect(popups).toEqual([]);
+  expect(network.blocked).toEqual([]);
+});
+
+test('the Assets lightbox: every visible button is at least a 44x44 touch target', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  seedPdf(network);
+  await serveThumbnails(page);
+  await page.goto('/assets');
+  const card = page.getByRole('button', { name: `View ${PDF_NAME}` }).first();
+  await card.waitFor({ state: 'visible', timeout: 15_000 });
+  await card.click();
+  await expectPdfOpen(page);
+  await closeViewer(page);
+  const lightbox = page.getByRole('dialog', { name: `Viewing ${PDF_NAME}` });
+  await expect(lightbox).toBeVisible();
+  const checked = await expectAllVisibleControlsTouchSized(lightbox);
+  expect(checked, 'buttons measured in the lightbox').toBeGreaterThan(0);
   expect(network.blocked).toEqual([]);
 });
 

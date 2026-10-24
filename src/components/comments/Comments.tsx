@@ -14,6 +14,7 @@ import { dispatchInductionDid, INDUCTION_KEYS } from '@/lib/induction';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
 import { checkLink } from '@/lib/links/safety';
 import { parseExternalLink } from '@/lib/links';
@@ -283,15 +284,16 @@ export function annotationChip(
     );
   }
   return (
-    <button
+    <PressableRow
       type="button"
+      flat
       data-caption-quote="live"
       onClick={() => onClick?.(commentId)}
-      className="mb-2 flex w-full min-h-[44px] min-w-0 items-start gap-2 border-l-2 border-border-strong pl-3 text-left text-base text-fg-2 transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="mb-2 flex min-w-0 items-start gap-2 border-l-2 border-border-strong pl-3 text-base text-fg-2 transition-colors hover:text-fg"
     >
       <sup className="shrink-0 text-xs font-semibold text-annotation-line">{annotation.n}</sup>
       <span className="min-w-0 [overflow-wrap:anywhere]">{annotation.quote}</span>
-    </button>
+    </PressableRow>
   );
 }
 
@@ -1790,28 +1792,28 @@ export function Comments({
         </IconButton>
         <MenuPopover open={menuOpenId === comment.id} onClose={closeMenu} align="right">
           {actions.canEdit ? (
-            <button
+            <PressableRow
               type="button"
-              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-base text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex items-center px-3 text-base text-fg"
               onClick={() => {
                 closeMenu();
                 startEdit(comment);
               }}
             >
               Edit
-            </button>
+            </PressableRow>
           ) : null}
           {actions.canDelete ? (
-            <button
+            <PressableRow
               type="button"
-              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-base text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex items-center px-3 text-base text-bad"
               onClick={() => {
                 closeMenu();
                 handleDelete(comment.id);
               }}
             >
               Delete
-            </button>
+            </PressableRow>
           ) : null}
         </MenuPopover>
       </div>

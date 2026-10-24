@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
+import { Backdrop } from '@/components/ui/Backdrop';
 import {
   ICON_SIZE,
   IconCopy,
@@ -74,18 +75,17 @@ function Row({
   destructive?: boolean;
 }) {
   return (
-    <Button
-      variant="ghost"
+    <PressableRow
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`w-full !justify-start !gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent${
-        destructive ? ' text-bad hover:text-bad' : ''
+      className={`flex items-center gap-3 px-4 text-base font-medium transition-colors duration-fast${
+        destructive ? ' text-bad' : ' text-fg-2 hover:text-fg'
       }`}
     >
       <span className={destructive ? 'text-bad' : 'text-fg-2'}>{icon}</span>
       {label}
-    </Button>
+    </PressableRow>
   );
 }
 
@@ -149,12 +149,7 @@ export function AssetActionSheet({
 
   return (
     <div className="fixed inset-0 z-40 flex items-end">
-      <button
-        type="button"
-        aria-label="Close actions"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/40"
-      />
+      <Backdrop aria-label="Close actions" onClick={onClose} position="absolute" />
       <div
         role="dialog"
         aria-label={`Actions for ${name}`}

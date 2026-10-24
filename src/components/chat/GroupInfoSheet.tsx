@@ -7,7 +7,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Button, buttonClass } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
@@ -185,15 +186,15 @@ export function GroupInfoNotice(): ReactElement {
 /** Under the kept member list when its re-read failed: the line is the retry. */
 export function MembersRefreshNotice(props: { onRetry: () => void }): ReactElement {
   return (
-    <button
+    <PressableRow
       type="button"
       role="status"
       data-members-refresh=""
       onClick={props.onRetry}
-      className={`mt-1 flex min-h-[44px] w-full items-center px-1 text-left text-fg-2 underline-offset-2 hover:underline ${SHEET_NOTICE_TYPE}`}
+      className={`mt-1 flex items-center px-1 text-fg-2 underline-offset-2 hover:underline ${SHEET_NOTICE_TYPE}`}
     >
       {MEMBERS_REFRESH_FAILED}
-    </button>
+    </PressableRow>
   );
 }
 
@@ -321,37 +322,34 @@ function SheetRow(props: {
   data?: string;
 }): ReactElement {
   return (
-    <button
+    <PressableRow
       type="button"
       data-row={props.data}
       onClick={props.onClick}
-      className="flex h-12 w-full select-none items-center gap-3 rounded-lg px-3 text-left text-base font-medium text-fg [-webkit-touch-callout:none] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+      className="flex h-12 select-none items-center gap-3 px-3 text-base font-medium text-fg [-webkit-touch-callout:none]"
     >
       <span className="flex w-5 shrink-0 justify-center text-fg-2">{props.icon}</span>
       {props.label}
-    </button>
+    </PressableRow>
   );
 }
 
 /** Leave group: the full-width secondary button (44px, outlined), destructive text, no filled red. */
 export function LeaveGroupRow(props: { disabled: boolean; onClick: () => void }): ReactElement {
   return (
-    <button
+    <Button
+      variant="secondary"
       type="button"
       data-row="leave-group"
       disabled={props.disabled}
       onClick={props.onClick}
-      className={buttonClass(
-        'secondary',
-        'default',
-        'w-full !justify-start gap-3 text-left text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-      )}
+      className="w-full gap-3 text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span className="flex w-5 shrink-0 justify-center text-bad">
         <IconSignOut size={ICON_SIZE.inline} />
       </span>
       Leave group
-    </button>
+    </Button>
   );
 }
 
@@ -380,23 +378,25 @@ export function GroupHero(props: {
   return (
     <div className="flex flex-col items-center gap-1 text-center">
       {props.canEdit ? (
-        <button
-          type="button"
-          data-group-photo=""
-          aria-label="Change group photo"
-          disabled={props.busy}
-          onClick={props.onPhoto}
-          className="relative h-[112px] w-[112px] select-none rounded-[24px] [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          {photo}
-          <span
-            data-camera-badge=""
-            aria-hidden="true"
-            className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-fg ring-4 ring-bg"
+        <div className="h-[112px] w-[112px]">
+          <PressableRow
+            type="button"
+            data-group-photo=""
+            aria-label="Change group photo"
+            disabled={props.busy}
+            onClick={props.onPhoto}
+            className="relative h-full select-none [-webkit-touch-callout:none]"
           >
-            <IconCamera size={ICON_SIZE.control} />
-          </span>
-        </button>
+            {photo}
+            <span
+              data-camera-badge=""
+              aria-hidden="true"
+              className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-fg ring-4 ring-bg"
+            >
+              <IconCamera size={ICON_SIZE.control} />
+            </span>
+          </PressableRow>
+        </div>
       ) : (
         photo
       )}

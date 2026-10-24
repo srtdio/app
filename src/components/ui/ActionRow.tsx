@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { IconChevronRight } from '@/components/ui/icons';
+import { PressableRow } from '@/components/ui/PressableRow';
 
 interface ActionRowProps {
   icon: ReactNode;
@@ -26,12 +27,11 @@ export function ActionRow({
   chevron = false,
 }: ActionRowProps) {
   return (
-    <button
+    <PressableRow
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
-        'hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex items-center gap-3 px-3 py-2 transition-colors',
         danger ? 'text-bad' : 'text-fg',
       )}
     >
@@ -54,6 +54,6 @@ export function ActionRow({
           <IconChevronRight />
         </span>
       ) : null}
-    </button>
+    </PressableRow>
   );
 }

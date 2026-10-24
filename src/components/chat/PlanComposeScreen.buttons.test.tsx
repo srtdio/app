@@ -53,7 +53,8 @@ describe('New plan row buttons (design system)', () => {
       }
       expect(remove).toContain('w-11');
       expect(remove).toContain(`aria-label="Remove ${item.title}"`);
-      expect(day).toContain('!justify-between');
+      // The day label and its icon sit apart inside the centred Button.
+      expect(html).toMatch(/data-plan-day-inner="" class="[^"]*justify-between/);
     });
   }
 

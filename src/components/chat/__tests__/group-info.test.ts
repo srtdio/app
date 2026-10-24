@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
+import { Button, buttonClass, type ButtonVariant } from '@/components/ui/Button';
+import { PRESSABLE_ROW_BASE, PressableRow } from '@/components/ui/PressableRow';
 import { ChatInfoTabs } from '@/components/chat/ChatInfoTabs';
 import {
   canEditFromReads,
@@ -194,7 +196,9 @@ describe('G4: a failed member refresh after an add or remove', () => {
     const onRetry = vi.fn();
     const el = MembersRefreshNotice({ onRetry });
     expect(el.props.children).toBe(MEMBERS_REFRESH_FAILED);
-    expect(String(el.props.className)).toContain('min-h-[44px]');
+    // PressableRow supplies the 44px minimum.
+    expect(el.type).toBe(PressableRow);
+    expect(PRESSABLE_ROW_BASE).toContain('min-h-[44px]');
     (el.props.onClick as () => void)();
     expect(onRetry).toHaveBeenCalledOnce();
   });
@@ -320,7 +324,13 @@ describe('group info full page', () => {
 
   it('Leave group is the 44px outlined secondary button with destructive text, no filled red', () => {
     const row = LeaveGroupRow({ disabled: false, onClick: vi.fn() });
-    const className = String(row.props.className);
+    expect(row.type).toBe(Button);
+    // The class string the Button primitive renders for this call site.
+    const className = buttonClass(
+      row.props.variant as ButtonVariant,
+      'default',
+      String(row.props.className),
+    );
     expect(className).toContain('h-11');
     expect(className).toContain('rounded-lg');
     expect(className).not.toContain('min-h-[56px]');

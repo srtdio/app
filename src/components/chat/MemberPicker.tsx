@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { cn } from '@/lib/cn';
 import type { MemberOption } from '@/components/chat/member-picker';
@@ -44,13 +45,13 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
         const isSelected = selected.has(option.userId);
         return (
           <li key={option.userId}>
-            <button
+            <PressableRow
               type="button"
               aria-pressed={isSelected}
               onClick={() => props.onToggle(option.userId)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-2 min-h-[44px] text-left transition-colors',
-                isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2',
+                'flex items-center gap-3 px-2 transition-colors',
+                isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2',
               )}
             >
               <Avatar
@@ -62,7 +63,7 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
                 {option.displayName}
               </span>
               <SelectCheck checked={isSelected} />
-            </button>
+            </PressableRow>
           </li>
         );
       })}

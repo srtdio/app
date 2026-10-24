@@ -10,6 +10,7 @@
 // callout).
 
 import type { ReactElement } from 'react';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
@@ -148,15 +149,13 @@ export function ThreadChipRow(props: {
     >
       <span className="relative flex min-w-0 max-w-full">
         <RailElbow reach="w-[15px]" bottom="bottom-0" />
-        <button
+        <PressableRow
+          inline
           type="button"
           data-thread-open="chip"
           aria-label={`Open the thread about ${label.title}`}
           onClick={props.onOpen}
-          className={cn(
-            'flex min-h-[44px] min-w-0 max-w-full items-center rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            NO_TOUCH_SELECT,
-          )}
+          className={cn('flex min-w-0 max-w-full items-center', NO_TOUCH_SELECT)}
         >
           <span className="inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-[14px] bg-panel pl-1 pr-2.5 text-sm">
             <PostRefThumb assetVersionId={post?.thumbnailAssetVersionId ?? null} size={20} />
@@ -167,7 +166,7 @@ export function ThreadChipRow(props: {
               </span>
             ) : null}
           </span>
-        </button>
+        </PressableRow>
       </span>
     </li>
   );
@@ -207,17 +206,15 @@ export function RepliesButtonRow(props: {
       {...guardProps(props.coarse)}
     >
       {props.through ? <RailThrough /> : null}
-      <button
+      <PressableRow
+        inline
         type="button"
         data-thread-open="replies"
         onClick={props.onOpen}
-        className={cn(
-          'flex min-h-[44px] items-center rounded-md text-md font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          NO_TOUCH_SELECT,
-        )}
+        className={cn('flex items-center text-md font-semibold text-accent', NO_TOUCH_SELECT)}
       >
         {props.label}
-      </button>
+      </PressableRow>
     </li>
   );
 }

@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -241,24 +242,26 @@ export function PipelineDateRangeCalendar({
             const between = start !== null && end !== null && iso > start && iso < end;
             const isToday = iso === todayISO;
             return (
-              <button
+              <PressableRow
                 key={iso}
                 type="button"
+                // A between day sits flush in the range band (square corners).
+                flat={between}
                 aria-label={dayAriaLabel(view.year, view.monthIndex, day)}
                 aria-pressed={isEndpoint || single}
                 onClick={() => pick(iso)}
                 className={cn(
-                  'flex min-h-[44px] items-center justify-center font-sans text-base tabular-nums transition-colors',
+                  'flex items-center justify-center font-sans text-base tabular-nums transition-colors',
                   isEndpoint
-                    ? 'rounded-md bg-accent font-semibold text-accent-fg'
+                    ? 'bg-accent font-semibold text-accent-fg'
                     : between
                       ? 'bg-accent-soft text-accent'
-                      : 'rounded-md text-fg hover:bg-panel-2',
+                      : 'text-fg',
                   !isEndpoint && !between && isToday ? 'ring-1 ring-inset ring-accent-line' : '',
                 )}
               >
                 {day}
-              </button>
+              </PressableRow>
             );
           })}
         </div>

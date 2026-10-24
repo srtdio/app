@@ -9,7 +9,7 @@ import type { ReactElement } from 'react';
 import { ICON_SIZE, IconSmile } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { EMOJI_LIST, readRecents, rememberRecent } from '@/lib/chat/emoji-list';
-import { buttonClass } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { popoverClass } from '@/components/ui/popover-classes';
 import type { ChatLayout } from '@/components/chat/chat-type';
 
@@ -66,36 +66,30 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
   ];
   return (
     <div ref={rootRef} className="relative shrink-0">
-      <button
-        ref={buttonRef}
+      <IconButton
+        buttonRef={buttonRef}
         type="button"
         data-emoji-button=""
-        aria-label="Emoji"
+        label="Emoji"
         aria-haspopup="dialog"
         aria-expanded={open}
         // Keep the textarea's caret: the press never takes focus from it.
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((o) => !o)}
-        // Needs a ref (Escape returns focus): raw button on the shared recipe.
-        // A 44x44 icon button (IconButton's footprint): ghost, accent while open.
-        className={buttonClass(
-          'ghost',
-          'default',
-          cn(
-            'w-11 !px-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            open && '!text-accent',
-          ),
-        )}
+        // buttonRef returns focus on Escape. Accent while open (aria-expanded
+        // outranks the base text-fg-2 without an important override).
+        className="aria-expanded:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <IconSmile size={ICON_SIZE.control} />
-      </button>
+      </IconButton>
       {open ? (
         <div
           role="dialog"
           aria-label="Emoji"
           data-emoji-popover=""
           className={cn(
-            'absolute bottom-full right-0 z-20 mb-2 max-h-[320px] w-[312px] origin-bottom-right overflow-y-auto p-2',
+            // 8 columns of 44px cells plus the 8px padding each side (desktop only).
+            'absolute bottom-full right-0 z-20 mb-2 max-h-[320px] w-[368px] origin-bottom-right overflow-y-auto p-2',
             popoverClass(shown),
           )}
         >
@@ -104,17 +98,17 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
               <h3 className="px-1 pb-1 pt-2 text-sm font-medium text-fg-3">{group.name}</h3>
               <div className="grid grid-cols-8">
                 {group.emoji.map((emoji) => (
-                  <button
+                  <IconButton
                     key={emoji}
                     type="button"
                     data-emoji-cell=""
-                    aria-label={emoji}
+                    label={emoji}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pick(emoji)}
-                    className="flex h-9 w-9 items-center justify-center rounded-md text-2xl leading-none hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="text-2xl leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     {emoji}
-                  </button>
+                  </IconButton>
                 ))}
               </div>
             </section>

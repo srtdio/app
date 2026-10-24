@@ -10,6 +10,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { CROPPER_HINT } from '@/lib/onboarding';
 
 const FRAME = 260;
@@ -329,16 +330,15 @@ function AvatarCropperImpl(
       <div className="w-full max-w-[260px]">
         <span className="mb-1 block text-sm font-medium text-fg-2">Zoom</span>
         <div className="flex items-center gap-2">
-          <Button
+          <IconButton
             type="button"
-            aria-label="Zoom out"
+            label="Zoom out"
             onClick={() => stepZoom(-0.25)}
             disabled={!hasPhoto}
-            variant="secondary"
-            className="w-11 shrink-0 !px-0"
+            className="shrink-0 border border-border bg-panel disabled:pointer-events-none disabled:opacity-50"
           >
-            <span className="text-lg leading-none">-</span>
-          </Button>
+            <span className="text-lg leading-none text-fg">-</span>
+          </IconButton>
           <input
             type="range"
             min={1}
@@ -356,16 +356,15 @@ function AvatarCropperImpl(
             }
             className="h-11 flex-1 accent-accent disabled:opacity-50"
           />
-          <Button
+          <IconButton
             type="button"
-            aria-label="Zoom in"
+            label="Zoom in"
             onClick={() => stepZoom(0.25)}
             disabled={!hasPhoto}
-            variant="secondary"
-            className="w-11 shrink-0 !px-0"
+            className="shrink-0 border border-border bg-panel disabled:pointer-events-none disabled:opacity-50"
           >
-            <span className="text-lg leading-none">+</span>
-          </Button>
+            <span className="text-lg leading-none text-fg">+</span>
+          </IconButton>
         </div>
       </div>
 

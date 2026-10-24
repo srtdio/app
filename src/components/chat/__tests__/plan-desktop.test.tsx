@@ -158,7 +158,10 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
 
   it('a picked-up row carries the accent outline and its marker', () => {
     const html = paint('agency', edit({ pickedId: 'c1' }));
-    expect(html).toMatch(/data-plan-row="c1"[^>]*data-plan-row-picked=""[^>]*ring-accent/);
+    // PressableRow renders class before the spread data attributes.
+    expect(html).toMatch(
+      /class="[^"]*ring-2 ring-accent ring-offset-2[^"]*" data-plan-row="c1"[^>]*data-plan-row-picked=""/,
+    );
   });
 
   it('the list takes the keys (rows are the targets) in edit mode only', () => {

@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
+import { IconButton } from '@/components/ui/IconButton';
 
 // F5 pin overlay: numbered dots layered over one lightbox slide. It renders into
 // the seam F2 left in the lightbox (a pointer-events-none absolute layer), so each
@@ -19,18 +20,18 @@ export function PinOverlay({ pins, onPinClick }: PinOverlayProps): ReactElement 
   return (
     <div className="absolute inset-0">
       {visible.map((pin) => (
-        <button
+        <IconButton
           key={pin.annotationId}
           type="button"
-          aria-label={`Pin ${pin.n}`}
+          label={`Pin ${pin.n}`}
           onClick={() => onPinClick(pin.commentId)}
           style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
-          className="pointer-events-auto absolute flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line"
+          className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line"
         >
           <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-xs font-semibold tabular-nums text-fg shadow">
             {pin.n}
           </span>
-        </button>
+        </IconButton>
       ))}
     </div>
   );

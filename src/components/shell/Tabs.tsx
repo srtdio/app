@@ -1,3 +1,4 @@
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 
 export interface TabItem {
@@ -17,13 +18,15 @@ export function Tabs({ items, active, onChange }: TabsProps) {
       {items.map((tab) => {
         const isActive = tab.key === active;
         return (
-          <button
+          <PressableRow
             key={tab.key}
             type="button"
+            inline
+            align="center"
             onClick={() => onChange(tab.key)}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'relative inline-flex items-center min-h-[44px] px-3 text-base whitespace-nowrap transition-colors',
+              'relative flex items-center justify-center px-3 text-base whitespace-nowrap transition-colors',
               isActive ? 'text-fg' : 'text-fg-2 hover:text-fg',
             )}
           >
@@ -31,7 +34,7 @@ export function Tabs({ items, active, onChange }: TabsProps) {
             {isActive ? (
               <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />
             ) : null}
-          </button>
+          </PressableRow>
         );
       })}
     </div>

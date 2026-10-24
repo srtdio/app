@@ -1,6 +1,10 @@
+import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/cn';
 
-interface ChipProps {
+interface ChipProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'className' | 'onClick' | 'children'
+> {
   label: string;
   selected?: boolean;
   variant?: 'default' | 'add';
@@ -15,7 +19,9 @@ interface ChipProps {
    * existing consumer renders byte-for-byte the same.
    */
   className?: string;
-  onClick?: () => void;
+  onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
+  /** Ref to the rendered <button>; a plain prop so Chip stays a callable function. */
+  buttonRef?: Ref<HTMLButtonElement> | undefined;
 }
 
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {
@@ -30,10 +36,14 @@ export function Chip({
   size = 'sm',
   className,
   onClick,
+  buttonRef,
+  ...props
 }: ChipProps) {
   return (
     <button
       type="button"
+      {...props}
+      ref={buttonRef}
       onClick={onClick}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-lg border text-base font-normal transition-colors',

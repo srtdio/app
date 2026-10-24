@@ -21,6 +21,8 @@ import {
 import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
 import { IDENTITY_MAP } from '@/components/pages/pcs/pin-annotations';
 import { PlatformFrame } from '@/components/media/PlatformFrame';
+import { IconButton } from '@/components/ui/IconButton';
+import { DropZone } from '@/components/ui/DropZone';
 import type { Frame } from '@/lib/platform-specs';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { createLongPressController } from '@/components/ui/useLongPress';
@@ -32,7 +34,8 @@ import type { GalleryItem } from '@srtdio/posts';
 // The unit environment is node (no DOM renderer), so these specs walk the JSX
 // tree returned by the hookless galleryView rather than mounting it. The
 // stateful thumbnail (GalleryThumb) stays an unexpanded element, so the mocked
-// cache is never actually called during the walk.
+// cache is never actually called during the walk. IconButton (dots, pins) is
+// hookless too, so it is expanded to the <button> it renders.
 
 function flatten(node: ReactNode, out: ReactElement[]): void {
   if (Array.isArray(node)) {
@@ -40,7 +43,9 @@ function flatten(node: ReactNode, out: ReactElement[]): void {
     return;
   }
   if (node === null || typeof node !== 'object' || !('props' in node)) return;
-  const el = node as ReactElement;
+  const raw = node as ReactElement;
+  const el =
+    raw.type === IconButton ? IconButton(raw.props as Parameters<typeof IconButton>[0]) : raw;
   out.push(el);
   flatten((el.props as { children?: ReactNode }).children, out);
 }
@@ -239,7 +244,7 @@ describe('galleryView', () => {
     expect(texts).toContain('Add images');
 
     // The upload zone is wired to the append flow.
-    const zone = elements(tree).find((el) => el.type === 'button')!;
+    const zone = elements(tree).find((el) => el.type === DropZone)!;
     (zone.props as { onClick: () => void }).onClick();
     expect(onAddSlide).toHaveBeenCalledOnce();
 

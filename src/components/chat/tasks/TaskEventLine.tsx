@@ -39,8 +39,9 @@ export const OPEN_TASKS_LABEL = 'Open tasks';
 
 const PILL =
   'rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-sm font-medium leading-4 text-fg-3';
+// The pill's tap target: a ghost Button (44 tall) around the visual pill.
 const PRESS = cn(
-  'flex min-h-[44px] max-w-full items-center justify-center px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
   NO_TOUCH_SELECT,
 );
 
@@ -50,7 +51,8 @@ export function TaskEventPill(props: { event: TaskEvent; ctx: TaskLineContext })
   const ref = taskRefOf(ctx.tasksById.get(event.taskId));
   const actor = event.actorId !== null ? ctx.nameOf(event.actorId) : null;
   return (
-    <button
+    <Button
+      variant="ghost"
       type="button"
       data-task-line={event.kind}
       data-task-id={event.taskId}
@@ -62,7 +64,7 @@ export function TaskEventPill(props: { event: TaskEvent; ctx: TaskLineContext })
         {actor !== null ? <span className="font-semibold text-fg-2">{actor} </span> : null}
         {eventText(event, ref)}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -125,7 +127,8 @@ function TaskBatch(props: {
   const rows = line.events.flatMap((e) => batchRows(e, taskRefOf(ctx.tasksById.get(e.taskId))));
   return (
     <div data-task-batch={line.batchId} className="flex w-full flex-col items-center">
-      <button
+      <Button
+        variant="ghost"
         type="button"
         aria-expanded={open}
         data-task-batch-toggle=""
@@ -144,7 +147,7 @@ function TaskBatch(props: {
             <IconChevronRight size={ICON_SIZE.inline} className="shrink-0" />
           )}
         </span>
-      </button>
+      </Button>
       {open ? (
         <div
           data-task-batch-rows=""
@@ -193,7 +196,8 @@ function TaskBurst(props: {
     );
   }
   return (
-    <button
+    <Button
+      variant="ghost"
       type="button"
       data-task-burst=""
       aria-expanded={false}
@@ -205,7 +209,7 @@ function TaskBurst(props: {
         <span className="font-semibold text-fg-2">{ctx.nameOf(line.actorId)}</span>
         {burstLabel('', line.events.length)}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -216,7 +220,8 @@ function TaskAdded(props: {
 }): ReactElement {
   const { line, ctx } = props;
   return (
-    <button
+    <Button
+      variant="ghost"
       type="button"
       data-task-added={line.events.length}
       onClick={() => ctx.onOpenTask(TASKS_SHEET_ONLY)}
@@ -227,7 +232,7 @@ function TaskAdded(props: {
         <span className="font-semibold text-fg-2">{ctx.nameOf(line.actorId)}</span>
         {addedLabel('', line.events.length)}
       </span>
-    </button>
+    </Button>
   );
 }
 

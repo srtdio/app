@@ -107,7 +107,8 @@ describe('EmojiPicker parts', () => {
   it('one 44x44 tab per Unicode group; a tap goes to that group', () => {
     const onTab = vi.fn();
     const tabs = EmojiTabs({ query: '', activeGroup: 'Smileys & Emotion', onTab });
-    const list = all(tabs).filter((e) => e.props.role === 'tab');
+    // Each tab is an IconButton: expand it to the <button> it renders.
+    const list = buttons(tabs).filter((e) => e.props.role === 'tab');
     expect(list.map((t) => t.props['aria-label'])).toEqual(emojiSections().map((s) => s.group));
     for (const t of list) expect(String(t.props.className)).toContain('h-11 w-11');
     (list[3]?.props.onClick as () => void)();
@@ -315,7 +316,7 @@ describe('R4: a tab tap while searching', () => {
       }),
     ).toBe('Flags');
     // With the query cleared the tab reads selected.
-    const tabs = all(EmojiTabs({ query: '', activeGroup: 'Flags', onTab: vi.fn() })).filter(
+    const tabs = buttons(EmojiTabs({ query: '', activeGroup: 'Flags', onTab: vi.fn() })).filter(
       (e) => e.props.role === 'tab',
     );
     const selected = tabs.filter((t) => t.props['aria-selected'] === true);

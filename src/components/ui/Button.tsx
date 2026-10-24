@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/cn';
 
 export type ButtonVariant =
@@ -20,12 +20,15 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md' | 'lg';
   /** 'round' renders a 44x44 circle (composer actions); default is the 8px-radius rectangle. */
   shape?: 'default' | 'round';
+  /** Ref to the rendered <button>; a plain prop so Button stays a callable function. */
+  buttonRef?: Ref<HTMLButtonElement> | undefined;
 }
 
 // One height (44), one radius (8), one type (14 / 500). Tokens only, so light
 // and dark match. cn() does not merge classes, so the radius and padding live in
-// the shape classes (never both rounded-lg and rounded-full on one element) and
-// a caller overriding a base property must use the ! modifier (e.g. !justify-start).
+// the shape classes (never both rounded-lg and rounded-full on one element).
+// Callers never override a base property with the ! modifier (no-raw-button
+// test): pick another variant or primitive instead.
 export const BUTTON_BASE =
   'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none';
 
@@ -60,8 +63,9 @@ export function Button({
   size,
   shape = 'default',
   className,
+  buttonRef,
   ...props
 }: ButtonProps) {
   void size;
-  return <button className={buttonClass(variant, shape, className)} {...props} />;
+  return <button ref={buttonRef} className={buttonClass(variant, shape, className)} {...props} />;
 }

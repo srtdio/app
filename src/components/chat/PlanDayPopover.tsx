@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { MOVE_TO_HEADING, REMOVE_LABEL } from '@/lib/chat/plan-keyboard-move';
 import { cn } from '@/lib/cn';
@@ -169,8 +170,7 @@ export function PlanDayPopover(props: {
     const next = items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
     next?.focus();
   };
-  const item =
-    'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg px-2.5 text-left text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  const item = 'flex items-center justify-between gap-2 px-2.5 text-base';
   return createPortal(
     <div
       ref={ref}
@@ -197,30 +197,26 @@ export function PlanDayPopover(props: {
       {props.days.map((d) => {
         const current = d.day === props.current;
         return (
-          <button
+          <PressableRow
             key={d.day ?? 'none'}
             type="button"
             role="menuitem"
             data-plan-popover-day={d.day ?? 'none'}
             {...(current ? { 'aria-current': 'true' as const } : {})}
             onClick={() => props.onPick(d.day)}
-            className={cn(
-              item,
-              'hover:bg-panel-2',
-              current ? 'font-medium text-accent' : 'font-medium text-fg',
-            )}
+            className={cn(item, current ? 'font-medium text-accent' : 'font-medium text-fg')}
           >
             <span className="truncate">{d.label}</span>
             <span className="shrink-0 font-mono text-xs text-fg-3">
               {d.count > 0 ? d.count : ''}
             </span>
-          </button>
+          </PressableRow>
         );
       })}
       {props.withRemove ? (
         <>
           <hr className="mx-1.5 my-1 border-0 border-t border-border" />
-          <button
+          <PressableRow
             type="button"
             role="menuitem"
             data-plan-popover-remove=""
@@ -229,7 +225,7 @@ export function PlanDayPopover(props: {
           >
             <IconTrash size={ICON_SIZE.inline} />
             {REMOVE_LABEL}
-          </button>
+          </PressableRow>
         </>
       ) : null}
     </div>,

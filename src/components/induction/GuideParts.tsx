@@ -282,10 +282,16 @@ function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): 
           variant="ghost"
           data-induction-next=""
           onClick={actions.onNext}
-          // The guide's amber, not a theme variant: ! so it beats ghost's colours.
-          className={`${GUIDE_ACTION} !bg-[var(--guide)] !text-[var(--guide-ink)] hover:opacity-90`}
+          // The guide's amber, not a theme variant: the fill is a layer under the
+          // label (isolate keeps it above the button's own hover) and the ink rides
+          // on the label, so ghost's colours never need overriding.
+          className={`${GUIDE_ACTION} relative isolate hover:opacity-90`}
         >
-          {copy.next}
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 -z-10 rounded-lg bg-[var(--guide)]"
+          />
+          <span className="text-[var(--guide-ink)]">{copy.next}</span>
         </Button>
       ) : null}
       {actions.onLater !== undefined ? (
@@ -398,12 +404,12 @@ export function GuideCard({
         {onSkip !== undefined && copy.skip !== undefined ? (
           <Button
             type="button"
-            variant="ghost"
+            variant={hero ? 'link' : 'ghost'}
             data-induction-skip=""
             onClick={onSkip}
-            className={`${GUIDE_ACTION} ${hero ? '!text-accent-fg opacity-90 hover:!bg-transparent focus-visible:ring-accent-fg' : ''}`}
+            className={`${GUIDE_ACTION} ${hero ? 'opacity-90 focus-visible:ring-accent-fg' : ''}`}
           >
-            {copy.skip}
+            {hero ? <span className="text-accent-fg">{copy.skip}</span> : copy.skip}
           </Button>
         ) : null}
         <Button

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { PageHead } from '@/components/shell/PageHead';
+import { Chip } from '@/components/ui/Chip';
 import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
-import { cn } from '@/lib/cn';
 
 const CATEGORIES = [
   'All topics',
@@ -204,20 +204,15 @@ export function HelpPage() {
 
           <div className="mt-4 flex gap-2 overflow-x-auto pb-2" aria-label="Filter help articles">
             {CATEGORIES.map((item) => (
-              <button
+              <Chip
                 key={item}
                 type="button"
+                label={item}
+                selected={category === item}
                 aria-pressed={category === item}
                 onClick={() => setCategory(item)}
-                className={cn(
-                  'inline-flex min-h-[44px] shrink-0 items-center rounded-lg border px-4 text-base font-normal transition-colors',
-                  category === item
-                    ? 'border-accent-line bg-accent-soft text-accent'
-                    : 'border-border text-fg-2 hover:bg-panel-2',
-                )}
-              >
-                {item}
-              </button>
+                className="shrink-0"
+              />
             ))}
           </div>
 

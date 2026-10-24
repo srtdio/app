@@ -31,6 +31,7 @@ import type {
   CheckpointStripProps,
 } from '@/components/pages/pcs/CheckpointStrip';
 import { commentDomId } from '@/components/comments/Comments';
+import { IconButton } from '@/components/ui/IconButton';
 
 // Node unit environment (no DOM renderer): walk the JSX the hookless helpers
 // return and assert structure / classes, mirroring PcsTabs.test.tsx.
@@ -133,26 +134,31 @@ describe('checkpointChips', () => {
   it('renders one chip per checkpoint in ledger_seq order regardless of read order', () => {
     const chips = checkpointChips(rows);
     expect(chips).toHaveLength(3);
-    expect(chips.map((chip) => (chip.props as { ['aria-label']: string })['aria-label'])).toEqual([
+    expect(chips.map((chip) => (chip.props as { label: string }).label)).toEqual([
       'Jump to checkpoint 1',
       'Jump to checkpoint 2',
       'Jump to checkpoint 3',
     ]);
   });
 
-  it('every chip is a real button carrying a 44px minimum touch target', () => {
+  it('every chip is an IconButton carrying a 44px minimum touch target', () => {
     for (const chip of checkpointChips(rows)) {
-      expect(chip.type).toBe('button');
-      const cls = (chip.props as { className: string }).className;
+      expect(chip.type).toBe(IconButton);
+      // The rendered <button>'s classes come from IconButton itself.
+      const rendered = IconButton(chip.props as Parameters<typeof IconButton>[0]);
+      const cls = (rendered.props as { className: string }).className;
       expect(cls).toContain('min-h-[44px]');
       expect(cls).toContain('min-w-[44px]');
+      // No important overrides on the shared primitive.
+      expect((chip.props as { className?: string }).className ?? '').not.toMatch(/(^|\s|:)!/);
     }
   });
 
   it('shows the ledger_seq number and no glyph component on an open chip', () => {
     const open = checkpointChips([row('y', 5, null, null)])[0]!;
     expect(collectText(open)).toContain('5');
-    expect(elements(open).some((el) => typeof el.type === 'function')).toBe(false);
+    // The root is the IconButton; no glyph component renders inside it.
+    expect(elements(open).some((el) => el !== open && typeof el.type === 'function')).toBe(false);
   });
 
   it('shows a tick glyph and NOT the number on a resolved chip, accepted or not', () => {
@@ -160,7 +166,8 @@ describe('checkpointChips', () => {
     for (const resolved of [row('a', 7, 't', null), row('x', 7, 't', 't')]) {
       const chip = checkpointChips([resolved])[0]!;
       expect(collectText(chip)).not.toContain('7');
-      expect(elements(chip).some((el) => typeof el.type === 'function')).toBe(true);
+      // The root is the IconButton; the tick glyph component renders inside it.
+      expect(elements(chip).some((el) => el !== chip && typeof el.type === 'function')).toBe(true);
     }
   });
 
@@ -213,7 +220,7 @@ describe('checkpointChips', () => {
     expect(text).not.toMatch(/[A-Za-z]{3,}/);
   });
 
-  it('no chip element translates, rotates or scales', () => {
+  it('no chip element translates, rotates or scales (IconButton press feedback aside)', () => {
     for (const chip of checkpointChips([row('a', 1, 't', null)])) {
       for (const el of elements(chip)) {
         const cls = (el.props as { className?: string }).className ?? '';

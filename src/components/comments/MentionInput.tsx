@@ -13,6 +13,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 
 const TEXT_NODE = 3;
@@ -434,11 +435,12 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
       />
 
       {open ? (
-        <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-panel-2 py-1 shadow-lg">
+        <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-panel py-1 shadow-lg">
           {matches.map((member, index) => (
             <li key={member.id}>
-              <button
+              <PressableRow
                 type="button"
+                flat
                 onMouseDown={(event) => {
                   event.preventDefault();
                   selectMember(member);
@@ -446,8 +448,8 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
                 onMouseEnter={() => setHighlight(index)}
                 className={
                   index === highlight
-                    ? 'flex min-h-[44px] w-full items-center gap-2 px-3 text-left bg-panel-3'
-                    : 'flex min-h-[44px] w-full items-center gap-2 px-3 text-left hover:bg-panel-3'
+                    ? 'flex items-center gap-2 px-3 bg-panel-2'
+                    : 'flex items-center gap-2 px-3'
                 }
               >
                 <Avatar
@@ -464,7 +466,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
                 {member.role !== '' ? (
                   <span className="shrink-0 text-sm text-fg-3">{member.role}</span>
                 ) : null}
-              </button>
+              </PressableRow>
             </li>
           ))}
         </ul>

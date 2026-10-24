@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Sheet } from '@/components/ui/Sheet';
 import {
@@ -285,10 +286,10 @@ export function MarkSheetRow(props: {
       className="flex flex-col border-b border-border py-1 last:border-b-0"
     >
       <div className="flex items-center gap-2">
-        <button
+        <PressableRow
           type="button"
           onClick={props.onJump}
-          className="flex min-h-[44px] min-w-0 flex-1 flex-col gap-1 rounded-md px-2 py-2 text-left transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex min-w-0 flex-1 flex-col gap-1 px-2 py-2 transition-colors"
         >
           <span className="flex min-w-0 items-center gap-2 text-sm text-fg-3">
             <Tag label={TYPE_LABEL[mark.type]} tone={MARK_TONE[mark.type]} className="shrink-0" />
@@ -299,7 +300,7 @@ export function MarkSheetRow(props: {
           <span className="line-clamp-2 [overflow-wrap:anywhere] text-base text-fg-2">
             {props.text}
           </span>
-        </button>
+        </PressableRow>
         {props.resolver !== undefined ? (
           <div data-mark-history="" className="flex shrink-0 flex-col items-end gap-1 text-right">
             <span className="text-sm font-semibold text-fg">{STAMP_WORD[mark.type]}</span>

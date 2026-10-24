@@ -14,6 +14,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { ICON_SIZE, IconCamera, IconFile, IconMic, IconVideo } from '@/components/ui/icons';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import type { PresignCache } from '@/lib/asset-presign';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import {
   attachmentSummary,
@@ -28,7 +29,9 @@ import {
   type ChatLayout,
 } from '@/components/chat/chat-type';
 
-export const REPLY_QUOTE_BOX = 'flex min-w-0 gap-2 overflow-hidden rounded-md bg-panel-3';
+/** The box without its radius: the tappable quote takes PressableRow's. */
+const REPLY_QUOTE_LAYOUT = 'flex min-w-0 gap-2 overflow-hidden bg-panel-3';
+export const REPLY_QUOTE_BOX = `${REPLY_QUOTE_LAYOUT} rounded-md`;
 
 /** The rule and author ink: accent for a reply, warn for the editing bar. */
 export type QuoteTone = 'accent' | 'warn';
@@ -226,17 +229,17 @@ export function ReplyQuoteBox(props: {
   if (props.onJump !== undefined) {
     const onJump = props.onJump;
     return (
-      <button
+      <PressableRow
         type="button"
         aria-label="Go to quoted message"
         onClick={(e) => {
           e.stopPropagation();
           onJump();
         }}
-        className={cn(REPLY_QUOTE_BOX, 'min-h-[44px] w-full text-left', props.className)}
+        className={cn(REPLY_QUOTE_LAYOUT, props.className)}
       >
         {quoteLines(props.author, props.preview, tone, deleted, inBubble, media, props.thumbSource)}
-      </button>
+      </PressableRow>
     );
   }
   return (

@@ -13,6 +13,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
+import { PRESSABLE_ROW_BASE } from '@/components/ui/PressableRow';
 import { VOICE_START_TIMEOUT_MS, VoiceNote } from '@/components/chat/VoiceNote';
 import { voiceStore } from '@/lib/chat/transcript-store';
 
@@ -303,11 +304,16 @@ describe('VoiceNote playback', () => {
     expect(ring.matches(selector)).toBe(false);
   });
 
-  it('play is a bare glyph: no rounded box and no fill classes', () => {
+  it('play is a bare glyph on the shared PressableRow surface: no fill or radius of its own', () => {
     mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/a' });
-    const cls = playButton().className;
-    expect(cls).not.toMatch(/\brounded-/);
-    expect(cls).not.toMatch(/(^|\s)(hover:|active:|focus:)?!?bg-/);
+    // Only the primitive's own surface classes (rounded-lg, hover:bg-panel-2)
+    // may carry a radius or fill; VoiceNote adds none.
+    const own = playButton()
+      .className.split(/\s+/)
+      .filter((c) => !PRESSABLE_ROW_BASE.split(' ').includes(c) && c !== 'rounded-lg')
+      .join(' ');
+    expect(own).not.toMatch(/\brounded-/);
+    expect(own).not.toMatch(/(^|\s)(hover:|active:|focus:)?!?bg-/);
     expect(playButton().hasAttribute('data-voice-control')).toBe(true);
   });
 });

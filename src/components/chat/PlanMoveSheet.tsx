@@ -10,6 +10,7 @@ import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconCalendar, IconCheck, IconEdit, IconTrash } from '@/components/ui/icons';
 import { KEEP_APPROVAL_NO, KEEP_APPROVAL_YES } from '@/components/chat/plan-card';
 import { cn } from '@/lib/cn';
@@ -78,20 +79,20 @@ export function PlanMoveSheet(props: {
           const current = d.day === props.current;
           return (
             <li key={d.day ?? 'none'}>
-              <button
+              <PressableRow
                 type="button"
                 data-plan-move-day={d.day ?? 'none'}
                 {...(current ? { 'aria-current': 'true' as const } : {})}
                 disabled={props.busy}
                 onClick={() => props.onPick(d.day)}
                 className={cn(
-                  'flex min-h-[48px] w-full items-center justify-between rounded-lg px-3 text-left text-lg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
+                  'flex min-h-[48px] items-center justify-between px-3 text-lg',
                   current ? 'text-fg-3' : 'text-fg',
                 )}
               >
                 <span>{d.label}</span>
                 {current ? <span className="text-sm text-fg-3">Current</span> : null}
-              </button>
+              </PressableRow>
             </li>
           );
         })}

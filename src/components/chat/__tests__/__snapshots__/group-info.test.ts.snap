@@ -16,7 +16,7 @@ exports[`group info full page > Leave group is the 44px outlined secondary butto
     "members",
     "leave",
   ],
-  "leaveRow": "inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none rounded-lg px-4 bg-panel text-fg border border-border hover:bg-panel-2 w-full !justify-start gap-3 text-left text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+  "leaveRow": "inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none rounded-lg px-4 bg-panel text-fg border border-border hover:bg-panel-2 w-full gap-3 text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
   "member": [
     "hero",
     "tabs",

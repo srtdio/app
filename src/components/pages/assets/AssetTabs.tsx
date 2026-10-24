@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react';
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { ASSET_TABS, TAB_LABELS, type AssetTab } from '@/lib/assets';
 
@@ -51,9 +52,10 @@ export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
       {ASSET_TABS.map((tab) => {
         const selected = tab === value;
         return (
-          <button
+          <Button
+            variant="ghost"
             key={tab}
-            ref={(el) => {
+            buttonRef={(el) => {
               if (el === null) refs.current.delete(tab);
               else refs.current.set(tab, el);
             }}
@@ -66,15 +68,15 @@ export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
             data-asset-tab={tab}
             onClick={() => onChange(tab)}
             className={cn(
-              'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-base font-normal transition-colors',
+              'shrink-0 border',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
               selected
-                ? 'border-accent-line bg-accent-soft text-accent'
-                : 'border-border text-fg-2 hover:bg-panel-2',
+                ? 'border-accent-line bg-accent-soft text-accent hover:text-accent'
+                : 'border-border',
             )}
           >
             {TAB_LABELS[tab]} <span className="tabular-nums">{counts[tab]}</span>
-          </button>
+          </Button>
         );
       })}
     </div>

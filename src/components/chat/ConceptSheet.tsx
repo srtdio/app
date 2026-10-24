@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
@@ -419,8 +420,9 @@ export function ConceptSheet(props: {
                         fallback={{ kind: 'glyph' }}
                         alt={f.name}
                       />
-                      <button
+                      <PressableRow
                         type="button"
+                        inline
                         data-plan-concept-file-remove=""
                         aria-label={`Remove ${f.name}`}
                         disabled={busy}
@@ -430,12 +432,12 @@ export function ConceptSheet(props: {
                             files: x.files.filter((y) => y.versionId !== f.versionId),
                           }))
                         }
-                        className="absolute right-0 top-0 flex h-11 w-11 items-start justify-end p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        className="absolute right-0 top-0 flex h-11 w-11 items-start justify-end p-1"
                       >
                         <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-panel text-fg-2">
                           <IconX size={ICON_SIZE.inline} />
                         </span>
-                      </button>
+                      </PressableRow>
                     </div>
                   ))}
                 </div>

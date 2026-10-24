@@ -584,12 +584,14 @@ export function ProfileSettingsPanel(): React.ReactElement {
  */
 export function CameraBadge(props: { disabled: boolean; onPress: () => void }): React.ReactElement {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      shape="round"
       aria-label="Change photo"
       disabled={props.disabled}
       onClick={props.onPress}
-      className="absolute -bottom-2 -right-2 grid h-11 w-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+      className="absolute -bottom-2 -right-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span
         data-camera-badge=""
@@ -598,7 +600,7 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
       >
         <IconCamera size={ICON_SIZE.control} />
       </span>
-    </button>
+    </Button>
   );
 }
 

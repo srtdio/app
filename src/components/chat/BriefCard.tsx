@@ -18,6 +18,7 @@ import {
   type ThreadCardCache,
 } from '@/components/chat/PostCard';
 import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { BriefStatusPill } from '@/components/pages/BriefCard';
 import { briefRoute, sharedBriefViews, type SharedBriefView } from '@/lib/chat/briefs';
 
@@ -97,11 +98,12 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
     );
   }
   return (
-    <button
+    <PressableRow
       type="button"
+      inline
       aria-label={`Open brief ${view.title}`}
       onClick={() => navigate(briefRoute(view.briefId))}
-      className={`${SHARED_CARD} text-left transition-colors hover:bg-panel-2`}
+      className={`${SHARED_CARD} transition-colors`}
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3 text-fg-3">
         <IconBriefs size={ICON_SIZE.nav} />
@@ -116,6 +118,6 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
           <BriefStatusPill status={view.status} />
         </span>
       </span>
-    </button>
+    </PressableRow>
   );
 }

@@ -11,6 +11,7 @@ import type { ReactElement } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { NotesAvatar } from '@/components/chat/NotesBits';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { SelectCheck } from '@/components/ui/SelectCheck';
@@ -142,15 +143,15 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
             const isSelected = selected.has(channel.channelId);
             return (
               <li key={channel.channelId}>
-                <button
+                <PressableRow
                   type="button"
                   aria-pressed={isSelected}
                   onClick={() =>
                     setSelected((prev) => toggleForwardTarget(prev, channel.channelId))
                   }
                   className={cn(
-                    'group/notes-row flex w-full min-h-[44px] items-center gap-3 rounded-lg px-2 py-1 text-left transition-colors',
-                    isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2',
+                    'group/notes-row flex items-center gap-3 px-2 py-1 transition-colors',
+                    isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2',
                   )}
                 >
                   {forwardRowAvatar(channel, isSelected)}
@@ -158,7 +159,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
                     {channel.title}
                   </span>
                   <SelectCheck checked={isSelected} />
-                </button>
+                </PressableRow>
               </li>
             );
           })}

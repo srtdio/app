@@ -28,6 +28,7 @@ import type { PostCardFields } from '@srtdio/posts';
 import { planCreateWithItems } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ICON_SIZE, IconCalendar, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -489,7 +490,9 @@ export function PlanComposeScreen(props: {
   );
 
   const addClass =
-    'w-full !justify-start border-dashed border-border-strong text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+    'w-full border-dashed border-border-strong text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  // Left aligned inside the full-width button (the Button itself centres).
+  const addInner = 'flex w-full items-center gap-2';
 
   return (
     <>
@@ -581,8 +584,10 @@ export function PlanComposeScreen(props: {
               }}
               className={addClass}
             >
-              <IconPlus size={ICON_SIZE.inline} />
-              Add concept
+              <span className={addInner}>
+                <IconPlus size={ICON_SIZE.inline} />
+                Add concept
+              </span>
             </Button>
             <Button
               type="button"
@@ -590,8 +595,10 @@ export function PlanComposeScreen(props: {
               onClick={() => setPicker('posts')}
               className={addClass}
             >
-              <IconPlus size={ICON_SIZE.inline} />
-              Add from Pipeline
+              <span className={addInner}>
+                <IconPlus size={ICON_SIZE.inline} />
+                Add from Pipeline
+              </span>
             </Button>
             <Button
               type="button"
@@ -599,8 +606,10 @@ export function PlanComposeScreen(props: {
               onClick={() => setPicker('drafts')}
               className={addClass}
             >
-              <IconPlus size={ICON_SIZE.inline} />
-              Add drafts
+              <span className={addInner}>
+                <IconPlus size={ICON_SIZE.inline} />
+                Add drafts
+              </span>
             </Button>
           </div>
         </div>
@@ -729,19 +738,16 @@ export function ComposeItemRow(props: {
     >
       <div className="flex items-center gap-2.5">
         {item.kind === 'concept' ? (
-          <button
+          <PressableRow
             type="button"
             data-plan-draft-concept-edit=""
             aria-label={`Edit ${item.title}`}
             onClick={props.onEdit}
             onContextMenu={(event) => event.preventDefault()}
-            className={cn(
-              '-m-1 flex min-h-[44px] min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              NO_TOUCH_SELECT,
-            )}
+            className={cn('-m-1 flex min-w-0 flex-1 items-center gap-2.5 p-1', NO_TOUCH_SELECT)}
           >
             {head}
-          </button>
+          </PressableRow>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-2.5">{head}</div>
         )}
@@ -764,27 +770,29 @@ export function ComposeItemRow(props: {
         data-plan-day-button={need ? 'need' : item.day === 'none' ? 'none' : 'day'}
         onClick={props.onDay}
         className={cn(
-          'w-full !justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           need ? 'border-warn text-warn' : 'bg-panel-2',
         )}
       >
-        {need ? (
-          <>
-            {PICK_A_DAY}
-            <IconChevronRight size={ICON_SIZE.inline} />
-          </>
-        ) : (
-          <>
-            {item.day === 'none' ? (
-              <span className="font-medium text-fg-3">{NO_DATE_LABEL}</span>
-            ) : (
-              <span>{formatCivilDayHeader(item.day as string)}</span>
-            )}
-            <span className="text-fg-3">
-              <IconCalendar size={ICON_SIZE.inline} />
-            </span>
-          </>
-        )}
+        <span data-plan-day-inner="" className="flex w-full items-center justify-between gap-2">
+          {need ? (
+            <>
+              {PICK_A_DAY}
+              <IconChevronRight size={ICON_SIZE.inline} />
+            </>
+          ) : (
+            <>
+              {item.day === 'none' ? (
+                <span className="font-medium text-fg-3">{NO_DATE_LABEL}</span>
+              ) : (
+                <span>{formatCivilDayHeader(item.day as string)}</span>
+              )}
+              <span className="text-fg-3">
+                <IconCalendar size={ICON_SIZE.inline} />
+              </span>
+            </>
+          )}
+        </span>
       </Button>
       {note !== null ? (
         <p

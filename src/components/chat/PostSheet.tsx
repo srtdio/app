@@ -60,6 +60,7 @@ import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import { formatShortDate } from '@/lib/chat/time-format';
 import { actsOnBehalfOfClient, type ViewerSide } from '@/lib/chat/viewer-role';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
@@ -160,14 +161,15 @@ function StripSlide(props: {
   const video = isVideoItem(item);
   const ready = thumb.url !== null && !thumb.failed;
   return (
-    <button
-      ref={thumb.ref}
+    <PressableRow
+      flat
+      buttonRef={thumb.ref}
       type="button"
       data-strip-slide=""
       aria-label={`Open slide ${index + 1}`}
       onClick={() => props.onOpen(index)}
       className={cn(
-        'relative h-full w-full shrink-0 snap-center overflow-hidden',
+        'relative h-full shrink-0 snap-center overflow-hidden',
         frame === null && 'bg-panel-3',
       )}
     >
@@ -199,7 +201,7 @@ function StripSlide(props: {
           </span>
         </span>
       ) : null}
-    </button>
+    </PressableRow>
   );
 }
 

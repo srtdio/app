@@ -12,6 +12,8 @@ import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import {
   ICON_SIZE,
   IconCalendar,
@@ -104,15 +106,15 @@ function radioRow(
   trailing?: ReactNode,
 ): ReactElement {
   return (
-    <button
+    <PressableRow
       key={key}
       type="button"
       role="menuitemradio"
       aria-checked={selected}
       onClick={onClick}
       className={cn(
-        'flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-base transition-colors',
-        selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
+        'flex h-11 items-center gap-2.5 px-3 text-base transition-colors',
+        selected ? 'text-fg' : 'text-fg-2',
       )}
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-accent">
@@ -120,7 +122,7 @@ function radioRow(
       </span>
       <span className="flex-1">{label}</span>
       {trailing}
-    </button>
+    </PressableRow>
   );
 }
 
@@ -391,16 +393,16 @@ export function PipelineFilterControl({
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const active = dateFilterActive(dateWindow, customRange) || order !== POST_SORT_DEFAULT;
   const trigger = (
-    <Button
+    <IconButton
       type="button"
-      variant="secondary"
+      label="Filter and sort"
       aria-haspopup="menu"
       aria-expanded={open}
-      aria-label="Filter and sort"
       data-filter-control=""
       {...(active ? { 'data-active': '' } : {})}
       onClick={() => setOpen((prev) => !prev)}
-      className={cn(TRIGGER, 'relative w-11 !px-0 text-fg-2')}
+      // The shared 44x44 IconButton in the secondary outline (border on panel).
+      className={cn(TRIGGER, 'relative border border-border bg-panel')}
     >
       <IconFilterLines size={ICON_SIZE.control} />
       {active ? (
@@ -410,7 +412,7 @@ export function PipelineFilterControl({
           className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-panel"
         />
       ) : null}
-    </Button>
+    </IconButton>
   );
   const calendar = (
     <PipelineDateRangeCalendar

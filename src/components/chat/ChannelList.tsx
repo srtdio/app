@@ -10,7 +10,8 @@ import {
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/ui/Avatar';
-import { Button, buttonClass } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { countBadgeText } from '@/components/ui/CountBadge';
@@ -718,9 +719,10 @@ export function ChannelCard(props: {
       // Touch-first: the native menu and callout never show on a tile.
       onContextMenu={chatRowContextMenu(coarsePointer)}
     >
-      <button
-        ref={rowRef}
+      <PressableRow
+        buttonRef={rowRef}
         type="button"
+        align={tileKind(channel) === 'square' ? 'center' : 'left'}
         {...(menuEnabled
           ? {
               ...handlers,
@@ -782,7 +784,7 @@ export function ChannelCard(props: {
           selecting,
           checked,
         })}
-      </button>
+      </PressableRow>
       {menuEnabled ? (
         <IconButton
           type="button"
@@ -822,7 +824,7 @@ export function notesTile(props: {
   const last = notesLastLine(summary, props.nowMs ?? 0, workspaceTimeZone(props.timeZone));
   return (
     <div className={cn(CHAT_HOME_STACK, 'pb-2')}>
-      <button
+      <PressableRow
         type="button"
         data-notes-tile=""
         aria-label={`Open ${notes.title}`}
@@ -864,7 +866,7 @@ export function notesTile(props: {
             {last !== null ? last.preview : NOTES_TILE_LINE}
           </span>
         </span>
-      </button>
+      </PressableRow>
     </div>
   );
 }
@@ -924,27 +926,24 @@ export function searchChips(props: {
       {HOME_CHIPS.map((chip) => {
         const on = props.kind === chip.kind;
         return (
-          <button
+          <Button
             key={chip.kind}
+            variant="secondary"
             type="button"
             data-search-chip={chip.kind}
             aria-pressed={on}
             onClick={() => props.onChange(toggleHomeChip(props.kind, chip.kind))}
-            className={buttonClass(
-              'secondary',
-              'default',
-              cn(
-                'shrink-0 !gap-1.5 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                NO_TOUCH_SELECT,
-                on ? 'border-accent-line bg-accent-soft text-accent' : 'text-fg-2',
-              ),
+            className={cn(
+              'shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              NO_TOUCH_SELECT,
+              on ? 'border-accent-line bg-accent-soft text-accent' : 'text-fg-2',
             )}
           >
             {chip.kind === 'starred' ? (
               <IconStarFilled size={ICON_SIZE.inline} className="shrink-0 text-accent" />
             ) : null}
             {chip.label}
-          </button>
+          </Button>
         );
       })}
     </div>

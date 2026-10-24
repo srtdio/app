@@ -6,6 +6,7 @@ import type { ReactElement, ReactNode } from 'react';
 // codebase). Topbar holds no hooks, so no renderer is needed.
 import { Topbar } from '@/components/shell/Topbar';
 import { NotificationsButton } from '@/components/shell/NotificationsButton';
+import { Button } from '@/components/ui/Button';
 
 // The button's module graph reaches the chat SDK and the logger: stub both.
 vi.mock('agora-chat', () => ({
@@ -59,8 +60,14 @@ const baseProps = {
   onOpenAvatar: () => {},
 };
 
+/** The switcher is a <Button>; expand it (hookless) to read the host <button> it renders. */
 function switcherButtons(tree: ReactNode): ReactElement[] {
-  return findAll(tree, (el) => el.type === 'button' && ariaLabel(el) === 'Switch workspace');
+  return findAll(
+    tree,
+    (el) => (el.type === 'button' || el.type === Button) && ariaLabel(el) === 'Switch workspace',
+  ).map((el) =>
+    el.type === Button ? (Button(el.props as Parameters<typeof Button>[0]) as ReactElement) : el,
+  );
 }
 
 afterEach(() => {

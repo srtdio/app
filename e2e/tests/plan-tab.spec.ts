@@ -15,7 +15,7 @@ import {
   mondayOf,
   seedPlanTab,
 } from '../fixtures/chat-data';
-import { expectMinTouchTarget } from '../helpers/touch-target';
+import { expectAllVisibleControlsTouchSized, expectMinTouchTarget } from '../helpers/touch-target';
 
 // The Plan tab (/plan). Phone: the plans as cards in sections, a tap opens
 // the plan's own screen full page. Laptop (@desktop, desktop-webkit): the
@@ -111,6 +111,17 @@ test('phone: the Plan tab lists plans in sections and a tap opens the plan @them
   await expect(page).toHaveURL(new RegExp(`/plan/${TAB_SHARED_PLAN_ID}$`));
   await expect(page.locator('[data-plan-page="plan"]')).toBeVisible();
   await expect(page.locator('[data-plan-tab-list]')).toHaveCount(0);
+  expectClean(network);
+});
+
+test('the Plan tab: every visible button is at least a 44x44 touch target @desktop', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  seedPlanTab(network.world, { sender: ME });
+  await openTab(page);
+  const checked = await expectAllVisibleControlsTouchSized(page);
+  expect(checked, 'buttons measured on the Plan tab').toBeGreaterThan(0);
   expectClean(network);
 });
 

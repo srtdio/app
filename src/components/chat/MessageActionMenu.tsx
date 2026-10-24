@@ -23,7 +23,9 @@ import {
   IconX,
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
+import { Backdrop } from '@/components/ui/Backdrop';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { MARK_TONE } from '@/components/chat/MarkBits';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
 import { useReminderOptional } from '@/components/chat/ReminderContext';
@@ -578,15 +580,15 @@ export function MenuRow(props: {
       item.icon
     );
   return (
-    <button
+    <PressableRow
+      flat
       type="button"
       role="menuitem"
       data-menu-item={item.key}
       onClick={() => props.onRun(item)}
       className={cn(
         MENU_ROW,
-        'text-left text-lg transition-colors',
-        'hover:bg-panel-2 focus:outline-none focus-visible:bg-panel-2',
+        'text-lg transition-colors focus-visible:bg-panel-2',
         item.danger === true ? 'text-bad' : 'text-fg',
       )}
     >
@@ -609,7 +611,7 @@ export function MenuRow(props: {
           <IconChevronRight />
         </span>
       ) : null}
-    </button>
+    </PressableRow>
   );
 }
 
@@ -717,33 +719,30 @@ export function ReactionsRow(props: {
       )}
     >
       {QUICK_REACTIONS.map((emoji) => (
-        <button
+        <IconButton
           key={emoji}
           type="button"
-          aria-label={`React ${emoji}`}
+          label={`React ${emoji}`}
           aria-pressed={emoji === currentReaction}
           {...(reactionsOnly ? { 'data-menu-item': `react-${emoji}` } : {})}
           onClick={() => props.onReact(emoji)}
-          className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl hover:bg-panel-2',
-            emoji === currentReaction && 'bg-panel-3',
-          )}
+          className={cn('shrink-0 text-2xl', emoji === currentReaction && 'bg-panel-3')}
         >
           <span aria-hidden="true">{emoji}</span>
-        </button>
+        </IconButton>
       ))}
-      <button
-        ref={props.moreRef}
+      <IconButton
+        buttonRef={props.moreRef}
         type="button"
         data-react-more=""
-        aria-label={MORE_REACTIONS_LABEL}
+        label={MORE_REACTIONS_LABEL}
         aria-haspopup="dialog"
         {...(reactionsOnly ? { 'data-menu-item': 'react-more' } : {})}
         onClick={props.onMore}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2 hover:bg-panel-3 hover:text-fg"
+        className="shrink-0 bg-panel-2"
       >
         <IconPlus size={ICON_SIZE.control} />
-      </button>
+      </IconButton>
     </div>
   );
 }
@@ -1092,7 +1091,8 @@ export function EmojiPickerShell(props: {
     );
   }
   return createPortal(
-    <div data-emoji-dismiss="" className="fixed inset-0 z-[60] bg-black/45" onClick={onClose}>
+    <div data-emoji-dismiss="" className="fixed inset-0 z-[60]">
+      <Backdrop aria-label="Close emoji picker" onClick={onClose} position="absolute" />
       <div
         {...dialogProps}
         data-emoji-picker="touch"
@@ -1397,15 +1397,18 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
 
   return createPortal(
     <>
+      {/* The wrapper keeps the menu's own fade out and the inert return; the
+          Backdrop is the one scrim. */}
       <div
         data-menu-backdrop=""
         className={cn(
-          'fixed inset-0 z-40 bg-black/55 transition-opacity duration-fast motion-reduce:transition-none',
+          'fixed inset-0 z-40 transition-opacity duration-fast motion-reduce:transition-none',
           shown && !returning ? 'opacity-100' : 'opacity-0',
           returning && 'pointer-events-none',
         )}
-        onClick={onClose}
-      />
+      >
+        <Backdrop aria-label="Close actions" onClick={onClose} position="absolute" />
+      </div>
       <div
         ref={safeRef}
         aria-hidden="true"

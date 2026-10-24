@@ -9,6 +9,7 @@
 // the strip renders nothing.
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { IconButton } from '@/components/ui/IconButton';
 import type { ReactElement } from 'react';
 import {
   checkpointProgressText,
@@ -82,8 +83,8 @@ function byLedgerSeq(rows: readonly CheckpointChipRow[]): CheckpointChipRow[] {
   return [...rows].sort((a, b) => (a.ledger_seq ?? 0) - (b.ledger_seq ?? 0));
 }
 
-/** One chip per checkpoint, ledger_seq ascending. Each chip is a real button with
- *  a 44px minimum touch target (the visible circle is smaller) and an accessible
+/** One chip per checkpoint, ledger_seq ascending. Each chip is the shared
+ *  IconButton: a 44x44 touch target (the visible circle is smaller) and an accessible
  *  label naming the checkpoint it jumps to; activating it scrolls to and rings
  *  that checkpoint's row in the feed. A resolved chip shows a tick glyph in place
  *  of its number. */
@@ -92,13 +93,13 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
     const state = chipState(row);
     const seq = row.ledger_seq ?? 0;
     return (
-      <button
+      <IconButton
         key={row.id}
-        type="button"
-        aria-label={`Jump to checkpoint ${seq}`}
+        label={`Jump to checkpoint ${seq}`}
         onClick={() => flashNode(commentDomId(row.id))}
-        // axis: none. Chips never translate, rotate or scale.
-        className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        // axis: none. The chip's own markup never translates, rotates or scales;
+        // the only motion is IconButton's shared press feedback.
+        className="shrink-0"
       >
         <span
           aria-hidden
@@ -112,7 +113,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
         >
           {state === 'open' ? seq : <IconCheck size={ICON_SIZE.inline} />}
         </span>
-      </button>
+      </IconButton>
     );
   });
 }

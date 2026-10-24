@@ -14,6 +14,7 @@ import { briefRoute } from '@/lib/chat/briefs';
 import { Sheet } from '@/components/ui/Sheet';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
 import {
@@ -1883,17 +1884,15 @@ export function PostDetailPage({
       >
         {metaHead.length > 0 ? (
           detailsEditable ? (
-            <button
+            <PressableRow
+              inline
               type="button"
               data-post-details-edit=""
               onClick={() => setShowDetails(true)}
-              className={cn(
-                metaHeadClass,
-                '-mx-1 px-1 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              )}
+              className={cn(metaHeadClass, '-mx-1 px-1 transition-colors')}
             >
               {metaHead}
-            </button>
+            </PressableRow>
           ) : (
             <div className={metaHeadClass}>{metaHead}</div>
           )
@@ -2185,14 +2184,17 @@ export function PostDetailPage({
                 // tile): at least 44px tall, a visible focus ring, and the
                 // same padding as the editor so tapping never shifts the page.
                 <h1 className="text-3xl font-semibold tracking-tight break-words [overflow-wrap:anywhere]">
-                  <button
+                  {/* inline (w-auto) on a block: the -mx-2 bleed widens it to the
+                      full title column plus the padding, no width calc needed. */}
+                  <PressableRow
+                    inline
                     type="button"
                     data-title-edit=""
                     onClick={openTitleEditor}
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg px-2 py-1 text-left font-semibold tracking-tight transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="-mx-2 block px-2 py-1 font-semibold tracking-tight transition-colors"
                   >
                     <Highlight text={post.title} />
-                  </button>
+                  </PressableRow>
                 </h1>
               )
             ) : (

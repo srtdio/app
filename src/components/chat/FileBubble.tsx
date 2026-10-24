@@ -26,6 +26,7 @@ import {
   VIEWER_ERROR,
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { humanizeSize } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -148,14 +149,13 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
   const { kind, ratio, thumbUrl, progress, uploading, failed } = props;
   const sending = progress !== null;
   return (
-    <button
+    <PressableRow
       type="button"
       onClick={props.onOpen}
       aria-label={`Open ${props.name}`}
       className={cn(
-        'relative flex w-full flex-col overflow-hidden rounded-xl border border-border bg-panel text-left',
+        'relative flex flex-col overflow-hidden border border-border bg-panel',
         'select-none [-webkit-touch-callout:none]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
     >
       {ratio !== null ? (
@@ -229,7 +229,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           />
         </span>
       ) : null}
-    </button>
+    </PressableRow>
   );
 }
 

@@ -26,6 +26,7 @@ import {
   IconX,
 } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
@@ -167,13 +168,14 @@ export function ScheduledStrip(props: {
   const next = props.rows[0];
   if (next === undefined) return null;
   return (
-    <button
+    <PressableRow
       type="button"
+      flat
       data-scheduled-strip=""
       onClick={props.onOpen}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'flex h-12 w-full shrink-0 items-center gap-3 border-t border-border bg-accent-soft px-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        'flex h-12 shrink-0 items-center gap-3 border-t border-border bg-accent-soft px-4 hover:bg-accent-soft focus-visible:ring-inset',
         NO_TOUCH_SELECT,
       )}
     >
@@ -186,7 +188,7 @@ export function ScheduledStrip(props: {
         {formatSendLabel(new Date(next.send_at), props.now ?? new Date())}
       </span>
       <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg-2" />
-    </button>
+    </PressableRow>
   );
 }
 

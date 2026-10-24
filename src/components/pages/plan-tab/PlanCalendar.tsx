@@ -24,7 +24,9 @@ import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostC
 import { rowTitle } from '@/components/chat/PlanScreen';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
@@ -259,10 +261,12 @@ export function PlanCalendar(props: {
 // Chips
 // ---------------------------------------------------------------------------
 
-const CHIP =
-  'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-4 text-base font-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
-const CHIP_IDLE = 'border-border text-fg-2 hover:bg-panel-2';
-const CHIP_ON = 'border-accent-line bg-accent-soft text-accent';
+// A plan chip carries a dot and a Draft tag, so it is a Button styled as the Chip.
+const PLAN_CHIP =
+  'max-w-[260px] shrink-0 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+const PLAN_CHIP_IDLE = 'border-border';
+// text-accent sorts after the ghost Button's text-fg-2 / hover:text-fg, so it wins.
+const PLAN_CHIP_ON = 'border-accent-line bg-accent-soft text-accent hover:text-accent';
 
 function ChipRow(props: {
   bundles: readonly PlanBundle[];
@@ -272,25 +276,26 @@ function ChipRow(props: {
 }): ReactElement {
   return (
     <div className="flex gap-2 overflow-x-auto px-6 pt-3">
-      <button
+      <Chip
         type="button"
+        label={ALL_LABEL}
+        selected={props.selected === null}
         data-plan-tab-chip="all"
         aria-pressed={props.selected === null}
         onClick={() => props.onSelect(null)}
-        className={cn(CHIP, props.selected === null ? CHIP_ON : CHIP_IDLE)}
-      >
-        {ALL_LABEL}
-      </button>
+        className="shrink-0"
+      />
       {plansInToneOrder(props.bundles.map((b) => b.plan)).map((plan) => {
         const on = props.selected === plan.id;
         return (
-          <button
+          <Button
             key={plan.id}
             type="button"
+            variant="ghost"
             data-plan-tab-chip={plan.id}
             aria-pressed={on}
             onClick={() => props.onSelect(plan.id)}
-            className={cn(CHIP, 'max-w-[260px]', on ? CHIP_ON : CHIP_IDLE)}
+            className={cn(PLAN_CHIP, on ? PLAN_CHIP_ON : PLAN_CHIP_IDLE)}
           >
             <span
               aria-hidden="true"
@@ -301,7 +306,7 @@ function ChipRow(props: {
             />
             <span className="truncate">{plan.title}</span>
             {isDraftPlan(plan) ? <DraftTag /> : null}
-          </button>
+          </Button>
         );
       })}
     </div>
@@ -406,14 +411,15 @@ function MonthGrid(props: {
                   <MonthEntry key={entry.key} {...props.entryProps(entry)} />
                 ))}
                 {more > 0 ? (
-                  <button
+                  <PressableRow
+                    inline
                     type="button"
                     data-plan-tab-more={cell.day}
                     onClick={() => props.onMore(cell.day)}
-                    className="h-[18px] shrink-0 self-start rounded px-1.5 text-xs font-medium text-fg-2 hover:bg-panel-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="shrink-0 self-start px-1.5 text-xs font-medium text-fg-2 hover:text-fg"
                   >
                     {moreLabel(more)}
-                  </button>
+                  </PressableRow>
                 ) : null}
               </div>
             );
@@ -427,7 +433,10 @@ function MonthGrid(props: {
 /** An entry's tone classes: its plan's soft colour and round dot, or the neutral square. */
 function entryLook(entry: CalendarEntry): { soft: string; dot: string } {
   if (entry.kind === 'post')
-    return { soft: LOOSE_POST_CLASSES.soft, dot: cn(LOOSE_POST_CLASSES.dot, 'rounded-sm') };
+    return {
+      soft: LOOSE_POST_CLASSES.soft,
+      dot: cn(LOOSE_POST_CLASSES.dot, 'rounded-sm'),
+    };
   const tone = PLAN_TONE_CLASSES[entry.tone];
   return { soft: tone.soft, dot: cn(tone.dot, 'rounded-full') };
 }
@@ -435,7 +444,7 @@ function entryLook(entry: CalendarEntry): { soft: string; dot: string } {
 function MonthEntry(props: EntryProps): ReactElement {
   const look = entryLook(props.entry);
   return (
-    <button
+    <PressableRow
       type="button"
       data-plan-tab-entry={props.entry.key}
       data-plan-tab-lifted={props.lifted ? '' : undefined}
@@ -445,14 +454,14 @@ function MonthEntry(props: EntryProps): ReactElement {
       }
       onClick={() => props.onOpen(props.entry)}
       className={cn(
-        'flex h-[22px] w-full min-w-0 shrink-0 items-center gap-1.5 rounded px-1.5 text-left text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex min-w-0 shrink-0 items-center gap-1.5 px-1.5 text-sm text-fg',
         look.soft,
         props.lifted && 'opacity-40',
       )}
     >
       <span aria-hidden="true" className={cn('h-2 w-2 shrink-0', look.dot)} />
       <span className="truncate">{props.entry.title}</span>
-    </button>
+    </PressableRow>
   );
 }
 
@@ -529,7 +538,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
   const cover = cardCover(entry, props.thumbs);
   const pill = entry.kind === 'item' ? planPill(entry.bundle, entry.item) : null;
   return (
-    <button
+    <PressableRow
       type="button"
       data-plan-tab-entry={entry.key}
       data-plan-tab-lifted={props.lifted ? '' : undefined}
@@ -537,7 +546,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
       onPointerDown={props.draggable ? (event) => props.onPointerDown(entry, event) : undefined}
       onClick={() => props.onOpen(entry)}
       className={cn(
-        'flex w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-panel text-left transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex min-w-0 shrink-0 flex-col overflow-hidden border border-border bg-panel transition-colors',
         props.lifted && 'opacity-40',
       )}
     >
@@ -579,7 +588,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
             : `Post: ${entry.post.stage}`}
         </span>
       </span>
-    </button>
+    </PressableRow>
   );
 }
 

@@ -56,6 +56,7 @@ import {
   LONG_PRESS_MS,
   MOVE_CANCEL_PX,
 } from '@/components/ui/useLongPress';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { logger } from '@/lib/logger';
@@ -650,8 +651,12 @@ const BUBBLE_INSET: ChatSize = {
 /** Row 2 and the error row start under the wave: 44px play + 2px gap. */
 const UNDER_WAVE = 'pl-[46px]';
 
-/** A 44px tall hit area on a 16px control, without growing its row. */
-const TALL_HIT = "relative after:absolute after:inset-x-0 after:-inset-y-3.5 after:content-['']";
+/**
+ * A 44px tall text control on a 16px row, without growing the row: the
+ * PressableRow is 44 tall (its min-h) and -14px margins top and bottom give
+ * back the 28px, with the text centred.
+ */
+const TALL_HIT = 'flex -my-3.5 items-center';
 
 /** Per side colours. Sent avoids the class names the own bubble restyles. */
 function sideTone(mine: boolean): {
@@ -702,7 +707,8 @@ function transcribeLink(props: {
     case 'transcribe':
     case 'failed':
       return onTranscribe === undefined ? null : (
-        <button
+        <PressableRow
+          inline
           type="button"
           data-voice-control=""
           data-voice-link={state === 'failed' ? 'retry' : 'transcribe'}
@@ -711,7 +717,7 @@ function transcribeLink(props: {
           className={className}
         >
           Transcribe
-        </button>
+        </PressableRow>
       );
     case 'pending':
       return (
@@ -722,7 +728,8 @@ function transcribeLink(props: {
     case 'hide':
     case 'show':
       return (
-        <button
+        <PressableRow
+          inline
           type="button"
           data-voice-control=""
           data-voice-link={state}
@@ -732,7 +739,7 @@ function transcribeLink(props: {
           className={className}
         >
           {state === 'hide' ? 'Hide text' : 'Transcribe'}
-        </button>
+        </PressableRow>
       );
   }
 }
@@ -1151,9 +1158,11 @@ export function VoiceNote({
     else onTranscribe?.();
   };
   const canOpenTranscript = view.kind === 'shown' || onTranscribe !== undefined;
+  // The controls are PressableRows: their accent focus ring is the base; an
+  // own note adds an accent-fg offset so the ring reads on the solid bubble.
   const controlFocus = cn(
-    'cursor-pointer select-none [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2',
-    tone.focus,
+    'cursor-pointer select-none [-webkit-touch-callout:none]',
+    mine && 'focus-visible:ring-offset-2 focus-visible:ring-offset-accent-fg',
   );
   const link =
     messageId !== undefined
@@ -1161,7 +1170,7 @@ export function VoiceNote({
           state: transcribeLinkState(view),
           onTranscribe,
           onCollapse: (collapsed) => voiceStore.update(messageId, { collapsed }),
-          className: cn('shrink-0 rounded-sm font-semibold', TALL_HIT, controlFocus),
+          className: cn('shrink-0 font-semibold', TALL_HIT, controlFocus),
         })
       : null;
   const metaSlot =
@@ -1173,7 +1182,8 @@ export function VoiceNote({
 
   // 44x44 transparent hit area; the visible control is the bare 20px glyph.
   const playControl = (
-    <button
+    <PressableRow
+      inline
       type="button"
       data-voice-control=""
       onClick={toggle}
@@ -1181,13 +1191,13 @@ export function VoiceNote({
       aria-label={active ? 'Pause voice note' : 'Play voice note'}
       {...(uploading ? { 'aria-hidden': true, tabIndex: -1 } : {})}
       className={cn(
-        'flex h-11 w-11 shrink-0 items-center justify-center disabled:cursor-default',
+        'flex h-11 min-w-[44px] shrink-0 items-center justify-center disabled:cursor-default',
         controlFocus,
         tone.glyph,
         upload === undefined
           ? playFailed
             ? 'opacity-[.45]'
-            : 'disabled:opacity-[.45]'
+            : null
           : cn(
               'transition-[opacity,visibility] duration-150 motion-reduce:transition-none',
               uploading
@@ -1199,7 +1209,7 @@ export function VoiceNote({
       )}
     >
       {active ? <IconPauseFill size={ICON_SIZE.control} /> : <IconPlay size={ICON_SIZE.control} />}
-    </button>
+    </PressableRow>
   );
   // An own note sent this session: the play spot holds the ring while it
   // uploads (40px, absolutely centred inside the 44px spot, so nothing moves
@@ -1229,13 +1239,14 @@ export function VoiceNote({
   const photoSlot = (
     <div className="flex h-11 w-11 shrink-0 items-center justify-center">
       {playing ? (
-        <button
+        <PressableRow
+          inline
           type="button"
           data-voice-control=""
           data-voice-speed=""
           onClick={cycleSpeed}
           aria-label={`Playback speed ${speedLabel(rate)}`}
-          className={cn('flex h-11 w-11 items-center justify-center rounded-full', controlFocus)}
+          className={cn('flex h-11 min-w-[44px] items-center justify-center', controlFocus)}
         >
           <span
             className={cn(
@@ -1245,7 +1256,7 @@ export function VoiceNote({
           >
             {speedLabel(rate)}
           </span>
-        </button>
+        </PressableRow>
       ) : sender !== undefined ? (
         <span className="relative flex" data-voice-played={played ? '' : undefined}>
           {/* The 40px header photo drawn at 34px (its box is sized inline). */}
@@ -1390,15 +1401,16 @@ export function VoiceNote({
           <IconAlertTriangle size={ICON_SIZE.inline} className="shrink-0" />
           <span>Can&apos;t play here.</span>
           {canOpenTranscript ? (
-            <button
+            <PressableRow
+              inline
               type="button"
               data-voice-control=""
               data-voice-read=""
               onClick={openTranscript}
-              className={cn('shrink-0 rounded-sm font-semibold underline', TALL_HIT, controlFocus)}
+              className={cn('shrink-0 font-semibold underline', TALL_HIT, controlFocus)}
             >
               Read the transcript
-            </button>
+            </PressableRow>
           ) : null}
         </div>
       ) : null}

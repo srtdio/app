@@ -213,7 +213,8 @@ describe('FileBubble states', () => {
 
   it('the tap target is a full-width button at least 56px tall', () => {
     const html = bubble(PDF);
-    expect(html).toMatch(/<button type="button" aria-label="Open deck.pdf"/);
+    // A PressableRow: type, then class, then the passed attributes.
+    expect(html).toMatch(/<button type="button" class="[^"]*" aria-label="Open deck.pdf"/);
     expect(html).toContain('min-h-[56px]');
   });
 

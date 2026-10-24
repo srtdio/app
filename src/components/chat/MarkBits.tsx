@@ -4,8 +4,9 @@
 
 import type { ReactElement } from 'react';
 import { ICON_SIZE, IconLock } from '@/components/ui/icons';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { SelectCheck } from '@/components/ui/SelectCheck';
-import { Tag, tagClass, type TagTone } from '@/components/ui/Tag';
+import { Tag, type TagTone } from '@/components/ui/Tag';
 import { cn } from '@/lib/cn';
 import { canChangePriority, markBadgeLabel, type ChatMark, type MarkType } from '@/lib/chat/marks';
 
@@ -20,8 +21,8 @@ export const MARK_TONE: Record<MarkType, TagTone> = {
  * The mark badge on a bubble. Commitment and decision are plain labels; a
  * stamped mark of any type is a plain label with its stamp word appended
  * ("Commitment · Delivered"). An open pending badge is a button that opens the
- * priority chooser; its visible pill is small, and an invisible after-element
- * extends the hit area to at least 44x44.
+ * priority chooser; its visible pill is small, inside a 44px-tall target whose
+ * negative margins keep the pill where a plain label sits.
  */
 export function MarkBadge(props: {
   mark: ChatMark | undefined;
@@ -33,21 +34,19 @@ export function MarkBadge(props: {
   if (canChangePriority(props.mark) && props.onChangePriority !== undefined) {
     const onChange = props.onChangePriority;
     return (
-      <button
+      <PressableRow
         type="button"
+        inline
         data-mark-badge={props.mark.type}
         aria-label={`${label}. Change priority`}
         onClick={(e) => {
           e.stopPropagation();
           onChange();
         }}
-        className={cn(
-          tagClass(tone),
-          "relative mb-1 min-w-[44px] justify-center after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']",
-        )}
+        className="-mx-1 -mb-2 -mt-3 flex items-center px-1"
       >
-        {label}
-      </button>
+        <Tag label={label} tone={tone} className="min-w-[44px] justify-center" />
+      </PressableRow>
     );
   }
   return (
@@ -75,21 +74,22 @@ export function SelectCheckbox(props: {
   className?: string;
 }): ReactElement {
   return (
-    <button
+    <PressableRow
       type="button"
+      inline
       role="checkbox"
       aria-checked={props.checked}
       aria-label={props.checked ? 'Deselect message' : 'Select message'}
       data-select-circle=""
       onClick={props.onToggle}
       className={cn(
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
+        'flex h-11 w-11 shrink-0 items-center justify-center',
         SELECT_CHECK_FADE,
         props.className ?? 'self-center',
       )}
     >
       <SelectCheck checked={props.checked} />
-    </button>
+    </PressableRow>
   );
 }
 

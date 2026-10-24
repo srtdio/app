@@ -11,6 +11,8 @@
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/cn';
 import { composeRangeProblem, type ComposeDay, type ComposeRange } from '@/lib/chat/plans';
@@ -79,8 +81,9 @@ export function PlanDayTiles(props: {
               const on = props.selected === day;
               const count = props.counts?.[day] ?? 0;
               return (
-                <button
+                <PressableRow
                   key={day}
+                  align="center"
                   type="button"
                   data-plan-day-tile={day}
                   aria-pressed={on}
@@ -88,9 +91,9 @@ export function PlanDayTiles(props: {
                   disabled={props.disabled === true}
                   onClick={() => props.onPick(day)}
                   className={cn(
-                    'relative flex min-h-[62px] flex-col items-center justify-center gap-px rounded-xl border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
+                    'relative flex min-h-[62px] flex-col items-center justify-center gap-px border',
                     on
-                      ? 'border-accent bg-accent text-accent-fg'
+                      ? 'border-accent bg-accent text-accent-fg hover:bg-accent'
                       : 'border-border bg-panel text-fg',
                   )}
                 >
@@ -120,7 +123,7 @@ export function PlanDayTiles(props: {
                       className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-warn"
                     />
                   ) : null}
-                </button>
+                </PressableRow>
               );
             })}
           </div>
@@ -133,20 +136,17 @@ export function PlanDayTiles(props: {
         </p>
       ) : null}
       {props.noDate !== false ? (
-        <Button
+        <Chip
           type="button"
           data-plan-day-none=""
           aria-pressed={props.selected === 'none'}
           disabled={props.disabled === true}
           onClick={() => props.onPick('none')}
-          variant="secondary"
-          className={cn(
-            'w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            props.selected === 'none' && '!border-transparent !bg-accent-soft !text-accent',
-          )}
-        >
-          {NO_DATE_BUTTON}
-        </Button>
+          label={NO_DATE_BUTTON}
+          selected={props.selected === 'none'}
+          size="tap"
+          className="w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        />
       ) : null}
     </div>
   );

@@ -13,7 +13,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { Button, buttonClass } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
@@ -294,11 +295,12 @@ function MediaTile(props: {
 }): ReactElement {
   const { url } = useAttachmentUrl(props.item.versionId, props.cache, props.presignEnabled);
   return (
-    <button
+    <PressableRow
       type="button"
       aria-label={props.item.name !== '' ? props.item.name : 'Photo'}
       onClick={props.onOpen}
-      className="relative block aspect-square min-h-[44px] w-full cursor-zoom-in overflow-hidden bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+      flat
+      className="relative block aspect-square cursor-zoom-in overflow-hidden bg-panel-3 focus-visible:ring-inset"
     >
       {url !== null ? (
         <img
@@ -308,7 +310,7 @@ function MediaTile(props: {
           className="absolute inset-0 h-full w-full object-cover"
         />
       ) : null}
-    </button>
+    </PressableRow>
   );
 }
 
@@ -342,12 +344,12 @@ function FileRow(props: {
   );
   return (
     <li>
-      <button
+      <PressableRow
         type="button"
         data-file-row={classifyFileKind(item.mime)}
         disabled={source === null}
         onClick={() => setOpen(true)}
-        className={cn(ROW, 'rounded-lg text-left hover:bg-panel-2 disabled:opacity-60')}
+        className={ROW}
       >
         <span className={ROW_ICON}>
           <IconFile size={ICON_SIZE.control} />
@@ -358,7 +360,7 @@ function FileRow(props: {
           </span>
           <span className="truncate text-sm text-fg-2">{fileMetaLine(item, props.timeZone)}</span>
         </span>
-      </button>
+      </PressableRow>
       {open && source !== null ? (
         <FileViewer
           name={name}
@@ -426,18 +428,15 @@ export function LinkRow(props: {
 /** The 48px full-width row that expands a previewed tab in place. Hook-free. */
 export function SeeAllRow(props: { onClick: () => void }): ReactElement {
   return (
-    <button
+    <Button
+      variant="secondary"
       type="button"
       data-see-all=""
       onClick={props.onClick}
-      className={buttonClass(
-        'secondary',
-        'default',
-        'w-full text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-      )}
+      className="w-full text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       {SEE_ALL_LABEL}
-    </button>
+    </Button>
   );
 }
 
@@ -651,7 +650,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
             key={option.key}
             label={option.label}
             size="tap"
-            className="shrink-0 !px-3"
+            className="shrink-0"
             selected={props.tab === option.key}
             onClick={() => props.onTab(option.key)}
           />

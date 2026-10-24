@@ -25,6 +25,9 @@ import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { DropZone } from '@/components/ui/DropZone';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import { frameFor, PLATFORM_SPECS, type Frame } from '@/lib/platform-specs';
 import { frameCutText, galleryItemMedia, PlatformFrame } from '@/components/media/PlatformFrame';
@@ -379,15 +382,15 @@ export function framePins(
       {pins.map((pin) => {
         const at = originalToFrame(pin, map);
         return (
-          <button
+          <IconButton
             key={pin.annotationId}
             type="button"
             data-pin-edge={at.edge ?? undefined}
-            aria-label={at.edge === null ? `Pin ${pin.n}` : `Pin ${pin.n}, outside the frame`}
+            label={at.edge === null ? `Pin ${pin.n}` : `Pin ${pin.n}, outside the frame`}
             onClick={() => onPinClick?.(pin.commentId)}
             style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
             className={cn(
-              'pointer-events-auto absolute flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line',
+              'pointer-events-auto absolute focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line',
               at.edge === null ? '-translate-x-1/2 -translate-y-1/2' : EDGE_SHIFT[at.edge],
             )}
           >
@@ -400,7 +403,7 @@ export function framePins(
                 {pin.n}
               </span>
             )}
-          </button>
+          </IconButton>
         );
       })}
     </div>
@@ -696,9 +699,10 @@ export function reorderView(model: ReorderModel): ReactElement {
           const selected = item.assetAttachmentId === selectedId;
           return (
             <div key={item.assetAttachmentId} role="listitem" className="shrink-0">
-              <button
+              <PressableRow
+                inline
                 type="button"
-                ref={
+                buttonRef={
                   model.tileRef !== undefined
                     ? (el) => model.tileRef?.(item.assetAttachmentId, el)
                     : undefined
@@ -723,7 +727,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                     : { aspectRatio: `${ratio}` }
                 }
                 className={cn(
-                  'relative flex h-24 min-h-[44px] min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden rounded-lg border-2 bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:transition-colors',
+                  'relative flex h-24 min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 motion-safe:transition-colors',
                   SLIDE_PRESS_CLASS,
                   selected ? 'border-accent' : 'border-border',
                   dragging && 'z-10 cursor-grabbing shadow-lg',
@@ -737,7 +741,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                 <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-overlay px-1 text-xs font-medium tabular-nums text-overlay-fg">
                   {index + 1}
                 </span>
-              </button>
+              </PressableRow>
             </div>
           );
         })}
@@ -898,17 +902,13 @@ export function galleryView({
     // onAddSlide and keep the calm, view-only empty line unchanged.
     if (onAddSlide !== undefined) {
       const zone = (
-        <button
-          type="button"
-          onClick={onAddSlide}
-          className="flex min-h-[44px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 px-4 py-10 text-center transition-colors hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
+        <DropZone type="button" minHeight="panel" onClick={onAddSlide}>
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-panel-3 text-accent">
             <IconImagePlus size={ICON_SIZE.status} />
           </span>
           <span className="text-base font-medium text-fg">Add images</span>
           <span className="text-sm text-fg-3">Tap to upload</span>
-        </button>
+        </DropZone>
       );
       return toolbar !== undefined && toolbar !== null ? (
         <div>
@@ -940,7 +940,7 @@ export function galleryView({
         {items.map((item, index) => {
           const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
           return (
-            <button
+            <PressableRow
               key={item.assetAttachmentId}
               type="button"
               aria-label={`View image ${index + 1}`}
@@ -949,7 +949,7 @@ export function galleryView({
                 if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
                 onOpen(index);
               }}
-              className={`group relative ${aspectClass(aspect)} overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+              className={`group relative ${aspectClass(aspect)} overflow-hidden border border-border bg-panel-2 transition-colors hover:border-border-strong`}
             >
               <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
               {showIndex ? (
@@ -963,7 +963,7 @@ export function galleryView({
                   {pinCount}
                 </span>
               ) : null}
-            </button>
+            </PressableRow>
           );
         })}
       </div>
@@ -980,22 +980,22 @@ export function galleryView({
     items.length > 1 ? (
       <div className="flex flex-wrap items-center justify-center">
         {items.map((item, index) => (
-          <button
+          <IconButton
             key={item.assetAttachmentId}
             type="button"
-            aria-label={`Go to slide ${index + 1}`}
+            label={`Go to slide ${index + 1}`}
             aria-current={index === active}
             onClick={() => {
               if (onDotClick !== undefined) onDotClick(index);
             }}
-            className="flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <span
               className={`h-2 w-2 rounded-full transition-colors ${
                 index === active ? 'bg-accent' : 'bg-border-strong'
               }`}
             />
-          </button>
+          </IconButton>
         ))}
       </div>
     ) : null;
@@ -1046,7 +1046,7 @@ export function galleryView({
                       />
                     }
                   >
-                    <button
+                    <PressableRow
                       type="button"
                       aria-label={`View image ${index + 1}`}
                       {...(slideGestures !== undefined ? slideGestures(index) : {})}
@@ -1060,7 +1060,7 @@ export function galleryView({
                         onOpen(index);
                       }}
                       className={cn(
-                        'absolute inset-0 flex h-full w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+                        'absolute inset-0 flex h-full items-center justify-center focus-visible:ring-inset',
                         SLIDE_PRESS_CLASS,
                         pinArmedIndex === index && 'cursor-crosshair',
                       )}
@@ -1076,7 +1076,7 @@ export function galleryView({
                             : undefined
                         }
                       />
-                    </button>
+                    </PressableRow>
                     {pinsFor !== undefined ? framePins(pinsFor(item), map, onPinClick) : null}
                     {pinsFor === undefined && pinCount > 0 ? (
                       <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg">
@@ -1100,14 +1100,14 @@ export function galleryView({
         </div>
         {dots}
         {cutLine !== null ? (
-          <button
+          <PressableRow
             type="button"
             data-frame-cut
             onClick={() => onOpen(active)}
-            className="mt-1 flex min-h-[44px] w-full items-center text-left text-base text-fg-2 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="mt-1 flex items-center text-base text-fg-2 underline-offset-2 hover:underline"
           >
             {cutLine}
-          </button>
+          </PressableRow>
         ) : null}
         {frameNote !== null ? (
           <p data-frame-note className="mt-1 text-base text-fg-2">
@@ -1145,7 +1145,7 @@ export function galleryView({
                 key={item.assetAttachmentId}
                 className="relative flex shrink-0 snap-start items-center justify-center"
               >
-                <button
+                <PressableRow
                   type="button"
                   aria-label={`View image ${index + 1}`}
                   style={resolveRibbonTileStyle(item, measuredDimensions, items.length === 1)}
@@ -1159,7 +1159,7 @@ export function galleryView({
                     onOpen(index);
                   }}
                   className={cn(
-                    'group relative flex shrink-0 snap-start items-center justify-center overflow-hidden rounded-xl border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    'group relative flex shrink-0 snap-start items-center justify-center overflow-hidden border border-border bg-panel-2 transition-colors hover:border-border-strong',
                     SLIDE_PRESS_CLASS,
                     pinArmedIndex === index && 'cursor-crosshair',
                   )}
@@ -1181,7 +1181,7 @@ export function galleryView({
                       {pinCount}
                     </span>
                   ) : null}
-                </button>
+                </PressableRow>
               </div>
             );
           })}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactElement } from 'react';
 import { MarkBadge } from '@/components/chat/MarkBits';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Tag } from '@/components/ui/Tag';
 import type { ChatMark } from '@/lib/chat/marks';
 
@@ -41,16 +42,21 @@ describe('MarkBadge', () => {
   it('an open pending badge is a button that opens the priority chooser', () => {
     const onChangePriority = vi.fn();
     const el = render(mark({ type: 'pending', priority: 1 }), onChangePriority);
-    expect(el.type).toBe('button');
+    expect(el.type).toBe(PressableRow);
     const props = el.props as {
-      children: string;
+      children: ReactElement;
+      inline: boolean;
       className: string;
       onClick: (e: { stopPropagation: () => void }) => void;
     };
-    expect(props.children).toBe('Pending P1');
-    // The hit area reaches 44x44 around the small pill.
-    expect(props.className).toContain('min-w-[44px]');
-    expect(props.className).toContain('after:-inset-y-3');
+    // The small pill is the shared Tag inside a 44px-tall PressableRow target.
+    expect(props.children.type).toBe(Tag);
+    expect(props.children.props).toMatchObject({ label: 'Pending P1', tone: 'warn' });
+    expect(String((props.children.props as { className: string }).className)).toContain(
+      'min-w-[44px]',
+    );
+    expect(props.inline).toBe(true);
+    expect(props.className).toContain('-mt-3');
     props.onClick({ stopPropagation: vi.fn() });
     expect(onChangePriority).toHaveBeenCalledOnce();
   });

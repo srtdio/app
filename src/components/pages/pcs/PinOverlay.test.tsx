@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
+import { IconButton } from '@/components/ui/IconButton';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
 
 // node test environment (no DOM renderer): PinOverlay is hookless, so call it as a
@@ -23,10 +24,15 @@ function elements(tree: ReactNode): ReactElement[] {
   return out;
 }
 
+// Each dot is an IconButton; it is hookless, so expand it to the <button> it renders.
 function dots(tree: ReactNode): ReactElement[] {
-  return elements(tree).filter((el) =>
-    String((el.props as { 'aria-label'?: string })['aria-label'] ?? '').startsWith('Pin '),
-  );
+  return elements(tree)
+    .map((el) =>
+      el.type === IconButton ? IconButton(el.props as Parameters<typeof IconButton>[0]) : el,
+    )
+    .filter((el) =>
+      String((el.props as { 'aria-label'?: string })['aria-label'] ?? '').startsWith('Pin '),
+    );
 }
 
 const PIN = (over: Partial<PinDot>): PinDot => ({

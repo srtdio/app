@@ -474,8 +474,14 @@ function row(
   });
 }
 
+/** The rendered <button>s: the row's IconButtons are expanded to the button each renders. */
 function rowButtons(el: ReactElement): ReactElement<Record<string, unknown>>[] {
-  return all(el).filter((e) => e.type === 'button') as ReactElement<Record<string, unknown>>[];
+  return all(el).flatMap((e) => {
+    if (typeof e.type === 'function') {
+      return rowButtons((e.type as (p: unknown) => ReactElement)(e.props));
+    }
+    return e.type === 'button' ? [e as ReactElement<Record<string, unknown>>] : [];
+  });
 }
 
 describe('D6: the reactions row and its "+"', () => {
@@ -700,8 +706,9 @@ describe('F5: picker focus', () => {
         (el) =>
           isValidElement(el) &&
           (el.props as Record<string, unknown>)['data-react-more'] !== undefined,
-      ) as ReactElement & { ref?: unknown };
-    expect(plus.ref).toBe(moreRef);
+      ) as ReactElement<{ buttonRef?: unknown }>;
+    // An IconButton: the ref travels as buttonRef.
+    expect(plus.props.buttonRef).toBe(moreRef);
   });
 });
 

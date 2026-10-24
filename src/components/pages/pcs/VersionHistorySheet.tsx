@@ -17,6 +17,8 @@ import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconCheck, IconChevronRight } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { parseSnapshot, sortVersionsDesc, type PostVersionView } from '@/lib/post-versions';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
@@ -62,8 +64,8 @@ interface VersionHistorySheetModel extends VersionHistorySheetProps {
   onToggleSelect: (id: string) => void;
 }
 
-const ROW_BASE =
-  'flex w-full min-w-0 min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+// Layout only: PressableRow brings the width, 44px height, radius, hover and focus ring.
+const ROW_BASE = 'flex min-w-0 items-center gap-3 px-3 py-2 transition-colors';
 
 /** Thumbs per row before the "+n" count. */
 export const VERSION_THUMBS_MAX = 2;
@@ -149,7 +151,7 @@ export function versionHistorySheet({
           const isCurrent = version.versionNumber === currentVersionNumber;
           const selected = selectedIds.includes(version.id);
           const rowButton = (
-            <button
+            <PressableRow
               type="button"
               onClick={() => (isCurrent ? onClose() : onSelectVersion(version.id))}
               aria-current={isCurrent ? 'true' : undefined}
@@ -196,7 +198,7 @@ export function versionHistorySheet({
                   <IconChevronRight size={ICON_SIZE.inline} />
                 </span>
               )}
-            </button>
+            </PressableRow>
           );
 
           if (!showSelect) {
@@ -211,12 +213,12 @@ export function versionHistorySheet({
                 selected && 'border-accent-line bg-accent-soft',
               )}
             >
-              <button
+              <IconButton
                 type="button"
                 aria-pressed={selected}
-                aria-label={`Select v${version.versionNumber} to compare`}
+                label={`Select v${version.versionNumber} to compare`}
                 onClick={() => onToggleSelect(version.id)}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <span
                   className={cn(
@@ -228,7 +230,7 @@ export function versionHistorySheet({
                 >
                   {selected ? <IconCheck size={12} /> : null}
                 </span>
-              </button>
+              </IconButton>
               {rowButton}
             </li>
           );

@@ -33,6 +33,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -286,17 +287,19 @@ interface SearchState {
   loadingMore: boolean;
 }
 
-/** Full-width row: hairline divider, 44px minimum, no rounded card. */
-const ROW_BASE =
-  'flex w-full gap-3 border-b border-border px-4 py-3 min-h-[44px] text-left transition-colors';
+/**
+ * Full-width row: hairline divider, no rounded card. PressableRow provides the
+ * width, 44px minimum, left alignment and panel-2 hover; flat squares the corners.
+ */
+const ROW_BASE = 'flex gap-3 border-b border-border px-4 py-3 transition-colors';
 
 function rowClass(active: boolean): string {
-  return cn(ROW_BASE, 'items-start', active ? 'bg-accent-soft' : 'hover:bg-panel-2');
+  return cn(ROW_BASE, 'items-start', active && 'bg-accent-soft');
 }
 
 /** A post row: the 48px cover sets the height, so the text centres beside it. */
 function postRowClass(active: boolean): string {
-  return cn(ROW_BASE, 'items-center', active ? 'bg-accent-soft' : 'hover:bg-panel-2');
+  return cn(ROW_BASE, 'items-center', active && 'bg-accent-soft');
 }
 
 // ---------------------------------------------------------------------------
@@ -874,17 +877,18 @@ export function SearchResultsView(
       ))}
       {hasMoreResults(props.rows.length, props.count) ? (
         <li>
-          <button
+          <PressableRow
             type="button"
             onClick={props.onLoadMore}
             disabled={props.loadingMore}
-            className="flex min-h-[44px] w-full items-center justify-between gap-3 px-4 py-3 text-left text-base font-medium text-accent transition-colors hover:bg-panel-2 disabled:text-fg-3"
+            flat
+            className="flex items-center justify-between gap-3 px-4 py-3 text-base font-medium text-accent transition-colors disabled:text-fg-3"
           >
             <span>{`Load ${PICKER_PAGE_SIZE} more`}</span>
             <span className="text-sm font-normal tabular-nums text-fg-3">
               {shownOfLabel(props.rows.length, props.count)}
             </span>
-          </button>
+          </PressableRow>
         </li>
       ) : null}
     </ul>
@@ -905,7 +909,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
     .join(' · ');
   return (
     <li>
-      <button
+      <PressableRow
         type="button"
         aria-pressed={active}
         onClick={() => props.onToggle(post)}
@@ -932,7 +936,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
             </span>
           ) : null}
         </span>
-      </button>
+      </PressableRow>
     </li>
   );
 }
@@ -974,7 +978,7 @@ export function BriefPickerList(props: {
         const target = brief.targetDate !== null ? formatShortDateOnly(brief.targetDate) : '';
         return (
           <li key={brief.id}>
-            <button
+            <PressableRow
               type="button"
               aria-pressed={active}
               onClick={() => props.onToggle(brief)}
@@ -1013,7 +1017,7 @@ export function BriefPickerList(props: {
                   <IconCheck size={ICON_SIZE.nav} />
                 </span>
               ) : null}
-            </button>
+            </PressableRow>
           </li>
         );
       })}

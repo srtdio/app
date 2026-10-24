@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
@@ -91,17 +92,17 @@ function DetailRow({
 }) {
   if (onTap !== undefined) {
     return (
-      <button
+      <PressableRow
         type="button"
         onClick={onTap}
-        className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex items-center gap-3 px-2 py-2 transition-colors"
       >
         <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
         <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
         <span className="ml-auto shrink-0 text-fg-3">
           <IconChevronRight size={ICON_SIZE.nav} />
         </span>
-      </button>
+      </PressableRow>
     );
   }
   return (
@@ -330,7 +331,7 @@ export function PostDetailsSheet({
       >
         <div className="flex flex-col gap-1">
           {buckets.map((bucket) => (
-            <button
+            <PressableRow
               key={bucket.id}
               type="button"
               onClick={() => {
@@ -338,17 +339,17 @@ export function PostDetailsSheet({
                 resetNewBucket();
                 setPicker(null);
               }}
-              className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-base text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex items-center gap-3 px-3 py-2 text-base text-fg transition-colors"
             >
               <BucketDot colorHex={bucket.colorHex} />
               <span className="truncate">{bucket.name}</span>
               {bucket.id === bucketId ? (
                 <span className="ml-auto shrink-0 text-sm text-accent">Selected</span>
               ) : null}
-            </button>
+            </PressableRow>
           ))}
           {onCreateBucket !== undefined && !newBucketOpen ? (
-            <button
+            <PressableRow
               type="button"
               data-new-bucket-open=""
               onClick={() => {
@@ -356,10 +357,10 @@ export function PostDetailsSheet({
                 setNewBucketName('');
                 setNewBucketError(null);
               }}
-              className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-base font-medium text-accent transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex items-center gap-3 px-3 py-2 text-base font-medium text-accent transition-colors"
             >
               {NEW_BUCKET_LABEL}
-            </button>
+            </PressableRow>
           ) : null}
           {onCreateBucket !== undefined && newBucketOpen ? (
             <div
@@ -420,14 +421,14 @@ export function PostDetailsSheet({
         ) : (
           <div className="flex flex-col gap-1">
             {memberOptions.map((member) => (
-              <button
+              <PressableRow
                 key={member.userId}
                 type="button"
                 onClick={() => {
                   onChangeOwner(member.userId);
                   setPicker(null);
                 }}
-                className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-base text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="flex items-center gap-3 px-3 py-2 text-base text-fg transition-colors"
               >
                 <Avatar
                   name={member.displayName}
@@ -438,7 +439,7 @@ export function PostDetailsSheet({
                 {member.userId === ownerUserId ? (
                   <span className="ml-auto shrink-0 text-sm text-accent">Selected</span>
                 ) : null}
-              </button>
+              </PressableRow>
             ))}
           </div>
         )}
