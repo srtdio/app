@@ -1,7 +1,7 @@
 import { useCallback, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { IconChat } from '@/components/ui/icons';
+import { ICON_SIZE, IconChat } from '@/components/ui/icons';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 
@@ -278,7 +278,7 @@ export function CaptionView({
               window.getSelection()?.removeAllRanges();
             }}
           >
-            <IconChat size={16} inline />
+            <IconChat size={ICON_SIZE.inline} inline />
             Comment
           </Button>
         </div>

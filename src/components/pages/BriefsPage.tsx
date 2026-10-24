@@ -10,7 +10,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastOptions } from '@/components/ui/toast/types';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconBriefs } from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
 import { CreateBriefSheet, type BriefCreated } from '@/components/pages/CreateBriefSheet';
 import { dispatchSorted } from '@/lib/events';
@@ -360,7 +360,7 @@ export function briefsEmptyView(
   onClearSearch: () => void,
   onNewBrief: () => void,
 ): ReactElement {
-  const icon = <IconBriefs size={24} />;
+  const icon = <IconBriefs size={ICON_SIZE.status} />;
   switch (state.kind) {
     case 'no-results':
       return (

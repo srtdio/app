@@ -1,7 +1,7 @@
 import { cn } from '@/lib/cn';
 import { useLongPress } from '@/components/pages/assets/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
-import { IconCheck, IconEllipsis } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconMore } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
 import type { PresignCache } from '@/lib/asset-presign';
 import { FileTile } from '@/components/ui/FileTile';
@@ -87,7 +87,7 @@ export function AssetCard({
                 : 'border-[1.5px] border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]',
             )}
           >
-            {selected ? <IconCheck size={11} /> : null}
+            {selected ? <IconCheck size={12} /> : null}
           </span>
         ) : null}
 
@@ -133,7 +133,7 @@ export function CardMenuButton({ name, onPress }: { name: string; onPress: () =>
       onClick={onPress}
       className="absolute -bottom-0.5 -right-0.5 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <IconEllipsis size={20} />
+      <IconMore size={ICON_SIZE.control} />
     </IconButton>
   );
 }

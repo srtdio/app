@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconCheck, IconClock, IconMore } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconClock, IconMore } from '@/components/ui/icons';
 import { LAPTOP_QUERY } from '@/lib/use-media-query';
 import { SNOOZE_OPTIONS, type SnoozeKind } from '@/components/pages/activity/data';
 
@@ -80,7 +80,7 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
       }}
       className="shrink-0 !text-fg-3"
     >
-      <IconMore size={20} />
+      <IconMore size={ICON_SIZE.control} />
     </IconButton>
   );
 
@@ -108,15 +108,21 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
 
   const list = (
     <div role="menu" aria-label="Activity options" className="flex flex-col">
-      {unread ? item('mark-read', 'Mark as read', <IconCheck size={16} />, pickMarkRead) : null}
+      {unread
+        ? item('mark-read', 'Mark as read', <IconCheck size={ICON_SIZE.inline} />, pickMarkRead)
+        : null}
       <p className="px-3 pb-1 pt-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
         Snooze
       </p>
       {SNOOZE_OPTIONS.map((option) =>
-        item(option.kind, option.label, <IconClock size={16} />, () => pickSnooze(option.kind)),
+        item(option.kind, option.label, <IconClock size={ICON_SIZE.inline} />, () =>
+          pickSnooze(option.kind),
+        ),
       )}
       {snoozed
-        ? item('clear', 'Un-snooze', <IconClock size={16} />, () => pickSnooze('clear'))
+        ? item('clear', 'Un-snooze', <IconClock size={ICON_SIZE.inline} />, () =>
+            pickSnooze('clear'),
+          )
         : null}
     </div>
   );

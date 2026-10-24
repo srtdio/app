@@ -4,7 +4,7 @@
 // in src/lib/platform-specs.ts; this file only sizes and paints it.
 
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
-import { IconImagePlus } from '@/components/ui/icons';
+import { ICON_SIZE, IconImagePlus } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { Frame, FrameMedia } from '@/lib/platform-specs';
 import { cutPercent, type FrameMap } from '@/components/pages/pcs/pin-annotations';
@@ -131,7 +131,7 @@ export function PlatformFrameUpload({
         className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center text-base text-fg-2 transition-colors hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none"
       >
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-panel-3 text-accent">
-          <IconImagePlus size={22} />
+          <IconImagePlus size={ICON_SIZE.tray} />
         </span>
         <span>{label}</span>
       </button>

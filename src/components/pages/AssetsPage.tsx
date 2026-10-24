@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconAssets, IconUpload } from '@/components/ui/icons';
+import { ICON_SIZE, IconAssets, IconUpload } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
@@ -648,12 +648,12 @@ export function AssetsPage() {
           </div>
         ) : tab === 'all' && liveItems.length === 0 ? (
           <EmptyState
-            icon={<IconAssets size={24} />}
+            icon={<IconAssets size={ICON_SIZE.status} />}
             title="No assets yet"
             description="Upload photos, videos, PDFs and docs, or add a link. Files used in posts and briefs show up here too."
             action={
               <Button variant="primary" onClick={() => setUploadOpen(true)}>
-                <IconUpload size={16} />
+                <IconUpload size={ICON_SIZE.inline} />
                 Upload
               </Button>
             }

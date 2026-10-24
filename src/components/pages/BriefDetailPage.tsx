@@ -13,7 +13,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { LoadError } from '@/components/ui/LoadError';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { useOptionalToast } from '@/components/ui/toast';
-import { IconBriefs, IconChevronLeft, IconMore } from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs, IconChevronLeft, IconMore } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
@@ -359,7 +359,7 @@ function BriefActionsMenu({
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
       >
-        <IconMore size={20} />
+        <IconMore size={ICON_SIZE.control} />
       </IconButton>
       {open ? (
         <>
@@ -655,7 +655,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   // The same chevron as Post detail.
   const backButton = (
     <IconButton label="Back" className="shrink-0" onClick={goBack}>
-      <IconChevronLeft size={20} />
+      <IconChevronLeft size={ICON_SIZE.control} />
     </IconButton>
   );
 
@@ -690,7 +690,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
       <>
         {bareHeader}
         <EmptyState
-          icon={<IconBriefs size={22} />}
+          icon={<IconBriefs size={ICON_SIZE.tray} />}
           title="Brief not found"
           description="This brief may have been removed, or you may not have access to it."
           action={

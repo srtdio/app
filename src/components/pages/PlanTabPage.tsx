@@ -19,7 +19,7 @@ import { useInduction } from '@/components/induction/InductionProvider';
 import { PageHead } from '@/components/shell/PageHead';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconPlan } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ComposeRange } from '@/lib/chat/plans';
 import { workspaceTimeZone } from '@/lib/chat/time-format';
@@ -121,7 +121,7 @@ export function PlanTabPage(): ReactElement {
     body = (
       <div data-plan-tab-zero="">
         <EmptyState
-          icon={<IconPlan size={22} />}
+          icon={<IconPlan size={ICON_SIZE.tray} />}
           title={copy.title}
           {...(copy.line2 !== null ? { description: copy.line2 } : {})}
           {...(copy.create

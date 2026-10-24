@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { PageHead } from '@/components/shell/PageHead';
-import { IconChevronDown } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/cn';
 
@@ -231,7 +231,7 @@ export function HelpPage() {
                   <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                     <span>{article.title}</span>
                     <IconChevronDown
-                      size={18}
+                      size={ICON_SIZE.nav}
                       className="shrink-0 text-fg-3 transition-transform group-open:rotate-180"
                     />
                   </summary>

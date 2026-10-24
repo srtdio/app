@@ -10,7 +10,7 @@ import { ProfileSettingsPanel } from '@/components/settings/ProfileSettingsPanel
 import { storageUsedLine } from '@/components/storage/storage-usage';
 import { useStorageWarning } from '@/components/storage/useStorageWarning';
 import { ActionRow } from '@/components/ui/ActionRow';
-import { IconAssets } from '@/components/ui/icons';
+import { ICON_SIZE, IconAssets } from '@/components/ui/icons';
 
 const PANELS: TabItem[] = [
   { key: 'workspace', label: 'Workspace' },
@@ -58,7 +58,7 @@ export function SettingsPage() {
             <WorkspaceSettingsPanel />
             <div className="-mx-3 max-w-[544px]">
               <ActionRow
-                icon={<IconAssets size={18} />}
+                icon={<IconAssets size={ICON_SIZE.nav} />}
                 label="Storage"
                 {...(usage !== null ? { sub: storageUsedLine(usage.usedBytes) } : {})}
                 onClick={() => setActive('storage')}

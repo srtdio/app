@@ -12,7 +12,7 @@ import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'reac
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconEye, IconFile, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
@@ -66,7 +66,7 @@ export function PreviewChip({
       onClick={onClick}
       className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none"
     >
-      <IconEye size={16} />
+      <IconEye size={ICON_SIZE.inline} />
       {previewChipLabel(platform)}
     </Button>
   );
@@ -253,7 +253,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
     return (
       <div className="flex flex-col gap-3">
         <div className="flex min-h-[44px] items-center gap-2 rounded-md border border-border bg-panel-2 px-3 py-2">
-          <IconFile size={16} />
+          <IconFile size={ICON_SIZE.inline} />
           <span className="min-w-0 flex-1 truncate text-base text-fg">{firstMedia?.filename}</span>
         </div>
         <p className="text-base text-fg-2">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconPipeline } from '@/components/ui/icons';
+import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui/useLongPress';
 import { PostCard } from '@/components/pages/PostCard';
 import { BOARD_CAP, StageEmpty } from '@/components/pages/pipeline/stage-meta';
@@ -152,7 +152,7 @@ export function PipelineFeed({
     <div className="px-4 py-4">
       {list.length === 0 ? (
         activeStage === 'all' ? (
-          <EmptyState icon={<IconPipeline size={22} />} title="No posts yet" />
+          <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="No posts yet" />
         ) : (
           <StageEmpty stage={activeStage as Stage} compact />
         )

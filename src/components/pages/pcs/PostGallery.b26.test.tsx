@@ -125,13 +125,13 @@ describe('#26 gallery tools row', () => {
     expect(galleryToolsRow(toolsModel({ canEdit: false, versionNumber: null }))).toBeNull();
   });
 
-  it('approved: one 14px lock in text-fg-3, no edit tools', () => {
+  it('approved: one 16px lock in text-fg-3, no edit tools', () => {
     const tree = galleryToolsRow(toolsModel({ canEdit: false, locked: true }));
     expect(tree).not.toBeNull();
     const html = renderToStaticMarkup(tree!);
     expect(html.split('data-gallery-lock').length - 1).toBe(1);
     expect(html.match(/<svg/g)?.length).toBe(2); // the lock and the v{n} history icon
-    expect(html).toContain('width="14"');
+    expect(html).toContain('width="16"');
     expect(html).toContain('text-fg-3');
     expect(html).not.toContain('data-gallery-add');
   });

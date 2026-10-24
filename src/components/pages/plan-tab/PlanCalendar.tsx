@@ -25,7 +25,7 @@ import { rowTitle } from '@/components/chat/PlanScreen';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
@@ -185,14 +185,14 @@ export function PlanCalendar(props: {
           data-plan-tab-prev=""
           onClick={() => props.onAnchor(shiftAnchor(view, anchor, -1))}
         >
-          <IconChevronLeft size={20} />
+          <IconChevronLeft size={ICON_SIZE.control} />
         </IconButton>
         <IconButton
           label={view === 'month' ? 'Next month' : 'Next week'}
           data-plan-tab-next=""
           onClick={() => props.onAnchor(shiftAnchor(view, anchor, 1))}
         >
-          <IconChevronRight size={20} />
+          <IconChevronRight size={ICON_SIZE.control} />
         </IconButton>
         <Button data-plan-tab-go-today="" onClick={() => props.onAnchor(today)}>
           {TODAY_LABEL}

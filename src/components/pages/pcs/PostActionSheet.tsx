@@ -23,6 +23,7 @@ import { ActionRow } from '@/components/ui/ActionRow';
 import { Button } from '@/components/ui/Button';
 import { removeImageConfirmCopy } from '@/components/pages/pcs/PostLightbox';
 import {
+  ICON_SIZE,
   IconCalendar,
   IconDownload,
   IconLink,
@@ -288,7 +289,7 @@ export function PostActionSheet({
         <div className="flex flex-col gap-1">
           {onOpenInPipeline !== undefined ? (
             <ActionRow
-              icon={<IconPipeline size={18} />}
+              icon={<IconPipeline size={ICON_SIZE.nav} />}
               label="Open in pipeline"
               sub="See this post in the pipeline"
               onClick={() => {
@@ -299,7 +300,7 @@ export function PostActionSheet({
           ) : null}
           {planRows !== null ? (
             <ActionRow
-              icon={<IconCalendar size={18} />}
+              icon={<IconCalendar size={ICON_SIZE.nav} />}
               label={MOVE_ROW_LABEL}
               onClick={() => {
                 close();
@@ -321,21 +322,21 @@ export function PostActionSheet({
             />
           ))}
           <ActionRow
-            icon={<IconSend size={18} />}
+            icon={<IconSend size={ICON_SIZE.nav} />}
             label="Send to chat"
             sub="Share this post in a conversation"
             chevron
             onClick={() => setView('chat')}
           />
           <ActionRow
-            icon={<IconLink size={18} />}
+            icon={<IconLink size={ICON_SIZE.nav} />}
             label="Copy link"
             sub="In-app link to this post"
             onClick={() => void handleCopyLink()}
           />
           {showDownload ? (
             <ActionRow
-              icon={<IconDownload size={18} />}
+              icon={<IconDownload size={ICON_SIZE.nav} />}
               label="Download all images"
               sub={
                 downloading
@@ -348,7 +349,7 @@ export function PostActionSheet({
           {removeImage !== undefined && removeImage.count > 0 ? (
             <ActionRow
               danger
-              icon={<IconTrash size={18} />}
+              icon={<IconTrash size={ICON_SIZE.nav} />}
               label="Remove image"
               sub={
                 removeImage.saving
@@ -363,7 +364,7 @@ export function PostActionSheet({
           {canDelete ? (
             <ActionRow
               danger
-              icon={<IconTrash size={18} />}
+              icon={<IconTrash size={ICON_SIZE.nav} />}
               label="Delete post"
               sub={DELETE_CONFIRM_BASE}
               onClick={handleDelete}

@@ -8,12 +8,12 @@ import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
+  ICON_SIZE,
   IconAlarmClock,
   IconCalendarClock,
   IconChat,
   IconClock,
   IconFile,
-  IconFileText,
   IconPlan,
   IconSend,
   IconTaskSquare,
@@ -262,15 +262,15 @@ function AlertIcon({ item, alert }: { item: ActivityItem; alert: AlertInfo }): R
   const bad = alert.kind === 'failed' || item.eventType === 'task_due';
   const icon =
     alert.kind === 'reminder' || item.eventType === 'task_due' ? (
-      <IconAlarmClock size={28} />
+      <IconAlarmClock size={ICON_SIZE.status} />
     ) : alert.kind === 'sent' ? (
-      <IconSend size={28} />
+      <IconSend size={ICON_SIZE.status} />
     ) : alert.kind === 'failed' ? (
-      <IconCalendarClock size={28} />
+      <IconCalendarClock size={ICON_SIZE.status} />
     ) : alert.kind === 'plan' ? (
-      <IconPlan size={28} />
+      <IconPlan size={ICON_SIZE.status} />
     ) : (
-      <IconTaskSquare size={28} />
+      <IconTaskSquare size={ICON_SIZE.status} />
     );
   return (
     <div
@@ -330,7 +330,7 @@ export function TextTile({
 function BriefTile({ title }: { title: string }): ReactElement {
   return (
     <div className="aspect-square w-full bg-panel-3">
-      <TextTile eyebrow="Brief" icon={<IconFileText size={12} />} body={title} />
+      <TextTile eyebrow="Brief" icon={<IconFile size={ICON_SIZE.inline} />} body={title} />
     </div>
   );
 }
@@ -378,7 +378,7 @@ function DeletedFilesTile({
       fallbackTile={
         <TextTile
           eyebrow={fileKindLabel({ filename: name, mimeType: file?.mimeType ?? null })}
-          icon={<IconFile size={12} />}
+          icon={<IconFile size={ICON_SIZE.inline} />}
           body={name}
         />
       }
@@ -589,11 +589,11 @@ export function ActivityCard({
                 aria-hidden="true"
                 className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
               >
-                <IconPlan size={28} />
+                <IconPlan size={ICON_SIZE.status} />
               </div>
             ) : isChatMention(lead) ? (
               <IconTile kind="chat">
-                <IconChat size={28} />
+                <IconChat size={ICON_SIZE.status} />
               </IconTile>
             ) : welcome && lead.welcome != null ? (
               <WelcomeTile name={lead.welcome.workspaceName} />
@@ -647,7 +647,7 @@ export function ActivityCard({
           ) : null}
           {snoozed ? (
             <span className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2">
-              <IconClock size={12} inline />
+              <IconClock size={ICON_SIZE.inline} inline />
               Snoozed
             </span>
           ) : null}
@@ -793,9 +793,9 @@ export function UpcomingCard({
               className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
             >
               {item.kind === 'reminder' ? (
-                <IconAlarmClock size={28} />
+                <IconAlarmClock size={ICON_SIZE.status} />
               ) : (
-                <IconCalendarClock size={28} />
+                <IconCalendarClock size={ICON_SIZE.status} />
               )}
             </div>
           </div>

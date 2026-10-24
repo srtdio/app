@@ -596,12 +596,12 @@ describe('37. approved posts are locked', () => {
     expect(document.querySelector('[data-caption-lock]')).not.toBeNull();
     expect(h.galleryProps?.tools?.locked).toBe(true);
     expect(document.querySelector('[data-detail="owner"] [data-detail-lock]')).not.toBeNull();
-    // A5: at most one lock per row, 14px, text-fg-3.
+    // A5: at most one lock per row, 16px, text-fg-3.
     for (const selector of ['[data-title-lock]', '[data-caption-lock]', '[data-detail-lock]']) {
       const lock = document.querySelector(selector);
       expect(lock?.className).toContain('text-fg-3');
       expect(lock?.querySelectorAll('svg').length).toBe(1);
-      expect(lock?.querySelector('svg')?.getAttribute('width')).toBe('14');
+      expect(lock?.querySelector('svg')?.getAttribute('width')).toBe('16');
     }
     expect(h.detailsSheetProps?.lockedFields).toBe(true);
     // A1: the meta line opens the details sheet for agency roles only while not approved.

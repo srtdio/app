@@ -4,7 +4,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconCheck, IconFile, IconPlus, IconUpload, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconFile, IconPlus, IconUpload, IconX } from '@/components/ui/icons';
 import { fileExtension, humanizeSize } from '@/lib/assets';
 import {
   UPLOAD_ACCEPT,
@@ -537,7 +537,7 @@ export function AssetUploadSheet({
           </Button>
         )}
         <Button variant="primary" disabled={!canUpload} onClick={() => void startRun(uploads)}>
-          <IconUpload size={16} />
+          <IconUpload size={ICON_SIZE.inline} />
           {running ? 'Uploading' : hasFiles ? `Upload ${uploads.length}` : 'Upload'}
         </Button>
       </span>
@@ -574,7 +574,7 @@ export function AssetUploadSheet({
           onClick={() => inputRef.current?.click()}
           className="flex min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 px-4 text-center text-fg-2 transition-colors hover:bg-panel-3"
         >
-          <IconUpload size={26} />
+          <IconUpload size={ICON_SIZE.status} />
           <span className="text-base font-medium">Choose files</span>
           <span className="text-sm text-fg-3">
             Name your upload before it is added to {ROOT_LABEL}.
@@ -613,7 +613,7 @@ export function AssetUploadSheet({
                     <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex flex-col items-center gap-0.5">
-                      <IconFile size={20} />
+                      <IconFile size={ICON_SIZE.control} />
                       {fileExtension(item.file.name) !== '' ? (
                         <span className="text-xs font-medium">{fileExtension(item.file.name)}</span>
                       ) : null}
@@ -634,7 +634,7 @@ export function AssetUploadSheet({
                   onClick={() => remove(item.id)}
                   disabled={running}
                 >
-                  <IconX size={18} />
+                  <IconX size={ICON_SIZE.nav} />
                 </IconButton>
               </div>
             );
@@ -646,7 +646,7 @@ export function AssetUploadSheet({
             disabled={running}
             className="border-dashed text-fg-2"
           >
-            <IconPlus size={16} />
+            <IconPlus size={ICON_SIZE.inline} />
             Add more files
           </Button>
         </div>
@@ -691,7 +691,7 @@ function UploadStatusRow({
   if (status.state === 'done') {
     return (
       <span className="flex items-center gap-1 text-sm text-good">
-        <IconCheck size={13} />
+        <IconCheck size={ICON_SIZE.inline} />
         Uploaded
       </span>
     );

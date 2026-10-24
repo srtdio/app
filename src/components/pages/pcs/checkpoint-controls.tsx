@@ -4,7 +4,7 @@
 // the controls, not with any one surface that draws them.
 
 import type { ReactElement } from 'react';
-import { IconCheck } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { CommentResolveArgs, DomainError } from '@srtdio/rpc';
 import { errorText } from '@/lib/error-copy';
@@ -122,7 +122,7 @@ export function tickCircle(done: boolean, live = false, hollow = false): ReactEl
           done || isHollow ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-60',
         )}
       >
-        <IconCheck size={14} />
+        <IconCheck size={ICON_SIZE.inline} />
       </span>
     </span>
   );

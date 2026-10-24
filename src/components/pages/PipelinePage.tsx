@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconCalendar, IconPipeline, IconPlus } from '@/components/ui/icons';
+import { ICON_SIZE, IconCalendar, IconPipeline, IconPlus } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
@@ -181,7 +181,7 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                     className={NEW_POST_CLASS}
                     onClick={() => dispatchSorted('sorted:create-post')}
                   >
-                    <IconPlus size={18} />
+                    <IconPlus size={ICON_SIZE.nav} />
                     New post
                   </Button>
                 ),
@@ -199,7 +199,7 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                       data-create-placeholder=""
                       className={cn('invisible', NEW_POST_CLASS)}
                     >
-                      <IconPlus size={18} />
+                      <IconPlus size={ICON_SIZE.nav} />
                       New post
                     </Button>
                   ),
@@ -451,7 +451,7 @@ export function emptyPipeline(canCreate: boolean): ReactElement {
   return (
     <div data-pipeline-empty="" className="px-4 md:px-6">
       <EmptyState
-        icon={<IconPipeline size={22} />}
+        icon={<IconPipeline size={ICON_SIZE.tray} />}
         title="No posts yet"
         description={
           canCreate
@@ -570,7 +570,7 @@ export function filteredEmpty(onClear: () => void): ReactElement {
   return (
     <div data-filtered-empty="" className="px-4 md:px-6">
       <EmptyState
-        icon={<IconPipeline size={22} />}
+        icon={<IconPipeline size={ICON_SIZE.tray} />}
         title="Nothing fits these filters"
         action={
           <Button variant="default" onClick={onClear}>
@@ -595,7 +595,7 @@ export function undatedHint(label: string, count: number, onShow: () => void): R
   if (count <= 0) return null;
   return (
     <p data-undated-hint="" className="flex flex-wrap items-center gap-x-2 text-base text-fg-2">
-      <IconCalendar size={15} className="shrink-0 text-fg-3" />
+      <IconCalendar size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
       <span>{undatedHiddenLine(label, count)}</span>
       <Button
         variant="link"

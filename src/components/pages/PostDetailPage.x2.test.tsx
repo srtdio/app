@@ -45,7 +45,7 @@ describe('1. caption block (mock P1)', () => {
     // The old version pill is gone for good (its component was deleted).
     expect(PAGE).not.toContain('VersionPill');
     expect(block).toContain('data-caption-edit=""');
-    expect(block).toContain('<IconPencil size={16} />\n                    Edit');
+    expect(block).toContain('<IconEdit size={ICON_SIZE.inline} />\n                    Edit');
     // The uppercase eyebrow and the select hint are gone.
     expect(PAGE).not.toContain('>\n                  Caption\n                </span>');
     expect(PAGE).not.toContain('Select any text to comment on it.');

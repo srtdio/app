@@ -13,6 +13,7 @@ import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import {
+  ICON_SIZE,
   IconCalendar,
   IconCheck,
   IconChevronDown,
@@ -115,7 +116,7 @@ function radioRow(
       )}
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-accent">
-        {selected ? <IconCheck size={16} /> : null}
+        {selected ? <IconCheck size={ICON_SIZE.inline} /> : null}
       </span>
       <span className="flex-1">{label}</span>
       {trailing}
@@ -158,7 +159,7 @@ export function dateControlBody(props: {
         customRangeLabel(props.customRange),
         props.dateWindow === 'custom',
         props.onCustomOpen,
-        <IconCalendar size={16} className="shrink-0 text-fg-3" />,
+        <IconCalendar size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />,
       )}
     </div>
   );
@@ -230,9 +231,9 @@ export function PipelineSortControl({
       onClick={() => setOpen((prev) => !prev)}
       className={cn(TRIGGER, 'text-fg-2')}
     >
-      <IconSort size={16} />
+      <IconSort size={ICON_SIZE.inline} />
       <span className="hidden sm:inline">{activeOrder?.label ?? 'Sort'}</span>
-      <IconChevronDown size={16} className="text-fg-3" />
+      <IconChevronDown size={ICON_SIZE.inline} className="text-fg-3" />
     </Button>
   );
   return (
@@ -283,7 +284,7 @@ export function PipelineDateControl({
         active ? 'border-accent-line bg-accent-soft text-accent' : 'text-fg-2',
       )}
     >
-      <IconCalendar size={16} />
+      <IconCalendar size={ICON_SIZE.inline} />
       <span className="hidden md:inline">{label}</span>
     </Button>
   );
@@ -401,7 +402,7 @@ export function PipelineFilterControl({
       onClick={() => setOpen((prev) => !prev)}
       className={cn(TRIGGER, 'relative w-11 !px-0 text-fg-2')}
     >
-      <IconFilterLines size={20} />
+      <IconFilterLines size={ICON_SIZE.control} />
       {active ? (
         <span
           aria-hidden="true"

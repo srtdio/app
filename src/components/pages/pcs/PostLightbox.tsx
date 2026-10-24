@@ -10,6 +10,7 @@ import type {
   SyntheticEvent,
 } from 'react';
 import {
+  ICON_SIZE,
   IconChevronLeft,
   IconChevronRight,
   IconDownload,
@@ -468,7 +469,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           onClick={props.onClose}
           className={cn(OVERLAY_SKIN, 'absolute right-2 top-2', chromeMotion(chromeVisible))}
         >
-          <IconX size={20} />
+          <IconX size={ICON_SIZE.control} />
         </IconButton>
 
         {/* Prev / next overlay arrows for click; swipe still drives the track.
@@ -486,7 +487,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               onClick={props.onPrev}
               className={cn(OVERLAY_SKIN, 'pointer-events-auto')}
             >
-              <IconChevronLeft size={20} />
+              <IconChevronLeft size={ICON_SIZE.control} />
             </IconButton>
             <IconButton
               type="button"
@@ -494,7 +495,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               onClick={props.onNext}
               className={cn(OVERLAY_SKIN, 'pointer-events-auto')}
             >
-              <IconChevronRight size={20} />
+              <IconChevronRight size={ICON_SIZE.control} />
             </IconButton>
           </div>
         ) : null}
@@ -516,7 +517,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             onClick={props.onDownload}
             className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
           >
-            <IconDownload size={20} />
+            <IconDownload size={ICON_SIZE.control} />
           </IconButton>
         ) : removeConfirming ? (
           <div className="flex items-center gap-2 px-3">
@@ -553,7 +554,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               onClick={props.onDownload}
               className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
             >
-              <IconDownload size={20} />
+              <IconDownload size={ICON_SIZE.control} />
             </IconButton>
             <IconButton
               type="button"
@@ -561,7 +562,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               onClick={manage.onAddAfter}
               className={cn(TOOLBAR_SKIN, 'text-accent hover:text-overlay-fg')}
             >
-              <IconPlus size={20} />
+              <IconPlus size={ICON_SIZE.control} />
             </IconButton>
             <IconButton
               type="button"
@@ -570,7 +571,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               onClick={props.onRequestRemove}
               className={cn(TOOLBAR_SKIN, 'hover:text-bad')}
             >
-              <IconTrash size={20} />
+              <IconTrash size={ICON_SIZE.control} />
             </IconButton>
             {saving ? (
               <span aria-live="polite" className="ml-2 text-sm text-overlay-fg-dim">
@@ -643,7 +644,7 @@ function GracefulPanel({
           disabled={busy}
           className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <IconDownload size={16} />
+          <IconDownload size={ICON_SIZE.inline} />
           Download
         </Button>
       ) : null}

@@ -29,7 +29,7 @@ import { generateTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
 import { errorText } from '@/lib/error-copy';
 import { ActionRow } from '@/components/ui/ActionRow';
-import { IconChat } from '@/components/ui/icons';
+import { ICON_SIZE, IconChat } from '@/components/ui/icons';
 
 interface ConversationPickerProps {
   /** The post being shared into a conversation. */
@@ -221,7 +221,7 @@ export function conversationPickerBody(
         {load.channels.map((channel) => (
           <ActionRow
             key={channel.channelId}
-            icon={<IconChat size={18} />}
+            icon={<IconChat size={ICON_SIZE.nav} />}
             label={channel.title}
             sub={sendingId === channel.channelId ? 'Sending…' : channelTypeLabel(channel)}
             onClick={() => onSend(channel)}

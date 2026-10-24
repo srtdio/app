@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconMore } from '@/components/ui/icons';
+import { ICON_SIZE, IconLock, IconMore } from '@/components/ui/icons';
 import type { SelectOption } from '@/components/ui/Select';
 import { cn } from '@/lib/cn';
 import {
@@ -24,28 +24,6 @@ import { formatJoined, isUndelivered, roleLabel } from './members-data';
 import type { DerivedMembers, InviteDeliveryStatus, MemberEntry } from './members-data';
 
 const OWNER_LOCK_TITLE = 'Transfer ownership before the owner can be removed';
-
-// Local lock glyph: the shared icon set has no lock, so the owner's no-actions
-// affordance draws one inline (translateY/opacity-only surfaces elsewhere; a
-// static glyph never animates on X or rotate).
-function LockGlyph() {
-  return (
-    <svg
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x={5} y={11} width={14} height={9} rx={2} />
-      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-    </svg>
-  );
-}
 
 function RoleBadge({ role }: { role: string }) {
   return (
@@ -95,7 +73,7 @@ function MemberRowItem({ member, canManage, onOpenActions }: RowProps) {
           title={OWNER_LOCK_TITLE}
           aria-label={OWNER_LOCK_TITLE}
         >
-          <LockGlyph />
+          <IconLock size={ICON_SIZE.control} />
         </span>
       ) : canManage ? (
         <IconButton
