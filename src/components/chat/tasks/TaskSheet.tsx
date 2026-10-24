@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
+import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { LoadError } from '@/components/ui/LoadError';
@@ -532,13 +533,11 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const sheet = createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-50 flex items-end bg-black/45 transition-opacity duration-base sm:items-center sm:justify-center',
+        'fixed inset-0 z-50 flex items-end transition-opacity duration-base sm:items-center sm:justify-center',
         entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
       )}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) requestClose();
-      }}
     >
+      <Backdrop aria-label="Close tasks" position="absolute" onClick={requestClose} />
       <div
         ref={panelRef}
         role="dialog"
@@ -546,7 +545,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         tabIndex={-1}
         aria-label={TASK_SHEET_TITLE}
         className={cn(
-          'flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           entered
             ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'
             : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',
@@ -712,12 +711,8 @@ function DiscardConfirm(props: {
   useEscapeLayer(true, props.onCancel);
   useModalFocus(panelRef, true);
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) props.onCancel();
-      }}
-    >
+    <div className="fixed inset-0 z-[60] flex items-end justify-center px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center">
+      <Backdrop aria-label="Keep editing" position="absolute" onClick={props.onCancel} />
       <div
         ref={panelRef}
         role="alertdialog"
@@ -725,7 +720,7 @@ function DiscardConfirm(props: {
         aria-label={DISCARD_TITLE}
         tabIndex={-1}
         data-task-discard=""
-        className="w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
+        className="relative w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
       >
         <h2 className="text-lg font-semibold text-fg">{DISCARD_TITLE}</h2>
         <div className="mt-5 flex justify-end gap-2">

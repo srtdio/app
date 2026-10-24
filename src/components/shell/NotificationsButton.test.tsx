@@ -48,7 +48,11 @@ describe('NotificationsButton', () => {
   });
 
   it('tints while the Notifications page is on screen, never elsewhere', () => {
-    expect(render(NOTIFICATIONS_PATH)).toContain('bg-accent-soft !text-accent');
+    const active = render(NOTIFICATIONS_PATH);
+    expect(active).toContain('bg-accent-soft');
+    // The accent ink rides on the icon's span, never as a ! override on the button.
+    expect(active).toContain('class="inline-flex text-accent"');
+    expect(active).not.toMatch(/(^|[\s:"])!/);
     expect(render(NOTIFICATIONS_PATH)).toContain('aria-current="page"');
     expect(render('/chat')).not.toContain('bg-accent-soft');
     expect(onNotifications('/notifications')).toBe(true);

@@ -92,8 +92,9 @@ export function PriorityChip(props: {
   if (pick === undefined) return chip;
   return (
     <>
-      <Button
-        variant="ghost"
+      <PressableRow
+        inline
+        align="center"
         buttonRef={chipRef}
         type="button"
         data-task-chip=""
@@ -103,13 +104,10 @@ export function PriorityChip(props: {
         disabled={props.disabled}
         onClick={() => setOpen((v) => !v)}
         onContextMenu={(e) => e.preventDefault()}
-        className={cn(
-          'shrink-0 !px-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          NO_TOUCH_SELECT,
-        )}
+        className={cn('flex min-w-[44px] shrink-0 items-center justify-center', NO_TOUCH_SELECT)}
       >
         {chip}
-      </Button>
+      </PressableRow>
       {open ? (
         <PriorityMenu
           anchor={chipRef}

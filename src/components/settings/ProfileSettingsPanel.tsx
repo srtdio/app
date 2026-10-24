@@ -24,7 +24,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { UsernameField } from '@/components/settings/UsernameField';
 import { Field } from '@/components/ui/Field';
-import { IconButton } from '@/components/ui/IconButton';
 import { IconCamera, ICON_SIZE } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { PhotoOptionsSheet } from '@/components/ui/PhotoOptionsSheet';
@@ -585,12 +584,14 @@ export function ProfileSettingsPanel(): React.ReactElement {
  */
 export function CameraBadge(props: { disabled: boolean; onPress: () => void }): React.ReactElement {
   return (
-    <IconButton
+    <Button
       type="button"
-      label="Change photo"
+      variant="ghost"
+      shape="round"
+      aria-label="Change photo"
       disabled={props.disabled}
       onClick={props.onPress}
-      className="absolute -bottom-2 -right-2 !rounded-full hover:!bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+      className="absolute -bottom-2 -right-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span
         data-camera-badge=""
@@ -599,7 +600,7 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
       >
         <IconCamera size={ICON_SIZE.control} />
       </span>
-    </IconButton>
+    </Button>
   );
 }
 

@@ -101,11 +101,12 @@ export function CommentEmojiButton(props: {
         }}
         className={cn(
           'shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
-          open && '!text-accent',
           props.className,
         )}
       >
-        <IconSmile size={ICON_SIZE.control} />
+        <span className={cn('inline-flex', open && 'text-accent')}>
+          <IconSmile size={ICON_SIZE.control} />
+        </span>
       </IconButton>
       <EmojiPickerShell
         open={open}

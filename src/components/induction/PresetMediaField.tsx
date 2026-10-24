@@ -384,12 +384,7 @@ function MediaTile({
           <IconVideo size={ICON_SIZE.tray} />
         </span>
       )}
-      <IconButton
-        type="button"
-        label={label}
-        onClick={onRemove}
-        className="absolute right-0 top-0 text-overlay-fg hover:!bg-transparent hover:!text-overlay-fg"
-      >
+      <IconButton type="button" label={label} onClick={onRemove} className="absolute right-0 top-0">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg">
           <IconX size={ICON_SIZE.inline} />
         </span>

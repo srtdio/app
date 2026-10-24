@@ -435,11 +435,12 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
       />
 
       {open ? (
-        <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-panel-2 py-1 shadow-lg">
+        <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-panel py-1 shadow-lg">
           {matches.map((member, index) => (
             <li key={member.id}>
               <PressableRow
                 type="button"
+                flat
                 onMouseDown={(event) => {
                   event.preventDefault();
                   selectMember(member);
@@ -447,8 +448,8 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
                 onMouseEnter={() => setHighlight(index)}
                 className={
                   index === highlight
-                    ? 'flex items-center gap-2 px-3 !rounded-none bg-panel-3 hover:!bg-panel-3'
-                    : 'flex items-center gap-2 px-3 !rounded-none hover:!bg-panel-3'
+                    ? 'flex items-center gap-2 px-3 bg-panel-2'
+                    : 'flex items-center gap-2 px-3'
                 }
               >
                 <Avatar

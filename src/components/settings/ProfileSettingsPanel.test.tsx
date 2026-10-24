@@ -331,7 +331,9 @@ describe('tokens', () => {
     const badge = renderToStaticMarkup(<CameraBadge disabled={false} onPress={() => {}} />);
     expect(badge).toContain('ring-bg');
     expect(badge).not.toContain('ring-panel');
-    expect(badge).toContain('h-11 w-11');
+    expect(badge).toContain('h-11');
+    expect(badge).toContain('w-11');
+    expect(badge).toContain('rounded-full');
     const actions = renderToStaticMarkup(
       <PhotoPickActions busy={false} onUse={() => {}} onCancel={() => {}} />,
     );

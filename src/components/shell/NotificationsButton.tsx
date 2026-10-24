@@ -44,10 +44,13 @@ export function NotificationsButton(): ReactElement {
       onClick={() => navigate(NOTIFICATIONS_PATH)}
       className={cn(
         'relative shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        active && 'bg-accent-soft !text-accent hover:!bg-accent-soft hover:!text-accent',
+        active && 'bg-accent-soft',
       )}
     >
-      <IconNotifications size={ICON_SIZE.control} />
+      {/* The active tint rides on the icon so the button keeps its own colours. */}
+      <span className={cn('inline-flex', active && 'text-accent')}>
+        <IconNotifications size={ICON_SIZE.control} />
+      </span>
       {unreadCount > 0 ? (
         <CountBadge
           count={unreadCount}

@@ -286,9 +286,10 @@ export function annotationChip(
   return (
     <PressableRow
       type="button"
+      flat
       data-caption-quote="live"
       onClick={() => onClick?.(commentId)}
-      className="mb-2 flex min-w-0 items-start gap-2 !rounded-none border-l-2 border-border-strong pl-3 text-base text-fg-2 transition-colors hover:!bg-transparent hover:text-fg"
+      className="mb-2 flex min-w-0 items-start gap-2 border-l-2 border-border-strong pl-3 text-base text-fg-2 transition-colors hover:text-fg"
     >
       <sup className="shrink-0 text-xs font-semibold text-annotation-line">{annotation.n}</sup>
       <span className="min-w-0 [overflow-wrap:anywhere]">{annotation.quote}</span>

@@ -663,9 +663,9 @@ export function OnboardingFlow({
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex !min-h-[56px] flex-col items-start justify-center gap-0.5 border px-3.5 py-2.5',
+                'flex flex-col items-start justify-center gap-0.5 border px-3.5 py-2.5',
                 side === tile.side
-                  ? 'border-accent bg-accent-soft ring-1 ring-accent hover:!bg-accent-soft'
+                  ? 'border-accent bg-accent-soft ring-1 ring-accent'
                   : 'border-border bg-panel-2',
               )}
             >
@@ -923,8 +923,10 @@ export function OnboardingFlow({
         <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6">
           <header className="flex min-h-[56px] items-center justify-between pt-2">
             {canGoBack ? (
-              <IconButton type="button" onClick={back} label="Back" className="-ml-3 !text-fg">
-                <BackGlyph />
+              <IconButton type="button" onClick={back} label="Back" className="-ml-3">
+                <span className="inline-flex text-fg">
+                  <BackGlyph />
+                </span>
               </IconButton>
             ) : (
               <span className="block text-fg [&_svg]:h-6 [&_svg]:w-auto [&_.mark-dot]:fill-accent">

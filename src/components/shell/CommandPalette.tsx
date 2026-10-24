@@ -306,8 +306,7 @@ export function namesNeeded(
   return ids;
 }
 
-const ROW =
-  'flex items-center px-2 text-base transition-colors hover:!bg-accent-soft active:bg-accent-soft';
+const ROW = 'flex items-center px-2 text-base transition-colors active:bg-accent-soft';
 
 /** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
 const ACTIVE_ROW = 'bg-accent-soft text-fg';

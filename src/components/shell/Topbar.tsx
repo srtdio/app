@@ -39,7 +39,7 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={onCreateWorkspace}
-          className="min-w-0 !justify-start border-dashed text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="min-w-0 border-dashed text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <IconPlus size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
           <span className="truncate">Create your workspace</span>
@@ -54,7 +54,7 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="md:hidden min-w-0 max-w-[190px] !justify-start !gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="md:hidden min-w-0 max-w-[190px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
               short lines at word breaks instead of clipping the platform. */}
@@ -70,7 +70,7 @@ export function Topbar({
           type="button"
           variant="secondary"
           onClick={onOpenPalette}
-          className="hidden md:flex min-w-[240px] !justify-start"
+          className="hidden md:flex min-w-[240px]"
         >
           <IconSearch size={ICON_SIZE.inline} className="text-fg-3" />
           <span className="flex-1 text-left text-fg-3">Search</span>
