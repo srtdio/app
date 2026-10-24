@@ -231,6 +231,15 @@ export function IconSort(props: IconProps) {
   );
 }
 
+/** Three lines narrowing downward: the combined filter-and-sort trigger. */
+export function IconFilterLines(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 7h16M7 12h10M10 17h4" />
+    </Svg>
+  );
+}
+
 export function IconUpload(props: IconProps) {
   return (
     <Svg {...props}>

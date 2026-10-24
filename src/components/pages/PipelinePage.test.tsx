@@ -71,7 +71,6 @@ import {
   filteredEmpty,
   moveErrorMessage,
   pipelineHeader,
-  PHONE_TOOLBAR_CLASS,
   pipelineSurface,
   postCountLabel,
   postsSkeleton,
@@ -92,11 +91,15 @@ import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   PipelineDateControl,
+  PipelineFilterControl,
   PipelineSortControl,
   customRangeLabel,
   dateControlBody,
+  dateFilterActive,
+  filterControlBody,
   sortControlBody,
 } from '@/components/pages/pipeline/PipelineSortControl';
+import { IconFilterLines } from '@/components/ui/icons';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
@@ -215,8 +218,10 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
   return all.filter(predicate);
 }
 
+/** The labelled New post button: its last child is the label, the plus icon leads. */
 function isNewPost(el: ReactElement): boolean {
-  return (el.props as { children?: ReactNode }).children === 'New post';
+  const children = (el.props as { children?: ReactNode }).children;
+  return Array.isArray(children) && children[children.length - 1] === 'New post';
 }
 
 function texts(tree: ReactNode): string[] {
@@ -249,59 +254,60 @@ function header(canCreate = true): ReactElement {
 }
 
 describe('pipelineHeader', () => {
-  it('uses the shared SectionHeader with the sort and date controls (no raw SortMenu)', () => {
+  it('uses the shared SectionHeader with the one combined filter control (no raw SortMenu)', () => {
     const tree = header();
     expect(findAll(tree, (el) => el.type === SectionHeader)).toHaveLength(1);
-    // The header now hands SectionHeader a node, not the declarative SortMenu.
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
-    expect(findAll(tree, (el) => el.type === PipelineSortControl)).toHaveLength(1);
-    expect(findAll(tree, (el) => el.type === PipelineDateControl)).toHaveLength(1);
+    expect(findAll(tree, (el) => el.type === PipelineFilterControl)).toHaveLength(1);
+    // The two standalone buttons are gone from the row.
+    expect(findAll(tree, (el) => el.type === PipelineSortControl)).toHaveLength(0);
+    expect(findAll(tree, (el) => el.type === PipelineDateControl)).toHaveLength(0);
   });
 
-  it('passes the sort to SectionHeader as a { node } holding the date and sort buttons', () => {
+  it('passes the sort to SectionHeader as a { node } that IS the combined control', () => {
     const headers = findAll(header(), (el) => el.type === SectionHeader);
     expect(headers).toHaveLength(1);
     const sort = (headers[0]!.props as { sort: { node?: ReactElement } }).sort;
     expect(sort.node).toBeDefined();
-    const inner = findAll(sort.node, (el) => el !== sort.node).map((el) => el.type);
-    // The date filter sits before Sort, each its own button.
-    expect(inner).toEqual([PipelineDateControl, PipelineSortControl]);
+    expect(sort.node!.type).toBe(PipelineFilterControl);
   });
 
-  it('wires the active order to Sort and the date-window state to the date control', () => {
-    const sortControls = findAll(header(), (el) => el.type === PipelineSortControl);
-    expect(sortControls).toHaveLength(1);
-    expect((sortControls[0]!.props as { order: string }).order).toBe('updated');
-    const dateControls = findAll(header(), (el) => el.type === PipelineDateControl);
-    expect(dateControls).toHaveLength(1);
-    const props = dateControls[0]!.props as {
+  it('wires the active order and the date-window state to the combined control', () => {
+    const controls = findAll(header(), (el) => el.type === PipelineFilterControl);
+    expect(controls).toHaveLength(1);
+    const props = controls[0]!.props as {
+      order: string;
       dateWindow: string;
       customRange: unknown;
       weekStartDay: number;
     };
+    expect(props.order).toBe('updated');
     expect(props.dateWindow).toBe('any');
     expect(props.customRange).toBeNull();
     expect(props.weekStartDay).toBe(1);
   });
 
-  it('on a phone the search takes its own full-width row; filters, sort and New post share the next', () => {
+  it('is one row on every screen: no phone wrap class, search shrinks, New post never wraps', () => {
     const tree = header();
-    const props = tree.props as { className: string; 'data-pipeline-toolbar'?: string };
+    const props = tree.props as { className?: string; 'data-pipeline-toolbar'?: string };
     expect(tree.type).toBe('div');
     expect(props['data-pipeline-toolbar']).toBe('');
-    expect(props.className).toBe(PHONE_TOOLBAR_CLASS);
-    // Phone only (max-md): the control row wraps and its first child, the
-    // search field, takes the whole row. Nothing applies at md and up.
-    expect(PHONE_TOOLBAR_CLASS).toContain('max-md:[&>div:first-child]:flex-wrap');
-    expect(PHONE_TOOLBAR_CLASS).toContain('max-md:[&>div:first-child>div:first-child]:basis-full');
-    expect(PHONE_TOOLBAR_CLASS.split(' ').every((c) => c.startsWith('max-md:'))).toBe(true);
+    expect(props.className).toBeUndefined();
+    const newPost = findAll(tree, isNewPost)[0]!;
+    const cls = (newPost.props as { className: string }).className;
+    expect(cls).toContain('shrink-0');
+    expect(cls).toContain('whitespace-nowrap');
+    expect(cls).not.toContain('max-md:');
+    // Labelled, with the plus icon leading: never an icon-only button.
+    const children = (newPost.props as { children: ReactNode[] }).children;
+    expect(children).toHaveLength(2);
+    expect((children[0] as ReactElement).type).toBe(IconPlus);
+    expect(children[1]).toBe('New post');
     // The search is still the one SectionHeader field, first in its row.
     const section = findAll(tree, (el) => el.type === SectionHeader)[0]!;
     expect((section.props as { search: { placeholder: string } }).search.placeholder).toBe(
       'Search posts',
     );
-    const newPost = findAll(tree, isNewPost)[0]!;
-    expect((newPost.props as { className: string }).className).toContain('max-md:ml-auto');
   });
 
   it('dispatches sorted:create-post from the New post action', () => {
@@ -657,7 +663,7 @@ describe('persisted sort sanitization (fix 1)', () => {
       counts: { all: 0 },
       canCreate: true,
     });
-    const controls = findAll(tree, (el) => el.type === PipelineSortControl);
+    const controls = findAll(tree, (el) => el.type === PipelineFilterControl);
     expect((controls[0]!.props as { order: string }).order).toBe(POST_SORT_DEFAULT);
   });
 });
@@ -899,7 +905,8 @@ describe('W4 fix 3: create gating', () => {
     expect(props['aria-label']).toBeUndefined();
     expect(props['data-induction']).toBe(INDUCTION_KEYS.pipelineCreate);
     expect(props.className).toContain('whitespace-nowrap');
-    expect(findAll(header(true), (el) => el.type === IconPlus)).toHaveLength(0);
+    // The plus icon leads the label; the button is never icon-only.
+    expect(findAll(button, (el) => el.type === IconPlus)).toHaveLength(1);
     expect(
       findAll(
         header(true),
@@ -927,7 +934,7 @@ describe('W4 fix 6 (revised): the date filter is its own button, no chip under t
     const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
     expect(src).not.toContain('dateFilterChip');
     expect(src).not.toContain('Clear date filter');
-    expect(src).toContain('PipelineDateControl');
+    expect(src).toContain('PipelineFilterControl');
   });
 });
 
@@ -1090,5 +1097,115 @@ describe('E: no jumps while loading', () => {
     // A stage view on a laptop keeps the grid.
     const grid = renderToStaticMarkup(postsSkeleton(true, { ratio }));
     expect(grid).toContain('grid-cols-[repeat(auto-fill,minmax(220px,1fr))]');
+  });
+});
+
+describe('PipelineFilterControl: one icon button, one sheet holding due date and sort', () => {
+  function rowLabel(button: ReactElement): string {
+    const all: ReactElement[] = [];
+    collect(button, all);
+    for (const el of all) {
+      const child = (el.props as { children?: ReactNode }).children;
+      if (typeof child === 'string') return child;
+    }
+    return '';
+  }
+  function menuRows(tree: ReactNode): ReactElement[] {
+    return findAll(tree, (el) => (el.props as { role?: string }).role === 'menuitemradio');
+  }
+  function shell(tree: ReactElement): ShellParts {
+    return tree.props as ShellParts;
+  }
+  function control(over: Partial<Parameters<typeof PipelineFilterControl>[0]> = {}) {
+    hookState.reset();
+    return PipelineFilterControl({
+      order: POST_SORT_DEFAULT,
+      onOrderChange: () => {},
+      dateWindow: 'any',
+      onDateWindowChange: () => {},
+      customRange: null,
+      onCustomRangeChange: () => {},
+      weekStartDay: 1,
+      ...over,
+    });
+  }
+
+  it('the trigger is a single 44x44 icon button labelled Filter and sort, no text', () => {
+    const { trigger } = shell(control());
+    const props = trigger.props as { 'aria-label': string; className: string; children: unknown };
+    expect(props['aria-label']).toBe('Filter and sort');
+    expect(props.className).toContain('h-11');
+    expect(props.className).toContain('w-11');
+    expect(props.className).toContain('shrink-0');
+    expect(findAll(trigger, (el) => el.type === IconFilterLines)).toHaveLength(1);
+    expect(texts(trigger)).toEqual([]);
+  });
+
+  it('the body holds the due-date rows AND the sort rows, due date first', () => {
+    const { body, title } = shell(control()) as ShellParts & { title: string };
+    expect(title).toBe('Filter and sort');
+    const labels = menuRows(body).map(rowLabel);
+    expect(labels).toContain('This week');
+    expect(labels).toContain('Custom…');
+    expect(labels).toContain('Recently updated');
+    expect(labels).toContain('Due soonest first');
+    expect(labels.indexOf('Custom…')).toBeLessThan(labels.indexOf('Recently updated'));
+    const menus = findAll(body, (el) => (el.props as { role?: string }).role === 'menu').map(
+      (el) => (el.props as { 'aria-label': string })['aria-label'],
+    );
+    expect(menus).toEqual(['Due date', 'Sort']);
+  });
+
+  it('a sort pick fires onOrderChange and closes; a date pick fires onDateWindowChange and closes', () => {
+    const onOrderChange = vi.fn();
+    const onDateWindowChange = vi.fn();
+    const { body } = shell(control({ onOrderChange, onDateWindowChange }));
+    const rows = menuRows(body);
+    const oldest = rows.find((r) => rowLabel(r) === 'Least recently updated')!;
+    (oldest.props as { onClick: () => void }).onClick();
+    expect(onOrderChange).toHaveBeenCalledWith('oldest');
+    const week = rows.find((r) => rowLabel(r) === 'This week')!;
+    (week.props as { onClick: () => void }).onClick();
+    expect(onDateWindowChange).toHaveBeenCalledWith('week');
+    // useState index 0 is `open`: both picks set it false.
+    expect(hookState.calls[0]).toEqual([false, false]);
+  });
+
+  it('the Custom row still opens the floating range calendar, mounted as the shell extra', () => {
+    const parts = shell(control());
+    const calendars = findAll(parts.extra, (el) => el.type === PipelineDateRangeCalendar);
+    expect(calendars).toHaveLength(1);
+    const custom = menuRows(parts.body).find((r) => rowLabel(r) === 'Custom…')!;
+    (custom.props as { onClick: () => void }).onClick();
+    // useState index 1 is `calendarOpen`.
+    expect(hookState.calls[1]).toEqual([true]);
+  });
+
+  it('shows the corner dot only while a date window or a non-default sort is on', () => {
+    const dot = (tree: ReactElement) =>
+      findAll(shell(tree).trigger, (el) => 'data-filter-dot' in (el.props as object));
+    expect(dot(control())).toHaveLength(0);
+    expect(dot(control({ dateWindow: 'week' }))).toHaveLength(1);
+    expect(dot(control({ order: 'oldest' }))).toHaveLength(1);
+    // Custom with no range applied is not a filter.
+    expect(dot(control({ dateWindow: 'custom', customRange: null }))).toHaveLength(0);
+    expect(dateFilterActive('custom', { start: '2026-06-24', end: '2026-06-27' })).toBe(true);
+    const trigger = shell(control({ order: 'target' })).trigger;
+    expect((trigger.props as { 'data-active'?: string })['data-active']).toBe('');
+  });
+
+  it('filterControlBody is pure: both sections render from the same props', () => {
+    const body = filterControlBody({
+      order: 'target',
+      onOrderChange: () => {},
+      dateWindow: 'month',
+      onDateWindowChange: () => {},
+      customRange: null,
+      onCustomOpen: () => {},
+    });
+    const checked = menuRows(body)
+      .filter((r) => (r.props as { 'aria-checked': boolean })['aria-checked'])
+      .map(rowLabel);
+    expect(checked).toEqual(['This month', 'Due soonest first']);
   });
 });

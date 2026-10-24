@@ -1,22 +1,28 @@
-// The Pipeline's two header controls, each its own button: Sort (the order,
-// every option naming its direction) and the date filter (calendar icon; on a
-// laptop the button shows the active window's label, e.g. "This week"). The
-// responsive shell mirrors SortMenu (a popover under the trigger on desktop,
-// the shared bottom Sheet on mobile) without importing it. Rows share
-// SortMenu's radio-row markup (role="menuitemradio", aria-checked, an
-// IconCheck on the active row) and stay 44px on every screen. The date
-// filter's "Custom" row opens the floating range calendar, which paints ON TOP
-// and never pushes page content down.
+// The Pipeline header controls. PipelineFilterControl is the one the page
+// mounts: a single 44x44 icon button opening one sheet (popover on a laptop)
+// that holds the due-date filter rows and the sort rows. PipelineSortControl
+// and PipelineDateControl remain as the standalone buttons the combined body
+// is composed from. Rows share SortMenu's radio-row markup
+// (role="menuitemradio", aria-checked, an IconCheck on the active row) and stay
+// 44px on every screen. The date filter's "Custom" row opens the floating range
+// calendar, which paints ON TOP and never pushes page content down.
 
 import { useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconCalendar, IconCheck, IconChevronDown, IconSort } from '@/components/ui/icons';
+import {
+  IconCalendar,
+  IconCheck,
+  IconChevronDown,
+  IconFilterLines,
+  IconSort,
+} from '@/components/ui/icons';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import {
   DATE_WINDOW_OPTIONS,
+  POST_SORT_DEFAULT,
   POST_SORT_OPTIONS,
   type DateWindow,
   type PostSort,
@@ -259,7 +265,7 @@ export function PipelineDateControl({
   const [open, setOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const active = dateWindow !== 'any' && !(dateWindow === 'custom' && customRange === null);
+  const active = dateFilterActive(dateWindow, customRange);
   const label = dateButtonLabel(dateWindow, customRange);
   const trigger = (
     <button
@@ -308,6 +314,127 @@ export function PipelineDateControl({
       title="Due date"
       trigger={trigger}
       body={dateControlBody({
+        dateWindow,
+        onDateWindowChange: (next) => {
+          onDateWindowChange(next);
+          setOpen(false);
+        },
+        customRange,
+        onCustomOpen: () => setCalendarOpen(true),
+      })}
+      extra={calendar}
+    />
+  );
+}
+
+interface PipelineFilterControlProps extends PipelineSortControlProps, PipelineDateControlProps {}
+
+/** True when a due-date window other than Any time is applied (Custom needs a range). */
+export function dateFilterActive(dateWindow: DateWindow, customRange: DateRange | null): boolean {
+  return dateWindow !== 'any' && !(dateWindow === 'custom' && customRange === null);
+}
+
+/**
+ * The combined body: the due-date rows, a divider, then the sort rows. Each
+ * section keeps its own role="menu" and label so the rows stay as they were.
+ * Pure.
+ */
+export function filterControlBody(props: {
+  order: PostSort;
+  onOrderChange: (order: PostSort) => void;
+  dateWindow: DateWindow;
+  onDateWindowChange: (window: DateWindow) => void;
+  customRange: DateRange | null;
+  onCustomOpen: () => void;
+}): ReactElement {
+  return (
+    <div data-filter-body="" className="flex flex-col">
+      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold text-fg-3">Due date</p>
+      {dateControlBody({
+        dateWindow: props.dateWindow,
+        onDateWindowChange: props.onDateWindowChange,
+        customRange: props.customRange,
+        onCustomOpen: props.onCustomOpen,
+      })}
+      <div className="my-1.5 border-t border-border" aria-hidden="true" />
+      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold text-fg-3">Sort</p>
+      {sortControlBody({ order: props.order, onOrderChange: props.onOrderChange })}
+    </div>
+  );
+}
+
+/**
+ * One 44x44 icon button in place of the separate date and sort buttons: it
+ * opens a single sheet (popover on a laptop) holding both. While a date window
+ * or a non-default sort is on, a small accent dot sits on the button's corner.
+ * The floating range calendar still paints on top via the Custom row.
+ */
+export function PipelineFilterControl({
+  order,
+  onOrderChange,
+  dateWindow,
+  onDateWindowChange,
+  customRange,
+  onCustomRangeChange,
+  weekStartDay,
+}: PipelineFilterControlProps): ReactElement {
+  const [open, setOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const active = dateFilterActive(dateWindow, customRange) || order !== POST_SORT_DEFAULT;
+  const trigger = (
+    <button
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-label="Filter and sort"
+      data-filter-control=""
+      {...(active ? { 'data-active': '' } : {})}
+      onClick={() => setOpen((prev) => !prev)}
+      className={cn(TRIGGER, 'relative w-11 border-border px-0 text-fg-2')}
+    >
+      <IconFilterLines size={20} />
+      {active ? (
+        <span
+          aria-hidden="true"
+          data-filter-dot=""
+          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-panel"
+        />
+      ) : null}
+    </button>
+  );
+  const calendar = (
+    <PipelineDateRangeCalendar
+      open={calendarOpen}
+      initialRange={customRange}
+      weekStartDay={weekStartDay}
+      onApply={(range) => {
+        onCustomRangeChange(range);
+        onDateWindowChange('custom');
+        setCalendarOpen(false);
+        setOpen(false);
+      }}
+      onClear={() => {
+        onCustomRangeChange(null);
+        if (dateWindow === 'custom') onDateWindowChange('any');
+        setCalendarOpen(false);
+      }}
+      onClose={() => setCalendarOpen(false)}
+    />
+  );
+  return (
+    <MenuShell
+      isDesktop={isDesktop}
+      open={open}
+      onClose={() => setOpen(false)}
+      title="Filter and sort"
+      trigger={trigger}
+      body={filterControlBody({
+        order,
+        onOrderChange: (next) => {
+          onOrderChange(next);
+          setOpen(false);
+        },
         dateWindow,
         onDateWindowChange: (next) => {
           onDateWindowChange(next);
