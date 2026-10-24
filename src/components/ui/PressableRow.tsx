@@ -13,6 +13,13 @@ export interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElemen
 export const PRESSABLE_ROW_BASE =
   'w-full min-h-[44px] rounded-lg text-left hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none';
 
-export function PressableRow({ className, buttonRef, type = 'button', ...props }: PressableRowProps) {
-  return <button ref={buttonRef} type={type} className={cn(PRESSABLE_ROW_BASE, className)} {...props} />;
+export function PressableRow({
+  className,
+  buttonRef,
+  type = 'button',
+  ...props
+}: PressableRowProps) {
+  return (
+    <button ref={buttonRef} type={type} className={cn(PRESSABLE_ROW_BASE, className)} {...props} />
+  );
 }

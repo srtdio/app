@@ -1,8 +1,10 @@
 import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/cn';
 
-interface ChipProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'onClick' | 'children'> {
+interface ChipProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'className' | 'onClick' | 'children'
+> {
   label: string;
   selected?: boolean;
   variant?: 'default' | 'add';
