@@ -1,6 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+// The chat cards' import graph reaches the agora-chat browser SDK; mock it so
+// importing in node never touches browser globals (mirrors MessageThread.test).
+vi.mock('agora-chat', () => ({
+  default: { connection: vi.fn(), message: { create: vi.fn() } },
+}));
+
 import type { PipelinePost } from '@srtdio/posts';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import type { PresignCache } from '@/lib/asset-presign';
