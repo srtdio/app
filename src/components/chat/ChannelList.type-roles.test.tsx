@@ -77,11 +77,15 @@ describe('chat list type roles', () => {
   });
 
   it('card titles: the wide tile name is xl/600, the square tile name lg/600', () => {
-    const [wide] = paint(list([group]), 'span', 'Launch');
+    const wide = paint(list([group]), 'span', 'Launch').find((e) =>
+      e.classList.contains('truncate'),
+    );
     expect(classes(wide as Element)).toEqual(
       expect.arrayContaining(['truncate', 'text-fg', 'text-xl', 'font-semibold']),
     );
-    const [square] = paint(list([dm]), 'span', 'Asha Rao');
+    const square = paint(list([dm]), 'span', 'Asha Rao').find((e) =>
+      e.classList.contains('truncate'),
+    );
     expect(classes(square as Element)).toEqual(
       expect.arrayContaining(['truncate', 'text-fg', 'text-lg', 'font-semibold']),
     );

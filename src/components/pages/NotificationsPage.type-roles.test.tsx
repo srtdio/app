@@ -52,6 +52,13 @@ vi.mock('@/components/pages/activity/data', async (importOriginal) => ({
   fetchUpcoming: (...args: unknown[]) => h.fetchUpcoming(...args),
 }));
 
+// The filter bar measures its row; jsdom has no ResizeObserver.
+globalThis.ResizeObserver ??= class {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+} as unknown as typeof ResizeObserver;
+
 // The card menus and the sort pick popover vs sheet by width; jsdom has no matchMedia.
 window.matchMedia ??= ((query: string) => ({
   matches: false,
