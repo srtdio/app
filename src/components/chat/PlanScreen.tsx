@@ -807,7 +807,7 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
             {box.label}
           </span>
           <span className="truncate font-mono text-md text-fg">{box.text}</span>
-          <span className="block h-1 overflow-hidden rounded-[2px] bg-panel-3">
+          <span className="block h-1 overflow-hidden rounded-full bg-panel-3">
             <span
               data-plan-progress-bar={box.tone}
               className={cn('block h-1', box.bar)}
@@ -2035,7 +2035,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-transparent bg-accent-soft px-3 text-base font-semibold leading-5 text-accent group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+          className="flex h-[34px] items-center gap-1.5 rounded-lg border border-transparent bg-accent-soft px-3 text-base font-semibold leading-5 text-accent group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
         >
           <IconPlus size={ICON_SIZE.inline} />
           Add
@@ -2050,7 +2050,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-border-strong bg-panel px-3 text-base font-semibold leading-5 text-fg group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+          className="flex h-[34px] items-center gap-1.5 rounded-lg border border-border-strong bg-panel px-3 text-base font-semibold leading-5 text-fg group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
         >
           <IconEdit size={ICON_SIZE.inline} />
           {EDIT_LABEL}
@@ -2608,7 +2608,7 @@ export function PlanHeaderMenu(props: {
       data-plan-header-menu=""
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-lg border border-border-strong bg-panel py-1 shadow-lg transition-transform duration-fast ease-enter motion-reduce:transition-none',
+        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border border-border-strong bg-panel py-1 shadow-2xl transition-transform duration-fast ease-enter motion-reduce:transition-none',
         entered ? 'translate-y-0' : '-translate-y-1',
         NO_TOUCH_SELECT,
       )}
@@ -3281,7 +3281,7 @@ export function DayColumn(props: {
       data-plan-day-col=""
       {...(isToday ? { 'data-plan-today': '' } : {})}
       className={cn(
-        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-[10px] border bg-panel',
+        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border bg-panel',
         isToday ? 'border-accent' : 'border-border-strong',
       )}
     >
@@ -3551,7 +3551,7 @@ function RowTile(props: {
       return (
         <span
           data-plan-row-tile="concept-image"
-          className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] bg-panel-2"
+          className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-panel-2"
         >
           <Thumbnail
             assetVersionId={concept.versionId}
@@ -3567,7 +3567,7 @@ function RowTile(props: {
       return (
         <span
           data-plan-row-tile="concept-file"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[10px] bg-panel-3 text-fg-3"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3"
         >
           <IconFile size={ICON_SIZE.tray} />
         </span>
@@ -3576,7 +3576,7 @@ function RowTile(props: {
     return (
       <span
         data-plan-row-tile="concept"
-        className="h-14 w-14 shrink-0 rounded-[10px] border-[1.5px] border-dashed border-border-strong"
+        className="h-14 w-14 shrink-0 rounded-lg border-[1.5px] border-dashed border-border-strong"
       />
     );
   }
@@ -3584,7 +3584,7 @@ function RowTile(props: {
     return (
       <span
         data-plan-row-tile="image"
-        className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] bg-panel-2"
+        className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-panel-2"
       >
         <Thumbnail
           assetVersionId={props.thumb}
@@ -3600,7 +3600,7 @@ function RowTile(props: {
     <span
       data-plan-row-tile="text"
       className={cn(
-        'flex h-14 w-14 shrink-0 items-center justify-center rounded-[10px] text-xl font-semibold',
+        'flex h-14 w-14 shrink-0 items-center justify-center rounded-lg text-xl font-semibold',
         props.muted ? 'bg-panel-2 text-fg-3' : 'bg-accent-soft text-accent',
       )}
     >

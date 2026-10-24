@@ -92,7 +92,7 @@ async function pickSelect(page: Page): Promise<void> {
   await expect(menu(page)).toHaveCount(0);
 }
 
-/** Menu style in the current theme: radius 18, 1px border-border, icons in the row ink. */
+/** Menu style in the current theme: radius 12, 1px border-border, icons in the row ink. */
 async function expectMenuStyle(page: Page): Promise<void> {
   // Let the entrance scale finish so sizes read at 1.
   await page.waitForTimeout(400);
@@ -129,7 +129,7 @@ async function expectMenuStyle(page: Page): Promise<void> {
     probe.remove();
     return out;
   });
-  expect(style.radius).toBe('18px');
+  expect(style.radius).toBe('12px');
   expect(style.borderWidth).toBe('1px');
   expect(style.borderColor).toBe(style.refBorder);
   expect(style.icons.length).toBeGreaterThan(3);

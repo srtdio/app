@@ -340,6 +340,7 @@ export function CouldntLoadCard(props: { onRetry: () => void }): ReactElement {
   return (
     <PressableRow
       inline
+      card
       type="button"
       data-card-failed=""
       onClick={props.onRetry}
@@ -596,16 +597,16 @@ export function SharedPostCardList(
 
 /** The shared card box: one tappable row, thumb + title over meta. */
 const SHARED_CARD_BODY =
-  'flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 min-h-[44px]';
+  'flex items-center gap-2.5 rounded-xl border border-border px-2.5 py-2 min-h-[44px]';
 const SHARED_CARD_BOX = `w-[240px] ${SHARED_CARD_BODY}`;
 export const SHARED_CARD = `${SHARED_CARD_BOX} bg-panel`;
 
 /** The live post card frame: media (optional), body, footer stacked. */
 export const POST_CARD =
-  'flex w-[240px] flex-col overflow-hidden rounded-lg border border-border bg-panel text-left';
+  'flex w-[240px] flex-col overflow-hidden rounded-xl border border-border bg-panel text-left';
 
 /** A loading card: the height of a no-media card (one title line, meta row, footer). */
-export const CARD_SKELETON = 'h-[118px] w-[240px] rounded-lg border border-border bg-panel-2';
+export const CARD_SKELETON = 'h-[118px] w-[240px] rounded-xl border border-border bg-panel-2';
 
 /** A small pill laid over the cover image. */
 const MEDIA_PILL =

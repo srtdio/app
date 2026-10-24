@@ -22,7 +22,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { ICON_SIZE, IconChevronLeft, IconChevronRight, IconStar } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
-import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { BUBBLE_SHAPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
@@ -331,7 +331,8 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
           <span
             data-starred-bubble={props.mine ? 'own' : 'peer'}
             className={cn(
-              'max-w-[92%] self-start whitespace-pre-wrap rounded-[18px] px-3 py-2 text-lg leading-5',
+              'max-w-[92%] self-start whitespace-pre-wrap px-3 py-2 text-lg leading-5',
+              BUBBLE_SHAPE.touch,
               props.fullText === true
                 ? 'min-w-0 [overflow-wrap:anywhere]'
                 : 'line-clamp-3 break-words',
@@ -584,7 +585,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
               <div className="h-7 w-7 shrink-0 rounded-full bg-panel-2" />
               <div className="h-3.5 w-1/3 rounded bg-panel-2" />
             </div>
-            <div className="h-8 w-2/3 rounded-[18px] bg-panel-2" />
+            <div className={cn('h-8 w-2/3 bg-panel-2', BUBBLE_SHAPE.touch)} />
           </li>
         ))}
       </ul>

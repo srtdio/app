@@ -41,6 +41,7 @@ import { readLatestBrandRequest, requestBrandTeam } from '@/components/induction
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -924,9 +925,7 @@ export function OnboardingFlow({
           <header className="flex min-h-[56px] items-center justify-between pt-2">
             {canGoBack ? (
               <IconButton type="button" onClick={back} label="Back" className="-ml-3">
-                <span className="inline-flex text-fg">
-                  <BackGlyph />
-                </span>
+                <IconChevronLeft size={ICON_SIZE.control} className="text-fg" />
               </IconButton>
             ) : (
               <span className="block text-fg [&_svg]:h-6 [&_svg]:w-auto [&_.mark-dot]:fill-accent">
@@ -1167,7 +1166,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
 
 function PreviewCard({ label, children }: { label: string; children: ReactNode }): ReactElement {
   return (
-    <div className="w-full max-w-[340px] rounded-2xl border border-border bg-panel p-3.5 shadow-[0_12px_30px_-16px_rgba(17,17,20,0.25)]">
+    <div className="w-full max-w-[340px] rounded-2xl border border-border bg-panel p-3.5 shadow-[var(--shadow-card)]">
       <p className="mb-2 text-sm text-fg-3">{label}</p>
       {children}
     </div>
@@ -1241,23 +1240,5 @@ function WaitingPreview(): ReactElement {
         </p>
       </PreviewCard>
     </>
-  );
-}
-
-function BackGlyph(): ReactElement {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
   );
 }

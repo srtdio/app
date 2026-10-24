@@ -90,7 +90,7 @@ export function ConfirmDialog({
         tabIndex={-1}
         className={cn(
           // Axis: translateY only (8px rise) with a crossfade. No X, no rotate.
-          'w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none transition-[opacity,transform] duration-base will-change-transform',
+          'w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-2xl outline-none transition-[opacity,transform] duration-base will-change-transform',
           entered ? 'translate-y-0 opacity-100 ease-enter' : 'translate-y-2 opacity-0 ease-exit',
         )}
       >

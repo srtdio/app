@@ -528,11 +528,27 @@ describe('album grid', () => {
     expect(html).toContain('bg-black/50');
     expect(html).toContain('text-2xl font-semibold text-white');
     expect(html).toContain('gap-[2px]');
-    expect(html).toContain('rounded-[15px]');
+    // No corners passed: the touch bubble's 18px.
+    expect(html).toContain('gap-[2px] overflow-hidden rounded-[18px]');
     expect(html.match(/<button/g)).toHaveLength(4);
     const { tiles, onOpen } = grid(6);
     (tiles[3]?.props as { onClick: () => void }).onClick();
     expect(onOpen).toHaveBeenCalledWith(3);
+  });
+
+  it("takes its bubble's corners, tail included, so photos and text round alike", () => {
+    const { cache } = spiedCache();
+    const html = renderToStaticMarkup(
+      <AlbumGrid
+        images={images(2)}
+        cache={cache}
+        presignEnabled
+        onOpen={() => {}}
+        corners="rounded-[18px] rounded-br-[4px]"
+      />,
+    );
+    expect(html).toContain('overflow-hidden rounded-[18px] rounded-br-[4px]');
+    expect(html).not.toContain('rounded-xl');
   });
 
   it('first paint is the final grid: pending tiles are bg-panel-3 boxes sized by the grid', () => {

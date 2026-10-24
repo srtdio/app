@@ -75,7 +75,7 @@ function Thumb(props: {
       data-scheduled-thumb=""
       className={cn(
         'relative flex shrink-0 items-center justify-center overflow-hidden bg-panel-3 text-fg-3',
-        props.size === 'strip' ? 'h-7 w-7 rounded-[5px]' : 'h-12 w-12 rounded-md',
+        props.size === 'strip' ? 'h-7 w-7 rounded-md' : 'h-12 w-12 rounded-md',
       )}
     >
       {url !== null && !failed ? (

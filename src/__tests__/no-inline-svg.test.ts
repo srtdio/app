@@ -14,7 +14,6 @@ const ALLOWED = new Set([
   'chat/ThreadRail.tsx',
   'chat/tasks/TaskGlyph.tsx',
   'induction/GuideParts.tsx',
-  'onboarding/OnboardingFlow.tsx',
 ]);
 const ALLOWED_DIRS = ['home/'];
 

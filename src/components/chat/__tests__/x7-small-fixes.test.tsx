@@ -51,7 +51,7 @@ describe('X7 FT44: reaction badge name', () => {
       ]),
     ).toBe('Reactions: 👍 2, ❤️ 1. 3 in total. Show who reacted');
     expect(source('../MessageThread.tsx')).toContain(
-      'aria-label={reactionBadgeLabel(message.reactions)}',
+      '<ReactionBadge label={reactionBadgeLabel(message.reactions)}',
     );
   });
 });

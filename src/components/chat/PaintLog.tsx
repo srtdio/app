@@ -240,7 +240,7 @@ function PaintLogPanel(): ReactElement {
   return (
     <div
       data-paint-log=""
-      className="fixed inset-x-2 bottom-2 z-[70] flex flex-col overflow-hidden rounded-lg border border-border bg-panel text-fg shadow-lg"
+      className="fixed inset-x-2 bottom-2 z-[70] flex flex-col overflow-hidden rounded-xl border border-border bg-panel text-fg shadow-2xl"
     >
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2">
         <span className="flex-1 truncate text-sm font-semibold text-fg-2">

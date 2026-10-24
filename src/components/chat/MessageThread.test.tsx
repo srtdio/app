@@ -14,17 +14,18 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { REACTION_BADGE_CLASS, ReactionBadge } from '@/components/ui/ReactionBadge';
 import { leaveSelectionThen } from '@/lib/chat/forward';
 import {
   bodyText,
   bubbleClass,
+  bubbleCorners,
   bubbleMeta,
   BubbleMetaView,
   metaPlacement,
   MetaSpacer,
   FAILED_RETRY_CLASS,
   FailedLine,
-  REACTION_BADGE_CLASS,
   REACTION_ROW_SPACE,
   bubbleStatus,
   bubbleTimeLabel,
@@ -435,15 +436,15 @@ describe('bubble shell', () => {
     expect(bubbleClass({ ...base, mine: false, tail: false })).not.toContain('rounded-bl-[4px]');
   });
 
-  it('F6 laptop: the first bubble of a run keeps its tail corner, later ones are fully 7.5px', () => {
+  it('F6 laptop: the first bubble of a run keeps its tail corner, later ones are fully 12px', () => {
     const laptop = { ...base, layout: 'laptop' as const };
     for (const mine of [true, false]) {
       const corner = mine ? 'rounded-tr-none' : 'rounded-tl-none';
       const first = bubbleClass({ ...laptop, mine, head: true, tail: false }).split(' ');
       const later = bubbleClass({ ...laptop, mine, head: false, tail: true }).split(' ');
-      expect(first).toEqual(expect.arrayContaining(['rounded-[7.5px]', corner]));
-      expect(later).toContain('rounded-[7.5px]');
-      expect(later.filter((c) => c.startsWith('rounded-'))).toEqual(['rounded-[7.5px]']);
+      expect(first).toEqual(expect.arrayContaining(['rounded-xl', corner]));
+      expect(later).toContain('rounded-xl');
+      expect(later.filter((c) => c.startsWith('rounded-'))).toEqual(['rounded-xl']);
       expect(first).not.toContain('rounded-[18px]');
     }
     // Touch is unchanged: 18px, the 4px tail on the last bubble, nothing on the head.
@@ -1283,8 +1284,7 @@ describe('own-bubble inner content', () => {
       let badge = '';
       let meta = '';
       walk(root, (el) => {
-        const props = el.props as Record<string, unknown>;
-        if (props['data-reaction-badge'] !== undefined) badge = String(props.className);
+        if (el.type === ReactionBadge) badge = REACTION_BADGE_CLASS;
       });
       const view = metaOf(root);
       const html = view !== null ? renderStrip(BubbleMetaView(view)) : '';
@@ -1354,6 +1354,22 @@ describe('image album and viewer', () => {
     });
     return found;
   }
+
+  it('the album rounds exactly like its bubble: touch 18 with the tail, laptop 12 with the head corner', () => {
+    for (const layout of ['touch', 'laptop'] as const) {
+      for (const tail of [true, false]) {
+        const el = attachmentsEl(renderBubble(albumMessage, { layout, tail, head: true }));
+        const corners = (el?.props as { albumCorners?: string }).albumCorners;
+        const expected = bubbleCorners({ mine: false, head: true, tail, layout });
+        expect(corners).toBe(expected);
+        expect(corners).toContain(layout === 'touch' ? 'rounded-[18px]' : 'rounded-xl');
+      }
+    }
+    const touchTail = attachmentsEl(renderBubble(albumMessage, { tail: true, layout: 'touch' }));
+    expect((touchTail?.props as { albumCorners?: string }).albumCorners).toContain(
+      'rounded-bl-[4px]',
+    );
+  });
 
   it('renders the album with its caption and 3px bubble padding', () => {
     expect(hasAlbum(albumMessage)).toBe(true);
@@ -1570,13 +1586,13 @@ describe('bubble text sizes', () => {
     expect(bar).not.toContain(QUOTE_TEXT_TYPE.touch);
   });
 
-  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 7.5px, 6/7/8/9, 65%', () => {
+  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 12px, 6/7/8/9, 65%', () => {
     const shape = { mine: false, head: false, tail: false, failed: false, voiceOnly: false };
     const touch = bubbleClass({ ...shape, layout: 'touch' });
     expect(touch).toContain('px-3 py-2');
     expect(touch).toContain('rounded-[18px]');
     const laptop = bubbleClass({ ...shape, layout: 'laptop' });
-    expect(laptop).toContain('rounded-[7.5px]');
+    expect(laptop).toContain('rounded-xl');
     expect(laptop).toContain('pb-[8px] pl-[9px] pr-[7px] pt-[6px]');
     for (const cls of [touch, laptop]) expect(cls).not.toContain('md:');
     const columnOf = (layout: ChatLayout): string => {

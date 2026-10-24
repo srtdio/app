@@ -254,7 +254,7 @@ export function PostCard({
     <div
       data-induction={INDUCTION_KEYS.pipelinePostRow}
       data-induction-post={post.id}
-      className="relative flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2"
+      className="relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-panel transition-colors hover:bg-panel-2"
     >
       <PressableRow
         type="button"

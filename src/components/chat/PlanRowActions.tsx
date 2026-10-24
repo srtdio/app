@@ -68,7 +68,7 @@ export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactEle
       onPointerDown={onPointerDown}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'flex h-11 w-7 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-md text-fg-3 hover:bg-panel-2',
+        'flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-md text-fg-3 hover:bg-panel-2',
         NO_TOUCH_SELECT,
       )}
     >
@@ -79,7 +79,7 @@ export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactEle
 
 /** The grip's place on a row that cannot be dragged (an out-of-range day). */
 export function PlanGripSpacer(): ReactElement {
-  return <span aria-hidden="true" className="h-11 w-7 shrink-0" />;
+  return <span aria-hidden="true" className="h-11 w-11 shrink-0" />;
 }
 
 /**

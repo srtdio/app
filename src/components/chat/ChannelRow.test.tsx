@@ -188,7 +188,7 @@ describe('chat home tile', () => {
     );
     expect(t.cls).toContain('bg-panel');
     expect(t.cls.split(' ')).toEqual(expect.arrayContaining(['border', 'border-border']));
-    expect(t.cls).toContain('rounded-[18px]');
+    expect(t.cls).toContain('rounded-xl');
     expect(t.html).toContain(`data-person-photo="" class="${esc(PERSON_TILE_PHOTO)}"`);
     expect(PERSON_TILE_PHOTO).toContain('[&>*]:!h-[72px] [&>*]:!w-[72px]');
     expect(PERSON_TILE_PHOTO).not.toContain('rounded');
@@ -206,10 +206,10 @@ describe('chat home tile', () => {
     expect(t.cls).toContain('h-[100px]');
     expect(t.cls).not.toContain('flex-col');
     expect(t.cls.split(' ')).toEqual(
-      expect.arrayContaining(['w-full', 'rounded-[18px]', 'py-3', 'pl-3', 'pr-4', 'items-center']),
+      expect.arrayContaining(['w-full', 'rounded-xl', 'py-3', 'pl-3', 'pr-4', 'items-center']),
     );
     expect(t.html).toContain(`data-group-photo="" class="${esc(GROUP_TILE_PHOTO)}"`);
-    expect(GROUP_TILE_PHOTO).toContain('[&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-[18px]');
+    expect(GROUP_TILE_PHOTO).toContain('[&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-xl');
     expect(t.html).toContain(`break-words line-clamp-2 ${GROUP_PREVIEW_TYPE}`);
     // The pill is the last thing in the row, after the text column.
     expect(t.html.indexOf('data-unread-pill')).toBeGreaterThan(t.html.indexOf('See you then'));

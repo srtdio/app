@@ -165,7 +165,7 @@ export function StopRecordingDialog(props: {
         aria-modal="true"
         aria-label={STOP_RECORDING_TITLE}
         tabIndex={-1}
-        className="relative w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
+        className="relative w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-2xl outline-none"
       >
         <h2 className="text-lg font-semibold text-fg">{STOP_RECORDING_TITLE}</h2>
         <div className="mt-5 flex flex-col gap-2">

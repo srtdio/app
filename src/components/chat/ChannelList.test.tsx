@@ -385,7 +385,7 @@ describe('load status', () => {
     expect(kinds).toEqual(['wide', 'wide', 'square', 'square', 'square', 'square']);
     for (const tile of tiles) {
       const cls = (tile.props as { className: string }).className;
-      for (const token of ['rounded-[18px]', 'border', 'border-border', 'animate-pulse']) {
+      for (const token of ['rounded-xl', 'border', 'border-border', 'animate-pulse']) {
         expect(cls).toContain(token);
       }
       const wide = (tile.props as Record<string, unknown>)['data-skeleton-row'] === 'wide';
@@ -394,7 +394,7 @@ describe('load status', () => {
         tile,
         (el) =>
           el !== tile &&
-          /rounded-(full|\[18px\])/.test((el.props as { className?: string }).className ?? ''),
+          /rounded-(full|xl)/.test((el.props as { className?: string }).className ?? ''),
       );
       expect((photo!.props as { className: string }).className).toContain(
         wide ? 'h-[76px] w-[76px]' : 'h-[72px] w-[72px]',

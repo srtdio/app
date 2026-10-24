@@ -128,7 +128,7 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
   it('grip 28x44, always shown, muted; the chip names the day; the remove is bad colour, 44px', () => {
     const html = paint('agency', edit());
     expect(html).toMatch(
-      /data-plan-grip=""[^>]*class="[^"]*h-11 w-7[^"]*cursor-grab[^"]*touch-none/,
+      /data-plan-grip=""[^>]*class="[^"]*h-11 w-11[^"]*cursor-grab[^"]*touch-none/,
     );
     expect(html).not.toMatch(/data-plan-grip=""[^>]*opacity-0/);
     // The chip: the shared 44px secondary button (8px radius, bordered).

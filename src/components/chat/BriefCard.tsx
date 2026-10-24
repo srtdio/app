@@ -63,7 +63,7 @@ export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactEle
         {briefIds.map((id) => (
           <div
             key={id}
-            className="h-[54px] w-[240px] animate-pulse rounded-lg border border-border bg-panel-2"
+            className="h-[54px] w-[240px] animate-pulse rounded-xl border border-border bg-panel-2"
           />
         ))}
       </div>
@@ -101,6 +101,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
     <PressableRow
       type="button"
       inline
+      card
       aria-label={`Open brief ${view.title}`}
       onClick={() => navigate(briefRoute(view.briefId))}
       className={`${SHARED_CARD} transition-colors`}

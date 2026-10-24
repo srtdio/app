@@ -1171,7 +1171,7 @@ export function remindProps(
  * full-bleed), clipped to the radius.
  */
 export const MENU_PANEL =
-  'overflow-hidden rounded-[18px] border border-border bg-panel shadow-2xl transition-[opacity,transform] duration-fast motion-reduce:transition-none';
+  'overflow-hidden rounded-xl border border-border bg-panel shadow-2xl transition-[opacity,transform] duration-fast motion-reduce:transition-none';
 
 /** The held copy's return on close, ms (the --dur-fast token). */
 export const HELD_RETURN_MS = 120;

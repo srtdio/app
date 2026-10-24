@@ -145,7 +145,7 @@ describe('the same notes avatar in all four places, no reads', () => {
       expect(html).toContain('data-notes-avatar');
       expect(html).toContain(`src="${PHOTO}"`);
     }
-    expect(tile).toContain('h-[76px] w-[76px] rounded-[18px]');
+    expect(tile).toContain('h-[76px] w-[76px] rounded-xl');
     expect(header).toContain('h-10 w-10 rounded-xl');
     expect(picker).toContain('h-11 w-11 rounded-xl');
     expect(search).toContain('h-11 w-11 rounded-xl');

@@ -634,7 +634,7 @@ function GracefulPanel({
   busy?: boolean;
 }) {
   return (
-    <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl">
+    <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-2xl">
       <p className="text-sm text-fg-3">{message}</p>
       {onDownload !== undefined ? (
         <Button

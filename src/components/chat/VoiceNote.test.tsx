@@ -749,7 +749,7 @@ describe('first paint', () => {
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('>Hide text</button>');
     expect(html).toMatch(/data-voice-transcript="open" class="grid [^"]*visible grid-rows-\[1fr\]/);
-    expect(html).toMatch(/select-text[^"]*rounded-\[14px\][^"]*text-lg bg-panel-3 text-fg/);
+    expect(html).toMatch(/select-text[^"]*rounded-xl[^"]*text-lg bg-panel-3 text-fg/);
     expect(html).toContain('नमस्ते, see you at 5');
     expect(html.indexOf('data-voice-transcript')).toBeGreaterThan(html.indexOf('data-voice-foot'));
   });
@@ -838,12 +838,12 @@ describe('bars from the real waveform', () => {
     expect(Math.max(...heights)).toBeLessThanOrEqual(MAX_BAR_PX);
   });
 
-  it('unplayed bars: the muted token received, white at 45% sent; 2px wide, 1px radius', () => {
+  it('unplayed bars: the muted token received, white at 45% sent; 2px wide, full radius', () => {
     const received = renderToStaticMarkup(<VoiceNote {...base} peaks={[50, 60]} />);
     const wave = received.slice(received.indexOf('data-voice-bars'));
-    expect((wave.match(/w-0\.5 shrink-0 rounded-\[1px\] bg-fg-3"/g) ?? []).length).toBe(30);
+    expect((wave.match(/w-0\.5 shrink-0 rounded-full bg-fg-3"/g) ?? []).length).toBe(30);
     expect(wave).not.toContain('data-played');
     const sent = renderToStaticMarkup(<VoiceNote {...base} mine peaks={[50, 60]} />);
-    expect(sent).toContain('w-0.5 shrink-0 rounded-[1px] bg-white/[.45]');
+    expect(sent).toContain('w-0.5 shrink-0 rounded-full bg-white/[.45]');
   });
 });

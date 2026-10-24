@@ -77,11 +77,11 @@ export type PlanCardView = { kind: 'plan'; bundle: PlanBundle } | { kind: 'unava
  * skeleton's height: the swap from skeleton to card never moves the thread.
  */
 export const PLAN_CARD =
-  'flex h-[217px] w-[284px] max-w-full flex-col overflow-hidden rounded-lg border border-border bg-panel text-left';
+  'flex h-[217px] w-[284px] max-w-full flex-col overflow-hidden rounded-xl border border-border bg-panel text-left';
 
 /** A loading plan card: exactly the card's height. */
 export const PLAN_CARD_SKELETON =
-  'h-[217px] w-[284px] max-w-full rounded-lg border border-border bg-panel-2';
+  'h-[217px] w-[284px] max-w-full rounded-xl border border-border bg-panel-2';
 
 const NO_SUBSCRIBE = (): (() => void) => () => {};
 const NO_VERSION = (): number => 0;

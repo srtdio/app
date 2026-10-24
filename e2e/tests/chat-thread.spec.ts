@@ -141,11 +141,9 @@ test('chat thread: every visible button is at least a 44x44 touch target', async
   await row.click();
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
   await page.waitForTimeout(400);
-  // The reaction badge is the one counted raw-button exception (see
-  // src/__tests__/no-raw-button.test.ts); it is reworked in the Shapes PR.
-  const checked = await expectAllVisibleControlsTouchSized(page, {
-    exclude: '[data-reaction-badge]',
-  });
+  // The reaction badge draws ~20px but its ::before is a 44x44 hit area,
+  // which the sweep measures, so nothing is excluded.
+  const checked = await expectAllVisibleControlsTouchSized(page);
   expect(checked, 'buttons measured on the open thread').toBeGreaterThan(0);
 });
 

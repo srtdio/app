@@ -244,7 +244,7 @@ test('A: the panel docks at full size, opens on today, chat scrolls beside it; i
       .first()
       .boundingBox();
     if (first === null) throw new Error('target');
-    return first.y + 4;
+    return first.y + first.height / 4; // upper quarter: above its middle at any line height
   });
   await expect.poll(() => titlesOn(panel, '2026-10-15')).toContain('Thank you note');
   expect(saves(network)).toEqual([]);
@@ -293,7 +293,7 @@ test('B: Edit: reorder inside Wed by the grip, the day chip moves one to Fri, re
         .first()
         .boundingBox();
       if (first === null) throw new Error('target');
-      return first.y + 4;
+      return first.y + first.height / 4; // upper quarter: above its middle at any line height
     });
     await expect
       .poll(() => titlesOn(panel, '2026-10-14'))

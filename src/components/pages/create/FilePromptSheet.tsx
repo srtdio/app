@@ -49,7 +49,7 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
         aria-modal="true"
         aria-label="Check the file"
         tabIndex={-1}
-        className="w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
+        className="w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-2xl outline-none"
       >
         <p className="text-base text-fg">{prompt.question}</p>
         <div className="mt-5 flex justify-end gap-2">

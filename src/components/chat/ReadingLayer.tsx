@@ -95,7 +95,7 @@ export function UnreadPill(props: {
         onContextMenu={(e) => e.preventDefault()}
         // Secondary is the float surface (bg-panel, border-border, text-fg).
         className={cn(
-          'shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           NO_TOUCH_SELECT,
           props.visible && 'pointer-events-auto',
         )}
@@ -133,7 +133,7 @@ export function LatestButton(props: {
         onClick={props.onTap}
         onContextMenu={(e) => e.preventDefault()}
         className={cn(
-          'shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           FLOAT_SURFACE_CLASS,
           NO_TOUCH_SELECT,
         )}

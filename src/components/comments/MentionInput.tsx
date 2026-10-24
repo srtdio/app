@@ -435,7 +435,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
       />
 
       {open ? (
-        <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-panel py-1 shadow-lg">
+        <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-xl border border-border bg-panel py-1 shadow-2xl">
           {matches.map((member, index) => (
             <li key={member.id}>
               <PressableRow

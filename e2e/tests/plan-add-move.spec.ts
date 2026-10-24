@@ -223,7 +223,7 @@ test('agency: in Edit, a grip drag moves a Thu item to Wed; Save changes writes 
       .first()
       .boundingBox();
     if (first === null) throw new Error('target');
-    return first.y + 4;
+    return first.y + first.height / 4; // upper quarter: above its middle at any line height
   });
   // Painted at once; nothing written until Save changes.
   await expect
@@ -304,7 +304,7 @@ test('agency: Escape mid-drag puts the row back with no write; a reorder within 
       .first()
       .boundingBox();
     if (first === null) throw new Error('target');
-    return first.y + 4;
+    return first.y + first.height / 4; // upper quarter: above its middle at any line height
   });
   await expect
     .poll(() => titlesOn(plan, '2026-10-12'))

@@ -264,9 +264,9 @@ describe('menu style', () => {
   };
   const items = [...messageMenuItems(styleProps), ...moreMenuItems(styleProps)];
 
-  it('panel: 18px radius, border-border hairline, no inner padding, tokens only', () => {
+  it('panel: 12px radius, border-border hairline, no inner padding, tokens only', () => {
     const cls = MENU_PANEL.split(' ');
-    expect(cls).toEqual(expect.arrayContaining(['rounded-[18px]', 'border', 'border-border']));
+    expect(cls).toEqual(expect.arrayContaining(['rounded-xl', 'border', 'border-border']));
     expect(cls).toEqual(expect.arrayContaining(['bg-panel', 'shadow-2xl']));
     expect(cls).not.toContain('border-border-strong');
     expect(cls.some((c) => /^p-/.test(c))).toBe(false);

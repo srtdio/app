@@ -24,14 +24,9 @@ const WRAPPER_MIN_HEIGHT = 56;
 
 const SELECTOR = 'button, [role="button"], a.h-11';
 // Controls the button-system PR left as they are on purpose (listed under
-// COULD NOT RESOLVE): the status ticker's dense bar items, the reaction badge
-// and the voice player controls inside a bubble.
-const KNOWN_EXEMPT = [
-  '[data-status-item]',
-  '[data-status-chevron]',
-  '[data-reaction-badge]',
-  '[data-voice-control]',
-];
+// COULD NOT RESOLVE): the status ticker's dense bar items and the voice player
+// controls inside a bubble.
+const KNOWN_EXEMPT = ['[data-status-item]', '[data-status-chevron]', '[data-voice-control]'];
 const EXCLUDE = ['.home', '[data-home]', '[data-touch-exempt]', ...KNOWN_EXEMPT].join(', ');
 
 export interface ButtonViolation {
@@ -109,7 +104,18 @@ export async function collectButtonViolations(
         style.borderBottomLeftRadius,
       ];
       const radiusText = corners.join(' ');
-      if (rect.height < a.minHeight - a.tolerance) {
+      // A drawn-small control (the reaction badge) counts its absolutely
+      // positioned ::before / ::after expander, as the touch-target sweep does.
+      let top = rect.top;
+      let bottom = rect.bottom;
+      for (const pseudo of ['::before', '::after']) {
+        const cs = getComputedStyle(el, pseudo);
+        if (cs.content === 'none' || cs.position !== 'absolute') continue;
+        const px = (v: string): number => (v.endsWith('px') ? Number.parseFloat(v) : 0);
+        top = Math.min(top, rect.top + px(cs.top));
+        bottom = Math.max(bottom, rect.bottom - px(cs.bottom));
+      }
+      if (bottom - top < a.minHeight - a.tolerance) {
         out.push({
           name: describe(el),
           height: rect.height,

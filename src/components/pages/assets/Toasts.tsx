@@ -21,7 +21,7 @@ export function Toasts({ toasts, onDismiss }: ToastsProps) {
           key={toast.id}
           type="button"
           onClick={() => onDismiss(toast.id)}
-          className="pointer-events-auto max-w-sm border border-border bg-panel px-4 py-2.5 text-base text-fg shadow-lg transition-colors duration-fast"
+          className="pointer-events-auto max-w-sm border border-border bg-panel px-4 py-2.5 text-base text-fg shadow-[var(--strip-shadow)] transition-colors duration-fast"
         >
           {toast.message}
         </PressableRow>

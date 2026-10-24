@@ -36,6 +36,7 @@ import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
 import { VoiceNote } from '@/components/chat/VoiceNote';
 import { UploadRing } from '@/components/chat/UploadRing';
 import { BUBBLE_FILL, FileBubble } from '@/components/chat/FileBubble';
+import { BUBBLE_SHAPE } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { middleTruncate } from '@/lib/files/display-name';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -447,6 +448,7 @@ export function AlbumGrid({
   onOpen,
   ring = null,
   onCancelUpload,
+  corners = BUBBLE_SHAPE.touch,
 }: {
   images: readonly MessageAttachment[];
   cache: PresignCache;
@@ -455,6 +457,12 @@ export function AlbumGrid({
   /** The one upload ring over the grid (progress across the whole message); null: none. */
   ring?: { progress: number | null } | null;
   onCancelUpload?: (() => void) | undefined;
+  /**
+   * The album's corners: the same classes as its bubble (chat-type.ts shape by
+   * layout, plus the tail corner when it ends a run), so photos and text
+   * bubbles round alike. Defaults to the touch bubble.
+   */
+  corners?: string;
 }): ReactElement {
   const count = images.length;
   return (
@@ -462,7 +470,8 @@ export function AlbumGrid({
       data-album={count}
       className={cn(
         albumGridClass(count),
-        'relative w-[320px] max-w-full gap-[2px] overflow-hidden rounded-[15px]',
+        'relative w-[320px] max-w-full gap-[2px] overflow-hidden',
+        corners,
       )}
     >
       {albumTiles(count).map((tile) => {
@@ -533,6 +542,8 @@ export interface MessageAttachmentsProps {
    * album, file or voice note shows the UploadRing, whose X calls this.
    */
   onCancelUpload?: (() => void) | undefined;
+  /** Album mode: the bubble's corner classes, passed on to the album (AlbumGrid). */
+  albumCorners?: string | undefined;
 }
 
 /** "Couldn't show this file": the attachment area's crash fallback. */
@@ -619,6 +630,7 @@ function MessageAttachmentsBody({
   album,
   caption,
   onCancelUpload,
+  albumCorners,
 }: MessageAttachmentsProps): ReactElement | null {
   if (attachments.length === 0) return null;
   if (album === true) {
@@ -638,6 +650,7 @@ function MessageAttachmentsBody({
             // ONE ring for the whole message: the chips below carry none.
             ring={ringFor(attachments, onCancelUpload)}
             onCancelUpload={onCancelUpload}
+            {...(albumCorners !== undefined ? { corners: albumCorners } : {})}
           />
           {hasBelow ? (
             <div className="flex flex-col items-start gap-1.5 px-[9px] pb-[5px] pt-1.5">

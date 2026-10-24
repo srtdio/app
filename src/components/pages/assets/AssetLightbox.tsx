@@ -567,7 +567,7 @@ export function AssetLightbox({
         ) : (
           <div
             data-file-card=""
-            className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl"
+            className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-2xl"
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold tracking-[0.06em] text-fg-2">
               {typeLabel(kind)}

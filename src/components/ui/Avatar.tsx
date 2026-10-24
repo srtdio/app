@@ -67,7 +67,7 @@ const base = 'inline-flex items-center justify-center select-none';
 
 const SHAPE: Record<NonNullable<AvatarProps['shape']>, string> = {
   circle: 'rounded-full',
-  rounded: 'rounded-[24px]',
+  rounded: 'rounded-2xl',
 };
 
 export function Avatar({ presence, ...props }: AvatarProps) {
