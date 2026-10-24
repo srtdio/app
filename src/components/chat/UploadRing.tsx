@@ -19,6 +19,7 @@
 
 import type { ReactElement } from 'react';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 
 export type UploadRingVariant = 'voice' | 'image' | 'file';
@@ -37,11 +38,15 @@ const RING_CLASS: Readonly<Record<UploadRingVariant, string>> = {
   file: 'h-11 w-11',
 };
 
-/** The tap target per variant: never under 44x44 (the 40px voice ring gets a 44px button). */
+/**
+ * The tap target per variant: never under 44x44 (the 40px voice ring gets a
+ * 44px button). The width is the drawn ring's (PressableRow inline sizes to
+ * content) with a 44px floor.
+ */
 const HIT_CLASS: Readonly<Record<UploadRingVariant, string>> = {
-  voice: 'h-11 w-11',
-  image: 'h-14 w-14',
-  file: 'h-11 w-11',
+  voice: 'h-11 min-w-[44px]',
+  image: 'h-14 min-w-[56px]',
+  file: 'h-11 min-w-[44px]',
 };
 
 const STROKE = 3;
@@ -87,7 +92,8 @@ export function UploadRing({
   const size = UPLOAD_RING_SIZES[variant];
   const radius = (size - STROKE) / 2;
   return (
-    <button
+    <PressableRow
+      inline
       type="button"
       data-upload-ring=""
       data-ring-variant={variant}
@@ -102,10 +108,12 @@ export function UploadRing({
         if (!hidden) onCancel?.();
       }}
       className={cn(
-        'grid shrink-0 place-items-center rounded-full text-overlay-fg',
+        // PressableRow (not IconButton): no text-fg-2 for the own bubble's
+        // [&_.text-fg-2]:opacity-80 to dim, and no transition of its own, so
+        // the ring keeps its overlay ink and its opacity/visibility fade.
+        'grid shrink-0 place-items-center text-overlay-fg',
         HIT_CLASS[variant],
         'transition-[opacity,visibility] duration-150 motion-reduce:transition-none',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg',
         hidden ? 'pointer-events-none invisible opacity-0' : 'visible opacity-100',
         className,
       )}
@@ -147,6 +155,6 @@ export function UploadRing({
         />
       </svg>
       <IconX size={UPLOAD_RING_X} className={LAYER} />
-    </button>
+    </PressableRow>
   );
 }

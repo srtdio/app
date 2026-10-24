@@ -27,7 +27,8 @@ import {
 } from '@/components/ui/icons';
 import { isClient } from '@/components/pages/pcs/roles';
 import { cn } from '@/lib/cn';
-import { buttonClass } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
 import { INDUCTION_KEYS } from '@/lib/induction';
@@ -185,8 +186,10 @@ export function ComposerTray(props: {
   });
   return (
     <div ref={rootRef} className={cn('shrink-0', NO_TOUCH_SELECT)} onContextMenu={preventDefault}>
-      <button
-        ref={buttonRef}
+      <Button
+        variant={open ? 'primary' : 'secondary'}
+        shape="round"
+        buttonRef={buttonRef}
         type="button"
         data-plus=""
         data-induction={INDUCTION_KEYS.chatPlus}
@@ -194,13 +197,9 @@ export function ComposerTray(props: {
         aria-expanded={open}
         aria-controls="composer-tray"
         onClick={() => setOpen((o) => !o)}
-        // Needs a ref (Escape returns focus), so it stays a raw button on the
-        // shared recipe: round secondary, primary while the tray is open.
-        className={buttonClass(
-          open ? 'primary' : 'secondary',
-          'round',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        )}
+        // Round secondary, primary while the tray is open; buttonRef returns
+        // focus on Escape.
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span
           aria-hidden="true"
@@ -212,7 +211,7 @@ export function ComposerTray(props: {
         >
           <IconPlus size={ICON_SIZE.control} />
         </span>
-      </button>
+      </Button>
       {rendered ? (
         <div
           id="composer-tray"
@@ -251,8 +250,9 @@ export function TrayGrid(props: {
   return (
     <div className="grid grid-cols-4 gap-2">
       {tiles.map((tile) => (
-        <button
+        <PressableRow
           key={tile.id}
+          align="center"
           type="button"
           data-tray-tile={tile.id}
           disabled={tile.disabled === true}
@@ -262,13 +262,13 @@ export function TrayGrid(props: {
             if (tile.disabled === true) return;
             props.onPick(tile.id);
           }}
-          className="flex min-h-[72px] min-w-[44px] flex-col items-center justify-center gap-1.5 rounded-lg text-fg-2 hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50"
+          className="flex h-[72px] min-w-[44px] flex-col items-center justify-center gap-1.5 text-fg-2 hover:text-fg"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg">
             <tile.Icon size={ICON_SIZE.tray} />
           </span>
           <span className="text-sm font-medium">{tile.label}</span>
-        </button>
+        </PressableRow>
       ))}
     </div>
   );

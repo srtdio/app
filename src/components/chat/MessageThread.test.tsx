@@ -13,6 +13,7 @@ vi.mock('agora-chat', () => ({
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { leaveSelectionThen } from '@/lib/chat/forward';
 import {
   bodyText,
@@ -535,7 +536,7 @@ describe('in-bubble meta and ticks', () => {
         'top-1/2',
         '-translate-y-1/2',
         'h-11',
-        'w-11',
+        'min-w-[44px]',
         'text-bad',
       ]),
     );
@@ -559,7 +560,7 @@ describe('in-bubble meta and ticks', () => {
       }
     });
     const button = retry as unknown as ReactElement<Record<string, unknown>>;
-    expect(button.type).toBe('button');
+    expect(button.type).toBe(PressableRow);
     expect(button.props.role).toBeUndefined();
     expect(renderStrip(button as ReactElement)).not.toContain('role="status"');
     const html = renderStrip(root);
@@ -940,7 +941,8 @@ describe('MessageBubble keyboard and hover actions', () => {
     expect(withAttr(bubble, 'data-more')).toHaveLength(1);
     const cls = String(button?.props.className);
     expect(button?.props['aria-label']).toBe('Message options');
-    expect(cls).toContain('h-11 w-11');
+    // A PressableRow (inline): 44 tall with a 44px width floor.
+    expect(cls).toContain('h-11 min-w-[44px]');
     expect(cls).toContain('absolute right-0 top-0');
     expect(cls).toContain('group-hover/bubble:opacity-100');
     expect(cls).toContain('focus-visible:opacity-100');
@@ -1704,7 +1706,8 @@ describe('ThreadHeaderIdentity', () => {
   function buttons(root: ReactElement): ReactElement<Record<string, unknown>>[] {
     const out: ReactElement<Record<string, unknown>>[] = [];
     walk(root, (el) => {
-      if (el.type === 'button') out.push(el as ReactElement<Record<string, unknown>>);
+      // The header button is a PressableRow (it renders the <button>).
+      if (el.type === PressableRow) out.push(el as ReactElement<Record<string, unknown>>);
     });
     return out;
   }
@@ -1713,8 +1716,9 @@ describe('ThreadHeaderIdentity', () => {
     const onOpenContact = vi.fn();
     const root = ThreadHeaderIdentity({ ...base, isGroup: false, onOpenContact });
     const [button] = buttons(root);
-    expect(root.type).toBe('button');
-    expect(String(button?.props.className)).toContain('min-h-[44px]');
+    expect(root.type).toBe(PressableRow);
+    // PressableRow's base supplies the 44px floor; the caller adds layout only.
+    expect(String(button?.props.className)).toContain('flex-1');
     expect(hasAvatar(root)).toBe(true);
     expect(allText(root)).toContain('Alice Doe');
     (button?.props.onClick as () => void)();
@@ -3273,7 +3277,10 @@ describe('@mentions in bubbles', () => {
     const peer = markup(false);
     expect(own).toContain('text-accent-fg');
     expect(peer).not.toContain('text-accent-fg');
-    expect(peer).toMatch(/data-mention="11111111[^"]*" class="[^"]*font-semibold/);
+    // A mention button is a PressableRow (class before data-mention); an inert one a span.
+    expect(peer).toMatch(
+      /data-mention="11111111[^"]*" class="[^"]*font-semibold|class="[^"]*font-semibold[^"]*" data-mention="11111111/,
+    );
   });
 
   it('tapping another person opens the DM via the opener; my own name is inert', () => {
@@ -3286,7 +3293,7 @@ describe('@mentions in bubbles', () => {
     const els = nodes.filter(isValidElement) as ReactElement<Record<string, unknown>>[];
     const ben = els.find((el) => el.props['data-mention'] === BEN);
     const me = els.find((el) => el.props['data-mention'] === ME);
-    expect(ben?.type).toBe('button');
+    expect(ben?.type).toBe(PressableRow);
     expect(String(ben?.props.className)).toContain('before:h-[44px]');
     (ben?.props.onClick as () => void)();
     expect(onOpen).toHaveBeenCalledWith(BEN);
@@ -3661,7 +3668,8 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     local: { key: 'local-t12f', file: null, previewUrl: null, progress: 0.6, uploading: true },
   };
   function ring(html: string): string {
-    const at = html.indexOf('<button type="button" data-upload-ring');
+    // The ring is a PressableRow: its opening tag starts before data-upload-ring.
+    const at = html.lastIndexOf('<button', html.indexOf('data-upload-ring'));
     return html.slice(at, html.indexOf('</button>', at) + '</button>'.length);
   }
   function paint(attachments: MessageAttachment[], mine: boolean, theme: 'light' | 'dark') {

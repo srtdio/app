@@ -190,8 +190,9 @@ describe('member rows on the rail', () => {
   it('a failed own reply on the rail sets its alert on the page fill', () => {
     const failed = { ...memberRow, mine: true, senderUserId: 'me', state: 'failed' as const };
     const onRail = bubble(failed, { member: true, rail: railFor('last', { mine: true }) });
-    expect(onRail).toMatch(/data-failed-retry=""[^>]*bg-bg/);
-    expect(bubble(failed)).not.toMatch(/data-failed-retry=""[^>]*bg-bg/);
+    // A PressableRow: its class renders before the passed data attribute.
+    expect(onRail).toMatch(/class="[^"]*\bbg-bg\b[^"]*"[^>]*data-failed-retry=""/);
+    expect(bubble(failed)).not.toMatch(/class="[^"]*\bbg-bg\b[^"]*"[^>]*data-failed-retry=""/);
   });
 });
 

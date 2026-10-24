@@ -10,6 +10,11 @@ import { describe, expect, it } from 'vitest';
 // rendered markup, not author it.
 const ROOT = fileURLToPath(new URL('../components/', import.meta.url));
 const ALLOWED_DIRS = ['ui/', 'home/', 'test-site/'];
+// Raw buttons that cannot move without changing behaviour, by file and count.
+// MessageThread's reaction badge hangs 3px under the bubble; any primitive's
+// 44px minimum would overlap the next message and steal its taps. Reworked in
+// the Shapes PR; until then the count here may only go down.
+const ALLOWED_RAW: Readonly<Record<string, number>> = { 'chat/MessageThread.tsx': 1 };
 const PRIMITIVE_TAG = /<(Button|IconButton|Chip|PressableRow|Backdrop|DropZone)\b/g;
 // An important-override token: "!" at the start of a class or after a variant
 // prefix (`!px-3`, `hover:!bg-panel`). Not `!==` or a negation in an expression,
@@ -62,7 +67,12 @@ describe('no raw <button> outside the ui primitives', () => {
   it('src/components/**/*.tsx has no "<button" outside ui/ and home/', () => {
     const offenders = sourceFiles()
       .filter((rel) => !ALLOWED_DIRS.some((d) => rel.startsWith(d)))
-      .filter((rel) => readFileSync(join(ROOT, rel), 'utf8').includes('<button'));
+      .map((rel) => ({
+        rel,
+        count: readFileSync(join(ROOT, rel), 'utf8').split('<button').length - 1,
+      }))
+      .filter(({ rel, count }) => count > (ALLOWED_RAW[rel] ?? 0))
+      .map(({ rel, count }) => `${rel} (${count})`);
     expect(offenders).toEqual([]);
   });
 

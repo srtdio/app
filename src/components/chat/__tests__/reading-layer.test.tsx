@@ -118,7 +118,7 @@ describe('T8 tray and emoji button by pointer', () => {
     );
     expect(html).toContain('grid-cols-4');
     expect(html.match(/data-tray-tile=/g)).toHaveLength(8);
-    expect(html.match(/min-h-\[72px\] min-w-\[44px\]/g)).toHaveLength(8);
+    expect(html.match(/h-\[72px\] min-w-\[44px\]/g)).toHaveLength(8);
     const plan = /<button[^>]*data-tray-tile="plan"[^>]*>/.exec(html)?.[0] ?? '';
     expect(plan).toContain('disabled=""');
     expect(plan).toContain('aria-disabled="true"');

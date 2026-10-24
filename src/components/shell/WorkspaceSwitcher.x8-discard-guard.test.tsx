@@ -95,7 +95,7 @@ async function escape(): Promise<void> {
 }
 
 async function clickBackdrop(): Promise<void> {
-  const overlay = dialog()?.parentElement;
+  const overlay = dialog()?.parentElement?.querySelector<HTMLButtonElement>('[data-backdrop]');
   if (overlay == null) throw new Error('no backdrop');
   await act(async () => overlay.click());
 }

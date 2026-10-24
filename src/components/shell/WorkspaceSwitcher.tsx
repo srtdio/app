@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormEvent, MouseEvent } from 'react';
+import type { FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { workspaceCreate } from '@srtdio/rpc';
 import { PLATFORM_LABELS, POST_PLATFORMS, type PostPlatform } from '@srtdio/posts';
@@ -11,6 +11,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field } from '@/components/ui/Field';
+import { Backdrop } from '@/components/ui/Backdrop';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
@@ -287,24 +288,18 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
 
   if (!open) return null;
 
-  function onOverlayClick(event: MouseEvent<HTMLDivElement>): void {
-    if (event.target === event.currentTarget) requestClose();
-  }
-
   const title = switcherTitle(mode);
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
-      onClick={onOverlayClick}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <Backdrop position="absolute" aria-label="Close" onClick={requestClose} />
       <div
         ref={panelRef}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex w-full max-w-[420px] max-h-[84vh] flex-col overflow-hidden rounded-xl border border-border-strong bg-panel shadow-2xl outline-none"
+        className="relative flex w-full max-w-[420px] max-h-[84vh] flex-col overflow-hidden rounded-xl border border-border-strong bg-panel shadow-2xl outline-none"
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-[15px]">
           <h2 className="text-lg font-semibold">{title}</h2>

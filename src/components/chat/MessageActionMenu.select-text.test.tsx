@@ -334,7 +334,7 @@ describe('menu style', () => {
         onMore={() => {}}
       />,
     );
-    expect(html.match(/h-11 w-11 shrink-0/g)?.length).toBe(6);
+    expect(html.match(/h-11 w-11 min-h-\[44px\] min-w-\[44px\][^"]*shrink-0/g)?.length).toBe(6);
     expect(html).toContain('px-[10px] py-2');
     expect(html).toContain('border-b border-border');
   });

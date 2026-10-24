@@ -13,6 +13,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FocusEvent, ReactElement, ReactNode } from 'react';
 import { ICON_SIZE, IconSearch } from '@/components/ui/icons';
+import { IconButton } from '@/components/ui/IconButton';
 import { cn } from '@/lib/cn';
 import { EMOJI, EMOJI_GROUPS, type EmojiEntry } from '@/components/chat/emoji-data';
 import {
@@ -209,19 +210,19 @@ export function gridColumns(width: number): number {
 /** One 44x44 glyph button. */
 function EmojiButton(props: { entry: EmojiEntry; onPick: (char: string) => void }): ReactElement {
   return (
-    <button
+    <IconButton
       type="button"
       data-emoji={props.entry.char}
-      aria-label={props.entry.name}
+      label={props.entry.name}
       title={props.entry.name}
       onClick={() => props.onPick(props.entry.char)}
       className={cn(
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         EMOJI_GLYPH_TYPE,
       )}
     >
       <span aria-hidden="true">{props.entry.char}</span>
-    </button>
+    </IconButton>
   );
 }
 
@@ -270,21 +271,21 @@ export function EmojiTabs(props: {
       className="flex shrink-0 justify-between overflow-x-auto border-b border-border px-1"
     >
       {SECTIONS.map((section) => (
-        <button
+        <IconButton
           key={section.group}
           type="button"
           role="tab"
-          aria-label={section.group}
+          label={section.group}
           aria-selected={!searching && props.activeGroup === section.group}
           data-emoji-tab={section.group}
           onClick={() => props.onTab(section.group)}
           className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg opacity-60 hover:bg-panel-2 aria-selected:bg-panel-3 aria-selected:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'shrink-0 opacity-60 aria-selected:bg-panel-3 aria-selected:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             EMOJI_GLYPH_TYPE,
           )}
         >
           <span aria-hidden="true">{groupTabGlyph(section)}</span>
-        </button>
+        </IconButton>
       ))}
     </div>
   );

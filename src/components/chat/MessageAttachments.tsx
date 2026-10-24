@@ -27,6 +27,7 @@
 // lightbox at its index; non-image attachments render below the album as before.
 
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { ICON_SIZE, IconDownload, IconFile, IconImage } from '@/components/ui/icons';
@@ -263,14 +264,15 @@ function AttachmentItem({
       // When the caller wants tap-to-open (comments), wrap the unchanged <img> in
       // a button; chat passes no onImageClick so it renders exactly as before.
       return onImageClick !== undefined ? (
-        <button
+        <PressableRow
+          inline
           type="button"
           aria-label="Open image"
           onClick={onImageClick}
           className="cursor-zoom-in"
         >
           {image}
-        </button>
+        </PressableRow>
       ) : (
         image
       );
@@ -466,14 +468,15 @@ export function AlbumGrid({
       {albumTiles(count).map((tile) => {
         const attachment = images[tile.index] as MessageAttachment;
         return (
-          <button
+          <PressableRow
             key={attachment.local?.key ?? `${attachment.assetId}-${tile.index}`}
+            flat
             type="button"
             aria-label={albumTileLabel(tile.index, count)}
             onClick={() => onOpen(tile.index)}
             className={cn(
-              'relative block w-full cursor-zoom-in overflow-hidden bg-panel-3 [-webkit-touch-callout:none]',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+              'relative block cursor-zoom-in overflow-hidden bg-panel-3 [-webkit-touch-callout:none]',
+              'focus-visible:ring-inset',
               tile.className,
             )}
           >
@@ -486,7 +489,7 @@ export function AlbumGrid({
                 +{tile.more}
               </span>
             ) : null}
-          </button>
+          </PressableRow>
         );
       })}
       {ring !== null ? (

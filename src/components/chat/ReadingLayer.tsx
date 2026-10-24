@@ -14,6 +14,8 @@ import type { Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconArrowUp, IconChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { formatClockTime, civilDay } from '@/lib/chat/time-format';
@@ -74,8 +76,16 @@ export function UnreadPill(props: {
   onJump: () => void;
 }): ReactElement {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
-      <button
+    // The fade sits on the wrapper: Button's own transition would replace it.
+    <div
+      className={cn(
+        'pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center',
+        FADE,
+        props.visible ? 'opacity-100' : 'opacity-0',
+      )}
+    >
+      <Button
+        variant="secondary"
         type="button"
         data-unread-pill=""
         aria-label={`Jump to first unread, ${unreadLabel(props.count)}`}
@@ -83,18 +93,17 @@ export function UnreadPill(props: {
         tabIndex={props.visible ? 0 : -1}
         onClick={props.onJump}
         onContextMenu={(e) => e.preventDefault()}
+        // Secondary is the float surface (bg-panel, border-border, text-fg).
         className={cn(
-          'flex h-11 items-center gap-1.5 rounded-full px-4 text-base text-fg shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          FLOAT_SURFACE_CLASS,
+          'shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           NO_TOUCH_SELECT,
-          FADE,
-          props.visible ? 'pointer-events-auto opacity-100' : 'opacity-0',
+          props.visible && 'pointer-events-auto',
         )}
       >
         <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
         <span className="font-mono tabular-nums text-accent">{props.count}</span>
         <span>unread</span>
-      </button>
+      </Button>
     </div>
   );
 }
@@ -106,32 +115,40 @@ export function LatestButton(props: {
   onTap: () => void;
 }): ReactElement {
   return (
-    <button
-      type="button"
-      data-latest-button=""
-      aria-label={props.count > 0 ? `Scroll to latest, ${props.count} new` : 'Scroll to latest'}
-      aria-hidden={!props.visible}
-      tabIndex={props.visible ? 0 : -1}
-      onClick={props.onTap}
-      onContextMenu={(e) => e.preventDefault()}
+    // Position and fade sit on the wrapper: IconButton's own transition would
+    // replace the opacity fade.
+    <span
       className={cn(
-        'absolute bottom-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full text-fg-2 shadow-lg hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        FLOAT_SURFACE_CLASS,
-        NO_TOUCH_SELECT,
+        'absolute bottom-3 right-3 z-10 flex',
         FADE,
         props.visible ? 'opacity-100' : 'pointer-events-none opacity-0',
       )}
     >
-      <IconChevronDown size={ICON_SIZE.control} />
-      {props.count > 0 ? (
-        <span
-          data-latest-count=""
-          className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 font-mono text-xs leading-none tabular-nums text-accent-fg"
-        >
-          {props.count}
-        </span>
-      ) : null}
-    </button>
+      <IconButton
+        type="button"
+        data-latest-button=""
+        label={props.count > 0 ? `Scroll to latest, ${props.count} new` : 'Scroll to latest'}
+        aria-hidden={!props.visible}
+        tabIndex={props.visible ? 0 : -1}
+        onClick={props.onTap}
+        onContextMenu={(e) => e.preventDefault()}
+        className={cn(
+          'shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          FLOAT_SURFACE_CLASS,
+          NO_TOUCH_SELECT,
+        )}
+      >
+        <IconChevronDown size={ICON_SIZE.control} />
+        {props.count > 0 ? (
+          <span
+            data-latest-count=""
+            className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 font-mono text-xs leading-none tabular-nums text-accent-fg"
+          >
+            {props.count}
+          </span>
+        ) : null}
+      </IconButton>
+    </span>
   );
 }
 
@@ -185,18 +202,16 @@ export function ReadByLine(props: {
       className={cn('flex justify-end px-2', props.rail === true && 'relative', NO_TOUCH_SELECT)}
     >
       {props.rail === true ? <RailThrough /> : null}
-      <button
+      <PressableRow
+        inline
         type="button"
         onClick={props.onOpen}
         onContextMenu={(e) => e.preventDefault()}
         aria-haspopup="dialog"
-        className={cn(
-          BUBBLE_META_TYPE,
-          'flex h-11 items-center rounded-md px-2 text-fg-3 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        )}
+        className={cn(BUBBLE_META_TYPE, 'flex h-11 items-center px-2 text-fg-3 hover:text-fg-2')}
       >
         {readByWithMono(props.label)}
-      </button>
+      </PressableRow>
     </li>
   );
 }
@@ -400,23 +415,24 @@ export function WhoReactedSheet(props: {
           <>
             <div role="tablist" aria-label="Reactions" className="flex flex-wrap gap-2 pb-3">
               {model.tabs.map((t) => (
-                <button
+                <PressableRow
                   key={t.key}
+                  inline
                   type="button"
                   role="tab"
                   aria-selected={tab === t.key}
                   data-reactor-tab={t.key}
                   onClick={() => setTab(t.key)}
                   className={cn(
-                    'flex min-h-[44px] items-center gap-1.5 rounded-lg border px-4 text-base font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    'flex items-center gap-1.5 border px-4 text-base font-normal',
                     tab === t.key
                       ? 'border-accent-line bg-accent-soft text-accent'
-                      : 'border-border text-fg-2 hover:bg-panel-2',
+                      : 'border-border text-fg-2',
                   )}
                 >
                   <span>{t.emoji ?? 'All'}</span>
                   <span className="font-mono tabular-nums">{t.count}</span>
-                </button>
+                </PressableRow>
               ))}
             </div>
             <ul>
@@ -436,7 +452,7 @@ export function WhoReactedSheet(props: {
                 return (
                   <li key={`${row.userId}-${row.emoji}-${i}`} data-reactor-row={row.userId}>
                     {row.mine && messageId !== null ? (
-                      <button
+                      <PressableRow
                         type="button"
                         data-reactor-remove=""
                         aria-label={`Remove your ${row.emoji} reaction`}
@@ -444,10 +460,10 @@ export function WhoReactedSheet(props: {
                           props.onRemove(messageId, row.emoji);
                           props.onClose();
                         }}
-                        className="flex min-h-[52px] w-full items-center gap-3 rounded-md py-1 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        className="flex h-[52px] items-center gap-3 py-1"
                       >
                         {body}
-                      </button>
+                      </PressableRow>
                     ) : (
                       <div className="flex min-h-[52px] items-center gap-3 py-1">{body}</div>
                     )}

@@ -58,6 +58,7 @@ import {
 } from '@/lib/chat/shared-cards';
 import { formatClockTime, formatShortDate, workspaceTimeZone } from '@/lib/chat/time-format';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import {
   POST_CARD_META_TYPE,
@@ -337,17 +338,20 @@ export const CARD_LOAD_FAILED = "Couldn't load";
 /** A card whose reads failed every try: neutral, one 44px tap re-reads it. */
 export function CouldntLoadCard(props: { onRetry: () => void }): ReactElement {
   return (
-    <button
+    <PressableRow
+      inline
       type="button"
       data-card-failed=""
       onClick={props.onRetry}
-      className={`${SHARED_CARD_BOX} min-w-[44px] bg-panel-2 text-left text-fg-2 hover:bg-panel-3`}
+      // inline (w-auto) plus a fixed min/max of 240: the shared card's width
+      // without a w-* class against PressableRow's own.
+      className={`${SHARED_CARD_BODY} min-w-[240px] max-w-[240px] bg-panel-2 text-fg-2`}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate text-base font-medium">{CARD_LOAD_FAILED}</span>
         <span className="truncate text-sm">Tap to try again</span>
       </span>
-    </button>
+    </PressableRow>
   );
 }
 
@@ -591,8 +595,9 @@ export function SharedPostCardList(
 }
 
 /** The shared card box: one tappable row, thumb + title over meta. */
-const SHARED_CARD_BOX =
-  'flex w-[240px] items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 min-h-[44px]';
+const SHARED_CARD_BODY =
+  'flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 min-h-[44px]';
+const SHARED_CARD_BOX = `w-[240px] ${SHARED_CARD_BODY}`;
 export const SHARED_CARD = `${SHARED_CARD_BOX} bg-panel`;
 
 /** The live post card frame: media (optional), body, footer stacked. */

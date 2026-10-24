@@ -74,6 +74,7 @@ import { checkLink } from '@/lib/links/safety';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import {
   ICON_SIZE,
   IconAlertTriangle,
@@ -1127,18 +1128,18 @@ export function ThreadHeaderIdentity(props: {
   );
   if (props.onOpenContact !== undefined) {
     return (
-      <button
+      <PressableRow
         type="button"
         {...(props.isGroup ? { 'data-group-info-open': '' } : { 'data-contact-open': '' })}
         aria-label={
           props.isGroup ? `Group info for ${props.title}` : `Contact info for ${props.title}`
         }
         onClick={props.onOpenContact}
-        className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-w-0 flex-1 items-center gap-2.5"
       >
         {photo}
         {text}
-      </button>
+      </PressableRow>
     );
   }
   return (
@@ -1473,19 +1474,24 @@ export function FailedActions(props: {
         </Button>
       ) : null}
       {props.onDelete !== undefined ? (
-        <Button
+        <PressableRow
+          inline
           type="button"
-          variant="ghost"
           data-failed-delete=""
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             props.onDelete?.();
           }}
-          className={cn(FAILED_ACTION_CLASS, '!px-2 text-bad hover:bg-bad-soft hover:text-bad')}
+          // A PressableRow, not a ghost Button: the bad ink and 8px sides need
+          // no override of a Button variant.
+          className={cn(
+            FAILED_ACTION_CLASS,
+            'flex h-11 items-center justify-center px-2 text-base font-medium text-bad',
+          )}
         >
           Delete
-        </Button>
+        </PressableRow>
       ) : null}
     </div>
   );
@@ -1738,9 +1744,14 @@ export function mentionClass(mine: boolean, self: boolean): string {
   );
 }
 
-/** A 44x44 hit area centred on the inline name, without changing the line box. */
+/**
+ * A 44x44 hit area centred on the inline name, without changing the line box:
+ * the PressableRow is 44 tall (its min-h), inline-flex with the name centred,
+ * and -13px margins top and bottom keep its line share at 18px (under the 19
+ * and 22px body lines); the pseudo element keeps the 44px width floor.
+ */
 const MENTION_HIT =
-  "relative before:absolute before:left-1/2 before:top-1/2 before:h-[44px] before:w-full before:min-w-[44px] before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
+  "relative inline-flex -my-[13px] items-center before:absolute before:left-1/2 before:top-1/2 before:h-[44px] before:w-full before:min-w-[44px] before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
 
 /**
  * The thread's mention name lookup: the batched profiles, then this
@@ -1812,8 +1823,9 @@ export function renderBodyWithMentions(
       );
     }
     return (
-      <button
+      <PressableRow
         key={i}
+        inline
         type="button"
         data-mention={id}
         data-msg-link=""
@@ -1821,7 +1833,7 @@ export function renderBodyWithMentions(
         className={cn(mentionClass(mine, false), MENTION_HIT)}
       >
         {label}
-      </button>
+      </PressableRow>
     );
   });
 }
@@ -1887,8 +1899,9 @@ export const REACTION_ROW_SPACE = 'mb-5';
  * away from the tail (left of own bubbles), vertically centred on it, the "!"
  * in the bad token on the page background.
  */
+/** On a PressableRow (inline): 44 tall, a 44px width floor, the glyph centred in bad. */
 export const FAILED_RETRY_CLASS =
-  'absolute right-full top-1/2 mr-1 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'absolute right-full top-1/2 mr-1 flex h-11 min-w-[44px] -translate-y-1/2 items-center justify-center text-bad';
 
 /** Hover-only controls fade in on opacity alone, 120ms, and not at all under reduced motion. */
 const HOVER_FADE = 'transition-opacity duration-[120ms] motion-reduce:transition-none';
@@ -2407,7 +2420,8 @@ export function MessageBubble(props: {
               />
             )}
             {failed && mine && message.filesMissing !== true && canRetryFailed(message) ? (
-              <button
+              <PressableRow
+                inline
                 type="button"
                 data-failed-retry=""
                 aria-label="Retry sending"
@@ -2420,10 +2434,11 @@ export function MessageBubble(props: {
                 className={cn(FAILED_RETRY_CLASS, rail?.role != null && 'bg-bg')}
               >
                 <FailedGlyph />
-              </button>
+              </PressableRow>
             ) : null}
             {onMore !== undefined ? (
-              <button
+              <PressableRow
+                inline
                 type="button"
                 data-more=""
                 aria-label="Message options"
@@ -2434,7 +2449,7 @@ export function MessageBubble(props: {
                   onMore();
                 }}
                 className={cn(
-                  'pointer-events-none absolute right-0 top-0 z-10 flex h-11 w-11 items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
+                  'pointer-events-none absolute right-0 top-0 z-10 flex h-11 min-w-[44px] items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
                   HOVER_FADE,
                 )}
               >
@@ -2450,7 +2465,7 @@ export function MessageBubble(props: {
                 >
                   <ChevronGlyph />
                 </span>
-              </button>
+              </PressableRow>
             ) : null}
             {hasReactions ? (
               <button

@@ -13,6 +13,7 @@ import { useMediaQuery } from '@/lib/use-media-query';
 import { COARSE_POINTER_QUERY, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useModalFocus } from '@/lib/modal-focus';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
+import { IconButton } from '@/components/ui/IconButton';
 
 /** The view's fade, in and out (opacity only). */
 const THREAD_VIEW_FADE_MS = 150;
@@ -112,20 +113,20 @@ export function ThreadViewFrame(props: {
           ? { onContextMenu: (e: { preventDefault: () => void }) => e.preventDefault() }
           : {})}
       >
-        <button
-          ref={closeRef}
+        <IconButton
+          buttonRef={closeRef}
           type="button"
           data-thread-view-close=""
-          aria-label="Close thread"
+          label="Close thread"
           onClick={close}
           className={cn(
             // FN23: the dismiss is a chevron, like every other chat layer's back.
-            'ml-1 flex h-11 w-11 items-center justify-center justify-self-start rounded-lg text-fg-2 hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'ml-1 justify-self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             NO_TOUCH_SELECT,
           )}
         >
           <IconChevronLeft size={ICON_SIZE.control} />
-        </button>
+        </IconButton>
         <span
           data-thread-view-title=""
           className="truncate text-center text-base font-semibold text-fg"

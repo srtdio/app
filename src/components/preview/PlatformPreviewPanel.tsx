@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
+import { Backdrop } from '@/components/ui/Backdrop';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
@@ -131,13 +132,11 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-50 bg-black/45 transition-opacity duration-base motion-reduce:transition-none',
+        'fixed inset-0 z-50 transition-opacity duration-base motion-reduce:transition-none',
         entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
       )}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
     >
+      <Backdrop position="absolute" aria-label="Close preview" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"

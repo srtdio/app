@@ -13,6 +13,7 @@ import {
   attachmentView,
 } from '@/components/chat/MessageAttachments';
 import { BUBBLE_FILL } from '@/components/chat/FileBubble';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 
 // Realistic asset_versions.id fixtures: the render layer must presign the VERSION
@@ -510,7 +511,7 @@ describe('album grid', () => {
       'Open photo 2 of 3',
       'Open photo 3 of 3',
     ]);
-    for (const tile of tiles) expect(tile.type).toBe('button');
+    for (const tile of tiles) expect(tile.type).toBe(PressableRow);
     (tiles[1]?.props as { onClick: () => void }).onClick();
     expect(onOpen).toHaveBeenCalledWith(1);
   });

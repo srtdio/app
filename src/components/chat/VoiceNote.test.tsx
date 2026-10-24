@@ -682,11 +682,16 @@ describe('first paint', () => {
 
   it('play is a bare 44x44 hit area with a 20px glyph, accent received, white sent', () => {
     const received = render('fp-play-r');
-    expect(received).toMatch(/aria-label="Play voice note" class="flex h-11 w-11[^"]*text-accent /);
-    expect(received).not.toMatch(/aria-label="Play voice note"[^>]*class="[^"]*\bbg-accent\b/);
+    // A PressableRow: class renders before the passed attributes.
+    expect(received).toMatch(
+      /class="[^"]*flex h-11 min-w-\[44px\][^"]*text-accent(?![-\w])[^"]*"[^>]*aria-label="Play voice note"/,
+    );
+    expect(received).not.toMatch(
+      /class="[^"]*\bbg-accent\b[^"]*"[^>]*aria-label="Play voice note"/,
+    );
     expect(received).toContain('width="20" height="20"');
     expect(render('fp-play-s', true)).toMatch(
-      /aria-label="Play voice note" class="flex h-11 w-11[^"]*text-accent-fg/,
+      /class="[^"]*flex h-11 min-w-\[44px\][^"]*text-accent-fg[^"]*"[^>]*aria-label="Play voice note"/,
     );
   });
 
@@ -720,7 +725,7 @@ describe('first paint', () => {
     expect(html).toMatch(/data-voice-foot=""[^>]*text-sm leading-4/);
     expect(html).toContain('data-voice-duration="" class="font-medium tabular-nums"');
     expect(html).toMatch(
-      /data-voice-link="transcribe"[^>]*class="shrink-0 rounded-sm font-semibold relative after:absolute after:inset-x-0 after:-inset-y-3\.5/,
+      /class="[^"]*shrink-0 font-semibold flex -my-3\.5 items-center[^"]*"[^>]*data-voice-link="transcribe"/,
     );
   });
 

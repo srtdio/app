@@ -13,6 +13,7 @@ import type { ReactElement } from 'react';
 import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -181,7 +182,8 @@ export function PostRefChip(props: {
 }): ReactElement {
   const { post } = props;
   return (
-    <button
+    <PressableRow
+      inline
       type="button"
       data-post-ref={post.id}
       data-msg-link=""
@@ -190,12 +192,12 @@ export function PostRefChip(props: {
         e.stopPropagation();
         props.onTap();
       }}
-      className={cn('flex min-h-[44px] min-w-0 max-w-full items-center text-left', props.className)}
+      className={cn('flex min-w-0 max-w-full items-center', props.className)}
     >
       <span className="inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-panel-3 pl-[3px] pr-2.5">
         <PostRefThumb assetVersionId={post.thumbnailAssetVersionId} size={18} round />
         <span className="min-w-0 truncate text-sm text-fg-2">{post.title}</span>
       </span>
-    </button>
+    </PressableRow>
   );
 }

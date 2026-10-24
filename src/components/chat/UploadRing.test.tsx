@@ -89,12 +89,13 @@ function paint(
 
 /** The ring's own class list. */
 function ringClass(html: string): string {
-  return /data-upload-ring=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? '';
+  // A PressableRow: class renders before the passed data attributes.
+  return /<button[^>]*class="([^"]*)"[^>]*data-upload-ring=""/.exec(html)?.[1] ?? '';
 }
 
 /** The opening tag (with classes) of the element that directly holds the ring. */
 function ringParent(html: string): string {
-  const at = html.indexOf('<button type="button" data-upload-ring');
+  const at = html.lastIndexOf('<button', html.indexOf('data-upload-ring'));
   const stack: string[] = [];
   const VOID = /^<(img|br|hr|input)\b/;
   for (const match of html.slice(0, at).matchAll(/<\/?[a-zA-Z][^>]*>/g)) {
@@ -125,14 +126,14 @@ describe('T5: UploadRing positioning and sizes', () => {
     const voice = renderToStaticMarkup(<UploadRing progress={0.5} variant="voice" />);
     expect(voice).toContain('viewBox="0 0 40 40"');
     expect(voice).toMatch(/data-upload-disc="" class="[^"]*h-10 w-10/);
-    expect(ringClass(voice)).toContain('h-11 w-11');
+    expect(ringClass(voice)).toContain('h-11 min-w-[44px]');
     expect(voice).toContain('width="16" height="16"');
     const image = renderToStaticMarkup(<UploadRing progress={0.5} variant="image" />);
     expect(image).toContain('viewBox="0 0 56 56"');
-    expect(ringClass(image)).toContain('h-14 w-14');
+    expect(ringClass(image)).toContain('h-14 min-w-[56px]');
     const fileRing = renderToStaticMarkup(<UploadRing progress={0.5} variant="file" />);
     expect(fileRing).toContain('viewBox="0 0 44 44"');
-    expect(ringClass(fileRing)).toContain('h-11 w-11');
+    expect(ringClass(fileRing)).toContain('h-11 min-w-[44px]');
   });
 
   it('light arc on a translucent track over a dark translucent disc (tokens only)', () => {
