@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
 import { StageDot } from '@/components/pages/pipeline/stage-meta';
 import type { Stage } from '@srtdio/posts';
 
@@ -79,16 +80,17 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
       {items.map((item) => {
         const isActive = item.key === active;
         return (
-          <button
+          <Button
             key={item.key}
             type="button"
+            variant="ghost"
             aria-current={isActive ? 'true' : undefined}
             onClick={() => onChange(item.key)}
             className={cn(
-              'inline-flex min-h-[44px] flex-none items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-sm transition-colors',
+              'flex-none whitespace-nowrap border',
               isActive
-                ? 'border-accent-line bg-accent-soft text-accent'
-                : 'border-border text-fg-2 hover:bg-panel-2',
+                ? 'border-accent-line bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent'
+                : 'border-border',
             )}
           >
             {item.stage !== undefined ? <StageDot stage={item.stage} /> : null}
@@ -98,7 +100,7 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
                 {item.count}
               </span>
             ) : null}
-          </button>
+          </Button>
         );
       })}
     </div>

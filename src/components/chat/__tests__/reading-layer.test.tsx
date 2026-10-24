@@ -174,8 +174,10 @@ describe('T8 tray and emoji button by pointer', () => {
 
   it('the plus button is a 44x44 circle, collapsed tray not rendered', () => {
     const html = renderToStaticMarkup(<ComposerTray layout="touch" onPick={() => undefined} />);
-    expect(html).toContain('h-11 w-11');
-    expect(html).toContain('rounded-full');
+    // The shared round secondary Button recipe: 44 tall, 44 wide, a circle.
+    expect(html).toContain('h-11');
+    expect(html).toContain('rounded-full w-11 px-0');
+    expect(html).toContain('bg-panel text-fg border border-border');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('data-tray=""');
   });

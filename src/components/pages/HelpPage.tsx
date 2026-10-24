@@ -209,7 +209,7 @@ export function HelpPage() {
                 aria-pressed={category === item}
                 onClick={() => setCategory(item)}
                 className={cn(
-                  'min-h-[44px] shrink-0 rounded-full border px-4 text-sm font-medium transition-colors',
+                  'inline-flex min-h-[44px] shrink-0 items-center rounded-lg border px-4 text-sm font-normal transition-colors',
                   category === item
                     ? 'border-accent-line bg-accent-soft text-accent'
                     : 'border-border text-fg-2 hover:bg-panel-2',

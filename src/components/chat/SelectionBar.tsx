@@ -49,14 +49,15 @@ export function SelectionHeader(props: {
       >
         {selectedCountLabel(props.count)}
       </span>
-      <button
+      <Button
         type="button"
+        variant="link"
         data-selection-cancel=""
         onClick={props.onCancel}
-        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-3 text-sm font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="min-w-[44px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         Cancel
-      </button>
+      </Button>
     </>
   );
 }
@@ -95,12 +96,11 @@ export function SelectionBarView(props: {
         {props.onForward !== undefined ? (
           <Button
             variant="ghost"
-            size="lg"
             data-selection-forward=""
             disabled={props.count === 0}
             onClick={props.onForward}
           >
-            <IconForward size={18} />
+            <IconForward size={16} />
             Forward
           </Button>
         ) : (
@@ -109,25 +109,23 @@ export function SelectionBarView(props: {
         {star !== undefined ? (
           <Button
             variant="ghost"
-            size="lg"
             data-selection-star={star.action}
             disabled={props.count === 0}
             onClick={star.onRun}
           >
-            <IconStar size={18} />
+            <IconStar size={16} />
             {star.action === 'unstar' ? UNSTAR_LABEL : STAR_LABEL}
           </Button>
         ) : null}
         <Button
           variant="ghost"
-          size="lg"
           data-selection-delete=""
           aria-describedby={props.block !== null ? 'selection-delete-reason' : undefined}
           className="text-bad hover:bg-bad-soft hover:text-bad disabled:opacity-50"
           disabled={!props.canDelete}
           onClick={props.onDeleteTap}
         >
-          <IconTrash size={18} />
+          <IconTrash size={16} />
           Delete
         </Button>
       </div>

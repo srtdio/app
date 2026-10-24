@@ -1,4 +1,5 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { Button } from '@/components/ui/Button';
 import { describe, expect, it, vi } from 'vitest';
 import {
   SelectionBarView,
@@ -84,7 +85,10 @@ describe('SelectionHeader (D8)', () => {
     expect(find(header, 'data-selection-count')?.props.children).toBe('0 selected');
     expect(selectedCountLabel(3)).toBe('3 selected');
     const cancel = find(header, 'data-selection-cancel');
-    expect(String(cancel?.props.className)).toContain('min-h-[44px] min-w-[44px]');
+    // The shared Button (44 tall, 8px radius) as a link, at least 44 wide.
+    expect(cancel?.type).toBe(Button);
+    expect(cancel?.props.variant).toBe('link');
+    expect(String(cancel?.props.className)).toContain('min-w-[44px]');
     (cancel?.props.onClick as () => void)();
     expect(onCancel).toHaveBeenCalledOnce();
   });

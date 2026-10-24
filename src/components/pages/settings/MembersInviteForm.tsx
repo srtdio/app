@@ -429,13 +429,14 @@ export function EmailSuggestion({
   onApply: (email: string) => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
-      className="inline-flex min-h-[44px] items-center self-start text-left text-sm font-medium text-accent hover:underline"
+      variant="link"
+      className="self-start text-left hover:underline"
       onClick={() => onApply(suggestion)}
     >
       Did you mean {emailDomain(suggestion)}?
-    </button>
+    </Button>
   );
 }
 
@@ -689,9 +690,10 @@ export function MembersInviteForm({
             <EmailSuggestion suggestion={draftSuggestion} onApply={setDraft} />
           ) : null}
           {testSite ? (
-            <button
+            <Button
               type="button"
-              className="inline-flex min-h-[44px] items-center self-start text-sm font-medium text-accent hover:underline"
+              variant="link"
+              className="self-start hover:underline"
               onClick={() => {
                 const approver = clientOnly || isGuidedApproverInvite();
                 setDraft(testAddress(approver ? 'approver' : 'creator'));
@@ -699,7 +701,7 @@ export function MembersInviteForm({
               }}
             >
               Use a test address
-            </button>
+            </Button>
           ) : null}
         </div>
 

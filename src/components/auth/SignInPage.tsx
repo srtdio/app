@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { TestSiteStart } from '@/components/test-site/TestSiteStart';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { emailFieldError, linkErrorMessage } from '@/components/auth/SignUpPage';
@@ -254,13 +254,14 @@ export function SignInPage() {
           >
             {cooldown > 0 ? `Send again in ${cooldown}s` : 'Send again'}
           </Button>
-          <button
+          <Button
             type="button"
             onClick={startOverWithNewEmail}
-            className="inline-flex min-h-[44px] w-full items-center justify-center text-sm font-medium text-accent hover:underline"
+            variant="link"
+            className="w-full hover:underline"
           >
             {CHECK_EMAIL_COPY.differentEmail}
-          </button>
+          </Button>
         </div>
       </AuthShell>
     );
@@ -312,7 +313,7 @@ export function SignInPage() {
             <span>There is no account with this email yet.</span>
             <Link
               to={`/signup?email=${encodeURIComponent(email.trim())}`}
-              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-md bg-fg px-4 text-sm font-medium text-bg hover:opacity-90"
+              className={buttonClass('primary', 'default', 'w-full')}
             >
               Create one with this email
             </Link>

@@ -396,11 +396,10 @@ export function StageReasonConfirm(props: {
       discard={{ title: 'Discard your reason?', message: 'Your reason will be lost.' }}
       footer={
         <>
-          <Button size="lg" className="ml-auto" onClick={props.onCancel}>
+          <Button className="ml-auto" onClick={props.onCancel}>
             Cancel
           </Button>
           <Button
-            size="lg"
             variant={props.destructive === true ? 'danger' : 'default'}
             data-stage-confirm=""
             onClick={props.onConfirm}
@@ -1732,7 +1731,7 @@ export function PostDetailPage({
           title="Post not found"
           description="This post may have been removed, or you may not have access to it."
           action={
-            <Button variant="primary" size="lg" onClick={goPipeline}>
+            <Button variant="primary" onClick={goPipeline}>
               Back to pipeline
             </Button>
           }
@@ -2055,7 +2054,6 @@ export function PostDetailPage({
         <p className="min-w-0 flex-1 py-2">{APPROVED_LOCK_LINE}</p>
         {canParkApproved ? (
           <Button
-            size="lg"
             data-approved-park=""
             className="shrink-0"
             onClick={() => pickStage('parked')}
@@ -2161,7 +2159,6 @@ export function PostDetailPage({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="primary"
-                        size="lg"
                         disabled={savingMeta}
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={() => {
@@ -2173,7 +2170,6 @@ export function PostDetailPage({
                       </Button>
                       <Button
                         variant="ghost"
-                        size="lg"
                         disabled={savingMeta}
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={() => {
@@ -2381,7 +2377,6 @@ export function PostDetailPage({
                   <div className="flex items-center gap-2">
                     <Button
                       variant="primary"
-                      size="lg"
                       disabled={captionSaving}
                       onClick={() => void saveCaption()}
                     >
@@ -2389,7 +2384,6 @@ export function PostDetailPage({
                     </Button>
                     <Button
                       variant="ghost"
-                      size="lg"
                       disabled={captionSaving}
                       onClick={cancelCaptionEdit}
                     >

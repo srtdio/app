@@ -638,14 +638,15 @@ export function starredListView(props: StarredListViewProps): ReactElement {
     <div data-starred-list={props.listId} className="flex flex-col">
       {onEditingChange !== undefined && visible.length > 0 ? (
         <div className="flex justify-end">
-          <button
+          <Button
             type="button"
+            variant="link"
             data-starred-edit={editing ? 'done' : 'edit'}
             onClick={() => onEditingChange(!editing)}
-            className="flex min-h-[44px] items-center rounded-md px-3 text-[15px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {editing ? 'Done' : 'Edit'}
-          </button>
+          </Button>
         </div>
       ) : null}
       {body}
@@ -657,12 +658,11 @@ export function starredListView(props: StarredListViewProps): ReactElement {
         >
           <Button
             variant="ghost"
-            size="lg"
             data-starred-unstar=""
             disabled={selectedCount === 0 || props.busy}
             onClick={props.onUnstar}
           >
-            <IconStar size={18} />
+            <IconStar size={16} />
             {unstarLabel(selectedCount)}
           </Button>
         </div>
@@ -718,14 +718,15 @@ export function StarredSheet(props: {
             {props.chatName}
           </span>
         </div>
-        <button
+        <Button
           type="button"
+          variant="link"
           data-starred-edit={editing ? 'done' : 'edit'}
           onClick={() => setEditing((on) => !on)}
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-3 text-[15px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="min-w-[44px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {editing ? 'Done' : 'Edit'}
-        </button>
+        </Button>
       </div>
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overflow-x-hidden overscroll-contain">
         <div className="mx-auto w-full max-w-2xl px-4 pt-3">

@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn';
+import { buttonClass } from '@/components/ui/Button';
 import { IconArrowUpRight, IconLink } from '@/components/ui/icons';
 import { parseExternalLink } from '@/lib/links';
 
@@ -30,9 +31,13 @@ export function LinkButton({ url, className }: LinkButtonProps) {
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`Open ${link.domain} in a new tab`}
-      className={cn(
-        'group inline-flex items-center gap-2 min-h-[44px] max-w-full px-3 rounded-md border border-border bg-panel-2 text-sm text-fg no-underline transition-colors hover:bg-panel-3 hover:border-accent-line focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        className,
+      className={buttonClass(
+        'secondary',
+        'default',
+        cn(
+          'group max-w-full !justify-start no-underline hover:border-accent-line focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          className,
+        ),
       )}
     >
       <span className="shrink-0 text-accent">

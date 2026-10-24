@@ -270,9 +270,8 @@ export function CaptionView({
       {!readOnly && pending !== null ? (
         <div className="mt-2">
           <Button
-            size="lg"
             variant="primary"
-            className="min-h-[44px] min-w-[44px]"
+           
             data-induction={INDUCTION_KEYS.postCommentButton}
             onClick={() => {
               onAnnotate(pending.start, pending.end, pending.quote);

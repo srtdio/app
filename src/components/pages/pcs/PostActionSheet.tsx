@@ -263,11 +263,10 @@ export function PostActionSheet({
             <p className="text-sm text-fg-2">{removeCopy.message}</p>
           ) : null}
           <div className="flex justify-end gap-2">
-            <Button size="lg" onClick={() => setView('actions')}>
+            <Button onClick={() => setView('actions')}>
               Cancel
             </Button>
             <Button
-              size="lg"
               variant="danger"
               disabled={removeImage.saving}
               onClick={() => {

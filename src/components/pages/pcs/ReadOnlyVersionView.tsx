@@ -54,7 +54,7 @@ export function ReadOnlyVersionView({
         <span className="font-medium text-fg">Versions can&apos;t be changed</span>
         <span aria-hidden>·</span>
         <span>Read only, viewing v{versionNumber}</span>
-        <Button variant="default" size="lg" className="ml-auto" onClick={onBack}>
+        <Button variant="default" className="ml-auto" onClick={onBack}>
           Back to v{currentVersionNumber}
         </Button>
       </div>

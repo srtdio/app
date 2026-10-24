@@ -166,7 +166,7 @@ export function compareVersionsView({
           <span className="text-bad">−{diff.removedWords}</span>{' '}
           <span className="text-fg-2">{diff.changedPct}% changed</span>
         </span>
-        <Button variant="default" size="lg" onClick={onBack}>
+        <Button variant="default" onClick={onBack}>
           Back
         </Button>
       </div>
@@ -182,18 +182,16 @@ export function compareVersionsView({
               {MODES.map((option) => {
                 const active = mode === option.value;
                 return (
-                  <button
+                  <Button
                     key={option.value}
                     type="button"
+                    variant={active ? 'primary' : 'ghost'}
                     aria-pressed={active}
                     onClick={() => onModeChange(option.value)}
-                    className={cn(
-                      'min-h-[38px] rounded-md px-3 text-sm font-medium transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      active ? 'bg-accent text-accent-fg' : 'text-fg-2 hover:text-fg',
-                    )}
+                    className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     {option.label}
-                  </button>
+                  </Button>
                 );
               })}
             </div>

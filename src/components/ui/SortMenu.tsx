@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconCheck, IconChevronDown, IconSort } from '@/components/ui/icons';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -31,7 +32,7 @@ export function sortOptionButtons<T extends string>(
         aria-checked={selected}
         onClick={() => onPick(option.value)}
         className={cn(
-          'flex min-h-[44px] items-center gap-2.5 rounded-md px-3 text-left text-sm transition-colors md:min-h-0 md:h-9',
+          'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-left text-sm transition-colors',
           selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
         )}
       >
@@ -72,18 +73,19 @@ export function SortMenu<T extends string>({
   }
 
   const trigger = (
-    <button
+    <Button
       type="button"
+      variant="secondary"
       aria-haspopup="menu"
       aria-expanded={open}
       aria-label={label}
       onClick={() => setOpen((prev) => !prev)}
-      className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-border bg-panel px-3 text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg md:h-9"
+      className="shrink-0"
     >
       <IconSort size={16} />
       <span className="hidden sm:inline">{active?.label ?? label}</span>
-      <IconChevronDown size={14} className="text-fg-3" />
-    </button>
+      <IconChevronDown size={16} className="text-fg-3" />
+    </Button>
   );
 
   const list = (

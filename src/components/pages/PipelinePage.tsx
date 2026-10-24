@@ -185,7 +185,6 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                 node: (
                   <Button
                     variant="primary"
-                    size="lg"
                     data-induction={INDUCTION_KEYS.pipelineCreate}
                     className="shrink-0 whitespace-nowrap max-md:ml-auto"
                     onClick={() => dispatchSorted('sorted:create-post')}
@@ -201,7 +200,6 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                   node: (
                     <Button
                       variant="primary"
-                      size="lg"
                       aria-hidden="true"
                       tabIndex={-1}
                       disabled
@@ -471,7 +469,6 @@ export function emptyPipeline(canCreate: boolean): ReactElement {
               action: (
                 <Button
                   variant="primary"
-                  size="lg"
                   onClick={() => dispatchSorted('sorted:create-post')}
                 >
                   Create your first post
@@ -585,7 +582,7 @@ export function filteredEmpty(onClear: () => void): ReactElement {
         icon={<IconPipeline size={22} />}
         title="Nothing fits these filters"
         action={
-          <Button variant="default" size="lg" onClick={onClear}>
+          <Button variant="default" onClick={onClear}>
             Clear filters
           </Button>
         }
@@ -609,13 +606,14 @@ export function undatedHint(label: string, count: number, onShow: () => void): R
     <p data-undated-hint="" className="flex flex-wrap items-center gap-x-2 text-sm text-fg-2">
       <IconCalendar size={15} className="shrink-0 text-fg-3" />
       <span>{undatedHiddenLine(label, count)}</span>
-      <button
+      <Button
+        variant="link"
         type="button"
         onClick={onShow}
-        className="inline-flex min-h-[44px] items-center font-medium text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         Show them
-      </button>
+      </Button>
     </p>
   );
 }

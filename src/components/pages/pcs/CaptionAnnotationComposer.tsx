@@ -69,8 +69,7 @@ export function CaptionAnnotationComposer({
       footer={
         <>
           <Button
-            size="lg"
-            className="min-h-[44px] min-w-[44px]"
+           
             disabled={submitting}
             onClick={onCancel}
           >
@@ -83,9 +82,8 @@ export function CaptionAnnotationComposer({
             }
           />
           <Button
-            size="lg"
             variant="primary"
-            className="ml-auto min-h-[44px] min-w-[44px]"
+            className="ml-auto"
             data-induction={INDUCTION_KEYS.postCommentPost}
             disabled={!canPost}
             onClick={() => void onSubmit(body)}

@@ -900,16 +900,15 @@ export function AttachmentsField({
     <div className={cn('flex flex-wrap gap-2', dropzoneEmpty && 'justify-center')}>
       <Button
         type="button"
-        size="lg"
         disabled={dropzoneEmpty && pendingCount > 0}
         onClick={() => (dropzoneEmpty ? mediaInputRef : photoInputRef).current?.click()}
       >
         Photo
       </Button>
-      <Button type="button" size="lg" onClick={() => docInputRef.current?.click()}>
+      <Button type="button" onClick={() => docInputRef.current?.click()}>
         Document
       </Button>
-      <Button type="button" size="lg" onClick={() => setLinkOpen((prev) => !prev)}>
+      <Button type="button" onClick={() => setLinkOpen((prev) => !prev)}>
         <IconLink size={16} />
         Link
       </Button>
@@ -961,18 +960,16 @@ export function AttachmentsField({
           <p className="min-w-0 flex-1 text-sm text-bad">{failedFilesLine(failedCount)}</p>
           <Button
             type="button"
-            size="lg"
-            variant="ghost"
-            className="shrink-0 px-3 text-accent"
+            variant="link"
+            className="shrink-0"
             onClick={retryFailed}
           >
             Retry
           </Button>
           <Button
             type="button"
-            size="lg"
             variant="ghost"
-            className="shrink-0 px-3 text-bad"
+            className="shrink-0 text-bad"
             onClick={removeFailed}
           >
             Remove
@@ -1003,14 +1000,13 @@ export function AttachmentsField({
           <div className="flex items-center gap-2">
             <Button
               type="button"
-              size="lg"
               variant="primary"
               disabled={!linkValid || linkBusy}
               onClick={() => void submitLink()}
             >
               {linkBusy ? 'Adding' : 'Add link'}
             </Button>
-            <Button type="button" size="lg" variant="ghost" onClick={() => setLinkOpen(false)}>
+            <Button type="button" variant="ghost" onClick={() => setLinkOpen(false)}>
               Cancel
             </Button>
           </div>
@@ -1060,9 +1056,8 @@ export function AttachmentsField({
                 {item.error !== null && (item.file !== undefined || item.link !== undefined) ? (
                   <Button
                     type="button"
-                    size="lg"
-                    variant="ghost"
-                    className="min-w-[44px] shrink-0 px-2 text-accent"
+                    variant="link"
+                    className="shrink-0"
                     aria-label={`Retry ${item.name}`}
                     onClick={() => retryPending(item.id)}
                   >

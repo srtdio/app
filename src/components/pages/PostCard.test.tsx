@@ -319,7 +319,8 @@ describe('E: Pipeline card polish', () => {
     expect(button).toContain('h-11 w-11');
     expect(button).toContain('-my-3');
     expect(button).toContain('text-fg-3');
-    expect(button).not.toMatch(/\bbg-/);
+    // No resting fill (the shared IconButton only tints on hover).
+    expect(button).not.toMatch(/[\s"]bg-/);
     // Nothing of it on the picture; the carousel badge stays there.
     const thumb = out.slice(
       out.indexOf('data-post-card-thumb'),

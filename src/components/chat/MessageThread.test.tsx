@@ -11,6 +11,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { Avatar } from '@/components/ui/Avatar';
+import { IconButton } from '@/components/ui/IconButton';
 import { leaveSelectionThen } from '@/lib/chat/forward';
 import {
   bodyText,
@@ -974,7 +975,9 @@ describe('MessageBubble keyboard and hover actions', () => {
     const root = render(pressed({ onReact }));
     const [button] = withAttr(root, 'data-react');
     expect(withAttr(bubbleOf(root), 'data-react')).toHaveLength(0);
-    expect(String(button?.props.className)).toContain('h-11 w-11');
+    // The shared 44x44 IconButton (h-11 w-11 rounded-lg), labelled.
+    expect(button?.type).toBe(IconButton);
+    expect(button?.props.label).toBe('React to message');
     (button?.props.onClick as () => void)();
     expect(onReact).toHaveBeenCalledTimes(1);
     // Not on an unrecorded message.

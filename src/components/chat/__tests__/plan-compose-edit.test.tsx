@@ -73,11 +73,11 @@ describe('New plan rows', () => {
     const html = row(P);
     expect(html).toContain('data-plan-compose-flag="need"');
     expect(html).toContain('border-warn bg-warn-soft');
-    expect(html).toMatch(/data-plan-day-button="need"[^>]*min-h-\[44px\]/);
+    expect(html).toMatch(/class="[^"]*h-11 min-h-\[44px\][^"]*rounded-lg[^"]*"[^>]*data-plan-day-button="need"/);
     expect(html).toContain('Pick a day');
     expect(html).toContain('Dated Mon 2 Nov, outside this plan. Pick a day.');
     expect(html).toContain('Post · In review');
-    const x = html.slice(html.indexOf('data-plan-compose-remove'));
+    const x = html.slice(html.lastIndexOf('<button', html.indexOf('data-plan-compose-remove')));
     expect(x).toContain('h-11 w-11');
     expect(x).toContain('aria-label="Remove Festive teaser carousel"');
   });

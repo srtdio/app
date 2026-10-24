@@ -421,14 +421,13 @@ export function StatusMarkRow(props: {
         {props.canStamp ? (
           <Button
             type="button"
-            size="lg"
             data-mark-action="resolve"
             aria-expanded={props.confirming}
             disabled={props.busy}
             onClick={props.onAsk}
-            className="min-w-[44px] shrink-0 gap-1 px-3"
+            className="min-w-[44px] shrink-0"
           >
-            <IconCheck size={14} />
+            <IconCheck size={16} />
             <span>{STAMP_WORD[mark.type]}</span>
           </Button>
         ) : null}
@@ -443,10 +442,10 @@ export function StatusMarkRow(props: {
           <span className="min-w-0 flex-1 text-sm text-fg">
             {markConfirmCopy(mark.type, 'resolve')}
           </span>
-          <Button variant="ghost" size="lg" disabled={props.busy} onClick={props.onCancel}>
+          <Button variant="ghost" disabled={props.busy} onClick={props.onCancel}>
             Cancel
           </Button>
-          <Button variant="primary" size="lg" disabled={props.busy} onClick={props.onConfirm}>
+          <Button variant="primary" disabled={props.busy} onClick={props.onConfirm}>
             {markConfirmAction(mark.type, 'resolve')}
           </Button>
         </div>

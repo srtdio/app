@@ -70,7 +70,8 @@ describe('X5 PostCard move button placement (the ⋯ at the right end of the due
     expect(button).toContain('ml-auto');
     expect(button).toContain('z-10');
     expect(button).toContain('text-fg-3');
-    expect(button).not.toContain('bg-');
+    // No resting fill (the shared IconButton only tints on hover).
+    expect(button).not.toMatch(/[\s"]bg-/);
     expect(button).toContain('aria-label="Move post Post title"');
     const meta = /<div[^>]*data-post-card-meta=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(meta).toContain('h-5');

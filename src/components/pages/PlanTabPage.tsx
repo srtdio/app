@@ -93,19 +93,20 @@ export function PlanTabPage(): ReactElement {
         <>
           {desktop ? <ViewSwitch view={view} onView={setView} /> : null}
           {creator && desktop ? (
-            <Button variant="primary" size="lg" data-plan-tab-new="" onClick={() => openCompose()}>
+            <Button variant="primary" data-plan-tab-new="" onClick={() => openCompose()}>
               {NEW_PLAN_LABEL}
             </Button>
           ) : null}
           {creator && !desktop ? (
-            <button
+            <Button
+              variant="primary"
               type="button"
               data-plan-tab-new=""
               onClick={() => openCompose()}
-              className="inline-flex h-11 items-center rounded-md bg-accent-soft px-4 text-sm font-semibold text-accent transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {NEW_PLAN_LABEL}
-            </button>
+            </Button>
           ) : null}
         </>
       }
@@ -126,7 +127,7 @@ export function PlanTabPage(): ReactElement {
           {...(copy.create
             ? {
                 action: (
-                  <Button variant="primary" size="lg" onClick={() => openCompose()}>
+                  <Button variant="primary" onClick={() => openCompose()}>
                     {CREATE_PLAN_BUTTON}
                   </Button>
                 ),
@@ -204,7 +205,7 @@ function ViewSwitch(props: {
     { view: 'week', label: WEEK_LABEL },
   ];
   return (
-    <div className="flex overflow-hidden rounded-md border border-border bg-panel-2">
+    <div className="flex overflow-hidden rounded-lg border border-border bg-panel-2">
       {options.map((o) => (
         <button
           key={o.view}

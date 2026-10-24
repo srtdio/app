@@ -34,6 +34,7 @@ import {
   planItemReview,
 } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/toast';
 import { IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
@@ -734,30 +735,30 @@ export function PlanItemScreen(props: {
         {...(item.kind === 'concept' && planActions
           ? {
               action: (
-                <button
+                <IconButton
                   type="button"
-                  aria-label="Item actions"
+                  label="Item actions"
                   data-plan-item-more=""
                   onClick={() => setConceptMenuOpen(true)}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <IconMore size={22} />
-                </button>
+                  <IconMore size={20} />
+                </IconButton>
               ),
             }
           : {})}
         {...(item.kind === 'post' && item.post_id !== null
           ? {
               action: (
-                <button
+                <IconButton
                   type="button"
-                  aria-label="More actions"
+                  label="More actions"
                   data-plan-more=""
                   onClick={() => setMoreOpen(true)}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <IconMore size={22} />
-                </button>
+                  <IconMore size={20} />
+                </IconButton>
               ),
             }
           : {})}
@@ -771,23 +772,23 @@ export function PlanItemScreen(props: {
               {side === 'agency' ? (
                 <div className="flex gap-1.5" role="group" aria-label="Who sees the comment">
                   {(['everyone', 'team'] as const).map((v) => (
-                    <button
+                    <Button
                       key={v}
                       type="button"
+                      variant="secondary"
                       aria-pressed={visibility === v}
                       data-plan-visibility={v}
                       onClick={() => setVisibility(v)}
-                      className={cn(
-                        'min-h-[44px] rounded-full border px-3 text-[13px] font-medium',
+                      className={
                         visibility === v
                           ? v === 'team'
                             ? 'border-warn bg-warn-soft text-warn'
                             : 'border-accent bg-accent-soft text-accent'
-                          : 'border-border text-fg-2',
-                      )}
+                          : 'text-fg-2'
+                      }
                     >
                       {v === 'everyone' ? 'Everyone' : TEAM_ONLY_LABEL}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               ) : null}
@@ -797,15 +798,15 @@ export function PlanItemScreen(props: {
                   className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-[13px] leading-[18px] text-fg-2"
                 >
                   <p className="min-w-0 flex-1 py-2">{ASK_CHANGES_HINT}</p>
-                  <button
+                  <IconButton
                     type="button"
-                    aria-label="Cancel ask changes"
+                    label="Cancel ask changes"
                     data-plan-ask-cancel=""
                     onClick={() => setAskingChanges(false)}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-2 hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="shrink-0 hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
-                    <IconX size={16} />
-                  </button>
+                    <IconX size={20} />
+                  </IconButton>
                 </div>
               ) : null}
               {sendError !== null ? (
@@ -839,15 +840,17 @@ export function PlanItemScreen(props: {
                     teamNote ? 'border-warn' : askingChanges ? 'border-accent' : 'border-border',
                   )}
                 />
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  shape="round"
                   aria-label={askingChanges ? ASK_CHANGES_SEND : 'Send comment'}
                   data-plan-comment-send={askingChanges ? 'changes' : 'comment'}
                   disabled={(text.trim() === '' && !askingChanges) || sending || busy}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg disabled:opacity-50"
+                  className="shrink-0"
                 >
                   <IconArrowUp size={20} />
-                </button>
+                </Button>
               </div>
             </form>
           )
@@ -887,14 +890,15 @@ export function PlanItemScreen(props: {
                   {title}
                 </h3>
                 {editable ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
                     data-plan-edit-concept=""
                     onClick={openEdit}
-                    className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     Edit
-                  </button>
+                  </Button>
                 ) : null}
               </div>
               {description !== '' ? (
@@ -918,15 +922,16 @@ export function PlanItemScreen(props: {
                     {date.label}
                   </span>
                   {editable ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="link"
                       data-plan-edit-date=""
                       aria-label="Edit date"
                       onClick={openEdit}
-                      className="min-h-[44px] min-w-[44px] rounded-md px-2 text-[13px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     >
                       Edit
-                    </button>
+                    </Button>
                   ) : null}
                 </span>
               </div>
@@ -950,7 +955,6 @@ export function PlanItemScreen(props: {
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-2 gap-2">
                   <Button
-                    size="lg"
                     data-plan-ask=""
                     aria-pressed={askingChanges}
                     disabled={busy}
@@ -959,8 +963,7 @@ export function PlanItemScreen(props: {
                     Ask changes
                   </Button>
                   <Button
-                    size="lg"
-                    variant="primary"
+                    variant="success"
                     data-plan-approve=""
                     disabled={busy}
                     onClick={() => {

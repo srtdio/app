@@ -171,7 +171,7 @@ export function PipelineFeed({
           )}
           {list.length > shown ? (
             <div className="mt-4 flex justify-center">
-              <Button variant="default" size="lg" onClick={showMore}>
+              <Button variant="default" onClick={showMore}>
                 Show {Math.min(BOARD_CAP, list.length - shown)} more
               </Button>
             </div>

@@ -332,7 +332,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
       'focus-visible:ring-overlay-fg disabled:opacity-40',
     text:
-      'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-4 text-sm font-medium ' +
+      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium ' +
       'text-overlay-fg bg-overlay-surface hover:bg-overlay-line focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-overlay-fg',
   },
@@ -346,7 +346,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 ' +
       'focus-visible:ring-accent disabled:opacity-40',
     text:
-      'inline-flex min-h-[44px] items-center gap-2 rounded-lg px-4 text-sm font-medium ' +
+      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium ' +
       'text-fg bg-panel border border-border hover:bg-panel-3 focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-accent',
   },
@@ -382,7 +382,7 @@ function ViewerError(props: {
           </button>
         ) : null}
         <button type="button" onClick={props.onDownload} className={tone.text}>
-          <IconDownload size={18} />
+          <IconDownload size={16} />
           Download
         </button>
       </div>
@@ -440,7 +440,7 @@ function UnavailableRenderer(props: RendererProps): ReactElement {
         ) : null}
       </p>
       <button type="button" onClick={props.onDownload} className={OVERLAY.text}>
-        <IconDownload size={18} />
+        <IconDownload size={16} />
         Download
       </button>
     </div>
@@ -1058,7 +1058,7 @@ function TopBar(props: {
         onClick={props.onClose}
         className={tone.bar}
       >
-        <IconX size={22} />
+        <IconX size={20} />
       </button>
       {props.actions !== undefined ? (
         <div className="min-w-0 flex-1 px-1 text-center">
@@ -1327,7 +1327,7 @@ export function FileViewerFallback(props: {
           onClick={props.onClose}
           className={tone.bar}
         >
-          <IconX size={22} />
+          <IconX size={20} />
         </button>
       </div>
       <div className="flex flex-1 items-center justify-center">

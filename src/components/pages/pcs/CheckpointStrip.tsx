@@ -98,7 +98,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
         aria-label={`Jump to checkpoint ${seq}`}
         onClick={() => flashNode(commentDomId(row.id))}
         // axis: none. Chips never translate, rotate or scale.
-        className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span
           aria-hidden

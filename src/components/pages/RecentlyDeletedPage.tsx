@@ -32,11 +32,6 @@ const RETRY = 'Something went wrong. Try again.';
  */
 export const MEMBER_PURGE_NOTE = 'Only the workspace owner can delete files early.';
 
-// Delete now: a ghost button in the `bad` token, 44px like the rest.
-const DELETE_NOW_CLASS =
-  'inline-flex h-11 items-center justify-center rounded-md px-4 text-sm font-medium text-bad ' +
-  'transition-colors hover:bg-panel-2 disabled:opacity-50 disabled:pointer-events-none ' +
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /** Which confirm is open: one file's Delete now, or Empty now. */
 type PendingConfirm = { kind: 'one'; item: DeletedAssetItem } | { kind: 'all' } | null;
@@ -86,7 +81,7 @@ export function RecentlyDeletedView({
             Could not load assets.
           </div>
           <div className="mt-3">
-            <Button size="lg" onClick={onRetry}>
+            <Button onClick={onRetry}>
               Retry
             </Button>
           </div>
@@ -110,18 +105,19 @@ export function RecentlyDeletedView({
                   {goneInLine(item.sizeBytes, daysLeft(item.deletedAt, now))}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Button size="lg" disabled={busyId === item.id} onClick={() => onRestore(item)}>
+                  <Button disabled={busyId === item.id} onClick={() => onRestore(item)}>
                     Restore
                   </Button>
                   {isOwner ? (
-                    <button
+                    <Button
+                      variant="ghost"
                       type="button"
-                      className={DELETE_NOW_CLASS}
+                      className="text-bad hover:text-bad"
                       disabled={busyId === item.id}
                       onClick={() => onDeleteNow(item)}
                     >
                       Delete now
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </li>
@@ -131,7 +127,7 @@ export function RecentlyDeletedView({
           <div className="mt-4">
             {isOwner ? (
               <div className="flex flex-col items-start gap-1.5">
-                <Button size="lg" variant="danger" disabled={busyId !== null} onClick={onEmpty}>
+                <Button variant="danger" disabled={busyId !== null} onClick={onEmpty}>
                   Empty now
                 </Button>
                 <p className="text-xs text-fg-3">{freesLine(deletedBytes(items))}</p>

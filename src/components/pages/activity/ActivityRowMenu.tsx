@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { MouseEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { IconCheck, IconClock, IconMore } from '@/components/ui/icons';
 import { LAPTOP_QUERY } from '@/lib/use-media-query';
 import { SNOOZE_OPTIONS, type SnoozeKind } from '@/components/pages/activity/data';
@@ -67,19 +69,19 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
   }
 
   const trigger = (
-    <button
+    <IconButton
       type="button"
       aria-haspopup="menu"
       aria-expanded={open}
-      aria-label="Activity options"
+      label="Activity options"
       onClick={(event) => {
         isolate(event);
         setOpen((prev) => !prev);
       }}
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg"
+      className="shrink-0 text-fg-3"
     >
-      <IconMore size={18} />
-    </button>
+      <IconMore size={20} />
+    </IconButton>
   );
 
   const item = (
@@ -88,7 +90,8 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
     icon: ReactElement,
     onClick: () => void,
   ): ReactElement => (
-    <button
+    <Button
+      variant="ghost"
       key={key}
       type="button"
       role="menuitem"
@@ -96,11 +99,11 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
         isolate(event);
         onClick();
       }}
-      className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
+      className="w-full !justify-start !gap-2.5 text-left"
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-fg-3">{icon}</span>
       <span className="flex-1">{label}</span>
-    </button>
+    </Button>
   );
 
   const list = (

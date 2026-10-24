@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { IconPause, IconPlay, IconSend, IconTrash } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
@@ -13,8 +14,7 @@ import { useModalFocus } from '@/lib/modal-focus';
 import { BACK_GUARD_STEP_KEY, stepMarkerOf } from '@/lib/chat/use-history-step';
 import { voiceDraftLabel, type VoiceDraft } from '@/lib/chat/voice-draft';
 
-const DRAFT_BUTTON =
-  'flex h-11 w-11 shrink-0 items-center justify-center rounded-md transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /** The draft row's markup. Hook-free (playback state comes in) so it is unit tested. */
 export function voiceDraftView(props: {
@@ -33,39 +33,41 @@ export function voiceDraftView(props: {
       aria-label={`Saved ${label.toLowerCase()}`}
       className="flex items-center gap-1 rounded-xl border border-border bg-panel-2 py-0.5 pl-1 pr-0.5"
     >
-      <button
+      <IconButton
         type="button"
         data-voice-draft-play=""
-        aria-label={props.playing ? 'Pause voice note' : 'Play voice note'}
+        label={props.playing ? 'Pause voice note' : 'Play voice note'}
         onClick={props.onPlay}
-        className={cn(DRAFT_BUTTON, 'text-fg-2 hover:bg-panel-3 hover:text-fg')}
+        className={cn('shrink-0 hover:bg-panel-3', FOCUS_RING)}
       >
-        {props.playing ? <IconPause size={18} /> : <IconPlay size={18} />}
-      </button>
+        {props.playing ? <IconPause size={20} /> : <IconPlay size={20} />}
+      </IconButton>
       <span className="min-w-0 flex-1 truncate text-sm text-fg-2 tabular-nums">{label}</span>
-      <button
+      <IconButton
         type="button"
         data-voice-draft-delete=""
-        aria-label="Delete voice note"
+        label="Delete voice note"
         disabled={props.busy}
         onClick={props.onDelete}
-        className={cn(DRAFT_BUTTON, 'text-bad hover:bg-bad-soft disabled:opacity-50')}
+        className={cn(
+          'shrink-0 text-bad hover:bg-bad-soft hover:text-bad disabled:opacity-50',
+          FOCUS_RING,
+        )}
       >
-        <IconTrash size={18} />
-      </button>
-      <button
+        <IconTrash size={20} />
+      </IconButton>
+      <Button
         type="button"
+        variant="primary"
+        shape="round"
         data-voice-draft-send=""
         aria-label="Send voice note"
         disabled={props.busy}
         onClick={props.onSend}
-        className={cn(
-          DRAFT_BUTTON,
-          'bg-accent text-accent-fg hover:bg-accent-hover disabled:opacity-50',
-        )}
+        className={cn('shrink-0', FOCUS_RING)}
       >
-        <IconSend size={18} />
-      </button>
+        <IconSend size={20} />
+      </Button>
     </div>
   );
 }
@@ -163,13 +165,13 @@ export function StopRecordingDialog(props: {
       >
         <h2 className="text-sm font-semibold text-fg">{STOP_RECORDING_TITLE}</h2>
         <div className="mt-5 flex flex-col gap-2">
-          <Button size="lg" variant="primary" onClick={props.onKeep}>
+          <Button variant="primary" onClick={props.onKeep}>
             {STOP_RECORDING_KEEP}
           </Button>
-          <Button size="lg" onClick={props.onSave}>
+          <Button variant="secondary" onClick={props.onSave}>
             {STOP_RECORDING_SAVE}
           </Button>
-          <Button size="lg" variant="danger" onClick={props.onDiscard}>
+          <Button variant="danger" onClick={props.onDiscard}>
             {STOP_RECORDING_DISCARD}
           </Button>
         </div>

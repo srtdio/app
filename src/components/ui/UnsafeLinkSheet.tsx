@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { buttonClass } from '@/components/ui/Button';
 import { IconAlertTriangle } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -157,7 +158,11 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             type="button"
             data-unsafe-dont-open=""
             onClick={onClose}
-            className="h-[46px] rounded-xl bg-accent text-[15px] font-medium text-accent-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-panel"
+            className={buttonClass(
+              'primary',
+              'default',
+              'w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
+            )}
           >
             {"Don't open"}
           </button>
@@ -167,7 +172,11 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             rel="noopener noreferrer"
             data-unsafe-open-anyway=""
             onClick={onClose}
-            className="grid h-[46px] place-items-center rounded-xl border border-border text-[15px] font-medium text-[color:var(--warn-ink)] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-panel"
+            className={buttonClass(
+              'secondary',
+              'default',
+              'w-full !text-[color:var(--warn-ink)] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
+            )}
           >
             Open anyway
           </a>
@@ -239,7 +248,7 @@ export function UnsafeLinkButton(props: {
       url={props.url}
       reasons={props.reasons}
       className={cn(
-        'inline-flex min-h-[44px] max-w-full items-center gap-2 rounded-md border border-[color:var(--warn-line)] bg-warn-soft px-3 text-sm text-[color:var(--warn-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-[color:var(--warn-line)] bg-warn-soft px-4 text-sm font-medium text-[color:var(--warn-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         props.className,
       )}
     >

@@ -258,7 +258,7 @@ const ARROW_BUTTON =
 
 // The Try again control on the failure state: auto width, same token palette.
 const RETRY_BUTTON =
-  'inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm text-overlay-fg ' +
+  'inline-flex h-11 min-h-[44px] items-center justify-center rounded-lg px-4 text-sm font-medium text-overlay-fg ' +
   'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
   'focus-visible:ring-overlay-fg/70';
 

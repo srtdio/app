@@ -221,13 +221,14 @@ export function SignUpPage(): ReactElement {
           >
             {cooldown > 0 ? `${CHECK_EMAIL_COPY.resend} (${cooldown}s)` : CHECK_EMAIL_COPY.resend}
           </Button>
-          <button
+          <Button
             type="button"
             onClick={backToForm}
-            className="inline-flex min-h-[44px] w-full items-center justify-center text-sm font-medium text-accent hover:underline"
+            variant="link"
+            className="w-full hover:underline"
           >
             {CHECK_EMAIL_COPY.differentEmail}
-          </button>
+          </Button>
         </div>
       </AuthShell>
     );

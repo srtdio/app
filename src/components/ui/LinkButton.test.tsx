@@ -71,6 +71,16 @@ describe('LinkButton', () => {
     expect(out).toContain('min-h-[44px]');
   });
 
+  it('uses the shared 44px, 8px-radius secondary button recipe', () => {
+    const out = render('https://srtd.io/x');
+    expect(out).toContain('h-11');
+    expect(out).toContain('rounded-lg');
+    expect(out).toContain('text-sm');
+    expect(out).toContain('font-medium');
+    expect(out).not.toContain('rounded-md');
+    expect(out).not.toMatch(/\bh-9\b/);
+  });
+
   it('renders the leading link icon and the trailing outbound arrow', () => {
     const out = render('https://srtd.io/x');
     expect(out.match(/<svg/g) ?? []).toHaveLength(2);

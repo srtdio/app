@@ -961,7 +961,6 @@ export function EmojiPickerLoadFailed(props: { onRetry: () => void }): ReactElem
       <p className="text-sm text-fg-3">{EMOJI_LOAD_FAILED}</p>
       <Button
         type="button"
-        size="lg"
         data-emoji-retry=""
         className="min-w-[44px]"
         onClick={props.onRetry}

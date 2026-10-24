@@ -227,7 +227,7 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
     );
     // The static markup HTML-escapes the apostrophe: match the copy's tail.
     expect(failed).toContain('t save the plan. Nothing was saved. Try again.');
-    expect(failed).toMatch(/data-plan-save-retry=""[^>]*class="[^"]*min-h-\[44px\]/);
+    expect(failed).toMatch(/class="[^"]*h-11 min-h-\[44px\][^"]*rounded-lg[^"]*"[^>]*data-plan-save-retry=""/);
     expect(failed).toContain('>Retry<');
     expect(failed).toContain('To must be on or after From.');
     expect(failed).toContain('bg-bad-soft');
