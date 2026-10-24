@@ -19,9 +19,9 @@ export function AuthShell({ title, subtitle, children, footer, wide = false }: A
   return (
     <div className="min-h-full w-full grid place-items-center px-4 py-10 bg-bg bg-[radial-gradient(circle_at_50%_-10%,var(--accent-soft),transparent_55%)]">
       <div className={`w-full ${wide ? 'max-w-3xl' : 'max-w-[400px]'}`}>
-        <div className="rounded-2xl border border-border bg-panel p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_40px_-12px_rgba(0,0,0,0.12)]">
+        <div className="rounded-xl border border-border bg-panel p-6 shadow-[var(--shadow-card)]">
           <div className="mb-6">
-            <div className="text-lg font-semibold tracking-tight">{title}</div>
+            <div className="text-3xl font-semibold tracking-tight">{title}</div>
             <p className="mt-1 text-base text-fg-2">{subtitle}</p>
           </div>
           {children}

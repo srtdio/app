@@ -23,7 +23,7 @@ function classesOf(text: string): string[] {
 }
 
 describe('AuthShell type roles', () => {
-  it('title is the screen header, subtitle and footer are secondary copy', async () => {
+  it('title is the page title, subtitle and footer are secondary copy', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -35,8 +35,26 @@ describe('AuthShell type roles', () => {
       );
     });
     const title = classesOf('Sign in');
-    expect(title).toContain('text-lg');
+    expect(title).toContain('text-3xl');
     expect(title).toContain('font-semibold');
+    expect(title).toContain('tracking-tight');
+  });
+
+  it('card uses the shared card shadow token and the 12px card radius', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(
+        <AuthShell title="Sign up" subtitle="s" footer="f">
+          <p>form</p>
+        </AuthShell>,
+      );
+    });
+    const card = document.querySelector<HTMLElement>('.bg-panel')!;
+    expect(card.className).toContain('shadow-[var(--shadow-card)]');
+    expect(card.className).toContain('rounded-xl');
+    expect(card.className).not.toContain('rgba(');
 
     const subtitle = classesOf('Welcome back to Sorted.');
     expect(subtitle).toContain('text-base');

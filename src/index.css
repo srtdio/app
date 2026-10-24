@@ -145,6 +145,8 @@
   --strip-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   /* The docked plan panel over the chat (laptop): a shadow on its left edge only. */
   --shadow-panel-left: -12px 0 24px -12px rgba(20, 22, 30, 0.18);
+  /* Raised cards outside the app shell (auth, onboarding). */
+  --shadow-card: 0 1px 2px rgba(20, 22, 30, 0.04), 0 8px 24px rgba(20, 22, 30, 0.08);
   /* The induction guide's amber: the hairline, the label pill (dark ink on
      amber, 8:1) and the progress fill. Triplets feed rgb(var(--guide-rgb)). */
   --guide: #e8930c;
@@ -259,6 +261,7 @@
   --avatar-6: #237484;
   --avatar-6-rgb: 35 116 132;
   --shadow-panel-left: -12px 0 24px -12px rgba(0, 0, 0, 0.55);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
   /* Brighter amber so the hairline reads on dark panels; the pill keeps its
      dark ink (10:1). */
   --guide: #fbb53c;
