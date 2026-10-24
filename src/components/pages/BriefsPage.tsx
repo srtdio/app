@@ -365,11 +365,7 @@ export function briefsEmptyView(
         <EmptyState
           icon={icon}
           title={state.title}
-          action={
-            <Button onClick={onClearSearch}>
-              Clear
-            </Button>
-          }
+          action={<Button onClick={onClearSearch}>Clear</Button>}
         />
       );
     case 'client-empty':

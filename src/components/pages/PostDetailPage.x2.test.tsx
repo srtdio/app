@@ -57,7 +57,9 @@ describe('1. caption block (mock P1)', () => {
     expect(PAGE).toContain('setCaptionTipOpen(!captionTipDismissed(userId));');
     const tip = PAGE.slice(PAGE.indexOf('data-caption-tip=""'));
     // The shared Button carries the 44px height.
-    expect(tip.slice(0, 900)).toContain('<Button\n                        type="button"\n                        variant="link"');
+    expect(tip.slice(0, 900)).toContain(
+      '<Button\n                        type="button"\n                        variant="link"',
+    );
     expect(tip.slice(0, 900)).toContain('Got it');
   });
 });

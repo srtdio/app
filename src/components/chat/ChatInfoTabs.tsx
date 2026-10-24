@@ -468,9 +468,7 @@ export function FeedBody<T>(props: {
     return (
       <div data-feed="error" className="flex flex-col items-center gap-2 py-10 text-sm text-fg-3">
         <span>Could not load</span>
-        <Button onClick={props.onRetry}>
-          Try again
-        </Button>
+        <Button onClick={props.onRetry}>Try again</Button>
       </div>
     );
   }

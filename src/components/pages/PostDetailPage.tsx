@@ -2053,11 +2053,7 @@ export function PostDetailPage({
         </span>
         <p className="min-w-0 flex-1 py-2">{APPROVED_LOCK_LINE}</p>
         {canParkApproved ? (
-          <Button
-            data-approved-park=""
-            className="shrink-0"
-            onClick={() => pickStage('parked')}
-          >
+          <Button data-approved-park="" className="shrink-0" onClick={() => pickStage('parked')}>
             {MOVE_TO_PARKED_LABEL}
           </Button>
         ) : null}
@@ -2382,11 +2378,7 @@ export function PostDetailPage({
                     >
                       {captionSaving ? 'Saving…' : captionSaveLabel(currentVersionNumber)}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={captionSaving}
-                      onClick={cancelCaptionEdit}
-                    >
+                    <Button variant="ghost" disabled={captionSaving} onClick={cancelCaptionEdit}>
                       Cancel
                     </Button>
                     <span className="ml-auto text-xs tabular-nums text-fg-3">

@@ -10,7 +10,8 @@ import { ComposeItemRow } from '@/components/chat/PlanComposeScreen';
 import type { ComposeConcept, ComposePost } from '@/lib/chat/plans';
 
 const noop = (): void => undefined;
-const OLD = /\bh-8\b|\bh-9\b|\bh-10\b|\bh-12\b|rounded-md|rounded-xl|rounded-\[10px\]|font-semibold/;
+const OLD =
+  /\bh-8\b|\bh-9\b|\bh-10\b|\bh-12\b|rounded-md|rounded-xl|rounded-\[10px\]|font-semibold/;
 
 const C: ComposeConcept = {
   kind: 'concept',

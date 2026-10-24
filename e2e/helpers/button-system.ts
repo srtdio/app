@@ -131,10 +131,7 @@ export async function collectButtonViolations(
  * with an 8px radius or a full round. Fails with the list of offenders, and
  * when the screen has no button at all (an unloaded screen must not pass).
  */
-export async function expectButtonsMeetSystem(
-  page: Page,
-  scope?: string | Locator,
-): Promise<void> {
+export async function expectButtonsMeetSystem(page: Page, scope?: string | Locator): Promise<void> {
   const { checked, violations } = await collectButtonViolations(page, scope);
   expect(checked, 'buttons checked on this screen').toBeGreaterThan(0);
   const lines = violations.map(

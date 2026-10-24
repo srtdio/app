@@ -7,12 +7,7 @@ import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 describe('ActivityRowMenu buttons', () => {
   it('renders the trigger at 44x44 with the 8px radius', () => {
     const html = renderToStaticMarkup(
-      <ActivityRowMenu
-        snoozed={false}
-        unread
-        onSnooze={() => {}}
-        onMarkRead={() => {}}
-      />,
+      <ActivityRowMenu snoozed={false} unread onSnooze={() => {}} onMarkRead={() => {}} />,
     );
     const tag = (html.match(/<button\b[^>]*>/) ?? [''])[0];
     expect(tag).toContain('aria-label="Activity options"');

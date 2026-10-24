@@ -321,11 +321,7 @@ function AvatarCropperImpl(
       </div>
 
       {!hidePicker ? (
-        <Button
-          type="button"
-          variant="default"
-          onClick={() => fileInputRef.current?.click()}
-        >
+        <Button type="button" variant="default" onClick={() => fileInputRef.current?.click()}>
           Choose photo
         </Button>
       ) : null}

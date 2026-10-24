@@ -26,7 +26,15 @@ function expectShared(tag: string): void {
   expect(cls).toContain('rounded-lg');
   expect(cls).toContain('text-sm');
   expect(cls).toContain('font-medium');
-  for (const old of ['h-9', 'h-12', 'rounded-md', 'rounded-xl', 'font-semibold', 'text-xs', 'px-3']) {
+  for (const old of [
+    'h-9',
+    'h-12',
+    'rounded-md',
+    'rounded-xl',
+    'font-semibold',
+    'text-xs',
+    'px-3',
+  ]) {
     expect(cls).not.toContain(old);
   }
 }

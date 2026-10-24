@@ -467,10 +467,7 @@ export function emptyPipeline(canCreate: boolean): ReactElement {
         {...(canCreate
           ? {
               action: (
-                <Button
-                  variant="primary"
-                  onClick={() => dispatchSorted('sorted:create-post')}
-                >
+                <Button variant="primary" onClick={() => dispatchSorted('sorted:create-post')}>
                   Create your first post
                 </Button>
               ),

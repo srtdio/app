@@ -180,11 +180,7 @@ export function AcceptFailureView(props: {
     return (
       <>
         <p className="text-sm text-bad">{RECOVERY_COPY.wrongAccount}</p>
-        <Button
-          variant="primary"
-          className="w-full"
-          onClick={props.actions.switchAccount}
-        >
+        <Button variant="primary" className="w-full" onClick={props.actions.switchAccount}>
           {RECOVERY_COPY.differentEmail}
         </Button>
       </>
@@ -293,10 +289,7 @@ export function AcceptInvitePage() {
       <AuthShell title="Invite link" subtitle="We couldn't read this invitation." footer={null}>
         <div className="flex flex-col gap-4">
           <p className="text-sm text-bad">This invite link is invalid.</p>
-          <Link
-            to="/signin"
-            className={buttonClass('primary', 'default', 'w-full')}
-          >
+          <Link to="/signin" className={buttonClass('primary', 'default', 'w-full')}>
             Go to sign in
           </Link>
         </div>
@@ -318,12 +311,7 @@ export function AcceptInvitePage() {
   const footer =
     // The wrong-account body already offers the switch; no second link.
     failure === 'wrong-account' ? null : (
-      <Button
-        type="button"
-        onClick={differentAccount}
-        variant="link"
-        className="hover:underline"
-      >
+      <Button type="button" onClick={differentAccount} variant="link" className="hover:underline">
         Use a different account
       </Button>
     );

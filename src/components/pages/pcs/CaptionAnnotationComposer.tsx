@@ -68,11 +68,7 @@ export function CaptionAnnotationComposer({
       busyLabel="Posting…"
       footer={
         <>
-          <Button
-           
-            disabled={submitting}
-            onClick={onCancel}
-          >
+          <Button disabled={submitting} onClick={onCancel}>
             Cancel
           </Button>
           <CommentEmojiButton

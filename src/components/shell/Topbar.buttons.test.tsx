@@ -71,9 +71,7 @@ describe('Topbar buttons follow the design system', () => {
   });
 
   it('the create-workspace slot uses the shared recipe', () => {
-    const found = buttons(
-      Topbar({ ...base, workspaceName: null, onCreateWorkspace: () => {} }),
-    );
+    const found = buttons(Topbar({ ...base, workspaceName: null, onCreateWorkspace: () => {} }));
     expect(found.length).toBeGreaterThan(0);
     for (const el of found) expectSystem(el);
   });

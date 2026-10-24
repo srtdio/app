@@ -166,11 +166,7 @@ function PendingRowItem({
           </div>
           {canManage ? (
             <div className="flex shrink-0 items-center gap-1 self-center">
-              <Button
-                variant="ghost"
-                disabled={cancelling}
-                onClick={() => setEditing(true)}
-              >
+              <Button variant="ghost" disabled={cancelling} onClick={() => setEditing(true)}>
                 Edit
               </Button>
               <Button

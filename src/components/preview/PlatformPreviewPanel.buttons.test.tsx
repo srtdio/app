@@ -26,7 +26,15 @@ describe('PreviewChip buttons', () => {
 
   it('has no old pill sizing anywhere', () => {
     const html = chip();
-    for (const old of ['h-7', 'h-9', 'h-12', 'rounded-md', 'rounded-full', 'text-xs', 'font-semibold']) {
+    for (const old of [
+      'h-7',
+      'h-9',
+      'h-12',
+      'rounded-md',
+      'rounded-full',
+      'text-xs',
+      'font-semibold',
+    ]) {
       expect(html.split(/[\s"]/)).not.toContain(old);
     }
   });

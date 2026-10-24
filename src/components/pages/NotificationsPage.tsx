@@ -175,9 +175,7 @@ function LoadFailed({ onRetry }: { onRetry: () => void }) {
         {ACTIVITY_LOAD_FAILED}
       </div>
       <div className="mt-3">
-        <Button onClick={onRetry}>
-          Retry
-        </Button>
+        <Button onClick={onRetry}>Retry</Button>
       </div>
     </div>
   );

@@ -246,7 +246,13 @@ function PaintLogPanel(): ReactElement {
         <span className="flex-1 truncate text-xs font-semibold text-fg-2">
           {`Paint log (${entries.length})`}
         </span>
-        <Button type="button" variant="link" data-paint-log-copy="" onClick={onCopy} className={BUTTON}>
+        <Button
+          type="button"
+          variant="link"
+          data-paint-log-copy=""
+          onClick={onCopy}
+          className={BUTTON}
+        >
           {copy === 'copied' ? 'Copied' : copy === 'failed' ? 'Select below' : 'Copy'}
         </Button>
         <Button type="button" variant="link" onClick={() => store.clear()} className={BUTTON}>

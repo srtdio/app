@@ -143,18 +143,11 @@ export function PlanKeepApprovalSheet(props: {
     <Sheet open={props.open} onClose={props.onCancel} title={props.title}>
       <div data-plan-keep-sheet="" className="flex flex-col gap-3">
         <p className="text-[15px] leading-[21px] text-fg-2">{props.body}</p>
-        <Button
-          variant="primary"
-          data-plan-keep-yes=""
-          onClick={() => props.onKeep(true)}
-        >
+        <Button variant="primary" data-plan-keep-yes="" onClick={() => props.onKeep(true)}>
           <IconCheck size={16} />
           {KEEP_APPROVAL_YES}
         </Button>
-        <Button
-          data-plan-keep-no=""
-          onClick={() => props.onKeep(false)}
-        >
+        <Button data-plan-keep-no="" onClick={() => props.onKeep(false)}>
           {KEEP_APPROVAL_NO}
         </Button>
       </div>

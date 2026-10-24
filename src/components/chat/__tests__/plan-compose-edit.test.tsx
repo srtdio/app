@@ -73,7 +73,9 @@ describe('New plan rows', () => {
     const html = row(P);
     expect(html).toContain('data-plan-compose-flag="need"');
     expect(html).toContain('border-warn bg-warn-soft');
-    expect(html).toMatch(/class="[^"]*h-11 min-h-\[44px\][^"]*rounded-lg[^"]*"[^>]*data-plan-day-button="need"/);
+    expect(html).toMatch(
+      /class="[^"]*h-11 min-h-\[44px\][^"]*rounded-lg[^"]*"[^>]*data-plan-day-button="need"/,
+    );
     expect(html).toContain('Pick a day');
     expect(html).toContain('Dated Mon 2 Nov, outside this plan. Pick a day.');
     expect(html).toContain('Post · In review');

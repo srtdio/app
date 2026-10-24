@@ -271,7 +271,6 @@ export function CaptionView({
         <div className="mt-2">
           <Button
             variant="primary"
-           
             data-induction={INDUCTION_KEYS.postCommentButton}
             onClick={() => {
               onAnnotate(pending.start, pending.end, pending.quote);

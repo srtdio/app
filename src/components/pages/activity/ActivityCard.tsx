@@ -618,11 +618,7 @@ export function ActivityCard({
         {alert?.kind === 'failed' && (onEdit !== undefined || onRetry !== undefined) ? (
           <div data-activity-failed-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
             {onEdit !== undefined ? (
-              <Button
-                type="button"
-                data-activity-action="edit"
-                onClick={() => onEdit(lead)}
-              >
+              <Button type="button" data-activity-action="edit" onClick={() => onEdit(lead)}>
                 Edit
               </Button>
             ) : null}

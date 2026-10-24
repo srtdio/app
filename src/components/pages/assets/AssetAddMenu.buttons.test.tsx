@@ -6,7 +6,9 @@ import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 
 describe('AssetAddMenu buttons', () => {
   it('renders New asset as a 44px, 8px-radius primary button', () => {
-    const html = renderToStaticMarkup(<AssetAddMenu onUploadFiles={() => {}} onAddLink={() => {}} />);
+    const html = renderToStaticMarkup(
+      <AssetAddMenu onUploadFiles={() => {}} onAddLink={() => {}} />,
+    );
     const tag = (html.match(/<button\b[^>]*>/) ?? [''])[0];
     expect(tag).toContain('h-11');
     expect(tag).toContain('rounded-lg');

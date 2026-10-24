@@ -78,9 +78,7 @@ function strings(tree: ReactNode): string[] {
 }
 
 function byLabel(tree: ReactNode, value: string): ReactElement | undefined {
-  return elements(tree).find(
-    (el) => ariaLabel(el) === value,
-  );
+  return elements(tree).find((el) => ariaLabel(el) === value);
 }
 
 function byLabelEq(el: ReactElement, value: string): boolean {

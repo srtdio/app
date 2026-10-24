@@ -32,7 +32,6 @@ const RETRY = 'Something went wrong. Try again.';
  */
 export const MEMBER_PURGE_NOTE = 'Only the workspace owner can delete files early.';
 
-
 /** Which confirm is open: one file's Delete now, or Empty now. */
 type PendingConfirm = { kind: 'one'; item: DeletedAssetItem } | { kind: 'all' } | null;
 
@@ -81,9 +80,7 @@ export function RecentlyDeletedView({
             Could not load assets.
           </div>
           <div className="mt-3">
-            <Button onClick={onRetry}>
-              Retry
-            </Button>
+            <Button onClick={onRetry}>Retry</Button>
           </div>
         </div>
       ) : loading && items.length === 0 ? (

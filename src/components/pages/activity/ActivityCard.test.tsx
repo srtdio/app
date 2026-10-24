@@ -249,7 +249,9 @@ describe('ActivityCard', () => {
     expect(html).toContain('data-activity-time="" class="text-xs tabular-nums text-fg-3"');
     expect(html).toContain('+1 more');
     // The toggle is an inset touch target, not the old full-width button.
-    expect(html).toMatch(/<button[^>]*class="[^"]*h-11[^"]*rounded-lg[^"]*ml-auto"[^>]*aria-expanded/);
+    expect(html).toMatch(
+      /<button[^>]*class="[^"]*h-11[^"]*rounded-lg[^"]*ml-auto"[^>]*aria-expanded/,
+    );
     expect(html).not.toContain('min-h-[44px] w-full');
   });
 

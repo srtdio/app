@@ -958,12 +958,7 @@ export function AttachmentsField({
           className="flex flex-wrap items-center gap-2 rounded-md border border-bad bg-bad-soft px-3 py-1"
         >
           <p className="min-w-0 flex-1 text-sm text-bad">{failedFilesLine(failedCount)}</p>
-          <Button
-            type="button"
-            variant="link"
-            className="shrink-0"
-            onClick={retryFailed}
-          >
+          <Button type="button" variant="link" className="shrink-0" onClick={retryFailed}>
             Retry
           </Button>
           <Button

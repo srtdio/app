@@ -478,9 +478,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
       <div className="max-w-[520px] flex flex-col gap-3">
         <p className="text-sm text-bad">Could not load your profile.</p>
         <div>
-          <Button onClick={refetch}>
-            Retry
-          </Button>
+          <Button onClick={refetch}>Retry</Button>
         </div>
       </div>
     );

@@ -234,7 +234,9 @@ describe('AssetCard ⋯ at the bottom, smaller select box', () => {
         onLongPress={vi.fn()}
       />,
     );
-    expect(out).toMatch(/class="[^"]*h-11 w-11[^"]*rounded-lg[^"]*-bottom-0\.5 -right-0\.5[^"]*"[^>]*data-card-menu=""/);
+    expect(out).toMatch(
+      /class="[^"]*h-11 w-11[^"]*rounded-lg[^"]*-bottom-0\.5 -right-0\.5[^"]*"[^>]*data-card-menu=""/,
+    );
     expect(out).not.toMatch(/class="[^"]*top-0[^"]*"[^>]*data-card-menu=""/);
     // The size line keeps room on the right so text never runs under the ⋯.
     expect(out).toContain('flex h-5 items-center pr-8');

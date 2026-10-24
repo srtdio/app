@@ -102,9 +102,7 @@ export function SlideActionsSheet({
             ) : null}
           </div>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setConfirming(false)}>
-              Cancel
-            </Button>
+            <Button onClick={() => setConfirming(false)}>Cancel</Button>
             <Button variant="danger" disabled={saving} onClick={() => run(onRemove)}>
               Remove
             </Button>

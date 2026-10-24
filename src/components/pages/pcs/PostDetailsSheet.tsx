@@ -259,12 +259,7 @@ export function PostDetailsSheet({
         dirty={dateDirty}
         footer={
           isAgencySide ? (
-            <Button
-              variant="primary"
-              className="ml-auto"
-              data-details-done=""
-              onClick={done}
-            >
+            <Button variant="primary" className="ml-auto" data-details-done="" onClick={done}>
               Done
             </Button>
           ) : undefined

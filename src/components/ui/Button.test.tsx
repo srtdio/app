@@ -33,7 +33,15 @@ describe('Button design system', () => {
       expect(t).toContain('rounded-lg');
       expect(t).toContain('text-sm');
       expect(t).toContain('font-medium');
-      for (const bad of ['h-8', 'h-9', 'h-12', 'rounded-md', 'rounded-xl', 'text-xs', 'font-semibold']) {
+      for (const bad of [
+        'h-8',
+        'h-9',
+        'h-12',
+        'rounded-md',
+        'rounded-xl',
+        'text-xs',
+        'font-semibold',
+      ]) {
         expect(t).not.toContain(bad);
       }
     }
@@ -55,7 +63,9 @@ describe('Button design system', () => {
   });
 
   it('maps each variant to its tokens', () => {
-    expect(classOf({ variant: 'primary' })).toContain('bg-accent text-accent-fg hover:bg-accent-hover');
+    expect(classOf({ variant: 'primary' })).toContain(
+      'bg-accent text-accent-fg hover:bg-accent-hover',
+    );
     expect(classOf({ variant: 'secondary' })).toContain(
       'bg-panel text-fg border border-border hover:bg-panel-2',
     );
@@ -94,7 +104,9 @@ describe('Button design system', () => {
 
 describe('IconButton', () => {
   it('is 44x44 with an 8px radius', () => {
-    const el = IconButton({ label: 'Close', children: null }) as ReactElement<{ className: string }>;
+    const el = IconButton({ label: 'Close', children: null }) as ReactElement<{
+      className: string;
+    }>;
     const t = tokens(el.props.className);
     expect(t).toContain('h-11');
     expect(t).toContain('w-11');

@@ -34,9 +34,7 @@ export function AssetInUseSheet({ state, onOpenParent, onClose }: AssetInUseShee
       title={shown.current?.title ?? 'File in use'}
       footer={
         <div className="flex w-full justify-end gap-2">
-          <Button onClick={onClose}>
-            OK
-          </Button>
+          <Button onClick={onClose}>OK</Button>
           {parent !== null ? (
             <Button variant="primary" onClick={() => onOpenParent(parent)}>
               {openParentLabel(parent.kind)}
