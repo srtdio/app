@@ -70,7 +70,7 @@ export function PlanDayTiles(props: {
       {dayTileWeeks(props.range).map((week) => (
         <div key={week.days[0]} className="flex flex-col gap-2">
           {week.label !== null ? (
-            <p className="mt-0.5 text-legacy-xs font-semibold uppercase tracking-[0.04em] text-fg-3">
+            <p className="mt-0.5 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
               {week.label}
             </p>
           ) : null}
@@ -96,18 +96,18 @@ export function PlanDayTiles(props: {
                 >
                   <span
                     className={cn(
-                      'text-[11px] font-semibold uppercase tracking-[0.06em]',
+                      'text-xs font-semibold uppercase tracking-[0.06em]',
                       on ? 'text-accent-fg' : day === props.today ? 'text-accent' : 'text-fg-3',
                     )}
                   >
                     {civilWeekdayShort(day)}
                   </span>
-                  <span className="font-mono text-legacy-xl font-semibold leading-[1.15] tabular-nums">
+                  <span className="font-mono text-2xl font-medium leading-[1.15] tabular-nums">
                     {dayOfMonth(day)}
                   </span>
                   <span
                     className={cn(
-                      'font-mono text-[10.5px] tabular-nums',
+                      'font-mono text-xs tabular-nums',
                       on ? 'text-accent-fg' : 'text-fg-3',
                     )}
                   >
@@ -127,7 +127,7 @@ export function PlanDayTiles(props: {
         </div>
       ))}
       {pipelineInside ? (
-        <p className="flex items-center gap-1.5 text-legacy-xs text-fg-3">
+        <p className="flex items-center gap-1.5 text-sm text-fg-3">
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-warn" />
           {CURRENT_PIPELINE_DAY}
         </p>
@@ -181,7 +181,7 @@ export function PlanDayPickerSheet(props: {
   return (
     <Sheet open={props.open} onClose={props.onClose} title={props.title}>
       <div data-plan-day-picker="" className="flex flex-col gap-3">
-        <p className="-mt-1 text-[13px] leading-[18px] text-fg-3">{props.subline}</p>
+        <p className="-mt-1 text-md text-fg-3">{props.subline}</p>
         <PlanDayTiles
           range={props.range}
           selected={props.selected}
@@ -191,9 +191,7 @@ export function PlanDayPickerSheet(props: {
           {...(props.pipelineDay !== undefined ? { pipelineDay: props.pipelineDay } : {})}
           {...(props.counts !== undefined ? { counts: props.counts } : {})}
         />
-        {!hide ? (
-          <p className="text-[12.5px] leading-[18px] text-fg-3">{LATER_DAY_FOOTNOTE}</p>
-        ) : null}
+        {!hide ? <p className="text-sm text-fg-3">{LATER_DAY_FOOTNOTE}</p> : null}
       </div>
     </Sheet>
   );
@@ -209,9 +207,9 @@ export const DATE_FIT =
 
 /** The date inputs: the field look with a slimmer side padding so the date fits at 320px. */
 export const DATE_FIELD = cn(
-  'h-11 min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-2.5 text-legacy-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
+  'h-11 min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-2.5 text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
   DATE_FIT,
-  'font-mono text-[15px]',
+  'font-mono text-input md:text-base',
 );
 
 export const PLAN_DATES_TITLE = 'Plan dates';
@@ -253,7 +251,7 @@ export function PlanDatesSheet(props: {
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="-mt-1 text-[13px] leading-[18px] text-fg-3">{PLAN_DATES_HINT}</p>
+        <p className="-mt-1 text-md text-fg-3">{PLAN_DATES_HINT}</p>
         <div className="grid grid-cols-2 gap-2">
           {(
             [
@@ -262,7 +260,7 @@ export function PlanDatesSheet(props: {
             ] as const
           ).map(([field, label]) => (
             <label key={field} className="flex w-full min-w-0 flex-col gap-1">
-              <span className="text-[13px] text-fg-3">{label}</span>
+              <span className="text-md text-fg-3">{label}</span>
               <input
                 type="date"
                 data-plan-date={field}
@@ -278,7 +276,7 @@ export function PlanDatesSheet(props: {
           ))}
         </div>
         {error !== null ? (
-          <p role="alert" className="rounded-xl bg-bad-soft px-3 py-2.5 text-[13.5px] text-bad">
+          <p role="alert" className="rounded-xl bg-bad-soft px-3 py-2.5 text-md text-bad">
             {error}
           </p>
         ) : null}

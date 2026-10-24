@@ -70,10 +70,10 @@ export interface InChatSearchBarProps {
 
 /**
  * The mono "N of M" ink, the 44px arrows and the input, on the header's panel.
- * FN23: 16px on a phone (iOS never zooms the page on focus), 14px from sm up.
+ * FN23: 16px on a phone (iOS never zooms the page on focus), 14px from md up.
  */
 export const BAR_INPUT =
-  'h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-legacy-base text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none sm:text-legacy-sm';
+  'h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-input text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none md:text-base';
 
 /**
  * The in-chat search bar, in place of the thread header: close, the input,
@@ -236,7 +236,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
       <span
         data-search-counter=""
         aria-live="polite"
-        className="min-w-[44px] shrink-0 text-center font-mono text-legacy-xs tabular-nums text-fg-2"
+        className="min-w-[44px] shrink-0 text-center font-mono text-sm tabular-nums text-fg-2"
       >
         {counter ?? ''}
       </span>
@@ -262,7 +262,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
           data-search-retry=""
           onClick={() => runner?.retry()}
           className={cn(
-            'absolute left-0 right-0 top-full z-10 mt-px flex min-h-[44px] items-center justify-center border-b border-border bg-panel px-3 text-legacy-sm text-fg-2',
+            'absolute left-0 right-0 top-full z-10 mt-px flex min-h-[44px] items-center justify-center border-b border-border bg-panel px-3 text-base text-fg-2',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           )}
         >

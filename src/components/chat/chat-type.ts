@@ -3,7 +3,7 @@
 // touch values, a mouse or trackpad at 768px and up takes the laptop values.
 // Paired constants hold both; a single string is the same on both. Chat
 // surfaces use only these; no other size literals. 12px / 16px is Tailwind's
-// text-legacy-xs.
+// text-sm.
 
 import { useEffect, useState } from 'react';
 
@@ -64,7 +64,7 @@ export function sized(size: ChatSize, layout: ChatLayout): string {
 /** Message body in a bubble: 17/22 touch, 14.2/19 laptop, 400. */
 export const BUBBLE_BODY_TYPE: ChatSize = {
   touch: 'text-[17px] leading-[22px] font-normal',
-  laptop: 'text-[14.2px] leading-[19px] font-normal',
+  laptop: 'text-[14px] leading-[19px] font-normal',
 };
 
 /** In-bubble meta (time, "edited"): 11/15, 400 on both. */
@@ -76,19 +76,19 @@ export const TICK_ICON_BOX = 'h-[11px] w-4 shrink-0';
 /** The sender name over a group run: 13/18/600 touch, 12.8/22/500 laptop. */
 export const GROUP_SENDER_TYPE: ChatSize = {
   touch: 'text-[13px] leading-[18px] font-semibold',
-  laptop: 'text-[12.8px] leading-[22px] font-medium',
+  laptop: 'text-[13px] leading-[22px] font-medium',
 };
 
 /** A bubble's reply quote author: 13/18/600 touch, 12.8/20/500 laptop. */
 export const QUOTE_AUTHOR_TYPE: ChatSize = {
   touch: 'text-[13px] leading-[18px] font-semibold',
-  laptop: 'text-[12.8px] leading-[20px] font-medium',
+  laptop: 'text-[13px] leading-[20px] font-medium',
 };
 
 /** A bubble's reply quote text: 14/18 touch, 13.2/20 laptop, 400. */
 export const QUOTE_TEXT_TYPE: ChatSize = {
   touch: 'text-[14px] leading-[18px] font-normal',
-  laptop: 'text-[13.2px] leading-[20px] font-normal',
+  laptop: 'text-[13px] leading-[20px] font-normal',
 };
 
 /** Shared post card title: 15/20 touch, 14/19 laptop, 500. */
@@ -98,7 +98,7 @@ export const POST_CARD_TITLE_TYPE: ChatSize = {
 };
 
 /** Shared post card meta: 12/16, 400 on both. */
-export const POST_CARD_META_TYPE = 'text-legacy-xs font-normal';
+export const POST_CARD_META_TYPE = 'text-sm font-normal';
 
 /** Thread header name: 17/22/600 touch, 16/21/500 laptop. */
 export const HEADER_NAME_TYPE: ChatSize = {
@@ -137,7 +137,7 @@ export const CHAT_LIST_PREVIEW_TYPE: ChatSize = {
 /** Chat list time: 14/18 touch, 12/16 laptop, 400; sans with tabular figures. */
 export const CHAT_LIST_TIME_TYPE: ChatSize = {
   touch: 'font-sans text-[14px] leading-[18px] font-normal tabular-nums',
-  laptop: 'font-sans text-legacy-xs font-normal tabular-nums',
+  laptop: 'font-sans text-sm font-normal tabular-nums',
 };
 
 /** Thread header row padding: 8px touch, 16px laptop. */
@@ -146,10 +146,10 @@ export const HEADER_PAD: ChatSize = {
   laptop: 'px-4',
 };
 
-/** Date separator pill: 12.5/16/500 touch, 12.5/16/400 uppercase laptop; sans, tabular. */
+/** Date separator pill: 12/16/500 touch, 12/16/400 uppercase laptop; sans, tabular. */
 export const DATE_PILL_TYPE: ChatSize = {
-  touch: 'font-mono text-[12.5px] leading-[16px] font-medium tabular-nums',
-  laptop: 'font-mono text-[12.5px] leading-[16px] font-normal tabular-nums uppercase',
+  touch: 'font-mono text-sm font-medium tabular-nums',
+  laptop: 'font-mono text-sm font-normal tabular-nums uppercase',
 };
 
 /** The typing row above the composer: 13/16, 400. */
@@ -192,7 +192,7 @@ export const EMOJI_SEARCH_TYPE: ChatSize = {
 };
 
 /** The emoji picker's group heading: 12/16/500, both. */
-export const EMOJI_GROUP_TYPE = 'text-legacy-xs font-medium';
+export const EMOJI_GROUP_TYPE = 'text-sm font-medium';
 
 /** The reason line under a disabled selection Delete: 13/18, 400 on both. */
 export const SELECTION_REASON_TYPE = 'text-[13px] leading-[18px] font-normal';

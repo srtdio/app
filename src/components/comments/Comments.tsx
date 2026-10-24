@@ -203,10 +203,10 @@ export const ROW_ACTION_CLASS =
 /** The passive (non-interactive) checkbox: the same box, height and padding as
  *  a ghost row-action Button without the hover or focus treatment. */
 export const ROW_ACTION_STATIC_CLASS =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-4 text-legacy-sm font-medium';
+  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-4 text-base font-medium';
 
 /** The time in every row header: 12px, regular weight, never monospace. */
-export const ROW_TIME_CLASS = 'whitespace-nowrap text-legacy-xs tabular-nums text-fg-3';
+export const ROW_TIME_CLASS = 'whitespace-nowrap text-sm tabular-nums text-fg-3';
 
 /** The word beside every checkpoint checkbox, ticked or not. */
 export const CHECKPOINT_BOX_LABEL = 'Resolved';
@@ -273,11 +273,9 @@ export function annotationChip(
     return (
       <div
         data-caption-quote="stale"
-        className="mb-2 min-w-0 border-l-2 border-border pl-3 text-legacy-sm text-fg-2"
+        className="mb-2 min-w-0 border-l-2 border-border pl-3 text-base text-fg-2"
       >
-        <span className="block text-[11px] text-fg-3">
-          copy changed · v{annotation.versionNumber}
-        </span>
+        <span className="block text-xs text-fg-3">copy changed · v{annotation.versionNumber}</span>
         {annotation.quote !== '' ? (
           <span className="block [overflow-wrap:anywhere]">{annotation.quote}</span>
         ) : null}
@@ -289,9 +287,9 @@ export function annotationChip(
       type="button"
       data-caption-quote="live"
       onClick={() => onClick?.(commentId)}
-      className="mb-2 flex w-full min-h-[44px] min-w-0 items-start gap-2 border-l-2 border-border-strong pl-3 text-left text-legacy-sm text-fg-2 transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="mb-2 flex w-full min-h-[44px] min-w-0 items-start gap-2 border-l-2 border-border-strong pl-3 text-left text-base text-fg-2 transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <sup className="shrink-0 text-[10px] font-semibold text-annotation-line">{annotation.n}</sup>
+      <sup className="shrink-0 text-xs font-semibold text-annotation-line">{annotation.n}</sup>
       <span className="min-w-0 [overflow-wrap:anywhere]">{annotation.quote}</span>
     </button>
   );
@@ -1735,7 +1733,7 @@ export function Comments({
           Copy
         </Button>
         {copiedId === comment.id ? (
-          <span role="status" className="text-legacy-xs text-fg-3">
+          <span role="status" className="text-sm text-fg-3">
             {copyFailed ? COPY_FAILED : 'Copied'}
           </span>
         ) : null}
@@ -1750,7 +1748,7 @@ export function Comments({
           value={editBody}
           onChange={(event) => setEditBody(event.target.value)}
           aria-label="Edit comment body"
-          className="w-full px-3 rounded-md border border-border bg-panel-2 text-fg text-legacy-sm placeholder:text-fg-3 outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[74px] py-2.5 h-auto"
+          className="w-full px-3 rounded-md border border-border bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[74px] py-2.5 h-auto"
         />
         <div className="flex items-center gap-2">
           <Button
@@ -1794,7 +1792,7 @@ export function Comments({
           {actions.canEdit ? (
             <button
               type="button"
-              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-legacy-sm text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-base text-fg hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={() => {
                 closeMenu();
                 startEdit(comment);
@@ -1806,7 +1804,7 @@ export function Comments({
           {actions.canDelete ? (
             <button
               type="button"
-              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-legacy-sm text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex w-full min-h-[44px] items-center rounded-lg px-3 text-left text-base text-bad hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={() => {
                 closeMenu();
                 handleDelete(comment.id);
@@ -1842,12 +1840,12 @@ export function Comments({
     const meta = (
       <>
         {role !== null ? (
-          <span data-comment-role="" className="text-legacy-xs text-fg-3">
+          <span data-comment-role="" className="text-sm text-fg-3">
             {role}
           </span>
         ) : null}
         {!opts.reply || role !== null ? (
-          <span aria-hidden className="text-legacy-xs text-fg-3">
+          <span aria-hidden className="text-sm text-fg-3">
             ·
           </span>
         ) : null}
@@ -1855,21 +1853,18 @@ export function Comments({
           {formatAgo(comment.created_at, new Date())}
         </span>
         {opts.seq !== null ? (
-          <span
-            data-checkpoint-seq=""
-            className="whitespace-nowrap text-legacy-xs tabular-nums text-fg-3"
-          >
+          <span data-checkpoint-seq="" className="whitespace-nowrap text-sm tabular-nums text-fg-3">
             #{opts.seq}
           </span>
         ) : null}
-        {edited !== null ? <span className="text-legacy-xs text-fg-3">{edited}</span> : null}
+        {edited !== null ? <span className="text-sm text-fg-3">{edited}</span> : null}
       </>
     );
     const name = (
       <span
         data-comment-author=""
         className={cn(
-          'text-legacy-xs font-medium text-fg [overflow-wrap:anywhere]',
+          'text-sm font-medium text-fg [overflow-wrap:anywhere]',
           opts.reply ? 'block' : '',
         )}
       >
@@ -1919,7 +1914,7 @@ export function Comments({
               {comment.body.trim() !== '' ? (
                 <p
                   className={cn(
-                    'text-legacy-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
+                    'text-base leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
                     opts.muted === true ? 'text-fg-2' : 'text-fg',
                   )}
                 >
@@ -1959,7 +1954,7 @@ export function Comments({
           {rowError !== null && rowError.id === comment.id ? (
             <div
               role="alert"
-              className="mt-2 rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+              className="mt-2 rounded-md border border-bad px-3 py-2 text-base text-bad"
             >
               {rowError.message}
             </div>
@@ -2040,7 +2035,7 @@ export function Comments({
   function renderTombstone(root: CommentRow, replies: CommentRow[]): ReactNode {
     return (
       <>
-        <p className="text-legacy-xs italic text-fg-3">{tombstoneText(root, nameOf)}</p>
+        <p className="text-sm italic text-fg-3">{tombstoneText(root, nameOf)}</p>
         {renderThreadBelow(root, replies, true, false)}
       </>
     );
@@ -2224,7 +2219,7 @@ export function Comments({
     <div className="flex flex-col gap-4">
       {showHeader ? (
         <div data-comments-header="" className="flex items-center gap-2">
-          <h3 className="text-legacy-sm font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>
+          <h3 className="text-base font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>
           <div role="group" aria-label="Show comments" className="ml-auto flex items-center">
             {filterButton('open', 'Open')}
             {filterButton('all', 'All')}
@@ -2258,14 +2253,14 @@ export function Comments({
       ) : threads.length === 0 ? (
         <div
           data-comments-empty=""
-          className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-legacy-sm text-fg-3"
+          className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-base text-fg-3"
         >
           {emptyListText(entityType, 'all')}
         </div>
       ) : groups.length === 0 ? (
         <div
           data-comments-empty=""
-          className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-legacy-sm text-fg-3"
+          className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-base text-fg-3"
         >
           {emptyListText(entityType, 'open')}
         </div>
@@ -2280,7 +2275,7 @@ export function Comments({
       {!loading && !loadError && moreError ? (
         <div
           role="alert"
-          className="flex items-center gap-3 rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+          className="flex items-center gap-3 rounded-md border border-bad px-3 py-2 text-base text-bad"
         >
           <span>Couldn&apos;t load older comments.</span>
           <Button

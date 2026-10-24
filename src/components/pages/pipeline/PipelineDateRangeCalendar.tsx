@@ -210,7 +210,7 @@ export function PipelineDateRangeCalendar({
           >
             <IconChevronLeft size={20} />
           </IconButton>
-          <span className="text-legacy-sm font-semibold text-fg">
+          <span className="text-base font-semibold text-fg">
             {MONTHS[view.monthIndex]} {view.year}
           </span>
           <IconButton
@@ -222,7 +222,7 @@ export function PipelineDateRangeCalendar({
           </IconButton>
         </div>
 
-        <div className="grid grid-cols-7 text-center text-legacy-xs font-medium text-fg-3">
+        <div className="grid grid-cols-7 text-center text-sm font-medium text-fg-3">
           {weekdayHeader.map((letter, index) => (
             <span key={`${letter}-${index}`} className="py-1">
               {letter}
@@ -248,7 +248,7 @@ export function PipelineDateRangeCalendar({
                 aria-pressed={isEndpoint || single}
                 onClick={() => pick(iso)}
                 className={cn(
-                  'flex min-h-[44px] items-center justify-center font-sans text-legacy-sm tabular-nums transition-colors',
+                  'flex min-h-[44px] items-center justify-center font-sans text-base tabular-nums transition-colors',
                   isEndpoint
                     ? 'rounded-md bg-accent font-semibold text-accent-fg'
                     : between

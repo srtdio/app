@@ -177,7 +177,7 @@ export function PlanCalendar(props: {
     >
       <ChipRow bundles={bundles} tones={tones} selected={shownFilter} onSelect={setFilter} />
       <div className="flex flex-wrap items-center gap-2 px-6 py-2">
-        <h2 data-plan-tab-range="" className="mr-1 text-[15px] font-semibold text-fg">
+        <h2 data-plan-tab-range="" className="mr-1 text-lg font-semibold text-fg">
           {rangeLabel(view, anchor)}
         </h2>
         <IconButton
@@ -197,7 +197,7 @@ export function PlanCalendar(props: {
         <Button data-plan-tab-go-today="" onClick={() => props.onAnchor(today)}>
           {TODAY_LABEL}
         </Button>
-        <div className="ml-auto flex items-center gap-4 text-legacy-xs text-fg-2">
+        <div className="ml-auto flex items-center gap-4 text-sm text-fg-2">
           <span className="flex items-center gap-1.5">
             <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent" />
             {PLAN_ITEM_LEGEND}
@@ -260,7 +260,7 @@ export function PlanCalendar(props: {
 // ---------------------------------------------------------------------------
 
 const CHIP =
-  'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-4 text-legacy-sm font-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-4 text-base font-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 const CHIP_IDLE = 'border-border text-fg-2 hover:bg-panel-2';
 const CHIP_ON = 'border-accent-line bg-accent-soft text-accent';
 
@@ -370,7 +370,7 @@ function MonthGrid(props: {
     >
       <div className="grid grid-cols-7 border-b border-border bg-panel-2">
         {weeks[0]?.map((cell) => (
-          <span key={cell.day} className="px-2 py-1.5 text-legacy-xs font-semibold text-fg-3">
+          <span key={cell.day} className="px-2 py-1.5 text-sm font-semibold text-fg-3">
             {civilWeekdayShort(cell.day)}
           </span>
         ))}
@@ -396,7 +396,7 @@ function MonthGrid(props: {
                 <span
                   data-plan-tab-today={isToday ? '' : undefined}
                   className={cn(
-                    'mb-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-legacy-xs font-semibold',
+                    'mb-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
                     isToday ? 'bg-accent text-accent-fg' : cell.inMonth ? 'text-fg' : 'text-fg-3',
                   )}
                 >
@@ -410,7 +410,7 @@ function MonthGrid(props: {
                     type="button"
                     data-plan-tab-more={cell.day}
                     onClick={() => props.onMore(cell.day)}
-                    className="h-[18px] shrink-0 self-start rounded px-1.5 text-[11px] font-medium leading-[18px] text-fg-2 hover:bg-panel-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="h-[18px] shrink-0 self-start rounded px-1.5 text-xs font-medium text-fg-2 hover:bg-panel-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     {moreLabel(more)}
                   </button>
@@ -445,7 +445,7 @@ function MonthEntry(props: EntryProps): ReactElement {
       }
       onClick={() => props.onOpen(props.entry)}
       className={cn(
-        'flex h-[22px] w-full min-w-0 shrink-0 items-center gap-1.5 rounded px-1.5 text-left text-legacy-xs leading-[22px] text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex h-[22px] w-full min-w-0 shrink-0 items-center gap-1.5 rounded px-1.5 text-left text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         look.soft,
         props.lifted && 'opacity-40',
       )}
@@ -474,12 +474,12 @@ function WeekGrid(props: {
         {days.map((day) => (
           <span
             key={day}
-            className="flex items-baseline gap-1.5 px-2 py-1.5 text-legacy-xs font-semibold text-fg-3"
+            className="flex items-baseline gap-1.5 px-2 py-1.5 text-sm font-semibold text-fg-3"
           >
             {civilWeekdayShort(day)}
             <span
               data-plan-tab-today={day === props.today ? '' : undefined}
-              className={cn('text-legacy-sm', day === props.today ? 'text-accent' : 'text-fg')}
+              className={cn('text-base', day === props.today ? 'text-accent' : 'text-fg')}
             >
               {dayOfMonth(day)}
             </span>
@@ -553,11 +553,11 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
         ) : null}
       </span>
       <span className="flex min-w-0 flex-col gap-1 p-2">
-        <span className="line-clamp-2 text-[13px] font-semibold leading-[18px] text-fg [overflow-wrap:anywhere]">
+        <span className="line-clamp-2 text-base font-medium text-fg [overflow-wrap:anywhere]">
           {entry.title}
         </span>
         {entry.kind === 'item' ? (
-          <span className="flex min-w-0 items-start gap-1.5 text-[11px] leading-4 text-fg-2">
+          <span className="flex min-w-0 items-start gap-1.5 text-sm text-fg-2">
             <span aria-hidden="true" className={cn('mt-1 h-2 w-2 shrink-0', look.dot)} />
             <span className="line-clamp-2 [overflow-wrap:anywhere]">{entry.bundle.plan.title}</span>
           </span>
@@ -566,14 +566,14 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
           <span
             data-plan-tab-pill={pill.tone}
             className={cn(
-              'inline-flex h-5 max-w-full items-center self-start truncate rounded-full px-2 text-[11px] font-semibold leading-5',
+              'inline-flex h-5 max-w-full items-center self-start truncate rounded-full px-2 text-xs font-semibold leading-5',
               PILL_TONES[pill.tone],
             )}
           >
             {pill.label}
           </span>
         ) : null}
-        <span className="truncate text-[11px] leading-4 text-fg-3">
+        <span className="truncate text-sm text-fg-3">
           {entry.kind === 'item'
             ? postStageLine(entry.bundle, entry.item)
             : `Post: ${entry.post.stage}`}
@@ -598,9 +598,7 @@ function LiftedEntry(props: { drag: Drag }): ReactElement {
       style={{ left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.width }}
       className="pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-md bg-panel shadow-2xl ring-1 ring-border-strong"
     >
-      <span
-        className={cn('flex h-full items-center gap-1.5 px-2 text-legacy-xs text-fg', look.soft)}
-      >
+      <span className={cn('flex h-full items-center gap-1.5 px-2 text-sm text-fg', look.soft)}>
         <span className={cn('h-2 w-2 shrink-0', look.dot)} />
         <span className="truncate">{drag.entry.title}</span>
       </span>

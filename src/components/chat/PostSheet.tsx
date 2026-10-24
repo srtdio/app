@@ -113,7 +113,7 @@ export function stripFrame(
 
 /** A small pill laid over a slide. */
 const STRIP_PILL =
-  'pointer-events-none inline-flex h-6 items-center gap-1 rounded-md bg-panel px-2 text-legacy-xs font-medium text-fg';
+  'pointer-events-none inline-flex h-6 items-center gap-1 rounded-md bg-panel px-2 text-sm font-medium text-fg';
 
 /** The sheet's talk-about label. */
 export function talkAboutLabel(): string {
@@ -374,10 +374,10 @@ export function PostSheetDetails(props: {
   const rows = detailRows(post, approverName, props.timeZone, approverRole ?? null, props.brand);
   return (
     <div className="flex flex-col gap-3">
-      <h3 data-sheet-title="" className="text-[17px] font-semibold leading-6 text-fg">
+      <h3 data-sheet-title="" className="text-lg font-semibold text-fg">
         {post.title}
       </h3>
-      <dl className="flex flex-col text-legacy-sm">
+      <dl className="flex flex-col text-base">
         <div className="flex min-h-[36px] items-center justify-between gap-3 border-b border-border">
           <dt className="text-fg-3">Stage</dt>
           <dd>
@@ -444,7 +444,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
   const brand = props.brand ?? null;
   const error =
     props.error !== null ? (
-      <p role="alert" data-sheet-error="" className="text-legacy-sm text-bad">
+      <p role="alert" data-sheet-error="" className="text-base text-bad">
         {props.error}
       </p>
     ) : null;
@@ -458,10 +458,10 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
     });
     content = (
       <div data-sheet-confirm="reject" className="flex flex-col gap-2">
-        <p className="text-legacy-sm font-medium text-fg">{copy.question}</p>
-        <p className="text-legacy-sm text-fg-2">{copy.detail}</p>
+        <p className="text-base font-medium text-fg">{copy.question}</p>
+        <p className="text-base text-fg-2">{copy.detail}</p>
         <label className="mt-1 flex flex-col gap-1.5">
-          <span className="text-legacy-sm text-fg-2">{REJECT_REASON_LABEL}</span>
+          <span className="text-base text-fg-2">{REJECT_REASON_LABEL}</span>
           <Textarea
             data-sheet-reason=""
             aria-describedby="post-sheet-reason-helper"
@@ -470,7 +470,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
             onChange={(event) => props.onReasonChange?.(event.target.value)}
           />
         </label>
-        <p id="post-sheet-reason-helper" className="text-legacy-xs text-fg-3">
+        <p id="post-sheet-reason-helper" className="text-sm text-fg-3">
           {REJECT_REASON_HELPER}
         </p>
         {error}
@@ -505,10 +505,10 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
     });
     content = (
       <div data-sheet-confirm={mode.confirm} className="flex flex-col gap-2">
-        <p className="text-legacy-sm font-medium text-fg">{copy.question}</p>
-        <p className="text-legacy-sm text-fg-2">{copy.detail}</p>
+        <p className="text-base font-medium text-fg">{copy.question}</p>
+        <p className="text-base text-fg-2">{copy.detail}</p>
         {mode.confirm === 'approve' && props.onBehalf === true ? (
-          <p data-sheet-on-behalf="" className="text-legacy-sm text-fg-2">
+          <p data-sheet-on-behalf="" className="text-base text-fg-2">
             {onBehalfConfirmLine(brand)}
           </p>
         ) : null}
@@ -584,7 +584,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
           </Button>
         ) : null}
         {set.hint !== null ? (
-          <p data-sheet-hint="" className="text-center text-legacy-xs text-fg-3">
+          <p data-sheet-hint="" className="text-center text-sm text-fg-3">
             {set.hint}
           </p>
         ) : null}
@@ -796,7 +796,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
         <div data-post-sheet={view.postId} className="flex flex-col gap-4">
           {commenting ? (
             <div data-sheet-composer="" className="flex flex-col gap-3">
-              <h3 className="text-[15px] font-semibold text-fg">Comment on {subject}</h3>
+              <h3 className="text-lg font-semibold text-fg">Comment on {subject}</h3>
               <SlotComposer onSubmit={onSubmitPoints} canAttach={false} />
             </div>
           ) : (

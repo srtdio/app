@@ -28,14 +28,14 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
     return (
       <div
         role="alert"
-        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-legacy-sm text-bad"
+        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad"
       >
         {props.error}
       </div>
     );
   }
   if (props.options.length === 0) {
-    return <p className="px-1 py-3 text-legacy-sm text-fg-3">{props.emptyLabel}</p>;
+    return <p className="px-1 py-3 text-base text-fg-3">{props.emptyLabel}</p>;
   }
   const selected = new Set(props.selectedIds);
   return (
@@ -58,7 +58,7 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
                 {...(option.avatarUrl !== null ? { src: option.avatarUrl } : {})}
                 size="md"
               />
-              <span className="min-w-0 flex-1 truncate text-legacy-sm font-medium">
+              <span className="min-w-0 flex-1 truncate text-base font-medium">
                 {option.displayName}
               </span>
               <SelectCheck checked={isSelected} />

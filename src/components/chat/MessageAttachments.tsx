@@ -481,7 +481,7 @@ export function AlbumGrid({
             {tile.more > 0 ? (
               <span
                 aria-hidden="true"
-                className="absolute inset-0 flex items-center justify-center bg-black/50 text-[22px] font-semibold text-white"
+                className="absolute inset-0 flex items-center justify-center bg-black/50 text-2xl font-semibold text-white"
               >
                 +{tile.more}
               </span>
@@ -559,13 +559,10 @@ export function AttachmentsFallback(props: {
               <IconFile size={18} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span
-                className="text-legacy-sm font-medium text-fg [overflow-wrap:anywhere]"
-                title={name}
-              >
+              <span className="text-base font-medium text-fg [overflow-wrap:anywhere]" title={name}>
                 {middleTruncate(name)}
               </span>
-              <span className="text-legacy-xs text-fg-3">{ATTACHMENT_FALLBACK}</span>
+              <span className="text-sm text-fg-3">{ATTACHMENT_FALLBACK}</span>
             </span>
             {canDownload ? (
               <IconButton

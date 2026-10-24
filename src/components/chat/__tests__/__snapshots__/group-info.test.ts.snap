@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`F10: the admin-only notice > uses the chat sheet notice size (13/18/400), not text-legacy-sm 1`] = `
+exports[`F10: the admin-only notice > uses the chat sheet notice size (13/18/400), not text-base 1`] = `
 {
   "className": "mt-1.5 text-fg-2 text-[13px] leading-[18px] font-normal",
   "text": "Only the group's creator or an admin can edit this group's info",
@@ -16,7 +16,7 @@ exports[`group info full page > Leave group is the 44px outlined secondary butto
     "members",
     "leave",
   ],
-  "leaveRow": "inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-legacy-sm font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none rounded-lg px-4 bg-panel text-fg border border-border hover:bg-panel-2 w-full !justify-start gap-3 text-left text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+  "leaveRow": "inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none rounded-lg px-4 bg-panel text-fg border border-border hover:bg-panel-2 w-full !justify-start gap-3 text-left text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
   "member": [
     "hero",
     "tabs",

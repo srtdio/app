@@ -168,9 +168,7 @@ function quoteLines(
         <span
           className={cn(
             'line-clamp-1 [overflow-wrap:anywhere]',
-            inBubble !== undefined
-              ? sized(QUOTE_AUTHOR_TYPE, inBubble)
-              : 'text-legacy-xs font-medium',
+            inBubble !== undefined ? sized(QUOTE_AUTHOR_TYPE, inBubble) : 'text-sm font-medium',
             tone === 'warn' ? 'text-warn' : 'text-accent',
           )}
         >
@@ -181,7 +179,7 @@ function quoteLines(
           className={cn(
             // A media line is one row whose label ellipsizes; text clamps to two.
             label ? 'flex min-w-0' : 'line-clamp-2 [overflow-wrap:anywhere]',
-            inBubble !== undefined ? sized(QUOTE_TEXT_TYPE, inBubble) : 'text-legacy-xs',
+            inBubble !== undefined ? sized(QUOTE_TEXT_TYPE, inBubble) : 'text-sm',
             deleted ? 'italic text-fg-3' : 'text-fg-2',
           )}
         >

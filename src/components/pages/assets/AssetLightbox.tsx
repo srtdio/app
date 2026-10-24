@@ -165,8 +165,8 @@ export function viewerName(items: readonly AssetListItem[], asset: AssetListItem
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-[11px] uppercase tracking-wide text-fg-3">{label}</dt>
-      <dd className="text-legacy-sm text-fg break-words">{value}</dd>
+      <dt className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{label}</dt>
+      <dd className="text-base text-fg break-words">{value}</dd>
     </div>
   );
 }
@@ -486,10 +486,10 @@ export function AssetLightbox({
           <IconX size={20} />
         </button>
         <div className="min-w-0 flex-1 px-1 text-center">
-          <p className="truncate text-legacy-sm font-medium">
+          <p className="truncate text-base font-medium">
             <Highlight text={name} />
           </p>
-          <p className="truncate text-legacy-xs tabular-nums text-overlay-fg-dim">
+          <p className="truncate text-sm tabular-nums text-overlay-fg-dim">
             {lightboxSubtitle(typeLabel(kind), item.sizeBytes, index, items.length)}
           </p>
         </div>
@@ -537,19 +537,19 @@ export function AssetLightbox({
             data-file-card=""
             className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl"
           >
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-legacy-sm font-semibold tracking-wide text-fg-2">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold tracking-[0.06em] text-fg-2">
               {typeLabel(kind)}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-legacy-sm font-medium">
+              <p className="truncate text-base font-medium">
                 <Highlight text={name} />
               </p>
-              <p className="mt-1 text-legacy-xs text-fg-3">{humanizeSize(item.sizeBytes)}</p>
+              <p className="mt-1 text-sm text-fg-3">{humanizeSize(item.sizeBytes)}</p>
               {mediaFailed ? (
-                <p className="mt-1 text-legacy-xs text-fg-3">This asset could not be loaded.</p>
+                <p className="mt-1 text-sm text-fg-3">This asset could not be loaded.</p>
               ) : null}
               {openFailed ? (
-                <p role="status" className="mt-1 text-legacy-xs text-fg-3">
+                <p role="status" className="mt-1 text-sm text-fg-3">
                   {VIEWER_ERROR}
                 </p>
               ) : null}
@@ -588,7 +588,7 @@ export function AssetLightbox({
             className="relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t border-border bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"
           >
             <div className="flex items-center gap-2">
-              <h2 className="min-w-0 flex-1 truncate text-legacy-sm font-semibold">{name}</h2>
+              <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{name}</h2>
               <IconButton label="Close details" onClick={() => setInfoOpen(false)}>
                 <IconX size={20} />
               </IconButton>
@@ -596,7 +596,9 @@ export function AssetLightbox({
 
             <dl className="mt-3 flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
-                <dt className="text-[11px] uppercase tracking-wide text-fg-3">Name</dt>
+                <dt className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+                  Name
+                </dt>
                 {editingName ? (
                   <div className="mt-1 flex flex-col gap-2">
                     <Input
@@ -626,9 +628,7 @@ export function AssetLightbox({
                   </div>
                 ) : (
                   <dd className="flex items-center gap-1">
-                    <span className="min-w-0 flex-1 break-words text-legacy-sm text-fg">
-                      {name}
-                    </span>
+                    <span className="min-w-0 flex-1 break-words text-base text-fg">{name}</span>
                     {canRename ? (
                       <IconButton
                         type="button"

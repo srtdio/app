@@ -56,7 +56,7 @@ function RoleChange({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-legacy-sm text-fg-2">Role</span>
+        <span className="text-base text-fg-2">Role</span>
         <RolePicker
           label="Role"
           value={role}
@@ -77,7 +77,7 @@ function RoleChange({
         </Button>
       </div>
       {error !== null ? (
-        <p role="alert" className="text-legacy-xs text-bad">
+        <p role="alert" className="text-sm text-bad">
           {error}
         </p>
       ) : null}
@@ -104,13 +104,11 @@ export function MemberActionSheet({
               size="xl"
             />
             <div className="min-w-0">
-              <div className="truncate text-legacy-sm font-medium text-fg">
-                {member.displayName}
-              </div>
+              <div className="truncate text-base font-medium text-fg">{member.displayName}</div>
               {member.email !== null ? (
-                <div className="truncate text-legacy-xs text-fg-3">{member.email}</div>
+                <div className="truncate text-sm text-fg-3">{member.email}</div>
               ) : null}
-              <div className="mt-1 text-legacy-xs text-fg-2">{roleLabel(member.role)}</div>
+              <div className="mt-1 text-sm text-fg-2">{roleLabel(member.role)}</div>
             </div>
           </div>
           {canChangeMemberRole(member, canManage) ? (

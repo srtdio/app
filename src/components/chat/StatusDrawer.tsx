@@ -138,11 +138,10 @@ export interface StatusDrawerActions {
 
 const ROW =
   'flex min-h-[44px] w-full items-center gap-3 rounded-lg py-1 text-left transition-colors active:bg-panel-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
-const DATE_COL = 'w-12 shrink-0 font-mono text-legacy-xs leading-4 tabular-nums text-fg-3';
-const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-legacy-sm leading-5 text-fg';
-const ROW_SUB = 'block truncate text-legacy-xs leading-4 text-fg-3';
-const PILL =
-  'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold leading-4';
+const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
+const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
+const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
+const PILL = 'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-4';
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
@@ -168,7 +167,7 @@ function SeeAllRow(props: { total: number; onClick: () => void; attr: string }):
       type="button"
       data-see-all={props.attr}
       onClick={props.onClick}
-      className={cn(ROW, 'text-legacy-sm font-medium text-accent')}
+      className={cn(ROW, 'text-base font-medium text-accent')}
     >
       <span className="min-w-0 flex-1">{`See all ${props.total}`}</span>
       <Chevron />
@@ -185,10 +184,10 @@ function SectionHeader(props: {
   return (
     <div className="mb-2 flex h-5 items-center gap-2 text-fg-2">
       <Icon size={16} className="shrink-0" />
-      <h3 className="min-w-0 flex-1 truncate text-legacy-xs font-semibold uppercase leading-4 tracking-wide">
+      <h3 className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-[0.06em]">
         {props.label}
       </h3>
-      <span className="font-mono text-legacy-xs font-semibold tabular-nums">{props.count}</span>
+      <span className="font-mono text-sm font-medium tabular-nums">{props.count}</span>
     </div>
   );
 }
@@ -308,7 +307,7 @@ export function PlanBlock(props: {
     >
       <button type="button" data-plan-open="" onClick={props.onOpen} className={ROW}>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-semibold leading-5 text-fg">
+          <span className="block truncate text-lg font-semibold leading-5 text-fg">
             {bundle.plan.title}
           </span>
           <span className={ROW_SUB}>
@@ -329,9 +328,7 @@ export function PlanBlock(props: {
           );
         })}
       </div>
-      <p className="mb-1 mt-2 text-legacy-xs leading-4 text-fg-2">
-        {progressLabel(progress, side)}
-      </p>
+      <p className="mb-1 mt-2 text-sm leading-4 text-fg-2">{progressLabel(progress, side)}</p>
       {rows.map((item) => {
         const seg = itemSegment(bundle, item, side);
         const date = itemDateLabel(bundle, item);
@@ -441,7 +438,7 @@ export function StatusMarkRow(props: {
           data-mark-confirm="resolve"
           className="mb-1 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2"
         >
-          <span className="min-w-0 flex-1 text-legacy-sm text-fg">
+          <span className="min-w-0 flex-1 text-base text-fg">
             {markConfirmCopy(mark.type, 'resolve')}
           </span>
           <Button variant="ghost" disabled={props.busy} onClick={props.onCancel}>

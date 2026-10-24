@@ -10,7 +10,7 @@ import { useSession } from '@/lib/session-context';
 function SessionLoading() {
   return (
     <div className="min-h-full w-full grid place-items-center bg-bg">
-      <span className="text-legacy-sm text-fg-3">Loading</span>
+      <span className="text-base text-fg-3">Loading</span>
     </div>
   );
 }

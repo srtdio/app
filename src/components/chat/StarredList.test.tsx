@@ -124,11 +124,11 @@ describe('StarredRowView', () => {
 
   it('a 16px panel card: 28px avatar, Sender › Chat, mono date, chevron, peer bubble on panel-2', () => {
     const out = html(<ul>{StarredRowView(base)}</ul>);
-    expect(out).toContain('rounded-[16px] border border-border bg-panel');
+    expect(out).toContain('rounded-2xl border border-border bg-panel');
     expect(out).toContain('h-7 w-7');
     expect(out).toContain('Chitra');
     expect(out).toContain('›  Diwali shoot');
-    expect(out).toContain('font-mono text-legacy-xs tabular-nums text-fg-3');
+    expect(out).toContain('font-mono text-sm tabular-nums text-fg-3');
     expect(out).toContain('data-starred-bubble="peer"');
     expect(out).toContain('bg-panel-2 text-fg');
     expect(out).toContain('line-clamp-3');

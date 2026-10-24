@@ -717,7 +717,7 @@ describe('first paint', () => {
 
   it('the duration is Inter 12px medium tabular; Transcribe semibold with a 44px hit area', () => {
     const html = render('fp-type');
-    expect(html).toMatch(/data-voice-foot=""[^>]*text-legacy-xs leading-4/);
+    expect(html).toMatch(/data-voice-foot=""[^>]*text-sm leading-4/);
     expect(html).toContain('data-voice-duration="" class="font-medium tabular-nums"');
     expect(html).toMatch(
       /data-voice-link="transcribe"[^>]*class="shrink-0 rounded-sm font-semibold relative after:absolute after:inset-x-0 after:-inset-y-3\.5/,
@@ -744,9 +744,7 @@ describe('first paint', () => {
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('>Hide text</button>');
     expect(html).toMatch(/data-voice-transcript="open" class="grid [^"]*visible grid-rows-\[1fr\]/);
-    expect(html).toMatch(
-      /select-text[^"]*rounded-\[14px\][^"]*text-\[15px\] leading-\[21px\] bg-panel-3 text-fg/,
-    );
+    expect(html).toMatch(/select-text[^"]*rounded-\[14px\][^"]*text-lg bg-panel-3 text-fg/);
     expect(html).toContain('नमस्ते, see you at 5');
     expect(html.indexOf('data-voice-transcript')).toBeGreaterThan(html.indexOf('data-voice-foot'));
   });

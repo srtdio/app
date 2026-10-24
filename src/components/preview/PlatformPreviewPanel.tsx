@@ -149,7 +149,7 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
         )}
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-2">
-          <h2 className="text-[15px] font-semibold">{title}</h2>
+          <h2 className="text-lg font-semibold">{title}</h2>
           <div ref={closeRef} className="ml-auto">
             <IconButton label="Close preview" onClick={onClose}>
               <IconX />
@@ -254,18 +254,16 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
       <div className="flex flex-col gap-3">
         <div className="flex min-h-[44px] items-center gap-2 rounded-md border border-border bg-panel-2 px-3 py-2">
           <IconFile size={16} />
-          <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg">
-            {firstMedia?.filename}
-          </span>
+          <span className="min-w-0 flex-1 truncate text-base text-fg">{firstMedia?.filename}</span>
         </div>
-        <p className="text-[13px] text-fg-2">
+        <p className="text-base text-fg-2">
           {spec?.documentNote ?? 'Document pages are shown as-is, with no crop.'}
         </p>
       </div>
     );
   }
 
-  if (size === null) return <p className="text-legacy-sm text-fg-2">No preview.</p>;
+  if (size === null) return <p className="text-base text-fg-2">No preview.</p>;
 
   // Shorts with an image: the same "Shorts are video only." line the post page shows.
   const note =
@@ -301,7 +299,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
       {sizes.length > 0 ? (
         <SizePicker sizes={sizes} value={size.label} onChange={setLabel} />
       ) : null}
-      {note !== undefined ? <p className="text-[13px] text-fg-3">{note}</p> : null}
+      {note !== undefined ? <p className="text-base text-fg-2">{note}</p> : null}
 
       <LayoutMock
         size={size}
@@ -343,8 +341,8 @@ function SizePicker({
                 : 'border-border bg-panel-2 text-fg-2 hover:bg-panel-3',
             )}
           >
-            <span className="text-legacy-sm font-semibold">{size.label}</span>
-            <span className="text-[11px] text-fg-3">{sizeMeta(size)}</span>
+            <span className="text-base font-medium">{size.label}</span>
+            <span className="text-sm text-fg-3">{sizeMeta(size)}</span>
           </button>
         );
       })}
@@ -378,12 +376,12 @@ function LayoutMock({
   const ratio = frameRatio(size);
   const initial = handle.trim().charAt(0).toUpperCase() || '?';
   const avatar = (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-legacy-xs font-semibold text-accent-fg">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg">
       {initial}
     </span>
   );
   const placeholder = (
-    <span className="flex h-full w-full items-center justify-center text-[13px] text-fg-3">
+    <span className="flex h-full w-full items-center justify-center text-sm text-fg-3">
       {hasMedia ? 'Loading' : 'No media yet'}
     </span>
   );
@@ -398,7 +396,7 @@ function LayoutMock({
       >
         <div className="flex items-center gap-2 px-3 py-2">
           {avatar}
-          <span className="truncate text-legacy-sm font-semibold text-fg">{handle}</span>
+          <span className="truncate text-base font-semibold text-fg">{handle}</span>
         </div>
         <div
           data-mock-fit={feedLetterbox ? 'contain' : 'cover'}
@@ -414,7 +412,7 @@ function LayoutMock({
         </div>
         {caption !== '' ? (
           <figcaption
-            className="px-3 py-2 text-legacy-sm text-fg [overflow-wrap:anywhere]"
+            className="px-3 py-2 text-base text-fg [overflow-wrap:anywhere]"
             style={clampStyle(captionClampLines(size))}
           >
             <span className="font-semibold">{handle}</span> {caption}
@@ -454,18 +452,18 @@ function LayoutMock({
           <span className="h-0.5 w-full rounded-full bg-white/60" />
           <span className="flex items-center gap-2">
             {avatar}
-            <span className="truncate text-legacy-sm font-semibold text-white">{handle}</span>
+            <span className="truncate text-base font-semibold text-white">{handle}</span>
           </span>
         </div>
       ) : (
         <figcaption className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/70 to-transparent p-3 pt-10 text-white">
           <span className="flex items-center gap-2">
             {avatar}
-            <span className="truncate text-legacy-sm font-semibold">{handle}</span>
+            <span className="truncate text-base font-semibold">{handle}</span>
           </span>
           {caption !== '' ? (
             <span
-              className="text-[13px] [overflow-wrap:anywhere]"
+              className="text-md [overflow-wrap:anywhere]"
               style={clampStyle(captionClampLines(size))}
             >
               {caption}
@@ -488,12 +486,12 @@ function CropBox({
   media: ReactNode;
 }): ReactElement {
   if (dims === null) {
-    return <p className="text-[13px] text-fg-3">Measuring the original.</p>;
+    return <p className="text-sm text-fg-3">Measuring the original.</p>;
   }
   const result = cropFor(dims, size);
   return (
     <section aria-label="Crop" className="flex flex-col gap-2">
-      <h3 className="text-[13px] font-semibold text-fg-2">
+      <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
         Original · {dims.w} x {dims.h}
       </h3>
       <div
@@ -503,7 +501,7 @@ function CropBox({
         {media}
         <ShownWindow window={result.window} />
       </div>
-      <p className="text-legacy-sm text-fg">{cropLine(result)}</p>
+      <p className="text-base text-fg">{cropLine(result)}</p>
     </section>
   );
 }
@@ -515,7 +513,7 @@ function ShownWindow({ window: win }: { window: CropWindow }): ReactElement {
       className="absolute rounded-sm border-2 border-accent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
       style={{ left: pct(win.x), top: pct(win.y), width: pct(win.w), height: pct(win.h) }}
     >
-      <span className="absolute left-1 top-1 rounded bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-accent-fg">
+      <span className="absolute left-1 top-1 rounded bg-accent px-1.5 py-0.5 text-xs font-semibold text-accent-fg">
         Shown
       </span>
     </div>

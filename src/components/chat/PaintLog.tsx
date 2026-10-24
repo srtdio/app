@@ -243,7 +243,7 @@ function PaintLogPanel(): ReactElement {
       className="fixed inset-x-2 bottom-2 z-[70] flex flex-col overflow-hidden rounded-lg border border-border bg-panel text-fg shadow-lg"
     >
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2">
-        <span className="flex-1 truncate text-legacy-xs font-semibold text-fg-2">
+        <span className="flex-1 truncate text-sm font-semibold text-fg-2">
           {`Paint log (${entries.length})`}
         </span>
         <Button
@@ -267,13 +267,10 @@ function PaintLogPanel(): ReactElement {
           readOnly
           value={text()}
           onFocus={(e) => e.currentTarget.select()}
-          className="h-[30vh] w-full resize-none bg-panel-2 p-2 font-mono text-[11px] leading-4 text-fg"
+          className="h-[30vh] w-full resize-none bg-panel-2 p-2 font-mono text-xs leading-4 text-fg"
         />
       ) : open ? (
-        <ol
-          ref={listRef}
-          className="max-h-[30vh] overflow-y-auto p-2 font-mono text-[11px] leading-4"
-        >
+        <ol ref={listRef} className="max-h-[30vh] overflow-y-auto p-2 font-mono text-xs leading-4">
           {entries.map((e, i) => (
             <li key={i} className="whitespace-pre-wrap break-all">
               <span className="text-fg-3">{e.at.toFixed(1)}</span> {e.what}

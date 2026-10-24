@@ -79,6 +79,8 @@ export default {
         xl: ['17px', '22px'],
         '2xl': ['20px', '26px'],
         '3xl': ['28px', '34px'],
+        // Inputs below md: 16px so iOS never zooms on focus (md:text-base above).
+        input: ['16px', '22px'],
         'legacy-xs': ['12px', '16px'],
         'legacy-sm': ['14px', '20px'],
         'legacy-base': ['16px', '24px'],

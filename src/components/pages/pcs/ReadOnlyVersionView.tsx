@@ -49,7 +49,7 @@ export function ReadOnlyVersionView({
       <div
         role="status"
         data-version-banner=""
-        className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-panel-2 px-4 py-3 text-legacy-sm text-fg-2"
+        className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-panel-2 px-4 py-3 text-base text-fg-2"
       >
         <span className="font-medium text-fg">Versions can&apos;t be changed</span>
         <span aria-hidden>·</span>
@@ -60,7 +60,9 @@ export function ReadOnlyVersionView({
       </div>
 
       <section>
-        <div className="text-legacy-xs font-medium text-fg-3 mb-2">Gallery</div>
+        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+          Gallery
+        </div>
         {showPictures && thumbs !== undefined ? (
           <SnapshotThumbs
             items={snapshotItems(galleryVersionIds, thumbs.gallery)}
@@ -70,18 +72,20 @@ export function ReadOnlyVersionView({
             size="lg"
           />
         ) : (
-          <div className="rounded-lg border border-border bg-panel-2 px-4 py-6 text-center text-legacy-sm text-fg-3">
+          <div className="rounded-lg border border-border bg-panel-2 px-4 py-6 text-center text-base text-fg-3">
             {imageCountLabel(imageCount)}
           </div>
         )}
       </section>
 
       <section>
-        <div className="text-legacy-xs font-medium text-fg-3 mb-2">Caption</div>
+        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+          Caption
+        </div>
         {hasCaption ? (
-          <p className="whitespace-pre-wrap text-legacy-sm text-fg">{caption}</p>
+          <p className="whitespace-pre-wrap text-base text-fg">{caption}</p>
         ) : (
-          <p className="text-legacy-sm text-fg-3">No caption in this version.</p>
+          <p className="text-base text-fg-3">No caption in this version.</p>
         )}
       </section>
     </div>

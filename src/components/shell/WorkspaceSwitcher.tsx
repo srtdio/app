@@ -306,7 +306,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         className="flex w-full max-w-[420px] max-h-[84vh] flex-col overflow-hidden rounded-xl border border-border-strong bg-panel shadow-2xl outline-none"
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-[15px]">
-          <h2 className="text-[15px] font-semibold">{title}</h2>
+          <h2 className="text-lg font-semibold">{title}</h2>
           <span className="ml-auto">
             <IconButton label="Close" onClick={requestClose}>
               <IconX />
@@ -317,11 +317,11 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         {mode === 'list' ? (
           <div className="flex flex-col overflow-y-auto p-1.5">
             {loading ? (
-              <p className="px-3 py-4 text-legacy-sm text-fg-3">Loading workspaces...</p>
+              <p className="px-3 py-4 text-base text-fg-3">Loading workspaces...</p>
             ) : error !== null ? (
-              <p className="px-3 py-4 text-legacy-sm text-bad">{error}</p>
+              <p className="px-3 py-4 text-base text-bad">{error}</p>
             ) : workspaces.length === 0 ? (
-              <p className="px-3 py-4 text-legacy-sm text-fg-3">No workspaces yet.</p>
+              <p className="px-3 py-4 text-base text-fg-3">No workspaces yet.</p>
             ) : (
               workspaces.map((ws) => {
                 const isActive = ws.id === workspaceId;
@@ -337,7 +337,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                     )}
                   >
                     <Avatar name={ws.name} size="lg" />
-                    <span className="flex-1 truncate text-legacy-sm font-medium text-fg">
+                    <span className="flex-1 truncate text-base font-medium text-fg">
                       {workspaceDisplayName(ws)}
                     </span>
                     {isActive ? <IconCheck size={18} className="shrink-0 text-accent" /> : null}
@@ -356,17 +356,14 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                 setPlatform(null);
                 setMode('create');
               }}
-              className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-legacy-sm font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-2"
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-base font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-2"
             >
               <IconPlus size={18} className="shrink-0 text-fg-3" />
               <span>Create workspace</span>
             </button>
             {createBlocked ? (
               <>
-                <p
-                  id="workspace-limit-note"
-                  className="px-3 pb-2 text-[13px] leading-snug text-fg-3"
-                >
+                <p id="workspace-limit-note" className="px-3 pb-2 text-base leading-snug text-fg-2">
                   {WORKSPACE_LIMIT_MESSAGE}
                 </p>
                 <SupportRows
@@ -379,7 +376,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         ) : mode === 'create' ? (
           <form onSubmit={submitDetails} className="flex flex-col gap-4 overflow-y-auto p-[18px]">
             {deletedWorkspace !== null ? (
-              <p className="text-[13px] leading-snug text-fg-3">
+              <p className="text-base leading-snug text-fg-2">
                 {deletedWorkspace.name} is gone. Start a new one.
               </p>
             ) : null}
@@ -393,7 +390,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               />
             </Field>
             <div>
-              <p id="workspace-platform-label" className="mb-1.5 block text-legacy-sm font-medium">
+              <p id="workspace-platform-label" className="mb-1.5 block text-base font-medium">
                 Platform<span className="ml-0.5 text-bad">*</span>
               </p>
               <div
@@ -411,7 +408,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                       aria-checked={selected}
                       onClick={() => setPlatform(value)}
                       className={cn(
-                        'flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-lg border px-3 text-left text-legacy-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                        'flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-lg border px-3 text-left text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                         selected
                           ? 'border-accent bg-accent-soft text-accent'
                           : 'border-border text-fg-2 hover:bg-panel-2 hover:text-fg',
@@ -425,12 +422,12 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               </div>
             </div>
             {preview !== null ? (
-              <p className="text-[13px] leading-snug text-fg-3">
+              <p className="text-base leading-snug text-fg-2">
                 Shown as <span className="font-medium text-fg">{preview}</span>. The chat group
                 takes the same name.
               </p>
             ) : null}
-            {formError !== null ? <p className="text-legacy-sm text-bad">{formError}</p> : null}
+            {formError !== null ? <p className="text-base text-bad">{formError}</p> : null}
             <div className="flex items-center justify-end gap-2.5">
               <Button
                 type="button"
@@ -469,12 +466,12 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
           </form>
         ) : (
           <div className="flex flex-col gap-4 p-[18px]">
-            <p className="text-legacy-sm leading-relaxed text-fg-2">
+            <p className="text-base leading-relaxed text-fg-2">
               Check the spelling: <span className="font-semibold text-fg">{preview}</span>{' '}
               can&apos;t be changed later. To change it, you delete this workspace and create a new
               one.
             </p>
-            {formError !== null ? <p className="text-legacy-sm text-bad">{formError}</p> : null}
+            {formError !== null ? <p className="text-base text-bad">{formError}</p> : null}
             <div className="flex items-center justify-end gap-2.5">
               <Button
                 type="button"

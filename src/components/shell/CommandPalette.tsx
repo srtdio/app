@@ -306,7 +306,7 @@ export function namesNeeded(
 }
 
 const ROW =
-  'flex w-full items-center min-h-[44px] px-2 rounded-md text-legacy-sm text-left transition-colors active:bg-accent-soft';
+  'flex w-full items-center min-h-[44px] px-2 rounded-md text-base text-left transition-colors active:bg-accent-soft';
 
 /** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
 const ACTIVE_ROW = 'bg-accent-soft text-fg';
@@ -331,7 +331,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
   let status: ReactNode = null;
   if (ready && search.status === 'loading') {
     status = (
-      <div data-palette-state="loading" className="px-4 py-3 text-legacy-sm text-fg-3">
+      <div data-palette-state="loading" className="px-4 py-3 text-base text-fg-3">
         Searching…
       </div>
     );
@@ -339,7 +339,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
     status = (
       <div
         data-palette-state="error"
-        className="flex items-center justify-between gap-3 px-4 text-legacy-sm text-fg-2"
+        className="flex items-center justify-between gap-3 px-4 text-base text-fg-2"
       >
         <span className="truncate">{SEARCH_FAILED_COPY}</span>
         <Button type="button" variant="link" data-palette-retry="" onClick={props.onRetry}>
@@ -349,7 +349,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
     );
   } else if (ready && search.status === 'ready' && hits === 0) {
     status = (
-      <div data-palette-state="empty" className="px-4 py-6 text-center text-legacy-sm text-fg-3">
+      <div data-palette-state="empty" className="px-4 py-6 text-center text-base text-fg-3">
         {emptyCopy(props.query)}
       </div>
     );
@@ -364,7 +364,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           data-palette-group={section.label}
           className="px-2 pb-1"
         >
-          <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-fg-3">
+          <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
             {section.label}
           </div>
           {section.items.map((item) => {
@@ -399,7 +399,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                   className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
                 >
                   <span className="min-w-0 truncate font-medium text-fg">{item.title}</span>
-                  <span className="truncate text-legacy-xs text-fg-3">{item.typeLabel}</span>
+                  <span className="truncate text-sm text-fg-3">{item.typeLabel}</span>
                 </button>
               );
             }
@@ -414,11 +414,11 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                     {highlightNodes(item.title, words)}
                   </span>
                   {item.time !== '' ? (
-                    <span className="shrink-0 text-legacy-xs text-fg-3">{item.time}</span>
+                    <span className="shrink-0 text-sm text-fg-3">{item.time}</span>
                   ) : null}
                 </span>
                 {item.snippet !== '' ? (
-                  <span className="truncate text-legacy-xs text-fg-3">
+                  <span className="truncate text-sm text-fg-3">
                     {highlightNodes(item.snippet, words)}
                   </span>
                 ) : null}
@@ -682,7 +682,7 @@ export function CommandPalette({
             placeholder="Search anything"
             aria-label="Search this workspace"
             enterKeyHint="search"
-            className="flex-1 min-w-0 h-12 bg-transparent outline-none text-legacy-base sm:text-legacy-sm placeholder:text-fg-3"
+            className="flex-1 min-w-0 h-12 bg-transparent outline-none text-input sm:text-base placeholder:text-fg-3"
           />
           {query !== '' ? (
             <IconButton
@@ -700,7 +700,7 @@ export function CommandPalette({
               <IconX size={16} />
             </IconButton>
           ) : null}
-          <kbd className="hidden sm:inline text-[11px] text-fg-3 border border-border rounded px-1.5 py-0.5">
+          <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1.5 py-0.5">
             Esc
           </kbd>
           <Button

@@ -599,7 +599,7 @@ export function MenuRow(props: {
         role="menuitem"
         aria-disabled="true"
         data-menu-note={item.key}
-        className={cn(MENU_ROW, 'text-[15px] text-fg-3')}
+        className={cn(MENU_ROW, 'text-lg text-fg-3')}
       >
         <span className="flex w-[22px] shrink-0 justify-center">{item.icon}</span>
         <span className="min-w-0">{item.label}</span>
@@ -623,7 +623,7 @@ export function MenuRow(props: {
       onClick={() => props.onRun(item)}
       className={cn(
         MENU_ROW,
-        'text-left text-[16px] transition-colors',
+        'text-left text-lg transition-colors',
         'hover:bg-panel-2 focus:outline-none focus-visible:bg-panel-2',
         item.danger === true ? 'text-bad' : 'text-fg',
       )}
@@ -634,13 +634,13 @@ export function MenuRow(props: {
       <span className="min-w-0 flex-1 truncate">
         {item.label}
         {item.mono !== undefined ? (
-          <span data-menu-mono="" className="font-mono text-[13px] tabular-nums">
+          <span data-menu-mono="" className="font-mono text-md tabular-nums">
             {item.mono}
           </span>
         ) : null}
       </span>
       {item.hint !== undefined ? (
-        <span className="shrink-0 text-[13px] text-fg-3">{item.hint}</span>
+        <span className="shrink-0 text-md text-fg-3">{item.hint}</span>
       ) : null}
       {item.submenu === true && item.key !== 'back' ? (
         <span className="shrink-0 text-fg-3">
@@ -763,7 +763,7 @@ export function ReactionsRow(props: {
           {...(reactionsOnly ? { 'data-menu-item': `react-${emoji}` } : {})}
           onClick={() => props.onReact(emoji)}
           className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-legacy-xl hover:bg-panel-2',
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl hover:bg-panel-2',
             emoji === currentReaction && 'bg-panel-3',
           )}
         >
@@ -958,7 +958,7 @@ export function EmojiPickerLoadFailed(props: { onRetry: () => void }): ReactElem
       data-emoji-failed=""
       className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center"
     >
-      <p className="text-legacy-sm text-fg-3">{EMOJI_LOAD_FAILED}</p>
+      <p className="text-base text-fg-3">{EMOJI_LOAD_FAILED}</p>
       <Button type="button" data-emoji-retry="" className="min-w-[44px]" onClick={props.onRetry}>
         Try again
       </Button>

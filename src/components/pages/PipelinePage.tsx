@@ -373,7 +373,7 @@ function skeletonCard(index: number, ratio: number | null): ReactElement {
         {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
       />
       <div className="flex flex-col gap-1.5 p-3">
-        <div className="flex min-h-[2.75em] flex-col justify-center gap-1.5 text-legacy-sm leading-snug">
+        <div className="flex min-h-[2.75em] flex-col justify-center gap-1.5 text-base leading-snug">
           <div className="h-3.5 w-3/4 rounded bg-panel-3" />
           <div className="h-3.5 w-1/2 rounded bg-panel-3" />
         </div>
@@ -594,10 +594,7 @@ export function undatedHiddenLine(label: string, count: number): string {
 export function undatedHint(label: string, count: number, onShow: () => void): ReactElement | null {
   if (count <= 0) return null;
   return (
-    <p
-      data-undated-hint=""
-      className="flex flex-wrap items-center gap-x-2 text-legacy-sm text-fg-2"
-    >
+    <p data-undated-hint="" className="flex flex-wrap items-center gap-x-2 text-base text-fg-2">
       <IconCalendar size={15} className="shrink-0 text-fg-3" />
       <span>{undatedHiddenLine(label, count)}</span>
       <Button
@@ -1124,7 +1121,7 @@ export function PipelinePage() {
           date filter hides with "Show them". */}
       {narrowed && !boardLoading && !postsFailed ? (
         <div className="flex flex-col gap-1 px-4 pt-3 md:px-6">
-          <span data-posts-count="" className="text-legacy-sm text-fg-3">
+          <span data-posts-count="" className="text-base text-fg-3">
             {countLabel}
           </span>
           {undatedHint(dateChipLabel(query), hiddenUndated, () => setUndatedShownFor(dateKey))}

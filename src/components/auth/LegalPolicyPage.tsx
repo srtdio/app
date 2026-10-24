@@ -12,7 +12,7 @@ const policies = {
 
 function PrivacyPolicyContent() {
   return (
-    <div className="space-y-6 text-legacy-sm leading-6 text-fg-2">
+    <div className="space-y-6 text-base leading-6 text-fg-2">
       <p>Last Updated: 08 Oct 2026</p>
       <p>
         This Privacy Policy explains how we collect, use, share and protect your personal data when
@@ -26,7 +26,7 @@ function PrivacyPolicyContent() {
       </p>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">1. What we collect</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">1. What we collect</h2>
         <div className="space-y-4">
           <p>
             <strong className="font-medium text-fg">a) Account details you give us:</strong> Name
@@ -65,9 +65,7 @@ function PrivacyPolicyContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">
-          3. What we don&apos;t collect
-        </h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">3. What we don&apos;t collect</h2>
         <ul className="list-disc pl-6">
           <li>
             We don&apos;t ask for your social media account passwords. We do not see or store your
@@ -78,9 +76,7 @@ function PrivacyPolicyContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">
-          4. Cookies and local storage
-        </h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">4. Cookies and local storage</h2>
         <p>
           We use only what the app needs to work: keeping you signed in (session tokens in your
           browser storage or cookies), remembering preferences such as the active workspace, and
@@ -89,7 +85,7 @@ function PrivacyPolicyContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">5. How we use your data</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">5. How we use your data</h2>
         <ul className="list-disc space-y-1 pl-6">
           <li>To create your account, sign you in and keep it secure.</li>
           <li>
@@ -112,7 +108,7 @@ function PrivacyPolicyContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">6. Who we share data with</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">6. Who we share data with</h2>
         <p className="mb-3">
           We share data only with service providers who help us run Sorted, and only as needed:
         </p>
@@ -140,7 +136,7 @@ function PrivacyPolicyContent() {
         </ul>
       </section>
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">7. How to contact Us</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">7. How to contact Us</h2>
         <p className="mb-3">
           If you have questions or concerns about this Privacy Policy, please contact us at{' '}
           <a
@@ -157,7 +153,7 @@ function PrivacyPolicyContent() {
 
 function TermsAndConditionsContent() {
   return (
-    <div className="space-y-6 text-legacy-sm leading-6 text-fg-2">
+    <div className="space-y-6 text-base leading-6 text-fg-2">
       <p>Last Updated: 08 Oct 2026</p>
       <p>
         These Terms and Conditions govern your use of srtd.io and the Sorted platform. By creating
@@ -165,7 +161,7 @@ function TermsAndConditionsContent() {
       </p>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">1. Acceptance of terms</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">1. Acceptance of terms</h2>
         <p>
           By accessing or using the Service, you confirm that you are at least 18 years old and have
           the authority to enter into this agreement on behalf of your organization, if applicable.
@@ -173,7 +169,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">2. Account responsibilities</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">2. Account responsibilities</h2>
         <ul className="list-disc space-y-1 pl-6">
           <li>You are responsible for the accuracy of the information you provide.</li>
           <li>
@@ -185,7 +181,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">3. Use of the platform</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">3. Use of the platform</h2>
         <p>
           You may use the Service only for lawful business purposes and in accordance with the
           project&apos;s rules, workspace policies, and any applicable regulations.
@@ -193,7 +189,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">4. Content and workflow</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">4. Content and workflow</h2>
         <p>
           Users may create, upload, edit, review, and approve content within their assigned
           workspace. You remain responsible for the content you submit and any approvals or
@@ -202,9 +198,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">
-          5. Subscription and payments
-        </h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">5. Subscription and payments</h2>
         <p>
           Certain features may require a paid plan or subscription. Fees, billing periods, and
           payment terms will be disclosed before you confirm your purchase.
@@ -212,7 +206,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">6. Intellectual property</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">6. Intellectual property</h2>
         <p>
           You retain ownership of the content you upload to the platform, subject to the rights and
           permissions granted to us for hosting, processing, and delivering the Service.
@@ -220,7 +214,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">7. Limitation of liability</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">7. Limitation of liability</h2>
         <p>
           We do not guarantee uninterrupted service and are not liable for indirect, incidental, or
           consequential losses arising from the use of the Service, except where required by law.
@@ -228,7 +222,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">8. Termination</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">8. Termination</h2>
         <p>
           We may suspend or terminate access to the Service if you violate these terms, misuse the
           platform, or create unacceptable risk for other users or the service itself.
@@ -236,7 +230,7 @@ function TermsAndConditionsContent() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-legacy-base font-semibold text-fg">9. Contact</h2>
+        <h2 className="mb-2 text-lg font-semibold text-fg">9. Contact</h2>
         <p>
           For questions regarding these terms, contact us at{' '}
           <a

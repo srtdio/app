@@ -30,7 +30,7 @@ export function BriefStatusPill({ status }: { status: string }): ReactElement {
   return (
     <span
       data-brief-status={closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open}
-      className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-legacy-xs font-medium ${
+      className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-sm font-medium ${
         closed ? 'bg-panel-3 text-fg-2' : 'bg-accent-soft text-accent'
       }`}
     >
@@ -128,16 +128,14 @@ export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps
         <div className="flex min-w-0 items-start gap-3">
           <span
             aria-hidden="true"
-            className="min-w-0 flex-1 break-words text-legacy-sm font-medium leading-snug line-clamp-2 text-fg"
+            className="min-w-0 flex-1 break-words text-base font-medium leading-snug line-clamp-2 text-fg"
           >
             {brief.title}
           </span>
           <BriefStatusPill status={brief.status} />
         </div>
 
-        <p className="min-w-0 break-words text-legacy-sm text-fg-3 line-clamp-2">
-          {brief.objective}
-        </p>
+        <p className="min-w-0 break-words text-base text-fg-2 line-clamp-2">{brief.objective}</p>
 
         {/* Above the card link, so a tap follows this link only. */}
         {link !== null ? (
@@ -148,7 +146,7 @@ export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps
         ) : null}
 
         {brief.target_date !== null ? (
-          <div className="text-legacy-xs text-fg-3">
+          <div className="text-sm text-fg-3">
             <span className="tabular-nums">{briefDueLabel(brief.target_date)}</span>
           </div>
         ) : null}

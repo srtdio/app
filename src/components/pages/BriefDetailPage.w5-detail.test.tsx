@@ -746,7 +746,7 @@ describe('Brief detail polish', () => {
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
     expect(line?.textContent).toBe('Open · Due 14 Aug');
     expect(line?.querySelector('[aria-hidden="true"]')?.className).toContain('h-[7px] w-[7px]');
-    expect(line?.querySelector('.text-\\[15px\\]')?.className).toContain('font-semibold');
+    expect(line?.querySelector('.text-lg')?.className).toContain('font-semibold');
     expect(line?.querySelector('[data-brief-due]')?.className ?? '').not.toContain('text-bad');
   });
 
@@ -798,7 +798,7 @@ describe('Brief detail polish', () => {
     await mount();
     const titles = document.querySelectorAll('h1');
     expect(titles).toHaveLength(1);
-    expect(titles[0]?.className).toContain('text-[28px]');
+    expect(titles[0]?.className).toContain('text-3xl');
     expect(titles[0]?.className).toContain('break-words');
     expect(titles[0]?.className).toContain('min-w-0');
   });

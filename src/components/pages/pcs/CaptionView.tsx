@@ -199,7 +199,7 @@ export function captionView({
         role="button"
         tabIndex={0}
         aria-label={`Comment on "${quote}"`}
-        className="rounded-[3px] bg-annotation-bg px-0.5 text-fg cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-annotation-line"
+        className="rounded-sm bg-annotation-bg px-0.5 text-fg cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-annotation-line"
         onClick={() => onHighlightClick(a.commentId)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -211,7 +211,7 @@ export function captionView({
         {quote}
         <sup
           {...{ [CAPTION_MARKER_ATTR]: '' }}
-          className="ml-0.5 align-super select-none text-[10px] font-semibold text-annotation-line"
+          className="ml-0.5 align-super select-none text-xs font-semibold text-annotation-line"
           style={{ userSelect: 'none' }}
         >
           {a.n}
@@ -263,7 +263,7 @@ export function CaptionView({
         ref={containerRef}
         onMouseUp={captureSelection}
         onTouchEnd={captureSelection}
-        className="text-legacy-sm leading-relaxed whitespace-pre-wrap break-words text-fg [overflow-wrap:anywhere]"
+        className="text-base leading-relaxed whitespace-pre-wrap break-words text-fg [overflow-wrap:anywhere]"
       >
         {captionView({ caption, annotations, onHighlightClick, searchWords })}
       </div>

@@ -101,7 +101,7 @@ export function PlanDayMenu(props: {
           pos === null && 'invisible',
         )}
       >
-        <p className="px-2.5 pb-1.5 pt-1 text-legacy-xs font-semibold text-fg-3">
+        <p className="px-2.5 pb-1.5 pt-1 text-sm font-semibold text-fg-3">
           {addOnLabel(props.day)}
         </p>
         {props.plans.map((bundle) => (
@@ -123,11 +123,11 @@ export function PlanDayMenu(props: {
             <span className="flex min-w-0 flex-1 flex-col">
               <span
                 data-plan-tab-menu-title=""
-                className="line-clamp-2 text-legacy-sm font-medium text-fg [overflow-wrap:anywhere]"
+                className="line-clamp-2 text-base font-medium text-fg [overflow-wrap:anywhere]"
               >
                 {bundle.plan.title}
               </span>
-              <span className="truncate font-mono text-legacy-xs text-fg-3">
+              <span className="truncate font-mono text-sm text-fg-3">
                 {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
               </span>
             </span>

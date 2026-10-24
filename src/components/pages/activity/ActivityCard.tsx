@@ -96,7 +96,7 @@ function mentionPreview(body: string, selfName: string | null, chat = false): Re
       : // A chat "@all" reached me too: bold, with the same accent as my own name.
         (chat ? splitAllMentions(seg.text) : [{ text: seg.text, all: false }]).map((run, j) =>
           run.all ? (
-            <span key={`a${i}-${j}`} data-mention-all="" className="font-bold text-accent">
+            <span key={`a${i}-${j}`} data-mention-all="" className="font-semibold text-accent">
               {run.text}
             </span>
           ) : (
@@ -244,7 +244,7 @@ function EntryAuthor({ entry }: { entry: ActivityItem }) {
         {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
         size="sm"
       />
-      <span className="truncate text-legacy-xs font-medium text-fg-3">{entry.actorName}</span>
+      <span className="truncate text-sm font-medium text-fg-3">{entry.actorName}</span>
     </div>
   );
 }
@@ -317,9 +317,9 @@ export function TextTile({
     <div data-activity-text-tile={eyebrow} className="flex h-full w-full flex-col p-3">
       <span className="flex items-center gap-1 text-fg-3">
         {icon}
-        <span className="text-[10px] font-semibold uppercase tracking-wide">{eyebrow}</span>
+        <span className="text-xs font-semibold uppercase tracking-[0.06em]">{eyebrow}</span>
       </span>
-      <p className="mt-auto line-clamp-3 text-legacy-xs leading-snug text-fg-2 [overflow-wrap:anywhere]">
+      <p className="mt-auto line-clamp-3 text-sm leading-snug text-fg-2 [overflow-wrap:anywhere]">
         {body}
       </p>
     </div>
@@ -342,7 +342,7 @@ function WelcomeTile({ name }: { name: string }): ReactElement {
       data-activity-welcome-tile=""
       aria-hidden="true"
       className={cn(
-        'flex aspect-square w-full items-center justify-center text-legacy-3xl font-semibold text-white',
+        'flex aspect-square w-full items-center justify-center text-3xl font-semibold text-white',
         avatarFillFor(name),
       )}
     >
@@ -387,7 +387,7 @@ function DeletedFilesTile({
       {extra > 0 ? (
         <span
           data-activity-files-badge=""
-          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-md bg-panel px-1.5 text-[11px] font-medium tabular-nums text-fg-2"
+          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-md bg-panel px-1.5 text-xs font-medium tabular-nums text-fg-2"
         >
           +{extra}
         </span>
@@ -539,7 +539,7 @@ export function ActivityCard({
                   size="sm"
                 />
               ) : null}
-              <span className="truncate text-legacy-xs font-medium text-fg-3">
+              <span className="truncate text-sm font-medium text-fg-3">
                 {alert !== null ? alertTopLine(lead, alert) : actorLine(actorEntry, actorName)}
               </span>
               {unread ? (
@@ -551,30 +551,30 @@ export function ActivityCard({
               ) : null}
             </div>
 
-            <p className="truncate text-[15px] font-semibold leading-[1.3] text-fg">
+            <p className="truncate text-base font-medium text-fg">
               {alert !== null ? <AlertTitle item={lead} alert={alert} side={side} /> : title}
             </p>
 
             {alertLine !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {alertLine}
               </p>
             ) : null}
 
             {showsBody ? (
-              <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {cardBodyLine(lead)}
               </p>
             ) : null}
 
             {filesBody !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {filesBody}
               </p>
             ) : null}
 
             {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {mentionPreview(lead.body, selfName, isChatMention(lead))}
               </p>
             ) : null}
@@ -637,16 +637,16 @@ export function ActivityCard({
 
         <div className="h-px bg-border" />
         <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
-          <span data-activity-time="" className="text-legacy-xs tabular-nums text-fg-3">
+          <span data-activity-time="" className="text-sm tabular-nums text-fg-3">
             {relativeTime(lead.createdAt, nowMs)}
           </span>
           {tag !== undefined ? (
-            <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
+            <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2">
               {tag}
             </span>
           ) : null}
           {snoozed ? (
-            <span className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-[11px] font-medium text-fg-2">
+            <span className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2">
               <IconClock size={12} inline />
               Snoozed
             </span>
@@ -702,16 +702,14 @@ export function ActivityCard({
                   <EntryAuthor entry={entry} />
                   <p
                     className={cn(
-                      'line-clamp-2 text-legacy-sm',
+                      'line-clamp-2 text-base',
                       entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
                     )}
                   >
                     {/* The author line above already names who: the text never repeats it. */}
                     {cardBodyLine(entry, { name: entry.actorName === null })}
                   </p>
-                  <p className="mt-0.5 text-legacy-xs text-fg-3">
-                    {relativeTime(entry.createdAt, nowMs)}
-                  </p>
+                  <p className="mt-0.5 text-sm text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
                 </div>
                 {entry.readAt === null ? (
                   <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" />
@@ -779,14 +777,12 @@ export function UpcomingCard({
         >
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center gap-[7px]">
-              <span data-upcoming-tag="" className="truncate text-legacy-xs font-medium text-fg-3">
+              <span data-upcoming-tag="" className="truncate text-sm font-medium text-fg-3">
                 {upcomingTag(item)}
               </span>
             </div>
-            <p className="truncate text-[15px] font-semibold leading-[1.3] text-fg">
-              {upcomingChat(item)}
-            </p>
-            <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+            <p className="truncate text-base font-medium text-fg">{upcomingChat(item)}</p>
+            <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
               {item.preview}
             </p>
           </div>
@@ -822,7 +818,7 @@ export function UpcomingCard({
 
         <div className="h-px bg-border" />
         <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
-          <span data-upcoming-due="" className="font-mono text-legacy-xs tabular-nums text-fg-3">
+          <span data-upcoming-due="" className="font-mono text-sm tabular-nums text-fg-3">
             {formatSendLabel(new Date(item.dueAt), now)}
           </span>
         </div>

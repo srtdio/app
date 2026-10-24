@@ -553,7 +553,7 @@ export function PlanPage(props: {
           <div data-plan-header-line="2" className="flex min-h-[44px] items-center gap-2">
             <span
               {...(props.subtitle !== undefined ? { 'data-plan-page-subtitle': '' } : {})}
-              className="min-w-0 flex-1 truncate text-[13px] font-medium leading-[18px] text-fg-2"
+              className="min-w-0 flex-1 truncate text-sm text-fg-3"
             >
               {props.subtitle}
             </span>
@@ -575,15 +575,12 @@ export function PlanPage(props: {
             className="flex min-w-0 flex-1 flex-col rounded-md focus:outline-none"
           >
             {props.titleSlot ?? (
-              <h2 className="truncate text-[17px] font-[650] leading-[22px] text-fg">
+              <h2 className="truncate text-lg font-semibold text-fg">
                 <Highlight text={props.title} />
               </h2>
             )}
             {props.subtitle !== undefined ? (
-              <span
-                data-plan-page-subtitle=""
-                className="truncate text-[13px] leading-[18px] text-fg-3"
-              >
+              <span data-plan-page-subtitle="" className="truncate text-sm text-fg-3">
                 {props.subtitle}
               </span>
             ) : null}
@@ -690,9 +687,9 @@ export function PlanConfirmSheet(props: {
         </div>
       }
     >
-      <p className="text-[15px] leading-[21px] text-fg-2">{props.message}</p>
+      <p className="text-lg text-fg-2">{props.message}</p>
       {props.error !== undefined && props.error !== null ? (
-        <p role="alert" className="mt-2 text-legacy-sm text-bad">
+        <p role="alert" className="mt-2 text-base text-bad">
           {props.error}
         </p>
       ) : null}
@@ -712,7 +709,7 @@ export function ConceptDateField(props: {
 }): ReactElement {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[13px] text-fg-3">Date (optional)</span>
+      <span className="text-md text-fg-3">Date (optional)</span>
       <span className="flex items-center gap-1.5">
         <input
           type="date"
@@ -720,7 +717,7 @@ export function ConceptDateField(props: {
           value={props.value}
           disabled={props.disabled === true}
           onChange={(e) => props.onChange(e.target.value)}
-          className="h-11 min-h-[44px] w-full min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3.5 font-mono text-[15px] text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+          className="h-11 min-h-[44px] w-full min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3.5 font-mono text-input text-fg placeholder:text-fg-3 md:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
         />
         {props.value !== '' ? (
           <IconButton
@@ -751,7 +748,7 @@ export function PlanPill(props: { pill: StatusPill }): ReactElement {
     <span
       data-plan-pill={props.pill.side}
       className={cn(
-        'inline-flex min-h-[24px] items-center rounded-md px-2 text-[13px]',
+        'inline-flex min-h-[24px] items-center rounded-md px-2 text-md',
         PILL_TONES[props.pill.tone],
       )}
     >
@@ -804,10 +801,10 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
           data-plan-screen-progress={box.key}
           className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3"
         >
-          <span className="text-[11px] font-semibold uppercase leading-[14px] tracking-[.06em] text-fg-2">
+          <span className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
             {box.label}
           </span>
-          <span className="truncate font-mono text-[13px] leading-[18px] text-fg">{box.text}</span>
+          <span className="truncate font-mono text-md text-fg">{box.text}</span>
           <span className="block h-1 overflow-hidden rounded-[2px] bg-panel-3">
             <span
               data-plan-progress-bar={box.tone}
@@ -843,7 +840,7 @@ function ScreenSkeleton(): ReactElement {
 export function ScreenFailed(props: { onRetry: () => void }): ReactElement {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-legacy-sm text-fg-2">Couldn&apos;t load. Try again.</p>
+      <p className="text-base text-fg-2">Couldn&apos;t load. Try again.</p>
       <Button onClick={props.onRetry}>Retry</Button>
     </div>
   );
@@ -2005,10 +2002,7 @@ export function PlanScreen(props: {
       />
     ) : undefined;
   const editHeaderSlot = (
-    <h2
-      data-plan-editing-title=""
-      className="truncate text-[17px] font-[650] leading-[22px] text-fg"
-    >
+    <h2 data-plan-editing-title="" className="truncate text-lg font-semibold text-fg">
       {EDITING_TITLE}
     </h2>
   );
@@ -2038,7 +2032,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-transparent bg-accent-soft px-3 text-[14px] font-semibold leading-5 text-accent group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-transparent bg-accent-soft px-3 text-base font-semibold leading-5 text-accent group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
         >
           <IconPlus size={15} />
           Add
@@ -2052,7 +2046,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-border-strong bg-panel px-3 text-[14px] font-semibold leading-5 text-fg group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-border-strong bg-panel px-3 text-base font-semibold leading-5 text-fg group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
         >
           <IconEdit size={15} />
           {EDIT_LABEL}
@@ -2128,7 +2122,7 @@ export function PlanScreen(props: {
           <div
             role="status"
             data-plan-skipped-notes=""
-            className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-warn-soft py-1 pl-3 pr-1 text-[13px] leading-[18px] text-warn"
+            className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-warn-soft py-1 pl-3 pr-1 text-md text-warn"
           >
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-2">
               {skippedNotes.map((note, at) => (
@@ -2157,7 +2151,7 @@ export function PlanScreen(props: {
         ) : bundle === null ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-fg-2">
             <IconPlan size={22} />
-            <p className="text-legacy-sm">{PLAN_NOT_AVAILABLE}</p>
+            <p className="text-base">{PLAN_NOT_AVAILABLE}</p>
           </div>
         ) : (
           <>
@@ -2448,7 +2442,7 @@ export function PlanEditHeader(props: {
         <div
           role="alert"
           data-plan-save-error=""
-          className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft py-1 pl-3 pr-1 text-[13.5px] leading-[1.45] text-bad"
+          className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft py-1 pl-3 pr-1 text-md leading-[1.45] text-bad"
         >
           <p className="min-w-0 flex-1 py-2">{props.error}</p>
           <Button
@@ -2464,7 +2458,7 @@ export function PlanEditHeader(props: {
         </div>
       ) : null}
       <label className="flex flex-col gap-1">
-        <span className="text-[13px] text-fg-3">{EDIT_TITLE_LABEL}</span>
+        <span className="text-md text-fg-3">{EDIT_TITLE_LABEL}</span>
         <input
           data-plan-edit-title=""
           value={draft.title}
@@ -2484,7 +2478,7 @@ export function PlanEditHeader(props: {
           ] as const
         ).map(([field, label]) => (
           <label key={field} className="flex w-full min-w-0 flex-col gap-1">
-            <span className="text-[13px] text-fg-3">{label}</span>
+            <span className="text-md text-fg-3">{label}</span>
             <input
               type="date"
               data-plan-edit-date={field}
@@ -2497,7 +2491,7 @@ export function PlanEditHeader(props: {
         ))}
       </div>
       {props.problem !== null ? (
-        <p role="alert" data-plan-edit-problem="" className="text-[13px] text-bad">
+        <p role="alert" data-plan-edit-problem="" className="text-md text-bad">
           {props.problem}
         </p>
       ) : null}
@@ -2506,9 +2500,8 @@ export function PlanEditHeader(props: {
   );
 }
 
-/** The view header's title: 28/34 bold, 2 lines at most, wrapping at word breaks. */
-const PLAN_HEADER_TITLE =
-  'line-clamp-2 break-normal text-[28px] font-bold leading-[34px] tracking-[-0.02em] text-fg';
+/** The view header's title: the page title role (28/34, 600, tight), 2 lines at most. */
+const PLAN_HEADER_TITLE = 'line-clamp-2 break-normal text-3xl font-semibold tracking-tight text-fg';
 
 /**
  * The agency's header title: a button with a chevron (18px, 6px gap) that
@@ -2620,7 +2613,7 @@ export function PlanHeaderMenu(props: {
         role="menuitem"
         data-plan-menu-rename=""
         onClick={props.onRename}
-        className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-[15px] text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-lg text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <IconEdit size={18} />
         {RENAME_LABEL}
@@ -2631,7 +2624,7 @@ export function PlanHeaderMenu(props: {
           role="menuitem"
           data-plan-menu-delete=""
           onClick={props.onDelete}
-          className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-[15px] text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-lg text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <IconTrash size={18} />
           {DELETE_PLAN_LABEL}
@@ -2669,7 +2662,7 @@ export function RenameField(props: {
           if (e.key === 'Enter' && valid) props.onDone();
           if (e.key === 'Escape') props.onCancel();
         }}
-        className="h-11 min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-legacy-base font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+        className="h-11 min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-input font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60 md:text-base"
       />
       <IconButton
         type="button"
@@ -2741,7 +2734,7 @@ export function PlanFooter(props: {
   return (
     <div data-plan-footer="" className="flex flex-col gap-1.5">
       {props.error !== null ? (
-        <p role="alert" data-plan-send-error="" className="text-[13px] text-bad">
+        <p role="alert" data-plan-send-error="" className="text-md text-bad">
           {props.error}
         </p>
       ) : null}
@@ -2994,12 +2987,10 @@ function DragCard(props: {
           muted={false}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[15px] font-semibold leading-5 text-fg">
+          <span className="truncate text-base font-medium text-fg">
             {rowTitle(props.bundle, item)}
           </span>
-          <span className="truncate text-[13px] leading-[18px] text-fg-3">
-            {rowMeta(props.bundle, item)}
-          </span>
+          <span className="truncate text-sm text-fg-3">{rowMeta(props.bundle, item)}</span>
         </span>
       </div>
     </div>,
@@ -3121,7 +3112,7 @@ export function PlanBody(props: {
             {week.label !== null ? (
               <h3
                 data-plan-week-header=""
-                className="sticky top-0 z-10 border-b border-border bg-bg px-4 py-2 text-[13px] font-semibold text-fg-2 md:bg-panel"
+                className="sticky top-0 z-10 border-b border-border bg-bg px-4 py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2 md:bg-panel"
               >
                 {week.label}
               </h3>
@@ -3153,7 +3144,7 @@ export function PlanBody(props: {
                 ) : slotAt === null ? (
                   <p
                     data-plan-day-empty=""
-                    className="flex min-h-[44px] items-center text-[13px] text-fg-3"
+                    className="flex min-h-[44px] items-center text-md text-fg-3"
                   >
                     Nothing planned
                   </p>
@@ -3243,7 +3234,7 @@ function AddRow(props: {
       )}
     >
       {props.empty ? (
-        <p data-plan-day-empty="" className="flex-1 text-[13px] text-fg-3">
+        <p data-plan-day-empty="" className="flex-1 text-md text-fg-3">
           Nothing planned
         </p>
       ) : null}
@@ -3290,7 +3281,7 @@ export function DayColumn(props: {
       <span
         data-plan-day-weekday=""
         className={cn(
-          'flex h-[18px] shrink-0 items-center justify-center whitespace-nowrap text-[10px] font-bold uppercase leading-3 tracking-[.08em]',
+          'flex h-[18px] shrink-0 items-center justify-center whitespace-nowrap text-xs font-semibold uppercase leading-3 tracking-[.08em]',
           isToday ? 'bg-accent text-accent-fg' : 'bg-panel-2 text-fg-2',
         )}
       >
@@ -3301,8 +3292,8 @@ export function DayColumn(props: {
         className={cn(
           'flex flex-1 items-center justify-center',
           props.day === null
-            ? 'whitespace-nowrap text-[11px] font-semibold leading-[14px] text-fg-2'
-            : 'font-mono text-[20px] font-medium leading-6 tabular-nums text-fg',
+            ? 'whitespace-nowrap text-xs font-semibold text-fg-2'
+            : 'font-mono text-2xl font-medium leading-6 tabular-nums text-fg',
         )}
       >
         {props.day === null ? NO_DATE_LABEL : dayOfMonth(props.day)}
@@ -3311,9 +3302,8 @@ export function DayColumn(props: {
   );
 }
 
-/** The PLAN / POST line label: 36px column, 11px/14px, 600, uppercase, .06em. */
-const LINE_LABEL =
-  'w-9 shrink-0 text-[11px] font-semibold uppercase leading-[14px] tracking-[.06em] text-fg-2';
+/** The PLAN / POST line label: 36px column, the section label (12/16, 600, uppercase). */
+const LINE_LABEL = 'w-9 shrink-0 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /**
  * The PLAN switch: "OK" and "Not OK" joined (36px visual, min 84px each,
@@ -3329,7 +3319,7 @@ export function PlanSwitch(props: {
   onNotOk: () => void;
 }): ReactElement {
   const visual =
-    'flex h-9 min-w-[84px] items-center justify-center gap-1.5 border px-3.5 text-[13px] font-semibold leading-[18px]';
+    'flex h-9 min-w-[84px] items-center justify-center gap-1.5 border px-3.5 text-md font-semibold';
   return (
     <span
       role="group"
@@ -3408,7 +3398,7 @@ export function PlanDecidedPill(props: {
     >
       <span
         className={cn(
-          'flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold leading-[18px] text-white group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-panel',
+          'flex h-8 items-center gap-1.5 rounded-full px-3 text-md font-semibold text-white group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-panel',
           ok ? 'bg-[var(--good-solid)]' : 'bg-[var(--bad-solid)]',
         )}
       >
@@ -3471,7 +3461,7 @@ function PlanStatusLines(props: {
         data-plan-slot-state={planControlState(status)}
         data-plan-slot-readonly=""
         data-plan-control="text"
-        className={cn('text-[13px] font-semibold leading-[18px]', PLAN_TEXT_TONES[status])}
+        className={cn('text-md font-semibold', PLAN_TEXT_TONES[status])}
       >
         {planControlText(status)}
       </span>
@@ -3515,7 +3505,7 @@ function PlanStatusLines(props: {
         <span
           data-plan-post-status={post.tone}
           className={cn(
-            'flex min-w-0 items-center gap-2 text-[13px] font-medium leading-[18px]',
+            'flex min-w-0 items-center gap-2 text-md font-medium',
             POST_LINE_TONES[post.tone],
           )}
         >
@@ -3600,7 +3590,7 @@ function RowTile(props: {
     <span
       data-plan-row-tile="text"
       className={cn(
-        'flex h-14 w-14 shrink-0 items-center justify-center rounded-[10px] text-[17px] font-semibold',
+        'flex h-14 w-14 shrink-0 items-center justify-center rounded-[10px] text-xl font-semibold',
         props.muted ? 'bg-panel-2 text-fg-3' : 'bg-accent-soft text-accent',
       )}
     >
@@ -3658,7 +3648,7 @@ function PlanRow(props: {
     <span
       data-plan-row-title=""
       className={cn(
-        'line-clamp-2 break-words text-[15px] font-semibold leading-5',
+        'line-clamp-2 break-words text-base font-medium',
         muted ? 'text-fg-2' : 'text-fg',
       )}
     >
@@ -3680,7 +3670,7 @@ function PlanRow(props: {
         >
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             {titleText(true)}
-            <span className="truncate text-[13px] leading-[18px] text-fg-2">{DRAFT_NOT_READY}</span>
+            <span className="truncate text-sm text-fg-3">{DRAFT_NOT_READY}</span>
             {dateLine}
           </span>
           <RowTile item={props.item} thumb={null} muted />
@@ -3711,14 +3701,14 @@ function PlanRow(props: {
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         {titleText(false)}
         {meta !== '' ? (
-          <span data-plan-row-meta="" className="truncate text-[13px] leading-[18px] text-fg-2">
+          <span data-plan-row-meta="" className="truncate text-sm text-fg-3">
             {meta}
           </span>
         ) : null}
         {alsoIn !== null ? (
           <span
             data-plan-row-also-in=""
-            className="inline-flex max-w-full self-start truncate rounded px-1.5 text-[11px] font-semibold leading-[18px] bg-warn-soft text-warn"
+            className="inline-flex max-w-full self-start truncate rounded px-1.5 text-xs font-semibold bg-warn-soft text-warn"
           >
             {alsoIn}
           </span>

@@ -1759,7 +1759,7 @@ export function mentionsMe(
  */
 export function mentionClass(mine: boolean, self: boolean): string {
   return cn(
-    'whitespace-nowrap font-bold',
+    'whitespace-nowrap font-semibold',
     mine ? 'text-accent-fg' : 'text-accent-hover',
     self && 'rounded-sm bg-accent-soft px-[3px]',
   );
@@ -2614,7 +2614,7 @@ export function ForwardedLabel(props: { mine?: boolean } = {}): ReactElement {
     <span
       data-forwarded=""
       className={cn(
-        'mb-1 flex items-center gap-1 text-legacy-xs leading-none',
+        'mb-1 flex items-center gap-1 text-sm leading-none',
         props.mine === true ? 'text-accent-fg' : 'text-fg-2',
       )}
     >
@@ -4155,7 +4155,7 @@ function ThreadBody(
                       <p
                         data-message-fallback=""
                         className={cn(
-                          'px-4 py-1 text-legacy-xs text-fg-3',
+                          'px-4 py-1 text-sm text-fg-3',
                           row.message.mine && 'text-right',
                         )}
                       >
@@ -4457,7 +4457,7 @@ export function threadLoadErrorRow(onRetry: (() => void) | undefined): ReactElem
     <li
       key="load-failed"
       data-thread-load-error=""
-      className="flex items-center justify-center gap-3 px-4 py-2 text-legacy-sm text-fg-2"
+      className="flex items-center justify-center gap-3 px-4 py-2 text-base text-fg-2"
     >
       <span>Couldn&apos;t load messages</span>
       {onRetry !== undefined ? (
@@ -4483,7 +4483,7 @@ export function olderLoadErrorRow(onRetry: () => void): ReactElement {
       key="older-load-failed"
       role="alert"
       data-older-load-error=""
-      className="flex items-center justify-center gap-3 px-4 py-2 text-legacy-sm text-fg-2"
+      className="flex items-center justify-center gap-3 px-4 py-2 text-base text-fg-2"
     >
       <span>{OLDER_LOAD_FAILED}</span>
       <Button variant="secondary" className="min-w-[44px]" onClick={onRetry}>

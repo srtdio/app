@@ -159,11 +159,9 @@ export function HelpPage() {
       <PageHead title="Help" />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
         <section className="rounded-2xl border border-border bg-panel-2 p-5 md:p-8">
-          <p className="text-legacy-sm font-medium text-accent">Sorted Help Center</p>
-          <h2 className="mt-2 text-legacy-2xl font-semibold tracking-tight md:text-legacy-3xl">
-            Find your way through the workflow
-          </h2>
-          <p className="mt-2 max-w-2xl text-legacy-sm leading-6 text-fg-2">
+          <p className="text-base font-medium text-accent">Sorted Help Center</p>
+          <h2 className="mt-2 text-lg font-semibold">Find your way through the workflow</h2>
+          <p className="mt-2 max-w-2xl text-base leading-6 text-fg-2">
             Quick answers about pipeline, briefs, posts, approvals, assets, and chat with your team.
           </p>
           <div className="mt-5 max-w-xl">
@@ -183,7 +181,7 @@ export function HelpPage() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-panel px-4 text-legacy-sm font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg"
+                className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-panel px-4 text-base font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg"
               >
                 {link.label}
               </NavLink>
@@ -193,10 +191,13 @@ export function HelpPage() {
 
         <section className="mt-8" aria-labelledby="help-articles-heading">
           <div className="flex flex-col gap-1">
-            <h2 id="help-articles-heading" className="text-legacy-lg font-semibold">
+            <h2
+              id="help-articles-heading"
+              className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
+            >
               Help articles
             </h2>
-            <p className="text-legacy-sm text-fg-3">
+            <p className="text-sm text-fg-3">
               {articles.length} {articles.length === 1 ? 'article' : 'articles'}
             </p>
           </div>
@@ -209,7 +210,7 @@ export function HelpPage() {
                 aria-pressed={category === item}
                 onClick={() => setCategory(item)}
                 className={cn(
-                  'inline-flex min-h-[44px] shrink-0 items-center rounded-lg border px-4 text-legacy-sm font-normal transition-colors',
+                  'inline-flex min-h-[44px] shrink-0 items-center rounded-lg border px-4 text-base font-normal transition-colors',
                   category === item
                     ? 'border-accent-line bg-accent-soft text-accent'
                     : 'border-border text-fg-2 hover:bg-panel-2',
@@ -227,14 +228,14 @@ export function HelpPage() {
                   key={article.id}
                   className="group rounded-xl border border-border bg-panel px-4"
                 >
-                  <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-4 text-left text-legacy-sm font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+                  <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                     <span>{article.title}</span>
                     <IconChevronDown
                       size={18}
                       className="shrink-0 text-fg-3 transition-transform group-open:rotate-180"
                     />
                   </summary>
-                  <p className="max-w-3xl pb-4 pr-8 text-legacy-sm leading-6 text-fg-2">
+                  <p className="max-w-3xl pb-4 pr-8 text-base leading-6 text-fg-2">
                     {article.content}
                   </p>
                 </details>
@@ -242,8 +243,8 @@ export function HelpPage() {
             </div>
           ) : (
             <div className="mt-2 rounded-xl border border-border bg-panel px-4 py-8 text-center">
-              <p className="text-legacy-sm font-medium">No help articles like that</p>
-              <p className="mt-1 text-legacy-sm text-fg-3">
+              <p className="text-lg font-semibold">No help articles like that</p>
+              <p className="mt-1 text-base text-fg-2">
                 Try another search or choose a different topic.
               </p>
             </div>

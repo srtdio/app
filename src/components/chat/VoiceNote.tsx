@@ -759,7 +759,7 @@ function TranscriptDrop(props: {
           <p
             dir="auto"
             className={cn(
-              'select-text whitespace-pre-wrap rounded-[14px] px-3 py-2 [overflow-wrap:anywhere] text-[15px] leading-[21px]',
+              'select-text whitespace-pre-wrap rounded-[14px] px-3 py-2 [overflow-wrap:anywhere] text-lg',
               props.panel,
               props.ink,
             )}
@@ -1233,7 +1233,7 @@ export function VoiceNote({
         >
           <span
             className={cn(
-              'flex h-6 items-center rounded-full px-2 text-legacy-xs font-semibold leading-4 tabular-nums',
+              'flex h-6 items-center rounded-full px-2 text-sm font-semibold leading-4 tabular-nums',
               tone.pill,
             )}
           >
@@ -1354,7 +1354,7 @@ export function VoiceNote({
       <div
         data-voice-foot=""
         className={cn(
-          'flex min-h-4 items-center gap-1 whitespace-nowrap text-legacy-xs leading-4',
+          'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm leading-4',
           UNDER_WAVE,
           tone.ink,
         )}
@@ -1375,7 +1375,7 @@ export function VoiceNote({
           data-voice-error=""
           role="alert"
           className={cn(
-            'flex min-h-4 items-center gap-1 whitespace-nowrap text-legacy-xs leading-4',
+            'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm leading-4',
             UNDER_WAVE,
             tone.ink,
           )}
@@ -1405,7 +1405,7 @@ export function VoiceNote({
         />
       ) : null}
       {spacer !== undefined ? (
-        <p className="h-3 text-legacy-xs leading-3" aria-hidden="true">
+        <p className="h-3 text-sm leading-3" aria-hidden="true">
           {spacer}
         </p>
       ) : null}

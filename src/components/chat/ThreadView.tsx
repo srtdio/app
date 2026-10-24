@@ -128,7 +128,7 @@ export function ThreadViewFrame(props: {
         </button>
         <span
           data-thread-view-title=""
-          className="truncate text-center text-legacy-sm font-semibold text-fg"
+          className="truncate text-center text-base font-semibold text-fg"
         >
           {props.title}
         </span>

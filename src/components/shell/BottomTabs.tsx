@@ -20,7 +20,7 @@ export function BottomTabs() {
           to={item.to}
           className={({ isActive }) =>
             cn(
-              'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-[11px] font-medium transition-colors',
+              'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-xs font-medium transition-colors',
               isActive ? 'text-accent' : 'text-fg-3',
             )
           }

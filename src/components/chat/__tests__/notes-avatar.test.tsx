@@ -57,7 +57,7 @@ describe('notes avatar', () => {
 
   it('small sizes: 44px radius 12, 20px badge, -4px out, 2px ring', () => {
     const html = view({ size: 'small', surface: 'bg' });
-    expect(html).toContain('h-11 w-11 rounded-[12px]');
+    expect(html).toContain('h-11 w-11 rounded-xl');
     expect(html).toContain('h-5 w-5 -bottom-1 -right-1 border-2');
     expect(html).toContain('border-bg');
   });
@@ -146,9 +146,9 @@ describe('the same notes avatar in all four places, no reads', () => {
       expect(html).toContain(`src="${PHOTO}"`);
     }
     expect(tile).toContain('h-[76px] w-[76px] rounded-[18px]');
-    expect(header).toContain('h-10 w-10 rounded-[12px]');
-    expect(picker).toContain('h-11 w-11 rounded-[12px]');
-    expect(search).toContain('h-11 w-11 rounded-[12px]');
+    expect(header).toContain('h-10 w-10 rounded-xl');
+    expect(picker).toContain('h-11 w-11 rounded-xl');
+    expect(search).toContain('h-11 w-11 rounded-xl');
     expect(from).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });

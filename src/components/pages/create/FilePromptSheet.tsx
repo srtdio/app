@@ -51,7 +51,7 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
         tabIndex={-1}
         className="w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
       >
-        <p className="text-legacy-sm text-fg">{prompt.question}</p>
+        <p className="text-base text-fg">{prompt.question}</p>
         <div className="mt-5 flex justify-end gap-2">
           <Button onClick={onRemove}>{prompt.removeLabel}</Button>
           <div ref={keepRef}>

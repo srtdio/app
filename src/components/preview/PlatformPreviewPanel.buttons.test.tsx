@@ -18,7 +18,7 @@ describe('PreviewChip buttons', () => {
     const cls = classOf(html).split(/\s+/);
     expect(cls).toContain('h-11');
     expect(cls).toContain('rounded-lg');
-    expect(cls).toContain('text-legacy-sm');
+    expect(cls).toContain('text-base');
     expect(cls).toContain('font-medium');
     expect(html).toContain('Instagram preview');
     expect(html).toContain('type="button"');
@@ -32,7 +32,7 @@ describe('PreviewChip buttons', () => {
       'h-12',
       'rounded-md',
       'rounded-full',
-      'text-legacy-xs',
+      'text-sm',
       'font-semibold',
     ]) {
       expect(html.split(/[\s"]/)).not.toContain(old);

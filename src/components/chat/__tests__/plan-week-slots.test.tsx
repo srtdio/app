@@ -310,13 +310,7 @@ describe('week list layout (L1-L4)', () => {
     expect(numberClasses).not.toContain('tabular-nums');
     expect(numberClasses).not.toContain('uppercase');
     expect(numberClasses).toEqual(
-      expect.arrayContaining([
-        'whitespace-nowrap',
-        'text-[11px]',
-        'leading-[14px]',
-        'font-semibold',
-        'text-fg-2',
-      ]),
+      expect.arrayContaining(['whitespace-nowrap', 'text-xs', 'font-semibold', 'text-fg-2']),
     );
     expect(none).not.toContain('data-plan-today');
     expect(none).not.toContain('border-accent');
@@ -331,7 +325,7 @@ describe('week list layout (L1-L4)', () => {
     const number = html.match(/<span data-plan-day-number="" class="([^"]*)">([^<]*)<\/span>/);
     expect(number?.[2]).toBe('15');
     expect((number?.[1] ?? '').split(' ')).toEqual(
-      expect.arrayContaining(['font-mono', 'text-[20px]', 'tabular-nums', 'text-fg']),
+      expect.arrayContaining(['font-mono', 'text-2xl', 'tabular-nums', 'text-fg']),
     );
   });
 
@@ -408,7 +402,7 @@ describe('week list layout (L1-L4)', () => {
     expect(row).toMatch(/data-plan-line="plan"[\s\S]*?>PLAN<[\s\S]*?data-plan-control="pill"/);
     expect(row).toMatch(/data-plan-post-status="review"[\s\S]*?>Review</);
     expect(html).toMatch(
-      /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-\[13px\] text-fg-3">Nothing planned/,
+      /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-md text-fg-3">Nothing planned/,
     );
     // Day block: 16px all round, a 1px line between days, rows 16px apart.
     expect(html).toContain('flex flex-col gap-4 border-t border-border px-4 py-4');

@@ -217,11 +217,9 @@ export function MembersPanel() {
       ) : null}
 
       {loading ? (
-        <p className="text-legacy-sm text-fg-3">Loading members</p>
+        <p className="text-base text-fg-3">Loading members</p>
       ) : error !== null ? (
-        <p className="text-legacy-sm text-bad">
-          Couldn&apos;t load members. Refresh and try again.
-        </p>
+        <p className="text-base text-bad">Couldn&apos;t load members. Refresh and try again.</p>
       ) : (
         <MembersList
           derived={derived}

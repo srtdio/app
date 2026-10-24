@@ -288,7 +288,7 @@ describe('menu style', () => {
     );
     expect(html).not.toContain('rounded-lg');
     expect(html).not.toContain('text-fg-2');
-    expect(html).toContain('text-[16px]');
+    expect(html).toContain('text-lg');
     expect(html).not.toContain(DARK);
     expect(html).not.toContain(HASH);
   });

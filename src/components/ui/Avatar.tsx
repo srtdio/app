@@ -6,7 +6,7 @@ interface AvatarProps {
   name?: string;
   src?: string;
   /**
-   * 'row' is the 48px dense chat-list row avatar (text-legacy-sm initials); 'header' is
+   * 'row' is the 48px dense chat-list row avatar (text-base initials); 'header' is
    * the 40px group thread header photo; 'hero' is the 112px group info photo.
    */
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'row' | 'header' | 'hero';
@@ -27,13 +27,13 @@ const PX: Record<NonNullable<AvatarProps['size']>, number> = {
 };
 
 const INITIALS_TYPE: Record<NonNullable<AvatarProps['size']>, string> = {
-  sm: 'text-legacy-xs',
-  md: 'text-legacy-xs',
-  lg: 'text-legacy-xs',
-  xl: 'text-legacy-xs',
-  row: 'text-legacy-sm',
-  header: 'text-legacy-sm',
-  hero: 'text-legacy-3xl',
+  sm: 'text-sm',
+  md: 'text-sm',
+  lg: 'text-sm',
+  xl: 'text-sm',
+  row: 'text-base',
+  header: 'text-base',
+  hero: 'text-3xl',
 };
 
 // Token-driven fills (--avatar-1..6 in index.css, light and dark), each 4.5:1 or

@@ -50,7 +50,7 @@ describe('Tag', () => {
       bad: 'bg-bad-soft text-bad',
     });
     for (const tone of ['neutral', 'accent', 'good', 'warn', 'bad'] as const) {
-      expect(tagClass(tone)).toContain('inline-flex h-5 items-center rounded-md px-2 text-[11px]');
+      expect(tagClass(tone)).toContain('inline-flex h-5 items-center rounded-md px-2 text-xs');
       expect(tagClass(tone)).toContain(TAG_TONE[tone]);
     }
   });

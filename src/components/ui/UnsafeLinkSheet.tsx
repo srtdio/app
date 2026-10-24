@@ -127,7 +127,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
           <div aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 rounded-sm bg-border-strong" />
           <h2
             id="unsafe-link-title"
-            className="flex items-center gap-2 text-[17px] font-semibold text-[color:var(--warn-ink)]"
+            className="flex items-center gap-2 text-lg font-semibold text-[color:var(--warn-ink)]"
           >
             <IconAlertTriangle size={22} />
             Check before opening
@@ -135,12 +135,12 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         </div>
         <p
           data-unsafe-url=""
-          className="break-all rounded-lg border border-border bg-panel-2 px-2.5 py-2 font-mono text-legacy-xs text-fg"
+          className="break-all rounded-lg border border-border bg-panel-2 px-2.5 py-2 font-mono text-sm text-fg"
         >
           {url}
         </p>
         {reasons.length > 0 ? (
-          <ul className="flex flex-col gap-1.5 text-[13.5px] leading-[18px]">
+          <ul className="flex flex-col gap-1.5 text-base">
             {reasons.map((reason) => (
               <li key={reason} className="flex gap-2">
                 <span
@@ -248,7 +248,7 @@ export function UnsafeLinkButton(props: {
       url={props.url}
       reasons={props.reasons}
       className={cn(
-        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-[color:var(--warn-line)] bg-warn-soft px-4 text-legacy-sm font-medium text-[color:var(--warn-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-[color:var(--warn-line)] bg-warn-soft px-4 text-base font-medium text-[color:var(--warn-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         props.className,
       )}
     >

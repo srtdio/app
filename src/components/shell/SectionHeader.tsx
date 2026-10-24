@@ -119,7 +119,7 @@ export function SectionHeader<S extends string = string>({
         )}
       >
         {title !== undefined ? (
-          <h2 className="shrink-0 text-[15px] font-semibold text-fg">{title}</h2>
+          <h2 className="shrink-0 text-lg font-semibold text-fg">{title}</h2>
         ) : null}
         {search !== undefined ? (
           <div
@@ -137,7 +137,7 @@ export function SectionHeader<S extends string = string>({
               onChange={(e) => search.onChange(e.target.value)}
               placeholder={search.placeholder}
               {...(search.label !== undefined ? { 'aria-label': search.label } : {})}
-              className="h-11 w-full rounded-lg border border-border bg-panel-2 pl-9 pr-11 text-legacy-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
+              className="h-11 w-full rounded-lg border border-border bg-panel-2 pl-9 pr-11 text-input md:text-base text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
             />
             {searching ? (
               <IconButton

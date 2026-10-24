@@ -106,7 +106,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
             state === 'open' ? 'open' : row.accepted_at !== null ? 'filled' : 'hollow'
           }
           className={cn(
-            'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-legacy-xs font-semibold tabular-nums',
+            'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-sm font-medium tabular-nums',
             chipCircleClass(state, row.accepted_at !== null),
           )}
         >
@@ -221,7 +221,7 @@ export function CheckpointStrip({
       </div>
       <span
         data-checkpoint-progress=""
-        className="ml-2 shrink-0 self-center text-legacy-xs tabular-nums text-fg-3"
+        className="ml-2 shrink-0 self-center text-sm tabular-nums text-fg-3"
       >
         {checkpointProgressText(counts.resolved, counts.total)}
       </span>

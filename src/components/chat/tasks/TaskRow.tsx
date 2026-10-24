@@ -79,7 +79,7 @@ export function PriorityChip(props: {
     <span
       data-task-p={props.priority}
       className={cn(
-        'inline-flex h-[22px] items-center gap-0.5 rounded-[5px] px-1.5 font-mono text-legacy-xs leading-[22px]',
+        'inline-flex h-[22px] items-center gap-0.5 rounded-[5px] px-1.5 font-mono text-sm',
         P_TAG[props.priority],
         props.ringed === true && 'ring-2 ring-accent ring-offset-1 ring-offset-panel',
       )}
@@ -193,15 +193,11 @@ function PriorityMenu(props: {
           onClick={() => props.onPick(p)}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            'flex h-11 w-full items-center gap-2 rounded-[7px] px-2.5 text-left text-[14px] text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+            'flex h-11 w-full items-center gap-2 rounded-[7px] px-2.5 text-left text-base text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
             NO_TOUCH_SELECT,
           )}
         >
-          <span
-            className={cn('rounded-[5px] px-1.5 font-mono text-legacy-xs leading-[22px]', P_TAG[p])}
-          >
-            P{p}
-          </span>
+          <span className={cn('rounded-[5px] px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>
           {p === props.current ? <IconCheck size={16} className="text-accent" /> : null}
         </button>
@@ -214,7 +210,7 @@ function PriorityMenu(props: {
 /** The inline failure line: "Not saved · Retry" (44px Retry). */
 export function NotSaved(props: { onRetry: () => void; message?: string }): ReactElement {
   return (
-    <div data-task-not-saved="" className="flex items-center gap-1 pl-[60px] pr-3 text-[13px]">
+    <div data-task-not-saved="" className="flex items-center gap-1 pl-[60px] pr-3 text-md">
       <span className="text-bad">{props.message ?? NOT_SAVED} ·</span>
       <Button
         type="button"
@@ -281,7 +277,7 @@ function TitleCell(props: {
             inputRef.current?.blur();
           }
         }}
-        className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] font-medium text-fg focus:outline-none"
+        className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input font-medium text-fg focus:outline-none md:text-base"
       />
     );
   }
@@ -292,7 +288,7 @@ function TitleCell(props: {
       onClick={begin}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        'min-h-[44px] min-w-0 flex-1 py-[11px] text-left text-[16px] font-medium leading-[22px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        'min-h-[44px] min-w-0 flex-1 py-3 text-left text-base font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
         props.done ? 'text-fg-3 line-through' : 'text-fg',
       )}
     >
@@ -383,7 +379,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
         >
           <TaskGlyph status={props.done ? 'done' : 'todo'} />
         </button>
-        <span className="flex h-11 w-6 shrink-0 items-center font-mono text-[12.5px] text-fg-2">
+        <span className="flex h-11 w-6 shrink-0 items-center font-mono text-sm text-fg-2">
           {props.dot ? (
             <span
               aria-hidden="true"
@@ -394,7 +390,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           {props.number ?? ''}
         </span>
         {props.queuedDelete ? (
-          <span className="min-h-[44px] min-w-0 flex-1 py-[11px] text-[16px] leading-[22px] text-fg-3 line-through">
+          <span className="min-h-[44px] min-w-0 flex-1 py-3 text-base font-medium text-fg-3 line-through">
             {props.title}
           </span>
         ) : (
@@ -437,7 +433,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
       {props.marks.length > 0 ? (
         <p
           data-task-mark=""
-          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-[80px] pr-3 text-[12.5px] text-fg-2"
+          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-[80px] pr-3 text-sm text-fg-3"
         >
           {props.marks.map((m, k) => (
             <MarkLine key={k} mark={m} />
@@ -446,7 +442,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
       ) : null}
       {props.notice !== null ? (
         <div data-task-conflict="" className="-mt-1 flex flex-col gap-1 pb-2 pl-[80px] pr-3">
-          <p className="text-[12.5px] text-stage-review">{props.notice.text}</p>
+          <p className="text-sm text-stage-review">{props.notice.text}</p>
           <div className="flex gap-2">
             <Button
               type="button"

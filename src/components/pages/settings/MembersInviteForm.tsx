@@ -227,7 +227,7 @@ export function InviteNotSent(props: { email: string; acceptUrl: string | null }
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-warn bg-warn-soft p-3">
-      <p role="status" className="text-legacy-sm text-fg">
+      <p role="status" className="text-base text-fg">
         <span className="font-medium">{props.email}: </span>
         {INVITE_NOT_SENT_MESSAGE}
       </p>
@@ -244,12 +244,8 @@ export function InviteNotSent(props: { email: string; acceptUrl: string | null }
           >
             Copy link
           </Button>
-          {copied === 'copied' ? (
-            <span className="text-legacy-sm text-good">Link copied</span>
-          ) : null}
-          {copied === 'failed' ? (
-            <span className="text-legacy-sm text-bad">{COPY_FAILED}</span>
-          ) : null}
+          {copied === 'copied' ? <span className="text-base text-good">Link copied</span> : null}
+          {copied === 'failed' ? <span className="text-base text-bad">{COPY_FAILED}</span> : null}
         </div>
       ) : null}
     </div>
@@ -390,7 +386,7 @@ export function RolePicker({
   return (
     <label
       className={cn(
-        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel px-2.5 py-1 text-legacy-sm transition-colors duration-fast focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
+        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel px-2.5 py-1 text-base transition-colors duration-fast focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
         invalid ? 'border-bad bg-bad-soft' : 'border-border',
         current === undefined ? 'text-fg-3' : 'text-fg',
         fill ? 'min-w-0 flex-1' : 'max-w-[45%] shrink-0',
@@ -409,7 +405,7 @@ export function RolePicker({
         onChange={(event) => {
           if (isInviteRole(event.target.value)) onChange(event.target.value);
         }}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none text-legacy-base opacity-0 disabled:cursor-default"
+        className="absolute inset-0 h-full w-full cursor-pointer appearance-none text-input opacity-0 disabled:cursor-default"
       >
         <option value="" disabled>
           {ROLE_PLACEHOLDER}
@@ -506,7 +502,7 @@ export function MembersInviteForm({
 
   // No active workspace: there is nothing to invite into. Say so and stop.
   if (workspaceId === null) {
-    return <p className="text-legacy-sm text-fg-3">No active workspace.</p>;
+    return <p className="text-base text-fg-3">No active workspace.</p>;
   }
   // Capture the narrowed id so the async submit closure keeps the string type.
   const activeWorkspaceId = workspaceId;
@@ -660,10 +656,13 @@ export function MembersInviteForm({
     <section aria-labelledby="invite-people-title" className="flex max-w-[520px] flex-col gap-4">
       <style>{ROW_KEYFRAMES}</style>
       <div>
-        <h3 id="invite-people-title" className="text-legacy-base font-semibold text-fg">
+        <h3
+          id="invite-people-title"
+          className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
+        >
           Invite people
         </h3>
-        <p className="mt-0.5 text-legacy-sm text-fg-3">
+        <p className="mt-0.5 text-base text-fg-2">
           Add one email or many. Press Enter, or paste a list.
         </p>
       </div>
@@ -686,7 +685,7 @@ export function MembersInviteForm({
             disabled={submitting}
           />
           {duplicate ? (
-            <p id="invite-email-duplicate" role="alert" className="mt-1.5 text-legacy-xs text-bad">
+            <p id="invite-email-duplicate" role="alert" className="mt-1.5 text-sm text-bad">
               {INVITE_DUPLICATE_MESSAGE}
             </p>
           ) : null}
@@ -711,7 +710,7 @@ export function MembersInviteForm({
 
         {rows.length >= 2 && !clientOnly ? (
           <div className="flex items-center justify-end gap-2">
-            <span className="text-legacy-sm text-fg-2">Set all as</span>
+            <span className="text-base text-fg-2">Set all as</span>
             <RolePicker
               label="Set all as"
               value={setAllRole}
@@ -747,7 +746,7 @@ export function MembersInviteForm({
                       onChange={(event) =>
                         updateRow(row.key, { email: event.target.value, error: null })
                       }
-                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-legacy-base text-fg outline-none transition-colors duration-fast hover:border-dashed hover:border-border-strong focus:border-solid focus:border-accent md:text-legacy-sm"
+                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-input text-fg outline-none transition-colors duration-fast hover:border-dashed hover:border-border-strong focus:border-solid focus:border-accent md:text-base"
                     />
                     <RolePicker
                       label={`Role for ${row.email}`}
@@ -767,11 +766,11 @@ export function MembersInviteForm({
                     </IconButton>
                   </div>
                   {invalid ? (
-                    <p role="alert" className="pb-1 text-legacy-xs text-bad">
+                    <p role="alert" className="pb-1 text-sm text-bad">
                       {INVITE_INVALID_EMAIL_MESSAGE}
                     </p>
                   ) : row.error !== null ? (
-                    <p role="alert" className="pb-1 text-legacy-xs text-bad">
+                    <p role="alert" className="pb-1 text-sm text-bad">
                       {row.error}
                     </p>
                   ) : null}
@@ -798,7 +797,7 @@ export function MembersInviteForm({
           </Button>
         </div>
         {showRoleMissing ? (
-          <p role="alert" className="text-legacy-sm text-bad">
+          <p role="alert" className="text-base text-bad">
             {INVITE_PICK_ROLE_MESSAGE}
           </p>
         ) : null}
@@ -806,7 +805,7 @@ export function MembersInviteForm({
           <InviteNotSent key={item.email} email={item.email} acceptUrl={item.acceptUrl} />
         ))}
         {testSite && testSentTo !== null ? (
-          <p className="text-legacy-sm text-fg-2">
+          <p className="text-base text-fg-2">
             Test site: open it as the invitee from the sign-in page, or{' '}
             <a
               className="font-medium text-accent hover:underline"

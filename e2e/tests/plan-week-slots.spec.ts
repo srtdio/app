@@ -446,7 +446,7 @@ test('header: agency sees the 28px title, then boxed Add and Edit on line 2 (bot
   const line2 = plan.locator('[data-plan-header-line="2"]');
   const title = line1.locator('[data-plan-title-menu] h2');
   await expect(title).toHaveCSS('font-size', '28px');
-  await expect(title).toHaveCSS('font-weight', '700');
+  await expect(title).toHaveCSS('font-weight', '600');
   await expect(line1.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
   const l1 = await boxOf(line1);
   const l2 = await boxOf(line2);

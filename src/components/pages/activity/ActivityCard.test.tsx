@@ -237,7 +237,7 @@ describe('ActivityCard', () => {
     ]);
     // The footer container renders even with a single entry.
     expect(html).toContain('min-h-[44px] items-center gap-1.5 px-[14px]');
-    expect(html).toContain('data-activity-time="" class="text-legacy-xs tabular-nums text-fg-3"');
+    expect(html).toContain('data-activity-time="" class="text-sm tabular-nums text-fg-3"');
     expect(html).not.toContain('more');
   });
 
@@ -246,7 +246,7 @@ describe('ActivityCard', () => {
       item({ id: 'a', eventType: 'comment' }),
       item({ id: 'b', eventType: 'mention' }),
     ]);
-    expect(html).toContain('data-activity-time="" class="text-legacy-xs tabular-nums text-fg-3"');
+    expect(html).toContain('data-activity-time="" class="text-sm tabular-nums text-fg-3"');
     expect(html).toContain('+1 more');
     // The toggle is an inset touch target, not the old full-width button.
     expect(html).toMatch(
@@ -392,7 +392,9 @@ describe('A3 @all in the Activity preview', () => {
         body: chatMentionPreview('@[all] standup in 5', () => undefined),
       }),
     ]);
-    expect(html).toMatch(/<span data-mention-all="" class="font-bold text-accent">@all<\/span>/);
+    expect(html).toMatch(
+      /<span data-mention-all="" class="font-semibold text-accent">@all<\/span>/,
+    );
     expect(html).not.toContain('@[');
   });
 });
@@ -469,7 +471,7 @@ describe('ActivityCard actor rows', () => {
     ]);
     expect(one).toContain('Asha deleted a file');
     // The filename is the card title.
-    expect(one).toMatch(/text-\[15px\][^"]*">brief\.pdf</);
+    expect(one).toMatch(/text-base font-medium[^"]*">brief\.pdf</);
     expect(one).toContain('role="button"');
     const many = renderCard([
       item({
@@ -709,7 +711,7 @@ describe('ActivityCard: notifications fixes', () => {
     const html = renderCard([
       item({ title: 'Q3', format: 'text', caption: 'A long caption for the launch post' }),
     ]);
-    expect(html).toContain('mt-auto line-clamp-3 text-legacy-xs leading-snug text-fg-2');
+    expect(html).toContain('mt-auto line-clamp-3 text-sm leading-snug text-fg-2');
     expect(html).not.toContain('line-clamp-4');
   });
 
@@ -770,7 +772,7 @@ describe('ActivityCard: notifications fixes', () => {
 
   it('fix 8: a posts row still shows its "Posts" scope tag', () => {
     const html = renderCard([item({ eventType: 'comment', scope: 'posts' })]);
-    expect(html).toMatch(/text-\[11px\] font-medium text-fg-2">Posts</);
+    expect(html).toMatch(/text-xs font-medium text-fg-2">Posts</);
   });
 
   it('fix 10: a body line wraps anywhere so a long token never overflows', () => {
@@ -815,7 +817,7 @@ describe('ActivityCard: notifications fixes', () => {
         }),
       ]);
       expect(html).toContain('>Asha deleted 5 files<');
-      expect(html).toMatch(/text-\[15px\][^"]*">deck\.pdf</);
+      expect(html).toMatch(/text-base font-medium[^"]*">deck\.pdf</);
       expect(html).toContain('Also hero.png, teaser.mov and 2 more');
       expect(html).toContain('data-activity-text-tile="PDF"');
       expect(html).toMatch(/data-activity-files-badge=""[^>]*>\+4</);

@@ -90,7 +90,7 @@ describe('ApproveConfirm', () => {
     const alert = elements(base({ error: 'x' })).find(
       (el) => (el.props as { role?: string }).role === 'alert',
     );
-    expect((alert?.props as { className: string }).className).toBe('text-legacy-sm text-bad');
+    expect((alert?.props as { className: string }).className).toBe('text-base text-bad');
     expect(texts(base({ error: null }))).toHaveLength(4);
   });
 

@@ -102,12 +102,12 @@ export function UsernameField({
 
   return (
     <div>
-      <label htmlFor="settings-username" className="mb-1.5 block text-legacy-sm font-medium">
+      <label htmlFor="settings-username" className="mb-1.5 block text-base font-medium">
         Username
       </label>
       <div className="flex gap-2">
         <div className="flex h-11 min-w-0 flex-1 items-center rounded-lg border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
-          <span className="text-legacy-sm text-fg-3">@</span>
+          <span className="text-base text-fg-3">@</span>
           <input
             id="settings-username"
             autoCapitalize="off"
@@ -119,7 +119,7 @@ export function UsernameField({
               setMessage(null);
               setValue(normalizeUsernameInput(event.target.value));
             }}
-            className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-legacy-sm text-fg outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-input text-fg outline-none md:text-base"
           />
         </div>
         {!unchanged ? (
@@ -128,10 +128,7 @@ export function UsernameField({
           </Button>
         ) : null}
       </div>
-      <p
-        className={cn('mt-1.5 text-[11px]', message !== null ? 'text-fg-2' : tone)}
-        aria-live="polite"
-      >
+      <p className={cn('mt-1.5 text-sm', message !== null ? 'text-fg-2' : tone)} aria-live="polite">
         {message ?? hint}
       </p>
     </div>

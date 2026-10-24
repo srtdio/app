@@ -261,7 +261,7 @@ function RowAvatar(props: { name: string; src: string | null }): ReactElement {
   return (
     <span
       aria-hidden="true"
-      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-panel-3 text-[11px] font-semibold text-fg-2"
+      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-panel-3 text-xs font-semibold text-fg-2"
     >
       {props.src !== null ? (
         <img src={props.src} alt="" draggable={false} className="h-full w-full object-cover" />
@@ -303,7 +303,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
         onClick={selecting !== undefined ? selecting.onToggle : props.onOpen}
         onContextMenu={noCallout}
         className={cn(
-          'flex min-h-[44px] w-full min-w-0 items-center gap-3 rounded-[16px] border border-border bg-panel p-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'flex min-h-[44px] w-full min-w-0 items-center gap-3 rounded-2xl border border-border bg-panel p-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           NO_TOUCH_SELECT,
         )}
       >
@@ -311,7 +311,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
         <span className="flex min-w-0 flex-1 flex-col gap-2">
           <span className="flex min-w-0 items-center gap-2">
             <RowAvatar name={props.sender} src={props.avatarUrl} />
-            <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg">
+            <span className="min-w-0 flex-1 truncate text-base text-fg">
               <span className="font-semibold">{props.sender}</span>
               {props.chat !== null ? (
                 <span data-starred-chat="" className="text-fg-3">
@@ -321,7 +321,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
             </span>
             <span
               data-starred-date=""
-              className="shrink-0 font-mono text-legacy-xs tabular-nums text-fg-3"
+              className="shrink-0 font-mono text-sm tabular-nums text-fg-3"
             >
               {props.date}
             </span>
@@ -330,7 +330,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
           <span
             data-starred-bubble={props.mine ? 'own' : 'peer'}
             className={cn(
-              'max-w-[92%] self-start whitespace-pre-wrap rounded-[18px] px-3 py-2 text-[15px] leading-5',
+              'max-w-[92%] self-start whitespace-pre-wrap rounded-[18px] px-3 py-2 text-lg leading-5',
               props.fullText === true
                 ? 'min-w-0 [overflow-wrap:anywhere]'
                 : 'line-clamp-3 break-words',
@@ -349,8 +349,8 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
 export function StarredEmpty(): ReactElement {
   return (
     <div data-starred-empty="" className="flex flex-col items-center gap-1 px-4 py-10 text-center">
-      <p className="text-[15px] font-semibold text-fg">{STARRED_EMPTY_TITLE}</p>
-      <p className="text-legacy-sm text-fg-2">{STARRED_EMPTY_LINE}</p>
+      <p className="text-lg font-semibold text-fg">{STARRED_EMPTY_TITLE}</p>
+      <p className="text-base text-fg-2">{STARRED_EMPTY_LINE}</p>
     </div>
   );
 }
@@ -564,7 +564,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
         type="button"
         data-starred-retry=""
         onClick={props.onRetry}
-        className="flex min-h-[44px] w-full items-center justify-center rounded-[14px] px-3 text-legacy-sm text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] w-full items-center justify-center rounded-[14px] px-3 text-base text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         Couldn&apos;t load. Try again.
       </button>
@@ -578,10 +578,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
     body = (
       <ul data-starred-loading="" className="flex flex-col gap-2.5">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
-          <li
-            key={i}
-            className="flex flex-col gap-2 rounded-[16px] border border-border bg-panel p-3"
-          >
+          <li key={i} className="flex flex-col gap-2 rounded-2xl border border-border bg-panel p-3">
             <div className="flex items-center gap-2">
               <div className="h-7 w-7 shrink-0 rounded-full bg-panel-2" />
               <div className="h-3.5 w-1/3 rounded bg-panel-2" />
@@ -713,8 +710,8 @@ export function StarredSheet(props: {
           <IconChevronLeft size={20} />
         </IconButton>
         <div className="flex min-w-0 flex-1 flex-col">
-          <h2 className="truncate text-[15px] font-semibold leading-5 text-fg">{STARRED_TITLE}</h2>
-          <span data-starred-chat-name="" className="truncate text-legacy-xs text-fg-2">
+          <h2 className="truncate text-lg font-semibold leading-5 text-fg">{STARRED_TITLE}</h2>
+          <span data-starred-chat-name="" className="truncate text-sm text-fg-2">
             {props.chatName}
           </span>
         </div>

@@ -99,7 +99,7 @@ describe('searchResultsView', () => {
       /data-search-snippet=""[^>]*><b data-search-match="" class="font-semibold text-fg">shoot<\/b>/,
     );
     // Group: rounded square; person: circle.
-    expect(html).toContain('[&amp;&gt;*]:!rounded-[12px]');
+    expect(html).toContain('[&amp;&gt;*]:!rounded-xl');
     // Long-press: no selection, no callout.
     expect(html).toContain('[-webkit-touch-callout:none]');
   });

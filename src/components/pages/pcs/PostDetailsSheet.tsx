@@ -96,10 +96,8 @@ function DetailRow({
         onClick={onTap}
         className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <span className="w-24 shrink-0 text-legacy-xs text-fg-3">{label}</span>
-        <span className="flex min-w-0 flex-1 items-center gap-2 text-legacy-sm text-fg">
-          {value}
-        </span>
+        <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
         <span className="ml-auto shrink-0 text-fg-3">
           <IconChevronRight size={18} />
         </span>
@@ -108,8 +106,8 @@ function DetailRow({
   }
   return (
     <div className="flex w-full min-h-[44px] items-center gap-3 px-2 py-2">
-      <span className="w-24 shrink-0 text-legacy-xs text-fg-3">{label}</span>
-      <span className="flex min-w-0 flex-1 items-center gap-2 text-legacy-sm text-fg">{value}</span>
+      <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
+      <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
       {locked ? (
         <span aria-hidden data-detail-row-lock="" className="ml-auto shrink-0 text-fg-3">
           <IconLock size={16} />
@@ -292,7 +290,7 @@ export function PostDetailsSheet({
 
           {isAgencySide ? (
             <div className="flex w-full min-h-[44px] items-center gap-3 px-2 py-2">
-              <span className="w-24 shrink-0 text-legacy-xs text-fg-3">Due date</span>
+              <span className="w-24 shrink-0 text-sm text-fg-3">Due date</span>
               <div data-details-date="" className="min-w-0 flex-1">
                 <DatePicker label="Due date" value={dateDraft} onChange={setDateDraft} />
               </div>
@@ -315,7 +313,7 @@ export function PostDetailsSheet({
           )}
 
           {isClient ? (
-            <p className="px-2 pt-2 text-legacy-xs text-fg-3">Only creators can change these.</p>
+            <p className="px-2 pt-2 text-sm text-fg-3">Only creators can change these.</p>
           ) : null}
         </div>
       </Sheet>
@@ -340,12 +338,12 @@ export function PostDetailsSheet({
                 resetNewBucket();
                 setPicker(null);
               }}
-              className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-legacy-sm text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-base text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <BucketDot colorHex={bucket.colorHex} />
               <span className="truncate">{bucket.name}</span>
               {bucket.id === bucketId ? (
-                <span className="ml-auto shrink-0 text-legacy-xs text-accent">Selected</span>
+                <span className="ml-auto shrink-0 text-sm text-accent">Selected</span>
               ) : null}
             </button>
           ))}
@@ -358,7 +356,7 @@ export function PostDetailsSheet({
                 setNewBucketName('');
                 setNewBucketError(null);
               }}
-              className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-legacy-sm font-medium text-accent transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-base font-medium text-accent transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               {NEW_BUCKET_LABEL}
             </button>
@@ -388,7 +386,7 @@ export function PostDetailsSheet({
                 }}
               />
               {newBucketError !== null ? (
-                <p role="alert" data-new-bucket-error="" className="text-legacy-xs text-bad">
+                <p role="alert" data-new-bucket-error="" className="text-sm text-bad">
                   {newBucketError}
                 </p>
               ) : null}
@@ -418,9 +416,7 @@ export function PostDetailsSheet({
 
       <Sheet open={picker === 'owner'} onClose={() => setPicker(null)} title="Choose an owner">
         {memberOptions.length === 0 ? (
-          <p className="px-1 py-6 text-center text-legacy-sm text-fg-3">
-            No active members to assign.
-          </p>
+          <p className="px-1 py-6 text-center text-base text-fg-3">No active members to assign.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {memberOptions.map((member) => (
@@ -431,7 +427,7 @@ export function PostDetailsSheet({
                   onChangeOwner(member.userId);
                   setPicker(null);
                 }}
-                className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-legacy-sm text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-base text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <Avatar
                   name={member.displayName}
@@ -440,7 +436,7 @@ export function PostDetailsSheet({
                 />
                 <span className="truncate">{member.displayName}</span>
                 {member.userId === ownerUserId ? (
-                  <span className="ml-auto shrink-0 text-legacy-xs text-accent">Selected</span>
+                  <span className="ml-auto shrink-0 text-sm text-accent">Selected</span>
                 ) : null}
               </button>
             ))}

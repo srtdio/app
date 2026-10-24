@@ -103,11 +103,9 @@ describe('PlanCardBody', () => {
       'agency',
     );
     expect(html).not.toContain('flex-wrap');
-    expect(html).toMatch(
-      /data-plan-title="" class="text-\[17px\][^"]*leading-\[22px\][^"]*\btruncate\b/,
-    );
-    expect(html).toMatch(/data-plan-progress="" class="truncate text-legacy-xs leading-4/);
-    expect(html).toMatch(/data-plan-range="" class="truncate font-mono text-\[13px\] leading-5/);
+    expect(html).toMatch(/data-plan-title="" class="text-xl font-semibold[^"]*\btruncate\b/);
+    expect(html).toMatch(/data-plan-progress="" class="truncate text-sm leading-4/);
+    expect(html).toMatch(/data-plan-range="" class="truncate font-mono text-md leading-5/);
   });
 
   it('agency: eyebrow, title, mono range, counts, progress, Open plan and Forward', () => {

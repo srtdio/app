@@ -43,7 +43,7 @@ export function PlanTabList(props: {
           data-plan-tab-section={section.key}
           className="flex flex-col gap-2"
         >
-          <h2 className="text-legacy-xs font-semibold uppercase tracking-wide text-fg-3">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
             {section.label}
           </h2>
           {section.bundles.map((bundle) => (
@@ -103,14 +103,14 @@ export function PlanTabCard(props: {
             percent={meta.percent}
             side="client"
           />
-          <span data-plan-tab-progress="" className="truncate text-legacy-xs leading-4 text-fg-3">
+          <span data-plan-tab-progress="" className="truncate text-sm leading-4 text-fg-3">
             {meta.label}
           </span>
         </>
       ) : (
         <span className="flex min-w-0 items-center gap-2">
           <DraftTag />
-          <span data-plan-tab-progress="" className="truncate text-legacy-xs leading-4 text-fg-3">
+          <span data-plan-tab-progress="" className="truncate text-sm leading-4 text-fg-3">
             {meta.label}
           </span>
         </span>
@@ -124,7 +124,7 @@ export function DraftTag(): ReactElement {
   return (
     <span
       data-plan-tab-draft=""
-      className="inline-flex h-5 shrink-0 items-center rounded-md bg-warn-soft px-1.5 text-[11px] font-semibold leading-4 text-warn"
+      className="inline-flex h-5 shrink-0 items-center rounded-md bg-warn-soft px-1.5 text-xs font-semibold leading-4 text-warn"
     >
       {PLAN_DRAFT_LABEL}
     </span>

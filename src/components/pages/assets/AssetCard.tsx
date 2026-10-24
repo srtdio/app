@@ -183,17 +183,17 @@ function AssetMedia({
 
       <div className="flex flex-col gap-1.5 border-t border-border p-2.5">
         <div className="flex items-start gap-2">
-          <span className="line-clamp-2 flex-1 break-words text-legacy-xs font-medium" title={name}>
+          <span className="line-clamp-2 flex-1 break-words text-base font-medium" title={name}>
             {name}
           </span>
           {item.kind === 'image' ? (
-            <span className="shrink-0 rounded bg-panel-2 px-1.5 py-px text-[10px] font-medium leading-[14px] text-fg-3">
+            <span className="shrink-0 rounded bg-panel-2 px-1.5 py-px text-xs font-medium text-fg-3">
               {mimeBadge(item.mimeType)}
             </span>
           ) : null}
         </div>
         {/* One 20px line, room on the right for the card's ⋯. */}
-        <div className="flex h-5 items-center pr-8 text-[11px] tabular-nums text-fg-3">
+        <div className="flex h-5 items-center pr-8 text-sm tabular-nums text-fg-3">
           <span className="truncate">
             {item.kind === 'link' ? linkDomain(item.externalUrl) : humanizeSize(item.sizeBytes)}
           </span>

@@ -38,7 +38,7 @@ export interface TaskLineContext {
 export const OPEN_TASKS_LABEL = 'Open tasks';
 
 const PILL =
-  'rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-[12.5px] font-medium leading-4 text-fg-3';
+  'rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-sm font-medium leading-4 text-fg-3';
 const PRESS = cn(
   'flex min-h-[44px] max-w-full items-center justify-center px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
   NO_TOUCH_SELECT,
@@ -148,7 +148,7 @@ function TaskBatch(props: {
       {open ? (
         <div
           data-task-batch-rows=""
-          className="mx-4 mb-1 flex w-[min(100%-2rem,420px)] flex-col gap-1 rounded-[10px] border border-border bg-panel-2 px-3 py-2 text-[13px] text-fg-2"
+          className="mx-4 mb-1 flex w-[min(100%-2rem,420px)] flex-col gap-1 rounded-[10px] border border-border bg-panel-2 px-3 py-2 text-md text-fg-2"
         >
           {rows.map((row, k) => (
             <p key={k} data-task-batch-row={row.kind} className="leading-5">

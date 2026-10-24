@@ -296,8 +296,8 @@ export function PipelineBoardView({
           >
             <div className="flex h-11 items-center gap-2 border-b border-border px-3">
               <StageDot stage={stage} />
-              <span className="text-legacy-sm font-medium">{stageLabel(stage)}</span>
-              <span className="ml-auto text-legacy-xs tabular-nums text-fg-3">{all.length}</span>
+              <span className="text-base font-medium">{stageLabel(stage)}</span>
+              <span className="ml-auto text-sm tabular-nums text-fg-3">{all.length}</span>
             </div>
             {all.length === 0 ? (
               <div data-column-empty="">{StageEmpty({ stage, compact: true })}</div>

@@ -53,11 +53,11 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         </span>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={`truncate text-legacy-sm font-medium ${error ? 'text-white' : 'text-fg'}`}>
+        <span className={`truncate text-base font-medium ${error ? 'text-white' : 'text-fg'}`}>
           {title}
         </span>
         {description !== undefined ? (
-          <span className={`truncate text-legacy-xs ${error ? 'text-white' : 'text-fg-2'}`}>
+          <span className={`truncate text-sm ${error ? 'text-white' : 'text-fg-2'}`}>
             {description}
           </span>
         ) : null}
@@ -111,7 +111,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
             action.onPress();
             onDismiss(id);
           }}
-          className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-legacy-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+          className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
             error
               ? 'text-white underline hover:opacity-90 focus-visible:ring-white'
               : 'text-accent hover:bg-panel-2 focus-visible:ring-accent'

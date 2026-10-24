@@ -212,11 +212,12 @@ describe('reading layer elements', () => {
     expect(none).not.toContain('data-latest-count');
   });
 
-  it('Seen line is 11/15 muted with a mono time', () => {
+  it('Seen line is 11/15 muted with a sans tabular time', () => {
     const html = renderToStaticMarkup(<SeenLine readAt="2026-10-02T10:05:00Z" timeZone="UTC" />);
     expect(html).toContain('text-[11px] leading-[15px]');
     expect(html).toContain('Seen');
-    expect(html).toContain('font-mono');
+    expect(html).toContain('font-sans tabular-nums');
+    expect(html).not.toContain('font-mono');
   });
 
   it('Seen shows read_at on the workspace clock; no read_at reads "Seen" with no time', () => {
@@ -226,7 +227,7 @@ describe('reading layer elements', () => {
     expect(kolkata).not.toContain(formatClockTime(at, 'UTC'));
     const none = renderToStaticMarkup(<SeenLine readAt={null} timeZone="UTC" />);
     expect(none).toContain('Seen');
-    expect(none).not.toContain('font-mono');
+    expect(none).not.toContain('font-sans tabular-nums');
     expect(none.replace(/<[^>]*>/g, '').trim()).toBe('Seen');
   });
 
@@ -256,7 +257,7 @@ describe('reading layer elements', () => {
       />,
     );
     expect(html).toContain(formatClockTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
-    expect(html.match(/font-mono text-legacy-xs tabular-nums/g)?.length).toBe(1);
+    expect(html.match(/font-mono text-sm tabular-nums/g)?.length).toBe(1);
   });
 
   it('Read by line is a real button with a 44px hit area', () => {

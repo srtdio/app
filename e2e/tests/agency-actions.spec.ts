@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { COLLEAGUE_A, ME, POST_IDS, setHarnessPlatform, WORKSPACE_ID } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
@@ -165,3 +165,38 @@ for (const c of CASES) {
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   });
 }
+
+// Type roles on the post page (design rules, locked 24 Oct 2026): the page
+// title is 28px/600, the caption is body text at 14px and the details line is
+// meta at 12px. The post page has no section label on screen.
+
+/** The computed type of one element: size, weight and case. */
+function typeOf(locator: Locator) {
+  return locator.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { size: s.fontSize, weight: s.fontWeight, transform: s.textTransform };
+  });
+}
+
+test('PCS type roles: page title 28px, caption body 14px, details meta 12px @theme', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  withKey(network);
+  await page.goto(`/posts/${POST_IDS[0]}`);
+  const title = page.locator('h1', { hasText: 'Monday carousel' }).first();
+  await title.waitFor({ state: 'visible', timeout: 15_000 });
+
+  const titleType = await typeOf(title);
+  expect(titleType.size).toBe('28px');
+  expect(titleType.weight).toBe('600');
+
+  const caption = page.locator('[data-caption-block]').getByText('Fixture caption').first();
+  await expect(caption).toBeVisible();
+  expect((await typeOf(caption)).size).toBe('14px');
+
+  const meta = page.locator('[data-post-details]').first();
+  await expect(meta).toBeVisible();
+  expect((await typeOf(meta)).size).toBe('12px');
+  expectNoBlocked(network);
+});
