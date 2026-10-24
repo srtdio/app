@@ -918,7 +918,7 @@ export function searchChips(props: {
       data-search-chips=""
       role="group"
       aria-label="Filter messages"
-      className="flex min-w-0 flex-1 touch-pan-x flex-nowrap gap-2 overflow-x-auto overflow-y-hidden pr-10 [mask-image:linear-gradient(to_right,#000_calc(100%-40px),transparent)] [scrollbar-width:none] [-webkit-mask-image:linear-gradient(to_right,#000_calc(100%-40px),transparent)] [&::-webkit-scrollbar]:hidden"
+      className="flex min-w-0 flex-1 touch-pan-x flex-nowrap gap-2 overflow-x-auto overflow-y-hidden pr-10 [mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)] [scrollbar-width:none] [-webkit-mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)] [&::-webkit-scrollbar]:hidden"
     >
       {HOME_CHIPS.map((chip) => {
         const on = props.kind === chip.kind;

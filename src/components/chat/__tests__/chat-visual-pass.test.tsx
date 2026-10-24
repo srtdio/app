@@ -58,7 +58,7 @@ describe('chat visual pass', () => {
   it('filter chips fade at the trailing edge so a clipped chip reads as more', () => {
     const html = renderToStaticMarkup(searchChips({ kind: null, onChange: () => undefined }));
     expect(html).toContain(
-      '[mask-image:linear-gradient(to_right,#000_calc(100%-40px),transparent)]',
+      '[mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)]',
     );
     expect(html).toContain('pr-10');
   });
