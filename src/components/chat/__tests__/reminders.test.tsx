@@ -247,7 +247,7 @@ describe('UI-3 S10: reminder state in the long-press menu', () => {
       html.indexOf('data-reminder-row="custom"'),
     );
     expect(html).toContain(CANCEL_REMINDER_LABEL);
-    expect(html).toMatch(/data-reminder-row="cancel"[^>]*text-bad/);
+    expect(html).toMatch(/<button(?=[^>]*data-reminder-row="cancel")(?=[^>]*class="[^"]*text-bad)/);
     const plain = renderToStaticMarkup(<ReminderOptions preview={null} onPick={noop} />);
     expect(plain).not.toContain('data-reminder-row="cancel"');
   });

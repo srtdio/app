@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import { ICON_SIZE, IconChat, IconPlan } from '@/components/ui/icons';
@@ -473,12 +474,12 @@ function forwardList(
     <div className="h-[288px] overflow-y-auto">
       <div className={cn('flex flex-col gap-1', NO_TOUCH_SELECT)}>
         {channels.map((channel) => (
-          <button
+          <PressableRow
             key={channel.channelId}
             type="button"
             data-plan-forward-target={channel.channelId}
             onClick={() => onPick(channel)}
-            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-fg transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex items-center gap-3 px-3 py-2 text-fg transition-colors"
           >
             <span className="flex shrink-0 items-center justify-center text-fg-2">
               <IconChat size={ICON_SIZE.nav} />
@@ -501,7 +502,7 @@ function forwardList(
                 {HAS_CLIENT_TAG}
               </span>
             ) : null}
-          </button>
+          </PressableRow>
         ))}
       </div>
     </div>

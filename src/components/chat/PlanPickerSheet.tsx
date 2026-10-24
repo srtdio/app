@@ -11,6 +11,7 @@
 import { useMemo } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconChevronRight, IconPlan, IconPlus } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -116,15 +117,16 @@ export function PlanPickerSheet(props: {
                 </div>
               ) : (
                 pickerRows(read.data, inChat).map(({ bundle, chips }) => (
-                  <button
+                  <PressableRow
                     key={bundle.plan.id}
+                    flat
                     type="button"
                     data-plan-pick={bundle.plan.id}
                     onClick={() => {
                       props.onClose();
                       props.onOpenPlan(bundle.plan.id);
                     }}
-                    className="flex min-h-[72px] w-full items-center gap-3 border-b border-border py-3 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="flex min-h-[72px] items-center gap-3 border-b border-border py-3"
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
                       <IconPlan size={ICON_SIZE.control} />
@@ -154,17 +156,17 @@ export function PlanPickerSheet(props: {
                     <span className="shrink-0 text-fg-3">
                       <IconChevronRight />
                     </span>
-                  </button>
+                  </PressableRow>
                 ))
               )}
-              <button
+              <PressableRow
                 type="button"
                 data-plan-pick-new=""
                 onClick={() => {
                   props.onClose();
                   props.onNewPlan();
                 }}
-                className="flex min-h-[48px] w-full items-center gap-3 py-2 text-left text-lg font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="flex min-h-[48px] items-center gap-3 py-2 text-lg font-semibold text-accent"
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-2">
                   <IconPlus size={ICON_SIZE.control} />
@@ -173,7 +175,7 @@ export function PlanPickerSheet(props: {
                 <span className="shrink-0 text-fg-3">
                   <IconChevronRight />
                 </span>
-              </button>
+              </PressableRow>
             </div>
           )}
         </div>

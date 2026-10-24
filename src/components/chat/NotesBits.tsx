@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import type { SavedFromLine } from '@/lib/chat/saved-from';
 import { ICON_SIZE, IconFile } from '@/components/ui/icons';
+import { PressableRow } from '@/components/ui/PressableRow';
 
 /** The notes photo slot: 76px tile (radius 18), 40px header and 44px picker/search (radius 12). */
 const NOTES_AVATAR_BOX = {
@@ -223,8 +224,9 @@ export function SavedFromLabel(props: {
     );
   }
   return (
-    <button
+    <PressableRow
       type="button"
+      inline
       data-saved-from="source"
       aria-label={`${line.label}, open the original message`}
       onClick={(event) => {
@@ -232,11 +234,12 @@ export function SavedFromLabel(props: {
         props.onOpen(line);
       }}
       className={cn(
-        '-mb-2 -mt-3 flex min-h-[44px] max-w-full items-center gap-1.5 rounded-md text-left text-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        '-mb-2 -mt-3 flex max-w-full items-center gap-1.5 text-md',
         ink,
+        props.mine && 'hover:bg-accent-hover',
       )}
     >
       {body}
-    </button>
+    </PressableRow>
   );
 }

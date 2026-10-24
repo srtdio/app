@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Textarea } from '@/components/ui/Textarea';
 import { ICON_SIZE, IconCalendarClock } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -234,18 +235,19 @@ function CardAction(props: {
   children: string;
 }): ReactElement {
   return (
-    <button
+    <PressableRow
       type="button"
+      align="center"
       data-card-action={props.children}
       disabled={props.disabled}
       onClick={props.onClick}
       className={cn(
-        'inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap rounded-md px-1 text-md font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap px-1 text-md font-medium transition-colors duration-fast',
         CARD_ACTION_TONE[props.tone ?? 'plain'],
       )}
     >
       {props.children}
-    </button>
+    </PressableRow>
   );
 }
 

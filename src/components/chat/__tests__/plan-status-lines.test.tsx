@@ -241,8 +241,13 @@ describe('the PLAN switch and the decided pill', () => {
     expect(html).toContain('data-plan-slot="client"');
     expect(html).toContain('data-plan-slot-state="pending"');
     expect(html).toContain('data-plan-control="switch"');
-    expect(html).toMatch(/aria-pressed="false" data-plan-ok=""[^>]*class="[^"]*h-11/);
-    expect(html).toMatch(/aria-pressed="false" data-plan-not-ok=""[^>]*class="[^"]*h-11/);
+    // Attribute order follows the primitive, so match each part of the opening tag.
+    expect(html).toMatch(
+      /<button(?=[^>]*aria-pressed="false")(?=[^>]*data-plan-ok="")(?=[^>]*class="[^"]*h-11)/,
+    );
+    expect(html).toMatch(
+      /<button(?=[^>]*aria-pressed="false")(?=[^>]*data-plan-not-ok="")(?=[^>]*class="[^"]*h-11)/,
+    );
     expect(html).toMatch(/data-plan-ok=""[\s\S]*?>OK<\/span><\/button>/);
     expect(html).toMatch(/data-plan-not-ok=""[\s\S]*?>Not OK<\/span><\/button>/);
     expect(html).not.toContain('role="checkbox"');

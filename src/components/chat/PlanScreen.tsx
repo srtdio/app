@@ -82,6 +82,7 @@ import {
 import type { PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
@@ -2024,12 +2025,13 @@ export function PlanScreen(props: {
   // in a 44px tap target, the last one's right edge on the 16px line.
   const viewActions = (
     <span data-plan-header-actions="" className="flex shrink-0 items-center gap-2">
-      <button
+      <PressableRow
         type="button"
+        inline
         aria-label="Add to plan"
         data-plan-add-header=""
         onClick={() => openAdd(null)}
-        className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
+        className="group flex h-11 shrink-0 items-center"
       >
         <span
           data-plan-header-box=""
@@ -2038,12 +2040,13 @@ export function PlanScreen(props: {
           <IconPlus size={ICON_SIZE.inline} />
           Add
         </span>
-      </button>
-      <button
+      </PressableRow>
+      <PressableRow
         type="button"
+        inline
         data-plan-edit=""
         onClick={enterEdit}
-        className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
+        className="group flex h-11 shrink-0 items-center"
       >
         <span
           data-plan-header-box=""
@@ -2052,7 +2055,7 @@ export function PlanScreen(props: {
           <IconEdit size={ICON_SIZE.inline} />
           {EDIT_LABEL}
         </span>
-      </button>
+      </PressableRow>
     </span>
   );
   return (
@@ -2514,15 +2517,16 @@ function PlanTitleButton(props: {
   onToggle: () => void;
 }): ReactElement {
   return (
-    <button
+    <PressableRow
       type="button"
+      inline
       data-plan-title-menu=""
       aria-haspopup="menu"
       aria-expanded={props.open}
       onClick={props.onToggle}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        '-ml-1 flex min-h-[44px] min-w-0 max-w-full items-center gap-1.5 self-start rounded-lg px-1 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        '-ml-1 flex min-w-0 max-w-full items-center gap-1.5 self-start px-1',
         NO_TOUCH_SELECT,
       )}
     >
@@ -2530,7 +2534,7 @@ function PlanTitleButton(props: {
       <span aria-hidden="true" className="shrink-0 text-fg-2">
         <IconChevronDown size={ICON_SIZE.nav} />
       </span>
-    </button>
+    </PressableRow>
   );
 }
 
@@ -2609,27 +2613,29 @@ export function PlanHeaderMenu(props: {
         NO_TOUCH_SELECT,
       )}
     >
-      <button
+      <PressableRow
         type="button"
         role="menuitem"
         data-plan-menu-rename=""
         onClick={props.onRename}
-        className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-lg text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        flat
+        className="flex items-center gap-3 px-3 text-lg text-fg"
       >
         <IconEdit size={ICON_SIZE.nav} />
         {RENAME_LABEL}
-      </button>
+      </PressableRow>
       {props.canDelete ? (
-        <button
+        <PressableRow
           type="button"
           role="menuitem"
           data-plan-menu-delete=""
           onClick={props.onDelete}
-          className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-lg text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          flat
+          className="flex items-center gap-3 px-3 text-lg text-bad hover:bg-bad-soft"
         >
           <IconTrash size={ICON_SIZE.nav} />
           {DELETE_PLAN_LABEL}
-        </button>
+        </PressableRow>
       ) : null}
     </div>
   );
@@ -3245,7 +3251,7 @@ function AddRow(props: {
         aria-label={label}
         data-plan-add={props.day ?? 'none'}
         onClick={() => props.onAdd(props.day)}
-        className="!gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <IconPlus size={ICON_SIZE.inline} />
         Add
@@ -3330,12 +3336,13 @@ export function PlanSwitch(props: {
       data-plan-control="switch"
       className="flex shrink-0 items-center"
     >
-      <button
+      <PressableRow
         type="button"
+        inline
         aria-pressed={props.current === 'approved'}
         data-plan-ok=""
         onClick={props.onOk}
-        className="group flex h-11 items-center focus-visible:outline-none"
+        className="group flex h-11 items-center"
       >
         <span
           className={cn(
@@ -3349,13 +3356,14 @@ export function PlanSwitch(props: {
           <IconCheck size={ICON_SIZE.inline} />
           {PLAN_OK_LABEL}
         </span>
-      </button>
-      <button
+      </PressableRow>
+      <PressableRow
         type="button"
+        inline
         aria-pressed={props.current === 'changes'}
         data-plan-not-ok=""
         onClick={props.onNotOk}
-        className="group -ml-px flex h-11 items-center focus-visible:outline-none"
+        className="group -ml-px flex h-11 items-center"
       >
         <span
           className={cn(
@@ -3369,7 +3377,7 @@ export function PlanSwitch(props: {
           <IconX size={ICON_SIZE.inline} />
           {PLAN_NOT_OK_LABEL}
         </span>
-      </button>
+      </PressableRow>
     </span>
   );
 }
@@ -3387,15 +3395,16 @@ export function PlanDecidedPill(props: {
 }): ReactElement {
   const ok = props.status === 'approved';
   return (
-    <button
+    <PressableRow
       type="button"
+      inline
       aria-label={`${PLAN_LINE_LABEL} ${ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}: ${props.title}`}
       aria-haspopup="true"
       data-plan-slot={props.side}
       data-plan-slot-state={planControlState(props.status)}
       data-plan-control="pill"
       onClick={props.onChange}
-      className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
+      className="group flex h-11 shrink-0 items-center"
     >
       <span
         className={cn(
@@ -3409,7 +3418,7 @@ export function PlanDecidedPill(props: {
           <IconChevronDown size={ICON_SIZE.inline} />
         </span>
       </span>
-    </button>
+    </PressableRow>
   );
 }
 
@@ -3682,7 +3691,7 @@ function PlanRow(props: {
   const picked = edit?.pickedId === id;
   const meta = rowMeta(props.bundle, props.item);
   const rowButton = (
-    <button
+    <PressableRow
       type="button"
       data-plan-row={props.item.id}
       onContextMenu={(event) => event.preventDefault()}
@@ -3693,7 +3702,7 @@ function PlanRow(props: {
       }}
       {...(picked ? { 'data-plan-row-picked': '' } : {})}
       className={cn(
-        'flex w-full min-w-0 items-start gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex min-w-0 items-start gap-3',
         picked && 'ring-2 ring-accent ring-offset-2 ring-offset-panel',
         edit !== undefined && 'cursor-default',
         NO_TOUCH_SELECT,
@@ -3722,7 +3731,7 @@ function PlanRow(props: {
         conceptThumb={props.conceptThumb ?? null}
         muted={false}
       />
-    </button>
+    </PressableRow>
   );
   const lines = (
     <PlanStatusLines

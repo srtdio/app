@@ -151,7 +151,7 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     );
     expect(both).toContain('role="menu"');
     expect(both).toContain('Rename');
-    expect(both).toMatch(/data-plan-menu-delete=""[^>]*text-bad/);
+    expect(both).toMatch(/<button(?=[^>]*data-plan-menu-delete="")(?=[^>]*class="[^"]*text-bad)/);
     expect(both).toContain('Delete plan');
     expect(both.match(/min-h-\[44px\]/g)).toHaveLength(2);
     // translateY only, tokens only.

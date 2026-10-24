@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconAlarmClock, IconChevronRight, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -151,11 +152,11 @@ function PresetRow(props: {
 }): ReactElement {
   return (
     <li>
-      <button
+      <PressableRow
         type="button"
         data-reminder-row={props.id}
         onClick={props.onClick}
-        className="flex min-h-[56px] w-full items-center gap-3 rounded-md px-2 text-left text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[56px] items-center gap-3 px-2 text-fg"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2">
           <IconAlarmClock size={ICON_SIZE.control} />
@@ -166,7 +167,7 @@ function PresetRow(props: {
         ) : (
           <IconChevronRight size={ICON_SIZE.inline} className="text-fg-3" />
         )}
-      </button>
+      </PressableRow>
     </li>
   );
 }
@@ -175,17 +176,17 @@ function PresetRow(props: {
 function CancelReminderRow(props: { onClick: () => void }): ReactElement {
   return (
     <li className="mt-1 border-t border-border pt-1">
-      <button
+      <PressableRow
         type="button"
         data-reminder-row="cancel"
         onClick={props.onClick}
-        className="flex min-h-[56px] w-full items-center gap-3 rounded-md px-2 text-left text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[56px] items-center gap-3 px-2 text-bad hover:bg-bad-soft"
       >
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bad-soft text-bad">
           <IconX size={ICON_SIZE.control} />
         </span>
         <span className="flex-1 text-lg font-medium">{CANCEL_REMINDER_LABEL}</span>
-      </button>
+      </PressableRow>
     </li>
   );
 }
