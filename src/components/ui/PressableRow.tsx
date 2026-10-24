@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 
 export interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Ref to the rendered <button>; a plain prop so PressableRow stays a callable function. */
-  buttonRef?: Ref<HTMLButtonElement>;
+  buttonRef?: Ref<HTMLButtonElement> | undefined;
 }
 
 // The tappable-surface primitive: list rows, menu rows, tiles, cards and

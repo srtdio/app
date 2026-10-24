@@ -21,7 +21,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** 'round' renders a 44x44 circle (composer actions); default is the 8px-radius rectangle. */
   shape?: 'default' | 'round';
   /** Ref to the rendered <button>; a plain prop so Button stays a callable function. */
-  buttonRef?: Ref<HTMLButtonElement>;
+  buttonRef?: Ref<HTMLButtonElement> | undefined;
 }
 
 // One height (44), one radius (8), one type (14 / 500). Tokens only, so light

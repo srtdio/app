@@ -21,7 +21,7 @@ interface ChipProps extends Omit<
   className?: string;
   onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
   /** Ref to the rendered <button>; a plain prop so Chip stays a callable function. */
-  buttonRef?: Ref<HTMLButtonElement>;
+  buttonRef?: Ref<HTMLButtonElement> | undefined;
 }
 
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {

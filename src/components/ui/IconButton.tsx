@@ -4,7 +4,7 @@ import { cn } from '@/lib/cn';
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
   /** Ref to the rendered <button>; a plain prop so IconButton stays a callable function. */
-  buttonRef?: Ref<HTMLButtonElement>;
+  buttonRef?: Ref<HTMLButtonElement> | undefined;
 }
 
 export function IconButton({ label, className, children, buttonRef, ...props }: IconButtonProps) {
