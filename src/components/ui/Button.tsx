@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/cn';
 
 export type ButtonVariant =
@@ -20,6 +20,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md' | 'lg';
   /** 'round' renders a 44x44 circle (composer actions); default is the 8px-radius rectangle. */
   shape?: 'default' | 'round';
+  /** Ref to the rendered <button>; a plain prop so Button stays a callable function. */
+  buttonRef?: Ref<HTMLButtonElement>;
 }
 
 // One height (44), one radius (8), one type (14 / 500). Tokens only, so light
@@ -60,8 +62,9 @@ export function Button({
   size,
   shape = 'default',
   className,
+  buttonRef,
   ...props
 }: ButtonProps) {
   void size;
-  return <button className={buttonClass(variant, shape, className)} {...props} />;
+  return <button ref={buttonRef} className={buttonClass(variant, shape, className)} {...props} />;
 }
