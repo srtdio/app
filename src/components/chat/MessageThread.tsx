@@ -2377,6 +2377,7 @@ export function MessageBubble(props: {
                     cache={cache}
                     presignEnabled={presignEnabled}
                     album
+                    albumCorners={bubbleCorners(shape)}
                     onCancelUpload={cancelUpload}
                     caption={hasBody ? body : undefined}
                     onImageClick={(_attachment, index) => props.onOpenImage?.(index)}

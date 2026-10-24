@@ -19,6 +19,7 @@ import { leaveSelectionThen } from '@/lib/chat/forward';
 import {
   bodyText,
   bubbleClass,
+  bubbleCorners,
   bubbleMeta,
   BubbleMetaView,
   metaPlacement,
@@ -1353,6 +1354,22 @@ describe('image album and viewer', () => {
     });
     return found;
   }
+
+  it('the album rounds exactly like its bubble: touch 18 with the tail, laptop 12 with the head corner', () => {
+    for (const layout of ['touch', 'laptop'] as const) {
+      for (const tail of [true, false]) {
+        const el = attachmentsEl(renderBubble(albumMessage, { layout, tail, head: true }));
+        const corners = (el?.props as { albumCorners?: string }).albumCorners;
+        const expected = bubbleCorners({ mine: false, head: true, tail, layout });
+        expect(corners).toBe(expected);
+        expect(corners).toContain(layout === 'touch' ? 'rounded-[18px]' : 'rounded-xl');
+      }
+    }
+    const touchTail = attachmentsEl(renderBubble(albumMessage, { tail: true, layout: 'touch' }));
+    expect((touchTail?.props as { albumCorners?: string }).albumCorners).toContain(
+      'rounded-bl-[4px]',
+    );
+  });
 
   it('renders the album with its caption and 3px bubble padding', () => {
     expect(hasAlbum(albumMessage)).toBe(true);
