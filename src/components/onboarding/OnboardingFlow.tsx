@@ -1242,4 +1242,3 @@ function WaitingPreview(): ReactElement {
     </>
   );
 }
-

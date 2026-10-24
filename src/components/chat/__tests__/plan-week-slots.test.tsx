@@ -273,9 +273,7 @@ describe('Undo restores the exact previous status (A3)', () => {
 describe('week list layout (L1-L4)', () => {
   it('date tile: 56x56, weekday strip over the number; today accent strip and border; No date', () => {
     const today = renderToStaticMarkup(<DayColumn day="2026-10-14" today="2026-10-14" />);
-    expect(today).toContain(
-      'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border',
-    );
+    expect(today).toContain('flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border');
     expect(today).toContain('data-plan-today=""');
     expect(today).toContain('border-accent');
     expect(today).toMatch(/data-plan-day-weekday=""[^>]*bg-accent text-accent-fg">Wed</);
