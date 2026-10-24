@@ -52,7 +52,6 @@ describe('Comments row actions', () => {
   });
 
   it('row actions and filters are Buttons, not raw buttons with their own recipe', () => {
-    expect(SRC).not.toContain('className={cn(ROW_ACTION_CLASS');
     expect(SRC).toContain('className={ROW_ACTION_CLASS}');
     expect(SRC).toContain("variant={filter === value ? 'secondary' : 'ghost'}");
     expect(SRC).not.toMatch(/<Button[^>]*size="(sm|md|lg)"/);

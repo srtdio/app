@@ -413,7 +413,7 @@ describe('load status', () => {
     expect(texts(tree)).not.toContain('Select');
     const empty = findAll(tree, (el) => el.type === EmptyState)[0]!;
     const retry = (empty.props as { action: ReactElement }).action;
-    expect(retry.props).toMatchObject({ size: 'lg', children: 'Retry' });
+    expect(retry.props).toMatchObject({ children: 'Retry' });
     expect((retry.props as { className: string }).className).toContain('min-w-[44px]');
     (retry.props as { onClick: () => void }).onClick();
     expect(onRetry).toHaveBeenCalledTimes(1);

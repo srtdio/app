@@ -93,7 +93,7 @@ describe('chatUnavailableView', () => {
     expect(buttons).toHaveLength(1);
     (buttons[0]?.props as { onClick: () => void }).onClick();
     expect(onRetry).toHaveBeenCalledOnce();
-    // 44px touch target via the lg button size.
-    expect((buttons[0]?.props as { size: string }).size).toBe('lg');
+    // 44px touch target: every Button is 44 tall, no size prop needed.
+    expect((buttons[0]?.props as { size?: string }).size).toBeUndefined();
   });
 });

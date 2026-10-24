@@ -78,7 +78,7 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
         isolate(event);
         setOpen((prev) => !prev);
       }}
-      className="shrink-0 text-fg-3"
+      className="shrink-0 !text-fg-3"
     >
       <IconMore size={20} />
     </IconButton>

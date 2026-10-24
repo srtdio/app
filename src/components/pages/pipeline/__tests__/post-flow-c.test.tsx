@@ -40,6 +40,7 @@ import {
   type ConfirmTarget,
 } from '@/components/pages/pipeline/StageMoveConfirm';
 import { BoardApproveConfirm } from '@/components/pages/pipeline/PipelineBoard';
+import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import {
   PipelineDateControl,
@@ -333,9 +334,9 @@ describe('post flow C: header, count and filters', () => {
     const onShow = vi.fn();
     const hint = undatedHint('This week', 2, onShow)!;
     expect(text(hint)).toContain('This week. 2 posts with no date are hidden.');
-    const show = all(hint).find((el) => el.type === 'button')!;
+    const show = all(hint).find((el) => el.type === Button)!;
     expect(text(show)).toBe('Show them');
-    expect((show.props as { className: string }).className).toContain('min-h-[44px]');
+    expect((show.props as { variant: string }).variant).toBe('link');
     (show.props as { onClick: () => void }).onClick();
     expect(onShow).toHaveBeenCalledTimes(1);
 

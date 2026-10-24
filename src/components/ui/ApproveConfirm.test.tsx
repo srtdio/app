@@ -106,15 +106,15 @@ describe('ApproveConfirm', () => {
     expect(busy.every((el) => (el.props as { disabled: boolean }).disabled)).toBe(true);
   });
 
-  it('Back and Approve are lg Buttons, Approve the success variant, tokens only', () => {
+  it('Back is secondary, Approve the success variant, no size, tokens only', () => {
     const buttons = elements(base()).filter((el) => el.type === Button);
     const [back, approve] = buttons.map(
       (el) => el.props as { variant?: string; size?: string; className: string },
     );
-    expect(back?.variant).toBeUndefined();
-    expect(back?.size).toBe('lg');
+    expect(back?.variant).toBe('secondary');
+    expect(back?.size).toBeUndefined();
     expect(approve?.variant).toBe('success');
-    expect(approve?.size).toBe('lg');
+    expect(approve?.size).toBeUndefined();
     expect(`${back?.className} ${approve?.className}`).not.toMatch(/#[0-9a-f]{3,6}|dark:|rgba/i);
   });
 
