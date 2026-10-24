@@ -71,6 +71,7 @@ vi.mock('@/components/pages/pipeline/MoveSheet', () => ({ MoveSheet: () => null 
 vi.mock('@/components/pages/pipeline/StageChips', () => ({ StageChips: () => null }));
 vi.mock('@/components/pages/pipeline/PipelineSortControl', () => ({
   PipelineSortControl: () => null,
+  PipelineFilterControl: () => null,
   PipelineDateControl: () => null,
   customRangeLabel: () => '',
 }));
