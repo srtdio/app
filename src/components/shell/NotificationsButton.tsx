@@ -8,6 +8,7 @@ import type { ReactElement } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { CountBadge } from '@/components/ui/CountBadge';
+import { IconButton } from '@/components/ui/IconButton';
 import { IconNotifications, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction';
@@ -34,16 +35,16 @@ export function NotificationsButton(): ReactElement {
   const { pathname } = useLocation();
   const active = onNotifications(pathname);
   return (
-    <button
+    <IconButton
       type="button"
+      label={notificationsLabel(unreadCount)}
       data-notifications-button=""
       data-induction={INDUCTION_KEYS.activityTab}
-      aria-label={notificationsLabel(unreadCount)}
       {...(active ? { 'aria-current': 'page' as const } : {})}
       onClick={() => navigate(NOTIFICATIONS_PATH)}
       className={cn(
-        'relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        active ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
+        'relative shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        active && 'bg-accent-soft !text-accent hover:!bg-accent-soft hover:!text-accent',
       )}
     >
       <IconNotifications size={ICON_SIZE.control} />
@@ -53,6 +54,6 @@ export function NotificationsButton(): ReactElement {
           className="absolute right-0.5 top-0.5 border-2 border-panel"
         />
       ) : null}
-    </button>
+    </IconButton>
   );
 }

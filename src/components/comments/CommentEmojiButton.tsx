@@ -8,6 +8,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
+import { IconButton } from '@/components/ui/IconButton';
 import { IconSmile, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -80,11 +81,11 @@ export function CommentEmojiButton(props: {
 
   return (
     <>
-      <button
-        ref={buttonRef}
+      <IconButton
+        buttonRef={buttonRef}
         type="button"
+        label="Emoji"
         data-comment-emoji=""
-        aria-label="Emoji"
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={props.disabled}
@@ -99,13 +100,13 @@ export function CommentEmojiButton(props: {
           setOpen(true);
         }}
         className={cn(
-          'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
-          open ? 'text-accent' : 'text-fg-2',
+          'shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
+          open && '!text-accent',
           props.className,
         )}
       >
         <IconSmile size={ICON_SIZE.control} />
-      </button>
+      </IconButton>
       <EmojiPickerShell
         open={open}
         onClose={close}

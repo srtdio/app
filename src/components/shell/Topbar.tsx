@@ -1,7 +1,7 @@
 import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
 import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Avatar } from '@/components/ui/Avatar';
-import { Button, buttonClass } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronDown, IconPlus, IconSearch, ICON_SIZE } from '@/components/ui/icons';
 import { dispatchSorted } from '@/lib/events';
@@ -47,17 +47,14 @@ export function Topbar({
       ) : workspaceName === null ? (
         <span className="md:hidden h-4 w-24 rounded bg-panel-3 animate-pulse" aria-hidden />
       ) : (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Switch workspace"
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className={buttonClass(
-            'ghost',
-            'default',
-            'md:hidden min-w-0 max-w-[190px] !justify-start !gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          )}
+          className="md:hidden min-w-0 max-w-[190px] !justify-start !gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
               short lines at word breaks instead of clipping the platform. */}
@@ -65,7 +62,7 @@ export function Topbar({
             {workspaceName}
           </span>
           <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
-        </button>
+        </Button>
       )}
 
       {onCreateWorkspace !== undefined ? null : (

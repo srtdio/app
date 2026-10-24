@@ -14,6 +14,7 @@ import { Field } from '@/components/ui/Field';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { IconCheck, IconPlus, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { storeInductionStep } from '@/components/induction/induction-data';
 import { supabase } from '@/lib/supabase';
@@ -326,14 +327,14 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               workspaces.map((ws) => {
                 const isActive = ws.id === workspaceId;
                 return (
-                  <button
+                  <PressableRow
                     key={ws.id}
                     type="button"
                     onClick={() => selectWorkspace(ws.id)}
                     aria-current={isActive}
                     className={cn(
-                      'flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-2.5 text-left transition-colors',
-                      isActive ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2',
+                      'flex items-center gap-2.5 px-2.5 transition-colors',
+                      isActive ? 'bg-accent-soft text-accent hover:!bg-accent-soft' : 'text-fg-2',
                     )}
                   >
                     <Avatar name={ws.name} size="lg" />
@@ -343,12 +344,12 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                     {isActive ? (
                       <IconCheck size={ICON_SIZE.nav} className="shrink-0 text-accent" />
                     ) : null}
-                  </button>
+                  </PressableRow>
                 );
               })
             )}
             <div className="my-1 h-px bg-border" />
-            <button
+            <PressableRow
               type="button"
               disabled={createBlocked}
               aria-describedby={createBlocked ? 'workspace-limit-note' : undefined}
@@ -358,11 +359,11 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                 setPlatform(null);
                 setMode('create');
               }}
-              className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-base font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-2"
+              className="flex items-center gap-3 px-3 text-base font-medium text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-fg-2"
             >
               <IconPlus size={ICON_SIZE.nav} className="shrink-0 text-fg-3" />
               <span>Create workspace</span>
-            </button>
+            </PressableRow>
             {createBlocked ? (
               <>
                 <p id="workspace-limit-note" className="px-3 pb-2 text-base leading-snug text-fg-2">
@@ -403,22 +404,22 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                 {POST_PLATFORMS.map((value) => {
                   const selected = value === platform;
                   return (
-                    <button
+                    <PressableRow
                       key={value}
                       type="button"
                       role="radio"
                       aria-checked={selected}
                       onClick={() => setPlatform(value)}
                       className={cn(
-                        'flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-lg border px-3 text-left text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                        'flex min-w-[44px] items-center gap-2 border px-3 text-base font-medium transition-colors',
                         selected
-                          ? 'border-accent bg-accent-soft text-accent'
-                          : 'border-border text-fg-2 hover:bg-panel-2 hover:text-fg',
+                          ? 'border-accent bg-accent-soft text-accent hover:!bg-accent-soft'
+                          : 'border-border text-fg-2 hover:text-fg',
                       )}
                     >
                       <PlatformMark platform={value} />
                       <span className="min-w-0 break-words">{PLATFORM_LABELS[value]}</span>
-                    </button>
+                    </PressableRow>
                   );
                 })}
               </div>

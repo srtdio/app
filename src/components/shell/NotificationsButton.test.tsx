@@ -48,7 +48,7 @@ describe('NotificationsButton', () => {
   });
 
   it('tints while the Notifications page is on screen, never elsewhere', () => {
-    expect(render(NOTIFICATIONS_PATH)).toContain('bg-accent-soft text-accent');
+    expect(render(NOTIFICATIONS_PATH)).toContain('bg-accent-soft !text-accent');
     expect(render(NOTIFICATIONS_PATH)).toContain('aria-current="page"');
     expect(render('/chat')).not.toContain('bg-accent-soft');
     expect(onNotifications('/notifications')).toBe(true);

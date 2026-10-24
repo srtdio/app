@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 
 export interface TabItem {
@@ -17,21 +18,22 @@ export function Tabs({ items, active, onChange }: TabsProps) {
       {items.map((tab) => {
         const isActive = tab.key === active;
         return (
-          <button
+          <Button
             key={tab.key}
             type="button"
+            variant="ghost"
             onClick={() => onChange(tab.key)}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'relative inline-flex items-center min-h-[44px] px-3 text-base whitespace-nowrap transition-colors',
-              isActive ? 'text-fg' : 'text-fg-2 hover:text-fg',
+              'relative !px-3 !font-normal whitespace-nowrap hover:!bg-transparent',
+              isActive && '!text-fg',
             )}
           >
             {tab.label}
             {isActive ? (
               <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />
             ) : null}
-          </button>
+          </Button>
         );
       })}
     </div>

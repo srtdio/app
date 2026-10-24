@@ -9,6 +9,7 @@ import type {
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { startDmChannel } from '@/components/chat/chat-actions';
@@ -306,7 +307,7 @@ export function namesNeeded(
 }
 
 const ROW =
-  'flex w-full items-center min-h-[44px] px-2 rounded-md text-base text-left transition-colors active:bg-accent-soft';
+  'flex items-center px-2 text-base transition-colors hover:!bg-accent-soft active:bg-accent-soft';
 
 /** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
 const ACTIVE_ROW = 'bg-accent-soft text-fg';
@@ -382,29 +383,29 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
             };
             if (item.type === 'more') {
               return (
-                <button
+                <PressableRow
                   key={item.id}
                   {...common}
                   className={cn(ROW, 'font-medium', isActive ? ACTIVE_ROW : 'text-accent')}
                 >
                   {`Show all (${item.count})`}
-                </button>
+                </PressableRow>
               );
             }
             if (item.type === 'recent') {
               return (
-                <button
+                <PressableRow
                   key={item.id}
                   {...common}
                   className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
                 >
                   <span className="min-w-0 truncate font-medium text-fg">{item.title}</span>
                   <span className="truncate text-sm text-fg-3">{item.typeLabel}</span>
-                </button>
+                </PressableRow>
               );
             }
             return (
-              <button
+              <PressableRow
                 key={item.id}
                 {...common}
                 className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
@@ -422,7 +423,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                     {highlightNodes(item.snippet, words)}
                   </span>
                 ) : null}
-              </button>
+              </PressableRow>
             );
           })}
         </div>

@@ -6,6 +6,7 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { dispatchSorted } from '@/lib/events';
 import { CountBadge } from '@/components/ui/CountBadge';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
@@ -22,11 +23,11 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
   return (
     <aside className="hidden md:flex md:flex-col w-[244px] shrink-0 border-r border-border bg-panel">
       <div className="p-2.5">
-        <button
+        <PressableRow
           type="button"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="flex w-full items-center gap-2.5 min-h-[44px] px-2 rounded-lg hover:bg-panel-2 transition-colors text-left"
+          className="flex items-center gap-2.5 px-2 transition-colors"
         >
           {workspaceName !== null ? (
             <Avatar name={clientName ?? workspaceName} size="lg" />
@@ -42,7 +43,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             </span>
           )}
           <IconChevronDown size={ICON_SIZE.inline} className="text-fg-3 shrink-0" />
-        </button>
+        </PressableRow>
       </div>
       <nav className="flex flex-col gap-0.5 px-2.5">
         {PRIMARY_NAV.map((item) => (

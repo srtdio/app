@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 type Box = { width: number; height: number };
 type Dimension = keyof Box;
@@ -26,4 +26,24 @@ export function expectMinTouchTarget(
     if (value === undefined) throw new Error(`expectMinTouchTarget: box has no ${dim}`);
     expect(value, `touch target ${dim}`).toBeGreaterThanOrEqual(min - SUBPIXEL_TOLERANCE);
   }
+}
+
+/**
+ * Asserts every visible button inside `scope` (a Page or a Locator) is at least
+ * 44x44. Buttons that are not laid out (null or zero-size box) are skipped, so a
+ * hidden-but-visible-per-Playwright edge case cannot fail the run.
+ */
+export async function expectAllVisibleControlsTouchSized(
+  scope: Page | Locator,
+  opts?: { min?: number },
+): Promise<number> {
+  const buttons = await scope.locator('button:visible').all();
+  let checked = 0;
+  for (const button of buttons) {
+    const box = await button.boundingBox();
+    if (box === null || box.width === 0 || box.height === 0) continue;
+    expectMinTouchTarget(box, opts);
+    checked += 1;
+  }
+  return checked;
 }

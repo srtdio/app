@@ -68,6 +68,7 @@ import { resolveName } from '@/components/comments/commentProfiles';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
 import { attachmentView } from '@/components/chat/MessageAttachments';
+import { PressableRow } from '@/components/ui/PressableRow';
 
 // Node unit environment: walk the JSX returned by the hookless helpers and
 // assert structure / text, rather than mounting the stateful Comments list.
@@ -88,6 +89,11 @@ function flatten(node: ReactNode, out: ReactElement[]): void {
   const el = node as ReactElement;
   out.push(el);
   flatten((el.props as { children?: ReactNode }).children, out);
+}
+
+/** A host <button> or a PressableRow (which renders one). */
+function isButtonEl(el: ReactElement): boolean {
+  return el.type === 'button' || el.type === PressableRow;
 }
 
 function elements(tree: ReactNode): ReactElement[] {
@@ -160,7 +166,7 @@ describe('annotationChip (F4/F5 seam)', () => {
       { n: 2, quote: 'great hook', stale: false, versionNumber: 3 },
       onClick,
     );
-    const button = elements(tree).find((el) => el.type === 'button')!;
+    const button = elements(tree).find(isButtonEl)!;
     expect(button).toBeDefined();
     expect(text(tree)).toContain('great hook');
     (button.props as { onClick: () => void }).onClick();
@@ -173,7 +179,7 @@ describe('annotationChip (F4/F5 seam)', () => {
       { n: 0, quote: 'old copy', stale: true, versionNumber: 1 },
       vi.fn(),
     );
-    expect(elements(tree).some((el) => el.type === 'button')).toBe(false);
+    expect(elements(tree).some(isButtonEl)).toBe(false);
     expect(text(tree)).toContain('copy changed · v1');
     expect(text(tree)).toContain('old copy');
   });
@@ -1161,7 +1167,7 @@ describe('renderReplyList (replies are permanently open)', () => {
   it('exposes no expander or other interactive control in the list', () => {
     const tree = renderReplyList([row({ id: 'r1', parent_comment_id: 'P' })], renderReply);
     // The old "N replies" / "Hide replies" toggle is gone; the list owns no button.
-    expect(elements(tree).some((el) => el.type === 'button')).toBe(false);
+    expect(elements(tree).some(isButtonEl)).toBe(false);
   });
 
   it('renders nothing (no empty list container) when there are no replies', () => {
