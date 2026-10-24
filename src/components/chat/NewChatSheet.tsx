@@ -4,7 +4,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
-import { IconChat, IconUser } from '@/components/ui/icons';
+import { ICON_SIZE, IconChat, IconUser } from '@/components/ui/icons';
 import type { DomainError } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
@@ -239,11 +239,11 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
       return (
         <div className="flex flex-col gap-2">
           <Button className="!justify-start" onClick={() => setMode('dm')}>
-            <IconUser size={16} />
+            <IconUser size={ICON_SIZE.inline} />
             New direct message
           </Button>
           <Button className="!justify-start" onClick={() => setMode('group')}>
-            <IconChat size={16} />
+            <IconChat size={ICON_SIZE.inline} />
             New group
           </Button>
         </div>

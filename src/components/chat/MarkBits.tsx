@@ -3,7 +3,7 @@
 // Tag (tokens only), so light and dark stay at parity.
 
 import type { ReactElement } from 'react';
-import { IconLock } from '@/components/ui/icons';
+import { ICON_SIZE, IconLock } from '@/components/ui/icons';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { Tag, tagClass, type TagTone } from '@/components/ui/Tag';
 import { cn } from '@/lib/cn';
@@ -101,7 +101,7 @@ export function SelectLock(): ReactElement {
       title="Marked messages cannot be deleted"
       className="flex h-11 w-11 shrink-0 items-center justify-center self-center text-fg-3"
     >
-      <IconLock size={18} />
+      <IconLock size={ICON_SIZE.nav} />
       <span className="sr-only">Marked messages cannot be deleted</span>
     </span>
   );

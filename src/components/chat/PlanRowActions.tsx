@@ -9,7 +9,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
-import { IconCalendar, IconGrip, IconTrash } from '@/components/ui/icons';
+import { ICON_SIZE, IconCalendar, IconGrip, IconTrash } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -72,7 +72,7 @@ export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactEle
         NO_TOUCH_SELECT,
       )}
     >
-      <IconGrip size={16} />
+      <IconGrip size={ICON_SIZE.inline} />
     </span>
   );
 }
@@ -113,7 +113,7 @@ export function PlanRowEditButtons(props: {
         variant="secondary"
         className="shrink-0 text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconCalendar size={16} />
+        <IconCalendar size={ICON_SIZE.inline} />
         <span className="font-mono tabular-nums">{props.dayLabel}</span>
       </Button>
       <IconButton
@@ -124,7 +124,7 @@ export function PlanRowEditButtons(props: {
         onClick={props.onRemove}
         className="-mr-[13px] shrink-0 text-bad hover:bg-bad-soft hover:text-bad focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconTrash size={20} />
+        <IconTrash size={ICON_SIZE.control} />
       </IconButton>
     </span>
   );

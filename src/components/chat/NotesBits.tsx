@@ -1,4 +1,4 @@
-// Personal notes' small pieces: the notebook glyph, the notes avatar (your
+// Personal notes' small pieces: the notes avatar (your
 // photo with a notebook badge, or the accent-soft notebook square: chat home
 // tile, thread header, forward picker, search rows), and the "Saved from"
 // line a saved copy shows in place of "Forwarded". Tokens only, no motion.
@@ -8,28 +8,7 @@ import type { ReactElement, RefObject } from 'react';
 import { cn } from '@/lib/cn';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import type { SavedFromLine } from '@/lib/chat/saved-from';
-import { IconNotePage } from '@/components/ui/icons';
-
-/** The notebook glyph (stroke 1.7, like the icon set). */
-export function NotesGlyph(props: { size?: number }): ReactElement {
-  const size = props.size ?? 22;
-  return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M6 3h10l3 3v15H6z" />
-      <path d="M9 9h7M9 13h7M9 17h4" />
-    </svg>
-  );
-}
+import { ICON_SIZE, IconFile } from '@/components/ui/icons';
 
 /** The notes photo slot: 76px tile (radius 18), 40px header and 44px picker/search (radius 12). */
 const NOTES_AVATAR_BOX = {
@@ -40,13 +19,20 @@ const NOTES_AVATAR_BOX = {
 
 export type NotesAvatarSize = keyof typeof NOTES_AVATAR_BOX;
 
-const NOTES_GLYPH_SIZE: Record<NotesAvatarSize, number> = { tile: 34, header: 22, small: 24 };
+const NOTES_GLYPH_SIZE: Record<NotesAvatarSize, number> = {
+  tile: ICON_SIZE.status,
+  header: ICON_SIZE.tray,
+  small: ICON_SIZE.tray,
+};
 
 /** The badge: 30px, -5px, 3px ring on the tile; 20px, -4px, 2px ring on small sizes. */
 const NOTES_BADGE: Record<NotesAvatarSize, { box: string; glyph: number }> = {
-  tile: { box: 'h-[30px] w-[30px] -bottom-[5px] -right-[5px] border-[3px]', glyph: 14 },
-  header: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 10 },
-  small: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 10 },
+  tile: {
+    box: 'h-[30px] w-[30px] -bottom-[5px] -right-[5px] border-[3px]',
+    glyph: ICON_SIZE.inline,
+  },
+  header: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
+  small: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
 };
 
 /** The surface behind the avatar: the badge ring takes it, so it cuts out cleanly. */
@@ -158,7 +144,7 @@ export function notesAvatarView(input: {
           box,
         )}
       >
-        {shown ? null : <NotesGlyph size={NOTES_GLYPH_SIZE[input.size]} />}
+        {shown ? null : <IconFile size={NOTES_GLYPH_SIZE[input.size]} />}
         {usable && input.src !== null ? (
           <img
             ref={input.imgRef}
@@ -185,7 +171,7 @@ export function notesAvatarView(input: {
             input.hoverSurface !== undefined && HOVER_RING[input.hoverSurface],
           )}
         >
-          <NotesGlyph size={badge.glyph} />
+          <IconFile size={badge.glyph} />
         </span>
       ) : null}
     </span>
@@ -222,7 +208,7 @@ export function SavedFromLabel(props: {
   const ink = props.mine ? 'text-accent-fg' : 'text-fg-2';
   const body = (
     <>
-      <IconNotePage size={14} />
+      <IconFile size={ICON_SIZE.inline} />
       <span className="min-w-0 truncate">{line.label}</span>
     </>
   );

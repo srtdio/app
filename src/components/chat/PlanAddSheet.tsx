@@ -6,7 +6,7 @@
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { ActionRow } from '@/components/ui/ActionRow';
-import { IconPipeline, IconPlus } from '@/components/ui/icons';
+import { ICON_SIZE, IconPipeline, IconPlus } from '@/components/ui/icons';
 import { addSheetTitle } from '@/components/chat/plan-card';
 
 export function PlanAddSheet(props: {
@@ -26,13 +26,13 @@ export function PlanAddSheet(props: {
     >
       <div data-plan-add-sheet="" className="flex flex-col gap-1">
         <ActionRow
-          icon={<IconPlus size={18} />}
+          icon={<IconPlus size={ICON_SIZE.nav} />}
           label="New concept"
           sub="Title, note, files"
           onClick={props.onNewConcept}
         />
         <ActionRow
-          icon={<IconPipeline size={18} />}
+          icon={<IconPipeline size={ICON_SIZE.nav} />}
           label="Pick a post"
           sub="Its own date stays, if it is inside this plan."
           onClick={props.onPickPost}

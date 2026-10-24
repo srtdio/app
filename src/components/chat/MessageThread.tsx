@@ -75,12 +75,22 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import {
+  ICON_SIZE,
+  IconAlertTriangle,
+  IconBan,
   IconChat,
+  IconChevronDown,
   IconChevronLeft,
+  IconClock,
   IconForward,
+  IconInfo,
+  IconReply,
   IconSearch,
+  IconSmile,
   IconStar,
   IconStarFilled,
+  IconTickDouble,
+  IconTickSingle,
   IconTrash,
 } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui';
@@ -167,7 +177,6 @@ import {
 } from '@/components/chat/ThreadRail';
 import { PostRefChip, useChipBatch, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
-  BanGlyph,
   MessageActionMenu,
   isPlanMessage,
   ownMessageActions,
@@ -556,19 +565,7 @@ export function SwipeReplyIcon(props: {
       data-swipe-icon=""
       className="pointer-events-none absolute inset-y-0 left-0 my-auto flex h-8 w-8 scale-0 items-center justify-center rounded-full bg-panel-3 text-fg-2 opacity-0 data-[armed]:bg-accent data-[armed]:text-accent-fg"
     >
-      <svg
-        width={18}
-        height={18}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.7}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M9 7L4 12l5 5" />
-        <path d="M4 12h11a5 5 0 0 1 5 5v1" />
-      </svg>
+      <IconReply size={ICON_SIZE.nav} />
     </span>
   );
 }
@@ -1274,62 +1271,38 @@ export function metaTick(status: BubbleStatus | null): MetaTick | null {
 }
 
 /**
- * The 16x11 status glyph: clock (sending), single tick (delivered), double tick
+ * The 20x12 status glyph: clock (sending), single tick (delivered), double tick
  * in the read token (read). currentColor otherwise, so it takes the meta ink at
  * full strength (or the media pill's white).
  */
 export function MetaGlyph({ status }: { status: MetaTick }): ReactElement {
   return (
-    <svg
+    <span
       role="img"
       aria-label={STATUS_LABEL[status]}
       data-tick={status}
-      viewBox="0 0 16 11"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={cn(TICK_ICON_BOX, status === 'read' && 'text-[color:var(--tick-read)]')}
+      className={cn(
+        TICK_ICON_BOX,
+        'inline-flex items-center justify-center',
+        status === 'read' && 'text-[color:var(--tick-read)]',
+      )}
     >
-      {status === 'sending' ? (
-        <>
-          <circle cx={8} cy={5.5} r={4.5} />
-          <path d="M8 3.2v2.5l1.6 1" />
-        </>
-      ) : null}
-      {status === 'delivered' ? <path d="M3.5 5.8l2.8 2.8L12.5 2.2" /> : null}
-      {status === 'read' ? (
-        <>
-          <path d="M1 5.8l2.8 2.8L10 2.2" />
-          <path d="M7.2 8.2l.4.4L14.9 2.2" />
-        </>
-      ) : null}
-    </svg>
+      {status === 'sending' ? <IconClock size={12} /> : null}
+      {status === 'delivered' ? <IconTickSingle /> : null}
+      {status === 'read' ? <IconTickDouble /> : null}
+    </span>
   );
 }
 
 /**
- * The failed send's alert: a "!" in a circle in the bad token, drawn on the
+ * The failed send's alert: a "!" in a triangle in the bad token, drawn on the
  * page background beside the bubble (5.05:1 light, 5.83:1 dark).
  */
 export function FailedGlyph(): ReactElement {
   return (
-    <svg
-      aria-hidden="true"
-      data-failed-glyph=""
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx={12} cy={12} r={10} />
-      <path d="M12 7v6M12 16.5v.5" />
-    </svg>
+    <span data-failed-glyph="" className="flex">
+      <IconAlertTriangle size={ICON_SIZE.tray} />
+    </span>
   );
 }
 
@@ -1890,40 +1863,12 @@ export function metaPlacement(
 
 /** The small chevron in a bubble's top-right corner (laptop hover). */
 function ChevronGlyph(): ReactElement {
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  );
+  return <IconChevronDown size={ICON_SIZE.inline} />;
 }
 
 /** The smiley beside a bubble (laptop hover): opens the reactions row. */
 function SmileyGlyph(): ReactElement {
-  return (
-    <svg
-      width={20}
-      height={20}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx={12} cy={12} r={9} />
-      <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" />
-      <path d="M9 9.5h.01M15 9.5h.01" />
-    </svg>
-  );
+  return <IconSmile size={ICON_SIZE.control} />;
 }
 
 /**
@@ -2229,7 +2174,7 @@ export function MessageBubble(props: {
               aria-label={`${mine ? 'Your message' : `Message from ${name}`}, deleted, ${bubbleTimeLabel(message, timeZone)}`}
               className={tombstoneClass(shape)}
             >
-              <BanGlyph size={16} />
+              <IconBan size={ICON_SIZE.inline} />
               <span>
                 {deletedMessageLabel({ mine })}
                 <MetaSpacer meta={tombMeta} />
@@ -2568,7 +2513,7 @@ export function MessageBubble(props: {
           className="shrink-0 self-center text-bad hover:bg-bad-soft hover:text-bad"
           onClick={() => props.onRetry?.(message.id)}
         >
-          <IconTrash size={18} />
+          <IconTrash size={ICON_SIZE.nav} />
         </IconButton>
       ) : null}
     </li>
@@ -2586,25 +2531,12 @@ export function reactionBadgeLabel(reactions: readonly { emoji: string; count: n
   return `Reactions: ${each}. ${total} in total. Show who reacted`;
 }
 
-/** The info glyph (a circled "i") for the group info button, drawn like the icon set. */
+/** The info glyph (a circled "i") for the group info button. */
 export function InfoGlyph(props: { size?: number }): ReactElement {
-  const size = props.size ?? 20;
   return (
-    <svg
-      aria-hidden="true"
-      data-info-glyph=""
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 11v5.5M12 7.5h.01" />
-    </svg>
+    <span data-info-glyph="" className="flex">
+      <IconInfo size={props.size ?? ICON_SIZE.control} />
+    </span>
   );
 }
 
@@ -2618,7 +2550,7 @@ export function ForwardedLabel(props: { mine?: boolean } = {}): ReactElement {
         props.mine === true ? 'text-accent-fg' : 'text-fg-2',
       )}
     >
-      <IconForward size={12} />
+      <IconForward size={ICON_SIZE.inline} />
       {FORWARDED_LABEL}
     </span>
   );
@@ -4004,13 +3936,13 @@ function ThreadBody(
       <div className="flex flex-1 flex-col justify-center">
         {props.notes === true ? (
           <EmptyState
-            icon={<IconChat size={22} />}
+            icon={<IconChat size={ICON_SIZE.tray} />}
             title={NOTES_EMPTY_TITLE}
             description={NOTES_EMPTY_LINE}
           />
         ) : (
           <EmptyState
-            icon={<IconChat size={22} />}
+            icon={<IconChat size={ICON_SIZE.tray} />}
             title="No messages yet"
             description="Say hello."
           />
@@ -4432,7 +4364,7 @@ export function threadLoadError(onRetry: (() => void) | undefined): ReactElement
   return (
     <div data-thread-load-error="" className="flex flex-1 flex-col justify-center">
       <EmptyState
-        icon={<IconChat size={22} />}
+        icon={<IconChat size={ICON_SIZE.tray} />}
         title="Couldn't load messages"
         {...(onRetry !== undefined
           ? {
@@ -4512,7 +4444,7 @@ export function threadOpeningSkeleton(
       >
         {onBack !== undefined ? (
           <IconButton label="Back to conversations" onClick={onBack}>
-            <IconChevronLeft size={20} />
+            <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
         ) : null}
         <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-panel-2" />
@@ -6181,7 +6113,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           <>
             {props.onBack !== undefined ? (
               <IconButton label="Cancel selection" onClick={cancelSelection}>
-                <IconChevronLeft size={20} />
+                <IconChevronLeft size={ICON_SIZE.control} />
               </IconButton>
             ) : null}
             <SelectionHeader count={selected.size} onCancel={cancelSelection} layout={layout} />
@@ -6201,7 +6133,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           <>
             {props.onBack !== undefined ? (
               <IconButton label="Back to conversations" onClick={props.onBack}>
-                <IconChevronLeft size={20} />
+                <IconChevronLeft size={ICON_SIZE.control} />
               </IconButton>
             ) : null}
             <ThreadHeaderIdentity
@@ -6222,7 +6154,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             {/* FT46: a group's Starred lives in Group info (its Starred tab). */}
             {channelId !== undefined && starStore !== null && !groupInfoInHeader ? (
               <IconButton label={STARRED_HEADER_LABEL} onClick={() => setStarredOpen(true)}>
-                <IconStar size={20} />
+                <IconStar size={ICON_SIZE.control} />
               </IconButton>
             ) : null}
             {channelId !== undefined ? (
@@ -6230,7 +6162,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                 label="Search this chat"
                 onClick={() => setChatSearch({ query: '', anchor: null, key: 0, manual: true })}
               >
-                <IconSearch size={20} />
+                <IconSearch size={ICON_SIZE.control} />
               </IconButton>
             ) : null}
             {/* FT46: no Info icon; the identity tap opens Group info. */}

@@ -14,7 +14,7 @@ import type { Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
-import { IconArrowUp, IconChevronDown } from '@/components/ui/icons';
+import { ICON_SIZE, IconArrowUp, IconChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { formatClockTime, civilDay } from '@/lib/chat/time-format';
 import { dayPillLabel } from '@/components/chat/day-separators';
@@ -91,7 +91,7 @@ export function UnreadPill(props: {
           props.visible ? 'pointer-events-auto opacity-100' : 'opacity-0',
         )}
       >
-        <IconArrowUp size={16} className="text-accent" />
+        <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
         <span className="font-mono tabular-nums text-accent">{props.count}</span>
         <span>unread</span>
       </button>
@@ -122,7 +122,7 @@ export function LatestButton(props: {
         props.visible ? 'opacity-100' : 'pointer-events-none opacity-0',
       )}
     >
-      <IconChevronDown size={20} />
+      <IconChevronDown size={ICON_SIZE.control} />
       {props.count > 0 ? (
         <span
           data-latest-count=""

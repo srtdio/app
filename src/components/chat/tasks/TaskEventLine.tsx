@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
-import { IconChevronDown, IconChevronRight } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronDown, IconChevronRight } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import {
@@ -139,9 +139,9 @@ function TaskBatch(props: {
             {editedTasksLabel('')}
           </span>
           {open ? (
-            <IconChevronDown size={13} className="shrink-0" />
+            <IconChevronDown size={ICON_SIZE.inline} className="shrink-0" />
           ) : (
-            <IconChevronRight size={13} className="shrink-0" />
+            <IconChevronRight size={ICON_SIZE.inline} className="shrink-0" />
           )}
         </span>
       </button>

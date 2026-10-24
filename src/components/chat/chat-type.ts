@@ -70,8 +70,8 @@ export const BUBBLE_BODY_TYPE: ChatSize = {
 /** In-bubble meta (time, "edited"): 11/15, 400 on both. */
 export const BUBBLE_META_TYPE = 'text-[11px] leading-[15px] font-normal tabular-nums';
 
-/** The meta's tick (and clock) glyph box: 16x11. */
-export const TICK_ICON_BOX = 'h-[11px] w-4 shrink-0';
+/** The meta's tick (and clock) glyph box: 20x12, the double tick's box. */
+export const TICK_ICON_BOX = 'h-3 w-5 shrink-0';
 
 /** The sender name over a group run: 13/18/600 touch, 12.8/22/500 laptop. */
 export const GROUP_SENDER_TYPE: ChatSize = {

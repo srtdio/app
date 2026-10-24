@@ -6,7 +6,7 @@
 
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
-import { IconTaskSquare } from '@/components/ui/icons';
+import { ICON_SIZE, IconTaskSquare } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction';
@@ -42,7 +42,7 @@ export function TaskButton(props: {
           props.editing === true && 'animate-pulse motion-reduce:animate-none',
         )}
       >
-        <IconTaskSquare size={20} />
+        <IconTaskSquare size={ICON_SIZE.control} />
       </span>
       {props.unseen ? (
         <span

@@ -13,7 +13,14 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PhotoOptionsSheet, type PhotoOptionsSheetProps } from '@/components/ui/PhotoOptionsSheet';
-import { IconCamera, IconChevronLeft, IconPlus, IconSignOut, IconX } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconCamera,
+  IconChevronLeft,
+  IconPlus,
+  IconSignOut,
+  IconX,
+} from '@/components/ui/icons';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { supabase } from '@/lib/supabase';
@@ -341,7 +348,7 @@ export function LeaveGroupRow(props: { disabled: boolean; onClick: () => void })
       )}
     >
       <span className="flex w-5 shrink-0 justify-center text-bad">
-        <IconSignOut size={16} />
+        <IconSignOut size={ICON_SIZE.inline} />
       </span>
       Leave group
     </button>
@@ -387,7 +394,7 @@ export function GroupHero(props: {
             aria-hidden="true"
             className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-fg ring-4 ring-bg"
           >
-            <IconCamera size={20} />
+            <IconCamera size={ICON_SIZE.control} />
           </span>
         </button>
       ) : (
@@ -425,7 +432,7 @@ export function groupInfoPage(props: {
     >
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel px-2 md:px-4">
         <IconButton label="Close group info" onClick={props.onClose}>
-          <IconChevronLeft size={20} />
+          <IconChevronLeft size={ICON_SIZE.control} />
         </IconButton>
         <h2 className="truncate text-lg font-semibold text-fg">{GROUP_INFO_HEADING}</h2>
       </div>
@@ -823,7 +830,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
                     disabled={busy}
                     onClick={() => setRemoveTarget(member)}
                   >
-                    <IconX size={20} />
+                    <IconX size={ICON_SIZE.control} />
                   </IconButton>
                 ) : null}
               </li>
@@ -836,7 +843,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         {canManage ? (
           <SheetRow
             data="member-add"
-            icon={<IconPlus size={20} />}
+            icon={<IconPlus size={ICON_SIZE.control} />}
             label="Add member"
             onClick={() => setAdding((prev) => !prev)}
           />

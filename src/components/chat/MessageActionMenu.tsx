@@ -2,20 +2,23 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ICON_SIZE,
   IconAlarmClock,
+  IconBan,
   IconBookmark,
   IconChevronLeft,
   IconChevronRight,
   IconCopy,
   IconEdit,
+  IconFile,
   IconForward,
   IconMore,
-  IconNotePage,
   IconPlus,
   IconReply,
   IconSelectText,
   IconStar,
   IconStarFilled,
+  IconText,
   IconTrash,
   IconX,
 } from '@/components/ui/icons';
@@ -277,49 +280,8 @@ type MenuItemProps = Pick<
   | 'reminderAt'
 >;
 
-/** The ban glyph (circle with a slash) for tombstones and the locked line. */
-export function BanGlyph(props: { size?: number }): ReactElement {
-  const size = props.size ?? 18;
-  return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M6 6l12 12" />
-    </svg>
-  );
-}
-
 /** The menu row that copies a message into Personal notes. */
 export const SAVE_TO_NOTES_LABEL = 'Save to notes';
-
-/** The Transcribe row's glyph: three text lines, drawn like the icon set (stroke 1.7). */
-export function TranscribeGlyph(props: { size?: number }): ReactElement {
-  const size = props.size ?? 18;
-  return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 7h14M5 12h14M5 17h9" />
-    </svg>
-  );
-}
 
 /**
  * A row's tap, inside its click: the action runs before the menu closes, so
@@ -349,7 +311,7 @@ export function runMenuItem(
 }
 
 /** The menu's glyph size (the row icons, 22px at stroke 1.7). */
-export const MENU_ICON_SIZE = 22;
+export const MENU_ICON_SIZE = ICON_SIZE.tray;
 
 /** The row that selects part of one message's text in place. */
 export const SELECT_TEXT_LABEL = 'Select';
@@ -429,7 +391,7 @@ export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
       kind: 'note',
       key: 'locked',
       label: MARKED_LOCKED_LABEL,
-      icon: <BanGlyph size={size} />,
+      icon: <IconBan size={size} />,
     });
   } else if (props.canDelete === true) {
     items.push({
@@ -458,7 +420,7 @@ export function moreMenuItems(props: MenuItemProps): MessageMenuItem[] {
       kind: 'action',
       key: 'transcribe',
       label: 'Transcribe',
-      icon: <TranscribeGlyph size={size} />,
+      icon: <IconText size={size} />,
       run: () => props.onTranscribe?.(),
     });
   }
@@ -476,7 +438,7 @@ export function moreMenuItems(props: MenuItemProps): MessageMenuItem[] {
       kind: 'action',
       key: 'save-notes',
       label: SAVE_TO_NOTES_LABEL,
-      icon: <IconNotePage size={size} />,
+      icon: <IconFile size={size} />,
       run: () => props.onSaveToNotes?.(),
     });
   }
@@ -780,7 +742,7 @@ export function ReactionsRow(props: {
         onClick={props.onMore}
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2 hover:bg-panel-3 hover:text-fg"
       >
-        <IconPlus size={20} />
+        <IconPlus size={ICON_SIZE.control} />
       </button>
     </div>
   );
@@ -1073,7 +1035,7 @@ export function EmojiPickerShell(props: {
       className="shrink-0"
       onClick={onClose}
     >
-      <IconX size={18} />
+      <IconX size={ICON_SIZE.nav} />
     </IconButton>
   );
   const body =

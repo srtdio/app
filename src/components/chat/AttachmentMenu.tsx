@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { ActionRow } from '@/components/ui';
+import { ICON_SIZE } from '@/components/ui/icons';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { cn } from '@/lib/cn';
 import type { AttachmentMenuItem } from '@/lib/chat/attachment-menu';
@@ -78,7 +79,7 @@ export function attachmentMenuRows(
     return (
       <div key={item.id} role="menuitem">
         <ActionRow
-          icon={<Icon size={18} />}
+          icon={<Icon size={ICON_SIZE.nav} />}
           label={item.label}
           onClick={() => {
             item.onSelect();

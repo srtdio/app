@@ -4,7 +4,7 @@
 
 import type { ReactElement, ReactNode } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 
 export function PendingChip(props: {
@@ -35,7 +35,7 @@ export function PendingChip(props: {
         </span>
       </span>
       <IconButton label={`Remove ${props.title}`} onClick={props.onRemove}>
-        <IconX size={16} />
+        <IconX size={ICON_SIZE.inline} />
       </IconButton>
     </li>
   );

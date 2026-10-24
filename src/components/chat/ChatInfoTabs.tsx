@@ -17,6 +17,7 @@ import { Button, buttonClass } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
+  ICON_SIZE,
   IconAlertTriangle,
   IconBookmark,
   IconFile,
@@ -349,7 +350,7 @@ function FileRow(props: {
         className={cn(ROW, 'rounded-lg text-left hover:bg-panel-2 disabled:opacity-60')}
       >
         <span className={ROW_ICON}>
-          <IconFile size={20} />
+          <IconFile size={ICON_SIZE.control} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span title={name} className="truncate text-base font-medium text-fg">
@@ -388,7 +389,7 @@ export function LinkRow(props: {
           className={cn(ROW, 'w-full rounded-md text-left hover:bg-panel-2')}
         >
           <span className={cn(ROW_ICON, 'text-[color:var(--warn-ink)]')}>
-            <IconAlertTriangle size={20} />
+            <IconAlertTriangle size={ICON_SIZE.control} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="truncate text-base font-medium text-[color:var(--warn-ink)]">
@@ -409,7 +410,7 @@ export function LinkRow(props: {
         className={cn(ROW, 'rounded-md text-left hover:bg-panel-2')}
       >
         <span className={ROW_ICON}>
-          <IconLink size={20} />
+          <IconLink size={ICON_SIZE.control} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-base font-medium text-accent">
@@ -553,7 +554,9 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
       <FeedBody
         feed={props.attachments}
         isEmpty={split.images.length === 0}
-        empty={<EmptyState icon={<IconImage size={22} />} title={CONTACT_EMPTY.media} />}
+        empty={
+          <EmptyState icon={<IconImage size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.media} />
+        }
         {...feedProps('attachments', view.seeAll)}
       >
         <div data-media-grid="" className="grid grid-cols-3 gap-[2px]">
@@ -575,7 +578,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
       <FeedBody
         feed={props.attachments}
         isEmpty={split.files.length === 0}
-        empty={<EmptyState icon={<IconFile size={22} />} title={CONTACT_EMPTY.files} />}
+        empty={<EmptyState icon={<IconFile size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.files} />}
         {...feedProps('attachments', view.seeAll)}
       >
         <ul data-files="" className="flex flex-col">
@@ -598,7 +601,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
       <FeedBody
         feed={props.links}
         isEmpty={items.length === 0}
-        empty={<EmptyState icon={<IconLink size={22} />} title={CONTACT_EMPTY.links} />}
+        empty={<EmptyState icon={<IconLink size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.links} />}
         {...feedProps('links', view.seeAll)}
       >
         <ul data-links="" className="flex flex-col">
@@ -617,7 +620,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
     body = (
       <div data-starred-tab="">
         {props.starred ?? (
-          <EmptyState icon={<IconStar size={22} />} title={CONTACT_EMPTY.starred} />
+          <EmptyState icon={<IconStar size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.starred} />
         )}
       </div>
     );
@@ -633,7 +636,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
             : {})}
         />
       ) : (
-        <EmptyState icon={<IconBookmark size={22} />} title="All clear" />
+        <EmptyState icon={<IconBookmark size={ICON_SIZE.tray} />} title="All clear" />
       );
   }
 

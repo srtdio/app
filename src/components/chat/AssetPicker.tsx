@@ -15,7 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconAssets, IconCheck, IconSearch } from '@/components/ui/icons';
+import { ICON_SIZE, IconAssets, IconCheck, IconSearch } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { fileExtension } from '@/lib/assets';
@@ -191,7 +191,7 @@ export function AssetPicker(props: {
         <Field label="Search">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
-              <IconSearch size={16} />
+              <IconSearch size={ICON_SIZE.inline} />
             </span>
             <Input
               value={query}
@@ -235,7 +235,7 @@ export function AssetGrid(props: {
   if (props.rows.length === 0) {
     return (
       <EmptyState
-        icon={<IconAssets size={22} />}
+        icon={<IconAssets size={ICON_SIZE.tray} />}
         title={props.searching ? `No files called "${props.query.trim()}"` : 'No assets'}
         description={props.searching ? 'Try another name.' : 'Files added to Assets show up here.'}
       />
@@ -301,7 +301,7 @@ export function AssetTile(props: {
           />
           {props.active ? (
             <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-fg">
-              <IconCheck size={14} />
+              <IconCheck size={ICON_SIZE.inline} />
             </span>
           ) : null}
         </span>

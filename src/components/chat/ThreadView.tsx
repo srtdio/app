@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { COARSE_POINTER_QUERY, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useModalFocus } from '@/lib/modal-focus';
-import { IconChevronLeft } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 
 /** The view's fade, in and out (opacity only). */
 const THREAD_VIEW_FADE_MS = 150;
@@ -124,7 +124,7 @@ export function ThreadViewFrame(props: {
             NO_TOUCH_SELECT,
           )}
         >
-          <IconChevronLeft size={20} />
+          <IconChevronLeft size={ICON_SIZE.control} />
         </button>
         <span
           data-thread-view-title=""

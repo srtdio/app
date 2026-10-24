@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconChat } from '@/components/ui/icons';
+import { ICON_SIZE, IconChat } from '@/components/ui/icons';
 import { useChat } from '@/lib/chat/chat-context';
 
 /**
@@ -12,7 +12,7 @@ import { useChat } from '@/lib/chat/chat-context';
 export function chatUnavailableView(props: { onRetry: () => void }): ReactElement {
   return (
     <EmptyState
-      icon={<IconChat size={22} />}
+      icon={<IconChat size={ICON_SIZE.tray} />}
       title="Couldn't load chats"
       action={
         <Button variant="primary" className="min-w-[120px]" onClick={props.onRetry}>

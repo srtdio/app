@@ -20,7 +20,7 @@ import { Button, type ButtonVariant } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Tag, isTagDot } from '@/components/ui/Tag';
 import { Textarea } from '@/components/ui/Textarea';
-import { IconPlay } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlay } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import {
@@ -195,7 +195,7 @@ function StripSlide(props: {
           className="pointer-events-none absolute inset-0 flex items-center justify-center"
         >
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-panel text-fg">
-            <IconPlay size={20} />
+            <IconPlay size={ICON_SIZE.control} />
           </span>
         </span>
       ) : null}

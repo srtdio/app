@@ -36,7 +36,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/toast';
-import { IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
@@ -742,7 +742,7 @@ export function PlanItemScreen(props: {
                   onClick={() => setConceptMenuOpen(true)}
                   className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <IconMore size={20} />
+                  <IconMore size={ICON_SIZE.control} />
                 </IconButton>
               ),
             }
@@ -757,7 +757,7 @@ export function PlanItemScreen(props: {
                   onClick={() => setMoreOpen(true)}
                   className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <IconMore size={20} />
+                  <IconMore size={ICON_SIZE.control} />
                 </IconButton>
               ),
             }
@@ -805,7 +805,7 @@ export function PlanItemScreen(props: {
                     onClick={() => setAskingChanges(false)}
                     className="shrink-0 hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
-                    <IconX size={20} />
+                    <IconX size={ICON_SIZE.control} />
                   </IconButton>
                 </div>
               ) : null}
@@ -849,7 +849,7 @@ export function PlanItemScreen(props: {
                   disabled={(text.trim() === '' && !askingChanges) || sending || busy}
                   className="shrink-0"
                 >
-                  <IconArrowUp size={20} />
+                  <IconArrowUp size={ICON_SIZE.control} />
                 </Button>
               </div>
             </form>
@@ -1162,7 +1162,7 @@ function CommentRow(props: {
         <span className="text-base font-medium text-fg">{c.authorName}</span>
         {team ? (
           <span className="inline-flex items-center gap-1 text-sm text-warn">
-            <IconLock size={12} />
+            <IconLock size={ICON_SIZE.inline} />
             {TEAM_ONLY_LABEL}
           </span>
         ) : null}

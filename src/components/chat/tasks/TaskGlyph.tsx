@@ -6,13 +6,14 @@
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import type { TaskStatus } from '@/lib/chat/tasks';
+import { ICON_SIZE } from '@/components/ui/icons';
 
 const STROKE = 1.7;
 
 export const STATUS_LABEL: Record<TaskStatus, string> = { todo: 'To do', done: 'Done' };
 
 export function TaskGlyph(props: { status: TaskStatus; size?: 16 | 18 }): ReactElement {
-  const size = props.size ?? 18;
+  const size = props.size ?? ICON_SIZE.nav;
   const done = props.status === 'done';
   return (
     <span className="inline-flex shrink-0" data-task-glyph={props.status}>

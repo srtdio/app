@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent, Ref } from 'react';
 import { Button } from '@/components/ui/Button';
 import {
+  ICON_SIZE,
   IconBriefs,
   IconCheck,
   IconChevronRight,
@@ -158,7 +159,7 @@ const PILL_CLASS: Record<PlanSegment, string> = {
 };
 
 function Chevron(): ReactElement {
-  return <IconChevronRight size={16} className="shrink-0 text-fg-3" />;
+  return <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />;
 }
 
 function SeeAllRow(props: { total: number; onClick: () => void; attr: string }): ReactElement {
@@ -183,7 +184,7 @@ function SectionHeader(props: {
   const Icon = STATUS_ICON[props.sectionKey];
   return (
     <div className="mb-2 flex h-5 items-center gap-2 text-fg-2">
-      <Icon size={16} className="shrink-0" />
+      <Icon size={ICON_SIZE.inline} className="shrink-0" />
       <h3 className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-[0.06em]">
         {props.label}
       </h3>
@@ -246,7 +247,7 @@ function PlanItemTile(props: {
   if (concept?.kind === 'file') {
     return (
       <span aria-hidden="true" data-plan-tile="file" className={POST_COVER_BOX}>
-        <IconFile size={18} />
+        <IconFile size={ICON_SIZE.nav} />
       </span>
     );
   }
@@ -426,7 +427,7 @@ export function StatusMarkRow(props: {
             onClick={props.onAsk}
             className="min-w-[44px] shrink-0"
           >
-            <IconCheck size={16} />
+            <IconCheck size={ICON_SIZE.inline} />
             <span>{STAMP_WORD[mark.type]}</span>
           </Button>
         ) : null}

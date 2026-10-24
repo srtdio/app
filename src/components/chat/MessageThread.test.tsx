@@ -486,9 +486,9 @@ describe('in-bubble meta and ticks', () => {
     expect(read).toMatch(
       /data-tick="read"[^>]*text-\[color:var\(--tick-read\)\]|text-\[color:var\(--tick-read\)\][^>]*data-tick="read"/,
     );
-    // The tick box is 16x11.
-    expect(read).toMatch(/viewBox="0 0 16 11"/);
-    expect(read).toContain('h-[11px] w-4');
+    // The tick box is 20x12, the shared double tick's box.
+    expect(read).toMatch(/viewBox="0 0 20 12"/);
+    expect(read).toContain('h-3 w-5');
   });
 
   it('peer meta takes the peer meta token; no tick', () => {
@@ -1543,9 +1543,10 @@ describe('swipe to reply', () => {
     expect(cls).toContain('opacity-0');
     // Per-frame scale and opacity: no class transition lagging the finger.
     expect(cls).not.toContain('transition');
-    const [svg] = find(icon, 'strokeWidth');
-    expect(svg?.props.strokeWidth).toBe(1.7);
-    expect(svg?.props.stroke).toBe('currentColor');
+    // The shared reply icon: stroke 1.7 in currentColor.
+    const svg = renderStrip(icon);
+    expect(svg).toContain('stroke-width="1.7"');
+    expect(svg).toContain('stroke="currentColor"');
   });
 });
 

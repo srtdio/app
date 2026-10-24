@@ -18,7 +18,7 @@ import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconCheck, IconChevronDown, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconChevronDown, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { STATUS_LABEL, TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import { Highlight } from '@/components/ui/SearchHighlight';
@@ -85,7 +85,7 @@ export function PriorityChip(props: {
       )}
     >
       P{props.priority}
-      {pick !== undefined ? <IconChevronDown size={12} /> : null}
+      {pick !== undefined ? <IconChevronDown size={ICON_SIZE.inline} /> : null}
     </span>
   );
   if (pick === undefined) return chip;
@@ -199,7 +199,9 @@ function PriorityMenu(props: {
         >
           <span className={cn('rounded-[5px] px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>
-          {p === props.current ? <IconCheck size={16} className="text-accent" /> : null}
+          {p === props.current ? (
+            <IconCheck size={ICON_SIZE.inline} className="text-accent" />
+          ) : null}
         </button>
       ))}
     </div>,
@@ -425,7 +427,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
                 NO_TOUCH_SELECT,
               )}
             >
-              <IconX size={20} />
+              <IconX size={ICON_SIZE.control} />
             </IconButton>
           </>
         )}

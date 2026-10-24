@@ -12,7 +12,7 @@ import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
-import { IconCalendarClock } from '@/components/ui/icons';
+import { ICON_SIZE, IconCalendarClock } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { ScheduleSheet } from '@/components/chat/ScheduleSheet';
@@ -114,7 +114,7 @@ export function ScheduledListSheet(
               className="flex flex-col gap-2 rounded-lg border border-border bg-panel-2 p-3"
             >
               <div className={cn('flex items-center gap-2 text-fg-2', NO_TOUCH_SELECT)}>
-                <IconCalendarClock size={16} className="text-accent" />
+                <IconCalendarClock size={ICON_SIZE.inline} className="text-accent" />
                 <span className="font-mono text-sm tabular-nums">
                   {formatSendLabel(new Date(row.send_at), now)}
                 </span>

@@ -14,11 +14,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 import {
+  ICON_SIZE,
+  IconAssets,
   IconBriefs,
   IconCalendarClock,
   IconDraft,
   IconFile,
-  IconFolder,
   IconImage,
   IconPipeline,
   IconPlan,
@@ -100,7 +101,7 @@ export function trayTiles(
   const tiles: TrayTile[] = [
     { id: 'photos', label: 'Photos', Icon: IconImage },
     { id: 'file', label: 'File', Icon: IconFile },
-    { id: 'assets', label: 'Assets', Icon: IconFolder },
+    { id: 'assets', label: 'Assets', Icon: IconAssets },
     { id: 'brief', label: 'Brief', Icon: IconBriefs },
     { id: 'post', label: 'Post', Icon: IconPipeline },
     opts.draft === true
@@ -209,7 +210,7 @@ export function ComposerTray(props: {
             open && 'rotate-45',
           )}
         >
-          <IconPlus size={20} />
+          <IconPlus size={ICON_SIZE.control} />
         </span>
       </button>
       {rendered ? (
@@ -264,7 +265,7 @@ export function TrayGrid(props: {
           className="flex min-h-[72px] min-w-[44px] flex-col items-center justify-center gap-1.5 rounded-lg text-fg-2 hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg">
-            <tile.Icon size={22} />
+            <tile.Icon size={ICON_SIZE.tray} />
           </span>
           <span className="text-sm font-medium">{tile.label}</span>
         </button>

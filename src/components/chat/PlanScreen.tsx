@@ -86,6 +86,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import {
+  ICON_SIZE,
   IconCheck,
   IconChevronDown,
   IconChevronLeft,
@@ -485,7 +486,7 @@ export function PlanPage(props: {
         onClick={props.onBack}
         className="-ml-[11px] shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        {props.backIcon ?? <IconChevronLeft size={20} />}
+        {props.backIcon ?? <IconChevronLeft size={ICON_SIZE.control} />}
       </IconButton>
     )
   ) : null;
@@ -497,7 +498,7 @@ export function PlanPage(props: {
       onClick={props.onDismiss ?? props.onBack}
       className="-mr-3 shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <IconX size={20} />
+      <IconX size={ICON_SIZE.control} />
     </IconButton>
   ) : null;
   return createPortal(
@@ -728,7 +729,7 @@ export function ConceptDateField(props: {
             onClick={() => props.onChange('')}
             className="shrink-0 text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
           >
-            <IconX size={20} />
+            <IconX size={ICON_SIZE.control} />
           </IconButton>
         ) : null}
       </span>
@@ -2034,7 +2035,7 @@ export function PlanScreen(props: {
           data-plan-header-box=""
           className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-transparent bg-accent-soft px-3 text-base font-semibold leading-5 text-accent group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
         >
-          <IconPlus size={15} />
+          <IconPlus size={ICON_SIZE.inline} />
           Add
         </span>
       </button>
@@ -2048,7 +2049,7 @@ export function PlanScreen(props: {
           data-plan-header-box=""
           className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-border-strong bg-panel px-3 text-base font-semibold leading-5 text-fg group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
         >
-          <IconEdit size={15} />
+          <IconEdit size={ICON_SIZE.inline} />
           {EDIT_LABEL}
         </span>
       </button>
@@ -2135,7 +2136,7 @@ export function PlanScreen(props: {
               onClick={() => setSkippedNotes([])}
               className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <IconX size={20} />
+              <IconX size={ICON_SIZE.control} />
             </IconButton>
           </div>
         ) : null}
@@ -2150,7 +2151,7 @@ export function PlanScreen(props: {
           <ScreenFailed onRetry={reload} />
         ) : bundle === null ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-fg-2">
-            <IconPlan size={22} />
+            <IconPlan size={ICON_SIZE.tray} />
             <p className="text-base">{PLAN_NOT_AVAILABLE}</p>
           </div>
         ) : (
@@ -2527,7 +2528,7 @@ function PlanTitleButton(props: {
     >
       <h2 className={PLAN_HEADER_TITLE}>{props.title}</h2>
       <span aria-hidden="true" className="shrink-0 text-fg-2">
-        <IconChevronDown size={18} />
+        <IconChevronDown size={ICON_SIZE.nav} />
       </span>
     </button>
   );
@@ -2615,7 +2616,7 @@ export function PlanHeaderMenu(props: {
         onClick={props.onRename}
         className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-lg text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconEdit size={18} />
+        <IconEdit size={ICON_SIZE.nav} />
         {RENAME_LABEL}
       </button>
       {props.canDelete ? (
@@ -2626,7 +2627,7 @@ export function PlanHeaderMenu(props: {
           onClick={props.onDelete}
           className="flex min-h-[44px] w-full items-center gap-3 px-3 text-left text-lg text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <IconTrash size={18} />
+          <IconTrash size={ICON_SIZE.nav} />
           {DELETE_PLAN_LABEL}
         </button>
       ) : null}
@@ -2672,7 +2673,7 @@ export function RenameField(props: {
         onClick={props.onCancel}
         className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
       >
-        <IconX size={20} />
+        <IconX size={ICON_SIZE.control} />
       </IconButton>
       <Button
         type="button"
@@ -3246,7 +3247,7 @@ function AddRow(props: {
         onClick={() => props.onAdd(props.day)}
         className="!gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconPlus size={16} />
+        <IconPlus size={ICON_SIZE.inline} />
         Add
       </Button>
     </div>
@@ -3345,7 +3346,7 @@ export function PlanSwitch(props: {
               : 'border-border-strong bg-panel',
           )}
         >
-          <IconCheck size={16} />
+          <IconCheck size={ICON_SIZE.inline} />
           {PLAN_OK_LABEL}
         </span>
       </button>
@@ -3365,7 +3366,7 @@ export function PlanSwitch(props: {
               : 'border-border-strong bg-panel',
           )}
         >
-          <IconX size={16} />
+          <IconX size={ICON_SIZE.inline} />
           {PLAN_NOT_OK_LABEL}
         </span>
       </button>
@@ -3402,10 +3403,10 @@ export function PlanDecidedPill(props: {
           ok ? 'bg-[var(--good-solid)]' : 'bg-[var(--bad-solid)]',
         )}
       >
-        {ok ? <IconCheck size={16} /> : <IconX size={16} />}
+        {ok ? <IconCheck size={ICON_SIZE.inline} /> : <IconX size={ICON_SIZE.inline} />}
         {ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}
         <span aria-hidden="true" className="opacity-70">
-          <IconChevronDown size={14} />
+          <IconChevronDown size={ICON_SIZE.inline} />
         </span>
       </span>
     </button>
@@ -3559,7 +3560,7 @@ function RowTile(props: {
           data-plan-row-tile="concept-file"
           className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[10px] bg-panel-3 text-fg-3"
         >
-          <IconFile size={22} />
+          <IconFile size={ICON_SIZE.tray} />
         </span>
       );
     }

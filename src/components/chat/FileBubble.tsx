@@ -17,7 +17,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { IconPlay } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlay } from '@/components/ui/icons';
 import { KindIcon, useStoredThumbnail } from '@/components/ui/FileTile';
 import {
   FileViewer,
@@ -178,12 +178,12 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
             />
           ) : (
             <span className="absolute inset-0 flex items-center justify-center text-fg-3">
-              <KindIcon kind={kind} size={28} />
+              <KindIcon kind={kind} size={ICON_SIZE.status} />
             </span>
           )}
           {kind === 'video' && thumbUrl !== null ? (
             <span className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-overlay-fg">
-              <IconPlay size={18} />
+              <IconPlay size={ICON_SIZE.nav} />
             </span>
           ) : null}
         </span>
@@ -191,7 +191,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
       <span className="flex min-h-[56px] w-full items-center gap-2.5 px-3 py-2.5">
         {ratio === null ? (
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
-            <KindIcon kind={kind} size={20} />
+            <KindIcon kind={kind} size={ICON_SIZE.control} />
           </span>
         ) : null}
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">

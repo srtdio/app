@@ -29,7 +29,7 @@ import { planCreateWithItems } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { IconCalendar, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconCalendar, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import {
   ConceptSheet,
@@ -498,7 +498,7 @@ export function PlanComposeScreen(props: {
         testId="compose"
         title="New plan"
         backLabel="Close"
-        backIcon={<IconX size={22} />}
+        backIcon={<IconX size={ICON_SIZE.tray} />}
         onBack={requestClose}
         closeLabel="Close"
         footer={footer}
@@ -581,7 +581,7 @@ export function PlanComposeScreen(props: {
               }}
               className={addClass}
             >
-              <IconPlus size={16} />
+              <IconPlus size={ICON_SIZE.inline} />
               Add concept
             </Button>
             <Button
@@ -590,7 +590,7 @@ export function PlanComposeScreen(props: {
               onClick={() => setPicker('posts')}
               className={addClass}
             >
-              <IconPlus size={16} />
+              <IconPlus size={ICON_SIZE.inline} />
               Add from Pipeline
             </Button>
             <Button
@@ -599,7 +599,7 @@ export function PlanComposeScreen(props: {
               onClick={() => setPicker('drafts')}
               className={addClass}
             >
-              <IconPlus size={16} />
+              <IconPlus size={ICON_SIZE.inline} />
               Add drafts
             </Button>
           </div>
@@ -752,7 +752,7 @@ export function ComposeItemRow(props: {
           onClick={props.onRemove}
           className="-my-1.5 -mr-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <IconX size={20} />
+          <IconX size={ICON_SIZE.control} />
         </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (
@@ -771,7 +771,7 @@ export function ComposeItemRow(props: {
         {need ? (
           <>
             {PICK_A_DAY}
-            <IconChevronRight size={16} />
+            <IconChevronRight size={ICON_SIZE.inline} />
           </>
         ) : (
           <>
@@ -781,7 +781,7 @@ export function ComposeItemRow(props: {
               <span>{formatCivilDayHeader(item.day as string)}</span>
             )}
             <span className="text-fg-3">
-              <IconCalendar size={16} />
+              <IconCalendar size={ICON_SIZE.inline} />
             </span>
           </>
         )}

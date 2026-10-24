@@ -37,7 +37,7 @@ import type {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Tag, isTagDot } from '@/components/ui/Tag';
-import { IconCheck, IconPlay } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconPlay } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
@@ -817,7 +817,9 @@ export function PostCardItem(
                 footer.accent ? 'font-medium text-accent' : 'text-fg-2',
               )}
             >
-              {footer.check ? <IconCheck size={14} className="shrink-0 text-good" /> : null}
+              {footer.check ? (
+                <IconCheck size={ICON_SIZE.inline} className="shrink-0 text-good" />
+              ) : null}
               <span className="truncate">{footer.state}</span>
             </span>
             <span className="shrink-0 font-medium text-accent">{footer.action}</span>
@@ -968,7 +970,7 @@ function CardVideo(props: CardMediaProps): ReactElement {
         className="pointer-events-none absolute inset-0 flex items-center justify-center"
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg">
-          <IconPlay size={16} />
+          <IconPlay size={ICON_SIZE.inline} />
         </span>
       </span>
     </CardMediaBox>
@@ -1046,7 +1048,7 @@ function CardMediaBox(
         <span className="absolute bottom-2 right-2 flex gap-1">
           {pills.video !== null ? (
             <span className={MEDIA_PILL}>
-              <IconPlay size={10} />
+              <IconPlay size={12} />
               {pills.video}
             </span>
           ) : null}
