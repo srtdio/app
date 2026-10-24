@@ -1513,7 +1513,7 @@ export function CreatePostSheet({
             aria-expanded={moreOpen}
             aria-controls="post-more-options"
             onClick={() => setMoreOpen((prev) => !prev)}
-            className="flex items-center gap-3 border border-border bg-panel-2 px-3 py-2 transition-colors hover:!bg-panel-3"
+            className="flex items-center gap-3 border border-border px-3 py-2 transition-colors"
           >
             <span className="min-w-0 flex-1">
               <span className="block text-base font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
@@ -1881,21 +1881,28 @@ function ShareToggle({
     <div className="flex min-h-[44px] items-center justify-between gap-3 text-base">
       <span className="[text-wrap:pretty]">{label}</span>
       <PressableRow
+        inline
         role="switch"
         aria-checked={checked}
         aria-label={label}
         onClick={() => onChange(!checked)}
-        className={cn(
-          'relative inline-flex h-11 !w-[60px] shrink-0 items-center !rounded-full px-1 transition-colors motion-reduce:transition-none',
-          checked ? 'bg-accent hover:!bg-accent' : 'bg-panel-3 hover:!bg-panel-3',
-        )}
+        className="inline-flex shrink-0 items-center"
       >
+        {/* The track keeps the pill shape; the row stays the plain primitive. */}
         <span
+          aria-hidden
           className={cn(
-            'h-7 w-7 rounded-full bg-panel transition-transform motion-reduce:transition-none',
-            checked ? 'translate-x-[24px]' : 'translate-x-0',
+            'relative inline-flex h-11 w-[60px] items-center rounded-full px-1 transition-colors motion-reduce:transition-none',
+            checked ? 'bg-accent' : 'bg-panel-3',
           )}
-        />
+        >
+          <span
+            className={cn(
+              'h-7 w-7 rounded-full bg-panel transition-transform motion-reduce:transition-none',
+              checked ? 'translate-x-[24px]' : 'translate-x-0',
+            )}
+          />
+        </span>
       </PressableRow>
     </div>
   );

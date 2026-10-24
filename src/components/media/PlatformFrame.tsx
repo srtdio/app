@@ -5,7 +5,7 @@
 
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { ICON_SIZE, IconImagePlus } from '@/components/ui/icons';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { DropZone } from '@/components/ui/DropZone';
 import { cn } from '@/lib/cn';
 import type { Frame, FrameMedia } from '@/lib/platform-specs';
 import { cutPercent, type FrameMap } from '@/components/pages/pcs/pin-annotations';
@@ -124,18 +124,25 @@ export function PlatformFrameUpload({
   onPick: () => void;
 }): ReactElement {
   return (
-    <PlatformFrame frame={frame} maxHeight={maxHeight} empty className="min-h-[44px] rounded-xl">
-      <PressableRow
+    <PlatformFrame
+      frame={frame}
+      maxHeight={maxHeight}
+      empty
+      bordered={false}
+      className="min-h-[44px] rounded-xl"
+    >
+      {/* The DropZone draws the dashed outline, so the frame drops its own. */}
+      <DropZone
         type="button"
         disabled={disabled}
         onClick={onPick}
-        className="absolute inset-0 flex flex-col items-center justify-center gap-2 !rounded-none px-3 !text-center text-base text-fg-2 transition-colors hover:!bg-panel-3 focus-visible:ring-inset motion-reduce:transition-none"
+        className="absolute inset-0 text-base focus-visible:ring-inset motion-reduce:transition-none"
       >
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-panel-3 text-accent">
           <IconImagePlus size={ICON_SIZE.tray} />
         </span>
         <span>{label}</span>
-      </PressableRow>
+      </DropZone>
     </PlatformFrame>
   );
 }

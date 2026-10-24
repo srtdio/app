@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Comments } from '@/components/comments/Comments';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -368,8 +369,7 @@ function BriefActionsMenu({
             <div role="menu" aria-label="Brief actions" className="flex flex-col">
               {rows.map((row, index) => (
                 <div key={row.testId} className={index > 0 ? 'border-t border-border' : undefined}>
-                  <Button
-                    variant="ghost"
+                  <PressableRow
                     type="button"
                     role="menuitem"
                     data-testid={row.testId}
@@ -377,10 +377,10 @@ function BriefActionsMenu({
                       setOpen(false);
                       row.onSelect();
                     }}
-                    className="w-full !justify-start text-left"
+                    className="flex items-center px-4 text-base font-medium text-fg-2 transition-colors duration-fast hover:text-fg"
                   >
                     {row.label}
-                  </Button>
+                  </PressableRow>
                 </div>
               ))}
             </div>

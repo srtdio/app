@@ -68,9 +68,11 @@ export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
             data-asset-tab={tab}
             onClick={() => onChange(tab)}
             className={cn(
-              'shrink-0 !gap-1.5 border !font-normal',
+              'shrink-0 border',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-              selected ? 'border-accent-line !bg-accent-soft !text-accent' : 'border-border',
+              selected
+                ? 'border-accent-line bg-accent-soft text-accent hover:text-accent'
+                : 'border-border',
             )}
           >
             {TAB_LABELS[tab]} <span className="tabular-nums">{counts[tab]}</span>

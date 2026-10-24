@@ -263,9 +263,10 @@ export function PlanCalendar(props: {
 
 // A plan chip carries a dot and a Draft tag, so it is a Button styled as the Chip.
 const PLAN_CHIP =
-  'max-w-[260px] shrink-0 !gap-1.5 border !font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'max-w-[260px] shrink-0 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 const PLAN_CHIP_IDLE = 'border-border';
-const PLAN_CHIP_ON = 'border-accent-line bg-accent-soft !text-accent hover:!bg-accent-soft';
+// text-accent sorts after the ghost Button's text-fg-2 / hover:text-fg, so it wins.
+const PLAN_CHIP_ON = 'border-accent-line bg-accent-soft text-accent hover:text-accent';
 
 function ChipRow(props: {
   bundles: readonly PlanBundle[];
@@ -411,10 +412,11 @@ function MonthGrid(props: {
                 ))}
                 {more > 0 ? (
                   <PressableRow
+                    inline
                     type="button"
                     data-plan-tab-more={cell.day}
                     onClick={() => props.onMore(cell.day)}
-                    className="h-[18px] !min-h-0 !w-auto shrink-0 self-start px-1.5 text-xs font-medium text-fg-2 hover:!bg-panel-3 hover:text-fg"
+                    className="shrink-0 self-start px-1.5 text-xs font-medium text-fg-2 hover:text-fg"
                   >
                     {moreLabel(more)}
                   </PressableRow>
@@ -428,27 +430,15 @@ function MonthGrid(props: {
   );
 }
 
-/**
- * Each tone's soft colour held on hover, so a PressableRow's panel-2 hover never
- * repaints a plan-coloured entry (literal strings so Tailwind emits them).
- */
-const TONE_HOVER_HOLD: Readonly<Record<PlanTone, string>> = {
-  accent: 'hover:!bg-accent-soft',
-  good: 'hover:!bg-good-soft',
-  warn: 'hover:!bg-warn-soft',
-  parked: 'hover:!bg-[color-mix(in_srgb,var(--stage-parked)_14%,transparent)]',
-};
-
 /** An entry's tone classes: its plan's soft colour and round dot, or the neutral square. */
-function entryLook(entry: CalendarEntry): { soft: string; dot: string; hold: string } {
+function entryLook(entry: CalendarEntry): { soft: string; dot: string } {
   if (entry.kind === 'post')
     return {
       soft: LOOSE_POST_CLASSES.soft,
       dot: cn(LOOSE_POST_CLASSES.dot, 'rounded-sm'),
-      hold: 'hover:!bg-panel-2',
     };
   const tone = PLAN_TONE_CLASSES[entry.tone];
-  return { soft: tone.soft, dot: cn(tone.dot, 'rounded-full'), hold: TONE_HOVER_HOLD[entry.tone] };
+  return { soft: tone.soft, dot: cn(tone.dot, 'rounded-full') };
 }
 
 function MonthEntry(props: EntryProps): ReactElement {
@@ -464,9 +454,8 @@ function MonthEntry(props: EntryProps): ReactElement {
       }
       onClick={() => props.onOpen(props.entry)}
       className={cn(
-        'flex h-[22px] !min-h-0 min-w-0 shrink-0 items-center gap-1.5 px-1.5 text-sm text-fg',
+        'flex min-w-0 shrink-0 items-center gap-1.5 px-1.5 text-sm text-fg',
         look.soft,
-        look.hold,
         props.lifted && 'opacity-40',
       )}
     >

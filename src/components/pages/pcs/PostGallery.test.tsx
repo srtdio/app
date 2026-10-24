@@ -22,7 +22,7 @@ import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
 import { IDENTITY_MAP } from '@/components/pages/pcs/pin-annotations';
 import { PlatformFrame } from '@/components/media/PlatformFrame';
 import { IconButton } from '@/components/ui/IconButton';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { DropZone } from '@/components/ui/DropZone';
 import type { Frame } from '@/lib/platform-specs';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { createLongPressController } from '@/components/ui/useLongPress';
@@ -244,7 +244,7 @@ describe('galleryView', () => {
     expect(texts).toContain('Add images');
 
     // The upload zone is wired to the append flow.
-    const zone = elements(tree).find((el) => el.type === PressableRow)!;
+    const zone = elements(tree).find((el) => el.type === DropZone)!;
     (zone.props as { onClick: () => void }).onClick();
     expect(onAddSlide).toHaveBeenCalledOnce();
 

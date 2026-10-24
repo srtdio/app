@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import type { ReactElement, ReactNode } from 'react';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -1133,14 +1133,16 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
 
   it('the trigger is a single 44x44 icon button labelled Filter and sort, no text', () => {
     const { trigger } = shell(control());
-    const props = trigger.props as { 'aria-label': string; className: string; children: unknown };
-    expect(props['aria-label']).toBe('Filter and sort');
-    // A secondary Button (44 tall by the design system), square at 44 wide.
-    expect(trigger.type).toBe(Button);
-    expect((trigger.props as { variant: string }).variant).toBe('secondary');
-    expect(props.className).toContain('w-11');
-    expect(props.className).toContain('!px-0');
+    const props = trigger.props as { label: string; className: string; children: unknown };
+    expect(props.label).toBe('Filter and sort');
+    // The shared IconButton (44x44 by the design system) in the secondary outline.
+    expect(trigger.type).toBe(IconButton);
+    const rendered = IconButton(trigger.props as Parameters<typeof IconButton>[0]);
+    expect((rendered.props as { 'aria-label': string })['aria-label']).toBe('Filter and sort');
+    expect((rendered.props as { className: string }).className).toContain('h-11 w-11');
+    expect(props.className).toContain('border border-border');
     expect(props.className).toContain('shrink-0');
+    expect(props.className).not.toMatch(/(^|\s|:)!/);
     expect(findAll(trigger, (el) => el.type === IconFilterLines)).toHaveLength(1);
     expect(texts(trigger)).toEqual([]);
   });

@@ -337,9 +337,7 @@ function SizePicker({
             onClick={() => onChange(size.label)}
             className={cn(
               'flex flex-col items-start justify-center border px-3 py-1.5 transition-colors motion-reduce:transition-none',
-              selected
-                ? 'border-accent-line bg-accent-soft text-fg hover:!bg-accent-soft'
-                : 'border-border bg-panel-2 text-fg-2 hover:!bg-panel-3',
+              selected ? 'border-accent-line bg-accent-soft text-fg' : 'border-border text-fg-2',
             )}
           >
             <span className="text-base font-medium">{size.label}</span>

@@ -232,6 +232,8 @@ describe('Post flow A helpers', () => {
       Parameters<typeof IconButton>[0]
     >;
     expect(wrapper.type).toBe(IconButton);
+    // No important overrides on the shared IconButton; the circle pins itself.
+    expect(wrapper.props.className ?? '').not.toMatch(/(^|\s|:)!/);
     const el = IconButton(wrapper.props) as ReactElement<{
       className: string;
       'aria-label': string;
@@ -243,6 +245,7 @@ describe('Post flow A helpers', () => {
     expect(el.props['aria-label']).toBe('Remove a.png');
     expect(el.props.children.props.className).toContain('h-5');
     expect(el.props.children.props.className).toContain('w-5');
+    expect(el.props.children.props.className).toContain('absolute right-1 top-1');
     el.props.onClick();
     expect(onRemove).toHaveBeenCalledTimes(1);
   });

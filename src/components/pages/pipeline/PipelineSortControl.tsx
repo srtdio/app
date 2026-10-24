@@ -12,6 +12,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import {
   ICON_SIZE,
@@ -392,16 +393,16 @@ export function PipelineFilterControl({
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const active = dateFilterActive(dateWindow, customRange) || order !== POST_SORT_DEFAULT;
   const trigger = (
-    <Button
+    <IconButton
       type="button"
-      variant="secondary"
+      label="Filter and sort"
       aria-haspopup="menu"
       aria-expanded={open}
-      aria-label="Filter and sort"
       data-filter-control=""
       {...(active ? { 'data-active': '' } : {})}
       onClick={() => setOpen((prev) => !prev)}
-      className={cn(TRIGGER, 'relative w-11 !px-0 text-fg-2')}
+      // The shared 44x44 IconButton in the secondary outline (border on panel).
+      className={cn(TRIGGER, 'relative border border-border bg-panel')}
     >
       <IconFilterLines size={ICON_SIZE.control} />
       {active ? (
@@ -411,7 +412,7 @@ export function PipelineFilterControl({
           className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-panel"
         />
       ) : null}
-    </Button>
+    </IconButton>
   );
   const calendar = (
     <PipelineDateRangeCalendar

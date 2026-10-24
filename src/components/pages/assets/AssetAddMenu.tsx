@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconLink, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
-/** A menu row: the shared ghost button, full width, text from the left. */
-const MENU_ITEM = 'w-full !justify-start !gap-3 text-left';
+/** A menu row: the shared pressable row, full width, text from the left. */
+const MENU_ITEM =
+  'flex items-center gap-3 px-4 text-base font-medium text-fg-2 transition-colors duration-fast hover:text-fg';
 
 interface AssetAddMenuProps {
   /** Open the upload sheet (the "Upload files" option). */
@@ -40,8 +42,7 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
       </Button>
 
       <MenuPopover open={open} onClose={() => setOpen(false)} align="right">
-        <Button
-          variant="ghost"
+        <PressableRow
           type="button"
           role="menuitem"
           onClick={() => {
@@ -54,10 +55,9 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
             <IconUpload size={ICON_SIZE.inline} />
           </span>
           <span>Upload files</span>
-        </Button>
+        </PressableRow>
 
-        <Button
-          variant="ghost"
+        <PressableRow
           type="button"
           role="menuitem"
           onClick={() => {
@@ -70,7 +70,7 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
             <IconLink size={ICON_SIZE.inline} />
           </span>
           <span>Add link</span>
-        </Button>
+        </PressableRow>
       </MenuPopover>
     </div>
   );

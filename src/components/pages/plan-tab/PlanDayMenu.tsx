@@ -10,7 +10,6 @@ import type { ReactElement } from 'react';
 import { planRangeLabel } from '@/components/chat/plan-card';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { cn } from '@/lib/cn';
-import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
@@ -136,16 +135,15 @@ export function PlanDayMenu(props: {
           </PressableRow>
         ))}
         <div className="my-1 border-t border-border" />
-        <Button
-          variant="link"
+        <PressableRow
           type="button"
           role="menuitem"
           data-plan-tab-menu-new=""
           onClick={props.onNewPlan}
-          className="w-full !justify-start text-left focus-visible:bg-panel-2 focus-visible:outline-none"
+          className="flex items-center px-2.5 text-base font-medium text-accent transition-colors focus-visible:bg-panel-2"
         >
           {NEW_PLAN_ROW_LABEL}
-        </Button>
+        </PressableRow>
       </div>
     </>
   );

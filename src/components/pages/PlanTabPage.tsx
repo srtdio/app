@@ -18,6 +18,7 @@ import { postRoute } from '@/components/chat/post-card';
 import { useInduction } from '@/components/induction/InductionProvider';
 import { PageHead } from '@/components/shell/PageHead';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -207,20 +208,22 @@ function ViewSwitch(props: {
   return (
     <div className="flex overflow-hidden rounded-lg border border-border bg-panel-2">
       {options.map((o) => (
-        <Button
+        <PressableRow
           key={o.view}
+          inline
+          flat
+          align="center"
           type="button"
-          variant="ghost"
           data-plan-tab-view={o.view}
           aria-pressed={props.view === o.view}
           onClick={() => props.onView(o.view)}
           className={cn(
-            'min-w-[64px] !rounded-none !px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-            props.view === o.view && 'bg-accent-soft !text-accent hover:!bg-accent-soft',
+            'min-w-[64px] px-3 text-base font-medium transition-colors duration-fast focus-visible:ring-inset',
+            props.view === o.view ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:text-fg',
           )}
         >
           {o.label}
-        </Button>
+        </PressableRow>
       ))}
     </div>
   );

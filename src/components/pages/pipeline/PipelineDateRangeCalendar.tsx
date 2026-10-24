@@ -245,16 +245,18 @@ export function PipelineDateRangeCalendar({
               <PressableRow
                 key={iso}
                 type="button"
+                // A between day sits flush in the range band (square corners).
+                flat={between}
                 aria-label={dayAriaLabel(view.year, view.monthIndex, day)}
                 aria-pressed={isEndpoint || single}
                 onClick={() => pick(iso)}
                 className={cn(
                   'flex items-center justify-center font-sans text-base tabular-nums transition-colors',
                   isEndpoint
-                    ? '!rounded-md bg-accent font-semibold text-accent-fg hover:!bg-accent'
+                    ? 'bg-accent font-semibold text-accent-fg'
                     : between
-                      ? '!rounded-none bg-accent-soft text-accent hover:!bg-accent-soft'
-                      : '!rounded-md text-fg',
+                      ? 'bg-accent-soft text-accent'
+                      : 'text-fg',
                   !isEndpoint && !between && isToday ? 'ring-1 ring-inset ring-accent-line' : '',
                 )}
               >

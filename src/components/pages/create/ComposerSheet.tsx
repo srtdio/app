@@ -141,7 +141,8 @@ export function ComposerSheet({
             onClick={requestClose}
             className={cn(
               'shrink-0',
-              busy && 'cursor-default !text-fg-3 hover:!bg-transparent active:!scale-100',
+              // fg-3 sorts after IconButton's fg-2 / hover fg, so it wins unforced.
+              busy && 'cursor-default text-fg-3 hover:text-fg-3',
             )}
             {...(busy ? { 'aria-disabled': 'true' as const } : {})}
           >

@@ -51,7 +51,6 @@ function SlideRow({
       disabled={disabled}
       className={cn(
         'flex items-center gap-3 px-3 py-2 text-base font-medium transition-colors',
-        'disabled:!opacity-40',
         danger ? 'text-bad' : 'text-fg',
       )}
     >

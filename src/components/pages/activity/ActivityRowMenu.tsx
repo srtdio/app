@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { MouseEvent, ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
-import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconCheck, IconClock, IconMore } from '@/components/ui/icons';
 import { LAPTOP_QUERY } from '@/lib/use-media-query';
@@ -78,7 +78,8 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
         isolate(event);
         setOpen((prev) => !prev);
       }}
-      className="shrink-0 !text-fg-3"
+      // text-fg-3 sorts after IconButton's text-fg-2, so it wins without an override.
+      className="text-fg-3 shrink-0"
     >
       <IconMore size={ICON_SIZE.control} />
     </IconButton>
@@ -90,8 +91,7 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
     icon: ReactElement,
     onClick: () => void,
   ): ReactElement => (
-    <Button
-      variant="ghost"
+    <PressableRow
       key={key}
       type="button"
       role="menuitem"
@@ -99,11 +99,11 @@ export function ActivityRowMenu({ snoozed, unread, onSnooze, onMarkRead }: Activ
         isolate(event);
         onClick();
       }}
-      className="w-full !justify-start !gap-2.5 text-left"
+      className="flex items-center gap-2.5 px-4 text-base font-medium text-fg-2 transition-colors duration-fast hover:text-fg"
     >
       <span className="flex h-4 w-4 shrink-0 items-center justify-center text-fg-3">{icon}</span>
       <span className="flex-1">{label}</span>
-    </Button>
+    </PressableRow>
   );
 
   const list = (

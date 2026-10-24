@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
@@ -62,8 +62,17 @@ const STAGE_ARROW =
   'hover:bg-overlay-line hover:text-overlay-fg focus-visible:outline-none ' +
   'focus-visible:ring-2 focus-visible:ring-overlay-fg md:inline-flex';
 
-/** Delete keeps the bar button's shape in the bad colour. */
-const BAD = '!text-bad';
+/**
+ * Delete keeps the bar button's shape in the bad colour: the bar's own ink is
+ * dropped so text-bad, which sorts after the IconButton's fg tokens, wins. Pure.
+ */
+function badBarClass(barClass: string): string {
+  const shape = barClass
+    .split(/\s+/)
+    .filter((token) => !/^(hover:)?text-(fg|overlay-fg)$/.test(token))
+    .join(' ');
+  return cn(shape, 'text-bad hover:text-bad');
+}
 
 /**
  * A swipe's step: next (1) or previous (-1) for a horizontal swipe past the
@@ -428,7 +437,7 @@ export function AssetLightbox({
           type="button"
           label="Delete"
           onClick={handleDelete}
-          className={cn(barClass, BAD)}
+          className={badBarClass(bar)}
         >
           <IconTrash size={ICON_SIZE.control} />
         </IconButton>
@@ -594,10 +603,10 @@ export function AssetLightbox({
       {/* Info: bottom sheet sliding up inside the lightbox. */}
       {infoOpen ? (
         <div className="absolute inset-0 z-10 flex items-end">
-          <PressableRow
+          <Backdrop
             aria-label="Close details"
             onClick={() => setInfoOpen(false)}
-            className="absolute inset-0 !rounded-none bg-scrim hover:!bg-scrim"
+            position="absolute"
           />
           <div
             role="dialog"

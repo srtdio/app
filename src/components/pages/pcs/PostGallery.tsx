@@ -26,6 +26,7 @@ import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { DropZone } from '@/components/ui/DropZone';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import { frameFor, PLATFORM_SPECS, type Frame } from '@/lib/platform-specs';
@@ -389,7 +390,7 @@ export function framePins(
             onClick={() => onPinClick?.(pin.commentId)}
             style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
             className={cn(
-              'pointer-events-auto absolute !rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line',
+              'pointer-events-auto absolute focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line',
               at.edge === null ? '-translate-x-1/2 -translate-y-1/2' : EDGE_SHIFT[at.edge],
             )}
           >
@@ -699,6 +700,7 @@ export function reorderView(model: ReorderModel): ReactElement {
           return (
             <div key={item.assetAttachmentId} role="listitem" className="shrink-0">
               <PressableRow
+                inline
                 type="button"
                 buttonRef={
                   model.tileRef !== undefined
@@ -725,7 +727,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                     : { aspectRatio: `${ratio}` }
                 }
                 className={cn(
-                  'relative flex h-24 !w-auto min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 motion-safe:transition-colors',
+                  'relative flex h-24 min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 motion-safe:transition-colors',
                   SLIDE_PRESS_CLASS,
                   selected ? 'border-accent' : 'border-border',
                   dragging && 'z-10 cursor-grabbing shadow-lg',
@@ -900,17 +902,13 @@ export function galleryView({
     // onAddSlide and keep the calm, view-only empty line unchanged.
     if (onAddSlide !== undefined) {
       const zone = (
-        <PressableRow
-          type="button"
-          onClick={onAddSlide}
-          className="flex flex-col items-center justify-center gap-2 border border-dashed border-border-strong bg-panel-2 px-4 py-10 !text-center transition-colors hover:!bg-panel-3"
-        >
+        <DropZone type="button" minHeight="panel" onClick={onAddSlide}>
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-panel-3 text-accent">
             <IconImagePlus size={ICON_SIZE.status} />
           </span>
           <span className="text-base font-medium text-fg">Add images</span>
           <span className="text-sm text-fg-3">Tap to upload</span>
-        </PressableRow>
+        </DropZone>
       );
       return toolbar !== undefined && toolbar !== null ? (
         <div>
@@ -990,7 +988,7 @@ export function galleryView({
             onClick={() => {
               if (onDotClick !== undefined) onDotClick(index);
             }}
-            className="!rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <span
               className={`h-2 w-2 rounded-full transition-colors ${
