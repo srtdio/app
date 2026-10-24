@@ -104,7 +104,18 @@ export async function collectButtonViolations(
         style.borderBottomLeftRadius,
       ];
       const radiusText = corners.join(' ');
-      if (rect.height < a.minHeight - a.tolerance) {
+      // A drawn-small control (the reaction badge) counts its absolutely
+      // positioned ::before / ::after expander, as the touch-target sweep does.
+      let top = rect.top;
+      let bottom = rect.bottom;
+      for (const pseudo of ['::before', '::after']) {
+        const cs = getComputedStyle(el, pseudo);
+        if (cs.content === 'none' || cs.position !== 'absolute') continue;
+        const px = (v: string): number => (v.endsWith('px') ? Number.parseFloat(v) : 0);
+        top = Math.min(top, rect.top + px(cs.top));
+        bottom = Math.max(bottom, rect.bottom - px(cs.bottom));
+      }
+      if (bottom - top < a.minHeight - a.tolerance) {
         out.push({
           name: describe(el),
           height: rect.height,

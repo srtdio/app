@@ -29,21 +29,13 @@ describe('ReactionBadge', () => {
     expect(cls.some((c) => /^(min-)?h-/.test(c))).toBe(false);
   });
 
-  it('adds a centred 44x44 ::before hit area', () => {
+  it('adds a ::before hit area of at least 44x44 around the drawn badge', () => {
     const html = render();
-    for (const c of [
-      'before:absolute',
-      'before:h-11',
-      'before:w-11',
-      'before:left-1/2',
-      'before:top-1/2',
-      'before:-translate-x-1/2',
-      'before:-translate-y-1/2',
-      "before:content-['']",
-    ]) {
+    for (const c of ['before:absolute', 'before:-inset-x-2', 'before:-inset-y-3.5']) {
       expect(REACTION_BADGE_HIT.split(' ')).toContain(c);
-      // The markup escapes the quotes in content-['']; the class list holds it.
-      if (!c.includes("'")) expect(html).toContain(c);
+      expect(html).toContain(c);
     }
+    // The markup escapes the quotes in content-['']; the class list holds it.
+    expect(REACTION_BADGE_HIT.split(' ')).toContain("before:content-['']");
   });
 });

@@ -10,11 +10,12 @@ export const REACTION_BADGE_CLASS =
   'absolute left-2 top-[calc(100%-3px)] inline-flex items-center gap-0.5 rounded-full border border-border bg-panel px-1.5 py-0.5';
 
 /**
- * The tap target: a 44x44 ::before centred on the badge, so the drawn badge
- * keeps its size and hang while the touch area meets the 44px minimum.
+ * The tap target: a ::before grown 14px above and below and 8px each side, so
+ * the ~20px badge keeps its drawn size and hang while the touch area is at
+ * least 44x44 (48 tall; a one-emoji badge is ~30 wide, so 46 wide).
  */
 export const REACTION_BADGE_HIT =
-  "before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
+  "before:absolute before:-inset-x-2 before:-inset-y-3.5 before:content-['']";
 
 export interface ReactionBadgeProps {
   /** The spoken summary, e.g. "2 reactions: 👍 🎉". */
