@@ -710,7 +710,7 @@ export function ComposeItemRow(props: {
       <span
         aria-hidden="true"
         className={cn(
-          'flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-base font-semibold',
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-base font-semibold',
           item.kind === 'concept' && 'border-[1.5px] border-dashed border-border-strong text-fg-3',
           item.kind === 'post' && 'bg-accent-soft text-accent',
           item.kind === 'draft' && 'bg-panel-2 text-fg-3',
@@ -732,7 +732,7 @@ export function ComposeItemRow(props: {
       data-plan-compose-item={item.kind}
       data-plan-compose-flag={need ? 'need' : 'ok'}
       className={cn(
-        'flex flex-col gap-2 rounded-[14px] border p-2.5',
+        'flex flex-col gap-2 rounded-xl border p-2.5',
         need ? 'border-warn bg-warn-soft' : 'border-border bg-panel',
       )}
     >
@@ -872,7 +872,7 @@ export function PlanSharedNotice(props: {
       )}
     >
       {shown ? (
-        <span className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg shadow-lg">
+        <span className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg shadow-[var(--strip-shadow)]">
           {props.text}
         </span>
       ) : null}

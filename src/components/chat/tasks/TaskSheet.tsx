@@ -196,9 +196,9 @@ function TasksSkeleton(): ReactElement {
     <div data-task-skeleton="" aria-hidden="true" className="flex flex-col gap-3 px-4 py-4">
       {[0, 1, 2, 3].map((k) => (
         <div key={k} className="flex items-center gap-3">
-          <span className="h-4 w-4 shrink-0 animate-pulse rounded-[4px] bg-panel-3" />
-          <span className="h-4 flex-1 animate-pulse rounded-[4px] bg-panel-3" />
-          <span className="h-4 w-8 shrink-0 animate-pulse rounded-[4px] bg-panel-3" />
+          <span className="h-4 w-4 shrink-0 animate-pulse rounded-md bg-panel-3" />
+          <span className="h-4 flex-1 animate-pulse rounded-md bg-panel-3" />
+          <span className="h-4 w-8 shrink-0 animate-pulse rounded-md bg-panel-3" />
         </div>
       ))}
     </div>
@@ -720,7 +720,7 @@ function DiscardConfirm(props: {
         aria-label={DISCARD_TITLE}
         tabIndex={-1}
         data-task-discard=""
-        className="relative w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
+        className="relative w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-2xl outline-none"
       >
         <h2 className="text-lg font-semibold text-fg">{DISCARD_TITLE}</h2>
         <div className="mt-5 flex justify-end gap-2">

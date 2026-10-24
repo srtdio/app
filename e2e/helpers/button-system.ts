@@ -24,12 +24,11 @@ const WRAPPER_MIN_HEIGHT = 56;
 
 const SELECTOR = 'button, [role="button"], a.h-11';
 // Controls the button-system PR left as they are on purpose (listed under
-// COULD NOT RESOLVE): the status ticker's dense bar items, the reaction badge
-// and the voice player controls inside a bubble.
+// COULD NOT RESOLVE): the status ticker's dense bar items and the voice player
+// controls inside a bubble.
 const KNOWN_EXEMPT = [
   '[data-status-item]',
   '[data-status-chevron]',
-  '[data-reaction-badge]',
   '[data-voice-control]',
 ];
 const EXCLUDE = ['.home', '[data-home]', '[data-touch-exempt]', ...KNOWN_EXEMPT].join(', ');

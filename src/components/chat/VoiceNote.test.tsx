@@ -838,12 +838,12 @@ describe('bars from the real waveform', () => {
     expect(Math.max(...heights)).toBeLessThanOrEqual(MAX_BAR_PX);
   });
 
-  it('unplayed bars: the muted token received, white at 45% sent; 2px wide, 1px radius', () => {
+  it('unplayed bars: the muted token received, white at 45% sent; 2px wide, full radius', () => {
     const received = renderToStaticMarkup(<VoiceNote {...base} peaks={[50, 60]} />);
     const wave = received.slice(received.indexOf('data-voice-bars'));
-    expect((wave.match(/w-0\.5 shrink-0 rounded-\[1px\] bg-fg-3"/g) ?? []).length).toBe(30);
+    expect((wave.match(/w-0\.5 shrink-0 rounded-full bg-fg-3"/g) ?? []).length).toBe(30);
     expect(wave).not.toContain('data-played');
     const sent = renderToStaticMarkup(<VoiceNote {...base} mine peaks={[50, 60]} />);
-    expect(sent).toContain('w-0.5 shrink-0 rounded-[1px] bg-white/[.45]');
+    expect(sent).toContain('w-0.5 shrink-0 rounded-full bg-white/[.45]');
   });
 });

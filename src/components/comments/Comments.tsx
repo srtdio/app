@@ -2056,7 +2056,7 @@ export function Comments({
         key={comment.id}
         id={commentDomId(comment.id)}
         className={cn(
-          'rounded-xl border bg-panel-2 px-4 py-3 transition-shadow',
+          'rounded-xl border bg-panel-2 px-4 py-3',
           isResolved ? 'border-good' : 'border-border',
         )}
       >

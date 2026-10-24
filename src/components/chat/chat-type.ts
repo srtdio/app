@@ -61,7 +61,7 @@ export function sized(size: ChatSize, layout: ChatLayout): string {
   return size[layout];
 }
 
-/** Message body in a bubble: 17/22 touch, 14.2/19 laptop, 400. */
+/** Message body in a bubble: 17/22 touch, 14/19 laptop, 400. */
 export const BUBBLE_BODY_TYPE: ChatSize = {
   touch: 'text-[17px] leading-[22px] font-normal',
   laptop: 'text-[14px] leading-[19px] font-normal',
@@ -73,19 +73,19 @@ export const BUBBLE_META_TYPE = 'text-[11px] leading-[15px] font-normal tabular-
 /** The meta's tick (and clock) glyph box: 20x12, the double tick's box. */
 export const TICK_ICON_BOX = 'h-3 w-5 shrink-0';
 
-/** The sender name over a group run: 13/18/600 touch, 12.8/22/500 laptop. */
+/** The sender name over a group run: 13/18/600 touch, 13/22/500 laptop. */
 export const GROUP_SENDER_TYPE: ChatSize = {
   touch: 'text-[13px] leading-[18px] font-semibold',
   laptop: 'text-[13px] leading-[22px] font-medium',
 };
 
-/** A bubble's reply quote author: 13/18/600 touch, 12.8/20/500 laptop. */
+/** A bubble's reply quote author: 13/18/600 touch, 13/20/500 laptop. */
 export const QUOTE_AUTHOR_TYPE: ChatSize = {
   touch: 'text-[13px] leading-[18px] font-semibold',
   laptop: 'text-[13px] leading-[20px] font-medium',
 };
 
-/** A bubble's reply quote text: 14/18 touch, 13.2/20 laptop, 400. */
+/** A bubble's reply quote text: 14/18 touch, 13/20 laptop, 400. */
 export const QUOTE_TEXT_TYPE: ChatSize = {
   touch: 'text-[14px] leading-[18px] font-normal',
   laptop: 'text-[13px] leading-[20px] font-normal',
@@ -164,11 +164,20 @@ export const DRAFT_PREFIX_TYPE = 'font-medium';
 /** An inline notice in a chat sheet (group info): 13/18, 400 on both. */
 export const SHEET_NOTICE_TYPE = 'text-[13px] leading-[18px] font-normal';
 
-/** Bubble radius: 18px touch, 7.5px laptop. */
+/**
+ * Bubble radius: 18px touch (the WhatsApp lock), 12px laptop (the card role).
+ * The only arbitrary radii in the app live here.
+ */
 export const BUBBLE_SHAPE: ChatSize = {
   touch: 'rounded-[18px]',
-  laptop: 'rounded-[7.5px]',
+  laptop: 'rounded-xl',
 };
+
+/** The touch bubble's 4px tail corner, bottom right on own, bottom left on peer. */
+export const BUBBLE_TAIL = {
+  mine: 'rounded-br-[4px]',
+  theirs: 'rounded-bl-[4px]',
+} as const;
 
 /** Bubble padding: 8/12 touch, 6/7/8/9 laptop. */
 export const BUBBLE_PAD: ChatSize = {

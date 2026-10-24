@@ -772,7 +772,7 @@ function TranscriptDrop(props: {
           <p
             dir="auto"
             className={cn(
-              'select-text whitespace-pre-wrap rounded-[14px] px-3 py-2 [overflow-wrap:anywhere] text-lg',
+              'select-text whitespace-pre-wrap rounded-xl px-3 py-2 [overflow-wrap:anywhere] text-lg',
               props.panel,
               props.ink,
             )}
@@ -1332,7 +1332,7 @@ export function VoiceNote({
                 key={index}
                 data-played={barPlayed(index, progress, bars.length) ? '' : undefined}
                 className={cn(
-                  'w-0.5 shrink-0 rounded-[1px]',
+                  'w-0.5 shrink-0 rounded-full',
                   barPlayed(index, progress, bars.length) ? tone.played : tone.unplayed,
                 )}
                 style={{ height: `${height}px` }}

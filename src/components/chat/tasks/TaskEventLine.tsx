@@ -151,7 +151,7 @@ function TaskBatch(props: {
       {open ? (
         <div
           data-task-batch-rows=""
-          className="mx-4 mb-1 flex w-[min(100%-2rem,420px)] flex-col gap-1 rounded-[10px] border border-border bg-panel-2 px-3 py-2 text-md text-fg-2"
+          className="mx-4 mb-1 flex w-[min(100%-2rem,420px)] flex-col gap-1 rounded-xl border border-border bg-panel-2 px-3 py-2 text-md text-fg-2"
         >
           {rows.map((row, k) => (
             <p key={k} data-task-batch-row={row.kind} className="leading-5">

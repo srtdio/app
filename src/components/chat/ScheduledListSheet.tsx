@@ -15,7 +15,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Textarea } from '@/components/ui/Textarea';
 import { ICON_SIZE, IconCalendarClock } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
-import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { BUBBLE_SHAPE, BUBBLE_TAIL, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { ScheduleSheet } from '@/components/chat/ScheduleSheet';
 import { restoreDraftText } from '@/components/chat/Composer';
 import {
@@ -139,7 +139,11 @@ export function ScheduledListSheet(
                     <div className="flex justify-end">
                       <p
                         data-scheduled-preview=""
-                        className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-[4px] bg-bubble-own px-3 py-2 text-lg leading-snug text-accent-fg"
+                        className={cn(
+                          'max-w-[85%] whitespace-pre-wrap break-words bg-bubble-own px-3 py-2 text-lg leading-snug text-accent-fg',
+                          BUBBLE_SHAPE.touch,
+                          BUBBLE_TAIL.mine,
+                        )}
                       >
                         {scheduledPreviewText(row, props.nameOf)}
                       </p>

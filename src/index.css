@@ -155,6 +155,10 @@
   --guide-ink: #1f1400;
   --guide-rgb: 232 147 12;
   --guide-ink-rgb: 31 20 0;
+  /* The guide's dim layer, and the spotlight: a huge spread of the same dim
+     around a cut-out (the guide box, the preview's shown window). */
+  --guide-dim: rgba(14, 16, 30, 0.3);
+  --shadow-spotlight: 0 0 0 200vmax var(--guide-dim);
 }
 .dark {
   --bg: #0c0d10;
@@ -270,6 +274,8 @@
   --guide-ink: #1a1100;
   --guide-rgb: 251 181 60;
   --guide-ink-rgb: 26 17 0;
+  --guide-dim: rgba(0, 0, 0, 0.22);
+  --shadow-spotlight: 0 0 0 200vmax var(--guide-dim);
 }
 @layer base {
   html,
@@ -302,6 +308,7 @@
        sideways. Inherited; break-word, never anywhere, so min-content sizing
        of flex and grid children is unchanged. */
     overflow-wrap: break-word;
+    line-height: 1.45;
     font-family:
       'Inter',
       -apple-system,

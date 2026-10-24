@@ -528,7 +528,7 @@ describe('album grid', () => {
     expect(html).toContain('bg-black/50');
     expect(html).toContain('text-2xl font-semibold text-white');
     expect(html).toContain('gap-[2px]');
-    expect(html).toContain('rounded-[15px]');
+    expect(html).toContain('rounded-xl');
     expect(html.match(/<button/g)).toHaveLength(4);
     const { tiles, onOpen } = grid(6);
     (tiles[3]?.props as { onClick: () => void }).onClick();

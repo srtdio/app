@@ -8,6 +8,8 @@ export interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElemen
   inline?: boolean;
   /** Square corners (rounded-none) for surfaces that sit flush, like a quote rule. */
   flat?: boolean;
+  /** Card corners (rounded-xl, the 12px card role) for a tappable card. */
+  card?: boolean;
   /** Text alignment; rows are left aligned by default. */
   align?: 'left' | 'center';
 }
@@ -25,6 +27,7 @@ export function PressableRow({
   buttonRef,
   inline = false,
   flat = false,
+  card = false,
   align = 'left',
   type = 'button',
   ...props
@@ -36,7 +39,7 @@ export function PressableRow({
       className={cn(
         PRESSABLE_ROW_BASE,
         inline ? 'w-auto' : 'w-full',
-        flat ? 'rounded-none' : 'rounded-lg',
+        flat ? 'rounded-none' : card ? 'rounded-xl' : 'rounded-lg',
         align === 'center' ? 'text-center' : 'text-left',
         className,
       )}

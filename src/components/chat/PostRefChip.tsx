@@ -153,7 +153,7 @@ export function PostRefThumb(props: {
       className={cn(
         'flex shrink-0 items-center justify-center overflow-hidden bg-panel-3 text-fg-3',
         box,
-        props.round === true ? 'rounded-full' : props.size === 20 ? 'rounded-[5px]' : 'rounded-md',
+        props.round === true ? 'rounded-full' : 'rounded-md',
       )}
     >
       {thumb.url !== null && !thumb.failed ? (

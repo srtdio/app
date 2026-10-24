@@ -395,11 +395,11 @@ export function framePins(
             )}
           >
             {at.edge === null ? (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-sm font-semibold tabular-nums text-fg shadow">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-sm font-semibold tabular-nums text-fg">
                 {pin.n}
               </span>
             ) : (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg px-1 text-sm font-semibold tabular-nums text-fg shadow">
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg px-1 text-sm font-semibold tabular-nums text-fg">
                 {pin.n}
               </span>
             )}

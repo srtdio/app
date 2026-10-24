@@ -93,6 +93,10 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Icons: only src/components/ui/icons.tsx, stroke 1.7, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
 - Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots.
 - Contrast: every text token passes 4.5:1 on bg and panel in both themes.
+- Radius roles: controls 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. Chat bubble radii live only in chat/chat-type.ts.
+- Shadows: cards none; menus/popovers/sheets/dialogs shadow-2xl; dragged items shadow-lg; tokens for toast, auth card, spotlight.
+- Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".
+- Icon sizes come from ICON_SIZE in ui/icons.tsx.
 
 ## Canonical living docs
 

@@ -68,7 +68,7 @@ export function GuideDim(): ReactElement {
     <div
       data-induction-dim=""
       aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 ${GUIDE_Z} bg-[rgba(14,16,30,0.30)] dark:bg-[rgba(0,0,0,0.22)]`}
+      className={`pointer-events-none fixed inset-0 ${GUIDE_Z} bg-[var(--guide-dim)]`}
     />
   );
 }
@@ -78,7 +78,7 @@ export function GuideBox({ rect, radius }: { rect: Rect; radius: number }): Reac
     <div
       data-induction-box=""
       aria-hidden="true"
-      className={`pointer-events-none absolute ${GUIDE_Z} border border-[var(--guide)] shadow-[0_0_0_200vmax_rgba(14,16,30,0.30)] dark:shadow-[0_0_0_200vmax_rgba(0,0,0,0.22)]`}
+      className={`pointer-events-none absolute ${GUIDE_Z} border border-[var(--guide)] shadow-[var(--shadow-spotlight)]`}
       style={{
         top: rect.top + window.scrollY,
         left: rect.left + window.scrollX,

@@ -508,7 +508,7 @@ function ShownWindow({ window: win }: { window: CropWindow }): ReactElement {
   const pct = (n: number): string => `${n * 100}%`;
   return (
     <div
-      className="absolute rounded-sm border-2 border-accent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+      className="absolute rounded-sm border-2 border-accent shadow-[var(--shadow-spotlight)]"
       style={{ left: pct(win.x), top: pct(win.y), width: pct(win.w), height: pct(win.h) }}
     >
       <span className="absolute left-1 top-1 rounded bg-accent px-1.5 py-0.5 text-xs font-semibold text-accent-fg">

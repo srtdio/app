@@ -462,7 +462,7 @@ export function AlbumGrid({
       data-album={count}
       className={cn(
         albumGridClass(count),
-        'relative w-[320px] max-w-full gap-[2px] overflow-hidden rounded-[15px]',
+        'relative w-[320px] max-w-full gap-[2px] overflow-hidden rounded-xl',
       )}
     >
       {albumTiles(count).map((tile) => {

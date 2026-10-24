@@ -75,6 +75,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { ReactionBadge } from '@/components/ui/ReactionBadge';
 import {
   ICON_SIZE,
   IconAlertTriangle,
@@ -127,6 +128,7 @@ import {
   BUBBLE_META_TYPE,
   BUBBLE_PAD,
   BUBBLE_SHAPE,
+  BUBBLE_TAIL,
   COARSE_POINTER_QUERY,
   DATE_PILL_TYPE,
   GROUP_SENDER_TYPE,
@@ -1509,7 +1511,7 @@ export interface BubbleShape {
 
 /**
  * The sender-side tail corner. Touch: 18px radius, the 4px corner at the
- * bottom on the last bubble of a run. Laptop: 7.5px radius, the square corner
+ * bottom on the last bubble of a run. Laptop: 12px radius, the square corner
  * at the top on the first bubble of a run; later bubbles are fully rounded.
  */
 export function bubbleCorners(shape: BubbleShape): string {
@@ -1521,7 +1523,7 @@ export function bubbleCorners(shape: BubbleShape): string {
   }
   return cn(
     sized(BUBBLE_SHAPE, 'touch'),
-    shape.tail && (shape.mine ? 'rounded-br-[4px]' : 'rounded-bl-[4px]'),
+    shape.tail && (shape.mine ? BUBBLE_TAIL.mine : BUBBLE_TAIL.theirs),
   );
 }
 
@@ -1882,14 +1884,6 @@ function ChevronGlyph(): ReactElement {
 function SmileyGlyph(): ReactElement {
   return <IconSmile size={ICON_SIZE.control} />;
 }
-
-/**
- * The reaction badge: under the bubble's bottom-left, overlapping its bottom
- * edge by 3px (the meta's box starts 3px up, so the badge never covers it on
- * any bubble width). About 20px tall, so it hangs 17px below the bubble.
- */
-export const REACTION_BADGE_CLASS =
-  'absolute left-2 top-[calc(100%-3px)] inline-flex items-center gap-0.5 rounded-full border border-border bg-panel px-1.5 py-0.5';
 
 /** A row with a reaction badge makes room for its 17px overhang plus a gap. */
 export const REACTION_ROW_SPACE = 'mb-5';
@@ -2468,13 +2462,7 @@ export function MessageBubble(props: {
               </PressableRow>
             ) : null}
             {hasReactions ? (
-              <button
-                type="button"
-                data-reaction-badge=""
-                aria-label={reactionBadgeLabel(message.reactions)}
-                onClick={onBadgeClick}
-                className={REACTION_BADGE_CLASS}
-              >
+              <ReactionBadge label={reactionBadgeLabel(message.reactions)} onClick={onBadgeClick}>
                 <span aria-hidden="true" className={REACTION_EMOJI_TYPE}>
                   {distinctEmojis}
                 </span>
@@ -2483,7 +2471,7 @@ export function MessageBubble(props: {
                     {totalReactions}
                   </span>
                 ) : null}
-              </button>
+              </ReactionBadge>
             ) : null}
           </div>,
           rail,
@@ -4507,7 +4495,7 @@ export function threadSkeleton(): ReactElement {
           key={width}
           data-skeleton-bubble=""
           className={cn(
-            'h-10 animate-pulse rounded-[14px] bg-panel-2',
+            'h-10 animate-pulse rounded-xl bg-panel-2',
             width,
             i % 2 === 1 && 'self-end',
           )}

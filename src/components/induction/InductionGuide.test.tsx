@@ -216,7 +216,7 @@ describe('the spotlight', () => {
     await mount({ step: 'c_approved_chip' });
     const box = q('[data-induction-box]');
     expect(box.className).toContain('pointer-events-none');
-    expect(box.className).toMatch(/shadow-\[0_0_0_200vmax_rgba\(14,16,30,0\.30\)\]/);
+    expect(box.className).toContain('shadow-[var(--shadow-spotlight)]');
     expect(q('[data-induction-hand]').className).toContain('pointer-events-none');
     const label = q('[data-induction-label]');
     expect(label.textContent).toBe('Tap Approved to filter');
@@ -746,8 +746,8 @@ describe('fix round regressions', () => {
     expect(label).toContain('text-[var(--guide-ink)]');
     expect(q('[data-induction-progress]').className).toContain('bg-[var(--guide-deep)]');
     const dim = q('[data-induction-box]').className;
-    expect(dim).toContain('shadow-[0_0_0_200vmax_rgba(14,16,30,0.30)]');
-    expect(dim).toContain('dark:shadow-[0_0_0_200vmax_rgba(0,0,0,0.22)]');
+    expect(dim).toContain('shadow-[var(--shadow-spotlight)]');
+    expect(dim).not.toContain('dark:');
     expect(q('[data-induction-box]').getAttribute('style')).not.toMatch(/shadow|rgba/);
   });
 

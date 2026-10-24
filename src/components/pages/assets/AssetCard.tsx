@@ -85,7 +85,7 @@ export function AssetCard({
               'absolute left-3.5 top-3.5 z-10 flex h-4 w-4 items-center justify-center rounded',
               selected
                 ? 'bg-accent text-white'
-                : 'border-[1.5px] border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]',
+                : 'border-[1.5px] border-white bg-black/15 ring-1 ring-black/30',
             )}
           >
             {selected ? <IconCheck size={12} /> : null}
@@ -154,7 +154,7 @@ export function CardSelectBox({ name, onPress }: { name: string; onPress: () => 
       onClick={onPress}
       className="absolute left-0 top-0 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <span className="h-4 w-4 rounded border-[1.5px] border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]" />
+      <span className="h-4 w-4 rounded border-[1.5px] border-white bg-black/15 ring-1 ring-black/30" />
     </IconButton>
   );
 }

@@ -327,7 +327,7 @@ export function channelListSkeleton(): ReactElement {
               data-skeleton-row="wide"
               className={cn(tileBoxClass('wide'), 'border-border bg-panel animate-pulse')}
             >
-              <div className="h-[76px] w-[76px] shrink-0 rounded-[18px] bg-panel-2" />
+              <div className="h-[76px] w-[76px] shrink-0 rounded-xl bg-panel-2" />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <div className="h-4 w-1/2 rounded bg-panel-2" />
                 <div className="h-3 w-3/4 rounded bg-panel-2" />
@@ -467,7 +467,7 @@ export const TILE_TIME_TYPE = 'font-mono text-sm font-normal tabular-nums';
  * is final on first paint.
  */
 export const GROUP_TILE_PHOTO =
-  'flex h-[76px] w-[76px] shrink-0 [&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-[18px] [&>*]:!text-2xl';
+  'flex h-[76px] w-[76px] shrink-0 [&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-xl [&>*]:!text-2xl';
 
 /** The square tile's 72px circular photo: the shared Avatar resized in place. */
 export const PERSON_TILE_PHOTO =
@@ -475,7 +475,7 @@ export const PERSON_TILE_PHOTO =
 
 /** The unread pill: 22px min, radius 11, accent fill, 12/600. */
 export const TILE_PILL =
-  'inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-[11px] bg-accent px-1.5 text-sm font-semibold leading-none tabular-nums text-accent-fg';
+  'inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-sm font-semibold leading-none tabular-nums text-accent-fg';
 
 /**
  * A tile's box: hairline border, radius 18 and its fixed height. Wide: 100 tall
@@ -485,7 +485,7 @@ export const TILE_PILL =
  */
 export function tileBoxClass(kind: TileKind, more = false): string {
   return cn(
-    'flex w-full rounded-[18px] border',
+    'flex w-full rounded-xl border',
     kind === 'wide'
       ? cn('h-[100px] items-center gap-3 py-3 pl-3', more ? 'pr-14' : 'pr-4')
       : 'relative h-[168px] flex-col items-center px-3 pt-4 pb-[14px] text-center',

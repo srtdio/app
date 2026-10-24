@@ -70,7 +70,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
       style={{ animation }}
       {...(success ? { 'data-toast-tone': 'success' } : {})}
       {...(error ? { 'data-toast-tone': 'error', role: 'alert' } : {})}
-      className={`pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border pr-1 shadow-lg ${
+      className={`pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border pr-1 shadow-[var(--strip-shadow)] ${
         error
           ? 'border-bad-solid bg-bad-solid'
           : success
