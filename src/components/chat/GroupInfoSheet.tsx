@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
@@ -326,7 +326,7 @@ function SheetRow(props: {
   );
 }
 
-/** Leave group: a 56px full-width outlined row, destructive text, no filled red. */
+/** Leave group: the full-width secondary button (44px, outlined), destructive text, no filled red. */
 export function LeaveGroupRow(props: { disabled: boolean; onClick: () => void }): ReactElement {
   return (
     <button
@@ -334,10 +334,14 @@ export function LeaveGroupRow(props: { disabled: boolean; onClick: () => void })
       data-row="leave-group"
       disabled={props.disabled}
       onClick={props.onClick}
-      className="flex min-h-[56px] w-full select-none items-center gap-3 rounded-lg border border-border px-4 text-left text-sm font-medium text-bad [-webkit-touch-callout:none] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+      className={buttonClass(
+        'secondary',
+        'default',
+        'w-full !justify-start gap-3 text-left text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+      )}
     >
       <span className="flex w-5 shrink-0 justify-center text-bad">
-        <IconSignOut size={18} />
+        <IconSignOut size={16} />
       </span>
       Leave group
     </button>
@@ -776,10 +780,10 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         {/* FN23: an explicit Save / Cancel; leaving the field never saves. */}
         {name !== props.groupName ? (
           <div data-group-rename-actions="" className="mt-2 flex justify-end gap-2">
-            <Button size="lg" disabled={busy} onClick={() => setName(props.groupName)}>
+            <Button disabled={busy} onClick={() => setName(props.groupName)}>
               Cancel
             </Button>
-            <Button size="lg" variant="primary" disabled={busy} onClick={() => void submitRename()}>
+            <Button variant="primary" disabled={busy} onClick={() => void submitRename()}>
               {busy ? 'Saving' : 'Save'}
             </Button>
           </div>
@@ -819,7 +823,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
                     disabled={busy}
                     onClick={() => setRemoveTarget(member)}
                   >
-                    <IconX size={18} />
+                    <IconX size={20} />
                   </IconButton>
                 ) : null}
               </li>
@@ -852,7 +856,6 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
               emptyLabel="Everyone in this workspace is already a member."
             />
             <Button
-              size="lg"
               variant="primary"
               className="mt-2"
               disabled={addId === null || busy}

@@ -445,7 +445,7 @@ export function EditingBar(props: { text: string; onCancel: () => void }): React
       tone="warn"
       trailing={
         <IconButton label="Cancel editing" className="shrink-0" onClick={props.onCancel}>
-          <IconX size={16} />
+          <IconX size={20} />
         </IconButton>
       }
     />
@@ -500,7 +500,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
         )}
       </span>
       <IconButton label="Close about" className="shrink-0" onClick={props.onCancel}>
-        <IconX size={16} />
+        <IconX size={20} />
       </IconButton>
     </div>
   );
@@ -543,7 +543,7 @@ export function ReplyBar(props: {
       className={NO_TOUCH_SELECT}
       trailing={
         <IconButton label="Cancel reply" className="shrink-0" onClick={props.onCancel}>
-          <IconX size={16} />
+          <IconX size={20} />
         </IconButton>
       }
     />
@@ -2133,7 +2133,7 @@ export function Composer(props: ComposerProps): ReactElement {
               >
                 <IconTrash size={20} />
               </IconButton>
-              <div className="flex h-11 flex-1 items-center gap-2 rounded-md border border-border bg-panel-2 px-3">
+              <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3">
                 <span
                   aria-hidden="true"
                   className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-bad"
@@ -2146,12 +2146,12 @@ export function Composer(props: ComposerProps): ReactElement {
               <Button
                 type="button"
                 variant="primary"
-                size="lg"
+                shape="round"
                 aria-label="Stop and send voice note"
-                className="w-11 shrink-0 px-0"
+                className="shrink-0"
                 onClick={() => void stopSend()}
               >
-                <IconSend size={18} />
+                <IconSend size={20} />
               </Button>
             </>
           ) : voiceBusy ? (
@@ -2239,20 +2239,20 @@ export function Composer(props: ComposerProps): ReactElement {
                 <Button
                   type="button"
                   variant="primary"
-                  size="lg"
+                  shape="round"
                   aria-label="Record voice note"
                   data-induction={INDUCTION_KEYS.chatMic}
-                  className="w-11 shrink-0 px-0"
+                  className="shrink-0"
                   onClick={() => void start()}
                 >
-                  <IconMic size={18} />
+                  <IconMic size={20} />
                 </Button>
               ) : (
                 <div className="flex shrink-0">
                   <Button
                     type="submit"
                     variant="primary"
-                    size="lg"
+                    shape={scheduleBusy ? 'default' : 'round'}
                     aria-label={
                       editing !== undefined
                         ? 'Save edit'
@@ -2264,7 +2264,7 @@ export function Composer(props: ComposerProps): ReactElement {
                     }
                     aria-busy={editBusy || scheduleBusy || undefined}
                     className={cn(
-                      scheduleBusy ? 'shrink-0 whitespace-nowrap px-3' : 'w-11 shrink-0 px-0',
+                      scheduleBusy ? 'shrink-0 whitespace-nowrap' : 'shrink-0',
                       showChevron && 'rounded-r-none',
                       holdToSchedule && NO_TOUCH_SELECT,
                     )}
@@ -2286,9 +2286,9 @@ export function Composer(props: ComposerProps): ReactElement {
                         {SCHEDULING_LABEL}
                       </span>
                     ) : scheduling ? (
-                      <IconCalendarClock size={18} />
+                      <IconCalendarClock size={20} />
                     ) : (
-                      <IconSend size={18} />
+                      <IconSend size={20} />
                     )}
                   </Button>
                   {showChevron ? (
@@ -2298,17 +2298,17 @@ export function Composer(props: ComposerProps): ReactElement {
                         <Button
                           type="button"
                           variant="primary"
-                          size="lg"
+                          shape="round"
                           aria-label="Schedule options"
                           aria-haspopup="dialog"
                           aria-expanded={scheduleOpen !== null}
                           data-schedule-chevron=""
-                          className="w-11 shrink-0 rounded-l-none px-0"
+                          className="shrink-0 rounded-l-none"
                           onClick={() =>
                             scheduleOpen !== null ? setScheduleOpen(null) : openSchedule()
                           }
                         >
-                          <IconChevronDown size={16} />
+                          <IconChevronDown size={20} />
                         </Button>
                       </span>
                     </>

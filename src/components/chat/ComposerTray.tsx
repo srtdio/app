@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/icons';
 import { isClient } from '@/components/pages/pcs/roles';
 import { cn } from '@/lib/cn';
+import { buttonClass } from '@/components/ui/Button';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
 import { INDUCTION_KEYS } from '@/lib/induction';
@@ -192,11 +193,12 @@ export function ComposerTray(props: {
         aria-expanded={open}
         aria-controls="composer-tray"
         onClick={() => setOpen((o) => !o)}
-        className={cn(
-          'flex h-11 w-11 items-center justify-center rounded-full border transition-colors duration-[180ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          open
-            ? 'border-accent bg-accent text-accent-fg'
-            : 'border-border bg-panel text-fg-2 hover:text-fg',
+        // Needs a ref (Escape returns focus), so it stays a raw button on the
+        // shared recipe: round secondary, primary while the tray is open.
+        className={buttonClass(
+          open ? 'primary' : 'secondary',
+          'round',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         )}
       >
         <span
@@ -207,7 +209,7 @@ export function ComposerTray(props: {
             open && 'rotate-45',
           )}
         >
-          <IconPlus size={22} />
+          <IconPlus size={20} />
         </span>
       </button>
       {rendered ? (

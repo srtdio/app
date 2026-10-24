@@ -2,9 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PostCardRow, GalleryItem } from '../../../packages/posts/src/reads';
 import {
-  ACTION_BAD,
-  ACTION_BAD_FILL,
-  ACTION_GOOD,
   PostSheetActions,
   PostSheetDetails,
   PostSheetMedia,
@@ -71,13 +68,19 @@ describe('PostSheetActions by side and stage', () => {
     expect(actionIds(html)).toEqual(['approve', 'reject', 'comment', 'open_post']);
     expect(html).toContain('>Approve<');
     expect(html).toContain('>Reject<');
-    expect(ACTION_BAD).toContain('text-bad');
-    expect(ACTION_BAD).toContain('h-12');
+    // Reject: the secondary button with bad ink (never the red fill here).
+    const reject = /<button[^>]*data-sheet-action="reject"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(reject).toContain('text-bad');
+    expect(reject).toContain('border-border');
+    expect(reject).toContain('h-11');
+    expect(reject).not.toContain('bg-bad-solid');
     expect(html).toContain('Comment on this post');
     expect(html).toContain('Open full post');
     expect(html).toContain('One post at a time. Comments keep it in review.');
-    expect(html).toContain('bg-good');
-    expect(ACTION_GOOD).toContain('h-12');
+    // Approve: the success variant.
+    const approve = /<button[^>]*data-sheet-action="approve"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(approve).toContain('bg-good-solid');
+    expect(approve).toContain('h-11');
   });
 
   it('client on an approved post: reject and open, plus the disabled approved pill', () => {
@@ -106,7 +109,7 @@ describe('PostSheetActions by side and stage', () => {
     expect(actionIds(html)).toEqual(['approve', 'open_pipeline']);
     expect(html).toContain('>Approve<');
     expect(html).toContain('Waiting on approvers since 20 Sep');
-    expect(html).toContain('bg-good');
+    expect(html).toContain('bg-good-solid');
   });
 
   it('agency gets no Approve outside review, and never Reject; nobody gets Park', () => {
@@ -154,11 +157,16 @@ describe('PostSheetActions by side and stage', () => {
     expect(old).not.toContain('on behalf of the approvers');
   });
 
-  it('every action button is 48px tall and the area pads for the safe area', () => {
+  it('every action button is 44px tall, 8px radius, and the area pads for the safe area', () => {
     const html = actions('client', row({ stage: 'review' }));
     const buttons = html.match(/<button[^>]*>/g) ?? [];
     expect(buttons.length).toBe(4);
-    for (const b of buttons) expect(b).toContain('h-12');
+    for (const b of buttons) {
+      expect(b).toContain('h-11');
+      expect(b).toContain('rounded-lg');
+      expect(b).not.toContain('h-12');
+      expect(b).not.toContain('rounded-md');
+    }
     expect(html).toContain('pb-[env(safe-area-inset-bottom)]');
   });
 });
@@ -193,7 +201,7 @@ describe('PostSheetActions confirm and error', () => {
     expect(html).toContain('Wrong logo');
     expect(html).toContain('>Cancel<');
     expect(html).toMatch(/data-sheet-reject-confirm=""[^>]*>Reject</);
-    expect(ACTION_BAD_FILL).toContain('bg-bad');
+    expect(html).toMatch(/<button[^>]*bg-bad-solid[^>]*data-sheet-reject-confirm=""/);
     expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/client|agency/i);
     expect(actionIds(html)).toEqual([]);
   });

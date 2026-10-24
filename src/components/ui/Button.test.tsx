@@ -77,6 +77,7 @@ describe('Button design system', () => {
     expect(t).toContain('w-11');
     expect(t).toContain('px-0');
     expect(t).not.toContain('rounded-lg');
+    expect(t).not.toContain('px-4');
   });
 
   it('danger and success fill with the solid tokens', () => {

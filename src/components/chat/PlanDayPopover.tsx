@@ -170,7 +170,7 @@ export function PlanDayPopover(props: {
     next?.focus();
   };
   const item =
-    'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg px-2.5 text-left text-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+    'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg px-2.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
   return createPortal(
     <div
       ref={ref}
@@ -207,7 +207,7 @@ export function PlanDayPopover(props: {
             className={cn(
               item,
               'hover:bg-panel-2',
-              current ? 'font-semibold text-accent' : 'font-medium text-fg',
+              current ? 'font-medium text-accent' : 'font-medium text-fg',
             )}
           >
             <span className="truncate">{d.label}</span>
@@ -227,7 +227,7 @@ export function PlanDayPopover(props: {
             onClick={props.onRemove}
             className={cn(item, 'justify-start gap-2.5 font-medium text-bad hover:bg-bad-soft')}
           >
-            <IconTrash size={18} />
+            <IconTrash size={16} />
             {REMOVE_LABEL}
           </button>
         </>

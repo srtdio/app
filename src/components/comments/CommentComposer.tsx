@@ -260,7 +260,6 @@ export function CommentComposer({
         />
 
         <Button
-          size="lg"
           variant="primary"
           className="ml-auto min-w-[44px]"
           data-induction={submitAnchor}
@@ -333,7 +332,6 @@ export function PendingChip({
       {onRetry !== undefined && canRetryPending(item) ? (
         <Button
           type="button"
-          size="lg"
           variant="ghost"
           className="min-w-[44px] shrink-0 px-2 text-accent"
           aria-label={`Retry ${item.file.name}`}

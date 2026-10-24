@@ -167,7 +167,6 @@ function PendingRowItem({
           {canManage ? (
             <div className="flex shrink-0 items-center gap-1 self-center">
               <Button
-                size="lg"
                 variant="ghost"
                 disabled={cancelling}
                 onClick={() => setEditing(true)}
@@ -175,7 +174,6 @@ function PendingRowItem({
                 Edit
               </Button>
               <Button
-                size="lg"
                 disabled={cancelling}
                 onClick={() => onCancelInvite(member)}
                 className={cn(cancelling && 'opacity-70')}
@@ -298,10 +296,10 @@ function PendingEditFields({
       ) : null}
       <p className="text-xs text-fg-3">Saving sends a fresh invite. The old link stops working.</p>
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="lg" variant="primary" type="submit" disabled={saving}>
+        <Button variant="primary" type="submit" disabled={saving}>
           Save
         </Button>
-        <Button size="lg" variant="ghost" type="button" disabled={saving} onClick={onClose}>
+        <Button variant="ghost" type="button" disabled={saving} onClick={onClose}>
           Keep as is
         </Button>
       </div>

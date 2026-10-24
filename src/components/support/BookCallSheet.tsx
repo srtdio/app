@@ -140,7 +140,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
         onClose={onClose}
         title="Booked"
         footer={
-          <Button variant="primary" size="lg" className="ml-auto" onClick={onClose}>
+          <Button variant="primary" className="ml-auto" onClick={onClose}>
             Done
           </Button>
         }
@@ -160,7 +160,6 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
       footer={
         <Button
           variant="primary"
-          size="lg"
           className="ml-auto"
           disabled={slotAt === null || sending}
           onClick={() => void book()}

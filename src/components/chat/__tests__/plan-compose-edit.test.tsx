@@ -152,7 +152,9 @@ describe('New plan create: one call, never half built', () => {
     expect(pickerSrc).toContain('className={DATE_FIELD}');
     expect(DATE_FIELD).toContain(DATE_FIT);
     expect(DATE_FIELD).toContain(' px-2.5 ');
-    expect(DATE_FIELD).toContain('min-h-[48px]');
+    expect(DATE_FIELD).toContain('h-11 min-h-[44px]');
+    expect(DATE_FIELD).toContain('rounded-lg');
+    expect(DATE_FIELD).toContain('bg-panel-2');
     expect(DATE_FIT).toContain('appearance-none');
     const html = renderToStaticMarkup(
       <PlanDatesSheet open range={RANGE} onSave={() => {}} onClose={() => {}} />,

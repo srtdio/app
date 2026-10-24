@@ -7,7 +7,7 @@ exports[`F10: the admin-only notice > uses the chat sheet notice size (13/18/400
 }
 `;
 
-exports[`group info full page > Leave group is a 56px outlined row with destructive text, no filled red 1`] = `
+exports[`group info full page > Leave group is the 44px outlined secondary button with destructive text, no filled red 1`] = `
 {
   "admin": [
     "hero",
@@ -16,7 +16,7 @@ exports[`group info full page > Leave group is a 56px outlined row with destruct
     "members",
     "leave",
   ],
-  "leaveRow": "flex min-h-[56px] w-full select-none items-center gap-3 rounded-lg border border-border px-4 text-left text-sm font-medium text-bad [-webkit-touch-callout:none] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50",
+  "leaveRow": "inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none bg-panel text-fg border border-border hover:bg-panel-2 w-full !justify-start gap-3 text-left text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
   "member": [
     "hero",
     "tabs",

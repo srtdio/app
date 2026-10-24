@@ -318,10 +318,12 @@ describe('group info full page', () => {
     expect('onEscape' in (el.props as object)).toBe(false);
   });
 
-  it('Leave group is a 56px outlined row with destructive text, no filled red', () => {
+  it('Leave group is the 44px outlined secondary button with destructive text, no filled red', () => {
     const row = LeaveGroupRow({ disabled: false, onClick: vi.fn() });
     const className = String(row.props.className);
-    expect(className).toContain('min-h-[56px]');
+    expect(className).toContain('h-11');
+    expect(className).toContain('rounded-lg');
+    expect(className).not.toContain('min-h-[56px]');
     expect(className).toContain('w-full');
     expect(className).toContain('text-bad');
     expect(className).toContain('border-border');

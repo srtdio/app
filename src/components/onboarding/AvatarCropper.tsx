@@ -324,7 +324,6 @@ function AvatarCropperImpl(
         <Button
           type="button"
           variant="default"
-          size="lg"
           onClick={() => fileInputRef.current?.click()}
         >
           Choose photo

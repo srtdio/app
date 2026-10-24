@@ -112,14 +112,13 @@ export function PlanRemoveSheet(props: {
         </p>
         <Button
           variant="danger"
-          size="lg"
           data-plan-remove-confirm=""
           disabled={props.busy}
           onClick={props.onConfirm}
         >
           Remove
         </Button>
-        <Button variant="ghost" size="lg" disabled={props.busy} onClick={props.onClose}>
+        <Button variant="ghost" disabled={props.busy} onClick={props.onClose}>
           Cancel
         </Button>
       </div>
@@ -146,18 +145,14 @@ export function PlanKeepApprovalSheet(props: {
         <p className="text-[15px] leading-[21px] text-fg-2">{props.body}</p>
         <Button
           variant="primary"
-          size="lg"
           data-plan-keep-yes=""
-          className="min-h-[44px]"
           onClick={() => props.onKeep(true)}
         >
-          <IconCheck size={18} />
+          <IconCheck size={16} />
           {KEEP_APPROVAL_YES}
         </Button>
         <Button
-          size="lg"
           data-plan-keep-no=""
-          className="min-h-[44px]"
           onClick={() => props.onKeep(false)}
         >
           {KEEP_APPROVAL_NO}
@@ -175,13 +170,12 @@ export function RemoveFromPlanButton(props: { busy: boolean; onClick: () => void
   return (
     <Button
       variant="danger"
-      size="lg"
       data-plan-remove=""
-      className="min-h-[44px] w-full"
+      className="w-full"
       disabled={props.busy}
       onClick={props.onClick}
     >
-      <IconTrash size={18} />
+      <IconTrash size={16} />
       {REMOVE_ROW_LABEL}
     </Button>
   );

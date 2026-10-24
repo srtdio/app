@@ -18,6 +18,7 @@ import {
   moveTo,
   replaceAt,
 } from '@/components/pages/pcs/gallery-transforms';
+import { Button } from '@/components/ui/Button';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -50,7 +51,9 @@ function elements(tree: ReactNode): ReactElement[] {
 }
 function byData(tree: ReactNode, attr: string): ReactElement | undefined {
   return elements(tree).find(
-    (el) => (el.props as Record<string, unknown>)[attr] !== undefined && el.type === 'button',
+    (el) =>
+      (el.props as Record<string, unknown>)[attr] !== undefined &&
+      (el.type === 'button' || el.type === Button),
   );
 }
 function click(el: ReactElement | undefined): void {

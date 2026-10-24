@@ -16,6 +16,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { IconCheck, IconChevronDown, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { STATUS_LABEL, TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
@@ -100,7 +102,7 @@ export function PriorityChip(props: {
         onClick={() => setOpen((v) => !v)}
         onContextMenu={(e) => e.preventDefault()}
         className={cn(
-          'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           NO_TOUCH_SELECT,
         )}
       >
@@ -212,14 +214,15 @@ export function NotSaved(props: { onRetry: () => void; message?: string }): Reac
   return (
     <div data-task-not-saved="" className="flex items-center gap-1 pl-[60px] pr-3 text-[13px]">
       <span className="text-bad">{props.message ?? NOT_SAVED} ·</span>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={props.onRetry}
         onContextMenu={(e) => e.preventDefault()}
-        className={cn('h-11 min-w-11 px-1 font-semibold text-bad', NO_TOUCH_SELECT)}
+        className={cn('min-w-11 text-bad hover:text-bad', NO_TOUCH_SELECT)}
       >
         Retry
-      </button>
+      </Button>
     </div>
   );
 }
@@ -328,7 +331,7 @@ export interface TaskRowProps {
 }
 
 const ACTION = cn(
-  'h-11 min-w-11 shrink-0 rounded-[8px] px-3 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'min-w-11 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
   NO_TOUCH_SELECT,
 );
 
@@ -372,7 +375,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           onClick={props.onToggle}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             NO_TOUCH_SELECT,
           )}
         >
@@ -396,15 +399,16 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           <TitleCell title={props.title} done={props.done} onCommit={props.onTitle} />
         )}
         {props.queuedDelete ? (
-          <button
+          <Button
             type="button"
+            variant="link"
             data-task-undo-delete=""
             onClick={props.onUndoDelete}
             onContextMenu={(e) => e.preventDefault()}
-            className={cn(ACTION, 'text-accent hover:bg-panel-2')}
+            className={ACTION}
           >
             Undo
-          </button>
+          </Button>
         ) : (
           <>
             <PriorityChip
@@ -412,19 +416,19 @@ export function TaskRow(props: TaskRowProps): ReactElement {
               ringed={priorityMarked}
               onPick={props.onPriority}
             />
-            <button
+            <IconButton
               type="button"
-              aria-label={`Delete ${props.title}`}
+              label={`Delete ${props.title}`}
               data-task-delete=""
               onClick={props.onDelete}
               onContextMenu={(e) => e.preventDefault()}
               className={cn(
-                'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 hover:bg-panel-2 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'shrink-0 text-fg-3 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 NO_TOUCH_SELECT,
               )}
             >
-              <IconX size={16} />
-            </button>
+              <IconX size={20} />
+            </IconButton>
           </>
         )}
       </div>
@@ -442,22 +446,24 @@ export function TaskRow(props: TaskRowProps): ReactElement {
         <div data-task-conflict="" className="-mt-1 flex flex-col gap-1 pb-2 pl-[80px] pr-3">
           <p className="text-[12.5px] text-stage-review">{props.notice.text}</p>
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               data-task-keep-mine=""
               onClick={props.notice.onMine}
-              className={cn(ACTION, 'border border-border bg-panel text-fg hover:bg-panel-2')}
+              className={ACTION}
             >
               {props.notice.deleted ? 'Restore mine' : 'Keep mine'}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
               data-task-keep-theirs=""
               onClick={props.notice.onTheirs}
-              className={cn(ACTION, 'border border-border bg-panel text-fg hover:bg-panel-2')}
+              className={ACTION}
             >
               {props.notice.deleted ? 'OK' : 'Keep theirs'}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

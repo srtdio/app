@@ -1,6 +1,7 @@
 import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
 import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronDown, IconPlus, IconSearch } from '@/components/ui/icons';
 import { dispatchSorted } from '@/lib/events';
@@ -32,16 +33,17 @@ export function Topbar({
   return (
     <header className="sticky top-0 z-30 flex items-center gap-2 h-14 px-3 md:px-4 border-b border-border bg-panel">
       {workspaceName === null && onCreateWorkspace !== undefined ? (
-        <button
+        <Button
           type="button"
+          variant="secondary"
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={onCreateWorkspace}
-          className="flex min-w-0 items-center gap-1.5 min-h-[44px] px-3 rounded-lg border border-dashed border-border-strong text-left text-[13px] font-semibold text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="min-w-0 justify-start border-dashed text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <IconPlus size={16} className="shrink-0 text-fg-3" />
           <span className="truncate">Create your workspace</span>
-        </button>
+        </Button>
       ) : workspaceName === null ? (
         <span className="md:hidden h-4 w-24 rounded bg-panel-3 animate-pulse" aria-hidden />
       ) : (
@@ -51,11 +53,15 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="md:hidden flex min-w-0 items-center gap-1 min-h-[44px] max-w-[190px] px-2 rounded-lg text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className={buttonClass(
+            'ghost',
+            'default',
+            'md:hidden min-w-0 max-w-[190px] justify-start gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          )}
         >
           {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
               short lines at word breaks instead of clipping the platform. */}
-          <span className="min-w-0 font-semibold text-[13px] leading-tight line-clamp-2 break-words">
+          <span className="min-w-0 text-fg leading-tight line-clamp-2 break-words">
             {workspaceName}
           </span>
           <IconChevronDown size={16} className="shrink-0 text-fg-3" />
@@ -63,15 +69,16 @@ export function Topbar({
       )}
 
       {onCreateWorkspace !== undefined ? null : (
-        <button
+        <Button
           type="button"
+          variant="secondary"
           onClick={onOpenPalette}
-          className="hidden md:flex items-center gap-2 h-9 min-w-[240px] px-3 rounded-lg border border-border bg-panel-2 text-fg-3 text-sm hover:bg-panel-3 transition-colors"
+          className="hidden md:flex min-w-[240px] justify-start"
         >
-          <IconSearch size={16} />
-          <span className="flex-1 text-left">Search</span>
-          <kbd className="text-[11px] border border-border rounded px-1.5 py-0.5">⌘K</kbd>
-        </button>
+          <IconSearch size={16} className="text-fg-3" />
+          <span className="flex-1 text-left text-fg-3">Search</span>
+          <kbd className="text-[11px] text-fg-3 border border-border rounded px-1.5 py-0.5">⌘K</kbd>
+        </Button>
       )}
 
       <div className="ml-auto flex items-center gap-1">
@@ -84,18 +91,13 @@ export function Topbar({
         {/* Notifications on every main screen (its one mount), with the unread count. */}
         {workspaceName !== null && onCreateWorkspace === undefined ? <NotificationsButton /> : null}
 
-        <button
-          type="button"
-          aria-label="Account menu"
-          onClick={onOpenAvatar}
-          className="inline-flex items-center justify-center h-11 w-11 rounded-md hover:bg-panel-2 transition-colors"
-        >
+        <IconButton type="button" label="Account menu" onClick={onOpenAvatar}>
           <Avatar
             size="md"
             {...(currentUserName !== undefined ? { name: currentUserName } : {})}
             {...(currentUserAvatarUrl ? { src: currentUserAvatarUrl } : {})}
           />
-        </button>
+        </IconButton>
       </div>
     </header>
   );

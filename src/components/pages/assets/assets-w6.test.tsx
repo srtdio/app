@@ -105,7 +105,7 @@ describe('4. every card shows a visible 44px ⋯ button', () => {
       />,
     );
     expect(card).toContain('aria-label="More actions for photo.png"');
-    expect(card).toMatch(/data-card-menu=""[^>]*h-11 w-11/);
+    expect(card).toMatch(/class="[^"]*h-11 w-11[^"]*"[^>]*data-card-menu=""/);
     const selecting = renderToStaticMarkup(
       <AssetCard
         item={asset()}

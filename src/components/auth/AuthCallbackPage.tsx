@@ -195,7 +195,6 @@ export function AuthCallbackPage() {
     <AuthShell title={copy.title} subtitle={copy.subtitle} footer={backToSignIn}>
       <Button
         variant="primary"
-        size="lg"
         className="w-full"
         onClick={handleSignIn}
         disabled={phase === 'signing'}

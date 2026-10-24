@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement, UIEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { Button, type ButtonVariant } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Tag, isTagDot } from '@/components/ui/Tag';
 import { Textarea } from '@/components/ui/Textarea';
@@ -114,33 +115,27 @@ export function stripFrame(
 const STRIP_PILL =
   'pointer-events-none inline-flex h-6 items-center gap-1 rounded-md bg-panel px-2 text-xs font-medium text-fg';
 
-/** 48px action buttons; tokens only. */
-const ACTION_BASE =
-  'inline-flex h-12 w-full items-center justify-center gap-2 rounded-md px-4 text-sm font-medium select-none transition-colors duration-fast disabled:pointer-events-none disabled:opacity-50';
-/** Approve: the success fill (no on-good token, so white ink as the post page does). */
-export const ACTION_GOOD = `${ACTION_BASE} bg-good text-white hover:opacity-90`;
-/** Reject in the action list: bad ink on the panel with a bad border. */
-export const ACTION_BAD = `${ACTION_BASE} border border-bad bg-panel text-bad hover:bg-bad-soft`;
-/** Reject's confirm button: the bad fill (white ink, as the post page's danger button). */
-export const ACTION_BAD_FILL = `${ACTION_BASE} bg-bad text-white hover:opacity-90`;
-export const ACTION_PRIMARY = `${ACTION_BASE} bg-accent text-accent-fg hover:bg-accent-hover`;
-export const ACTION_GHOST = `${ACTION_BASE} border border-border bg-panel text-fg hover:bg-panel-2`;
-export const ACTION_LINK = `${ACTION_BASE} text-accent hover:bg-panel-2`;
-/** Soft: the accent-soft fill with accent ink ("Talk about"). */
-export const ACTION_SOFT = `${ACTION_BASE} bg-accent-soft text-accent hover:bg-panel-2`;
-
 /** The sheet's talk-about label. */
 export function talkAboutLabel(): string {
   return 'Talk about this post';
 }
 
-/** The emphasis each action takes: the first action is filled, the rest quieter. */
-function actionClass(action: SheetAction, first: boolean): string {
-  if (action === 'approve') return ACTION_GOOD;
-  if (action === 'reject') return ACTION_BAD;
-  if (action === 'open_post') return ACTION_LINK;
-  if (first) return ACTION_PRIMARY;
-  return action === 'comment' ? ACTION_GHOST : ACTION_LINK;
+/**
+ * The emphasis each action takes: Approve is the success fill, Reject the
+ * secondary with bad ink, the first other action is filled, the rest quieter.
+ * Pure.
+ */
+export function actionButton(
+  action: SheetAction,
+  first: boolean,
+): { variant: ButtonVariant; className: string } {
+  if (action === 'approve') return { variant: 'success', className: 'w-full' };
+  if (action === 'reject') return { variant: 'secondary', className: 'w-full text-bad' };
+  if (action === 'open_post') return { variant: 'link', className: 'w-full' };
+  if (first) return { variant: 'primary', className: 'w-full' };
+  return action === 'comment'
+    ? { variant: 'secondary', className: 'w-full' }
+    : { variant: 'link', className: 'w-full' };
 }
 
 // ---------------------------------------------------------------------------
@@ -480,23 +475,25 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
         </p>
         {error}
         <div className="mt-1 flex gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             disabled={props.busy}
             onClick={props.onBack}
-            className={cn(ACTION_GHOST, 'flex-1')}
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="danger"
             data-sheet-reject-confirm=""
             disabled={props.busy}
             onClick={props.onConfirm}
-            className={cn(ACTION_BAD_FILL, 'flex-1')}
+            className="flex-1"
           >
             {copy.confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -517,69 +514,74 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
         ) : null}
         {error}
         <div className="mt-1 flex gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             disabled={props.busy}
             onClick={props.onBack}
-            className={cn(ACTION_GHOST, 'flex-1')}
+            className="flex-1"
           >
             Back
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant={mode.confirm === 'approve' ? 'success' : 'primary'}
             disabled={props.busy}
             onClick={props.onConfirm}
-            className={cn(mode.confirm === 'approve' ? ACTION_GOOD : ACTION_PRIMARY, 'flex-1')}
+            className="flex-1"
           >
             {copy.confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     );
   } else if (mode.kind === 'comment') {
     content = (
-      <button type="button" onClick={props.onBack} className={ACTION_GHOST}>
+      <Button type="button" variant="secondary" onClick={props.onBack} className="w-full">
         Back
-      </button>
+      </Button>
     );
   } else {
     content = (
       <div className="flex flex-col gap-2">
         {error}
         {set.approvedPill ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             disabled
             data-approved-pill=""
-            className={cn(
-              ACTION_BASE,
-              'cursor-default bg-good-soft text-good disabled:opacity-100',
-            )}
+            className="w-full cursor-default bg-good-soft text-good disabled:opacity-100"
           >
             {approvedPillLabel(props.approverName, props.approverRole ?? null, brand)}
-          </button>
+          </Button>
         ) : null}
-        {set.actions.map((action, index) => (
-          <button
-            key={action}
-            type="button"
-            data-sheet-action={action}
-            disabled={props.busy}
-            onClick={() => props.onAction(action)}
-            className={actionClass(action, index === 0)}
-          >
-            {actionLabel(action)}
-          </button>
-        ))}
+        {set.actions.map((action, index) => {
+          const look = actionButton(action, index === 0);
+          return (
+            <Button
+              key={action}
+              type="button"
+              variant={look.variant}
+              data-sheet-action={action}
+              disabled={props.busy}
+              onClick={() => props.onAction(action)}
+              className={look.className}
+            >
+              {actionLabel(action)}
+            </Button>
+          );
+        })}
         {props.onTalkAbout !== undefined ? (
-          <button
+          <Button
             type="button"
+            variant="link"
             data-sheet-talk-about=""
             onClick={props.onTalkAbout}
-            className={ACTION_SOFT}
+            className="w-full bg-accent-soft"
           >
             {talkAboutLabel()}
-          </button>
+          </Button>
         ) : null}
         {set.hint !== null ? (
           <p data-sheet-hint="" className="text-center text-xs text-fg-3">

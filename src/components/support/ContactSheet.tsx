@@ -34,7 +34,7 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
       title="Write to us"
       footer={
         <>
-          <Button variant="ghost" size="lg" className="ml-auto" onClick={onClose}>
+          <Button variant="ghost" className="ml-auto" onClick={onClose}>
             Close
           </Button>
           <a
@@ -54,7 +54,7 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
           <span className="min-w-0 flex-1 break-all text-sm font-medium text-fg">
             {SUPPORT_EMAIL}
           </span>
-          <Button size="lg" className="shrink-0" onClick={() => void copy()}>
+          <Button className="shrink-0" onClick={() => void copy()}>
             Copy
           </Button>
         </div>

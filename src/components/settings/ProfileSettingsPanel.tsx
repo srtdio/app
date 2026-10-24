@@ -478,7 +478,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
       <div className="max-w-[520px] flex flex-col gap-3">
         <p className="text-sm text-bad">Could not load your profile.</p>
         <div>
-          <Button size="lg" onClick={refetch}>
+          <Button onClick={refetch}>
             Retry
           </Button>
         </div>
@@ -568,7 +568,6 @@ export function ProfileSettingsPanel(): React.ReactElement {
         <Button
           type="button"
           variant="primary"
-          size="lg"
           disabled={!canSave}
           onClick={() => void handleSave()}
         >
@@ -616,7 +615,6 @@ export function PhotoPickActions(props: {
       <Button
         type="button"
         variant="primary"
-        size="lg"
         data-action="use-photo"
         disabled={props.busy}
         onClick={props.onUse}
@@ -625,7 +623,6 @@ export function PhotoPickActions(props: {
       </Button>
       <Button
         type="button"
-        size="lg"
         data-action="cancel-photo"
         disabled={props.busy}
         onClick={props.onCancel}

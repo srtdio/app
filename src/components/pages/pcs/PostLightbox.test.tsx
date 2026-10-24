@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 
 // The FileViewer portals to document.body, which this DOM-less environment has
 // none of: a marker stands in for it so a mount shows up in the markup.
@@ -77,15 +79,27 @@ function strings(tree: ReactNode): string[] {
 
 function byLabel(tree: ReactNode, value: string): ReactElement | undefined {
   return elements(tree).find(
-    (el) => (el.props as { 'aria-label'?: string })['aria-label'] === value,
+    (el) => ariaLabel(el) === value,
   );
 }
 
 function byLabelEq(el: ReactElement, value: string): boolean {
-  return (el.props as { 'aria-label'?: string })['aria-label'] === value;
+  return ariaLabel(el) === value;
 }
 
+// IconButton takes its aria-label as `label`.
+function ariaLabel(el: ReactElement): string | undefined {
+  const p = el.props as { 'aria-label'?: string; label?: unknown };
+  if (p['aria-label'] !== undefined) return p['aria-label'];
+  return el.type === IconButton && typeof p.label === 'string' ? p.label : undefined;
+}
+
+// Shared Button / IconButton elements carry their geometry inside the
+// component, so their class is read from the rendered markup.
 function className(el: ReactElement): string {
+  if (el.type === Button || el.type === IconButton) {
+    return /class="([^"]*)"/.exec(renderToStaticMarkup(el))?.[1] ?? '';
+  }
   return (el.props as { className?: string }).className ?? '';
 }
 
@@ -426,7 +440,10 @@ describe('lightboxView', () => {
     const remove = elements(tree).find(
       (el) => (el.props as { children?: ReactNode }).children === 'Remove',
     )!;
-    expect(className(remove)).toContain('border-bad');
+    expect(remove.type).toBe(Button);
+    expect((remove.props as { variant?: string }).variant).toBe('secondary');
+    expect(className(remove)).toContain('h-11');
+    expect(className(remove)).toContain('rounded-lg');
     expect(className(remove)).toContain('text-bad');
     (cancel.props as { onClick: () => void }).onClick();
     expect(onCancelRemove).toHaveBeenCalledOnce();
@@ -721,7 +738,7 @@ describe('files open in the FileViewer', () => {
     expect(all).not.toContain('Preview unavailable.');
     expect(all).toContain('PDF');
     expect(all.some((text) => text.includes('file-0'))).toBe(false);
-    const open = elements(tree).find((el) => el.type === 'button' && strings(el).includes('Open'));
+    const open = elements(tree).find((el) => el.type === Button && strings(el).includes('Open'));
     if (open === undefined) throw new Error('no Open button');
     expect(className(open)).toContain('min-h-[44px]');
     const stop = vi.fn();

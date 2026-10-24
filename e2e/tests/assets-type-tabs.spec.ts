@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { WORKSPACE_ID } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
+import { expectButtonsMeetSystem } from '../helpers/button-system';
 
 // Assets tabs: All, Media, PDF, Docs, Sheets, Links filter the one loaded list
 // on the client (no per-tab read), the tab lives in ?type= (Back and refresh
@@ -138,6 +139,14 @@ test('six tabs filter the loaded list, with counts, empty states and ?type= @the
   await expect(tab(page, 'All')).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
   await expect(cards(page)).toHaveCount(6);
 
+  expect(network.blocked).toEqual([]);
+});
+
+test('Assets: every button is 44 tall with an 8px radius or round', async ({ page }) => {
+  const network = await open(page);
+  await page.goto('/assets');
+  await expect(cards(page)).toHaveCount(6, { timeout: 15_000 });
+  await expectButtonsMeetSystem(page);
   expect(network.blocked).toEqual([]);
 });
 

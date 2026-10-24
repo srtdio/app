@@ -176,7 +176,9 @@ describe('approver Reject', () => {
     const reject = q('[data-sheet-action="reject"]');
     expect(reject?.textContent).toBe('Reject');
     expect(reject?.className).toContain('text-bad');
-    expect(reject?.className).toContain('h-12');
+    expect(reject?.className).toContain('h-11');
+    expect(reject?.className).toContain('rounded-lg');
+    expect(reject?.className).not.toContain('bg-bad-solid');
   });
 
   it('the agency side gets no Reject', async () => {

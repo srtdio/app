@@ -133,21 +133,20 @@ export function PlanDayTiles(props: {
         </p>
       ) : null}
       {props.noDate !== false ? (
-        <button
+        <Button
           type="button"
           data-plan-day-none=""
           aria-pressed={props.selected === 'none'}
           disabled={props.disabled === true}
           onClick={() => props.onPick('none')}
+          variant="secondary"
           className={cn(
-            'min-h-[46px] w-full rounded-xl border text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
-            props.selected === 'none'
-              ? 'border-transparent bg-accent-soft text-accent'
-              : 'border-border bg-panel text-fg',
+            'w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            props.selected === 'none' && '!border-transparent !bg-accent-soft !text-accent',
           )}
         >
           {NO_DATE_BUTTON}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -210,7 +209,7 @@ export const DATE_FIT =
 
 /** The date inputs: the field look with a slimmer side padding so the date fits at 320px. */
 export const DATE_FIELD = cn(
-  'min-h-[48px] w-full rounded-lg border border-border bg-panel px-2.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
+  'h-11 min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-2.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
   DATE_FIT,
   'font-mono text-[15px]',
 );
@@ -249,10 +248,9 @@ export function PlanDatesSheet(props: {
       title={PLAN_DATES_TITLE}
       footer={
         <Button
-          size="lg"
           variant="primary"
           data-plan-dates-save=""
-          className="min-h-[48px] w-full"
+          className="w-full"
           onClick={save}
         >
           {PLAN_DATES_SAVE}

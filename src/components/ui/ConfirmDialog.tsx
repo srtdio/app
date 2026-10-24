@@ -101,11 +101,10 @@ export function ConfirmDialog({
           </p>
         ) : null}
         <div className="mt-5 flex justify-end gap-2">
-          <Button size="lg" disabled={busy} onClick={requestClose}>
+          <Button disabled={busy} onClick={requestClose}>
             {cancelLabel}
           </Button>
           <Button
-            size="lg"
             disabled={busy}
             onClick={onConfirm}
             variant={destructive ? 'danger' : 'primary'}

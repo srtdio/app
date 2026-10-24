@@ -23,9 +23,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 // One height (44), one radius (8), one type (14 / 500). Tokens only, so light
-// and dark match.
+// and dark match. cn() does not merge classes, so the radius and padding live in
+// the shape classes (never both rounded-lg and rounded-full on one element) and
+// a caller overriding a base property must use the ! modifier (e.g. !justify-start).
 export const BUTTON_BASE =
-  'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none';
+  'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 text-sm font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none';
 
 const secondary = 'bg-panel text-fg border border-border hover:bg-panel-2';
 
@@ -39,7 +41,10 @@ export const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   default: secondary,
 };
 
-export const BUTTON_ROUND = 'rounded-full w-11 px-0';
+export const BUTTON_SHAPES: Record<'default' | 'round', string> = {
+  default: 'rounded-lg px-4',
+  round: 'rounded-full w-11 px-0',
+};
 
 /** The class string a Button renders; exported for the few anchors that must look like one. */
 export function buttonClass(
@@ -47,7 +52,7 @@ export function buttonClass(
   shape: 'default' | 'round' = 'default',
   className?: string,
 ): string {
-  return cn(BUTTON_BASE, BUTTON_VARIANTS[variant], shape === 'round' && BUTTON_ROUND, className);
+  return cn(BUTTON_BASE, BUTTON_SHAPES[shape], BUTTON_VARIANTS[variant], className);
 }
 
 export function Button({

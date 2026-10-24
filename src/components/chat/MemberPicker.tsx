@@ -49,7 +49,7 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
               aria-pressed={isSelected}
               onClick={() => props.onToggle(option.userId)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-md px-2 min-h-[44px] text-left transition-colors',
+                'flex w-full items-center gap-3 rounded-lg px-2 min-h-[44px] text-left transition-colors',
                 isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2',
               )}
             >

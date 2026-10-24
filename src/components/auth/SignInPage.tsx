@@ -248,7 +248,6 @@ export function SignInPage() {
           ) : null}
           <Button
             variant="default"
-            size="lg"
             className="w-full"
             onClick={handleResend}
             disabled={cooldown > 0}
@@ -328,7 +327,6 @@ export function SignInPage() {
 
         <Button
           variant="primary"
-          size="lg"
           type="submit"
           className="w-full"
           disabled={busy || email.trim().length === 0}

@@ -215,7 +215,6 @@ export function SignUpPage(): ReactElement {
           ) : null}
           <Button
             variant="default"
-            size="lg"
             className="w-full"
             onClick={handleResend}
             disabled={cooldown > 0 || submitting}
@@ -323,7 +322,7 @@ export function SignUpPage(): ReactElement {
           </p>
         ) : null}
 
-        <Button variant="primary" size="lg" className="w-full" type="submit" disabled={!canSubmit}>
+        <Button variant="primary" className="w-full" type="submit" disabled={!canSubmit}>
           {submitting ? CHECK_EMAIL_COPY.sending : CHECK_EMAIL_COPY.createAccount}
         </Button>
       </form>

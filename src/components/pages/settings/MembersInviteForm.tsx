@@ -235,7 +235,6 @@ export function InviteNotSent(props: { email: string; acceptUrl: string | null }
         <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="default"
-            size="lg"
             type="button"
             onClick={() => {
               const url = props.acceptUrl;
@@ -785,7 +784,6 @@ export function MembersInviteForm({
         <div>
           <Button
             variant="primary"
-            size="lg"
             type="submit"
             data-induction={INDUCTION_KEYS.membersInvite}
             disabled={submitting || sendCount === 0}

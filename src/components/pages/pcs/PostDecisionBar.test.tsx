@@ -47,7 +47,7 @@ function approver(role: string, onPick = vi.fn()): DecisionModel {
 }
 
 describe('30. approver row: Reject, Approve, same on phone and laptop', () => {
-  it('reads Reject, Approve in that order (no Comment); Reject is plain with bad ink, Approve the one primary', () => {
+  it('reads Reject, Approve in that order (no Comment); Reject is secondary with bad ink, Approve the one success', () => {
     for (const tree of [
       PostDecisionBar({ model: approver('client'), busy: false, error: null }),
       PostDecisionRow({ model: approver('client'), busy: false, error: null }),
@@ -57,11 +57,11 @@ describe('30. approver row: Reject, Approve, same on phone and laptop', () => {
       expect(row.map(label)).not.toContain('Comment');
       expect(all(tree).some((el) => 'data-decision-comment' in el.props)).toBe(false);
       const [reject, approve] = row;
-      expect(reject?.props.variant).toBe('default');
+      expect(reject?.props.variant).toBe('secondary');
       expect(String(reject?.props.className)).toContain('text-bad');
-      expect(approve?.props.variant).toBe('primary');
-      expect(row.filter((b) => b.props.variant === 'primary')).toHaveLength(1);
-      for (const b of row) expect(b.props.size).toBe('lg');
+      expect(approve?.props.variant).toBe('success');
+      expect(row.filter((b) => b.props.variant === 'success')).toHaveLength(1);
+      for (const b of row) expect(b.props.size).toBeUndefined();
     }
   });
 

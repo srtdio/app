@@ -131,12 +131,12 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
       /data-plan-grip=""[^>]*class="[^"]*h-11 w-7[^"]*cursor-grab[^"]*touch-none/,
     );
     expect(html).not.toMatch(/data-plan-grip=""[^>]*opacity-0/);
-    // The chip: a 44px tall target holding a 32px bordered chip.
-    expect(html).toMatch(/data-plan-row-day-chip=""[^>]*class="[^"]*h-11/);
-    expect(html).toContain('flex h-8 items-center gap-1.5 rounded-lg border border-border-strong');
+    // The chip: the shared 44px secondary button (8px radius, bordered).
+    expect(html).toMatch(/class="[^"]*h-11[^"]*rounded-lg[^"]*border[^"]*"[^>]*data-plan-row-day-chip=""/);
+    expect(html).not.toContain('flex h-8 items-center gap-1.5 rounded-lg border border-border-strong');
     expect(html).toContain('>Tue 13<');
     expect(html).toContain('>Tue 20<');
-    expect(html).toMatch(/data-plan-row-remove-edit=""[^>]*class="[^"]*h-11 w-11[^"]*text-bad/);
+    expect(html).toMatch(/class="[^"]*h-11 w-11[^"]*text-bad[^"]*"[^>]*data-plan-row-remove-edit=""/);
     expect(html).toContain('select-none');
   });
 

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectMinTouchTarget } from '../helpers/touch-target';
+import { expectButtonsMeetSystem } from '../helpers/button-system';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   DM_CHANNEL,
@@ -542,5 +543,17 @@ test('fix 6 and 30: a brief row shows the BRIEF text tile; deleted files show a 
   const badge = files.locator('[data-activity-files-badge]');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveText('+2');
+  expectClean(network);
+});
+
+test('Notifications: every button is 44 tall with an 8px radius or round', async ({ page }) => {
+  const network = await installHarnessNetwork(page);
+  seedAlerts(network.world);
+  await page.goto('/notifications');
+  await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(card(page, 'scheduled_failed')).toBeVisible();
+  await expectButtonsMeetSystem(page);
   expectClean(network);
 });

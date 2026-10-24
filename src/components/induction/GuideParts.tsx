@@ -401,7 +401,6 @@ export function GuideCard({
         ) : null}
         <Button
           variant={hero ? 'default' : 'primary'}
-          size="lg"
           onClick={onPress}
           className={hero ? 'border-transparent bg-panel text-fg hover:bg-panel-2' : ''}
         >

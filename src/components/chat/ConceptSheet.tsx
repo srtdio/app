@@ -64,7 +64,7 @@ export const EMPTY_CONCEPT: ConceptForm = { title: '', description: '', files: [
 export const CONCEPT_DESCRIPTION_MAX = 5000;
 
 export const FIELD =
-  'min-h-[48px] w-full rounded-lg border border-border bg-panel px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60';
+  'min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60';
 
 /** The hint once the files reach the cap (library picks and uploads together). */
 export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} files.`;
@@ -314,7 +314,6 @@ export function ConceptSheet(props: {
             ) : null}
             <div className="grid w-full grid-cols-2 gap-2">
               <Button
-                size="lg"
                 variant="ghost"
                 data-plan-concept-cancel=""
                 disabled={busy}
@@ -323,7 +322,6 @@ export function ConceptSheet(props: {
                 Cancel
               </Button>
               <Button
-                size="lg"
                 variant="primary"
                 data-plan-concept-save=""
                 aria-busy={waiting}
@@ -401,9 +399,7 @@ export function ConceptSheet(props: {
             >
               <p className="text-sm text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
               <Button
-                size="lg"
                 data-plan-concept-files-retry=""
-                className="min-w-[44px]"
                 onClick={props.onRetryFiles}
               >
                 Retry
@@ -459,16 +455,17 @@ export function ConceptSheet(props: {
                         <PendingChip item={u} onRemove={() => controller.remove(u.id)} />
                       </ul>
                       {u.status.state === 'error' ? (
-                        <button
+                        <Button
                           type="button"
+                          variant="link"
                           data-plan-concept-upload-retry=""
                           aria-label={`Retry ${u.file.name}`}
                           disabled={busy}
                           onClick={() => controller.retry(u.id)}
-                          className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                          className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         >
                           Retry
-                        </button>
+                        </Button>
                       ) : null}
                     </li>
                   ))}
@@ -484,7 +481,6 @@ export function ConceptSheet(props: {
               ) : null}
               <div className={cn('grid gap-2', canUpload ? 'grid-cols-2' : 'grid-cols-1')}>
                 <Button
-                  size="lg"
                   data-plan-concept-files=""
                   disabled={busy}
                   onClick={() => {
@@ -495,7 +491,6 @@ export function ConceptSheet(props: {
                 </Button>
                 {canUpload ? (
                   <Button
-                    size="lg"
                     data-plan-concept-upload-pick=""
                     disabled={busy}
                     onClick={() => {

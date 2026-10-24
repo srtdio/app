@@ -123,7 +123,7 @@ export function UsernameField({
           />
         </div>
         {!unchanged ? (
-          <Button size="lg" variant="primary" disabled={!canSave} onClick={() => void save()}>
+          <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
             {saving ? 'Saving' : 'Save'}
           </Button>
         ) : null}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button } from '@/components/ui/Button';
 import { IconCopy, IconDownload, IconEdit, IconLink, IconTrash } from '@/components/ui/icons';
 import { IconInfo } from '@/components/pages/assets/viewerIcons';
 import { displayLabel, linkDomain, type AssetListItem } from '@/lib/assets';
@@ -66,17 +67,18 @@ function Row({
   destructive?: boolean;
 }) {
   return (
-    <button
+    <Button
+      variant="ghost"
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex h-12 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-panel-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        destructive ? 'text-bad' : 'text-fg'
+      className={`w-full justify-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent${
+        destructive ? ' text-bad hover:text-bad' : ''
       }`}
     >
       <span className={destructive ? 'text-bad' : 'text-fg-2'}>{icon}</span>
       {label}
-    </button>
+    </Button>
   );
 }
 

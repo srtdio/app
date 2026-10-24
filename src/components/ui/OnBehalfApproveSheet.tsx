@@ -70,7 +70,6 @@ export function OnBehalfApproveView(props: OnBehalfApproveViewProps): ReactEleme
         <div className="flex w-full gap-2">
           <Button
             variant="ghost"
-            size="lg"
             className="flex-1"
             data-on-behalf-cancel=""
             disabled={props.busy}
@@ -80,7 +79,6 @@ export function OnBehalfApproveView(props: OnBehalfApproveViewProps): ReactEleme
           </Button>
           <Button
             variant="success"
-            size="lg"
             className="flex-1"
             data-on-behalf-approve=""
             disabled={props.busy}

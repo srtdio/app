@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { IconChevronRight, IconCopy, IconDownload, IconTrash, IconX } from '@/components/ui/icons';
@@ -23,13 +23,6 @@ import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
 
-// The file card's action: a 44px target, colour change only on press (the
-// shared Button's height and press scale do not fit this rule).
-const CARD_BUTTON =
-  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md bg-accent px-4 ' +
-  'text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50 ' +
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
-
 /** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */
 const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -41,6 +34,13 @@ const BAR_BUTTON =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
   'transition-colors duration-fast hover:bg-overlay-surface disabled:opacity-40 ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg';
+
+// The stage's previous / next arrows (laptop only): the shared IconButton in the
+// overlay colours. Overlay tokens sort after the IconButton's own, so they win.
+const STAGE_ARROW =
+  'absolute top-1/2 hidden -translate-y-1/2 bg-overlay-surface text-overlay-fg ' +
+  'hover:bg-overlay-line hover:text-overlay-fg focus-visible:outline-none ' +
+  'focus-visible:ring-2 focus-visible:ring-overlay-fg md:inline-flex';
 
 /** Delete keeps the bar button's shape in the bad colour. */
 const BAD = '!text-bad';
@@ -483,7 +483,7 @@ export function AssetLightbox({
           onClick={onClose}
           className={BAR_BUTTON}
         >
-          <IconX size={22} />
+          <IconX size={20} />
         </button>
         <div className="min-w-0 flex-1 px-1 text-center">
           <p className="truncate text-sm font-medium">
@@ -507,22 +507,22 @@ export function AssetLightbox({
       >
         {items.length > 1 ? (
           <>
-            <button
+            <IconButton
               type="button"
-              aria-label="Previous asset"
+              label="Previous asset"
               onClick={() => go(-1)}
-              className="absolute left-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-surface text-overlay-fg hover:bg-overlay-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg md:inline-flex"
+              className={cn('left-2', STAGE_ARROW)}
             >
-              <IconChevronLeft size={22} />
-            </button>
-            <button
+              <IconChevronLeft size={20} />
+            </IconButton>
+            <IconButton
               type="button"
-              aria-label="Next asset"
+              label="Next asset"
               onClick={() => go(1)}
-              className="absolute right-2 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-surface text-overlay-fg hover:bg-overlay-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg md:inline-flex"
+              className={cn('right-2', STAGE_ARROW)}
             >
-              <IconChevronRight size={22} />
-            </button>
+              <IconChevronRight size={20} />
+            </IconButton>
           </>
         ) : null}
 
@@ -555,19 +555,19 @@ export function AssetLightbox({
               ) : null}
             </div>
             {viewable ? (
-              <button ref={openRef} type="button" onClick={handleOpen} className={CARD_BUTTON}>
+              <button
+                ref={openRef}
+                type="button"
+                onClick={handleOpen}
+                className={buttonClass('primary')}
+              >
                 Open
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={handleDownload}
-                disabled={busy}
-                className={CARD_BUTTON}
-              >
+              <Button variant="primary" type="button" onClick={handleDownload} disabled={busy}>
                 <IconDownload size={16} />
                 {isInlineRenderable(kind) ? 'Download to view' : 'Download'}
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -590,7 +590,7 @@ export function AssetLightbox({
             <div className="flex items-center gap-2">
               <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</h2>
               <IconButton label="Close details" onClick={() => setInfoOpen(false)}>
-                <IconX size={18} />
+                <IconX size={20} />
               </IconButton>
             </div>
 
@@ -608,7 +608,6 @@ export function AssetLightbox({
                     />
                     <div className="flex gap-2">
                       <Button
-                        size="lg"
                         className="flex-1"
                         onClick={() => setEditingName(false)}
                         disabled={savingName}
@@ -617,7 +616,6 @@ export function AssetLightbox({
                       </Button>
                       <Button
                         variant="primary"
-                        size="lg"
                         className="flex-1"
                         disabled={!canSaveName}
                         onClick={() => void saveName()}
@@ -630,17 +628,17 @@ export function AssetLightbox({
                   <dd className="flex items-center gap-1">
                     <span className="min-w-0 flex-1 break-words text-sm text-fg">{name}</span>
                     {canRename ? (
-                      <button
+                      <IconButton
                         type="button"
-                        aria-label="Rename asset"
+                        label="Rename asset"
                         onClick={() => {
                           setNameDraft(name);
                           setEditingName(true);
                         }}
-                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft"
+                        className="shrink-0"
                       >
-                        <IconEdit size={16} />
-                      </button>
+                        <IconEdit size={20} />
+                      </IconButton>
                     ) : null}
                   </dd>
                 )}
@@ -658,7 +656,7 @@ export function AssetLightbox({
             </dl>
 
             <div className="mt-4 border-t border-border pt-4">
-              <Button variant="danger" size="lg" className="w-full" onClick={handleDelete}>
+              <Button variant="danger" className="w-full" onClick={handleDelete}>
                 Delete
               </Button>
             </div>

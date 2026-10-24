@@ -35,7 +35,9 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
 }
 
 function ariaLabel(el: ReactElement): string | undefined {
-  return (el.props as { 'aria-label'?: string })['aria-label'];
+  // IconButton takes `label` and renders it as aria-label.
+  const props = el.props as { 'aria-label'?: string; label?: string };
+  return props['aria-label'] ?? props.label;
 }
 
 describe('SectionHeader', () => {

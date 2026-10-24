@@ -5,6 +5,7 @@
 // motion). Pressable: no iOS selection callout.
 
 import type { ReactElement } from 'react';
+import { Button } from '@/components/ui/Button';
 import { IconTaskSquare } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
@@ -19,8 +20,10 @@ export function TaskButton(props: {
   onOpen: () => void;
 }): ReactElement {
   return (
-    <button
+    <Button
       type="button"
+      variant="secondary"
+      shape="round"
       aria-label={TASK_BUTTON_LABEL}
       data-task-button=""
       data-induction={INDUCTION_KEYS.chatTasks}
@@ -29,7 +32,7 @@ export function TaskButton(props: {
       onClick={props.onOpen}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-panel text-fg-2 transition-colors duration-fast hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'relative shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         NO_TOUCH_SELECT,
       )}
     >
@@ -39,7 +42,7 @@ export function TaskButton(props: {
           props.editing === true && 'animate-pulse motion-reduce:animate-none',
         )}
       >
-        <IconTaskSquare size={22} />
+        <IconTaskSquare size={20} />
       </span>
       {props.unseen ? (
         <span
@@ -48,7 +51,7 @@ export function TaskButton(props: {
           className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-accent ring-2 ring-panel"
         />
       ) : null}
-    </button>
+    </Button>
   );
 }
 

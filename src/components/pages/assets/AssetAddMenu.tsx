@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
+import { Button } from '@/components/ui/Button';
 import { IconLink, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
+
+/** A menu row: the shared ghost button, full width, text from the left. */
+const MENU_ITEM = 'w-full justify-start gap-3 text-left';
 
 interface AssetAddMenuProps {
   /** Open the upload sheet (the "Upload files" option). */
@@ -23,47 +27,50 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
 
   return (
     <div className="relative shrink-0">
-      <button
+      <Button
+        variant="primary"
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         data-induction={INDUCTION_KEYS.assetsAdd}
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+        className="whitespace-nowrap"
       >
         New asset
-      </button>
+      </Button>
 
       <MenuPopover open={open} onClose={() => setOpen(false)} align="right">
-        <button
+        <Button
+          variant="ghost"
           type="button"
           role="menuitem"
           onClick={() => {
             setOpen(false);
             onUploadFiles();
           }}
-          className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
+          className={MENU_ITEM}
         >
           <span className="shrink-0 text-fg-3">
-            <IconUpload size={18} />
+            <IconUpload size={16} />
           </span>
           <span>Upload files</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
+          variant="ghost"
           type="button"
           role="menuitem"
           onClick={() => {
             setOpen(false);
             onAddLink();
           }}
-          className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-3 text-left text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
+          className={MENU_ITEM}
         >
           <span className="shrink-0 text-fg-3">
-            <IconLink size={18} />
+            <IconLink size={16} />
           </span>
           <span>Add link</span>
-        </button>
+        </Button>
       </MenuPopover>
     </div>
   );

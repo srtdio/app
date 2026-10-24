@@ -36,7 +36,7 @@ export function LoadError({
       )}
     >
       <p className="text-sm text-fg-2">{loadErrorText(title)}</p>
-      <Button size="lg" onClick={onRetry} disabled={retrying} aria-busy={retrying}>
+      <Button onClick={onRetry} disabled={retrying} aria-busy={retrying}>
         {retrying ? 'Retrying…' : 'Retry'}
       </Button>
     </div>

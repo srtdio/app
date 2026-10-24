@@ -718,7 +718,7 @@ export function OnboardingFlow({
             <Avatar size="xl" />
           )}
           <div className="flex min-w-0 flex-col gap-1">
-            <Button size="lg" onClick={() => photoInputRef.current?.click()}>
+            <Button onClick={() => photoInputRef.current?.click()}>
               {photoPreview !== null ? ONBOARDING_COPY.changePhoto : ONBOARDING_COPY.addPhoto}
             </Button>
             <p className="text-xs text-fg-3">{ONBOARDING_COPY.photoHint}</p>
@@ -971,13 +971,12 @@ export function OnboardingFlow({
         title="Position your photo"
         footer={
           <>
-            <Button size="lg" onClick={() => setCropOpen(false)}>
+            <Button onClick={() => setCropOpen(false)}>
               Cancel
             </Button>
             <span className="ml-auto">
               <Button
                 variant="primary"
-                size="lg"
                 disabled={!cropReady}
                 onClick={() => void applyPhoto()}
               >

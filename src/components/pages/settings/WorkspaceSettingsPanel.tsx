@@ -107,13 +107,12 @@ function DeleteWorkspaceSheet({
       title={deleteWorkspaceTitle(name)}
       footer={
         <>
-          <Button type="button" size="lg" className="ml-auto" onClick={close} disabled={deleting}>
+          <Button type="button" className="ml-auto" onClick={close} disabled={deleting}>
             Cancel
           </Button>
           <Button
             type="button"
             variant="danger"
-            size="lg"
             disabled={deleting || !canConfirmWorkspaceDelete(typed, name)}
             onClick={() => void confirm()}
           >
@@ -242,7 +241,7 @@ export function WorkspaceSettingsPanel() {
                 Permanent. Nothing is saved.
               </p>
             </div>
-            <Button type="button" variant="danger" size="lg" onClick={() => setDeleteOpen(true)}>
+            <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
               Delete
             </Button>
             <DeleteWorkspaceSheet
