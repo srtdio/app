@@ -56,7 +56,10 @@ function byText(text: string): HTMLElement {
   const hits = [...document.body.querySelectorAll<HTMLElement>('*')].filter(
     (el) => el.textContent?.trim() === text,
   );
-  const deepest = hits.find((el) => ![...el.children].some((c) => c.textContent?.trim() === text));
+  // The last match: the thumbnail's FileTile can repeat the text before the card's own line.
+  const deepest = hits
+    .filter((el) => ![...el.children].some((c) => c.textContent?.trim() === text))
+    .at(-1);
   if (deepest === undefined) throw new Error(`no element with text "${text}"`);
   return deepest;
 }
@@ -73,7 +76,8 @@ afterEach(() => {
 describe('AssetCard type roles', () => {
   it('the name is the card title: base/500', () => {
     mount(makeAsset({}));
-    const title = document.querySelector<HTMLElement>('span[title="report.pdf"]');
+    // The thumbnail's FileTile also names the file; the card's own label comes last.
+    const title = [...document.querySelectorAll<HTMLElement>('span[title="report.pdf"]')].at(-1);
     expect(title).not.toBeNull();
     expectRole(title as HTMLElement, ['text-base', 'font-medium']);
     expect(title?.className).not.toContain('text-xs');

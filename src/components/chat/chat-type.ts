@@ -146,10 +146,10 @@ export const HEADER_PAD: ChatSize = {
   laptop: 'px-4',
 };
 
-/** Date separator pill: 12.5/16/500 touch, 12.5/16/400 uppercase laptop; sans, tabular. */
+/** Date separator pill: 12/16/500 touch, 12/16/400 uppercase laptop; sans, tabular. */
 export const DATE_PILL_TYPE: ChatSize = {
-  touch: 'font-mono text-[12px] leading-[16px] font-medium tabular-nums',
-  laptop: 'font-mono text-[12px] leading-[16px] font-normal tabular-nums uppercase',
+  touch: 'font-mono text-sm font-medium tabular-nums',
+  laptop: 'font-mono text-sm font-normal tabular-nums uppercase',
 };
 
 /** The typing row above the composer: 13/16, 400. */

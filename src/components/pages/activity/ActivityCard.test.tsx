@@ -471,7 +471,7 @@ describe('ActivityCard actor rows', () => {
     ]);
     expect(one).toContain('Asha deleted a file');
     // The filename is the card title.
-    expect(one).toMatch(/text-\[15px\][^"]*">brief\.pdf</);
+    expect(one).toMatch(/text-base font-medium[^"]*">brief\.pdf</);
     expect(one).toContain('role="button"');
     const many = renderCard([
       item({
@@ -817,7 +817,7 @@ describe('ActivityCard: notifications fixes', () => {
         }),
       ]);
       expect(html).toContain('>Asha deleted 5 files<');
-      expect(html).toMatch(/text-\[15px\][^"]*">deck\.pdf</);
+      expect(html).toMatch(/text-base font-medium[^"]*">deck\.pdf</);
       expect(html).toContain('Also hero.png, teaser.mov and 2 more');
       expect(html).toContain('data-activity-text-tile="PDF"');
       expect(html).toMatch(/data-activity-files-badge=""[^>]*>\+4</);
