@@ -193,7 +193,7 @@ describe('the page', () => {
     expect(src).toContain('title={NOTIFICATIONS_TITLE}');
     expect(src).not.toContain('title="Activity"');
     expect(src).toMatch(
-      /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{24\} \/>\} title=\{EMPTY_LINES\.plans\} \/>/,
+      /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{ICON_SIZE\.status\} \/>\} title=\{EMPTY_LINES\.plans\} \/>/,
     );
     expect(EMPTY_LINES.plans).toBe('Plan updates show up here.');
   });

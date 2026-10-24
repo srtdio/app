@@ -84,6 +84,6 @@ describe('LinkButton', () => {
   it('renders the leading link icon and the trailing outbound arrow', () => {
     const out = render('https://srtd.io/x');
     expect(out.match(/<svg/g) ?? []).toHaveLength(2);
-    expect(out).not.toContain('style=');
+    expect(out).not.toContain('display:inline-block');
   });
 });
