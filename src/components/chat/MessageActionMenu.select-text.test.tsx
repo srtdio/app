@@ -314,15 +314,15 @@ describe('menu style', () => {
     expect(del).toContain('text-bad');
   });
 
-  it('icon mapping: Select crop, filled star when starred, note page, bookmark', () => {
+  it('icon mapping: Select crop, filled star when starred, file page, bookmark', () => {
     const html = (key: string): string =>
       renderToStaticMarkup(
         <MenuRow item={items.find((i) => i.key === key) as MessageMenuItem} onRun={() => {}} />,
       );
     expect(html('select-text')).toContain('M6 6.5V16a1 1 0 0 0 1 1h10.5');
     expect(html('star')).toContain('fill="currentColor"');
-    expect(html('save-notes')).toContain('M6 3h9l4 4v14H6z');
-    expect(html('mark')).toContain('M6 3h12v18l-6-4-6 4z');
+    expect(html('save-notes')).toContain('M19.5 14.25v-2.625a3.375 3.375');
+    expect(html('mark')).toContain('M17.593 3.322c1.1.128 1.907 1.');
   });
 
   it('reactions: six 44x44 cells, 8px 10px padding, one hairline under it', () => {

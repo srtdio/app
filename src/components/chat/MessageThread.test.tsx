@@ -2356,7 +2356,7 @@ describe('tombstones, edited label and the neutral selection', () => {
       expect(html).toContain(T_UTC);
       expect(html).toContain('data-meta-spacer');
       expect(html).toContain('data-tombstone');
-      expect(html).toContain('<circle');
+      expect(html).toContain('M18.364 18.364A9 9');
       expect(root.props).toMatchObject({ 'data-deleted': '' });
       const cls = tombstoneClass({ mine, head: false, tail: true, layout: 'touch' });
       expect(cls).toContain('border border-border');

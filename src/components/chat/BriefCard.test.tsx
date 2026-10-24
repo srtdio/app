@@ -28,7 +28,7 @@ describe('chat brief card status pill', () => {
     expect(out).toContain('data-brief-status="closed"');
     expect(out).toContain('bg-panel-3 text-fg-2');
     expect(out).not.toContain('bg-accent-soft');
-    expect(out).toContain('<rect');
+    expect(out).toContain('M16.5 10.5V6.75');
     expect(out).toContain('Closed');
   });
 
