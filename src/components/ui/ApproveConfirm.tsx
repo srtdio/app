@@ -103,7 +103,7 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
       <div className="flex gap-2">
         <Button
           type="button"
-          size="lg"
+          variant="secondary"
           data-approve-back=""
           disabled={props.busy}
           onClick={props.onBack}
@@ -113,7 +113,6 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
         </Button>
         <Button
           type="button"
-          size="lg"
           variant="success"
           data-approve-confirm-button=""
           {...(props.induction !== undefined ? { 'data-induction': props.induction } : {})}

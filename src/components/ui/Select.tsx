@@ -223,7 +223,7 @@ export function Select({
         disabled={disabled}
         onClick={toggle}
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
-        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-panel-2 px-3 text-base md:text-sm transition-colors hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
+        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-base md:text-sm transition-colors hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
       >
         {selected?.renderLeft !== undefined ? (
           <span className="flex shrink-0 items-center">{selected.renderLeft}</span>
