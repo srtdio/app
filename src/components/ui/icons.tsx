@@ -1,11 +1,79 @@
 import type { CSSProperties, ReactNode } from 'react';
 import {
+  AdjustmentsHorizontalIcon,
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  ArrowRightStartOnRectangleIcon,
+  ArrowUpIcon,
+  ArrowUpRightIcon,
+  ArrowUpTrayIcon,
+  ArrowUturnLeftIcon,
+  ArrowUturnRightIcon,
+  ArrowsRightLeftIcon,
+  ArrowsUpDownIcon,
+  AtSymbolIcon,
+  Bars3Icon,
+  Bars3BottomLeftIcon,
+  BellAlertIcon,
+  BookmarkIcon,
+  CalendarIcon,
   CalendarDaysIcon,
+  CameraIcon,
   ChatBubbleOvalLeftIcon,
+  CheckIcon,
+  CheckBadgeIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  Cog6ToothIcon,
+  DocumentIcon,
+  DocumentDuplicateIcon,
   DocumentTextIcon,
+  EllipsisVerticalIcon,
+  ExclamationTriangleIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  FaceSmileIcon,
+  FilmIcon,
+  InboxIcon,
+  InboxStackIcon,
+  InformationCircleIcon,
+  LinkIcon,
+  LockClosedIcon,
+  MagnifyingGlassIcon,
+  MicrophoneIcon,
+  MoonIcon,
+  NoSymbolIcon,
+  PaperAirplaneIcon,
+  PaperClipIcon,
+  PauseIcon,
+  PencilIcon,
+  PencilSquareIcon,
   PhotoIcon,
+  PlusIcon,
+  QuestionMarkCircleIcon,
+  RectangleStackIcon,
+  ScaleIcon,
+  StarIcon,
+  SunIcon,
+  TrashIcon,
+  UserIcon,
   ViewColumnsIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
+import {
+  PauseIcon as PauseSolid,
+  PlayIcon as PlaySolid,
+  StarIcon as StarSolid,
+} from '@heroicons/react/24/solid';
+
+/**
+ * The one icon size scale. 16 beside text or in a chip, 18 sidebar (the
+ * default), 20 alone in a 44 button or the tab bar, 22 tray tiles, composer
+ * and long-press menu, 28 status glyphs (empty states, file tiles).
+ */
+export const ICON_SIZE = { inline: 16, nav: 18, control: 20, tray: 22, status: 28 } as const;
 
 export interface IconProps {
   className?: string;
@@ -26,7 +94,8 @@ interface SvgProps extends IconProps {
   box?: { width: number; height: number };
 }
 
-function Svg({ className, size = 18, inline = false, box, children }: SvgProps) {
+/** Hand-drawn glyphs, kept only where Heroicons has no equivalent. */
+function Svg({ className, size = ICON_SIZE.nav, inline = false, box, children }: SvgProps) {
   return (
     <svg
       className={className}
@@ -39,6 +108,7 @@ function Svg({ className, size = 18, inline = false, box, children }: SvgProps) 
       strokeWidth={1.7}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
     >
       {children}
     </svg>
@@ -48,10 +118,17 @@ function Svg({ className, size = 18, inline = false, box, children }: SvgProps) 
 type HeroIcon = typeof ViewColumnsIcon;
 
 /**
- * A Heroicons 24/outline glyph on the same contract as Svg: size (default 18),
- * stroke 1.7 over Heroicons' own 1.5, decorative, and the same inline layout.
+ * A Heroicons glyph on the same contract as Svg: size (default 18), decorative,
+ * and the same inline layout. 24/outline gets stroke 1.7 over Heroicons' own
+ * 1.5; `solid` (24/solid, filled states only) has no stroke.
  */
-function Hero({ icon: C, className, size = 18, inline = false }: IconProps & { icon: HeroIcon }) {
+function Hero({
+  icon: C,
+  solid = false,
+  className,
+  size = ICON_SIZE.nav,
+  inline = false,
+}: IconProps & { icon: HeroIcon; solid?: boolean }) {
   const style: CSSProperties = inline
     ? { width: size, height: size, display: 'inline-block', verticalAlign: '-0.15em' }
     : { width: size, height: size };
@@ -60,7 +137,7 @@ function Hero({ icon: C, className, size = 18, inline = false }: IconProps & { i
       width={size}
       height={size}
       style={style}
-      strokeWidth={1.7}
+      strokeWidth={solid ? undefined : 1.7}
       className={className}
       aria-hidden="true"
     />
@@ -68,45 +145,23 @@ function Hero({ icon: C, className, size = 18, inline = false }: IconProps & { i
 }
 
 export function IconX(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 6l12 12M18 6L6 18" />
-    </Svg>
-  );
+  return <Hero icon={XMarkIcon} {...props} />;
 }
 
 export function IconUser(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={8} r={3.4} />
-      <path d="M5 20a7 7 0 0 1 14 0" />
-    </Svg>
-  );
+  return <Hero icon={UserIcon} {...props} />;
 }
 
 export function IconCheck(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M5 12l5 5L20 6" />
-    </Svg>
-  );
+  return <Hero icon={CheckIcon} {...props} />;
 }
 
 export function IconSearch(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={11} cy={11} r={7} />
-      <path d="M21 21l-4.3-4.3" />
-    </Svg>
-  );
+  return <Hero icon={MagnifyingGlassIcon} {...props} />;
 }
 
 export function IconPlus(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 5v14M5 12h14" />
-    </Svg>
-  );
+  return <Hero icon={PlusIcon} {...props} />;
 }
 
 export function IconPipeline(props: IconProps) {
@@ -117,18 +172,10 @@ export function IconBriefs(props: IconProps) {
   return <Hero icon={DocumentTextIcon} {...props} />;
 }
 
-/** A draft: a page with a pencil over its corner. */
 export function IconDraft(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M13 3H6v18h12v-7" />
-      <path d="M9 12h3M9 16h4" />
-      <path d="M17.5 4.5l2 2L14 12h-2v-2z" />
-    </Svg>
-  );
+  return <Hero icon={PencilSquareIcon} {...props} />;
 }
 
-/** A plan: two layered sheets. */
 export function IconPlan(props: IconProps) {
   return <Hero icon={CalendarDaysIcon} {...props} />;
 }
@@ -137,23 +184,12 @@ export function IconChat(props: IconProps) {
   return <Hero icon={ChatBubbleOvalLeftIcon} {...props} />;
 }
 
-/** Notifications: a stacked tray (the top bar's inbox of everything). */
 export function IconNotifications(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x={4} y={9} width={16} height={11} rx={2} />
-      <path d="M6.5 6h11M9 3h6" />
-    </Svg>
-  );
+  return <Hero icon={InboxStackIcon} {...props} />;
 }
 
 export function IconActivity(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 13l2.5-7h11L20 13" />
-      <path d="M4 13h4l1 2h6l1-2h4v5H4z" />
-    </Svg>
-  );
+  return <Hero icon={InboxIcon} {...props} />;
 }
 
 export function IconAssets(props: IconProps) {
@@ -161,196 +197,78 @@ export function IconAssets(props: IconProps) {
 }
 
 export function IconSettings(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={12} r={3} />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </Svg>
-  );
+  return <Hero icon={Cog6ToothIcon} {...props} />;
 }
 
 export function IconTrash(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 7h16" />
-      <path d="M9 7V5h6v2" />
-      <path d="M6 7l1 13h10l1-13" />
-      <path d="M10 11v6M14 11v6" />
-    </Svg>
-  );
+  return <Hero icon={TrashIcon} {...props} />;
 }
 
 export function IconEdit(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z" />
-      <path d="M13.5 6.5l4 4" />
-    </Svg>
-  );
+  return <Hero icon={PencilIcon} {...props} />;
 }
 
 export function IconSignOut(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M9 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h3" />
-      <path d="M16 8l4 4-4 4" />
-      <path d="M20 12H9" />
-    </Svg>
-  );
+  return <Hero icon={ArrowRightStartOnRectangleIcon} {...props} />;
 }
 
 export function IconSun(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={12} r={4} />
-      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" />
-    </Svg>
-  );
+  return <Hero icon={SunIcon} {...props} />;
 }
 
 export function IconMoon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M20 14a8 8 0 0 1-10-10 8 8 0 1 0 10 10z" />
-    </Svg>
-  );
+  return <Hero icon={MoonIcon} {...props} />;
 }
 
 export function IconChevronDown(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 9l6 6 6-6" />
-    </Svg>
-  );
+  return <Hero icon={ChevronDownIcon} {...props} />;
 }
 
 export function IconSort(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M7 4v16M7 20l-3-3M7 20l3-3" />
-      <path d="M17 20V4M17 4l-3 3M17 4l3 3" />
-    </Svg>
-  );
+  return <Hero icon={ArrowsUpDownIcon} {...props} />;
 }
 
-/** Three lines narrowing downward: the combined filter-and-sort trigger. */
 export function IconFilterLines(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 7h16M7 12h10M10 17h4" />
-    </Svg>
-  );
+  return <Hero icon={AdjustmentsHorizontalIcon} {...props} />;
 }
 
 export function IconUpload(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 16V5" />
-      <path d="M8 9l4-4 4 4" />
-      <path d="M5 19h14" />
-    </Svg>
-  );
+  return <Hero icon={ArrowUpTrayIcon} {...props} />;
 }
 
 export function IconSwitch(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 8h13l-3-3" />
-      <path d="M20 16H7l3 3" />
-    </Svg>
-  );
-}
-
-export function IconFolder(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 6h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z" />
-    </Svg>
-  );
+  return <Hero icon={ArrowsRightLeftIcon} {...props} />;
 }
 
 export function IconFile(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M7 3h7l4 4v14H7z" />
-      <path d="M14 3v4h4" />
-    </Svg>
-  );
+  return <Hero icon={DocumentIcon} {...props} />;
 }
 
 export function IconLink(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5" />
-      <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" />
-    </Svg>
-  );
+  return <Hero icon={LinkIcon} {...props} />;
 }
 
 export function IconArrowUpRight(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M8 16L16 8" />
-      <path d="M9 8h7v7" />
-    </Svg>
-  );
+  return <Hero icon={ArrowUpRightIcon} {...props} />;
 }
 
 export function IconDownload(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 5v11" />
-      <path d="M8 12l4 4 4-4" />
-      <path d="M5 19h14" />
-    </Svg>
-  );
+  return <Hero icon={ArrowDownTrayIcon} {...props} />;
 }
 
 export function IconCopy(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x={9} y={9} width={11} height={11} rx={2} />
-      <path d="M5 15V5a1 1 0 0 1 1-1h9" />
-    </Svg>
-  );
+  return <Hero icon={DocumentDuplicateIcon} {...props} />;
 }
 
 export function IconChevronRight(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M9 6l6 6-6 6" />
-    </Svg>
-  );
+  return <Hero icon={ChevronRightIcon} {...props} />;
 }
 
 export function IconChevronLeft(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M15 6l-6 6 6 6" />
-    </Svg>
-  );
+  return <Hero icon={ChevronLeftIcon} {...props} />;
 }
 
-export function IconZoomIn(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={11} cy={11} r={7} />
-      <path d="M21 21l-4.3-4.3" />
-      <path d="M11 8v6M8 11h6" />
-    </Svg>
-  );
-}
-
-export function IconZoomOut(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={11} cy={11} r={7} />
-      <path d="M21 21l-4.3-4.3" />
-      <path d="M8 11h6" />
-    </Svg>
-  );
-}
-
+/** A pushpin (pin a version or message). Hand-drawn: Heroicons has no pushpin; MapPinIcon means a place. */
 export function IconPin(props: IconProps) {
   return (
     <Svg {...props}>
@@ -361,53 +279,22 @@ export function IconPin(props: IconProps) {
 }
 
 export function IconClock(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={12} r={8} />
-      <path d="M12 8v4l3 2" />
-    </Svg>
-  );
+  return <Hero icon={ClockIcon} {...props} />;
 }
 
 export function IconMore(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={5} r={1.2} />
-      <circle cx={12} cy={12} r={1.2} />
-      <circle cx={12} cy={19} r={1.2} />
-    </Svg>
-  );
-}
-
-/** Horizontal ⋯, the hover "more actions" control. */
-export function IconEllipsis(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={5} cy={12} r={1.2} />
-      <circle cx={12} cy={12} r={1.2} />
-      <circle cx={19} cy={12} r={1.2} />
-    </Svg>
-  );
+  return <Hero icon={EllipsisVerticalIcon} {...props} />;
 }
 
 export function IconReply(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M9 7L4 12l5 5" />
-      <path d="M4 12h11a5 5 0 0 1 5 5v1" />
-    </Svg>
-  );
+  return <Hero icon={ArrowUturnLeftIcon} {...props} />;
 }
 
 export function IconForward(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M15 7l5 5-5 5" />
-      <path d="M20 12H9a5 5 0 0 0-5 5v1" />
-    </Svg>
-  );
+  return <Hero icon={ArrowUturnRightIcon} {...props} />;
 }
 
+/** Add an image: a photo with a plus. Hand-drawn: Heroicons has no photo-plus. */
 export function IconImagePlus(props: IconProps) {
   return (
     <Svg {...props}>
@@ -420,52 +307,26 @@ export function IconImagePlus(props: IconProps) {
 }
 
 export function IconSend(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M21 4L3 11l6 2 2 6 10-15z" />
-      <path d="M9 13l4-4" />
-    </Svg>
-  );
+  return <Hero icon={PaperAirplaneIcon} {...props} />;
 }
 
 export function IconMic(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-      <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-      <path d="M12 18v4" />
-      <path d="M8 22h8" />
-    </Svg>
-  );
+  return <Hero icon={MicrophoneIcon} {...props} />;
 }
 
 export function IconText(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M5 7h14M5 12h14M5 17h9" />
-    </Svg>
-  );
+  return <Hero icon={Bars3BottomLeftIcon} {...props} />;
 }
 
 export function IconCamera(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
-      <circle cx={12} cy={13} r={3.5} />
-    </Svg>
-  );
+  return <Hero icon={CameraIcon} {...props} />;
 }
 
 export function IconImage(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x={3} y={5} width={18} height={14} rx={2} />
-      <circle cx={8.5} cy={10} r={1.5} />
-      <path d="M4 17l5-5 4 4 3-3 4 4" />
-    </Svg>
-  );
+  return <Hero icon={PhotoIcon} {...props} />;
 }
 
+/** A carousel badge: stacked cards. Hand-drawn: Square2StackIcon reads as copy at badge size. */
 export function IconCarousel(props: IconProps) {
   return (
     <Svg {...props}>
@@ -476,50 +337,26 @@ export function IconCarousel(props: IconProps) {
 }
 
 export function IconVideo(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x={3} y={6} width={18} height={12} rx={2} />
-      <path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor" stroke="none" />
-    </Svg>
-  );
+  return <Hero icon={FilmIcon} {...props} />;
 }
 
 export function IconPlay(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M8 5v14l11-7z" fill="currentColor" stroke="none" />
-    </Svg>
-  );
+  return <Hero icon={PlaySolid} solid {...props} />;
 }
 
 export function IconPause(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M9 5v14M15 5v14" />
-    </Svg>
-  );
+  return <Hero icon={PauseIcon} {...props} />;
 }
 
-/** The filled pause glyph (two rounded bars), the pair of the filled IconPlay. */
 export function IconPauseFill(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x={6.5} y={5} width={4} height={14} rx={1.2} fill="currentColor" stroke="none" />
-      <rect x={13.5} y={5} width={4} height={14} rx={1.2} fill="currentColor" stroke="none" />
-    </Svg>
-  );
+  return <Hero icon={PauseSolid} solid {...props} />;
 }
 
 export function IconCalendar(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x={4} y={5} width={16} height={16} rx={2} />
-      <path d="M4 9h16M8 3v4M16 3v4" />
-    </Svg>
-  );
+  return <Hero icon={CalendarIcon} {...props} />;
 }
 
-/** Calendar outline with a small clock at the bottom-right: scheduled sends (never reminders). */
+/** Calendar outline with a small clock at the bottom-right: scheduled sends (never reminders). Hand-drawn: Heroicons has no calendar-clock. */
 export function IconCalendarClock(props: IconProps) {
   return (
     <Svg {...props}>
@@ -532,127 +369,34 @@ export function IconCalendarClock(props: IconProps) {
 }
 
 export function IconAt(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={12} r={4} />
-      <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12A9 9 0 1 0 16.5 19" />
-    </Svg>
-  );
-}
-
-export function IconListOrdered(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M11 6h10M11 12h10M11 18h10" />
-      <path d="M4 5l1.5-1v5" />
-      <path d="M3.5 14.5a1.5 1.5 0 0 1 2.8.6c0 1.3-2.6 1.8-2.6 3.4h2.8" />
-    </Svg>
-  );
-}
-
-export function IconQuote(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M9 8H6a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h3v2a2 2 0 0 1-2 2" />
-      <path d="M19 8h-3a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h3v2a2 2 0 0 1-2 2" />
-    </Svg>
-  );
-}
-
-export function IconStamp(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 4a3 3 0 0 1 3 3c0 1.6-1.2 2.2-1.2 3.6V12H10.2v-1.4C10.2 9.2 9 8.6 9 7a3 3 0 0 1 3-3z" />
-      <rect x={6} y={12} width={12} height={4} rx={1} />
-      <path d="M5 20h14" />
-    </Svg>
-  );
+  return <Hero icon={AtSymbolIcon} {...props} />;
 }
 
 export function IconSignpost(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 4v16" />
-      <path d="M12 7h6l2.5 2.5L18 12h-6z" />
-    </Svg>
-  );
+  return <Hero icon={ScaleIcon} {...props} />;
 }
 
 export function IconTarget(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={12} r={8} />
-      <circle cx={12} cy={12} r={2} fill="currentColor" stroke="none" />
-    </Svg>
-  );
+  return <Hero icon={CheckBadgeIcon} {...props} />;
 }
 
 export function IconScrollText(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M17 19V6a2 2 0 0 0-2-2H5" />
-      <path d="M9 20h9a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1h-7a1 1 0 0 0-1 1v1a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2V6a2 2 0 0 0-2-2" />
-      <path d="M9 8h6M9 12h4" />
-    </Svg>
-  );
-}
-
-export function IconScroll(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M17 19V6a2 2 0 0 0-2-2H5" />
-      <path d="M9 20h9a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1h-7a1 1 0 0 0-1 1v1a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2V6a2 2 0 0 0-2-2" />
-    </Svg>
-  );
-}
-
-export function IconFrame(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 8h16M4 16h16M8 4v16M16 4v16" />
-    </Svg>
-  );
+  return <Hero icon={QuestionMarkCircleIcon} {...props} />;
 }
 
 export function IconHistory(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-      <path d="M12 7v5l4 2" />
-    </Svg>
-  );
+  return <Hero icon={RectangleStackIcon} {...props} />;
 }
 
 export function IconRotateCcw(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M4 12a8 8 0 1 0 2.3-5.6" />
-      <path d="M3 4.5 6.3 6.4 4.4 9.7" />
-    </Svg>
-  );
-}
-
-export function IconDoorOpen(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 5.5l8-1.5v16l-8-1.5z" />
-      <path d="M14 4h3a1 1 0 0 1 1 1v13" />
-      <path d="M4 20h16" />
-      <circle cx={11.5} cy={12} r={0.7} fill="currentColor" stroke="none" />
-    </Svg>
-  );
+  return <Hero icon={ArrowPathIcon} {...props} />;
 }
 
 export function IconEye(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-      <circle cx={12} cy={12} r={3} />
-    </Svg>
-  );
+  return <Hero icon={EyeIcon} {...props} />;
 }
 
+/** Pending (status drawer). Hand-drawn: Heroicons has no hourglass, and ClockIcon is IconClock. */
 export function IconHourglass(props: IconProps) {
   return (
     <Svg {...props}>
@@ -663,55 +407,15 @@ export function IconHourglass(props: IconProps) {
   );
 }
 
-export function IconReceipt(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 3h12v17l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5z" />
-      <path d="M13.6 9.1A2 2 0 0 0 11.8 8c-1.1 0-1.9.6-1.9 1.5 0 2 3.7 1 3.7 3 0 .9-.9 1.5-2 1.5a2 2 0 0 1-1.8-1.1" />
-      <path d="M12 6.5v1.5M12 14v1.5" />
-    </Svg>
-  );
-}
-
-export function IconBroadcast(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={12} r={1.6} fill="currentColor" stroke="none" />
-      <path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7" />
-      <path d="M6 6a9 9 0 0 0 0 12M18 6a9 9 0 0 1 0 12" />
-    </Svg>
-  );
-}
-
 export function IconPaperclip(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M20 11l-7.8 7.8a4 4 0 0 1-5.7-5.7L13.5 6a2.7 2.7 0 0 1 3.8 3.8L9.8 17.3a1.3 1.3 0 0 1-1.9-1.9L15 8.3" />
-    </Svg>
-  );
+  return <Hero icon={PaperClipIcon} {...props} />;
 }
 
 export function IconLock(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x="5" y="11" width="14" height="10" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-    </Svg>
-  );
+  return <Hero icon={LockClosedIcon} {...props} />;
 }
 
-export function IconUsers(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={9} cy={8} r={3.2} />
-      <path d="M3 19a6 6 0 0 1 12 0" />
-      <path d="M16 5.2a3.2 3.2 0 0 1 0 5.6" />
-      <path d="M18 13.5a6 6 0 0 1 3 5.5" />
-    </Svg>
-  );
-}
-
-/** Single message tick (recorded), a fixed 16x12 glyph; `size` is ignored. */
+/** Single message tick (recorded), a fixed 16x12 glyph; `size` is ignored. Hand-drawn: Heroicons has no message ticks. */
 export function IconTickSingle(props: IconProps) {
   return (
     <Svg {...props} box={{ width: 16, height: 12 }}>
@@ -720,7 +424,7 @@ export function IconTickSingle(props: IconProps) {
   );
 }
 
-/** Double message tick (read), a fixed 20x12 glyph; `size` is ignored. */
+/** Double message tick (read), a fixed 20x12 glyph; `size` is ignored. Hand-drawn: Heroicons has no message ticks. */
 export function IconTickDouble(props: IconProps) {
   return (
     <Svg {...props} box={{ width: 20, height: 12 }}>
@@ -731,33 +435,18 @@ export function IconTickDouble(props: IconProps) {
 }
 
 export function IconSmile(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={12} r={9} />
-      <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" />
-      <path d="M9 9.5h.01M15 9.5h.01" />
-    </Svg>
-  );
+  return <Hero icon={FaceSmileIcon} {...props} />;
 }
 
 export function IconArrowUp(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 19V5M6 11l6-6 6 6" />
-    </Svg>
-  );
+  return <Hero icon={ArrowUpIcon} {...props} />;
 }
 
 export function IconAlarmClock(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx={12} cy={13} r={7} />
-      <path d="M12 9.5V13l2.5 1.5M4.5 5.5 7 3.5M19.5 5.5 17 3.5M7 19.5 5.5 21M17 19.5l1.5 1.5" />
-    </Svg>
-  );
+  return <Hero icon={BellAlertIcon} {...props} />;
 }
 
-/** The chat task list: a rounded square with a tick. */
+/** The chat task list: a rounded square with a tick. Hand-drawn: Heroicons has no checkbox-square. */
 export function IconTaskSquare(props: IconProps) {
   return (
     <Svg {...props}>
@@ -767,25 +456,15 @@ export function IconTaskSquare(props: IconProps) {
   );
 }
 
-const STAR_PATH = 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z';
-
 export function IconStar(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d={STAR_PATH} />
-    </Svg>
-  );
+  return <Hero icon={StarIcon} {...props} />;
 }
 
 export function IconStarFilled(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d={STAR_PATH} fill="currentColor" />
-    </Svg>
-  );
+  return <Hero icon={StarSolid} solid {...props} />;
 }
 
-/** Select text: an iMessage-style crop, a handle dot at either end. */
+/** Select text: an iMessage-style crop, a handle dot at either end. Hand-drawn: Heroicons has no text-selection glyph. */
 export function IconSelectText(props: IconProps) {
   return (
     <Svg {...props}>
@@ -797,36 +476,11 @@ export function IconSelectText(props: IconProps) {
   );
 }
 
-/** A page with a folded corner and two lines (Save to notes, the notes tile). */
-export function IconNotePage(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 3h9l4 4v14H6z" />
-      <path d="M15 3v4h4M9 12h7M9 16h5" />
-    </Svg>
-  );
-}
-
-/** A bookmark (Mark as, the marks empty states). */
 export function IconBookmark(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 3h12v18l-6-4-6 4z" />
-    </Svg>
-  );
+  return <Hero icon={BookmarkIcon} {...props} />;
 }
 
-/** A page with text lines: PDFs and Office files in the chat file bubble. */
-export function IconFileText(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5M9 13h6M9 17h6M9 9h1" />
-    </Svg>
-  );
-}
-
-/** Six dots: the Plan list's drag handle (laptop). */
+/** Six dots: the Plan list's drag handle (laptop). Hand-drawn: Heroicons has no grip. */
 export function IconGrip(props: IconProps) {
   return (
     <Svg {...props}>
@@ -841,10 +495,21 @@ export function IconGrip(props: IconProps) {
 }
 
 export function IconAlertTriangle(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 3l9 16H3z" />
-      <path d="M12 10v4M12 17h.01" />
-    </Svg>
-  );
+  return <Hero icon={ExclamationTriangleIcon} {...props} />;
+}
+
+export function IconInfo(props: IconProps) {
+  return <Hero icon={InformationCircleIcon} {...props} />;
+}
+
+export function IconEyeOff(props: IconProps) {
+  return <Hero icon={EyeSlashIcon} {...props} />;
+}
+
+export function IconBan(props: IconProps) {
+  return <Hero icon={NoSymbolIcon} {...props} />;
+}
+
+export function IconMenu(props: IconProps) {
+  return <Hero icon={Bars3Icon} {...props} />;
 }
