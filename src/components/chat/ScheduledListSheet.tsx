@@ -193,12 +193,11 @@ export function ScheduledListSheet(
         title={CANCEL_CONFIRM_TITLE}
         footer={
           <div className="flex w-full justify-end gap-2">
-            <Button type="button" size="lg" onClick={() => setCancelFor(null)}>
+            <Button type="button" onClick={() => setCancelFor(null)}>
               Keep
             </Button>
             <Button
               type="button"
-              size="lg"
               variant="danger"
               data-cancel-scheduled=""
               disabled={busyId !== null}
@@ -287,12 +286,11 @@ export function BodyEditor(props: {
         className="text-base"
       />
       <div className="flex justify-end gap-2">
-        <Button type="button" size="lg" variant="ghost" onClick={props.onDone}>
+        <Button type="button" variant="ghost" onClick={props.onDone}>
           Cancel
         </Button>
         <Button
           type="button"
-          size="lg"
           variant="primary"
           disabled={props.busy || (body.trim() === '' && !hasFiles)}
           onClick={() => props.onSave(body)}

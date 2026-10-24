@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { IconCheck } from '@/components/ui/icons';
 import { fetchUnsubscribeStatus, postUnsubscribeAction } from './api';
 
 type PageState = 'loading' | 'subscribed' | 'unsubscribed' | 'invalid';
-
-const buttonBase =
-  'inline-flex min-h-11 w-full items-center justify-center rounded-md px-4 text-sm font-medium select-none disabled:opacity-50';
-const primaryButton = `${buttonBase} bg-accent text-accent-fg hover:bg-accent-hover`;
-const secondaryButton = `${buttonBase} border border-border bg-panel-2 text-fg hover:bg-panel-3`;
 
 function Card({ children }: { children: ReactNode }) {
   return (
@@ -75,18 +71,16 @@ export function UnsubscribePage() {
             </p>
           </div>
           <div className="mt-6 space-y-2">
-            <button
+            <Button
               type="button"
-              className={primaryButton}
+              variant="primary"
+              className="w-full"
               disabled={busy}
               onClick={() => void submit('unsubscribe')}
             >
               Unsubscribe
-            </button>
-            <Link
-              to="/"
-              className="inline-flex min-h-11 w-full items-center justify-center text-sm text-accent hover:underline"
-            >
+            </Button>
+            <Link to="/" className={buttonClass('link', 'default', 'w-full hover:underline')}>
               Keep getting catch-ups
             </Link>
           </div>
@@ -108,14 +102,15 @@ export function UnsubscribePage() {
             </p>
           </div>
           <div className="mt-6">
-            <button
+            <Button
               type="button"
-              className={secondaryButton}
+              variant="secondary"
+              className="w-full"
               disabled={busy}
               onClick={() => void submit('resubscribe')}
             >
               Turn catch-ups back on
-            </button>
+            </Button>
           </div>
           <p className="mt-4 text-center text-xs text-fg-3">
             Invites, login links and password resets still arrive.

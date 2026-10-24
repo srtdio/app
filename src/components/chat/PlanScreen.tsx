@@ -2027,33 +2027,39 @@ export function PlanScreen(props: {
       {saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}
     </Button>
   );
-  // Line 2's boxed pair: Add (accent soft), then Edit (outlined), each the
-  // shared 44px button, the last one's right edge on the 16px line.
+  // Line 2's boxed pair: Add (accent soft), then Edit (outlined), each box 34px
+  // in a 44px tap target, the last one's right edge on the 16px line.
   const viewActions = (
     <span data-plan-header-actions="" className="flex shrink-0 items-center gap-2">
-      <Button
+      <button
         type="button"
-        variant="secondary"
         aria-label="Add to plan"
         data-plan-add-header=""
-        data-plan-header-box=""
         onClick={() => openAdd(null)}
-        className="shrink-0 border-accent-line bg-accent-soft text-accent hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
       >
-        <IconPlus size={16} />
-        Add
-      </Button>
-      <Button
+        <span
+          data-plan-header-box=""
+          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-transparent bg-accent-soft px-3 text-[14px] font-semibold leading-5 text-accent group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+        >
+          <IconPlus size={15} />
+          Add
+        </span>
+      </button>
+      <button
         type="button"
-        variant="secondary"
         data-plan-edit=""
-        data-plan-header-box=""
         onClick={enterEdit}
-        className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
       >
-        <IconEdit size={16} />
-        {EDIT_LABEL}
-      </Button>
+        <span
+          data-plan-header-box=""
+          className="flex h-[34px] items-center gap-1.5 rounded-[10px] border border-border-strong bg-panel px-3 text-[14px] font-semibold leading-5 text-fg group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+        >
+          <IconEdit size={15} />
+          {EDIT_LABEL}
+        </span>
+      </button>
     </span>
   );
   return (

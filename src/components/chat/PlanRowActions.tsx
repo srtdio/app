@@ -84,7 +84,7 @@ export function PlanGripSpacer(): ReactElement {
 
 /**
  * The edit row's bottom line: the day chip ("Thu 22", "No date"; calendar
- * icon, 32px visual with a 1px border-strong in a 44px target) on the left,
+ * icon, the shared 44px secondary button) on the left,
  * the remove icon (a 44x44 target in the bad colour) on the right edge. The
  * chip opens the day picker. Nothing is written until Save changes.
  */

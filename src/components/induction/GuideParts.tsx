@@ -207,8 +207,8 @@ function dockStyle(dock: DockAt): { className: string; style: Record<string, num
   return { className: 'left-2 right-2', style: vertical };
 }
 
-const CHIP =
-  'flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full px-3 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+/** Layout added to every guide control (each is a <Button>: 44 tall, 8px radius, 14 / 500). */
+const GUIDE_ACTION = 'min-w-[44px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 export const GuideBar = forwardRef<
   HTMLElement,
@@ -276,40 +276,49 @@ function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): 
   return (
     <div className="flex shrink-0 items-center gap-1">
       {actions.onNext !== undefined ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           data-induction-next=""
           onClick={actions.onNext}
-          className={`${CHIP} ${AMBER_BG} ${AMBER_INK} px-4`}
+          // The guide's amber, not a theme variant: ! so it beats ghost's colours.
+          className={`${GUIDE_ACTION} !bg-[var(--guide)] !text-[var(--guide-ink)] hover:opacity-90`}
         >
           {copy.next}
-        </button>
+        </Button>
       ) : null}
       {actions.onLater !== undefined ? (
-        <button type="button" onClick={actions.onLater} className={`${CHIP} bg-panel-2 text-fg`}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={actions.onLater}
+          className={GUIDE_ACTION}
+        >
           {copy.later}
-        </button>
+        </Button>
       ) : null}
       {actions.onBack !== undefined ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           data-induction-back=""
           aria-label={copy.aria.back}
           onClick={actions.onBack}
-          className={`${CHIP} text-fg-2`}
+          className={GUIDE_ACTION}
         >
           {copy.back}
-        </button>
+        </Button>
       ) : null}
       {actions.onSkip !== undefined ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           data-induction-skip=""
           onClick={actions.onSkip}
-          className={`${CHIP} text-fg-3`}
+          className={`${GUIDE_ACTION} text-fg-3`}
         >
           {copy.skip}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -390,14 +399,15 @@ export function GuideCard({
       ) : null}
       <div className="mt-3 flex items-center justify-end gap-2">
         {onSkip !== undefined && copy.skip !== undefined ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             data-induction-skip=""
             onClick={onSkip}
-            className={`${CHIP} ${hero ? 'text-accent-fg opacity-90 focus-visible:ring-accent-fg' : 'text-fg-2'}`}
+            className={`${GUIDE_ACTION} ${hero ? '!text-accent-fg opacity-90 hover:!bg-transparent focus-visible:ring-accent-fg' : ''}`}
           >
             {copy.skip}
-          </button>
+          </Button>
         ) : null}
         <Button
           variant={hero ? 'default' : 'primary'}

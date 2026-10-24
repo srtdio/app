@@ -333,15 +333,16 @@ function AvatarCropperImpl(
       <div className="w-full max-w-[260px]">
         <span className="mb-1 block text-xs font-medium text-fg-2">Zoom</span>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
             aria-label="Zoom out"
             onClick={() => stepZoom(-0.25)}
             disabled={!hasPhoto}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-border bg-panel-2 text-fg hover:bg-panel-3 disabled:opacity-50"
+            variant="secondary"
+            className="w-11 shrink-0 !px-0"
           >
             <span className="text-lg leading-none">-</span>
-          </button>
+          </Button>
           <input
             type="range"
             min={1}
@@ -359,15 +360,16 @@ function AvatarCropperImpl(
             }
             className="h-11 flex-1 accent-accent disabled:opacity-50"
           />
-          <button
+          <Button
             type="button"
             aria-label="Zoom in"
             onClick={() => stepZoom(0.25)}
             disabled={!hasPhoto}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-border bg-panel-2 text-fg hover:bg-panel-3 disabled:opacity-50"
+            variant="secondary"
+            className="w-11 shrink-0 !px-0"
           >
             <span className="text-lg leading-none">+</span>
-          </button>
+          </Button>
         </div>
       </div>
 
