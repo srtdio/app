@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   COLLEAGUE_A,
@@ -102,6 +102,50 @@ test(
         .first()
         .evaluate((el) => getComputedStyle(el).color),
     ).toBe(accent);
+  },
+);
+
+/** The computed type of one element: size, weight and case. */
+function typeOf(locator: Locator) {
+  return locator.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { size: s.fontSize, weight: s.fontWeight, transform: s.textTransform };
+  });
+}
+
+// Type roles on Pipeline (design rules, locked 24 Oct 2026). Pipeline has no
+// page title or PageHead: its screen header is the Filter and sort sheet title
+// (15px/600), the sheet's Due date label is a section label (12px/600,
+// uppercase), a card title is 14px/500 and the search field renders 16px on
+// the phone (iOS zoom).
+test(
+  'Pipeline type roles: sheet header 15px, section label 12px uppercase, card title 14px',
+  { tag: '@theme' },
+  async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    await page.goto('/pipeline');
+    const cardTitle = page.locator('[data-post-card-title]', { hasText: 'Monday carousel' }).first();
+    await expect(cardTitle).toBeVisible({ timeout: 15_000 });
+    const cardType = await typeOf(cardTitle);
+    expect(cardType.size).toBe('14px');
+    expect(cardType.weight).toBe('500');
+
+    expect((await typeOf(page.getByPlaceholder('Search posts'))).size).toBe('16px');
+
+    await page.locator('[data-filter-control]').click();
+    const sheet = page.getByRole('dialog', { name: 'Filter and sort' });
+    await expect(sheet).toBeVisible();
+    const header = sheet.getByRole('heading', { name: 'Filter and sort' });
+    const headerType = await typeOf(header);
+    expect(headerType.size).toBe('15px');
+    expect(headerType.weight).toBe('600');
+
+    const label = sheet.locator('[data-filter-body] > p', { hasText: 'Due date' });
+    const labelType = await typeOf(label);
+    expect(labelType.size).toBe('12px');
+    expect(labelType.weight).toBe('600');
+    expect(labelType.transform).toBe('uppercase');
+    expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   },
 );
 

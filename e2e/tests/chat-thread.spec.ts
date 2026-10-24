@@ -131,3 +131,48 @@ test('chat thread: every button is 44 tall with an 8px radius or round', async (
   await page.waitForTimeout(400);
   await expectButtonsMeetSystem(page);
 });
+
+// Type roles around the chat thread (design rules, locked 24 Oct 2026). The
+// chat list's section labels are the shared section label (12px/600,
+// uppercase). The thread itself keeps its chat-type.ts sizes (WhatsApp lock):
+// a bubble body is 17px on touch, not the 14px app body. The Seen time is meta
+// in the sans face with tabular numbers, never mono.
+test(
+  'chat thread type roles: list section label 12px uppercase, bubble 17px, Seen not mono',
+  { tag: '@theme' },
+  async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    await page.goto('/chat');
+    const label = page.locator('[data-section-label]').first();
+    await label.waitFor({ state: 'visible', timeout: 15_000 });
+    const labelType = await label.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { size: s.fontSize, weight: s.fontWeight, transform: s.textTransform };
+    });
+    expect(labelType.size).toBe('12px');
+    expect(labelType.weight).toBe('600');
+    expect(labelType.transform).toBe('uppercase');
+
+    const row = page.getByText(PEER_NAME, { exact: true }).first();
+    await row.click();
+    await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
+    await page.waitForTimeout(400);
+
+    const body = page
+      .locator('[data-bubble]', { hasText: MENTION_PREVIEW })
+      .getByText(MENTION_PREVIEW)
+      .first();
+    await body.scrollIntoViewIfNeeded();
+    expect(await body.evaluate((el) => getComputedStyle(el).fontSize)).toBe('17px');
+
+    const seen = page.locator('[data-seen-line]').first();
+    await expect(seen).toBeVisible();
+    const families = await seen.evaluate((el) =>
+      [el, ...Array.from(el.querySelectorAll('*'))].map((n) => getComputedStyle(n).fontFamily),
+    );
+    for (const family of families) {
+      expect(family).not.toMatch(/JetBrains Mono|monospace/);
+    }
+    expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+  },
+);

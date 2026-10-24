@@ -557,3 +557,43 @@ test('Notifications: every button is 44 tall with an 8px radius or round', async
   await expectButtonsMeetSystem(page);
   expectClean(network);
 });
+
+// Type roles on Notifications (design rules, locked 24 Oct 2026): the PageHead
+// title is a screen header (15px/600, no 28px page title here), a day bucket
+// label is a section label (12px/600, uppercase), a card's preview line is
+// body text at 14px and its time is meta at 12px.
+test(
+  'Notifications type roles: header 15px, section label 12px uppercase, body 14px, meta 12px',
+  { tag: '@theme' },
+  async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    seedAlerts(network.world);
+    await page.goto('/notifications');
+    const typeOf = (locator: ReturnType<Page['locator']>) =>
+      locator.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { size: s.fontSize, weight: s.fontWeight, transform: s.textTransform };
+      });
+
+    const header = page.getByRole('heading', { level: 1, name: 'Notifications' });
+    await expect(header).toBeVisible({ timeout: 15_000 });
+    const headerType = await typeOf(header);
+    expect(headerType.size).toBe('15px');
+    expect(headerType.weight).toBe('600');
+
+    const mention = card(page, 'mention');
+    await expect(mention).toContainText(MENTION_PREVIEW);
+    const label = page.locator('section', { has: mention }).locator('h2').first();
+    const labelType = await typeOf(label);
+    expect(labelType.size).toBe('12px');
+    expect(labelType.weight).toBe('600');
+    expect(labelType.transform).toBe('uppercase');
+
+    const body = mention.locator('p', { hasText: MENTION_PREVIEW }).first();
+    expect((await typeOf(body)).size).toBe('14px');
+
+    const meta = mention.locator('[data-activity-time]').first();
+    expect((await typeOf(meta)).size).toBe('12px');
+    expectClean(network);
+  },
+);
