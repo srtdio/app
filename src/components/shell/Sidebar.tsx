@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { Avatar } from '@/components/ui/Avatar';
-import { IconChevronDown } from '@/components/ui/icons';
+import { IconChevronDown, ICON_SIZE } from '@/components/ui/icons';
 import { PRIMARY_NAV } from '@/components/shell/nav';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
@@ -41,7 +41,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
               {workspaceName}
             </span>
           )}
-          <IconChevronDown size={16} className="text-fg-3 shrink-0" />
+          <IconChevronDown size={ICON_SIZE.inline} className="text-fg-3 shrink-0" />
         </button>
       </div>
       <nav className="flex flex-col gap-0.5 px-2.5">
@@ -60,7 +60,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             }
           >
             <span className="relative">
-              <item.Icon size={18} />
+              <item.Icon size={ICON_SIZE.nav} />
               {item.showChatBadge && total > 0 ? (
                 <CountBadge
                   count={total}

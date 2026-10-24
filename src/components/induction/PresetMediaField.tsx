@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { isImageMime } from '@srtdio/storage';
 import { Button } from '@/components/ui/Button';
-import { IconVideo, IconX } from '@/components/ui/icons';
+import { IconVideo, IconX, ICON_SIZE } from '@/components/ui/icons';
 import {
   ComposerMediaFrame,
   firstMedia,
@@ -380,7 +380,7 @@ function MediaTile({
         <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
       ) : (
         <span className="flex h-full w-full items-center justify-center text-fg-3">
-          <IconVideo size={22} />
+          <IconVideo size={ICON_SIZE.tray} />
         </span>
       )}
       <button
@@ -390,7 +390,7 @@ function MediaTile({
         className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center"
       >
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-panel text-fg shadow">
-          <IconX size={14} />
+          <IconX size={ICON_SIZE.inline} />
         </span>
       </button>
     </li>

@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { IconCheck } from '@/components/ui/icons';
+import { IconCheck, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
@@ -88,7 +88,7 @@ function ChoiceRow(props: { label: string; selected: boolean; onSelect: () => vo
       )}
     >
       <span className="min-w-0 flex-1 break-words">{props.label}</span>
-      {props.selected ? <IconCheck size={18} className="shrink-0" /> : null}
+      {props.selected ? <IconCheck size={ICON_SIZE.nav} className="shrink-0" /> : null}
     </button>
   );
 }

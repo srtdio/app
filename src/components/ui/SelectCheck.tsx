@@ -1,4 +1,4 @@
-import { IconCheck } from '@/components/ui/icons';
+import { IconCheck, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 
 interface SelectCheckProps {
@@ -24,7 +24,7 @@ export function SelectCheck({ checked }: SelectCheckProps) {
       data-select-check={checked ? 'on' : 'off'}
       className={selectCheckClass(checked)}
     >
-      {checked ? <IconCheck size={14} /> : null}
+      {checked ? <IconCheck size={ICON_SIZE.inline} /> : null}
     </span>
   );
 }

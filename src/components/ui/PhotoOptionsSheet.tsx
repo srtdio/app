@@ -8,7 +8,7 @@
 import { useRef } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconCamera, IconImage, IconTrash } from '@/components/ui/icons';
+import { IconCamera, IconImage, IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 
 export type PhotoOption = 'camera' | 'library' | 'remove';
@@ -73,9 +73,9 @@ function PhotoOptionRow(props: {
 }
 
 const ROW_ICON: Record<PhotoOption, ReactNode> = {
-  camera: <IconCamera size={20} />,
-  library: <IconImage size={20} />,
-  remove: <IconTrash size={20} />,
+  camera: <IconCamera size={ICON_SIZE.control} />,
+  library: <IconImage size={ICON_SIZE.control} />,
+  remove: <IconTrash size={ICON_SIZE.control} />,
 };
 
 /** The rows alone (no Sheet, no inputs); the body the sheet renders. */

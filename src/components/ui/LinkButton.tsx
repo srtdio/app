@@ -1,6 +1,6 @@
 import { cn } from '@/lib/cn';
 import { buttonClass } from '@/components/ui/Button';
-import { IconArrowUpRight, IconLink } from '@/components/ui/icons';
+import { IconArrowUpRight, IconLink, ICON_SIZE } from '@/components/ui/icons';
 import { parseExternalLink } from '@/lib/links';
 
 interface LinkButtonProps {
@@ -41,11 +41,11 @@ export function LinkButton({ url, className }: LinkButtonProps) {
       )}
     >
       <span className="shrink-0 text-accent">
-        <IconLink size={16} />
+        <IconLink size={ICON_SIZE.inline} />
       </span>
       <span className="min-w-0 truncate">{link.domain}</span>
       <span className="shrink-0 text-fg-3 transition-colors group-hover:text-accent">
-        <IconArrowUpRight size={16} />
+        <IconArrowUpRight size={ICON_SIZE.inline} />
       </span>
     </a>
   );

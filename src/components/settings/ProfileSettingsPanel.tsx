@@ -24,7 +24,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { UsernameField } from '@/components/settings/UsernameField';
 import { Field } from '@/components/ui/Field';
-import { IconCamera } from '@/components/ui/icons';
+import { IconCamera, ICON_SIZE } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { PhotoOptionsSheet } from '@/components/ui/PhotoOptionsSheet';
 import { env } from '@/lib/env';
@@ -596,7 +596,7 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
         aria-hidden="true"
         className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-fg ring-4 ring-bg"
       >
-        <IconCamera size={20} />
+        <IconCamera size={ICON_SIZE.control} />
       </span>
     </button>
   );

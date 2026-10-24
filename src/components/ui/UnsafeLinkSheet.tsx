@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { buttonClass } from '@/components/ui/Button';
-import { IconAlertTriangle } from '@/components/ui/icons';
+import { IconAlertTriangle, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
@@ -129,7 +129,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             id="unsafe-link-title"
             className="flex items-center gap-2 text-lg font-semibold text-[color:var(--warn-ink)]"
           >
-            <IconAlertTriangle size={22} />
+            <IconAlertTriangle size={ICON_SIZE.tray} />
             Check before opening
           </h2>
         </div>
@@ -252,7 +252,7 @@ export function UnsafeLinkButton(props: {
         props.className,
       )}
     >
-      <IconAlertTriangle size={16} className="shrink-0" />
+      <IconAlertTriangle size={ICON_SIZE.inline} className="shrink-0" />
       <span className="min-w-0 truncate">{props.domain}</span>
     </UnsafeLinkText>
   );

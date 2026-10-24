@@ -17,7 +17,7 @@ import { MentionInput } from '@/components/comments/MentionInput';
 import type { MentionInputHandle } from '@/components/comments/MentionInput';
 import { CommentEmojiButton } from '@/components/comments/CommentEmojiButton';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
-import { IconFile, IconX } from '@/components/ui/icons';
+import { IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { IconPaperclip } from '@/components/chat/AttachmentIcons';
 import { fileExtension } from '@/lib/assets';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
@@ -250,7 +250,7 @@ export function CommentComposer({
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting}
           >
-            <IconPaperclip size={20} />
+            <IconPaperclip size={ICON_SIZE.control} />
           </IconButton>
         ) : null}
 
@@ -314,7 +314,7 @@ export function PendingChip({
         {item.previewUrl !== null ? (
           <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
         ) : (
-          <IconFile size={16} />
+          <IconFile size={ICON_SIZE.inline} />
         )}
       </span>
       <span className="flex min-w-0 max-w-[180px] flex-col">
@@ -341,7 +341,7 @@ export function PendingChip({
         </Button>
       ) : null}
       <IconButton label={`Remove ${item.file.name}`} onClick={onRemove}>
-        <IconX size={20} />
+        <IconX size={ICON_SIZE.control} />
       </IconButton>
     </li>
   );

@@ -2,21 +2,21 @@
 // and Settings > Storage. Presentational: each caller owns its sheets.
 
 import { ActionRow } from '@/components/ui/ActionRow';
-import { IconAt, IconCalendar } from '@/components/ui/icons';
+import { IconAt, IconCalendar, ICON_SIZE } from '@/components/ui/icons';
 import { SUPPORT_EMAIL } from '@/lib/support';
 
 export function SupportRows(props: { onContact: () => void; onBook: () => void }) {
   return (
     <>
       <ActionRow
-        icon={<IconAt size={18} />}
+        icon={<IconAt size={ICON_SIZE.nav} />}
         label="Contact us"
         sub={SUPPORT_EMAIL}
         onClick={props.onContact}
         chevron
       />
       <ActionRow
-        icon={<IconCalendar size={18} />}
+        icon={<IconCalendar size={ICON_SIZE.nav} />}
         label="Book a call"
         sub="Pick a time, we send a Meet link"
         onClick={props.onBook}

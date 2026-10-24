@@ -26,7 +26,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { IconAlertTriangle, IconPlay, IconX } from '@/components/ui/icons';
+import { IconAlertTriangle, IconPlay, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { UnsafeLinkSheet } from '@/components/ui/UnsafeLinkSheet';
 import { cn } from '@/lib/cn';
 import { useInView } from '@/lib/use-in-view';
@@ -156,7 +156,7 @@ function MediaSlot(props: {
     >
       {props.warn === true ? (
         <span className="absolute inset-0 grid place-items-center text-[color:var(--warn-ink)]">
-          <IconAlertTriangle size={36} />
+          <IconAlertTriangle size={ICON_SIZE.status} />
         </span>
       ) : showImage && props.src !== null ? (
         <img
@@ -181,7 +181,7 @@ function MediaSlot(props: {
       {props.video ? (
         <span className="absolute inset-0 grid place-items-center">
           <span className="grid h-11 w-11 place-items-center rounded-full bg-[color:var(--media-meta-bg)] pl-0.5 text-[color:var(--media-meta-fg)]">
-            <IconPlay size={18} />
+            <IconPlay size={ICON_SIZE.nav} />
           </span>
         </span>
       ) : null}
@@ -402,7 +402,7 @@ function Compact(props: {
           FOCUS,
         )}
       >
-        <IconAlertTriangle size={20} className="shrink-0" />
+        <IconAlertTriangle size={ICON_SIZE.control} className="shrink-0" />
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-base font-medium">This link may be unsafe</span>
           <span className="truncate text-sm leading-4 opacity-90">{`${preview.domain} · tap to check`}</span>
@@ -461,7 +461,7 @@ function Draft(props: {
   } else if (preview.type === 'unsafe') {
     thumb = (
       <span className="grid h-[52px] w-[52px] shrink-0 place-items-center">
-        <IconAlertTriangle size={22} />
+        <IconAlertTriangle size={ICON_SIZE.tray} />
       </span>
     );
     lines = (
@@ -525,7 +525,7 @@ function Draft(props: {
           onClick={props.onRemove}
           className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-xl text-fg-2', FOCUS)}
         >
-          <IconX size={18} />
+          <IconX size={ICON_SIZE.nav} />
         </button>
       ) : null}
     </div>

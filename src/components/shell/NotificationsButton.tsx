@@ -8,7 +8,7 @@ import type { ReactElement } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { IconNotifications } from '@/components/ui/icons';
+import { IconNotifications, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
@@ -46,7 +46,7 @@ export function NotificationsButton(): ReactElement {
         active ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
       )}
     >
-      <IconNotifications size={20} />
+      <IconNotifications size={ICON_SIZE.control} />
       {unreadCount > 0 ? (
         <CountBadge
           count={unreadCount}

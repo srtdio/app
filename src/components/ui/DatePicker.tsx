@@ -15,29 +15,7 @@ import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
-import type { IconProps } from '@/components/ui/icons';
-
-// No calendar glyph exists in src/components/ui/icons, so a minimal inline svg
-// lives here (matching the shared Svg stroke conventions).
-function IconCalendar({ className, size = 18 }: IconProps): ReactElement {
-  return (
-    <svg
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x={4} y={5} width={16} height={16} rx={2} />
-      <path d="M8 3v4M16 3v4M4 10h16" />
-    </svg>
-  );
-}
+import { IconCalendar, IconChevronLeft, IconChevronRight, ICON_SIZE } from '@/components/ui/icons';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = [
@@ -222,7 +200,7 @@ export function DatePicker({
         onClick={() => setOpen((prev) => !prev)}
         className="flex h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-panel-2 px-3 text-base transition-colors hover:bg-panel-3"
       >
-        <IconCalendar size={16} className="shrink-0 text-fg-3" />
+        <IconCalendar size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
         <span
           className={cn(
             'min-w-0 flex-1 truncate text-left',
@@ -255,7 +233,7 @@ export function DatePicker({
                     label="Previous month"
                     onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, -1))}
                   >
-                    <IconChevronLeft size={16} />
+                    <IconChevronLeft size={ICON_SIZE.inline} />
                   </IconButton>
                   <span className="text-base font-medium text-fg">
                     {MONTHS[view.monthIndex]} {view.year}
@@ -264,7 +242,7 @@ export function DatePicker({
                     label="Next month"
                     onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, 1))}
                   >
-                    <IconChevronRight size={16} />
+                    <IconChevronRight size={ICON_SIZE.inline} />
                   </IconButton>
                 </div>
                 <div className="grid grid-cols-7 place-items-center gap-0.5 text-center text-xs text-fg-3">

@@ -36,7 +36,7 @@ import {
 import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { IconDownload, IconFileText, IconX } from '@/components/ui/icons';
+import { IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { humanizeSize } from '@/lib/assets';
@@ -382,7 +382,7 @@ function ViewerError(props: {
           </button>
         ) : null}
         <button type="button" onClick={props.onDownload} className={tone.text}>
-          <IconDownload size={16} />
+          <IconDownload size={ICON_SIZE.inline} />
           Download
         </button>
       </div>
@@ -427,7 +427,7 @@ function UnavailableRenderer(props: RendererProps): ReactElement {
       className={cn('flex flex-col items-center gap-3 px-6 text-center', NO_SELECT)}
     >
       <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-overlay-fg">
-        <IconFileText size={30} />
+        <IconFile size={ICON_SIZE.status} />
       </span>
       <p className="text-lg font-semibold text-overlay-fg">{PREVIEW_UNAVAILABLE}</p>
       <p className="max-w-full text-base text-overlay-fg-dim [overflow-wrap:anywhere]">
@@ -440,7 +440,7 @@ function UnavailableRenderer(props: RendererProps): ReactElement {
         ) : null}
       </p>
       <button type="button" onClick={props.onDownload} className={OVERLAY.text}>
-        <IconDownload size={16} />
+        <IconDownload size={ICON_SIZE.inline} />
         Download
       </button>
     </div>
@@ -618,7 +618,7 @@ function PdfPage(props: {
           )}
         >
           <span className="flex flex-col items-center gap-3 text-fg-2">
-            <IconFileText size={30} />
+            <IconFile size={ICON_SIZE.status} />
             <span className="max-w-full text-base font-medium [overflow-wrap:anywhere]">
               {middleTruncate(name)}
             </span>
@@ -1058,7 +1058,7 @@ function TopBar(props: {
         onClick={props.onClose}
         className={tone.bar}
       >
-        <IconX size={20} />
+        <IconX size={ICON_SIZE.control} />
       </button>
       {props.actions !== undefined ? (
         <div className="min-w-0 flex-1 px-1 text-center">
@@ -1083,7 +1083,7 @@ function TopBar(props: {
         props.actions(tone.bar)
       ) : (
         <button type="button" aria-label="Download" onClick={props.onDownload} className={tone.bar}>
-          <IconDownload size={20} />
+          <IconDownload size={ICON_SIZE.control} />
         </button>
       )}
     </div>
@@ -1327,7 +1327,7 @@ export function FileViewerFallback(props: {
           onClick={props.onClose}
           className={tone.bar}
         >
-          <IconX size={20} />
+          <IconX size={ICON_SIZE.control} />
         </button>
       </div>
       <div className="flex flex-1 items-center justify-center">

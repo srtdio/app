@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import { IconSearch, IconX } from '@/components/ui/icons';
+import { IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
 
 interface SectionHeaderSearch {
   value: string;
@@ -129,7 +129,7 @@ export function SectionHeader<S extends string = string>({
             )}
           >
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
-              <IconSearch size={16} />
+              <IconSearch size={ICON_SIZE.inline} />
             </span>
             <input
               type="search"
@@ -146,7 +146,7 @@ export function SectionHeader<S extends string = string>({
                 onClick={() => search.onChange('')}
                 className="absolute right-0 top-1/2 -translate-y-1/2"
               >
-                <IconX size={16} />
+                <IconX size={ICON_SIZE.inline} />
               </IconButton>
             ) : null}
           </div>

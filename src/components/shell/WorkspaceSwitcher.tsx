@@ -14,7 +14,7 @@ import { Field } from '@/components/ui/Field';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
-import { IconCheck, IconPlus, IconX } from '@/components/ui/icons';
+import { IconCheck, IconPlus, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { storeInductionStep } from '@/components/induction/induction-data';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
@@ -340,7 +340,9 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                     <span className="flex-1 truncate text-base font-medium text-fg">
                       {workspaceDisplayName(ws)}
                     </span>
-                    {isActive ? <IconCheck size={18} className="shrink-0 text-accent" /> : null}
+                    {isActive ? (
+                      <IconCheck size={ICON_SIZE.nav} className="shrink-0 text-accent" />
+                    ) : null}
                   </button>
                 );
               })
@@ -358,7 +360,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               }}
               className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-left text-base font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-2"
             >
-              <IconPlus size={18} className="shrink-0 text-fg-3" />
+              <IconPlus size={ICON_SIZE.nav} className="shrink-0 text-fg-3" />
               <span>Create workspace</span>
             </button>
             {createBlocked ? (

@@ -4,7 +4,14 @@
 // into 'image') so callers map the DB format to a token before rendering.
 
 import type { ReactElement } from 'react';
-import { IconText, IconImage, IconCarousel, IconVideo, IconLink } from '@/components/ui/icons';
+import {
+  IconText,
+  IconImage,
+  IconCarousel,
+  IconVideo,
+  IconLink,
+  ICON_SIZE,
+} from '@/components/ui/icons';
 
 export type FormatGlyphToken = 'text' | 'image' | 'carousel' | 'video' | 'link';
 
@@ -17,7 +24,7 @@ export const FORMAT_GLYPH_LABEL: Record<FormatGlyphToken, string> = {
 };
 
 /** The format glyph as an icon element at the given pixel size. */
-export function formatIcon(token: FormatGlyphToken, size = 14): ReactElement {
+export function formatIcon(token: FormatGlyphToken, size: number = ICON_SIZE.inline): ReactElement {
   switch (token) {
     case 'text':
       return <IconText size={size} />;

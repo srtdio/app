@@ -18,7 +18,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
 import { IconPaperclip } from '@/components/chat/AttachmentIcons';
-import { IconX } from '@/components/ui/icons';
+import { IconX, ICON_SIZE } from '@/components/ui/icons';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
 import {
@@ -360,7 +360,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                       fileInputRef.current?.click();
                     }}
                   >
-                    <IconPaperclip size={20} />
+                    <IconPaperclip size={ICON_SIZE.control} />
                   </IconButton>
                 ) : null}
                 {index > 0 ? (
@@ -369,7 +369,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                     disabled={submitting}
                     onClick={() => removeSlot(slot.id)}
                   >
-                    <IconX size={20} />
+                    <IconX size={ICON_SIZE.control} />
                   </IconButton>
                 ) : null}
               </div>
