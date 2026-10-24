@@ -12,6 +12,7 @@ import {
   PEER_NAME,
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
+import { expectButtonsMeetSystem } from '../helpers/button-system';
 
 // Back returns to where you came from: every open is one history step and
 // every back (page.goBack, the iOS swipe and browser Back alike) pops exactly
@@ -58,6 +59,16 @@ test(
     await expect(page).toHaveURL(/\/pipeline$/);
   },
 );
+
+test('Pipeline: every button is 44 tall with an 8px radius or round', async ({ page }) => {
+  const network = await installHarnessNetwork(page);
+  await page.goto('/pipeline');
+  await expect(page.getByText('Monday carousel', { exact: true }).first()).toBeVisible({
+    timeout: 15_000,
+  });
+  await expectButtonsMeetSystem(page);
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
 
 test('2: a layer is one step: thread view, contact sheet, Starred close on back and stay in the chat', async ({
   page,

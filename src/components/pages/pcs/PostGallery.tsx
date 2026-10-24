@@ -23,6 +23,7 @@ import { PostLightbox, placePinFromEvent } from '@/components/pages/pcs/PostLigh
 import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import { frameFor, PLATFORM_SPECS, type Frame } from '@/lib/platform-specs';
 import { frameCutText, galleryItemMedia, PlatformFrame } from '@/components/media/PlatformFrame';
@@ -503,9 +504,6 @@ interface GalleryViewProps {
   toolbar?: ReactNode;
 }
 
-const TOOL_BUTTON =
-  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-lg border border-border bg-panel px-3 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-40';
-
 /**
  * The pin toolbar button: "Add pin" (pin icon + text, 44px) for anyone who can
  * comment, or Cancel while a slide is armed. Nothing when pins are not on
@@ -519,19 +517,14 @@ export function pinButton(
 ): ReactElement | null {
   if (onArmPin === undefined) return null;
   return pinArmedIndex === null ? (
-    <button type="button" data-add-pin="" onClick={() => onArmPin(active)} className={TOOL_BUTTON}>
-      <IconPin size={15} />
+    <Button type="button" variant="secondary" data-add-pin="" onClick={() => onArmPin(active)}>
+      <IconPin size={16} />
       Add pin
-    </button>
+    </Button>
   ) : (
-    <button
-      type="button"
-      data-cancel-pin=""
-      onClick={() => onDisarmPin?.()}
-      className={TOOL_BUTTON}
-    >
+    <Button type="button" variant="secondary" data-cancel-pin="" onClick={() => onDisarmPin?.()}>
       Cancel
-    </button>
+    </Button>
   );
 }
 
@@ -598,52 +591,53 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
           ) : null}
           {canEdit ? (
             <>
-              <button
+              <Button
                 type="button"
                 data-gallery-add=""
                 disabled={saving}
                 onClick={model.onAdd}
-                className={TOOL_BUTTON}
+                variant="secondary"
               >
-                <IconPlus size={15} />
+                <IconPlus size={16} />
                 Add
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 data-gallery-replace=""
                 disabled={saving || itemCount === 0}
                 onClick={model.onReplace}
-                className={TOOL_BUTTON}
+                variant="secondary"
               >
-                <IconSwitch size={15} />
+                <IconSwitch size={16} />
                 Replace
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 data-gallery-reorder=""
                 disabled={saving || itemCount < 2}
                 onClick={model.onReorder}
-                className={TOOL_BUTTON}
+                variant="secondary"
               >
-                <IconGrip size={15} />
+                <IconGrip size={16} />
                 Reorder
-              </button>
+              </Button>
             </>
           ) : null}
           {pin}
         </div>
         {versionNumber !== null ? (
-          <button
+          <Button
             type="button"
             data-gallery-versions=""
             onClick={model.onVersions}
             aria-label={`Versions, current version ${versionNumber}`}
             aria-haspopup="dialog"
-            className={cn(TOOL_BUTTON, 'shrink-0 tabular-nums')}
+            variant="secondary"
+            className="shrink-0 tabular-nums"
           >
-            <IconHistory size={15} />
+            <IconHistory size={16} />
             {`v${versionNumber}`}
-          </button>
+          </Button>
         ) : null}
       </div>
       {error !== null ? (
@@ -748,49 +742,49 @@ export function reorderView(model: ReorderModel): ReactElement {
         })}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
           type="button"
           data-reorder-left=""
           disabled={saving || selectedIndex <= 0}
           onClick={() => {
             if (selectedId !== null) model.onMove(selectedId, -1);
           }}
-          className={TOOL_BUTTON}
+          variant="secondary"
         >
-          <IconChevronLeft size={15} />
+          <IconChevronLeft size={16} />
           Move left
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           data-reorder-right=""
           disabled={saving || selectedIndex < 0 || selectedIndex >= items.length - 1}
           onClick={() => {
             if (selectedId !== null) model.onMove(selectedId, 1);
           }}
-          className={TOOL_BUTTON}
+          variant="secondary"
         >
           Move right
-          <IconChevronRight size={15} />
-        </button>
+          <IconChevronRight size={16} />
+        </Button>
         <span className="flex-1" />
-        <button
+        <Button
           type="button"
           data-reorder-cancel=""
           disabled={saving}
           onClick={model.onCancel}
-          className={TOOL_BUTTON}
+          variant="secondary"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="primary"
           data-reorder-save=""
           disabled={saving || !changed}
           onClick={model.onSave}
-          className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-40"
         >
           {saving ? 'Saving…' : 'Save order'}
-        </button>
+        </Button>
       </div>
       {error !== null ? (
         <p role="alert" data-gallery-error="" className="text-sm text-bad">

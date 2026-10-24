@@ -192,12 +192,11 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     if (mode === 'dm') {
       return (
         <>
-          <Button size="lg" disabled={busy} onClick={() => setMode('choose')}>
+          <Button disabled={busy} onClick={() => setMode('choose')}>
             Back
           </Button>
           {missingLine()}
           <Button
-            size="lg"
             variant="primary"
             className={missing === null ? 'ml-auto' : undefined}
             disabled={busy}
@@ -210,12 +209,11 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     }
     return (
       <>
-        <Button size="lg" disabled={busy} onClick={() => setMode('choose')}>
+        <Button disabled={busy} onClick={() => setMode('choose')}>
           Back
         </Button>
         {missingLine()}
         <Button
-          size="lg"
           variant="primary"
           className={missing === null ? 'ml-auto' : undefined}
           disabled={busy}
@@ -240,12 +238,12 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     if (mode === 'choose') {
       return (
         <div className="flex flex-col gap-2">
-          <Button size="lg" className="justify-start" onClick={() => setMode('dm')}>
-            <IconUser size={18} />
+          <Button className="!justify-start" onClick={() => setMode('dm')}>
+            <IconUser size={16} />
             New direct message
           </Button>
-          <Button size="lg" className="justify-start" onClick={() => setMode('group')}>
-            <IconChat size={18} />
+          <Button className="!justify-start" onClick={() => setMode('group')}>
+            <IconChat size={16} />
             New group
           </Button>
         </div>

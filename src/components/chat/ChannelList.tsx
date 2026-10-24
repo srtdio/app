@@ -10,7 +10,8 @@ import {
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/ui/Avatar';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { countBadgeText } from '@/components/ui/CountBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -215,7 +216,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
         title="No conversations yet"
         description="Messages from your team will show up here."
         action={
-          <Button size="lg" variant="primary" onClick={props.onNewChat}>
+          <Button variant="primary" onClick={props.onNewChat}>
             New chat
           </Button>
         }
@@ -359,7 +360,7 @@ export function channelListError(onRetry: () => void): ReactElement {
       icon={<IconChat size={24} />}
       title="Couldn't load chats"
       action={
-        <Button size="lg" variant="primary" className="min-w-[44px]" onClick={onRetry}>
+        <Button variant="primary" onClick={onRetry}>
           Retry
         </Button>
       }
@@ -651,7 +652,7 @@ export function channelRowBody(props: {
  * opening the same menu a long-press opens. Tokens only.
  */
 const ROW_MORE_BASE =
-  'flex h-11 w-11 items-center justify-center rounded-md text-fg-3 transition-colors duration-fast hover:bg-panel-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 transition-colors duration-fast hover:bg-panel-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 export function rowMoreClass(kind: TileKind): string {
   return cn(
@@ -778,17 +779,17 @@ export function ChannelCard(props: {
         })}
       </button>
       {menuEnabled ? (
-        <button
+        <IconButton
           type="button"
           data-more=""
           data-row-more=""
-          aria-label={`Actions for ${channel.title}`}
+          label={`Actions for ${channel.title}`}
           aria-haspopup="menu"
           onClick={(e) => openMenu(e.currentTarget.getBoundingClientRect())}
           className={rowMoreClass(tileKind(channel))}
         >
           <IconEllipsis size={20} />
-        </button>
+        </IconButton>
       ) : null}
     </div>
   );
@@ -900,7 +901,7 @@ export function searchKindOf(chip: HomeChip | null): SearchKind | null {
 /**
  * The chips under the search box: Starred (a filled star in accent), then
  * Photos, Links, Files, Voice notes. One at a time (tap again to clear). Each
- * is a 44px tall target around a 32px pill; the row scrolls on X when it
+ * is the shared 44px chip (8px radius); the row scrolls on X when it
  * overflows (no scrollbar), chips never wrap or shrink. Tokens only, no
  * motion. Hook-free.
  */
@@ -924,25 +925,20 @@ export function searchChips(props: {
             data-search-chip={chip.kind}
             aria-pressed={on}
             onClick={() => props.onChange(toggleHomeChip(props.kind, chip.kind))}
-            className={cn(
-              'group/chip flex min-h-[44px] shrink-0 items-center focus-visible:outline-none',
-              NO_TOUCH_SELECT,
+            className={buttonClass(
+              'secondary',
+              'default',
+              cn(
+                'shrink-0 !gap-1.5 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                NO_TOUCH_SELECT,
+                on ? 'border-accent-line bg-accent-soft text-accent' : 'text-fg-2',
+              ),
             )}
           >
-            <span
-              className={cn(
-                'flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-sm group-focus-visible/chip:ring-2 group-focus-visible/chip:ring-accent',
-                chip.kind === 'starred' && 'pl-2.5',
-                on
-                  ? 'border-accent-line bg-accent-soft font-medium text-accent'
-                  : 'border-border bg-panel text-fg-2 hover:bg-panel-2',
-              )}
-            >
-              {chip.kind === 'starred' ? (
-                <IconStarFilled size={14} className="shrink-0 text-accent" />
-              ) : null}
-              {chip.label}
-            </span>
+            {chip.kind === 'starred' ? (
+              <IconStarFilled size={16} className="shrink-0 text-accent" />
+            ) : null}
+            {chip.label}
           </button>
         );
       })}
@@ -1022,7 +1018,7 @@ function selectHeader(select: ChannelSelectMode): ReactElement {
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
         {`${select.selectedIds.size} selected`}
       </span>
-      <Button variant="ghost" size="lg" onClick={select.onCancel}>
+      <Button variant="ghost" onClick={select.onCancel}>
         Cancel
       </Button>
     </div>
@@ -1035,12 +1031,11 @@ function selectBar(select: ChannelSelectMode): ReactElement {
     <div className="flex items-center gap-2 border-t border-border bg-panel px-4 py-3">
       <Button
         variant="primary"
-        size="lg"
         className="ml-auto"
         disabled={select.selectedIds.size === 0}
         onClick={select.onDelete}
       >
-        <IconEyeOff size={18} />
+        <IconEyeOff size={16} />
         Hide
       </Button>
     </div>
@@ -1086,13 +1081,12 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
               node: (
                 <>
                   {select !== undefined && hasChannels ? (
-                    <Button variant="ghost" size="lg" onClick={select.onStart}>
+                    <Button variant="ghost" onClick={select.onStart}>
                       Select
                     </Button>
                   ) : null}
                   <Button
                     variant="primary"
-                    size="lg"
                     className="shrink-0 whitespace-nowrap"
                     onClick={newChat}
                   >

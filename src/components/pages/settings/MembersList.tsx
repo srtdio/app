@@ -166,16 +166,10 @@ function PendingRowItem({
           </div>
           {canManage ? (
             <div className="flex shrink-0 items-center gap-1 self-center">
-              <Button
-                size="lg"
-                variant="ghost"
-                disabled={cancelling}
-                onClick={() => setEditing(true)}
-              >
+              <Button variant="ghost" disabled={cancelling} onClick={() => setEditing(true)}>
                 Edit
               </Button>
               <Button
-                size="lg"
                 disabled={cancelling}
                 onClick={() => onCancelInvite(member)}
                 className={cn(cancelling && 'opacity-70')}
@@ -273,7 +267,7 @@ function PendingEditFields({
             setEmail(event.target.value);
             setError(null);
           }}
-          className="h-11 min-w-0 flex-1 rounded-md border border-border bg-panel-2 px-3 text-base text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-sm"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-base text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-sm"
         />
         <RolePicker
           label={`Role for ${trimmed}`}
@@ -298,10 +292,10 @@ function PendingEditFields({
       ) : null}
       <p className="text-xs text-fg-3">Saving sends a fresh invite. The old link stops working.</p>
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="lg" variant="primary" type="submit" disabled={saving}>
+        <Button variant="primary" type="submit" disabled={saving}>
           Save
         </Button>
-        <Button size="lg" variant="ghost" type="button" disabled={saving} onClick={onClose}>
+        <Button variant="ghost" type="button" disabled={saving} onClick={onClose}>
           Keep as is
         </Button>
       </div>

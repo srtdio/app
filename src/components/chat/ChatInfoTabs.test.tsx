@@ -266,10 +266,13 @@ describe('ChatInfoTabsView preview', () => {
     expect(loadMore(tree)).toHaveLength(1);
   });
 
-  it('See all is a 48px full-width token row', () => {
+  it('See all is the 44px full-width secondary button', () => {
     const row = SeeAllRow({ onClick: vi.fn() });
     const className = String(row.props.className);
-    expect(className).toContain('min-h-[48px]');
+    expect(className).toContain('h-11');
+    expect(className).toContain('rounded-lg');
+    expect(className).not.toContain('min-h-[48px]');
+    expect(className).not.toContain('rounded-md');
     expect(className).toContain('w-full');
     expect(row.props.children).toBe(SEE_ALL_LABEL);
   });

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { COLLEAGUE_A, ME, POST_IDS, setHarnessPlatform, WORKSPACE_ID } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
+import { expectButtonsMeetSystem } from '../helpers/button-system';
 
 // Agency acts on behalf of client. The harness viewer (ME) is the workspace
 // owner, an agency-side role: on a post in review the post's ⋯ sheet offers
@@ -47,6 +48,19 @@ test('PCS: agency approves on their behalf through the on-behalf sheet', async (
   // Cancel sends nothing.
   await behalf.locator('[data-on-behalf-cancel]').click();
   await expect(page.locator('[data-on-behalf-sheet]')).toHaveCount(0);
+  expectNoBlocked(network);
+});
+
+test('PCS: every button on the post page is 44 tall with an 8px radius or round', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  withKey(network);
+  await page.goto(`/posts/${POST_IDS[0]}`);
+  await page
+    .getByRole('button', { name: 'Post actions' })
+    .waitFor({ state: 'visible', timeout: 15_000 });
+  await expectButtonsMeetSystem(page);
   expectNoBlocked(network);
 });
 

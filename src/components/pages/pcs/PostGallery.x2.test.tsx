@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { galleryView, pinControls } from '@/components/pages/pcs/PostGallery';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
@@ -80,7 +81,9 @@ describe('Add pin (H2)', () => {
     const add = all.find((el) => 'data-add-pin' in (el.props as object))!;
     expect(add).toBeDefined();
     expect(text(add)).toContain('Add pin');
-    expect(className(add)).toContain('min-h-[44px]');
+    const addHtml = renderToStaticMarkup(add);
+    expect(addHtml).toContain('h-11');
+    expect(addHtml).toContain('rounded-lg');
     (add.props as { onClick: () => void }).onClick();
     expect(onArmPin).toHaveBeenCalledWith(1);
     expect(all.some((el) => 'data-cancel-pin' in (el.props as object))).toBe(false);

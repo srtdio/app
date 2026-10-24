@@ -16,6 +16,7 @@ import type { ReactNode } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconCheck, IconChevronRight } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
 import { parseSnapshot, sortVersionsDesc, type PostVersionView } from '@/lib/post-versions';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
@@ -124,23 +125,21 @@ export function versionHistorySheet({
   const canCompare = fromVersion !== undefined && toVersion !== undefined;
 
   const footer = showSelect ? (
-    <button
+    <Button
       type="button"
+      variant={canCompare ? 'primary' : 'secondary'}
       disabled={!canCompare}
       onClick={() => {
         if (fromVersion !== undefined && toVersion !== undefined) {
           onCompare(fromVersion.id, toVersion.id);
         }
       }}
-      className={cn(
-        'flex h-11 w-full items-center justify-center rounded-md text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none',
-        canCompare ? 'bg-accent text-accent-fg hover:bg-accent-hover' : 'bg-panel-2 text-fg-3',
-      )}
+      className="w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       {canCompare
         ? `Compare v${fromVersion.versionNumber} and v${toVersion.versionNumber}`
         : 'Select two versions'}
-    </button>
+    </Button>
   ) : undefined;
 
   return (

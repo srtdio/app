@@ -396,11 +396,10 @@ export function StageReasonConfirm(props: {
       discard={{ title: 'Discard your reason?', message: 'Your reason will be lost.' }}
       footer={
         <>
-          <Button size="lg" className="ml-auto" onClick={props.onCancel}>
+          <Button className="ml-auto" onClick={props.onCancel}>
             Cancel
           </Button>
           <Button
-            size="lg"
             variant={props.destructive === true ? 'danger' : 'default'}
             data-stage-confirm=""
             onClick={props.onConfirm}
@@ -1732,7 +1731,7 @@ export function PostDetailPage({
           title="Post not found"
           description="This post may have been removed, or you may not have access to it."
           action={
-            <Button variant="primary" size="lg" onClick={goPipeline}>
+            <Button variant="primary" onClick={goPipeline}>
               Back to pipeline
             </Button>
           }
@@ -1902,33 +1901,32 @@ export function PostDetailPage({
       </div>
     ) : detailsEditable ? (
       // Nothing to show yet: the line is still the way into the details sheet.
-      <button
+      <IconButton
         type="button"
         data-post-details-edit=""
-        aria-label="Post details"
+        label="Post details"
         onClick={() => setShowDetails(true)}
-        className="inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg text-[13px] text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconCalendar size={15} />
-      </button>
+        <IconCalendar size={20} />
+      </IconButton>
     ) : null;
 
   // Flow B 29: "{n} open comments" under the title while in review; a tap
   // scrolls to the comments. Hidden at 0.
   const openCommentsChip =
     currentStage === 'review' && openCount > 0 && !readOnly ? (
-      <button
+      <Button
         type="button"
+        variant="secondary"
         data-open-comments-chip=""
         onClick={() => scrollToCommentsSection()}
-        className="group inline-flex min-h-[44px] items-center focus:outline-none"
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-warn-soft px-3 text-[13px] font-semibold text-[color:var(--warn-ink)] group-focus-visible:ring-2 group-focus-visible:ring-accent">
-          <IconChat size={15} />
-          {openCommentsLabel(openCount)}
-          <IconChevronDown size={15} />
-        </span>
-      </button>
+        <IconChat size={16} />
+        {openCommentsLabel(openCount)}
+        <IconChevronDown size={16} />
+      </Button>
     ) : null;
 
   // The approver's quiet note in review, or null.
@@ -2055,12 +2053,7 @@ export function PostDetailPage({
         </span>
         <p className="min-w-0 flex-1 py-2">{APPROVED_LOCK_LINE}</p>
         {canParkApproved ? (
-          <Button
-            size="lg"
-            data-approved-park=""
-            className="shrink-0"
-            onClick={() => pickStage('parked')}
-          >
+          <Button data-approved-park="" className="shrink-0" onClick={() => pickStage('parked')}>
             {MOVE_TO_PARKED_LABEL}
           </Button>
         ) : null}
@@ -2089,14 +2082,14 @@ export function PostDetailPage({
           </div>
           {headerStageAction}
           {!readOnly ? (
-            <button
+            <IconButton
               type="button"
-              aria-label="Post actions"
+              label="Post actions"
               onClick={() => setActionsOpen(true)}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-panel-2 hover:text-fg-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="shrink-0 text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <IconMoreVertical size={18} />
-            </button>
+              <IconMoreVertical size={20} />
+            </IconButton>
           ) : (
             <div className="h-11 w-11 shrink-0" />
           )}
@@ -2162,7 +2155,6 @@ export function PostDetailPage({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="primary"
-                        size="lg"
                         disabled={savingMeta}
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={() => {
@@ -2174,7 +2166,6 @@ export function PostDetailPage({
                       </Button>
                       <Button
                         variant="ghost"
-                        size="lg"
                         disabled={savingMeta}
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={() => {
@@ -2196,7 +2187,7 @@ export function PostDetailPage({
                     type="button"
                     data-title-edit=""
                     onClick={openTitleEditor}
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-md px-2 py-1 text-left font-semibold leading-tight tracking-tight transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg px-2 py-1 text-left font-semibold leading-tight tracking-tight transition-colors hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <Highlight text={post.title} />
                   </button>
@@ -2352,15 +2343,16 @@ export function PostDetailPage({
                   </span>
                 ) : null}
                 {canEditContent && !editingCaption ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     data-caption-edit=""
                     onClick={openCaptionEditor}
-                    className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
-                    <IconPencil size={15} />
+                    <IconPencil size={16} />
                     Edit
-                  </button>
+                  </Button>
                 ) : null}
               </div>
               {editingCaption ? (
@@ -2381,18 +2373,12 @@ export function PostDetailPage({
                   <div className="flex items-center gap-2">
                     <Button
                       variant="primary"
-                      size="lg"
                       disabled={captionSaving}
                       onClick={() => void saveCaption()}
                     >
                       {captionSaving ? 'Saving…' : captionSaveLabel(currentVersionNumber)}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="lg"
-                      disabled={captionSaving}
-                      onClick={cancelCaptionEdit}
-                    >
+                    <Button variant="ghost" disabled={captionSaving} onClick={cancelCaptionEdit}>
                       Cancel
                     </Button>
                     <span className="ml-auto text-xs tabular-nums text-fg-3">
@@ -2419,16 +2405,17 @@ export function PostDetailPage({
                       className="mt-2 flex items-center gap-2 text-xs text-fg-3"
                     >
                       <span>{CAPTION_TIP_TEXT}</span>
-                      <button
+                      <Button
                         type="button"
+                        variant="link"
                         onClick={() => {
                           setCaptionTipOpen(false);
                           dismissCaptionTip(userId);
                         }}
-                        className="ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-xs font-medium text-accent transition-colors hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        className="ml-auto shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                       >
                         Got it
-                      </button>
+                      </Button>
                     </div>
                   ) : null}
                 </>

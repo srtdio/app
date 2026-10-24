@@ -120,7 +120,7 @@ export function ThreadViewFrame(props: {
           onClick={close}
           className={cn(
             // FN23: the dismiss is a chevron, like every other chat layer's back.
-            'ml-1 flex h-11 w-11 items-center justify-center justify-self-start rounded-md text-fg-2 hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'ml-1 flex h-11 w-11 items-center justify-center justify-self-start rounded-lg text-fg-2 hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             NO_TOUCH_SELECT,
           )}
         >

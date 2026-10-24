@@ -361,7 +361,6 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       footer={
         <>
           <Button
-            size="lg"
             onClick={() => {
               if (!submitting) onClose();
             }}
@@ -372,7 +371,6 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           <span className="ml-auto">
             <Button
               variant="primary"
-              size="lg"
               data-induction={INDUCTION_KEYS.briefSheetCreate}
               onClick={() => void handleSubmit()}
               disabled={submitting}

@@ -126,7 +126,6 @@ export function OpenPostSheetRow(props: {
       </span>
       <Button
         type="button"
-        size="lg"
         data-open-post-action={props.shared ? 'jump' : 'share'}
         onClick={props.shared ? props.onJump : props.onShare}
         className={ROW_ACTION}
@@ -248,7 +247,7 @@ export async function confirmMarkTransition(params: {
 }
 
 /** 44x44 minimum, right-aligned row action (stamp or Reopen): a default lg Button. */
-const ROW_ACTION = 'min-w-[44px] shrink-0 gap-1 px-3';
+const ROW_ACTION = 'min-w-[44px] shrink-0';
 
 /**
  * One pin board row. Hook-free so the stamp word, confirm copy and History
@@ -301,28 +300,26 @@ export function MarkSheetRow(props: {
             </span>
             <Button
               type="button"
-              size="lg"
               data-mark-action="reopen"
               aria-expanded={props.confirming}
               disabled={props.busy}
               onClick={props.onAsk}
               className={ROW_ACTION}
             >
-              <IconRotateCcw size={14} />
+              <IconRotateCcw size={16} />
               <span>Reopen</span>
             </Button>
           </div>
         ) : (
           <Button
             type="button"
-            size="lg"
             data-mark-action="resolve"
             aria-expanded={props.confirming}
             disabled={props.busy}
             onClick={props.onAsk}
             className={ROW_ACTION}
           >
-            <IconCheck size={14} />
+            <IconCheck size={16} />
             <span>{STAMP_WORD[mark.type]}</span>
           </Button>
         )}
@@ -337,10 +334,10 @@ export function MarkSheetRow(props: {
           <span className="min-w-0 flex-1 text-sm text-fg">
             {markConfirmCopy(mark.type, action)}
           </span>
-          <Button variant="ghost" size="lg" disabled={props.busy} onClick={props.onCancel}>
+          <Button variant="ghost" disabled={props.busy} onClick={props.onCancel}>
             Cancel
           </Button>
-          <Button variant="primary" size="lg" disabled={props.busy} onClick={props.onConfirm}>
+          <Button variant="primary" disabled={props.busy} onClick={props.onConfirm}>
             {markConfirmAction(mark.type, action)}
           </Button>
         </div>
@@ -543,7 +540,7 @@ export function PrioritySheet(props: {
       onClose={props.onClose}
       title={props.title}
       footer={
-        <Button variant="ghost" size="lg" className="ml-auto" onClick={props.onClose}>
+        <Button variant="ghost" className="ml-auto" onClick={props.onClose}>
           Cancel
         </Button>
       }

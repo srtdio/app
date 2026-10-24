@@ -5,7 +5,7 @@ import type { EmailOtpType } from '@supabase/supabase-js';
 import { ExpiredLinkView } from '@/components/auth/AuthCallbackPage';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { withNext } from '@/components/auth/SignInPage';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { dispatchSorted, SIGNOUT_EVENT } from '@/lib/events';
 import { RECOVERY_COPY } from '@/lib/induction-copy';
 import { logger } from '@/lib/logger';
@@ -180,12 +180,7 @@ export function AcceptFailureView(props: {
     return (
       <>
         <p className="text-sm text-bad">{RECOVERY_COPY.wrongAccount}</p>
-        <Button
-          variant="primary"
-          size="lg"
-          className="w-full"
-          onClick={props.actions.switchAccount}
-        >
+        <Button variant="primary" className="w-full" onClick={props.actions.switchAccount}>
           {RECOVERY_COPY.differentEmail}
         </Button>
       </>
@@ -197,7 +192,6 @@ export function AcceptFailureView(props: {
       {/* Retry reuses the same accept path the mount effect runs. */}
       <Button
         variant="primary"
-        size="lg"
         className="w-full"
         onClick={props.actions.retry}
         disabled={props.submitting}
@@ -205,7 +199,7 @@ export function AcceptFailureView(props: {
         Try again
       </Button>
       {/* Secondary path so an already-joined user is never stuck. */}
-      <Button variant="default" size="lg" className="w-full" onClick={props.actions.goToWorkspace}>
+      <Button variant="default" className="w-full" onClick={props.actions.goToWorkspace}>
         Go to your workspace
       </Button>
     </>
@@ -295,10 +289,7 @@ export function AcceptInvitePage() {
       <AuthShell title="Invite link" subtitle="We couldn't read this invitation." footer={null}>
         <div className="flex flex-col gap-4">
           <p className="text-sm text-bad">This invite link is invalid.</p>
-          <Link
-            to="/signin"
-            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover"
-          >
+          <Link to="/signin" className={buttonClass('primary', 'default', 'w-full')}>
             Go to sign in
           </Link>
         </div>
@@ -320,13 +311,9 @@ export function AcceptInvitePage() {
   const footer =
     // The wrong-account body already offers the switch; no second link.
     failure === 'wrong-account' ? null : (
-      <button
-        type="button"
-        onClick={differentAccount}
-        className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline"
-      >
+      <Button type="button" onClick={differentAccount} variant="link" className="hover:underline">
         Use a different account
-      </button>
+      </Button>
     );
 
   const failureView =
@@ -353,7 +340,6 @@ export function AcceptInvitePage() {
           {failureView ?? (
             <Button
               variant="primary"
-              size="lg"
               className="w-full"
               onClick={() => void handleJoin()}
               disabled={submitting}

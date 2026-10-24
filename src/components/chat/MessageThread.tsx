@@ -1137,7 +1137,7 @@ export function ThreadHeaderIdentity(props: {
           props.isGroup ? `Group info for ${props.title}` : `Contact info for ${props.title}`
         }
         onClick={props.onOpenContact}
-        className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {photo}
         {text}
@@ -1457,9 +1457,9 @@ export function canRetryFailed(message: Pick<ThreadMessage, 'refusal'>): boolean
   return message.refusal === undefined;
 }
 
-/** The failed line's text actions: 44px tall, the bad token for Delete. */
+/** The failed line's text actions: the shared 44px Button, the bad token for Delete. */
 const FAILED_ACTION_CLASS =
-  'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-2 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /**
  * The line under a failed own text send: "Not sent" (announced), then Retry
@@ -1481,32 +1481,34 @@ export function FailedActions(props: {
         </span>
       ) : null}
       {props.onRetry !== undefined && !refused ? (
-        <button
+        <Button
           type="button"
+          variant="link"
           data-failed-line-retry=""
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             props.onRetry?.();
           }}
-          className={cn(FAILED_ACTION_CLASS, 'text-accent hover:bg-panel-2', BUBBLE_META_TYPE)}
+          className={FAILED_ACTION_CLASS}
         >
           Retry
-        </button>
+        </Button>
       ) : null}
       {props.onDelete !== undefined ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           data-failed-delete=""
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             props.onDelete?.();
           }}
-          className={cn(FAILED_ACTION_CLASS, 'text-bad hover:bg-bad-soft', BUBBLE_META_TYPE)}
+          className={cn(FAILED_ACTION_CLASS, '!px-2 text-bad hover:bg-bad-soft hover:text-bad')}
         >
           Delete
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -2536,21 +2538,21 @@ export function MessageBubble(props: {
         ) : null}
       </div>
       {onReact !== undefined ? (
-        <button
+        <IconButton
           type="button"
+          label="React to message"
           data-react=""
-          aria-label="React to message"
           aria-haspopup="menu"
           onClick={onReact}
           className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center self-center rounded-full text-fg-3 opacity-0 hover:bg-panel-2 hover:text-fg focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent group-hover:opacity-100',
+            'shrink-0 self-center text-fg-3 opacity-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent group-hover:opacity-100',
             // An own row's tick passes under the smiley; the page fill keeps the glyph clear.
             rail?.role != null && mine && 'bg-bg',
             HOVER_FADE,
           )}
         >
           <SmileyGlyph />
-        </button>
+        </IconButton>
       ) : textSelect && press?.onReact !== undefined && message.state === 'sent' ? (
         // The smiley's room stays while selecting text, so the row never
         // changes size (a pinned list would re-pin and scroll it away).
@@ -2783,18 +2785,16 @@ export function threadListItems(
   } else if (loadOlder !== undefined && !loadingOlder) {
     items.push(
       <li key="load-older" className="flex justify-center px-4">
-        <button
+        <Button
           type="button"
+          variant="link"
           data-load-older=""
           onClick={loadOlder}
           {...(coarse ? { onContextMenu: preventDefault } : {})}
-          className={cn(
-            'flex min-h-[44px] items-center rounded-md px-4 text-xs font-medium text-accent hover:bg-panel-2',
-            NO_TOUCH_SELECT,
-          )}
+          className={NO_TOUCH_SELECT}
         >
           Load older
-        </button>
+        </Button>
       </li>,
     );
   }
@@ -4433,7 +4433,7 @@ export function threadLoadError(onRetry: (() => void) | undefined): ReactElement
         {...(onRetry !== undefined
           ? {
               action: (
-                <Button size="lg" variant="primary" className="min-w-[44px]" onClick={onRetry}>
+                <Button variant="primary" className="min-w-[44px]" onClick={onRetry}>
                   Retry
                 </Button>
               ),
@@ -4457,7 +4457,7 @@ export function threadLoadErrorRow(onRetry: (() => void) | undefined): ReactElem
     >
       <span>Couldn&apos;t load messages</span>
       {onRetry !== undefined ? (
-        <Button size="lg" variant="default" className="min-w-[44px]" onClick={onRetry}>
+        <Button variant="secondary" className="min-w-[44px]" onClick={onRetry}>
           Retry
         </Button>
       ) : null}
@@ -4482,7 +4482,7 @@ export function olderLoadErrorRow(onRetry: () => void): ReactElement {
       className="flex items-center justify-center gap-3 px-4 py-2 text-sm text-fg-2"
     >
       <span>{OLDER_LOAD_FAILED}</span>
-      <Button size="lg" variant="default" className="min-w-[44px]" onClick={onRetry}>
+      <Button variant="secondary" className="min-w-[44px]" onClick={onRetry}>
         Retry
       </Button>
     </li>

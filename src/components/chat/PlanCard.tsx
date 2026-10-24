@@ -17,6 +17,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement } from 'react';
+import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import { IconChat, IconPlan } from '@/components/ui/icons';
@@ -283,25 +284,30 @@ export function PlanCardBody(props: {
           {progressLabel(progress)}
         </span>
       </div>
-      <div className="flex shrink-0 border-t border-border">
-        <button
+      <div className="flex shrink-0 items-center gap-1 border-t border-border p-1">
+        <Button
           type="button"
+          variant="link"
           data-plan-open=""
           data-induction={INDUCTION_KEYS.briefOpenPlan}
           onClick={props.onOpen}
-          className="min-h-[48px] flex-1 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           Open plan
-        </button>
+        </Button>
         {forward ? (
-          <button
-            type="button"
-            data-plan-forward=""
-            onClick={props.onForward}
-            className="min-h-[48px] flex-1 border-l border-border text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            Forward
-          </button>
+          <>
+            <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
+            <Button
+              type="button"
+              variant="link"
+              data-plan-forward=""
+              onClick={props.onForward}
+              className="flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Forward
+            </Button>
+          </>
         ) : null}
       </div>
     </div>

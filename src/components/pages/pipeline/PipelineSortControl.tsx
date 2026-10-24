@@ -11,6 +11,7 @@ import { useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
+import { Button } from '@/components/ui/Button';
 import {
   IconCalendar,
   IconCheck,
@@ -109,7 +110,7 @@ function radioRow(
       aria-checked={selected}
       onClick={onClick}
       className={cn(
-        'flex h-11 w-full items-center gap-2.5 rounded-md px-3 text-left text-sm transition-colors',
+        'flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm transition-colors',
         selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
       )}
     >
@@ -172,8 +173,8 @@ export function dateButtonLabel(dateWindow: DateWindow, customRange: DateRange |
 
 // 44x44 at least on every screen: h-11 tall, and min-w-11 so the icon-only
 // phone date button is never narrower than its target.
-const TRIGGER =
-  'inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md border bg-panel px-3 text-sm transition-colors hover:bg-panel-2 hover:text-fg';
+// Layout for the shared secondary Button used as a menu trigger.
+const TRIGGER = 'min-w-11 shrink-0';
 
 /** The responsive shell: a popover on desktop, the shared bottom Sheet on mobile. */
 function MenuShell(props: {
@@ -220,18 +221,19 @@ export function PipelineSortControl({
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const activeOrder = PIPELINE_SORT_OPTIONS.find((option) => option.value === order);
   const trigger = (
-    <button
+    <Button
       type="button"
+      variant="secondary"
       aria-haspopup="menu"
       aria-expanded={open}
       aria-label="Sort"
       onClick={() => setOpen((prev) => !prev)}
-      className={cn(TRIGGER, 'border-border text-fg-2')}
+      className={cn(TRIGGER, 'text-fg-2')}
     >
       <IconSort size={16} />
       <span className="hidden sm:inline">{activeOrder?.label ?? 'Sort'}</span>
-      <IconChevronDown size={14} className="text-fg-3" />
-    </button>
+      <IconChevronDown size={16} className="text-fg-3" />
+    </Button>
   );
   return (
     <MenuShell
@@ -268,8 +270,9 @@ export function PipelineDateControl({
   const active = dateFilterActive(dateWindow, customRange);
   const label = dateButtonLabel(dateWindow, customRange);
   const trigger = (
-    <button
+    <Button
       type="button"
+      variant="secondary"
       aria-haspopup="menu"
       aria-expanded={open}
       aria-label={`Due date: ${label}`}
@@ -277,12 +280,12 @@ export function PipelineDateControl({
       onClick={() => setOpen((prev) => !prev)}
       className={cn(
         TRIGGER,
-        active ? 'border-accent-line bg-accent-soft text-accent' : 'border-border text-fg-2',
+        active ? 'border-accent-line bg-accent-soft text-accent' : 'text-fg-2',
       )}
     >
       <IconCalendar size={16} />
       <span className="hidden md:inline">{label}</span>
-    </button>
+    </Button>
   );
   // Always mounted so it floats above the sheet/popover; its own `open` prop
   // gates the portal. Applying closes both the calendar and the sheet/popover,
@@ -383,15 +386,16 @@ export function PipelineFilterControl({
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const active = dateFilterActive(dateWindow, customRange) || order !== POST_SORT_DEFAULT;
   const trigger = (
-    <button
+    <Button
       type="button"
+      variant="secondary"
       aria-haspopup="menu"
       aria-expanded={open}
       aria-label="Filter and sort"
       data-filter-control=""
       {...(active ? { 'data-active': '' } : {})}
       onClick={() => setOpen((prev) => !prev)}
-      className={cn(TRIGGER, 'relative w-11 border-border px-0 text-fg-2')}
+      className={cn(TRIGGER, 'relative w-11 !px-0 text-fg-2')}
     >
       <IconFilterLines size={20} />
       {active ? (
@@ -401,7 +405,7 @@ export function PipelineFilterControl({
           className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-panel"
         />
       ) : null}
-    </button>
+    </Button>
   );
   const calendar = (
     <PipelineDateRangeCalendar

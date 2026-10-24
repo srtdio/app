@@ -69,7 +69,6 @@ function RoleChange({
           }}
         />
         <Button
-          size="lg"
           variant="primary"
           disabled={saving || role === '' || role === member.role}
           onClick={() => void save()}
@@ -116,7 +115,7 @@ export function MemberActionSheet({
             // Keyed by member so a reopened sheet starts from that member's role.
             <RoleChange key={member.id} member={member} onChangeRole={onChangeRole} />
           ) : null}
-          <Button size="lg" variant="danger" className="w-full" onClick={() => onRemove(member)}>
+          <Button variant="danger" className="w-full" onClick={() => onRemove(member)}>
             Remove from workspace
           </Button>
         </div>

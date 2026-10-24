@@ -46,14 +46,16 @@ describe('SlotComposer removable slots', () => {
 });
 
 describe('SlotComposer composer row', () => {
-  it('one slot: no slot number, a small "+ Another" ghost and "Send"', () => {
+  it('one slot: no slot number, a 44px "+ Another" ghost and "Send"', () => {
     const onSubmit = vi.fn(async () => ({ ok: true as const }));
     act(() => root?.render(<SlotComposer onSubmit={onSubmit} canAttach={false} />));
     expect(host?.querySelector('[data-slot-number]')).toBeNull();
     expect(button('Add checkpoint')).toBeUndefined();
     const another = button('+ Another');
     expect(another).toBeDefined();
-    expect(another?.className).toContain('h-8');
+    expect(another?.className).toContain('h-11');
+    expect(another?.className).toContain('rounded-lg');
+    expect(another?.className).not.toContain('h-8');
     expect(another?.className).toContain('min-h-[44px]');
     expect(another?.className).toContain('min-w-[44px]');
     expect(button('Send')).toBeDefined();

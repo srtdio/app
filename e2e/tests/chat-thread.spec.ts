@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { GROUP_NAME, MENTION_PREVIEW, PEER_NAME } from '../fixtures/chat-data';
 import { checkStep, type StepReport } from '../fixtures/thread-checks';
+import { expectButtonsMeetSystem } from '../helpers/button-system';
 
 // Regression for the iPhone DM paint bug (#432): opening a DM showed the header
 // and open-loops strip, then the composer row repeated down the screen and no
@@ -119,3 +120,14 @@ for (const scenario of SCENARIOS) {
     }
   });
 }
+
+test('chat thread: every button is 44 tall with an 8px radius or round', async ({ page }) => {
+  await installHarnessNetwork(page);
+  await page.goto('/chat');
+  const row = page.getByText(PEER_NAME, { exact: true }).first();
+  await row.waitFor({ state: 'visible' });
+  await row.click();
+  await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
+  await page.waitForTimeout(400);
+  await expectButtonsMeetSystem(page);
+});

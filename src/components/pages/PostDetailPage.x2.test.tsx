@@ -45,7 +45,7 @@ describe('1. caption block (mock P1)', () => {
     // The old version pill is gone for good (its component was deleted).
     expect(PAGE).not.toContain('VersionPill');
     expect(block).toContain('data-caption-edit=""');
-    expect(block).toContain('<IconPencil size={15} />\n                    Edit');
+    expect(block).toContain('<IconPencil size={16} />\n                    Edit');
     // The uppercase eyebrow and the select hint are gone.
     expect(PAGE).not.toContain('>\n                  Caption\n                </span>');
     expect(PAGE).not.toContain('Select any text to comment on it.');
@@ -56,7 +56,10 @@ describe('1. caption block (mock P1)', () => {
     expect(PAGE).toContain('dismissCaptionTip(userId);');
     expect(PAGE).toContain('setCaptionTipOpen(!captionTipDismissed(userId));');
     const tip = PAGE.slice(PAGE.indexOf('data-caption-tip=""'));
-    expect(tip.slice(0, 900)).toContain('min-h-[44px] min-w-[44px]');
+    // The shared Button carries the 44px height.
+    expect(tip.slice(0, 900)).toContain(
+      '<Button\n                        type="button"\n                        variant="link"',
+    );
     expect(tip.slice(0, 900)).toContain('Got it');
   });
 });

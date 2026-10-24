@@ -237,7 +237,6 @@ export function PostReadyNotice({
       {showSend ? (
         <div className="flex flex-col gap-2">
           <Button
-            size="lg"
             variant="primary"
             disabled={openCount > 0 || sending}
             onClick={() => void handleNotify()}

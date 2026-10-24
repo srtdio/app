@@ -42,7 +42,7 @@ export function NotificationsButton(): ReactElement {
       {...(active ? { 'aria-current': 'page' as const } : {})}
       onClick={() => navigate(NOTIFICATIONS_PATH)}
       className={cn(
-        'relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         active ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
       )}
     >

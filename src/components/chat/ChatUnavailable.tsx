@@ -15,7 +15,7 @@ export function chatUnavailableView(props: { onRetry: () => void }): ReactElemen
       icon={<IconChat size={22} />}
       title="Couldn't load chats"
       action={
-        <Button variant="primary" size="lg" className="min-w-[120px]" onClick={props.onRetry}>
+        <Button variant="primary" className="min-w-[120px]" onClick={props.onRetry}>
           Retry
         </Button>
       }

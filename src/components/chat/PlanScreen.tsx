@@ -81,6 +81,7 @@ import {
 } from '@srtdio/rpc';
 import type { PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
@@ -467,36 +468,37 @@ export function PlanPage(props: {
   const showBack = !desktop || props.desktopBack === true;
   const backButton = showBack ? (
     props.backText !== undefined ? (
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-label={props.backLabel}
         data-plan-back-text=""
         onClick={props.onBack}
-        className="-ml-2 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-2 text-[15px] font-medium text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-ml-2 shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {props.backText}
-      </button>
+      </Button>
     ) : (
-      <button
+      <IconButton
         type="button"
-        aria-label={props.backLabel}
+        label={props.backLabel}
         onClick={props.onBack}
-        className="-ml-[11px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-ml-[11px] shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        {props.backIcon ?? <IconChevronLeft size={22} />}
-      </button>
+        {props.backIcon ?? <IconChevronLeft size={20} />}
+      </IconButton>
     )
   ) : null;
   const closeButton = desktop ? (
-    <button
+    <IconButton
       type="button"
-      aria-label={props.closeLabel ?? 'Close'}
+      label={props.closeLabel ?? 'Close'}
       data-plan-close=""
       onClick={props.onDismiss ?? props.onBack}
-      className="-mr-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="-mr-3 shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <IconX size={20} />
-    </button>
+    </IconButton>
   ) : null;
   return createPortal(
     <div
@@ -674,11 +676,10 @@ export function PlanConfirmSheet(props: {
       title={props.title}
       footer={
         <div className="grid w-full grid-cols-2 gap-2">
-          <Button size="lg" variant="ghost" onClick={props.onCancel} disabled={props.busy === true}>
+          <Button variant="ghost" onClick={props.onCancel} disabled={props.busy === true}>
             Cancel
           </Button>
           <Button
-            size="lg"
             variant={props.destructive === true ? 'danger' : 'primary'}
             data-plan-confirm=""
             onClick={props.onConfirm}
@@ -719,19 +720,19 @@ export function ConceptDateField(props: {
           value={props.value}
           disabled={props.disabled === true}
           onChange={(e) => props.onChange(e.target.value)}
-          className="min-h-[48px] w-full min-w-0 flex-1 rounded-lg border border-border bg-panel px-3.5 font-mono text-[15px] text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+          className="h-11 min-h-[44px] w-full min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3.5 font-mono text-[15px] text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
         />
         {props.value !== '' ? (
-          <button
+          <IconButton
             type="button"
-            aria-label="Clear date"
+            label="Clear date"
             data-plan-concept-date-clear=""
             disabled={props.disabled === true}
             onClick={() => props.onChange('')}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+            className="shrink-0 text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
           >
-            <IconX size={18} />
-          </button>
+            <IconX size={20} />
+          </IconButton>
         ) : null}
       </span>
     </label>
@@ -843,9 +844,7 @@ export function ScreenFailed(props: { onRetry: () => void }): ReactElement {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="text-sm text-fg-2">Couldn&apos;t load. Try again.</p>
-      <Button size="lg" onClick={props.onRetry}>
-        Retry
-      </Button>
+      <Button onClick={props.onRetry}>Retry</Button>
     </div>
   );
 }
@@ -2014,16 +2013,17 @@ export function PlanScreen(props: {
     </h2>
   );
   const saveButton = (
-    <button
+    <Button
       type="button"
+      variant="link"
       data-plan-save=""
       aria-busy={saving}
       disabled={saving || headerProblem !== null}
       onClick={() => void saveChanges()}
-      className="-mr-2 min-h-[44px] md:mr-0 min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+      className="-mr-2 shrink-0 md:mr-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       {saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}
-    </button>
+    </Button>
   );
   // Line 2's boxed pair: Add (accent soft), then Edit (outlined), each box 34px
   // in a 44px tap target, the last one's right edge on the 16px line.
@@ -2135,14 +2135,14 @@ export function PlanScreen(props: {
                 <p key={at}>{note}</p>
               ))}
             </div>
-            <button
+            <IconButton
               type="button"
-              aria-label="Dismiss"
+              label="Dismiss"
               onClick={() => setSkippedNotes([])}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <IconX size={16} />
-            </button>
+              <IconX size={20} />
+            </IconButton>
           </div>
         ) : null}
         {deskEditing ? (
@@ -2451,15 +2451,16 @@ export function PlanEditHeader(props: {
           className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft py-1 pl-3 pr-1 text-[13.5px] leading-[1.45] text-bad"
         >
           <p className="min-w-0 flex-1 py-2">{props.error}</p>
-          <button
+          <Button
             type="button"
+            variant="ghost"
             data-plan-save-retry=""
             disabled={props.saving}
             onClick={props.onRetry}
-            className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[14px] font-semibold text-bad hover:bg-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+            className="shrink-0 text-bad hover:bg-panel hover:text-bad focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {RETRY_LABEL}
-          </button>
+          </Button>
         </div>
       ) : null}
       <label className="flex flex-col gap-1">
@@ -2527,7 +2528,7 @@ function PlanTitleButton(props: {
       onClick={props.onToggle}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        '-ml-1 flex min-h-[44px] min-w-0 max-w-full items-center gap-1.5 self-start rounded-md px-1 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        '-ml-1 flex min-h-[44px] min-w-0 max-w-full items-center gap-1.5 self-start rounded-lg px-1 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         NO_TOUCH_SELECT,
       )}
     >
@@ -2668,33 +2669,34 @@ export function RenameField(props: {
           if (e.key === 'Enter' && valid) props.onDone();
           if (e.key === 'Escape') props.onCancel();
         }}
-        className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-base font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+        className="h-11 min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-base font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
       />
-      <button
+      <IconButton
         type="button"
-        aria-label="Cancel rename"
+        label="Cancel rename"
         data-plan-rename-cancel=""
         disabled={props.busy}
         onClick={props.onCancel}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+        className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
       >
         <IconX size={20} />
-      </button>
-      <button
+      </IconButton>
+      <Button
         type="button"
+        variant="link"
         data-plan-rename-done=""
         disabled={props.busy || !valid}
         onClick={props.onDone}
-        className="min-h-[44px] min-w-[44px] shrink-0 rounded-md px-2 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+        className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         Done
-      </button>
+      </Button>
     </div>
   );
 }
 
 /**
- * The Plan screen's footer (view mode): one primary button, 48px tall, full
+ * The Plan screen's footer (view mode): one primary button, 44px tall, full
  * width: "Send to approvers in {chat}" / "Send in {chat}" / "Open for
  * approvers" (planPrimaryAction). An error line sits above it; while an
  * error is shown the button reads "Retry". From a chat a send in flight reads
@@ -2723,15 +2725,16 @@ export function PlanFooter(props: {
   if (state === 'sent') {
     return (
       <div data-plan-footer="" className="flex flex-col gap-1.5">
-        <button
+        <Button
           type="button"
+          variant="secondary"
           data-plan-primary={action.kind}
           data-plan-send-state="sent"
           disabled
-          className="inline-flex h-11 min-h-[48px] w-full min-w-0 cursor-default select-none items-center justify-center gap-2 rounded-md bg-accent-soft px-4 text-sm font-medium text-accent"
+          className="w-full min-w-0 cursor-default border-accent-line bg-accent-soft text-accent disabled:opacity-100"
         >
           <span className="truncate">{label}</span>
-        </button>
+        </Button>
       </div>
     );
   }
@@ -2743,11 +2746,10 @@ export function PlanFooter(props: {
         </p>
       ) : null}
       <Button
-        size="lg"
         variant="primary"
         data-plan-primary={props.error !== null ? 'retry' : action.kind}
         data-plan-send-state={state}
-        className={cn('min-h-[48px] w-full min-w-0', state === 'sending' && 'disabled:opacity-100')}
+        className={cn('w-full min-w-0', state === 'sending' && 'disabled:opacity-100')}
         aria-busy={props.busy}
         disabled={props.busy || state !== 'idle'}
         onClick={props.onPress}
@@ -3245,16 +3247,17 @@ function AddRow(props: {
           Nothing planned
         </p>
       ) : null}
-      <button
+      <Button
         type="button"
+        variant="link"
         aria-label={label}
         data-plan-add={props.day ?? 'none'}
         onClick={() => props.onAdd(props.day)}
-        className="flex h-11 items-center gap-1.5 pr-3 text-[13px] font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="!gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <IconPlus size={16} />
         Add
-      </button>
+      </Button>
     </div>
   );
 }

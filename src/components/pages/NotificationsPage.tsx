@@ -175,9 +175,7 @@ function LoadFailed({ onRetry }: { onRetry: () => void }) {
         {ACTIVITY_LOAD_FAILED}
       </div>
       <div className="mt-3">
-        <Button size="lg" onClick={onRetry}>
-          Retry
-        </Button>
+        <Button onClick={onRetry}>Retry</Button>
       </div>
     </div>
   );
@@ -820,7 +818,7 @@ export function NotificationsPage() {
         actions={
           <>
             {chipUnread > 0 ? (
-              <Button variant="ghost" size="lg" onClick={handleMarkAll}>
+              <Button variant="ghost" onClick={handleMarkAll}>
                 Mark all read
               </Button>
             ) : null}
@@ -965,12 +963,11 @@ export function NotificationsPage() {
         title={cancelShown?.kind === 'scheduled' ? CANCEL_CONFIRM_TITLE : CANCEL_REMINDER_TITLE}
         footer={
           <div className="flex w-full justify-end gap-2">
-            <Button type="button" size="lg" onClick={() => setCancelTarget(null)}>
+            <Button type="button" onClick={() => setCancelTarget(null)}>
               Keep
             </Button>
             <Button
               type="button"
-              size="lg"
               variant="danger"
               data-confirm-cancel-upcoming=""
               onClick={confirmCancel}

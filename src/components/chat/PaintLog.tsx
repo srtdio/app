@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '@/components/ui/Button';
 import { copyText } from '@/lib/clipboard';
 
 /** The URL parameter that turns the log on (1) or off (0). */
@@ -213,7 +214,7 @@ function useFrameSampler(): void {
 }
 
 const BUTTON =
-  'min-h-[44px] min-w-[44px] rounded-md px-3 text-sm font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'min-w-[44px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 function PaintLogPanel(): ReactElement {
   const entries = useSyncExternalStore(store.subscribe, store.entries, store.entries);
@@ -245,15 +246,21 @@ function PaintLogPanel(): ReactElement {
         <span className="flex-1 truncate text-xs font-semibold text-fg-2">
           {`Paint log (${entries.length})`}
         </span>
-        <button type="button" data-paint-log-copy="" onClick={onCopy} className={BUTTON}>
+        <Button
+          type="button"
+          variant="link"
+          data-paint-log-copy=""
+          onClick={onCopy}
+          className={BUTTON}
+        >
           {copy === 'copied' ? 'Copied' : copy === 'failed' ? 'Select below' : 'Copy'}
-        </button>
-        <button type="button" onClick={() => store.clear()} className={BUTTON}>
+        </Button>
+        <Button type="button" variant="link" onClick={() => store.clear()} className={BUTTON}>
           Clear
-        </button>
-        <button type="button" onClick={() => setOpen((v) => !v)} className={BUTTON}>
+        </Button>
+        <Button type="button" variant="link" onClick={() => setOpen((v) => !v)} className={BUTTON}>
           {open ? 'Hide' : 'Show'}
-        </button>
+        </Button>
       </div>
       {open && copy === 'failed' ? (
         <textarea

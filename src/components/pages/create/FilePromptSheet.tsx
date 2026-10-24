@@ -53,11 +53,9 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
       >
         <p className="text-sm text-fg">{prompt.question}</p>
         <div className="mt-5 flex justify-end gap-2">
-          <Button size="lg" onClick={onRemove}>
-            {prompt.removeLabel}
-          </Button>
+          <Button onClick={onRemove}>{prompt.removeLabel}</Button>
           <div ref={keepRef}>
-            <Button size="lg" variant="primary" onClick={onKeep}>
+            <Button variant="primary" onClick={onKeep}>
               {prompt.keepLabel}
             </Button>
           </div>

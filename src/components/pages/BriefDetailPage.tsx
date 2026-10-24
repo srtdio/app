@@ -313,9 +313,6 @@ export function briefCopyLink(
   return origin + path;
 }
 
-const MENU_ROW =
-  'flex min-h-[44px] w-full items-center rounded-md px-3 text-left text-sm text-fg-2 transition-colors duration-fast hover:bg-panel-2 hover:text-fg';
-
 interface BriefMenuRow {
   label: string;
   testId: string;
@@ -362,7 +359,7 @@ function BriefActionsMenu({
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
       >
-        <IconMore size={18} />
+        <IconMore size={20} />
       </IconButton>
       {open ? (
         <>
@@ -371,7 +368,8 @@ function BriefActionsMenu({
             <div role="menu" aria-label="Brief actions" className="flex flex-col">
               {rows.map((row, index) => (
                 <div key={row.testId} className={index > 0 ? 'border-t border-border' : undefined}>
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     role="menuitem"
                     data-testid={row.testId}
@@ -379,10 +377,10 @@ function BriefActionsMenu({
                       setOpen(false);
                       row.onSelect();
                     }}
-                    className={MENU_ROW}
+                    className="w-full !justify-start text-left"
                   >
                     {row.label}
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -696,7 +694,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           title="Brief not found"
           description="This brief may have been removed, or you may not have access to it."
           action={
-            <Button variant="primary" size="lg" onClick={() => navigate('/briefs')}>
+            <Button variant="primary" onClick={() => navigate('/briefs')}>
               Back to briefs
             </Button>
           }
@@ -814,7 +812,6 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
         {showNewPost ? (
           <Button
             variant="primary"
-            size="lg"
             data-new-post-from-brief="top"
             className="hidden shrink-0 md:inline-flex"
             onClick={startPost}
@@ -927,7 +924,6 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           >
             <Button
               variant="primary"
-              size="lg"
               data-new-post-from-brief="bar"
               className="w-full"
               onClick={startPost}

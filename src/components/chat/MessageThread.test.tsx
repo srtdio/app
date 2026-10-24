@@ -11,6 +11,8 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { leaveSelectionThen } from '@/lib/chat/forward';
 import {
   bodyText,
@@ -974,7 +976,9 @@ describe('MessageBubble keyboard and hover actions', () => {
     const root = render(pressed({ onReact }));
     const [button] = withAttr(root, 'data-react');
     expect(withAttr(bubbleOf(root), 'data-react')).toHaveLength(0);
-    expect(String(button?.props.className)).toContain('h-11 w-11');
+    // The shared 44x44 IconButton (h-11 w-11 rounded-lg), labelled.
+    expect(button?.type).toBe(IconButton);
+    expect(button?.props.label).toBe('React to message');
     (button?.props.onClick as () => void)();
     expect(onReact).toHaveBeenCalledTimes(1);
     // Not on an unrecorded message.
@@ -1833,11 +1837,13 @@ describe('post references', () => {
     const row = items[1] as ReactElement<{ children: ReactElement }>;
     const button = row.props.children as ReactElement<{
       onClick: () => void;
-      className: string;
+      variant: string;
       children: string;
     }>;
     expect(button.props.children).toBe('Load older');
-    expect(button.props.className).toContain('min-h-[44px]');
+    // A Button: 44 tall by the design system.
+    expect(button.type).toBe(Button);
+    expect(button.props.variant).toBe('link');
     button.props.onClick();
     expect(loadOlder).toHaveBeenCalledTimes(1);
     // Not while a page is loading, and never without a loader.

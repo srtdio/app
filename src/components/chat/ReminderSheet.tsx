@@ -128,7 +128,6 @@ export function ReminderOptions(props: {
           <Button
             type="button"
             variant="primary"
-            size="lg"
             data-reminder-confirm=""
             disabled={!valid}
             onClick={() => {
@@ -229,7 +228,7 @@ export function ReminderSheet(props: {
           <span data-reminder-zone="" className="flex-1 text-xs text-fg-2">
             {zoneLine(new Date())}
           </span>
-          <Button type="button" size="lg" variant="ghost" onClick={props.onClose}>
+          <Button type="button" variant="ghost" onClick={props.onClose}>
             Cancel
           </Button>
         </>

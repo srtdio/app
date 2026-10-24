@@ -10,6 +10,7 @@ import type { ReactElement } from 'react';
 import { planRangeLabel } from '@/components/chat/plan-card';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
   NEW_PLAN_ROW_LABEL,
@@ -110,7 +111,7 @@ export function PlanDayMenu(props: {
             role="menuitem"
             data-plan-tab-menu-plan={bundle.plan.id}
             onClick={() => props.onPick(bundle)}
-            className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-panel-2 focus-visible:bg-panel-2 focus-visible:outline-none"
+            className="flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-panel-2 focus-visible:bg-panel-2 focus-visible:outline-none"
           >
             <span
               aria-hidden="true"
@@ -134,15 +135,16 @@ export function PlanDayMenu(props: {
           </button>
         ))}
         <div className="my-1 border-t border-border" />
-        <button
+        <Button
+          variant="link"
           type="button"
           role="menuitem"
           data-plan-tab-menu-new=""
           onClick={props.onNewPlan}
-          className="flex min-h-[44px] w-full items-center rounded-md px-2.5 text-left text-sm font-medium text-accent transition-colors hover:bg-panel-2 focus-visible:bg-panel-2 focus-visible:outline-none"
+          className="w-full !justify-start text-left focus-visible:bg-panel-2 focus-visible:outline-none"
         >
           {NEW_PLAN_ROW_LABEL}
-        </button>
+        </Button>
       </div>
     </>
   );

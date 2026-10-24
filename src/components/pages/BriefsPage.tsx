@@ -100,7 +100,6 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
               node: (
                 <Button
                   variant="primary"
-                  size="lg"
                   data-induction={INDUCTION_KEYS.briefsNew}
                   className="shrink-0 whitespace-nowrap"
                   onClick={() => dispatchSorted('sorted:create-brief')}
@@ -366,11 +365,7 @@ export function briefsEmptyView(
         <EmptyState
           icon={icon}
           title={state.title}
-          action={
-            <Button size="lg" onClick={onClearSearch}>
-              Clear
-            </Button>
-          }
+          action={<Button onClick={onClearSearch}>Clear</Button>}
         />
       );
     case 'client-empty':
@@ -380,7 +375,7 @@ export function briefsEmptyView(
           title="No open briefs yet"
           description="Tell the agency what you need next."
           action={
-            <Button variant="primary" size="lg" onClick={onNewBrief}>
+            <Button variant="primary" onClick={onNewBrief}>
               New brief
             </Button>
           }

@@ -193,17 +193,17 @@ export function emptyListText(entityType: CommentEntityType, filter: CommentFilt
 }
 
 /**
- * One class for every row action (the checkpoint checkbox, Confirm, Resolve,
- * Reply, Copy): the ghost button look at one 44px height. Colour is added per
- * control (cn() is a plain join, so the base carries none). Tokens only.
+ * Layout added to every row action (the checkpoint checkbox, Confirm, Resolve,
+ * Reply, Copy). Each is a ghost <Button> (44 tall, 8px radius, 14 / 500); this
+ * only keeps the 44px minimum width and the hover that reads on panel-2 rows.
  */
 export const ROW_ACTION_CLASS =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md px-2 text-sm font-medium transition-colors duration-fast hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50';
+  'min-w-[44px] hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /** The passive (non-interactive) checkbox: the same box, height and padding as
- *  ROW_ACTION_CLASS without the hover or focus treatment. */
+ *  a ghost row-action Button without the hover or focus treatment. */
 export const ROW_ACTION_STATIC_CLASS =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-2 text-sm font-medium';
+  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-4 text-sm font-medium';
 
 /** The time in every row header: 12px, regular weight, never monospace. */
 export const ROW_TIME_CLASS = 'whitespace-nowrap text-xs tabular-nums text-fg-3';
@@ -1725,14 +1725,15 @@ export function Comments({
   function copyControl(comment: CommentRow): ReactNode {
     return (
       <>
-        <button
+        <Button
           type="button"
           data-row-action="copy"
-          className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+          variant="ghost"
+          className={ROW_ACTION_CLASS}
           onClick={() => void handleCopy(comment)}
         >
           Copy
-        </button>
+        </Button>
         {copiedId === comment.id ? (
           <span role="status" className="text-xs text-fg-3">
             {copyFailed ? COPY_FAILED : 'Copied'}
@@ -1753,7 +1754,6 @@ export function Comments({
         />
         <div className="flex items-center gap-2">
           <Button
-            size="lg"
             variant="primary"
             className="min-w-[44px]"
             disabled={editBody.trim() === ''}
@@ -1762,7 +1762,6 @@ export function Comments({
             Save
           </Button>
           <Button
-            size="lg"
             variant="ghost"
             className="min-w-[44px]"
             onClick={() => {
@@ -1973,17 +1972,18 @@ export function Comments({
   // on the comment the onboarding guide teaches replying on.
   function rootReplyButton(comment: CommentRow): ReactNode {
     return (
-      <button
+      <Button
         type="button"
         data-row-action="reply"
-        className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+        variant="ghost"
+        className={ROW_ACTION_CLASS}
         data-induction={
           comment.id === guideReplyCommentId ? INDUCTION_KEYS.postCommentReply : undefined
         }
         onClick={() => onReplyButton(comment)}
       >
         {replyOpen.has(comment.id) ? 'Cancel' : 'Reply'}
-      </button>
+      </Button>
     );
   }
 
@@ -1998,15 +1998,16 @@ export function Comments({
       actions: commentActions(reply, currentUserId, false),
       replyButton:
         onReply !== undefined ? (
-          <button
+          <Button
             type="button"
             data-row-action="reply"
             data-reply-to-reply=""
-            className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+            variant="ghost"
+            className={ROW_ACTION_CLASS}
             onClick={onReply}
           >
             Reply
-          </button>
+          </Button>
         ) : null,
     });
   }
@@ -2067,17 +2068,18 @@ export function Comments({
               menuLabel: 'Comment actions',
               actions: commentActions(comment, currentUserId, false),
               leading: (
-                <button
+                <Button
                   type="button"
                   data-comment-resolve=""
-                  className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+                  variant="ghost"
+                  className={ROW_ACTION_CLASS}
                   disabled={isResolving}
                   onClick={() =>
                     isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
                   }
                 >
                   {isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}
-                </button>
+                </Button>
               ),
               replyButton: rootReplyButton(comment),
               below: renderThreadBelow(comment, replies, false, false),
@@ -2100,7 +2102,7 @@ export function Comments({
     return (
       <>
         {live ? (
-          <button
+          <Button
             type="button"
             role="checkbox"
             aria-checked={false}
@@ -2109,11 +2111,12 @@ export function Comments({
             onClick={() => handleOneTapResolve(comment)}
             // axis: background-color on hover only; the tick motion (opacity +
             // translateY) lives inside checkpointBox.
-            className={cn(ROW_ACTION_CLASS, 'text-fg-2')}
+            variant="ghost"
+            className={ROW_ACTION_CLASS}
           >
             {checkpointBox(false, false)}
             <span>{CHECKPOINT_BOX_LABEL}</span>
-          </button>
+          </Button>
         ) : (
           <span
             role="checkbox"
@@ -2130,16 +2133,17 @@ export function Comments({
           </span>
         )}
         {confirmable ? (
-          <button
+          <Button
             type="button"
             aria-label={`Confirm checkpoint ${seq}`}
             data-checkpoint-confirm=""
             onClick={() => handleConfirm(comment)}
             // axis: background-color on hover only.
-            className={cn(ROW_ACTION_CLASS, 'text-good')}
+            variant="ghost"
+            className={cn(ROW_ACTION_CLASS, 'text-good hover:text-good')}
           >
             Confirm
-          </button>
+          </Button>
         ) : null}
       </>
     );
@@ -2202,17 +2206,15 @@ export function Comments({
     );
 
   const filterButton = (value: CommentFilter, label: string): ReactNode => (
-    <button
+    <Button
       type="button"
+      variant={filter === value ? 'secondary' : 'ghost'}
       aria-pressed={filter === value}
       onClick={() => setFilter(value)}
-      className={cn(
-        'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        filter === value ? 'bg-panel-3 text-fg' : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
-      )}
+      className="min-w-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       {label}
-    </button>
+    </Button>
   );
 
   return (
@@ -2279,7 +2281,6 @@ export function Comments({
         >
           <span>Couldn&apos;t load older comments.</span>
           <Button
-            size="lg"
             variant="ghost"
             className="ml-auto min-w-[44px]"
             disabled={loadingMore}
@@ -2292,7 +2293,6 @@ export function Comments({
 
       {!loading && !loadError && !moreError && hasMore ? (
         <Button
-          size="lg"
           className="self-start"
           disabled={loadingMore}
           onClick={() => void loadPage(page + 1)}

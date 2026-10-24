@@ -117,7 +117,6 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
       footer={
         <Button
           variant="primary"
-          size="lg"
           className="w-full"
           disabled={selected.size === 0 || busy}
           onClick={() => void send()}
@@ -150,7 +149,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
                     setSelected((prev) => toggleForwardTarget(prev, channel.channelId))
                   }
                   className={cn(
-                    'group/notes-row flex w-full min-h-[44px] items-center gap-3 rounded-md px-2 py-1 text-left transition-colors',
+                    'group/notes-row flex w-full min-h-[44px] items-center gap-3 rounded-lg px-2 py-1 text-left transition-colors',
                     isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:bg-panel-2',
                   )}
                 >

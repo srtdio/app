@@ -10,6 +10,8 @@
 import { useEffect, useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import { IconCalendar, IconGrip, IconTrash } from '@/components/ui/icons';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import {
   CHANGE_DAY_LABEL,
@@ -82,7 +84,7 @@ export function PlanGripSpacer(): ReactElement {
 
 /**
  * The edit row's bottom line: the day chip ("Thu 22", "No date"; calendar
- * icon, 32px visual with a 1px border-strong in a 44px target) on the left,
+ * icon, the shared 44px secondary button) on the left,
  * the remove icon (a 44x44 target in the bad colour) on the right edge. The
  * chip opens the day picker. Nothing is written until Save changes.
  */
@@ -100,7 +102,7 @@ export function PlanRowEditButtons(props: {
       data-plan-row-edit-line=""
       className={cn('flex w-full items-center justify-between gap-2', NO_TOUCH_SELECT)}
     >
-      <button
+      <Button
         type="button"
         aria-label={`${CHANGE_DAY_LABEL}: ${props.title}`}
         aria-haspopup="dialog"
@@ -108,23 +110,22 @@ export function PlanRowEditButtons(props: {
         title={CHANGE_DAY_LABEL}
         data-plan-row-day-chip=""
         onClick={(event) => props.onDay(event.currentTarget)}
-        className="group flex h-11 shrink-0 items-center focus-visible:outline-none"
+        variant="secondary"
+        className="shrink-0 text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <span className="flex h-8 items-center gap-1.5 rounded-lg border border-border-strong bg-panel px-2.5 text-[13px] font-semibold text-fg-2 group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent">
-          <IconCalendar size={16} />
-          <span className="font-mono tabular-nums">{props.dayLabel}</span>
-        </span>
-      </button>
-      <button
+        <IconCalendar size={16} />
+        <span className="font-mono tabular-nums">{props.dayLabel}</span>
+      </Button>
+      <IconButton
         type="button"
-        aria-label={`${REMOVE_LABEL}: ${props.title}`}
+        label={`${REMOVE_LABEL}: ${props.title}`}
         title={REMOVE_LABEL}
         data-plan-row-remove-edit=""
         onClick={props.onRemove}
-        className="-mr-[13px] flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-bad hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-mr-[13px] shrink-0 text-bad hover:bg-bad-soft hover:text-bad focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <IconTrash size={18} />
-      </button>
+        <IconTrash size={20} />
+      </IconButton>
     </span>
   );
 }

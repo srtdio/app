@@ -132,7 +132,6 @@ export function ScheduleOptions(props: OptionsProps): ReactElement {
           <Button
             type="button"
             variant="primary"
-            size="lg"
             disabled={!valid}
             onClick={() => {
               if (chosen !== null && isWithinScheduleWindow(chosen, new Date())) {
@@ -182,7 +181,7 @@ function ScheduleFooter(props: { onCancel: () => void }): ReactElement {
       <span data-schedule-zone="" className="flex-1 text-xs text-fg-2">
         {zoneLine(new Date())}
       </span>
-      <Button type="button" size="lg" variant="ghost" onClick={props.onCancel}>
+      <Button type="button" variant="ghost" onClick={props.onCancel}>
         Cancel
       </Button>
     </>

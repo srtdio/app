@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
@@ -346,7 +346,7 @@ function FileRow(props: {
         data-file-row={classifyFileKind(item.mime)}
         disabled={source === null}
         onClick={() => setOpen(true)}
-        className={cn(ROW, 'rounded-md text-left hover:bg-panel-2 disabled:opacity-60')}
+        className={cn(ROW, 'rounded-lg text-left hover:bg-panel-2 disabled:opacity-60')}
       >
         <span className={ROW_ICON}>
           <IconFile size={20} />
@@ -429,7 +429,11 @@ export function SeeAllRow(props: { onClick: () => void }): ReactElement {
       type="button"
       data-see-all=""
       onClick={props.onClick}
-      className="flex min-h-[48px] w-full items-center justify-center rounded-md border border-border bg-panel text-sm font-medium text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className={buttonClass(
+        'secondary',
+        'default',
+        'w-full text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+      )}
     >
       {SEE_ALL_LABEL}
     </button>
@@ -464,9 +468,7 @@ export function FeedBody<T>(props: {
     return (
       <div data-feed="error" className="flex flex-col items-center gap-2 py-10 text-sm text-fg-3">
         <span>Could not load</span>
-        <Button size="lg" onClick={props.onRetry}>
-          Try again
-        </Button>
+        <Button onClick={props.onRetry}>Try again</Button>
       </div>
     );
   }
@@ -477,7 +479,6 @@ export function FeedBody<T>(props: {
       ) : null
     ) : showLoadMore(feed) ? (
       <Button
-        size="lg"
         data-load-more=""
         className="w-full"
         disabled={feed.loadingMore}

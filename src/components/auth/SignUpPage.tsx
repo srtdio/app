@@ -215,20 +215,20 @@ export function SignUpPage(): ReactElement {
           ) : null}
           <Button
             variant="default"
-            size="lg"
             className="w-full"
             onClick={handleResend}
             disabled={cooldown > 0 || submitting}
           >
             {cooldown > 0 ? `${CHECK_EMAIL_COPY.resend} (${cooldown}s)` : CHECK_EMAIL_COPY.resend}
           </Button>
-          <button
+          <Button
             type="button"
             onClick={backToForm}
-            className="inline-flex min-h-[44px] w-full items-center justify-center text-sm font-medium text-accent hover:underline"
+            variant="link"
+            className="w-full hover:underline"
           >
             {CHECK_EMAIL_COPY.differentEmail}
-          </button>
+          </Button>
         </div>
       </AuthShell>
     );
@@ -323,7 +323,7 @@ export function SignUpPage(): ReactElement {
           </p>
         ) : null}
 
-        <Button variant="primary" size="lg" className="w-full" type="submit" disabled={!canSubmit}>
+        <Button variant="primary" className="w-full" type="submit" disabled={!canSubmit}>
           {submitting ? CHECK_EMAIL_COPY.sending : CHECK_EMAIL_COPY.createAccount}
         </Button>
       </form>

@@ -93,7 +93,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         type="button"
         aria-label="Dismiss notification"
         onClick={() => onDismiss(id)}
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md transition-colors ${
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors ${
           error ? 'text-white hover:opacity-90' : 'text-fg-2 hover:bg-panel-2 hover:text-fg'
         }`}
       >
@@ -111,7 +111,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
             action.onPress();
             onDismiss(id);
           }}
-          className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+          className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
             error
               ? 'text-white underline hover:opacity-90 focus-visible:ring-white'
               : 'text-accent hover:bg-panel-2 focus-visible:ring-accent'

@@ -18,6 +18,8 @@ import {
   IconX,
 } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { wrapIndex, lightboxCounter, dragAxis, shouldDismiss } from '@/components/ui/ImageLightbox';
 import {
@@ -210,18 +212,17 @@ export function fitFrameStyle(width: number, height: number): CSSProperties {
   return { aspectRatio: `${width} / ${height}` };
 }
 
-// Icon buttons overlaid on the image (counter/close/prev/next): a translucent
-// chip keeps them legible over any photo, dark in both app themes.
-const OVERLAY_BUTTON =
-  'inline-flex h-11 w-11 items-center justify-center rounded-lg bg-overlay-surface text-overlay-fg ' +
-  'hover:bg-overlay-line disabled:opacity-40 focus-visible:outline-none ' +
-  'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
+// Overlay colour skins for the shared IconButton / Button (geometry comes from
+// the design system). Icon buttons overlaid on the image (close/prev/next): a
+// translucent chip keeps them legible over any photo, dark in both app themes.
+const OVERLAY_SKIN =
+  'bg-overlay-surface text-overlay-fg hover:bg-overlay-line hover:text-overlay-fg ' +
+  'disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
 // Icon buttons in the action bar below the image, which sits on the viewer's own
 // dark backdrop, so they need no chip of their own.
-const TOOLBAR_BUTTON =
-  'inline-flex h-11 w-11 items-center justify-center rounded-lg text-overlay-fg ' +
-  'hover:bg-overlay-surface disabled:opacity-40 focus-visible:outline-none ' +
+const TOOLBAR_SKIN =
+  'text-overlay-fg hover:bg-overlay-surface disabled:opacity-40 focus-visible:outline-none ' +
   'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
 /**
@@ -461,14 +462,14 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
         >
           {lightboxCounter(index, count)}
         </span>
-        <button
+        <IconButton
           type="button"
-          aria-label="Close viewer"
+          label="Close viewer"
           onClick={props.onClose}
-          className={cn(OVERLAY_BUTTON, 'absolute right-2 top-2', chromeMotion(chromeVisible))}
+          className={cn(OVERLAY_SKIN, 'absolute right-2 top-2', chromeMotion(chromeVisible))}
         >
           <IconX size={20} />
-        </button>
+        </IconButton>
 
         {/* Prev / next overlay arrows for click; swipe still drives the track.
             Centred by flex (no translate), edge-disabled. */}
@@ -479,22 +480,22 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               chromeMotion(chromeVisible),
             )}
           >
-            <button
+            <IconButton
               type="button"
-              aria-label="Previous image"
+              label="Previous image"
               onClick={props.onPrev}
-              className={cn(OVERLAY_BUTTON, 'pointer-events-auto')}
+              className={cn(OVERLAY_SKIN, 'pointer-events-auto')}
             >
-              <IconChevronLeft size={22} />
-            </button>
-            <button
+              <IconChevronLeft size={20} />
+            </IconButton>
+            <IconButton
               type="button"
-              aria-label="Next image"
+              label="Next image"
               onClick={props.onNext}
-              className={cn(OVERLAY_BUTTON, 'pointer-events-auto')}
+              className={cn(OVERLAY_SKIN, 'pointer-events-auto')}
             >
-              <IconChevronRight size={22} />
-            </button>
+              <IconChevronRight size={20} />
+            </IconButton>
           </div>
         ) : null}
       </div>
@@ -508,15 +509,15 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
         className={cn('flex h-12 w-full items-center justify-center', chromeMotion(chromeVisible))}
       >
         {manage === undefined ? (
-          <button
+          <IconButton
             type="button"
-            aria-label="Download"
+            label="Download"
             disabled={busy}
             onClick={props.onDownload}
-            className={TOOLBAR_BUTTON}
+            className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
           >
             <IconDownload size={20} />
-          </button>
+          </IconButton>
         ) : removeConfirming ? (
           <div className="flex items-center gap-2 px-3">
             <span className="flex min-w-0 flex-col text-left">
@@ -525,50 +526,52 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
                 <span className="text-xs text-overlay-fg-dim">{removeCopy.message}</span>
               ) : null}
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={props.onCancelRemove}
-              className="inline-flex h-11 items-center rounded-lg px-3 text-sm text-overlay-fg-dim hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
+              className="text-overlay-fg-dim hover:bg-overlay-surface hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
               disabled={saving || undefined}
               onClick={props.onConfirmRemove}
-              className="inline-flex h-11 items-center rounded-lg border border-bad px-3 text-sm font-medium text-bad hover:bg-bad/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
+              className="text-bad focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
             >
               Remove
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="flex items-center">
-            <button
+            <IconButton
               type="button"
-              aria-label="Download"
+              label="Download"
               disabled={busy}
               onClick={props.onDownload}
-              className={TOOLBAR_BUTTON}
+              className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
             >
               <IconDownload size={20} />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
               type="button"
-              aria-label="Add image"
+              label="Add image"
               onClick={manage.onAddAfter}
-              className={cn(TOOLBAR_BUTTON, 'text-accent')}
+              className={cn(TOOLBAR_SKIN, 'text-accent hover:text-overlay-fg')}
             >
               <IconPlus size={20} />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
               type="button"
-              aria-label="Delete image"
+              label="Delete image"
               disabled={saving || undefined}
               onClick={props.onRequestRemove}
-              className={cn(TOOLBAR_BUTTON, 'hover:text-bad')}
+              className={cn(TOOLBAR_SKIN, 'hover:text-bad')}
             >
               <IconTrash size={20} />
-            </button>
+            </IconButton>
             {saving ? (
               <span aria-live="polite" className="ml-2 text-xs text-overlay-fg-dim">
                 Saving…
@@ -600,16 +603,17 @@ function FileSlideCard({
       <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-sm font-medium text-overlay-fg">
         {label}
       </span>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={(event) => {
           event.stopPropagation();
           onOpen();
         }}
-        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-overlay-surface px-4 text-sm font-medium text-overlay-fg hover:bg-overlay-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg"
+        className="bg-overlay-surface text-overlay-fg hover:bg-overlay-line hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg"
       >
         Open
-      </button>
+      </Button>
       {failed ? (
         <p role="status" className="text-sm text-overlay-fg-dim">
           {VIEWER_ERROR}
@@ -632,15 +636,16 @@ function GracefulPanel({
     <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl">
       <p className="text-xs text-fg-3">{message}</p>
       {onDownload !== undefined ? (
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={onDownload}
           disabled={busy}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <IconDownload size={16} />
           Download
-        </button>
+        </Button>
       ) : null}
     </div>
   );

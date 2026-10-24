@@ -2,6 +2,7 @@
 // src/lib/chat/thread-tip.ts. Tokens only, so light and dark stay at parity.
 
 import { useEffect, useState, type ReactElement } from 'react';
+import { Button } from '@/components/ui/Button';
 import {
   HOLD_TIP_DISMISS,
   HOLD_TIP_TEXT,
@@ -19,13 +20,14 @@ export function holdTipView(onDismiss: () => void): ReactElement {
       className="mx-3 mb-2 flex items-center gap-3 rounded-xl border border-border bg-panel-2 py-1 pl-3 pr-1 text-sm text-fg-2"
     >
       <p className="min-w-0 flex-1">{HOLD_TIP_TEXT}</p>
-      <button
+      <Button
         type="button"
+        variant="link"
         onClick={onDismiss}
-        className="flex h-11 min-w-[44px] shrink-0 items-center justify-center rounded-lg px-3 font-semibold text-accent transition-colors duration-fast hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="min-w-[44px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {HOLD_TIP_DISMISS}
-      </button>
+      </Button>
     </div>
   );
 }

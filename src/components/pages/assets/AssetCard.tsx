@@ -2,6 +2,7 @@ import { cn } from '@/lib/cn';
 import { useLongPress } from '@/components/pages/assets/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { IconCheck, IconEllipsis } from '@/components/ui/icons';
+import { IconButton } from '@/components/ui/IconButton';
 import type { PresignCache } from '@/lib/asset-presign';
 import { FileTile } from '@/components/ui/FileTile';
 import { classifyFileKind } from '@/lib/chat/attachments';
@@ -125,15 +126,15 @@ export function AssetCard({
  */
 export function CardMenuButton({ name, onPress }: { name: string; onPress: () => void }) {
   return (
-    <button
+    <IconButton
       type="button"
-      aria-label={`More actions for ${name}`}
+      label={`More actions for ${name}`}
       data-card-menu=""
       onClick={onPress}
-      className="absolute -bottom-0.5 -right-0.5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-xl text-fg-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="absolute -bottom-0.5 -right-0.5 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <IconEllipsis size={18} />
-    </button>
+      <IconEllipsis size={20} />
+    </IconButton>
   );
 }
 
@@ -145,15 +146,15 @@ export function CardMenuButton({ name, onPress }: { name: string; onPress: () =>
  */
 export function CardSelectBox({ name, onPress }: { name: string; onPress: () => void }) {
   return (
-    <button
+    <IconButton
       type="button"
-      aria-label={`Select ${name}`}
+      label={`Select ${name}`}
       data-card-select=""
       onClick={onPress}
-      className="absolute left-0 top-0 z-10 inline-flex h-11 w-11 items-center justify-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="absolute left-0 top-0 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span className="h-4 w-4 rounded border-[1.5px] border-white bg-black/15 shadow-[0_0_0_1px_rgba(0,0,0,0.3)]" />
-    </button>
+    </IconButton>
   );
 }
 

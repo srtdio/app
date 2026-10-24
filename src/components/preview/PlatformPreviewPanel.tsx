@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -50,7 +51,7 @@ export function previewChipLabel(platform: string): string {
   return `${platformLabel(platform)} preview`;
 }
 
-/** The chip that opens the panel: a 44px tap target around a small pill. */
+/** The chip that opens the panel: the shared 44px secondary button. */
 export function PreviewChip({
   platform,
   onClick,
@@ -59,16 +60,15 @@ export function PreviewChip({
   onClick: () => void;
 }): ReactElement {
   return (
-    <button
+    <Button
       type="button"
+      variant="secondary"
       onClick={onClick}
-      className="group inline-flex h-11 items-center focus:outline-none"
+      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none"
     >
-      <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-panel px-2.5 text-xs font-semibold text-fg transition-colors group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent motion-reduce:transition-none">
-        <IconEye size={14} />
-        {previewChipLabel(platform)}
-      </span>
-    </button>
+      <IconEye size={16} />
+      {previewChipLabel(platform)}
+    </Button>
   );
 }
 
@@ -335,7 +335,7 @@ function SizePicker({
             aria-checked={selected}
             onClick={() => onChange(size.label)}
             className={cn(
-              'flex min-h-[44px] flex-col items-start justify-center rounded-md border px-3 py-1.5 text-left transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              'flex min-h-[44px] flex-col items-start justify-center rounded-lg border px-3 py-1.5 text-left transition-colors motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               selected
                 ? 'border-accent-line bg-accent-soft text-fg'
                 : 'border-border bg-panel-2 text-fg-2 hover:bg-panel-3',

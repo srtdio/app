@@ -300,7 +300,13 @@ describe('X7 FT42: the draft row', () => {
       }),
     );
     expect(html).toContain('Voice note 0:07');
-    expect(html.match(/h-11 w-11/g)).toHaveLength(3);
+    // Play and Delete are 44x44 IconButtons; Send is the round 44px primary.
+    expect(html.match(/h-11 w-11/g)).toHaveLength(2);
+    const send = /<button[^>]*aria-label="Send voice note"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(send).toContain('h-11');
+    expect(send).toContain('rounded-full w-11');
+    expect(send).toContain('bg-accent');
+    expect(html).not.toContain('rounded-md');
     expect(html).toContain('aria-label="Send voice note"');
     expect(html).toContain('aria-label="Delete voice note"');
     expect(html).toContain('aria-label="Play voice note"');

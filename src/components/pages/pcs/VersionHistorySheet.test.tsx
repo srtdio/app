@@ -5,6 +5,7 @@ import {
   toggleCompareSelection,
 } from '@/components/pages/pcs/VersionHistorySheet';
 import type { PostVersionView } from '@/lib/post-versions';
+import { Button } from '@/components/ui/Button';
 
 // The unit environment is node (no DOM renderer), so these specs walk the JSX
 // tree returned by the hookless versionHistorySheet rather than mounting it, and
@@ -188,7 +189,7 @@ describe('VersionHistorySheet compare selection', () => {
     });
     const footer = sheetProps(tree).footer;
     expect(texts(footer)).toContain('Compare v2 and v3');
-    const button = elements(footer).find((el) => el.type === 'button');
+    const button = elements(footer).find((el) => el.type === Button);
     expect((button?.props as { disabled?: boolean }).disabled).toBe(false);
     (button?.props as { onClick: () => void }).onClick();
     expect(onCompare).toHaveBeenCalledWith('b', 'c');
@@ -204,7 +205,7 @@ describe('VersionHistorySheet compare selection', () => {
     });
     const footer = sheetProps(tree).footer;
     expect(texts(footer)).toContain('Compare v1 and v2');
-    const button = elements(footer).find((el) => el.type === 'button');
+    const button = elements(footer).find((el) => el.type === Button);
     expect((button?.props as { disabled?: boolean }).disabled).toBe(false);
     (button?.props as { onClick: () => void }).onClick();
     expect(onCompare).toHaveBeenCalledWith('a', 'b');

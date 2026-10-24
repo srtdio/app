@@ -5,8 +5,8 @@ interface ChipProps {
   selected?: boolean;
   variant?: 'default' | 'add';
   /**
-   * 'sm' (default) is the 32px display/tag size; 'tap' is the 44px touch-target
-   * size for chips that act as tappable inputs (filters, selectable options).
+   * Both sizes render the one 44px button height (design system); 'sm' stays
+   * accepted so call sites compile.
    */
   size?: 'sm' | 'tap';
   /**
@@ -19,7 +19,7 @@ interface ChipProps {
 }
 
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {
-  sm: 'h-8 px-3',
+  sm: 'min-h-[44px] px-4',
   tap: 'min-h-[44px] px-4 justify-center',
 };
 
@@ -36,7 +36,7 @@ export function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border text-sm transition-colors',
+        'inline-flex items-center gap-1.5 rounded-lg border text-sm font-normal transition-colors',
         sizes[size],
         'border-border text-fg-2 hover:bg-panel-2',
         selected && 'bg-accent-soft text-accent border-accent-line',

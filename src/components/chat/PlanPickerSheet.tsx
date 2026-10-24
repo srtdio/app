@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react';
 import type { ReactElement } from 'react';
+import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconChevronRight, IconPlan, IconPlus } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -102,13 +103,9 @@ export function PlanPickerSheet(props: {
           ) : read.status === 'error' ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-[18px] text-center">
               <p className="text-sm text-fg-2">Couldn&apos;t load. Try again.</p>
-              <button
-                type="button"
-                onClick={reload}
-                className="min-h-[44px] rounded-lg px-4 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
+              <Button type="button" variant="link" onClick={reload}>
                 Retry
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="flex flex-col px-[18px] pb-4">

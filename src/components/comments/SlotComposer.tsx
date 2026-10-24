@@ -369,7 +369,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                     disabled={submitting}
                     onClick={() => removeSlot(slot.id)}
                   >
-                    <IconX size={18} />
+                    <IconX size={20} />
                   </IconButton>
                 ) : null}
               </div>
@@ -409,7 +409,6 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           primary on the right; both 44px tall, like the agency composer's row. */}
       <div className="flex items-center gap-3 flex-wrap">
         <Button
-          size="sm"
           variant="ghost"
           className="min-h-[44px] min-w-[44px]"
           data-add-slot=""
@@ -419,7 +418,6 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           {ADD_SLOT_LABEL}
         </Button>
         <Button
-          size="lg"
           variant="primary"
           className="ml-auto min-w-[44px]"
           disabled={!canSend}

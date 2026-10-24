@@ -528,7 +528,7 @@ export function AssetUploadSheet({
       ) : null}
       <span className={canCommit && nameError === null ? 'ml-auto flex gap-2.5' : 'flex gap-2.5'}>
         {running ? (
-          <Button size="lg" variant="ghost" onClick={() => setStopAsk(true)}>
+          <Button variant="ghost" onClick={() => setStopAsk(true)}>
             Stop
           </Button>
         ) : (
@@ -644,15 +644,15 @@ export function AssetUploadSheet({
             );
           })}
 
-          <button
+          <Button
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={running}
-            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-border text-sm text-fg-2 transition-colors hover:bg-panel-2 disabled:opacity-50 disabled:pointer-events-none"
+            className="border-dashed text-fg-2"
           >
             <IconPlus size={16} />
             Add more files
-          </button>
+          </Button>
         </div>
       )}
       {stopAsk && running ? (
@@ -669,12 +669,6 @@ export function AssetUploadSheet({
     </Sheet>
   );
 }
-
-/** The per-file Retry: a 44px target, colour change only. */
-export const RETRY_BUTTON =
-  'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-3 ' +
-  'text-xs font-medium text-fg transition-colors duration-fast hover:bg-panel-3 ' +
-  'disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /** Per-file progress / outcome line: an indeterminate bar while uploading, a
  *  success marker on done, and an inline Retry on error. */
@@ -713,9 +707,15 @@ function UploadStatusRow({
     return (
       <span className="flex items-center justify-between gap-2 text-[11px] text-bad">
         <span className="min-w-0 truncate">{status.message}</span>
-        <button type="button" onClick={onRetry} disabled={disabled} className={RETRY_BUTTON}>
+        <Button
+          variant="ghost"
+          type="button"
+          onClick={onRetry}
+          disabled={disabled}
+          className="shrink-0"
+        >
           Retry
-        </button>
+        </Button>
       </span>
     );
   }

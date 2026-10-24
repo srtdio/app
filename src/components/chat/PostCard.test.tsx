@@ -11,7 +11,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { Client } from '@srtdio/rpc';
 import type { CardFirstMedia, PostCardRow } from '../../../packages/posts/src/reads';
 import { createLongPressController } from '@/components/ui/useLongPress';
-import { ACTION_SOFT, PostSheetActions, talkAboutLabel } from '@/components/chat/PostSheet';
+import { PostSheetActions, talkAboutLabel } from '@/components/chat/PostSheet';
 import { sheetActions } from '@/components/chat/post-sheet';
 import {
   CARD_HOLD,
@@ -418,10 +418,12 @@ describe('post sheet: Talk about', () => {
 
   it('shows a soft "Talk about this post" button when the thread offers it', () => {
     expect(talkAboutLabel()).toBe('Talk about this post');
-    expect(ACTION_SOFT).toContain('bg-accent-soft');
     const html = actions(() => {});
     expect(html).toMatch(/data-sheet-talk-about=""[^>]*>Talk about this post</);
-    expect(html).toContain('bg-accent-soft text-accent');
+    const talk = /<button[^>]*data-sheet-talk-about=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(talk).toContain('bg-accent-soft');
+    expect(talk).toContain('text-accent');
+    expect(talk).toContain('h-11');
   });
 
   it('is absent without the hook', () => {

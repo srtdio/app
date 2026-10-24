@@ -40,6 +40,7 @@ import { EntryHand } from '@/components/induction/EntryHand';
 import { readLatestBrandRequest, requestBrandTeam } from '@/components/induction/induction-data';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
 import { Select } from '@/components/ui/Select';
@@ -661,7 +662,7 @@ export function OnboardingFlow({
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex min-h-[56px] flex-col items-start justify-center gap-0.5 rounded-md border px-3.5 py-2.5 text-left',
+                'flex min-h-[56px] flex-col items-start justify-center gap-0.5 rounded-lg border px-3.5 py-2.5 text-left',
                 side === tile.side
                   ? 'border-accent bg-accent-soft ring-1 ring-accent'
                   : 'border-border bg-panel-2',
@@ -718,7 +719,7 @@ export function OnboardingFlow({
             <Avatar size="xl" />
           )}
           <div className="flex min-w-0 flex-col gap-1">
-            <Button size="lg" onClick={() => photoInputRef.current?.click()}>
+            <Button onClick={() => photoInputRef.current?.click()}>
               {photoPreview !== null ? ONBOARDING_COPY.changePhoto : ONBOARDING_COPY.addPhoto}
             </Button>
             <p className="text-xs text-fg-3">{ONBOARDING_COPY.photoHint}</p>
@@ -753,7 +754,7 @@ export function OnboardingFlow({
           <label htmlFor="ob-username" className="mb-1.5 block text-sm font-medium">
             Username
           </label>
-          <div className="flex h-11 items-center rounded-md border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
+          <div className="flex h-11 items-center rounded-lg border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
             <span className="text-sm text-fg-3">@</span>
             <input
               id="ob-username"
@@ -921,14 +922,9 @@ export function OnboardingFlow({
         <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6">
           <header className="flex min-h-[56px] items-center justify-between pt-2">
             {canGoBack ? (
-              <button
-                type="button"
-                onClick={back}
-                aria-label="Back"
-                className="-ml-3 grid h-11 w-11 place-items-center rounded-md text-fg hover:bg-panel-2"
-              >
+              <IconButton type="button" onClick={back} label="Back" className="-ml-3 !text-fg">
                 <BackGlyph />
-              </button>
+              </IconButton>
             ) : (
               <span className="block text-fg [&_svg]:h-6 [&_svg]:w-auto [&_.mark-dot]:fill-accent">
                 <Wordmark />
@@ -971,16 +967,9 @@ export function OnboardingFlow({
         title="Position your photo"
         footer={
           <>
-            <Button size="lg" onClick={() => setCropOpen(false)}>
-              Cancel
-            </Button>
+            <Button onClick={() => setCropOpen(false)}>Cancel</Button>
             <span className="ml-auto">
-              <Button
-                variant="primary"
-                size="lg"
-                disabled={!cropReady}
-                onClick={() => void applyPhoto()}
-              >
+              <Button variant="primary" disabled={!cropReady} onClick={() => void applyPhoto()}>
                 Use this photo
               </Button>
             </span>
@@ -1060,15 +1049,16 @@ function Primary({
   children: ReactNode;
 }): ReactElement {
   return (
-    <button
+    <Button
       type="button"
+      variant="primary"
       data-induction={anchor}
       disabled={disabled}
       onClick={onClick}
-      className="h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg hover:bg-accent-hover disabled:opacity-50"
+      className="w-full"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -1083,14 +1073,15 @@ function TextAction({
   children: ReactNode;
 }): ReactElement {
   return (
-    <button
+    <Button
       type="button"
+      variant="link"
       disabled={disabled}
       onClick={onClick}
-      className="min-h-[44px] w-full text-sm font-medium text-accent hover:underline disabled:opacity-35"
+      className="w-full hover:underline"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

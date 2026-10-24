@@ -179,7 +179,6 @@ export function AssetPicker(props: {
       footer={
         <Button
           variant="primary"
-          size="lg"
           className="ml-auto"
           disabled={selected.length === 0}
           onClick={confirm}

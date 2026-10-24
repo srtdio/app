@@ -338,7 +338,7 @@ describe('the sheet (U1, U2, U5)', () => {
     expect(html).toContain('t load files.');
     const retry = /<button[^>]*data-plan-concept-files-retry=""[^>]*>/.exec(html)?.[0] ?? '';
     expect(retry).toMatch(/class="[^"]*\bh-11\b/);
-    expect(retry).toContain('min-w-[44px]');
+    expect(retry).toMatch(/class="[^"]*\brounded-lg\b/);
     expect(html).not.toContain('data-plan-concept-files=""');
     expect(html).not.toContain('data-plan-concept-upload-pick');
   });

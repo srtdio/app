@@ -288,7 +288,6 @@ export function PresetMediaField({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          size="lg"
           disabled={sending}
           data-induction={INDUCTION_KEYS.postSheetMedia}
           onClick={pick}
@@ -296,7 +295,7 @@ export function PresetMediaField({
           {value.length > 0 ? 'Add another' : 'Add a photo or video'}
         </Button>
         {upload.phase === 'failed' ? (
-          <Button type="button" size="lg" variant="ghost" onClick={() => retry(upload.file)}>
+          <Button type="button" variant="ghost" onClick={() => retry(upload.file)}>
             Try again
           </Button>
         ) : null}

@@ -435,7 +435,6 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               <Button
                 type="button"
                 variant="ghost"
-                size="lg"
                 onClick={() => {
                   setFormError(null);
                   setMode('list');
@@ -447,7 +446,6 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               <Button
                 type="submit"
                 variant="primary"
-                size="lg"
                 data-induction={INDUCTION_KEYS.workspaceCreateContinue}
                 disabled={preview === null || switching}
               >
@@ -455,17 +453,18 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               </Button>
             </div>
             {switchOffered ? (
-              <button
+              <Button
                 type="button"
+                variant="link"
                 disabled={switching}
                 onClick={() => {
                   setFormError(null);
                   setAskingSwitch(true);
                 }}
-                className="min-h-[44px] w-full rounded-lg text-sm font-medium text-accent transition-colors duration-fast ease-enter hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-35"
+                className="w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {WORKSPACE_CREATE_COPY.approveInstead}
-              </button>
+              </Button>
             ) : null}
           </form>
         ) : (
@@ -480,7 +479,6 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               <Button
                 type="button"
                 variant="ghost"
-                size="lg"
                 onClick={() => {
                   setFormError(null);
                   setMode('create');
@@ -492,7 +490,6 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               <Button
                 type="button"
                 variant="primary"
-                size="lg"
                 data-induction={INDUCTION_KEYS.workspaceCreateSubmit}
                 onClick={() => void submitCreate()}
                 disabled={submitting}

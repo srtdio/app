@@ -9,6 +9,7 @@ import type { ReactElement } from 'react';
 import { IconSmile } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { EMOJI_LIST, readRecents, rememberRecent } from '@/lib/chat/emoji-list';
+import { buttonClass } from '@/components/ui/Button';
 import { popoverClass } from '@/components/ui/popover-classes';
 import type { ChatLayout } from '@/components/chat/chat-type';
 
@@ -75,9 +76,15 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
         // Keep the textarea's caret: the press never takes focus from it.
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((o) => !o)}
-        className={cn(
-          'flex h-11 w-11 items-center justify-center rounded-md hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          open ? 'text-accent' : 'text-fg-2',
+        // Needs a ref (Escape returns focus): raw button on the shared recipe.
+        // A 44x44 icon button (IconButton's footprint): ghost, accent while open.
+        className={buttonClass(
+          'ghost',
+          'default',
+          cn(
+            'w-11 !px-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            open && '!text-accent',
+          ),
         )}
       >
         <IconSmile size={20} />

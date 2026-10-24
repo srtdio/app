@@ -46,8 +46,8 @@ describe('Edit concept (E1)', () => {
   it('both Edit buttons and the sheet are gated by the same check', () => {
     const src = read('PlanItemScreen.tsx');
     expect(src.match(/data-plan-edit-concept=""/g)).toHaveLength(1);
-    expect(src).toMatch(/\{editable \? \(\s*<button[\s\S]*?data-plan-edit-concept=""/);
-    expect(src).toMatch(/\{editable \? \(\s*<button[\s\S]*?data-plan-edit-date=""/);
+    expect(src).toMatch(/\{editable \? \(\s*<Button[\s\S]*?data-plan-edit-concept=""/);
+    expect(src).toMatch(/\{editable \? \(\s*<Button[\s\S]*?data-plan-edit-date=""/);
     expect(src).toMatch(/\{editable \? \(\s*<ConceptSheet/);
   });
 });

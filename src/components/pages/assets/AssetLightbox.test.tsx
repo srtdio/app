@@ -142,12 +142,11 @@ describe('AssetLightbox opens files in the FileViewer', () => {
     expect(html).toMatch(/<button[^>]*>Open<\/button>/);
   });
 
-  // Regression: the shared Button's h-9 beat the h-11 override (a 36px target)
-  // and it scales on press; the card's actions are 44px, colour change only.
+  // The card's actions use the shared Button recipe: 44 tall, 8px radius.
   it.each([
     ['Open', { presignEnabled: true }],
     ['Download', { presignEnabled: false }],
-  ] as const)('the card %s button is a 44px target with no press scale', (label, opts) => {
+  ] as const)('the card %s button is the shared 44px, 8px-radius button', (label, opts) => {
     const html = mount([asset(0, PDF_MIME)], 0, { ...opts, initialInfoOpen: true });
     const card = html.slice(html.indexOf('data-file-card'));
     const button = new RegExp(
@@ -155,7 +154,9 @@ describe('AssetLightbox opens files in the FileViewer', () => {
     ).exec(card);
     if (button === null) throw new Error(`no ${label} button`);
     expect(button[1]).toContain('min-h-[44px]');
-    expect(button[1]).not.toContain('scale');
+    expect(button[1]).toContain('h-11');
+    expect(button[1]).toContain('rounded-lg');
+    expect(button[1]).not.toContain('rounded-md');
   });
 });
 

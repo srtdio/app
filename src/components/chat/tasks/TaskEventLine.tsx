@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import type { ReactElement } from 'react';
+import { Button } from '@/components/ui/Button';
 import { IconChevronDown, IconChevronRight } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
@@ -154,18 +155,19 @@ function TaskBatch(props: {
               <BatchRowView row={row} />
             </p>
           ))}
-          <button
+          <Button
             type="button"
+            variant="link"
             data-task-open=""
             onClick={() => ctx.onOpenTask(TASKS_SHEET_ONLY)}
             onContextMenu={(e) => e.preventDefault()}
             className={cn(
-              'mt-1 h-11 self-start rounded-[8px] px-2 text-[13px] font-semibold text-accent hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              'mt-1 self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               NO_TOUCH_SELECT,
             )}
           >
             {OPEN_TASKS_LABEL}
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>

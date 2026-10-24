@@ -674,7 +674,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       // and filters all fill it, so the sheet never grows or shrinks.
       fixedHeight
       footer={
-        <Button variant="primary" size="lg" className="ml-auto" onClick={props.onClose}>
+        <Button variant="primary" className="ml-auto" onClick={props.onClose}>
           {count > 0 ? `Done (${count})` : 'Done'}
         </Button>
       }

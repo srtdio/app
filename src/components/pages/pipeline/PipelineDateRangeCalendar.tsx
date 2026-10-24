@@ -10,6 +10,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -201,25 +203,23 @@ export function PipelineDateRangeCalendar({
         )}
       >
         <div className="mb-2 flex items-center justify-between">
-          <button
+          <IconButton
             type="button"
-            aria-label="Previous month"
+            label="Previous month"
             onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, -1))}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
           >
-            <IconChevronLeft size={18} />
-          </button>
+            <IconChevronLeft size={20} />
+          </IconButton>
           <span className="text-sm font-semibold text-fg">
             {MONTHS[view.monthIndex]} {view.year}
           </span>
-          <button
+          <IconButton
             type="button"
-            aria-label="Next month"
+            label="Next month"
             onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, 1))}
-            className="flex h-11 w-11 items-center justify-center rounded-md text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
           >
-            <IconChevronRight size={18} />
-          </button>
+            <IconChevronRight size={20} />
+          </IconButton>
         </div>
 
         <div className="grid grid-cols-7 text-center text-xs font-medium text-fg-3">
@@ -264,24 +264,21 @@ export function PipelineDateRangeCalendar({
         </div>
 
         <div className="mt-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClear}
-            className="flex h-11 flex-1 items-center justify-center rounded-md border border-border bg-panel px-3 text-sm text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg"
-          >
+          <Button type="button" variant="secondary" onClick={onClear} className="flex-1">
             Clear
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="primary"
             disabled={start === null}
             onClick={() => {
               if (start === null) return;
               onApply({ start, end: end ?? start });
             }}
-            className="flex h-11 flex-1 items-center justify-center rounded-md bg-accent px-3 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover disabled:opacity-50"
+            className="flex-1"
           >
             Apply
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

@@ -337,7 +337,6 @@ export function PipelineBoardView({
               <div className="border-t border-border p-2">
                 <Button
                   variant="ghost"
-                  size="lg"
                   className="w-full"
                   aria-label={`View all ${all.length}`}
                   onClick={() => onViewAll(stage)}

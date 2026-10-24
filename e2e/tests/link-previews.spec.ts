@@ -70,7 +70,7 @@ test('link previews in chat and comments @theme', async ({ page }) => {
   await expect(sheet.getByRole('button', { name: "Don't open" })).toBeFocused();
   const anyway = sheet.getByRole('link', { name: 'Open anyway' });
   await expect(anyway).toHaveAttribute('rel', 'noopener noreferrer');
-  expect(await anyway.evaluate((el) => Math.round(el.getBoundingClientRect().height))).toBe(46);
+  expect(await anyway.evaluate((el) => Math.round(el.getBoundingClientRect().height))).toBe(44);
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
   expect(stub.requested.some((url) => url.includes('g00gle'))).toBe(false);

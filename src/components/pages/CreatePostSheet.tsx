@@ -5,7 +5,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import {
   computeMenuPlacement,
   Select,
@@ -1265,13 +1265,12 @@ export function CreatePostSheet({
 
   const presetFooter = (
     <>
-      <Button size="lg" onClick={onClose} disabled={submitting}>
+      <Button onClick={onClose} disabled={submitting}>
         Cancel
       </Button>
       <span className="ml-auto flex flex-col items-end gap-1">
         <Button
           variant="primary"
-          size="lg"
           data-induction={INDUCTION_KEYS.postSheetPrimary}
           onClick={() => void handleSubmit()}
           disabled={!canSubmit}
@@ -1288,9 +1287,8 @@ export function CreatePostSheet({
   const headerActions = (
     <>
       <Button
-        size="lg"
         variant="ghost"
-        className="shrink-0 px-2.5 sm:px-4"
+        className="shrink-0"
         data-submit="draft"
         onClick={() => void handleSubmit('draft')}
         disabled={!canSubmit}
@@ -1312,8 +1310,7 @@ export function CreatePostSheet({
       </Button>
       <Button
         variant="primary"
-        size="lg"
-        className="shrink-0 px-2.5 sm:px-4"
+        className="shrink-0"
         data-submit="review"
         onClick={() => void handleSubmit('review')}
         disabled={!canSubmit}
@@ -1512,7 +1509,7 @@ export function CreatePostSheet({
             aria-expanded={moreOpen}
             aria-controls="post-more-options"
             onClick={() => setMoreOpen((prev) => !prev)}
-            className="flex min-h-[44px] w-full items-center gap-3 rounded-md border border-border bg-panel-2 px-3 py-2 text-left transition-colors hover:bg-panel-3"
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-border bg-panel-2 px-3 py-2 text-left transition-colors hover:bg-panel-3"
           >
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
@@ -1568,7 +1565,6 @@ export function CreatePostSheet({
                     <div className="flex items-center gap-2">
                       <Button
                         type="button"
-                        size="lg"
                         variant="primary"
                         disabled={newBucketBusy}
                         onClick={() => void submitNewBucket()}
@@ -1577,7 +1573,6 @@ export function CreatePostSheet({
                       </Button>
                       <Button
                         type="button"
-                        size="lg"
                         variant="ghost"
                         disabled={newBucketBusy}
                         onClick={() => {
@@ -1701,7 +1696,7 @@ export function FormatRow({
       <button
         ref={buttonRef}
         type="button"
-        className="inline-flex h-11 shrink-0 items-center justify-center rounded-md px-3 text-sm font-medium text-accent transition-colors hover:bg-panel-2 disabled:pointer-events-none disabled:opacity-50"
+        className={buttonClass('link', 'default', 'shrink-0')}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Change format"

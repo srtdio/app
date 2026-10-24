@@ -106,7 +106,7 @@ export function UsernameField({
         Username
       </label>
       <div className="flex gap-2">
-        <div className="flex h-11 min-w-0 flex-1 items-center rounded-md border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
+        <div className="flex h-11 min-w-0 flex-1 items-center rounded-lg border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
           <span className="text-sm text-fg-3">@</span>
           <input
             id="settings-username"
@@ -123,7 +123,7 @@ export function UsernameField({
           />
         </div>
         {!unchanged ? (
-          <Button size="lg" variant="primary" disabled={!canSave} onClick={() => void save()}>
+          <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
             {saving ? 'Saving' : 'Save'}
           </Button>
         ) : null}

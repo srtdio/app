@@ -99,7 +99,8 @@ describe('S2: phone hold and laptop chevron wiring', () => {
   it('the chevron is laptop only, 44px, labelled', () => {
     expect(composer).toContain("const showChevron = layout === 'laptop' && schedulable;");
     expect(composer).toContain('aria-label="Schedule options"');
-    expect(composer).toContain("'w-11 shrink-0 rounded-l-none px-0'".slice(1, -1));
+    expect(composer).toContain('className="shrink-0 rounded-l-none"');
+    expect(composer).toMatch(/shape="round"\s+aria-label="Schedule options"/);
   });
 
   it('the camera input is gone (Photos still offers Take Photo)', () => {
@@ -109,7 +110,7 @@ describe('S2: phone hold and laptop chevron wiring', () => {
 
   it('schedule mode swaps the Send icon and label', () => {
     expect(composer).toMatch(/scheduling\s+\? 'Schedule message'\s+: 'Send'/);
-    expect(composer).toContain('<IconCalendarClock size={18} />');
+    expect(composer).toContain('<IconCalendarClock size={20} />');
   });
 });
 

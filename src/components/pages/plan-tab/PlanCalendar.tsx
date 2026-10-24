@@ -185,16 +185,16 @@ export function PlanCalendar(props: {
           data-plan-tab-prev=""
           onClick={() => props.onAnchor(shiftAnchor(view, anchor, -1))}
         >
-          <IconChevronLeft size={18} />
+          <IconChevronLeft size={20} />
         </IconButton>
         <IconButton
           label={view === 'month' ? 'Next month' : 'Next week'}
           data-plan-tab-next=""
           onClick={() => props.onAnchor(shiftAnchor(view, anchor, 1))}
         >
-          <IconChevronRight size={18} />
+          <IconChevronRight size={20} />
         </IconButton>
-        <Button size="lg" data-plan-tab-go-today="" onClick={() => props.onAnchor(today)}>
+        <Button data-plan-tab-go-today="" onClick={() => props.onAnchor(today)}>
           {TODAY_LABEL}
         </Button>
         <div className="ml-auto flex items-center gap-4 text-xs text-fg-2">
@@ -260,7 +260,7 @@ export function PlanCalendar(props: {
 // ---------------------------------------------------------------------------
 
 const CHIP =
-  'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-4 text-sm font-normal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 const CHIP_IDLE = 'border-border text-fg-2 hover:bg-panel-2';
 const CHIP_ON = 'border-accent-line bg-accent-soft text-accent';
 

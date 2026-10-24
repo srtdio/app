@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Button } from '@/components/ui/Button';
 import type { ReactElement, ReactNode } from 'react';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -1134,8 +1135,11 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
     const { trigger } = shell(control());
     const props = trigger.props as { 'aria-label': string; className: string; children: unknown };
     expect(props['aria-label']).toBe('Filter and sort');
-    expect(props.className).toContain('h-11');
+    // A secondary Button (44 tall by the design system), square at 44 wide.
+    expect(trigger.type).toBe(Button);
+    expect((trigger.props as { variant: string }).variant).toBe('secondary');
     expect(props.className).toContain('w-11');
+    expect(props.className).toContain('!px-0');
     expect(props.className).toContain('shrink-0');
     expect(findAll(trigger, (el) => el.type === IconFilterLines)).toHaveLength(1);
     expect(texts(trigger)).toEqual([]);

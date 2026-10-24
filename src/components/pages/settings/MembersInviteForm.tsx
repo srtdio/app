@@ -235,7 +235,6 @@ export function InviteNotSent(props: { email: string; acceptUrl: string | null }
         <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="default"
-            size="lg"
             type="button"
             onClick={() => {
               const url = props.acceptUrl;
@@ -387,7 +386,7 @@ export function RolePicker({
   return (
     <label
       className={cn(
-        'relative flex min-h-[44px] items-center gap-1 rounded-md border bg-panel px-2.5 py-1 text-sm transition-colors duration-fast focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
+        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel px-2.5 py-1 text-sm transition-colors duration-fast focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
         invalid ? 'border-bad bg-bad-soft' : 'border-border',
         current === undefined ? 'text-fg-3' : 'text-fg',
         fill ? 'min-w-0 flex-1' : 'max-w-[45%] shrink-0',
@@ -430,13 +429,14 @@ export function EmailSuggestion({
   onApply: (email: string) => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
-      className="inline-flex min-h-[44px] items-center self-start text-left text-sm font-medium text-accent hover:underline"
+      variant="link"
+      className="self-start text-left hover:underline"
       onClick={() => onApply(suggestion)}
     >
       Did you mean {emailDomain(suggestion)}?
-    </button>
+    </Button>
   );
 }
 
@@ -690,9 +690,10 @@ export function MembersInviteForm({
             <EmailSuggestion suggestion={draftSuggestion} onApply={setDraft} />
           ) : null}
           {testSite ? (
-            <button
+            <Button
               type="button"
-              className="inline-flex min-h-[44px] items-center self-start text-sm font-medium text-accent hover:underline"
+              variant="link"
+              className="self-start hover:underline"
               onClick={() => {
                 const approver = clientOnly || isGuidedApproverInvite();
                 setDraft(testAddress(approver ? 'approver' : 'creator'));
@@ -700,7 +701,7 @@ export function MembersInviteForm({
               }}
             >
               Use a test address
-            </button>
+            </Button>
           ) : null}
         </div>
 
@@ -785,7 +786,6 @@ export function MembersInviteForm({
         <div>
           <Button
             variant="primary"
-            size="lg"
             type="submit"
             data-induction={INDUCTION_KEYS.membersInvite}
             disabled={submitting || sendCount === 0}

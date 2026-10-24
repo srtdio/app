@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { IconSearch, IconX } from '@/components/ui/icons';
 
@@ -64,7 +65,7 @@ interface SectionHeaderProps<S extends string = string> {
 function renderPrimaryAction(action: SectionHeaderPrimaryAction): ReactNode {
   if ('node' in action) return action.node;
   return (
-    <Button variant="primary" size="lg" aria-label={action.label} onClick={action.onClick}>
+    <Button variant="primary" aria-label={action.label} onClick={action.onClick}>
       {action.icon}
       {action.label}
     </Button>
@@ -133,17 +134,17 @@ export function SectionHeader<S extends string = string>({
               value={search.value}
               onChange={(e) => search.onChange(e.target.value)}
               placeholder={search.placeholder}
-              className="h-11 w-full rounded-md border border-border bg-panel pl-9 pr-11 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
+              className="h-11 w-full rounded-lg border border-border bg-panel-2 pl-9 pr-11 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
             />
             {searching ? (
-              <button
+              <IconButton
                 type="button"
-                aria-label="Clear search"
+                label="Clear search"
                 onClick={() => search.onChange('')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-3 hover:bg-panel-2 hover:text-fg"
+                className="absolute right-0 top-1/2 -translate-y-1/2"
               >
                 <IconX size={16} />
-              </button>
+              </IconButton>
             ) : null}
           </div>
         ) : null}

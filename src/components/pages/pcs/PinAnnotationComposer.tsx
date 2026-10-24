@@ -55,12 +55,7 @@ export function PinAnnotationComposer({
       busyLabel="Posting…"
       footer={
         <>
-          <Button
-            size="lg"
-            className="min-h-[44px] min-w-[44px]"
-            disabled={submitting}
-            onClick={onCancel}
-          >
+          <Button disabled={submitting} onClick={onCancel}>
             Cancel
           </Button>
           <CommentEmojiButton
@@ -70,9 +65,8 @@ export function PinAnnotationComposer({
             }
           />
           <Button
-            size="lg"
             variant="primary"
-            className="ml-auto min-h-[44px] min-w-[44px]"
+            className="ml-auto"
             disabled={!canPost}
             onClick={() => void onSubmit(body)}
           >

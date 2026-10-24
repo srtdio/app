@@ -94,7 +94,7 @@ const RESULT_LABEL = 'px-1 pt-1 text-xs font-semibold uppercase tracking-[0.06em
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(
-  'group/notes-row flex min-h-[64px] w-full min-w-0 items-center gap-3 rounded-[14px] px-2 py-2 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'group/notes-row flex min-h-[64px] w-full min-w-0 items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
   NO_TOUCH_SELECT,
 );
 
@@ -202,7 +202,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         type="button"
         data-search-retry=""
         onClick={props.onRetry}
-        className="flex min-h-[44px] w-full items-center justify-center rounded-[14px] px-3 text-sm text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] w-full items-center justify-center rounded-lg px-3 text-sm text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {SEARCH_FAILED_COPY}
       </button>

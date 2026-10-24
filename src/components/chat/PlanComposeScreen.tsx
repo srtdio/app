@@ -27,6 +27,7 @@ import type { ReactElement } from 'react';
 import type { PostCardFields } from '@srtdio/posts';
 import { planCreateWithItems } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconCalendar, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -472,10 +473,9 @@ export function PlanComposeScreen(props: {
         </div>
       ) : null}
       <Button
-        size="lg"
         variant="primary"
         data-plan-create=""
-        className="min-h-[50px] w-full"
+        className="w-full"
         aria-busy={busy}
         disabled={busy}
         onClick={() => void create()}
@@ -489,7 +489,7 @@ export function PlanComposeScreen(props: {
   );
 
   const addClass =
-    'flex min-h-[48px] w-full items-center gap-2.5 rounded-xl border border-dashed border-border-strong px-3 text-[15px] font-semibold text-accent hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+    'w-full !justify-start border-dashed border-border-strong text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
   return (
     <>
@@ -534,14 +534,15 @@ export function PlanComposeScreen(props: {
                 Plan dates · <span className="font-mono tabular-nums">{dayCount}</span> days
               </span>
             </div>
-            <button
+            <Button
               type="button"
+              variant="link"
               data-plan-dates-change=""
               onClick={() => setDatesOpen(true)}
-              className="min-h-[44px] shrink-0 rounded-md px-2.5 text-sm font-semibold text-accent hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               Change
-            </button>
+            </Button>
           </div>
 
           <section className="flex flex-col gap-2" aria-label="Items">
@@ -567,7 +568,7 @@ export function PlanComposeScreen(props: {
           </section>
 
           <div className="flex flex-col gap-2">
-            <button
+            <Button
               type="button"
               data-plan-add-concept=""
               onClick={() => {
@@ -580,27 +581,27 @@ export function PlanComposeScreen(props: {
               }}
               className={addClass}
             >
-              <IconPlus size={20} />
+              <IconPlus size={16} />
               Add concept
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               data-plan-add-posts=""
               onClick={() => setPicker('posts')}
               className={addClass}
             >
-              <IconPlus size={20} />
+              <IconPlus size={16} />
               Add from Pipeline
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               data-plan-add-drafts=""
               onClick={() => setPicker('drafts')}
               className={addClass}
             >
-              <IconPlus size={20} />
+              <IconPlus size={16} />
               Add drafts
-            </button>
+            </Button>
           </div>
         </div>
       </PlanPage>
@@ -744,34 +745,35 @@ export function ComposeItemRow(props: {
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-2.5">{head}</div>
         )}
-        <button
+        <IconButton
           type="button"
           data-plan-compose-remove=""
-          aria-label={`Remove ${item.title}`}
+          label={`Remove ${item.title}`}
           onClick={props.onRemove}
-          className="-my-1.5 -mr-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="-my-1.5 -mr-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <IconX size={18} />
-        </button>
+          <IconX size={20} />
+        </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (
         <p className="line-clamp-2 px-0.5 text-[13.5px] leading-[1.45] text-fg-3">
           {item.description}
         </p>
       ) : null}
-      <button
+      <Button
         type="button"
+        variant="secondary"
         data-plan-day-button={need ? 'need' : item.day === 'none' ? 'none' : 'day'}
         onClick={props.onDay}
         className={cn(
-          'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-[10px] border px-3 text-left text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          need ? 'border-warn bg-panel text-warn' : 'border-border bg-panel-2 text-fg',
+          'w-full !justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          need ? 'border-warn text-warn' : 'bg-panel-2',
         )}
       >
         {need ? (
           <>
             {PICK_A_DAY}
-            <IconChevronRight size={18} />
+            <IconChevronRight size={16} />
           </>
         ) : (
           <>
@@ -781,11 +783,11 @@ export function ComposeItemRow(props: {
               <span>{formatCivilDayHeader(item.day as string)}</span>
             )}
             <span className="text-fg-3">
-              <IconCalendar size={18} />
+              <IconCalendar size={16} />
             </span>
           </>
         )}
-      </button>
+      </Button>
       {note !== null ? (
         <p
           data-plan-compose-note={note.warn ? 'warn' : 'info'}

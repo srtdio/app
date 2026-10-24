@@ -26,6 +26,7 @@
 // arriving never shifts layout. Every tile is a real button that opens the
 // lightbox at its index; non-image attachments render below the album as before.
 
+import { IconButton } from '@/components/ui/IconButton';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { IconDownload, IconFile, IconImage } from '@/components/ui/icons';
@@ -564,16 +565,16 @@ export function AttachmentsFallback(props: {
               <span className="text-xs text-fg-3">{ATTACHMENT_FALLBACK}</span>
             </span>
             {canDownload ? (
-              <button
+              <IconButton
                 type="button"
-                aria-label={`Download ${name}`}
+                label={`Download ${name}`}
                 onClick={() =>
                   void downloadFile(remoteFileSource(props.cache, attachment.assetId), name)
                 }
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                <IconDownload size={18} />
-              </button>
+                <IconDownload size={20} />
+              </IconButton>
             ) : null}
           </div>
         );

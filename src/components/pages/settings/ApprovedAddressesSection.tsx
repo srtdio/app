@@ -110,7 +110,6 @@ export function ApprovedAddressesSection({
               <Button
                 type="button"
                 variant="ghost"
-                size="lg"
                 aria-label={`Remove ${domain}`}
                 onClick={() => setConfirmFor(domain)}
               >
@@ -143,7 +142,7 @@ export function ApprovedAddressesSection({
           </p>
         ) : null}
         <div>
-          <Button type="submit" size="lg" disabled={adding || draft.trim() === ''}>
+          <Button type="submit" disabled={adding || draft.trim() === ''}>
             {adding ? 'Adding' : 'Add address'}
           </Button>
         </div>

@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { AuthShell } from '@/components/auth/AuthShell';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import {
   forgetNext,
   readRememberedNext,
@@ -94,8 +94,7 @@ export function isInviteDestination(next: string): boolean {
   return next.startsWith(INVITE_PATH_PREFIX) && next.length > INVITE_PATH_PREFIX.length;
 }
 
-const PRIMARY_LINK_CLASS =
-  'inline-flex min-h-[44px] w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-hover';
+const PRIMARY_LINK_CLASS = buttonClass('primary', 'default', 'w-full');
 
 /** "This invite link has expired. Ask {inviter} to resend it."; a blank name asks the inviter. */
 export function inviteExpiredCopy(inviter: string): string {
@@ -195,7 +194,6 @@ export function AuthCallbackPage() {
     <AuthShell title={copy.title} subtitle={copy.subtitle} footer={backToSignIn}>
       <Button
         variant="primary"
-        size="lg"
         className="w-full"
         onClick={handleSignIn}
         disabled={phase === 'signing'}

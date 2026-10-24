@@ -172,18 +172,19 @@ function AddRow(props: {
           label={`New task priority P${priority}`}
           disabled={props.disabled}
         />
-        <button
+        <Button
           type="submit"
+          variant="link"
           data-task-add-submit=""
           disabled={props.disabled || text.trim() === ''}
           onMouseDown={(e) => e.preventDefault()}
           className={cn(
-            'h-11 min-w-11 shrink-0 rounded-[8px] px-3 text-[13px] font-semibold text-accent hover:bg-panel-2 disabled:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'min-w-11 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             NO_TOUCH_SELECT,
           )}
         >
           Add
-        </button>
+        </Button>
       </form>
     </li>
   );
@@ -581,7 +582,6 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
             </IconButton>
           ) : null}
           <Button
-            size="lg"
             variant="primary"
             data-task-save=""
             disabled={!dirty || saving}
@@ -729,10 +729,10 @@ function DiscardConfirm(props: {
       >
         <h2 className="text-sm font-semibold text-fg">{DISCARD_TITLE}</h2>
         <div className="mt-5 flex justify-end gap-2">
-          <Button size="lg" variant="danger" disabled={props.saving} onClick={props.onDiscard}>
+          <Button variant="danger" disabled={props.saving} onClick={props.onDiscard}>
             Discard
           </Button>
-          <Button size="lg" variant="primary" disabled={props.saving} onClick={props.onSave}>
+          <Button variant="primary" disabled={props.saving} onClick={props.onSave}>
             Save
           </Button>
         </div>

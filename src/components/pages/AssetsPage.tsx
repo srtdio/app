@@ -584,7 +584,7 @@ export function AssetsPage() {
         {selectMode ? (
           <div data-select-bar="" className="flex w-full flex-col gap-1">
             <div className="flex w-full items-center gap-2">
-              <Button size="lg" variant="ghost" onClick={exitSelectMode}>
+              <Button variant="ghost" onClick={exitSelectMode}>
                 Cancel
               </Button>
               <span
@@ -594,7 +594,6 @@ export function AssetsPage() {
                 {selectedLabel(selected.size)}
               </span>
               <Button
-                size="lg"
                 variant="ghost"
                 disabled={visible.length === 0}
                 onClick={() => {
@@ -607,7 +606,6 @@ export function AssetsPage() {
               {/* Desktop keeps Delete up here; phones get the bottom bar. */}
               <span className="hidden gap-2 md:flex">
                 <Button
-                  size="lg"
                   variant="danger"
                   disabled={!canBulkDelete(selected.size)}
                   onClick={deleteSelected}
@@ -691,14 +689,15 @@ export function AssetsPage() {
       {/* Deleted files wait 31 days in Recently deleted; the way there from Assets. */}
       {!selectMode ? (
         <div className="px-4 md:px-6 pb-6 pt-2">
-          <button
+          <Button
+            variant="ghost"
             type="button"
             data-recently-deleted-link=""
             onClick={() => navigate(RECENTLY_DELETED_PATH)}
-            className="inline-flex min-h-[44px] items-center rounded-md px-1 text-sm text-fg-2 transition-colors duration-fast hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {RECENTLY_DELETED_LABEL}
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -713,7 +712,6 @@ export function AssetsPage() {
           >
             <div className="flex items-center gap-2">
               <Button
-                size="lg"
                 variant="danger"
                 className="min-w-[44px] flex-1"
                 disabled={!canBulkDelete(selected.size)}

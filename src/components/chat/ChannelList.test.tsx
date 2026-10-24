@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Button } from '@/components/ui/Button';
 import type { ReactElement, ReactNode } from 'react';
 
 // ChannelList now consumes the chat store, whose provider import graph pulls the
@@ -413,8 +414,9 @@ describe('load status', () => {
     expect(texts(tree)).not.toContain('Select');
     const empty = findAll(tree, (el) => el.type === EmptyState)[0]!;
     const retry = (empty.props as { action: ReactElement }).action;
-    expect(retry.props).toMatchObject({ size: 'lg', children: 'Retry' });
-    expect((retry.props as { className: string }).className).toContain('min-w-[44px]');
+    // A Button: 44 tall by the design system.
+    expect(retry.type).toBe(Button);
+    expect(retry.props).toMatchObject({ variant: 'primary', children: 'Retry' });
     (retry.props as { onClick: () => void }).onClick();
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

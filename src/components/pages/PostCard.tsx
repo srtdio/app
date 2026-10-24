@@ -16,6 +16,7 @@ import { civilDate } from '@/lib/list-sort';
 import { formatDue, formatOverdue } from '@/lib/display-date';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
+import { IconButton } from '@/components/ui/IconButton';
 import type { CardFirstMedia } from '../../../packages/posts/src/reads';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
@@ -384,17 +385,17 @@ export function PostCard({
             // Above the Open post overlay (z-10) so a tap moves, not opens.
             // Pointer down stops here so the feed's long-press never arms under
             // it. The negative margins keep the 44px target from growing the row.
-            <button
+            <IconButton
               type="button"
-              aria-label={`Move post ${post.title}`}
+              label={`Move post ${post.title}`}
               data-post-card-move=""
               draggable={false}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => onMove(post)}
-              className="relative z-10 -my-3 -mr-3 ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-fg-3 transition-colors duration-fast ease-enter hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="relative z-10 -my-3 -mr-3 ml-auto shrink-0 text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <MoreIcon />
-            </button>
+            </IconButton>
           ) : null}
         </div>
       </div>

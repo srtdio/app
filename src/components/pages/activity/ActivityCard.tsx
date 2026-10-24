@@ -618,19 +618,13 @@ export function ActivityCard({
         {alert?.kind === 'failed' && (onEdit !== undefined || onRetry !== undefined) ? (
           <div data-activity-failed-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
             {onEdit !== undefined ? (
-              <Button
-                type="button"
-                size="lg"
-                data-activity-action="edit"
-                onClick={() => onEdit(lead)}
-              >
+              <Button type="button" data-activity-action="edit" onClick={() => onEdit(lead)}>
                 Edit
               </Button>
             ) : null}
             {onRetry !== undefined ? (
               <Button
                 type="button"
-                size="lg"
                 variant="primary"
                 data-activity-action="retry"
                 onClick={() => onRetry(lead)}
@@ -658,14 +652,15 @@ export function ActivityCard({
             </span>
           ) : null}
           {rest.length > 0 ? (
-            <button
+            <Button
+              variant="link"
               type="button"
               aria-expanded={expanded}
               onClick={() => setExpanded((prev) => !prev)}
-              className="ml-auto flex min-h-[44px] items-center px-2 text-[13px] font-medium text-accent transition-colors hover:bg-panel-2"
+              className="ml-auto"
             >
               {expanded ? 'Show less' : `+${rest.length} more`}
-            </button>
+            </Button>
           ) : null}
           <div data-activity-menu="" className={cn('-mr-2', rest.length === 0 && 'ml-auto')}>
             <ActivityRowMenu
@@ -727,10 +722,6 @@ export function ActivityCard({
     </div>
   );
 }
-
-/** Cancel in the danger token (the bell's): a 44px outlined button, text in bad. */
-const UPCOMING_CANCEL_CLASS =
-  'inline-flex h-11 min-w-[44px] items-center justify-center rounded-md border border-border bg-panel px-4 text-sm font-medium text-bad transition-colors duration-fast hover:bg-bad-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /** A pending reminder's edit: the bell's "Change time" (the reminder sheet in change mode). */
 export const CHANGE_TIME_LABEL = 'Change time';
@@ -813,17 +804,18 @@ export function UpcomingCard({
         </div>
 
         <div data-upcoming-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
-          <Button type="button" size="lg" data-upcoming-action="edit" onClick={() => onEdit(item)}>
+          <Button type="button" data-upcoming-action="edit" onClick={() => onEdit(item)}>
             {upcomingEditLabel(item)}
           </Button>
-          <button
+          <Button
+            variant="secondary"
             type="button"
             data-upcoming-action="cancel"
-            className={UPCOMING_CANCEL_CLASS}
+            className="text-bad hover:bg-bad-soft"
             onClick={() => onCancel(item)}
           >
             Cancel
-          </button>
+          </Button>
         </div>
 
         <div className="h-px bg-border" />

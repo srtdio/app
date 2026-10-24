@@ -388,7 +388,7 @@ export function WhoReactedSheet(props: {
         {state.kind === 'failed' ? (
           <div className="flex flex-col items-center gap-3 py-6">
             <p className="text-sm text-fg-2">{SHEET_LOAD_FAILED}</p>
-            <Button size="lg" variant="primary" className="min-w-[44px]" onClick={retry}>
+            <Button variant="primary" className="min-w-[44px]" onClick={retry}>
               Retry
             </Button>
           </div>
@@ -404,7 +404,7 @@ export function WhoReactedSheet(props: {
                   data-reactor-tab={t.key}
                   onClick={() => setTab(t.key)}
                   className={cn(
-                    'flex h-11 items-center gap-1.5 rounded-full border px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    'flex min-h-[44px] items-center gap-1.5 rounded-lg border px-4 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     tab === t.key
                       ? 'border-accent-line bg-accent-soft text-accent'
                       : 'border-border text-fg-2 hover:bg-panel-2',

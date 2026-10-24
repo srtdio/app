@@ -7,6 +7,8 @@ import type {
   RefObject,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { IconSearch, IconX } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { startDmChannel } from '@/components/chat/chat-actions';
@@ -340,14 +342,9 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
         className="flex items-center justify-between gap-3 px-4 text-sm text-fg-2"
       >
         <span className="truncate">{SEARCH_FAILED_COPY}</span>
-        <button
-          type="button"
-          data-palette-retry=""
-          onClick={props.onRetry}
-          className="min-h-[44px] px-2 font-medium text-accent"
-        >
+        <Button type="button" variant="link" data-palette-retry="" onClick={props.onRetry}>
           Retry
-        </button>
+        </Button>
       </div>
     );
   } else if (ready && search.status === 'ready' && hits === 0) {
@@ -688,9 +685,9 @@ export function CommandPalette({
             className="flex-1 min-w-0 h-12 bg-transparent outline-none text-base sm:text-sm placeholder:text-fg-3"
           />
           {query !== '' ? (
-            <button
+            <IconButton
               type="button"
-              aria-label="Clear search"
+              label="Clear search"
               data-palette-clear=""
               // The field keeps focus (and the phone keeps its keyboard).
               onMouseDown={(event) => event.preventDefault()}
@@ -698,21 +695,22 @@ export function CommandPalette({
                 setQuery('');
                 inputRef.current?.focus({ preventScroll: true });
               }}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-3 hover:bg-panel-2 hover:text-fg"
+              className="shrink-0"
             >
               <IconX size={16} />
-            </button>
+            </IconButton>
           ) : null}
           <kbd className="hidden sm:inline text-[11px] text-fg-3 border border-border rounded px-1.5 py-0.5">
             Esc
           </kbd>
-          <button
+          <Button
             type="button"
+            variant="link"
             onClick={() => onClose('dismiss')}
-            className="sm:hidden min-h-[44px] min-w-[44px] text-sm font-medium text-accent"
+            className="sm:hidden shrink-0"
           >
             Cancel
-          </button>
+          </Button>
         </div>
         <div
           ref={listRef}

@@ -189,7 +189,7 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(html).toContain('maxLength="200"');
     expect(html).toContain('aria-label="Cancel rename"');
     expect(html).toContain('Done');
-    expect(html).toMatch(/data-plan-rename-cancel=""[^>]*h-11 w-11/);
+    expect(html).toMatch(/class="[^"]*h-11 w-11[^"]*"[^>]*data-plan-rename-cancel=""/);
     const empty = renderToStaticMarkup(
       <RenameField value="  " busy={false} onChange={noop} onCancel={noop} onDone={noop} />,
     );
@@ -254,7 +254,7 @@ describe('item 4: footer', () => {
     expect(SEND_NEEDS_OPEN).toBe('Open the plan for approvers to send it here.');
   });
 
-  it('one primary button (X3): Open for approvers outside a chat, Send to approvers / Send in from one; 48px', () => {
+  it('one primary button (X3): Open for approvers outside a chat, Send to approvers / Send in from one; 44px', () => {
     const open = renderToStaticMarkup(
       <PlanFooter
         action={planPrimaryAction({ side: 'agency', audience: 'team', chat: null })}
@@ -265,7 +265,7 @@ describe('item 4: footer', () => {
     );
     expect(open).toContain('Open for approvers');
     expect(open).toContain('data-plan-primary="open"');
-    expect(open.match(/min-h-\[48px\]/g)?.length).toBe(1);
+    expect(open.match(/min-h-\[44px\]/g)?.length).toBe(1);
     expect(open.match(/<button/g)?.length).toBe(1);
     const toApprovers = renderToStaticMarkup(
       <PlanFooter

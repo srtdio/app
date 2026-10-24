@@ -4,7 +4,7 @@
 // and up (laptop: the right column, above the caption). The page renders
 // exactly one of them per breakpoint.
 //
-// Approvers in review: Reject (plain, bad ink) then Approve (the one primary),
+// Approvers in review: Reject (secondary, bad ink) then Approve (success green),
 // in that order everywhere; no Comment button (the composer is on the page). Creators: one main button ("Send for
 // review", or "Send for review again"); their other moves (Approve on their
 // behalf, Park, Reject) live in the post's ⋯ sheet. A failed tap
@@ -74,8 +74,7 @@ function approverButtons(
         return (
           <Button
             key={action.to}
-            size="lg"
-            variant={approve ? 'primary' : 'default'}
+            variant={approve ? 'success' : 'secondary'}
             disabled={busy}
             onClick={() => model.onPick(action.to)}
             {...(approve ? { 'data-induction': INDUCTION_KEYS.postApprove } : {})}
@@ -98,12 +97,11 @@ function creatorButton(
   return (
     <div className="flex flex-col gap-1.5">
       <Button
-        size="lg"
         variant="primary"
         data-decision-main=""
         disabled={model.disabled || busy}
         onClick={model.onPress}
-        className="w-full gap-1.5"
+        className="w-full"
       >
         <IconSend size={16} />
         {model.label}

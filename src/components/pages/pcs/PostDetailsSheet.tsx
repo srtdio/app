@@ -259,13 +259,7 @@ export function PostDetailsSheet({
         dirty={dateDirty}
         footer={
           isAgencySide ? (
-            <Button
-              variant="primary"
-              size="lg"
-              className="ml-auto"
-              data-details-done=""
-              onClick={done}
-            >
+            <Button variant="primary" className="ml-auto" data-details-done="" onClick={done}>
               Done
             </Button>
           ) : undefined
@@ -301,13 +295,14 @@ export function PostDetailsSheet({
                 <DatePicker label="Due date" value={dateDraft} onChange={setDateDraft} />
               </div>
               {targetDate !== null ? (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => onChangeTargetDate(null)}
-                  className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md px-3 text-sm font-medium text-fg-2 transition-colors hover:bg-panel-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   Clear
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : (
@@ -398,7 +393,6 @@ export function PostDetailsSheet({
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
-                  size="lg"
                   variant="primary"
                   data-new-bucket-create=""
                   disabled={newBucketBusy}
@@ -408,7 +402,6 @@ export function PostDetailsSheet({
                 </Button>
                 <Button
                   type="button"
-                  size="lg"
                   variant="ghost"
                   disabled={newBucketBusy}
                   onClick={resetNewBucket}

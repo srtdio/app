@@ -41,7 +41,15 @@ describe('UnsafeLinkSheet', () => {
     expect(document.activeElement?.textContent).toBe("Don't open");
     expect(dialog.querySelector('[aria-label="Close"]')).toBeNull();
     const buttons = [...dialog.querySelectorAll('button, a')];
-    for (const b of buttons) expect(b.getAttribute('class')).toContain('h-[46px]');
+    for (const b of buttons) {
+      const cls = b.getAttribute('class') ?? '';
+      expect(cls).toContain('h-11');
+      expect(cls).toContain('rounded-lg');
+      expect(cls).toContain('text-sm');
+      expect(cls).not.toContain('h-[46px]');
+      expect(cls).not.toContain('rounded-xl');
+      expect(cls).not.toContain('text-[15px]');
+    }
   });
 
   it('"Don\'t open" and Esc close; "Open anyway" is a noopener noreferrer new-tab link', async () => {
