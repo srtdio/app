@@ -21,7 +21,16 @@ function tokens(cls: string): string[] {
   return cls.split(/\s+/).filter(Boolean);
 }
 
-const BAD = ['h-8', 'h-9', 'h-10', 'h-12', 'rounded-md', 'rounded-xl', 'font-semibold', 'text-xs'];
+const BAD = [
+  'h-8',
+  'h-9',
+  'h-10',
+  'h-12',
+  'rounded-md',
+  'rounded-xl',
+  'font-semibold',
+  'text-legacy-xs',
+];
 
 describe('Comments row actions', () => {
   it('a ghost row action renders 44 tall, 8px radius, 14 / 500, 44 wide minimum', () => {
@@ -31,7 +40,7 @@ describe('Comments row actions', () => {
       'min-h-[44px]',
       'min-w-[44px]',
       'rounded-lg',
-      'text-sm',
+      'text-legacy-sm',
       'font-medium',
     ]) {
       expect(t).toContain(want);
@@ -46,7 +55,7 @@ describe('Comments row actions', () => {
 
   it('the passive checkbox matches the button box', () => {
     const t = tokens(ROW_ACTION_STATIC_CLASS);
-    for (const want of ['h-11', 'min-h-[44px]', 'px-4', 'text-sm', 'font-medium']) {
+    for (const want of ['h-11', 'min-h-[44px]', 'px-4', 'text-legacy-sm', 'font-medium']) {
       expect(t).toContain(want);
     }
   });

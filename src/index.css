@@ -9,23 +9,45 @@
 @tailwind utilities;
 
 :root {
+  /* Each hex colour token has an --x-rgb triplet beside it so Tailwind can
+     apply /opacity (rgb(var(--x-rgb) / <alpha-value>)). Keep the pair in sync. */
   --bg: #f7f8f9;
+  --bg-rgb: 247 248 249;
   --panel: #ffffff;
+  --panel-rgb: 255 255 255;
   --panel-2: #f2f3f5;
+  --panel-2-rgb: 242 243 245;
   --panel-3: #ecedf0;
+  --panel-3-rgb: 236 237 240;
   --border: #e6e8eb;
+  --border-rgb: 230 232 235;
   --border-strong: #d7dade;
+  --border-strong-rgb: 215 218 222;
   --fg: #1b1c20;
+  --fg-rgb: 27 28 32;
   --fg-2: #62666d;
-  --fg-3: #8b9096;
+  --fg-2-rgb: 98 102 109;
+  /* fg-3 is meta ink: 4.75:1 on bg, 5.05:1 on panel. */
+  --fg-3: #6b6f76;
+  --fg-3-rgb: 107 111 118;
   --accent: #5e6ad2;
+  --accent-rgb: 94 106 210;
+  /* Accent split by use: accent-text is ink (4.97:1 on bg), accent-fill sits
+     under white accent-fg ink (4.70:1). accent stays for borders and rings. */
+  --accent-text: #5560d0;
+  --accent-text-rgb: 85 96 208;
+  --accent-fill: #5e6ad2;
+  --accent-fill-rgb: 94 106 210;
   --accent-hover: #4f5ac0;
+  --accent-hover-rgb: 79 90 192;
   --accent-fg: #ffffff;
+  --accent-fg-rgb: 255 255 255;
   --accent-soft: rgba(94, 106, 210, 0.1);
   --accent-line: rgba(94, 106, 210, 0.3);
   /* Own chat bubble fill. Light matches the accent; dark goes deeper than the
      accent so accent-fg ink clears 4.5:1 (#5560d0 on #ffffff is 5.3:1). */
   --bubble-own: #5e6ad2;
+  --bubble-own-rgb: 94 106 210;
   /* Chat bubble meta (time, edited, ticks). Peer meta on panel-2 is 5.2:1;
      own meta on bubble-own is white, 4.7:1 (the read tick, a glyph, 3.8:1).
      The media pill is a translucent black under white ink: 4.7:1 even over a
@@ -38,38 +60,52 @@
   /* The dim behind a modal surface (the command palette). */
   --scrim: rgba(20, 22, 30, 0.45);
   --good: #3e7d54;
-  --warn: #b8772b;
+  --good-rgb: 62 125 84;
+  /* warn ink: 4.68:1 on bg. */
+  --warn: #9a6420;
+  --warn-rgb: 154 100 32;
   --bad: #c2392b;
+  --bad-rgb: 194 57 43;
   /* Solid fills under white text (the Plan OK / Not OK pill): the light values
      in both themes so white stays at 4.5:1 or more. */
   --good-solid: #3e7d54;
+  --good-solid-rgb: 62 125 84;
   --bad-solid: #c2392b;
-  /* Soft tints behind added / removed words in the version-compare diff. The
-     good/bad tokens are bare hex, so Tailwind's /opacity modifier cannot mint a
-     tint from them; these explicit low-alpha fills give light/dark parity. */
+  --bad-solid-rgb: 194 57 43;
+  /* Soft tints behind added / removed words in the version-compare diff:
+     explicit low-alpha fills tuned per theme for light/dark parity. */
   --good-soft: rgba(62, 125, 84, 0.12);
   --bad-soft: rgba(194, 57, 43, 0.1);
   /* Team only plan rows and chips: a warm tint behind warn ink. */
   --warn-soft: #f6ecd9;
+  --warn-soft-rgb: 246 236 217;
   /* Link warning card + unsafe-link sheet: ink on warn-soft is 5.6:1, the line
      is the card border. */
   --warn-ink: #9a4a0a;
   --warn-line: #f2c9a2;
   --annotation-bg: #ffe9b8;
+  --annotation-bg-rgb: 255 233 184;
   --annotation-line: #d9a93c;
+  --annotation-line-rgb: 217 169 60;
   /* Search match fill and ink: amber with dark ink in both themes, so a match
      stands out on the indigo own bubble too. */
   --search-mark-bg: #ffe9b8;
+  --search-mark-bg-rgb: 255 233 184;
   --search-mark-fg: #1b1c20;
   --stage-review: #b45309;
+  --stage-review-rgb: 180 83 9;
   --stage-approved: #15803d;
+  --stage-approved-rgb: 21 128 61;
   --stage-rejected: #b91c1c;
+  --stage-rejected-rgb: 185 28 28;
   --stage-parked: #52606d;
+  --stage-parked-rgb: 82 96 109;
   /* Neutral overlay scale for fullscreen media surfaces (the PCS lightbox). A
      media backdrop reads as dark in both themes, so these stay constant across
      light/dark for parity rather than flipping. */
   --overlay: rgba(9, 10, 12, 0.92);
   --overlay-fg: #f4f5f6;
+  --overlay-fg-rgb: 244 245 246;
   --overlay-fg-dim: rgba(244, 245, 246, 0.7);
   --overlay-surface: rgba(244, 245, 246, 0.12);
   --overlay-line: rgba(244, 245, 246, 0.14);
@@ -82,11 +118,17 @@
   /* Initials avatar fills under white ink: every tone is 4.5:1 or more against
      white (4.7, 4.9, 5.0, 5.4, 5.3, 5.4). */
   --avatar-1: #5e6ad2;
+  --avatar-1-rgb: 94 106 210;
   --avatar-2: #3e7d54;
+  --avatar-2-rgb: 62 125 84;
   --avatar-3: #9a6420;
+  --avatar-3-rgb: 154 100 32;
   --avatar-4: #c2392b;
+  --avatar-4-rgb: 194 57 43;
   --avatar-5: #7a5ea8;
+  --avatar-5-rgb: 122 94 168;
   --avatar-6: #237484;
+  --avatar-6-rgb: 35 116 132;
   /* Motion token scale. Theme-invariant, so it lives only on :root and both
      light and dark inherit it (parity for free). Durations pair with the two
      easing curves below: ease-enter for entrances, ease-exit for every exit. */
@@ -114,24 +156,44 @@
 }
 .dark {
   --bg: #0c0d10;
+  --bg-rgb: 12 13 16;
   --strip-bg: #212329;
   --strip-fg: #f4f5f6;
   --strip-action: #838bec;
   --strip-border: #2f333b;
   --panel: #141519;
+  --panel-rgb: 20 21 25;
   --panel-2: #1a1c21;
+  --panel-2-rgb: 26 28 33;
   --panel-3: #212329;
+  --panel-3-rgb: 33 35 41;
   --border: #23262c;
+  --border-rgb: 35 38 44;
   --border-strong: #2f333b;
+  --border-strong-rgb: 47 51 59;
   --fg: #f4f5f6;
+  --fg-rgb: 244 245 246;
   --fg-2: #9aa0a8;
-  --fg-3: #6b7178;
+  --fg-2-rgb: 154 160 168;
+  /* fg-3 meta ink: 5.58:1 on bg, 5.24:1 on panel. */
+  --fg-3: #848a92;
+  --fg-3-rgb: 132 138 146;
   --accent: #6f79e3;
+  --accent-rgb: 111 121 227;
+  /* accent-text 5.11:1 on bg; accent-fill keeps white ink at 4.70:1 (the
+     brighter #6f79e3 would give only 3.80:1). */
+  --accent-text: #6f79e3;
+  --accent-text-rgb: 111 121 227;
+  --accent-fill: #5e6ad2;
+  --accent-fill-rgb: 94 106 210;
   --accent-hover: #838bec;
+  --accent-hover-rgb: 131 139 236;
   --accent-fg: #ffffff;
+  --accent-fg-rgb: 255 255 255;
   --accent-soft: rgba(111, 121, 227, 0.16);
   --accent-line: rgba(111, 121, 227, 0.34);
   --bubble-own: #5560d0;
+  --bubble-own-rgb: 85 96 208;
   /* Peer meta on panel-2 6.5:1; own meta on bubble-own 5.3:1 (read tick 4.2:1). */
   --bubble-meta: #9aa0a8;
   --bubble-meta-own: #ffffff;
@@ -141,27 +203,41 @@
   /* Darker in dark mode so the panel still lifts off the page. */
   --scrim: rgba(0, 0, 0, 0.6);
   --good: #5fb07d;
+  --good-rgb: 95 176 125;
   --warn: #d59a4a;
+  --warn-rgb: 213 154 74;
   --bad: #e0685a;
+  --bad-rgb: 224 104 90;
   --good-solid: #3e7d54;
+  --good-solid-rgb: 62 125 84;
   --bad-solid: #c2392b;
+  --bad-solid-rgb: 194 57 43;
   --good-soft: rgba(95, 176, 125, 0.16);
   --bad-soft: rgba(224, 104, 90, 0.14);
   --warn-soft: #2e2610;
+  --warn-soft-rgb: 46 38 16;
   --warn-ink: #f0a35c;
   --warn-line: #5a3a1c;
   --annotation-bg: #4a3a14;
+  --annotation-bg-rgb: 74 58 20;
   --annotation-line: #d9a93c;
+  --annotation-line-rgb: 217 169 60;
   --search-mark-bg: #e8b84a;
+  --search-mark-bg-rgb: 232 184 74;
   --search-mark-fg: #16171b;
   --stage-review: #e0954a;
+  --stage-review-rgb: 224 149 74;
   --stage-approved: #46b47a;
+  --stage-approved-rgb: 70 180 122;
   --stage-rejected: #e0685a;
+  --stage-rejected-rgb: 224 104 90;
   --stage-parked: #8a949e;
+  --stage-parked-rgb: 138 148 158;
   /* Overlay scale held constant with :root so the lightbox backdrop reads the
      same dark in light and dark mode (parity). */
   --overlay: rgba(0, 0, 0, 0.94);
   --overlay-fg: #f4f5f6;
+  --overlay-fg-rgb: 244 245 246;
   --overlay-fg-dim: rgba(244, 245, 246, 0.7);
   --overlay-surface: rgba(244, 245, 246, 0.12);
   --overlay-line: rgba(244, 245, 246, 0.14);
@@ -171,11 +247,17 @@
   /* Avatar fills keep white initials at 4.5:1 or more on dark panels too, so
      the light values hold (4.7, 4.9, 5.0, 5.4, 5.3, 5.4). */
   --avatar-1: #5e6ad2;
+  --avatar-1-rgb: 94 106 210;
   --avatar-2: #3e7d54;
+  --avatar-2-rgb: 62 125 84;
   --avatar-3: #9a6420;
+  --avatar-3-rgb: 154 100 32;
   --avatar-4: #c2392b;
+  --avatar-4-rgb: 194 57 43;
   --avatar-5: #7a5ea8;
+  --avatar-5-rgb: 122 94 168;
   --avatar-6: #237484;
+  --avatar-6-rgb: 35 116 132;
   --shadow-panel-left: -12px 0 24px -12px rgba(0, 0, 0, 0.55);
   /* Brighter amber so the hairline reads on dark panels; the pill keeps its
      dark ink (10:1). */
@@ -212,6 +294,7 @@
   }
   body {
     color: var(--fg);
+    line-height: 1.45;
     touch-action: manipulation;
     /* A long unbroken string (a pasted link) wraps instead of pushing the page
        sideways. Inherited; break-word, never anywhere, so min-content sizing

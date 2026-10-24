@@ -24,7 +24,7 @@ function expectShared(tag: string): void {
   const cls = classOf(tag).split(/\s+/);
   expect(cls).toContain('h-11');
   expect(cls).toContain('rounded-lg');
-  expect(cls).toContain('text-sm');
+  expect(cls).toContain('text-legacy-sm');
   expect(cls).toContain('font-medium');
   for (const old of [
     'h-9',
@@ -32,7 +32,7 @@ function expectShared(tag: string): void {
     'rounded-md',
     'rounded-xl',
     'font-semibold',
-    'text-xs',
+    'text-legacy-xs',
     'px-3',
   ]) {
     expect(cls).not.toContain(old);

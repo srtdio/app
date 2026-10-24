@@ -19,7 +19,7 @@ export function holdTipView(onDismiss: () => void, layout: ChatLayout = 'touch')
     <div
       data-hold-tip=""
       role="note"
-      className="mx-3 mb-2 flex items-center gap-3 rounded-xl border border-border bg-panel-2 py-1 pl-3 pr-1 text-sm text-fg-2"
+      className="mx-3 mb-2 flex items-center gap-3 rounded-xl border border-border bg-panel-2 py-1 pl-3 pr-1 text-legacy-sm text-fg-2"
     >
       <p className="min-w-0 flex-1">{layout === 'laptop' ? HOLD_TIP_TEXT_LAPTOP : HOLD_TIP_TEXT}</p>
       <Button

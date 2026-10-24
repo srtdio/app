@@ -295,7 +295,7 @@ const SECTION_HEADER_CLASS = cn(
 // raised on, in the workspace zone. Deliberately NOT sticky and not interactive
 // (the section header above it already pins), so it is a plain label: token
 // colours only, so light/dark parity is automatic, and no motion.
-const DAY_HEADING_CLASS = 'pt-3 pb-1 text-xs font-medium text-fg-2';
+const DAY_HEADING_CLASS = 'pt-3 pb-1 text-legacy-xs font-medium text-fg-2';
 
 /**
  * One section per time group: a sticky label header, then, for every
@@ -310,7 +310,7 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
     <section key={group.key}>
       {/* No count here: counts live on the chips only. */}
       <div className={SECTION_HEADER_CLASS}>
-        <h3 className="text-sm font-semibold text-fg">{group.label}</h3>
+        <h3 className="text-legacy-sm font-semibold text-fg">{group.label}</h3>
       </div>
       {groupBriefsByDay(group.items, timeZone, now).flatMap((day) => [
         <div key={`${day.key}-label`} className={DAY_HEADING_CLASS}>
@@ -387,7 +387,9 @@ export function briefsEmptyView(
           <div className="w-[54px] h-[54px] rounded-xl bg-panel-2 border border-border flex items-center justify-center text-fg-3 mb-1.5">
             {icon}
           </div>
-          <p className="text-fg-3 text-sm max-w-[300px]">Briefs from the client show up here.</p>
+          <p className="text-fg-3 text-legacy-sm max-w-[300px]">
+            Briefs from the client show up here.
+          </p>
         </div>
       );
     case 'filtered':

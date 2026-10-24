@@ -51,7 +51,7 @@ const TONE_CLASS: Record<MeterTone, string> = {
   bad: 'bg-bad',
 };
 
-const SECTION_LABEL = 'px-3 text-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
+const SECTION_LABEL = 'px-3 text-legacy-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 function mb(bytes: number): string {
   return `${wholeMb(bytes)} MB`;
@@ -59,7 +59,7 @@ function mb(bytes: number): string {
 
 function UsageLine(props: { label: string; bytes: number }) {
   return (
-    <div className="flex min-h-[44px] items-center gap-3 px-3 text-sm">
+    <div className="flex min-h-[44px] items-center gap-3 px-3 text-legacy-sm">
       <span className="min-w-0 flex-1 truncate text-fg">{props.label}</span>
       <span className="shrink-0 tabular-nums text-fg-2">{mb(props.bytes)}</span>
     </div>
@@ -100,8 +100,10 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
     <div className="flex max-w-[520px] flex-col gap-6">
       <div className="flex flex-col gap-2.5">
         <p className="flex items-baseline gap-2">
-          <span className="text-3xl font-semibold tabular-nums text-fg">{mb(usedBytes)}</span>
-          <span className="text-sm text-fg-3">of 1 GB</span>
+          <span className="text-legacy-3xl font-semibold tabular-nums text-fg">
+            {mb(usedBytes)}
+          </span>
+          <span className="text-legacy-sm text-fg-3">of 1 GB</span>
         </p>
         <div
           role="meter"

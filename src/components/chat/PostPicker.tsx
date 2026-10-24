@@ -786,7 +786,7 @@ function PickerError({ message }: { message: string }): ReactElement {
   return (
     <div
       role="alert"
-      className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-sm text-bad"
+      className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-legacy-sm text-bad"
     >
       {message}
     </div>
@@ -795,7 +795,7 @@ function PickerError({ message }: { message: string }): ReactElement {
 
 function SectionHeading({ label }: { label: string }): ReactElement {
   return (
-    <li className="border-b border-border bg-panel-2 px-4 py-2 text-xs font-medium text-fg-2">
+    <li className="border-b border-border bg-panel-2 px-4 py-2 text-legacy-xs font-medium text-fg-2">
       {label}
     </li>
   );
@@ -822,7 +822,7 @@ export function PostSectionsView(
           </ul>
         </li>
       ))}
-      {footer !== null ? <li className="px-4 py-3 text-xs text-fg-3">{footer}</li> : null}
+      {footer !== null ? <li className="px-4 py-3 text-legacy-xs text-fg-3">{footer}</li> : null}
     </ul>
   );
 }
@@ -873,10 +873,10 @@ export function SearchResultsView(
             type="button"
             onClick={props.onLoadMore}
             disabled={props.loadingMore}
-            className="flex min-h-[44px] w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-accent transition-colors hover:bg-panel-2 disabled:text-fg-3"
+            className="flex min-h-[44px] w-full items-center justify-between gap-3 px-4 py-3 text-left text-legacy-sm font-medium text-accent transition-colors hover:bg-panel-2 disabled:text-fg-3"
           >
             <span>{`Load ${PICKER_PAGE_SIZE} more`}</span>
-            <span className="text-xs font-normal tabular-nums text-fg-3">
+            <span className="text-legacy-xs font-normal tabular-nums text-fg-3">
               {shownOfLabel(props.rows.length, props.count)}
             </span>
           </button>
@@ -913,11 +913,11 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
               {post.title}
             </span>
           </span>
-          <span className="truncate text-xs text-fg-2">{meta}</span>
+          <span className="truncate text-legacy-xs text-fg-2">{meta}</span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
           {inChat ? (
-            <span className="text-xs text-fg-3">in this chat</span>
+            <span className="text-legacy-xs text-fg-3">in this chat</span>
           ) : isTagDot(post.stage) ? (
             <Tag label={stageLabel(post.stage)} dot={post.stage} />
           ) : null}
@@ -947,7 +947,7 @@ export function BriefPickerList(props: {
     return (
       <div
         role="alert"
-        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-sm text-bad"
+        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-legacy-sm text-bad"
       >
         {props.error}
       </div>
@@ -986,7 +986,7 @@ export function BriefPickerList(props: {
                   />
                 </span>
                 {brief.objective.trim() !== '' ? (
-                  <span className="line-clamp-2 text-sm text-fg-2 [overflow-wrap:anywhere]">
+                  <span className="line-clamp-2 text-legacy-sm text-fg-2 [overflow-wrap:anywhere]">
                     {brief.objective}
                   </span>
                 ) : null}
@@ -995,10 +995,10 @@ export function BriefPickerList(props: {
                     <Tag label={formatLabel(brief.formatRequested)} />
                   ) : null}
                   {target !== '' ? (
-                    <span className="text-xs text-fg-2">{`Target ${target}`}</span>
+                    <span className="text-legacy-xs text-fg-2">{`Target ${target}`}</span>
                   ) : null}
                   <span className="flex-1" />
-                  <span className="text-xs text-fg-2">
+                  <span className="text-legacy-xs text-fg-2">
                     {`${briefPostCountLabel(brief.postCount)} · Raised ${formatShortDate(brief.createdAt, props.timeZone)}`}
                   </span>
                 </span>

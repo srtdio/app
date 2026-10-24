@@ -692,7 +692,7 @@ export function PlanConfirmSheet(props: {
     >
       <p className="text-[15px] leading-[21px] text-fg-2">{props.message}</p>
       {props.error !== undefined && props.error !== null ? (
-        <p role="alert" className="mt-2 text-sm text-bad">
+        <p role="alert" className="mt-2 text-legacy-sm text-bad">
           {props.error}
         </p>
       ) : null}
@@ -843,7 +843,7 @@ function ScreenSkeleton(): ReactElement {
 export function ScreenFailed(props: { onRetry: () => void }): ReactElement {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-sm text-fg-2">Couldn&apos;t load. Try again.</p>
+      <p className="text-legacy-sm text-fg-2">Couldn&apos;t load. Try again.</p>
       <Button onClick={props.onRetry}>Retry</Button>
     </div>
   );
@@ -2157,7 +2157,7 @@ export function PlanScreen(props: {
         ) : bundle === null ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-fg-2">
             <IconPlan size={22} />
-            <p className="text-sm">{PLAN_NOT_AVAILABLE}</p>
+            <p className="text-legacy-sm">{PLAN_NOT_AVAILABLE}</p>
           </div>
         ) : (
           <>
@@ -2669,7 +2669,7 @@ export function RenameField(props: {
           if (e.key === 'Enter' && valid) props.onDone();
           if (e.key === 'Escape') props.onCancel();
         }}
-        className="h-11 min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-base font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+        className="h-11 min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-legacy-base font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
       />
       <IconButton
         type="button"

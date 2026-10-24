@@ -803,7 +803,7 @@ describe('MessageBubble forwarded label', () => {
     const label = ForwardedLabel();
     const cls = (label.props as { className: string }).className;
     expect(cls).toContain('text-fg-2');
-    expect(cls).toContain('text-xs');
+    expect(cls).toContain('text-legacy-xs');
     expect((label.props as { children: unknown[] }).children).toContain('Forwarded');
     // On the solid accent the label takes the bubble's on-accent ink.
     const own = ForwardedLabel({ mine: true });

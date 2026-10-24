@@ -137,7 +137,7 @@ export function dayCells(
           if (!past) onPick(iso);
         }}
         className={cn(
-          'flex h-11 w-11 items-center justify-center rounded-md text-sm tabular-nums transition-colors',
+          'flex h-11 w-11 items-center justify-center rounded-md text-legacy-sm tabular-nums transition-colors',
           past
             ? 'cursor-default text-fg-3 opacity-50'
             : selected
@@ -220,7 +220,7 @@ export function DatePicker({
         aria-expanded={open}
         {...(label !== undefined ? { 'aria-label': label } : {})}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-panel-2 px-3 text-sm transition-colors hover:bg-panel-3"
+        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-panel-2 px-3 text-legacy-sm transition-colors hover:bg-panel-3"
       >
         <IconCalendar size={16} className="shrink-0 text-fg-3" />
         <span
@@ -257,7 +257,7 @@ export function DatePicker({
                   >
                     <IconChevronLeft size={16} />
                   </IconButton>
-                  <span className="text-sm font-medium text-fg">
+                  <span className="text-legacy-sm font-medium text-fg">
                     {MONTHS[view.monthIndex]} {view.year}
                   </span>
                   <IconButton

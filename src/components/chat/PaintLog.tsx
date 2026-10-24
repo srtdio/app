@@ -243,7 +243,7 @@ function PaintLogPanel(): ReactElement {
       className="fixed inset-x-2 bottom-2 z-[70] flex flex-col overflow-hidden rounded-lg border border-border bg-panel text-fg shadow-lg"
     >
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2">
-        <span className="flex-1 truncate text-xs font-semibold text-fg-2">
+        <span className="flex-1 truncate text-legacy-xs font-semibold text-fg-2">
           {`Paint log (${entries.length})`}
         </span>
         <Button

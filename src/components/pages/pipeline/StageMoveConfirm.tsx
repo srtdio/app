@@ -140,18 +140,18 @@ export function StageMoveConfirmView(props: StageMoveConfirmViewProps): ReactEle
       <div className="flex flex-col gap-3">
         <p
           data-confirm-post-title=""
-          className="line-clamp-2 text-sm font-medium text-fg [overflow-wrap:anywhere]"
+          className="line-clamp-2 text-legacy-sm font-medium text-fg [overflow-wrap:anywhere]"
         >
           {shown.post.title}
         </p>
         {copy.body !== null ? (
-          <p data-confirm-body="" className="text-sm text-fg-2">
+          <p data-confirm-body="" className="text-legacy-sm text-fg-2">
             {copy.body}
           </p>
         ) : null}
         {copy.reason ? (
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={props.reasonId} className="text-sm font-medium text-fg-2">
+            <label htmlFor={props.reasonId} className="text-legacy-sm font-medium text-fg-2">
               {REASON_LABEL}
             </label>
             <Textarea
@@ -160,7 +160,7 @@ export function StageMoveConfirmView(props: StageMoveConfirmViewProps): ReactEle
               value={props.reason}
               onChange={(event) => props.onReasonChange(event.target.value)}
             />
-            <p className="text-xs text-fg-3">{REASON_HINT}</p>
+            <p className="text-legacy-xs text-fg-3">{REASON_HINT}</p>
           </div>
         ) : null}
       </div>

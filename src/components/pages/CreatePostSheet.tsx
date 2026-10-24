@@ -1245,7 +1245,7 @@ export function CreatePostSheet({
 
   function gridError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-xs text-bad">{fieldErrors[key]}</p>
+      <p className="mt-1.5 text-legacy-xs text-bad">{fieldErrors[key]}</p>
     ) : null;
   }
 
@@ -1369,7 +1369,10 @@ export function CreatePostSheet({
               titleError={gridError('title')}
             />
             {submitError !== null ? (
-              <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+              <div
+                role="alert"
+                className="rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+              >
                 {submitError}
               </div>
             ) : null}
@@ -1408,7 +1411,11 @@ export function CreatePostSheet({
         className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6"
       >
         {failedUploads > 0 ? (
-          <p data-upload-failed-footer="" role="status" className="text-xs text-bad lg:col-span-2">
+          <p
+            data-upload-failed-footer=""
+            role="status"
+            className="text-legacy-xs text-bad lg:col-span-2"
+          >
             {FAILED_UPLOAD_FOOTER}
           </p>
         ) : uploadWait && pendingUploads > 0 ? (
@@ -1512,7 +1519,7 @@ export function CreatePostSheet({
             className="flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-border bg-panel-2 px-3 py-2 text-left transition-colors hover:bg-panel-3"
           >
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
+              <span className="block text-legacy-sm font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
               <span className="block truncate text-[13px] text-fg-3">{MORE_OPTIONS_HINT}</span>
             </span>
             <IconChevronDown
@@ -1558,7 +1565,7 @@ export function CreatePostSheet({
                       }}
                     />
                     {newBucketError !== null ? (
-                      <p role="alert" className="text-xs text-bad">
+                      <p role="alert" className="text-legacy-xs text-bad">
                         {newBucketError}
                       </p>
                     ) : null}
@@ -1613,7 +1620,10 @@ export function CreatePostSheet({
           ) : null}
 
           {submitError !== null ? (
-            <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+            <div
+              role="alert"
+              className="rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+            >
               {submitError}
             </div>
           ) : null}
@@ -1683,7 +1693,7 @@ export function FormatRow({
   const name = platform !== null && format !== '' ? formatLabel(platform, format) : '';
   return (
     <div data-format-row="" className="relative flex min-h-[44px] min-w-0 items-center gap-3">
-      <span className="shrink-0 text-sm font-medium text-fg">Format</span>
+      <span className="shrink-0 text-legacy-sm font-medium text-fg">Format</span>
       <span
         data-format-pill=""
         className="inline-flex h-7 shrink-0 items-center rounded-full border border-border bg-panel-2 px-3 text-[13px] font-medium text-fg"
@@ -1873,7 +1883,7 @@ function ShareToggle({
   onChange: (value: boolean) => void;
 }): ReactElement {
   return (
-    <div className="flex min-h-[44px] items-center justify-between gap-3 text-sm">
+    <div className="flex min-h-[44px] items-center justify-between gap-3 text-legacy-sm">
       <span className="[text-wrap:pretty]">{label}</span>
       <button
         type="button"

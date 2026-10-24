@@ -122,7 +122,9 @@ describe('Open / All filter (item 2)', () => {
   it('the header row is opt-in (posts), so briefs keep their own heading', () => {
     expect(SRC).toContain('showHeader = false');
     expect(SRC).toContain('{showHeader ? (');
-    expect(SRC).toContain('<h3 className="text-sm font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>');
+    expect(SRC).toContain(
+      '<h3 className="text-legacy-sm font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>',
+    );
     expect(CHECKPOINTS_TITLE).toBe('Checkpoints');
     expect(SRC).not.toContain('>Comments</h3>');
     expect(SRC).toContain("filterButton('open', 'Open')");

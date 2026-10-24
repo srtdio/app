@@ -456,7 +456,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             keep both legible over any photo. */}
         <span
           className={cn(
-            'pointer-events-none absolute left-2 top-2 rounded-md bg-overlay-surface px-2 py-1 font-mono text-sm tabular-nums text-overlay-fg',
+            'pointer-events-none absolute left-2 top-2 rounded-md bg-overlay-surface px-2 py-1 font-mono text-legacy-sm tabular-nums text-overlay-fg',
             chromeMotion(chromeVisible),
           )}
         >
@@ -521,9 +521,9 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
         ) : removeConfirming ? (
           <div className="flex items-center gap-2 px-3">
             <span className="flex min-w-0 flex-col text-left">
-              <span className="text-sm text-overlay-fg">{removeCopy.title}</span>
+              <span className="text-legacy-sm text-overlay-fg">{removeCopy.title}</span>
               {removeCopy.message !== null ? (
-                <span className="text-xs text-overlay-fg-dim">{removeCopy.message}</span>
+                <span className="text-legacy-xs text-overlay-fg-dim">{removeCopy.message}</span>
               ) : null}
             </span>
             <Button
@@ -573,7 +573,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               <IconTrash size={20} />
             </IconButton>
             {saving ? (
-              <span aria-live="polite" className="ml-2 text-xs text-overlay-fg-dim">
+              <span aria-live="polite" className="ml-2 text-legacy-xs text-overlay-fg-dim">
                 Saving…
               </span>
             ) : null}
@@ -600,7 +600,7 @@ function FileSlideCard({
 }): ReactElement {
   return (
     <div data-file-slide="" className="flex flex-col items-center gap-3 px-6 text-center">
-      <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-sm font-medium text-overlay-fg">
+      <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-legacy-sm font-medium text-overlay-fg">
         {label}
       </span>
       <Button
@@ -615,7 +615,7 @@ function FileSlideCard({
         Open
       </Button>
       {failed ? (
-        <p role="status" className="text-sm text-overlay-fg-dim">
+        <p role="status" className="text-legacy-sm text-overlay-fg-dim">
           {VIEWER_ERROR}
         </p>
       ) : null}
@@ -634,7 +634,7 @@ function GracefulPanel({
 }) {
   return (
     <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-xl">
-      <p className="text-xs text-fg-3">{message}</p>
+      <p className="text-legacy-xs text-fg-3">{message}</p>
       {onDownload !== undefined ? (
         <Button
           type="button"

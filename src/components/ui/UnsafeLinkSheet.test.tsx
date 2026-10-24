@@ -45,7 +45,7 @@ describe('UnsafeLinkSheet', () => {
       const cls = b.getAttribute('class') ?? '';
       expect(cls).toContain('h-11');
       expect(cls).toContain('rounded-lg');
-      expect(cls).toContain('text-sm');
+      expect(cls).toContain('text-legacy-sm');
       expect(cls).not.toContain('h-[46px]');
       expect(cls).not.toContain('rounded-xl');
       expect(cls).not.toContain('text-[15px]');

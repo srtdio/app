@@ -84,6 +84,16 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - New API endpoints, RPC functions, and Workers must accept and propagate trace_id. Read it from the `X-Trace-Id` header on inbound, attach it to all outbound calls.
 - Use logger from `src/lib/logger.ts`. No `console.*` in `src/**` outside logger files.
 
+## Design rules (locked 24 Oct 2026)
+
+- Type: Tailwind fontSize scale only (xs 11, sm 12, md 13, base 14, lg 15, xl 17, 2xl 20, 3xl 28). No text-[Npx]. Inputs render 16px on phone (iOS zoom). Weights 400/500/600 only.
+- Roles: page title 3xl/600; screen header lg/600; section label sm/600 uppercase tracking-[0.06em] fg-2; card title base/500; body base fg; meta sm fg-3, meta only, never copy or controls.
+- Radius: 8 controls and cards, 12 popovers, 16 sheet tops, full pills. No rounded-[Npx].
+- Buttons: only Button / IconButton / Chip from src/components/ui. 44 tall. Variants primary secondary ghost link success danger; shape round for the composer.
+- Icons: only src/components/ui/icons.tsx, stroke 1.7, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
+- Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots.
+- Contrast: every text token passes 4.5:1 on bg and panel in both themes.
+
 ## Canonical living docs
 
 - Canonical docs live in `docs/`: `pr-list.md` (PR list, referenced by full title only, no numbers, no slugs), `prd.md` (PRD, decisions only), `schema.md` (live DB snapshot from Supabase project movnexawfhsyuluspxoc). Read these before planning any work; they outrank memory and prior chat context.

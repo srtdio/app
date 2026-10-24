@@ -166,7 +166,7 @@ export function PlanDropHere(props: { over: boolean }): ReactElement {
 /** The slim hint line in the laptop footer (agency, edit mode only). */
 export function PlanKeyHints(): ReactElement {
   return (
-    <p data-plan-key-hints="" className="text-xs leading-4 text-fg-3">
+    <p data-plan-key-hints="" className="text-legacy-xs leading-4 text-fg-3">
       {KEY_HINTS}
     </p>
   );

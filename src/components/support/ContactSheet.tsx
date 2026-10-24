@@ -51,11 +51,11 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="text-sm leading-relaxed text-fg-2">
+        <p className="text-legacy-sm leading-relaxed text-fg-2">
           Tell us what you need. Someone from the team replies by email.
         </p>
         <div className="flex min-w-0 items-center gap-2 rounded-[10px] border border-border bg-panel-2 py-1 pl-3 pr-1">
-          <span className="min-w-0 flex-1 break-all text-sm font-medium text-fg">
+          <span className="min-w-0 flex-1 break-all text-legacy-sm font-medium text-fg">
             {SUPPORT_EMAIL}
           </span>
           <Button className="shrink-0" onClick={() => void copy()}>
@@ -64,7 +64,7 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
         </div>
         <div className="flex flex-col gap-1">
           <p className="text-[11px] text-fg-3">Suggested line, copied with the address:</p>
-          <p className="text-sm text-fg">{anotherWorkspaceBody(workspaceName)}</p>
+          <p className="text-legacy-sm text-fg">{anotherWorkspaceBody(workspaceName)}</p>
         </div>
       </div>
     </Sheet>

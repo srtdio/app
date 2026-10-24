@@ -311,7 +311,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
         <span className="flex min-w-0 flex-1 flex-col gap-2">
           <span className="flex min-w-0 items-center gap-2">
             <RowAvatar name={props.sender} src={props.avatarUrl} />
-            <span className="min-w-0 flex-1 truncate text-sm text-fg">
+            <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg">
               <span className="font-semibold">{props.sender}</span>
               {props.chat !== null ? (
                 <span data-starred-chat="" className="text-fg-3">
@@ -321,7 +321,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
             </span>
             <span
               data-starred-date=""
-              className="shrink-0 font-mono text-xs tabular-nums text-fg-3"
+              className="shrink-0 font-mono text-legacy-xs tabular-nums text-fg-3"
             >
               {props.date}
             </span>
@@ -350,7 +350,7 @@ export function StarredEmpty(): ReactElement {
   return (
     <div data-starred-empty="" className="flex flex-col items-center gap-1 px-4 py-10 text-center">
       <p className="text-[15px] font-semibold text-fg">{STARRED_EMPTY_TITLE}</p>
-      <p className="text-sm text-fg-2">{STARRED_EMPTY_LINE}</p>
+      <p className="text-legacy-sm text-fg-2">{STARRED_EMPTY_LINE}</p>
     </div>
   );
 }
@@ -564,7 +564,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
         type="button"
         data-starred-retry=""
         onClick={props.onRetry}
-        className="flex min-h-[44px] w-full items-center justify-center rounded-[14px] px-3 text-sm text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] w-full items-center justify-center rounded-[14px] px-3 text-legacy-sm text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         Couldn&apos;t load. Try again.
       </button>
@@ -714,7 +714,7 @@ export function StarredSheet(props: {
         </IconButton>
         <div className="flex min-w-0 flex-1 flex-col">
           <h2 className="truncate text-[15px] font-semibold leading-5 text-fg">{STARRED_TITLE}</h2>
-          <span data-starred-chat-name="" className="truncate text-xs text-fg-2">
+          <span data-starred-chat-name="" className="truncate text-legacy-xs text-fg-2">
             {props.chatName}
           </span>
         </div>

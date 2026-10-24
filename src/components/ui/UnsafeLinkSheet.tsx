@@ -135,7 +135,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         </div>
         <p
           data-unsafe-url=""
-          className="break-all rounded-lg border border-border bg-panel-2 px-2.5 py-2 font-mono text-xs text-fg"
+          className="break-all rounded-lg border border-border bg-panel-2 px-2.5 py-2 font-mono text-legacy-xs text-fg"
         >
           {url}
         </p>
@@ -248,7 +248,7 @@ export function UnsafeLinkButton(props: {
       url={props.url}
       reasons={props.reasons}
       className={cn(
-        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-[color:var(--warn-line)] bg-warn-soft px-4 text-sm font-medium text-[color:var(--warn-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-[color:var(--warn-line)] bg-warn-soft px-4 text-legacy-sm font-medium text-[color:var(--warn-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         props.className,
       )}
     >

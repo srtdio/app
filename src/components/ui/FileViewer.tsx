@@ -332,7 +332,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
       'focus-visible:ring-overlay-fg disabled:opacity-40',
     text:
-      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium ' +
+      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-legacy-sm font-medium ' +
       'text-overlay-fg bg-overlay-surface hover:bg-overlay-line focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-overlay-fg',
   },
@@ -346,7 +346,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 ' +
       'focus-visible:ring-accent disabled:opacity-40',
     text:
-      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium ' +
+      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-legacy-sm font-medium ' +
       'text-fg bg-panel border border-border hover:bg-panel-3 focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-accent',
   },
@@ -374,7 +374,7 @@ function ViewerError(props: {
       role="alert"
       className={cn('flex flex-col items-center gap-3 px-6 text-center', NO_SELECT)}
     >
-      <p className={cn('text-sm', tone.fg)}>{VIEWER_ERROR}</p>
+      <p className={cn('text-legacy-sm', tone.fg)}>{VIEWER_ERROR}</p>
       <div className="flex flex-wrap items-center justify-center gap-2">
         {props.onRetry !== undefined ? (
           <button type="button" onClick={props.onRetry} className={tone.text}>
@@ -429,8 +429,8 @@ function UnavailableRenderer(props: RendererProps): ReactElement {
       <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-overlay-fg">
         <IconFileText size={30} />
       </span>
-      <p className="text-base font-medium text-overlay-fg">{PREVIEW_UNAVAILABLE}</p>
-      <p className="max-w-full text-sm text-overlay-fg-dim [overflow-wrap:anywhere]">
+      <p className="text-legacy-base font-medium text-overlay-fg">{PREVIEW_UNAVAILABLE}</p>
+      <p className="max-w-full text-legacy-sm text-overlay-fg-dim [overflow-wrap:anywhere]">
         {middleTruncate(props.name)}
         {props.size !== undefined && props.size > 0 ? (
           <>
@@ -619,7 +619,7 @@ function PdfPage(props: {
         >
           <span className="flex flex-col items-center gap-3 text-fg-2">
             <IconFileText size={30} />
-            <span className="max-w-full text-sm font-medium [overflow-wrap:anywhere]">
+            <span className="max-w-full text-legacy-sm font-medium [overflow-wrap:anywhere]">
               {middleTruncate(name)}
             </span>
           </span>
@@ -638,7 +638,7 @@ function PdfPage(props: {
           data-pdf-page-error=""
           onClick={() => setAttempt((n) => n + 1)}
           className={cn(
-            'absolute inset-0 flex min-h-[44px] items-center justify-center bg-panel text-sm text-fg',
+            'absolute inset-0 flex min-h-[44px] items-center justify-center bg-panel text-legacy-sm text-fg',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
             NO_SELECT,
           )}
@@ -1062,11 +1062,11 @@ function TopBar(props: {
       </button>
       {props.actions !== undefined ? (
         <div className="min-w-0 flex-1 px-1 text-center">
-          <p title={props.name} className={cn('truncate text-sm font-medium', tone.fg)}>
+          <p title={props.name} className={cn('truncate text-legacy-sm font-medium', tone.fg)}>
             {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
           </p>
           {props.line != null ? (
-            <p data-viewer-bar-line="" className={cn('truncate text-xs', tone.fgDim)}>
+            <p data-viewer-bar-line="" className={cn('truncate text-legacy-xs', tone.fgDim)}>
               {props.line}
             </p>
           ) : null}
@@ -1074,7 +1074,7 @@ function TopBar(props: {
       ) : (
         <p
           title={props.name}
-          className={cn('min-w-0 flex-1 truncate text-center text-sm font-medium', tone.fg)}
+          className={cn('min-w-0 flex-1 truncate text-center text-legacy-sm font-medium', tone.fg)}
         >
           {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
         </p>
@@ -1269,7 +1269,11 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           <div className="pointer-events-none absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] flex justify-center">
             <span
               data-page-counter=""
-              className={cn('rounded-full px-3 py-1 font-mono text-xs', tone.chip, NO_SELECT)}
+              className={cn(
+                'rounded-full px-3 py-1 font-mono text-legacy-xs',
+                tone.chip,
+                NO_SELECT,
+              )}
             >
               {pageCounter(pages.page, pages.total)}
             </span>
@@ -1278,7 +1282,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
         {downloadFailed ? (
           <p
             role="status"
-            className={cn('absolute inset-x-0 bottom-14 text-center text-sm', tone.fg)}
+            className={cn('absolute inset-x-0 bottom-14 text-center text-legacy-sm', tone.fg)}
           >
             {DOWNLOAD_ERROR}
           </p>

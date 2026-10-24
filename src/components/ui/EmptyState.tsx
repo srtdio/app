@@ -21,9 +21,9 @@ export function EmptyState({ icon, title, description, action, compact = false }
       <div className="w-[54px] h-[54px] rounded-xl bg-panel-2 border border-border flex items-center justify-center text-fg-3 mb-1.5">
         {icon}
       </div>
-      <div className="text-base font-semibold">{title}</div>
+      <div className="text-legacy-base font-semibold">{title}</div>
       {description !== undefined ? (
-        <div className="text-fg-3 text-sm max-w-[300px]">{description}</div>
+        <div className="text-fg-3 text-legacy-sm max-w-[300px]">{description}</div>
       ) : null}
       {action !== undefined ? <div className="mt-3.5">{action}</div> : null}
     </div>

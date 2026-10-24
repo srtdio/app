@@ -21,7 +21,15 @@ function classOf(el: ReactElement): string[] {
   return ((el.props as { className?: string }).className ?? '').split(/\s+/).filter(Boolean);
 }
 
-const BAD = ['h-9', 'md:h-9', 'h-12', 'rounded-md', 'rounded-xl', 'font-semibold', 'text-xs'];
+const BAD = [
+  'h-9',
+  'md:h-9',
+  'h-12',
+  'rounded-md',
+  'rounded-xl',
+  'font-semibold',
+  'text-legacy-xs',
+];
 
 describe('SortMenu buttons', () => {
   it('the trigger is a 44px, 8px-radius secondary button at every width', () => {
@@ -31,7 +39,7 @@ describe('SortMenu buttons', () => {
     const trigger = /<button[^>]*aria-haspopup="menu"[^>]*>/.exec(html)?.[0] ?? '';
     expect(trigger).toContain('h-11');
     expect(trigger).toContain('rounded-lg');
-    expect(trigger).toContain('text-sm');
+    expect(trigger).toContain('text-legacy-sm');
     expect(trigger).toContain('font-medium');
     for (const bad of BAD) expect(trigger.split(/[\s"]/)).not.toContain(bad);
   });
@@ -82,7 +90,7 @@ describe('Toast buttons', () => {
       expect(t).toContain('rounded-lg');
       for (const bad of BAD) expect(t).not.toContain(bad);
     }
-    expect(classOf(action!)).toContain('text-sm');
+    expect(classOf(action!)).toContain('text-legacy-sm');
     expect(classOf(action!)).toContain('font-medium');
   });
 });

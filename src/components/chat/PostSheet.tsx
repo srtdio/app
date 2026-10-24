@@ -113,7 +113,7 @@ export function stripFrame(
 
 /** A small pill laid over a slide. */
 const STRIP_PILL =
-  'pointer-events-none inline-flex h-6 items-center gap-1 rounded-md bg-panel px-2 text-xs font-medium text-fg';
+  'pointer-events-none inline-flex h-6 items-center gap-1 rounded-md bg-panel px-2 text-legacy-xs font-medium text-fg';
 
 /** The sheet's talk-about label. */
 export function talkAboutLabel(): string {
@@ -377,7 +377,7 @@ export function PostSheetDetails(props: {
       <h3 data-sheet-title="" className="text-[17px] font-semibold leading-6 text-fg">
         {post.title}
       </h3>
-      <dl className="flex flex-col text-sm">
+      <dl className="flex flex-col text-legacy-sm">
         <div className="flex min-h-[36px] items-center justify-between gap-3 border-b border-border">
           <dt className="text-fg-3">Stage</dt>
           <dd>
@@ -444,7 +444,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
   const brand = props.brand ?? null;
   const error =
     props.error !== null ? (
-      <p role="alert" data-sheet-error="" className="text-sm text-bad">
+      <p role="alert" data-sheet-error="" className="text-legacy-sm text-bad">
         {props.error}
       </p>
     ) : null;
@@ -458,10 +458,10 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
     });
     content = (
       <div data-sheet-confirm="reject" className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-fg">{copy.question}</p>
-        <p className="text-sm text-fg-2">{copy.detail}</p>
+        <p className="text-legacy-sm font-medium text-fg">{copy.question}</p>
+        <p className="text-legacy-sm text-fg-2">{copy.detail}</p>
         <label className="mt-1 flex flex-col gap-1.5">
-          <span className="text-sm text-fg-2">{REJECT_REASON_LABEL}</span>
+          <span className="text-legacy-sm text-fg-2">{REJECT_REASON_LABEL}</span>
           <Textarea
             data-sheet-reason=""
             aria-describedby="post-sheet-reason-helper"
@@ -470,7 +470,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
             onChange={(event) => props.onReasonChange?.(event.target.value)}
           />
         </label>
-        <p id="post-sheet-reason-helper" className="text-xs text-fg-3">
+        <p id="post-sheet-reason-helper" className="text-legacy-xs text-fg-3">
           {REJECT_REASON_HELPER}
         </p>
         {error}
@@ -505,10 +505,10 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
     });
     content = (
       <div data-sheet-confirm={mode.confirm} className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-fg">{copy.question}</p>
-        <p className="text-sm text-fg-2">{copy.detail}</p>
+        <p className="text-legacy-sm font-medium text-fg">{copy.question}</p>
+        <p className="text-legacy-sm text-fg-2">{copy.detail}</p>
         {mode.confirm === 'approve' && props.onBehalf === true ? (
-          <p data-sheet-on-behalf="" className="text-sm text-fg-2">
+          <p data-sheet-on-behalf="" className="text-legacy-sm text-fg-2">
             {onBehalfConfirmLine(brand)}
           </p>
         ) : null}
@@ -584,7 +584,7 @@ export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
           </Button>
         ) : null}
         {set.hint !== null ? (
-          <p data-sheet-hint="" className="text-center text-xs text-fg-3">
+          <p data-sheet-hint="" className="text-center text-legacy-xs text-fg-3">
             {set.hint}
           </p>
         ) : null}

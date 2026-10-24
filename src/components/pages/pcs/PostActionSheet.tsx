@@ -260,7 +260,7 @@ export function PostActionSheet({
       {view === 'remove' && removeImage !== undefined && removeCopy !== null ? (
         <div data-remove-image-confirm="" className="flex flex-col gap-3">
           {removeCopy.message !== null ? (
-            <p className="text-sm text-fg-2">{removeCopy.message}</p>
+            <p className="text-legacy-sm text-fg-2">{removeCopy.message}</p>
           ) : null}
           <div className="flex justify-end gap-2">
             <Button onClick={() => setView('actions')}>Cancel</Button>

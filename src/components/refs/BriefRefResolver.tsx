@@ -16,7 +16,7 @@ export function BriefRefResolver() {
 
   switch (resolution.status) {
     case 'loading':
-      return <div className="px-4 md:px-6 py-10 text-sm text-fg-3">Loading brief</div>;
+      return <div className="px-4 md:px-6 py-10 text-legacy-sm text-fg-3">Loading brief</div>;
     case 'redirect':
       return <Navigate to={resolution.to} replace />;
     case 'resolved':

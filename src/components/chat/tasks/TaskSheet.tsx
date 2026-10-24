@@ -563,7 +563,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           <div className="flex min-w-0 flex-1 flex-col">
             <h2 className="text-[15px] font-semibold text-fg">{TASK_SHEET_TITLE}</h2>
             {editingLine !== null ? (
-              <p data-task-editing="" className="truncate text-xs text-fg-2">
+              <p data-task-editing="" className="truncate text-legacy-xs text-fg-2">
                 {editingLine}
               </p>
             ) : null}
@@ -727,7 +727,7 @@ function DiscardConfirm(props: {
         data-task-discard=""
         className="w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-lg outline-none"
       >
-        <h2 className="text-sm font-semibold text-fg">{DISCARD_TITLE}</h2>
+        <h2 className="text-legacy-sm font-semibold text-fg">{DISCARD_TITLE}</h2>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="danger" disabled={props.saving} onClick={props.onDiscard}>
             Discard

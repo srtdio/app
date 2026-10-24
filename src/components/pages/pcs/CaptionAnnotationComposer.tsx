@@ -90,7 +90,7 @@ export function CaptionAnnotationComposer({
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="rounded-md border-l-4 border-annotation-line bg-annotation-bg px-3 py-2 text-sm text-fg">
+        <div className="rounded-md border-l-4 border-annotation-line bg-annotation-bg px-3 py-2 text-legacy-sm text-fg">
           {quote}
         </div>
         <Textarea
@@ -103,7 +103,7 @@ export function CaptionAnnotationComposer({
           autoFocus
         />
         {error !== null ? (
-          <p role="alert" className="text-sm text-bad">
+          <p role="alert" className="text-legacy-sm text-bad">
             {error}
           </p>
         ) : null}

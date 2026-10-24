@@ -44,7 +44,7 @@ export const PLATFORM_FIXED_LINE =
   'Fixed when the workspace was created. Another platform means another workspace.';
 
 function ReadOnlyValue({ children }: { children: string }) {
-  return <p className="min-h-[44px] py-2.5 text-sm text-fg">{children}</p>;
+  return <p className="min-h-[44px] py-2.5 text-legacy-sm text-fg">{children}</p>;
 }
 
 /** The type-the-name sheet; Delete permanently runs workspace_delete. */
@@ -122,7 +122,7 @@ function DeleteWorkspaceSheet({
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="text-sm leading-snug text-fg-2">{deleteWorkspaceBody(name)}</p>
+        <p className="text-legacy-sm leading-snug text-fg-2">{deleteWorkspaceBody(name)}</p>
         <Field label={deleteWorkspaceHint(name)} htmlFor="delete-workspace-name">
           <Input
             id="delete-workspace-name"
@@ -139,7 +139,7 @@ function DeleteWorkspaceSheet({
           />
         </Field>
         {error !== null ? (
-          <p role="alert" className="text-xs text-bad">
+          <p role="alert" className="text-legacy-xs text-bad">
             {error}
           </p>
         ) : null}
@@ -163,7 +163,7 @@ export function WorkspaceSettingsPanel() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (row === null || workspaceId === null) {
-    return <p className="text-sm text-fg-3">Loading workspace</p>;
+    return <p className="text-legacy-sm text-fg-3">Loading workspace</p>;
   }
   const activeId = workspaceId;
 
@@ -194,7 +194,7 @@ export function WorkspaceSettingsPanel() {
       </Field>
 
       <Field label="Platform" hint={PLATFORM_FIXED_LINE}>
-        <div className="flex min-h-[44px] items-center gap-2 text-sm text-fg">
+        <div className="flex min-h-[44px] items-center gap-2 text-legacy-sm text-fg">
           <PlatformMark platform={row.platform} />
           <span>{platformLabel(row.platform)}</span>
         </div>
@@ -217,7 +217,7 @@ export function WorkspaceSettingsPanel() {
       </Field>
 
       {error !== null ? (
-        <p role="alert" className="text-sm text-bad">
+        <p role="alert" className="text-legacy-sm text-bad">
           {error}
         </p>
       ) : null}
@@ -230,13 +230,13 @@ export function WorkspaceSettingsPanel() {
         aria-labelledby="workspace-danger-title"
         className="flex flex-col gap-3 rounded-xl border border-border bg-panel p-4"
       >
-        <h3 id="workspace-danger-title" className="text-sm font-semibold text-fg">
+        <h3 id="workspace-danger-title" className="text-legacy-sm font-semibold text-fg">
           Danger
         </h3>
         {isOwner && session !== null ? (
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-fg">Delete workspace</p>
+              <p className="text-legacy-sm text-fg">Delete workspace</p>
               <p className="mt-0.5 text-[13px] leading-snug text-fg-3">
                 Permanent. Nothing is saved.
               </p>

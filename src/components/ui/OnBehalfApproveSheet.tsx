@@ -90,7 +90,7 @@ export function OnBehalfApproveView(props: OnBehalfApproveViewProps): ReactEleme
       }
     >
       <div data-on-behalf-sheet="" className="flex flex-col gap-1.5">
-        <span className="block text-sm font-medium text-fg">{ON_BEHALF_FIELD}</span>
+        <span className="block text-legacy-sm font-medium text-fg">{ON_BEHALF_FIELD}</span>
         <Select
           value={props.selected}
           options={options}
@@ -99,7 +99,7 @@ export function OnBehalfApproveView(props: OnBehalfApproveViewProps): ReactEleme
           disabled={props.busy || options.length === 0}
         />
         {props.error !== undefined && props.error !== null ? (
-          <p role="alert" data-on-behalf-error="" className="mt-1 text-sm text-bad">
+          <p role="alert" data-on-behalf-error="" className="mt-1 text-legacy-sm text-bad">
             {props.error}
           </p>
         ) : null}

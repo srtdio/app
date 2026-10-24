@@ -64,7 +64,7 @@ export const EMPTY_CONCEPT: ConceptForm = { title: '', description: '', files: [
 export const CONCEPT_DESCRIPTION_MAX = 5000;
 
 export const FIELD =
-  'min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60';
+  'min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-3.5 text-legacy-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60';
 
 /** The hint once the files reach the cap (library picks and uploads together). */
 export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} files.`;
@@ -397,7 +397,7 @@ export function ConceptSheet(props: {
               data-plan-concept-files-failed=""
               className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border border-border bg-panel px-3.5"
             >
-              <p className="text-sm text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
+              <p className="text-legacy-sm text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
               <Button data-plan-concept-files-retry="" onClick={props.onRetryFiles}>
                 Retry
               </Button>

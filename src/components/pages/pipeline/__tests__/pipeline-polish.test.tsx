@@ -159,14 +159,14 @@ describe('Pipeline polish: move sheet', () => {
     }
   });
 
-  it('"Currently in" reads at text-sm, like the rows', () => {
+  it('"Currently in" reads at text-legacy-sm, like the rows', () => {
     const current = all(sheet('review', 'agency')).find(
       (el) => 'data-move-current' in (el.props as object),
     )!;
     expect(text(current)).toBe('Currently inReview');
     const className = (current.props as { className: string }).className;
-    expect(className).toContain('text-sm');
-    expect(className).not.toContain('text-xs');
+    expect(className).toContain('text-legacy-sm');
+    expect(className).not.toContain('text-legacy-xs');
   });
 });
 

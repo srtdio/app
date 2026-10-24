@@ -27,7 +27,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // the shape classes (never both rounded-lg and rounded-full on one element) and
 // a caller overriding a base property must use the ! modifier (e.g. !justify-start).
 export const BUTTON_BASE =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-sm font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none';
+  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-legacy-sm font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none';
 
 const secondary = 'bg-panel text-fg border border-border hover:bg-panel-2';
 

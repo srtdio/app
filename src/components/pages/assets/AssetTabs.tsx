@@ -66,7 +66,7 @@ export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
             data-asset-tab={tab}
             onClick={() => onChange(tab)}
             className={cn(
-              'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-sm font-normal transition-colors',
+              'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-1.5 rounded-lg border px-4 text-legacy-sm font-normal transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
               selected
                 ? 'border-accent-line bg-accent-soft text-accent'

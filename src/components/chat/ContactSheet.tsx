@@ -52,7 +52,7 @@ function ContactPhoto(props: { name: string; avatarUrl: string | null }): ReactE
   return (
     <span
       className={cn(
-        'flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full text-xl font-semibold',
+        'flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full text-legacy-xl font-semibold',
         props.avatarUrl !== null ? 'bg-panel-3' : cn(avatarFillFor(props.name), 'text-white'),
       )}
     >
@@ -90,11 +90,11 @@ function contactPage(props: {
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6">
           <div className="flex flex-col items-center gap-1 text-center">
             <ContactPhoto name={props.title} avatarUrl={props.avatarUrl} />
-            <span className="mt-2 max-w-full truncate text-lg font-semibold text-fg">
+            <span className="mt-2 max-w-full truncate text-legacy-lg font-semibold text-fg">
               {props.title}
             </span>
             {props.roleLine !== null ? (
-              <span data-role-line="" className="max-w-full truncate text-sm text-fg-2">
+              <span data-role-line="" className="max-w-full truncate text-legacy-sm text-fg-2">
                 {props.roleLine}
               </span>
             ) : null}

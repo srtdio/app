@@ -492,9 +492,9 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
         <span aria-hidden="true" className="h-8 w-8 shrink-0 rounded-md bg-panel-2" />
       )}
       <span className="flex min-w-0 flex-1 flex-col py-1">
-        <span className="truncate text-xs font-medium text-accent">About</span>
+        <span className="truncate text-legacy-xs font-medium text-accent">About</span>
         {post !== null ? (
-          <span className="truncate text-xs text-fg-2">{post.title}</span>
+          <span className="truncate text-legacy-xs text-fg-2">{post.title}</span>
         ) : (
           <span aria-hidden="true" className="my-[3px] h-3 w-28 rounded bg-panel-2" />
         )}
@@ -2138,8 +2138,8 @@ export function Composer(props: ComposerProps): ReactElement {
                   aria-hidden="true"
                   className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-bad"
                 />
-                <span className="text-sm text-fg-2">Recording</span>
-                <span className="ml-auto font-mono text-xs tabular-nums text-fg-2">
+                <span className="text-legacy-sm text-fg-2">Recording</span>
+                <span className="ml-auto font-mono text-legacy-xs tabular-nums text-fg-2">
                   {formatMmSs(recorder.seconds)}
                 </span>
               </div>
@@ -2160,7 +2160,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 aria-hidden="true"
                 className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-accent"
               />
-              <span className="text-sm text-fg-2">Sending voice note…</span>
+              <span className="text-legacy-sm text-fg-2">Sending voice note…</span>
             </div>
           ) : (
             <>
@@ -2282,7 +2282,7 @@ export function Composer(props: ComposerProps): ReactElement {
                         className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
                       />
                     ) : scheduleBusy ? (
-                      <span data-scheduling="" className="text-sm font-medium">
+                      <span data-scheduling="" className="text-legacy-sm font-medium">
                         {SCHEDULING_LABEL}
                       </span>
                     ) : scheduling ? (

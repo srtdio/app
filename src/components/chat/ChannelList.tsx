@@ -226,8 +226,8 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   if (props.channels.length === 0) {
     return (
       <div className="px-4 py-12 text-center">
-        <p className="text-sm text-fg-2">{`No chats called "${(props.search ?? '').trim()}"`}</p>
-        <p className="mt-1 text-xs text-fg-3">Try a different name or clear the search.</p>
+        <p className="text-legacy-sm text-fg-2">{`No chats called "${(props.search ?? '').trim()}"`}</p>
+        <p className="mt-1 text-legacy-xs text-fg-3">Try a different name or clear the search.</p>
       </div>
     );
   }
@@ -445,7 +445,8 @@ export const PEOPLE_TILE_GRID =
   'grid grid-cols-[repeat(2,minmax(0,1fr))] auto-rows-[168px] gap-[10px]';
 
 /** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
-export const SECTION_LABEL_TYPE = 'text-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
+export const SECTION_LABEL_TYPE =
+  'text-legacy-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /** The label's padding: 4px 4px 0 for the first section, 12px 4px 0 after. */
 export function sectionLabelClass(first: boolean): string {
@@ -457,7 +458,7 @@ export const GROUP_NAME_TYPE = 'text-[17px] leading-[22px] font-semibold';
 export const GROUP_PREVIEW_TYPE = 'text-[14px] leading-[19px] font-normal';
 export const PERSON_NAME_TYPE = 'text-[15px] leading-[20px] font-semibold';
 export const PERSON_PREVIEW_TYPE = 'text-[13px] leading-[18px] font-normal';
-export const TILE_TIME_TYPE = 'font-mono text-xs font-normal tabular-nums';
+export const TILE_TIME_TYPE = 'font-mono text-legacy-xs font-normal tabular-nums';
 
 /**
  * The wide tile's 76px rounded-square (radius 18) group photo: the shared
@@ -465,15 +466,15 @@ export const TILE_TIME_TYPE = 'font-mono text-xs font-normal tabular-nums';
  * is final on first paint.
  */
 export const GROUP_TILE_PHOTO =
-  'flex h-[76px] w-[76px] shrink-0 [&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-[18px] [&>*]:!text-xl';
+  'flex h-[76px] w-[76px] shrink-0 [&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-[18px] [&>*]:!text-legacy-xl';
 
 /** The square tile's 72px circular photo: the shared Avatar resized in place. */
 export const PERSON_TILE_PHOTO =
-  'flex h-[72px] w-[72px] shrink-0 [&>*]:!h-[72px] [&>*]:!w-[72px] [&>*]:!text-xl';
+  'flex h-[72px] w-[72px] shrink-0 [&>*]:!h-[72px] [&>*]:!w-[72px] [&>*]:!text-legacy-xl';
 
 /** The unread pill: 22px min, radius 11, accent fill, 12/700. */
 export const TILE_PILL =
-  'inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-[11px] bg-accent px-1.5 text-xs font-bold leading-none tabular-nums text-accent-fg';
+  'inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-[11px] bg-accent px-1.5 text-legacy-xs font-bold leading-none tabular-nums text-accent-fg';
 
 /**
  * A tile's box: hairline border, radius 18 and its fixed height. Wide: 100 tall
@@ -851,7 +852,7 @@ export function notesTile(props: {
               {notes.title}
             </span>
             {last !== null && last.time !== '' ? (
-              <span data-notes-time="" className="shrink-0 text-xs tabular-nums text-fg-3">
+              <span data-notes-time="" className="shrink-0 text-legacy-xs tabular-nums text-fg-3">
                 {last.time}
               </span>
             ) : null}
@@ -1019,7 +1020,7 @@ export function visibleChannels(
 function selectHeader(select: ChannelSelectMode): ReactElement {
   return (
     <div className="flex items-center gap-2 border-b border-border px-4 py-3 md:px-6">
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
+      <span className="min-w-0 flex-1 truncate text-legacy-sm font-semibold text-fg">
         {`${select.selectedIds.size} selected`}
       </span>
       <Button variant="ghost" onClick={select.onCancel}>

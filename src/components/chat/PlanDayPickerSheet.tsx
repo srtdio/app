@@ -70,7 +70,7 @@ export function PlanDayTiles(props: {
       {dayTileWeeks(props.range).map((week) => (
         <div key={week.days[0]} className="flex flex-col gap-2">
           {week.label !== null ? (
-            <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.04em] text-fg-3">
+            <p className="mt-0.5 text-legacy-xs font-semibold uppercase tracking-[0.04em] text-fg-3">
               {week.label}
             </p>
           ) : null}
@@ -102,7 +102,7 @@ export function PlanDayTiles(props: {
                   >
                     {civilWeekdayShort(day)}
                   </span>
-                  <span className="font-mono text-xl font-semibold leading-[1.15] tabular-nums">
+                  <span className="font-mono text-legacy-xl font-semibold leading-[1.15] tabular-nums">
                     {dayOfMonth(day)}
                   </span>
                   <span
@@ -127,7 +127,7 @@ export function PlanDayTiles(props: {
         </div>
       ))}
       {pipelineInside ? (
-        <p className="flex items-center gap-1.5 text-xs text-fg-3">
+        <p className="flex items-center gap-1.5 text-legacy-xs text-fg-3">
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-warn" />
           {CURRENT_PIPELINE_DAY}
         </p>
@@ -209,7 +209,7 @@ export const DATE_FIT =
 
 /** The date inputs: the field look with a slimmer side padding so the date fits at 320px. */
 export const DATE_FIELD = cn(
-  'h-11 min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-2.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
+  'h-11 min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-2.5 text-legacy-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
   DATE_FIT,
   'font-mono text-[15px]',
 );

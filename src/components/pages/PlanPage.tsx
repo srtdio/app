@@ -151,7 +151,7 @@ export function PlanPage(props: { fallback: string }): ReactElement {
       >
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-fg-2">
           <IconPlan size={22} />
-          <p className="text-sm">{PLAN_NOT_AVAILABLE}</p>
+          <p className="text-legacy-sm">{PLAN_NOT_AVAILABLE}</p>
         </div>
       </PlanFrame>
     );

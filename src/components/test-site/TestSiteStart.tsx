@@ -29,7 +29,7 @@ export function TestSiteStart(): ReactElement | null {
 
   return (
     <div className="mb-4 flex flex-col gap-2 rounded-md border border-dashed border-accent p-3">
-      <p className="text-xs text-fg-2">
+      <p className="text-legacy-xs text-fg-2">
         Test site: any new email signs in at once, no link. Test accounts are deleted after 24
         hours.
       </p>
@@ -42,15 +42,15 @@ export function TestSiteStart(): ReactElement | null {
       >
         {busy ? 'Starting' : 'Start fresh'}
       </Button>
-      {error !== null ? <p className="text-sm text-bad">{error}</p> : null}
+      {error !== null ? <p className="text-legacy-sm text-bad">{error}</p> : null}
       {invitees.length > 0 ? (
         <div className="flex flex-col gap-1 pt-1">
-          <p className="text-xs text-fg-2">Or open an invite you sent from this browser:</p>
+          <p className="text-legacy-xs text-fg-2">Or open an invite you sent from this browser:</p>
           {invitees.map((invitee) => (
             <Link
               key={invitee.email}
               to={testInviteePath(invitee.email)}
-              className="inline-flex min-h-[44px] items-center text-sm font-medium text-accent hover:underline"
+              className="inline-flex min-h-[44px] items-center text-legacy-sm font-medium text-accent hover:underline"
             >
               Open as {invitee.email}
             </Link>

@@ -90,7 +90,7 @@ export function PlanPickerSheet(props: {
         data-plan-picker=""
         className={cn('-mx-[18px] -my-4 sm:flex sm:min-h-0 sm:flex-1 sm:flex-col', NO_TOUCH_SELECT)}
       >
-        <p className="px-[18px] pb-1 pt-3 text-xs leading-4 text-fg-3">
+        <p className="px-[18px] pb-1 pt-3 text-legacy-xs leading-4 text-fg-3">
           Upcoming plans in {props.workspaceName}
         </p>
         <div className={BODY_BOX}>
@@ -102,7 +102,7 @@ export function PlanPickerSheet(props: {
             </div>
           ) : read.status === 'error' ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-[18px] text-center">
-              <p className="text-sm text-fg-2">Couldn&apos;t load. Try again.</p>
+              <p className="text-legacy-sm text-fg-2">Couldn&apos;t load. Try again.</p>
               <Button type="button" variant="link" onClick={reload}>
                 Retry
               </Button>
@@ -111,8 +111,8 @@ export function PlanPickerSheet(props: {
             <div className="flex flex-col px-[18px] pb-4">
               {read.data.length === 0 ? (
                 <div data-plan-picker-empty="" className="pb-4 pt-6 text-center">
-                  <p className="text-sm leading-5 text-fg-2">{PICKER_EMPTY}</p>
-                  <p className="mt-1 text-xs text-fg-3">{PICKER_EMPTY_SUB}</p>
+                  <p className="text-legacy-sm leading-5 text-fg-2">{PICKER_EMPTY}</p>
+                  <p className="mt-1 text-legacy-xs text-fg-3">{PICKER_EMPTY_SUB}</p>
                 </div>
               ) : (
                 pickerRows(read.data, inChat).map(({ bundle, chips }) => (
@@ -133,7 +133,7 @@ export function PlanPickerSheet(props: {
                       <span className="truncate text-[15px] font-semibold leading-5 text-fg">
                         {bundle.plan.title}
                       </span>
-                      <span className="font-mono text-xs leading-4 text-fg-3">
+                      <span className="font-mono text-legacy-xs leading-4 text-fg-3">
                         {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
                       </span>
                       <span className="flex flex-wrap gap-1">

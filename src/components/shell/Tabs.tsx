@@ -23,7 +23,7 @@ export function Tabs({ items, active, onChange }: TabsProps) {
             onClick={() => onChange(tab.key)}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'relative inline-flex items-center min-h-[44px] px-3 text-sm whitespace-nowrap transition-colors',
+              'relative inline-flex items-center min-h-[44px] px-3 text-legacy-sm whitespace-nowrap transition-colors',
               isActive ? 'text-fg' : 'text-fg-2 hover:text-fg',
             )}
           >

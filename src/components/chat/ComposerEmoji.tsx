@@ -101,7 +101,7 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
         >
           {groups.map((group) => (
             <section key={group.name} aria-label={group.name}>
-              <h3 className="px-1 pb-1 pt-2 text-xs font-medium text-fg-3">{group.name}</h3>
+              <h3 className="px-1 pb-1 pt-2 text-legacy-xs font-medium text-fg-3">{group.name}</h3>
               <div className="grid grid-cols-8">
                 {group.emoji.map((emoji) => (
                   <button

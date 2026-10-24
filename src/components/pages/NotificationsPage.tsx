@@ -171,7 +171,7 @@ function restoreAnchor(list: HTMLElement | null, anchor: ScrollAnchor): void {
 function LoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="px-4 md:px-6 mt-4">
-      <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
+      <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-legacy-sm text-bad">
         {ACTIVITY_LOAD_FAILED}
       </div>
       <div className="mt-3">
@@ -843,7 +843,7 @@ export function NotificationsPage() {
         upcomingError ? (
           <LoadFailed onRetry={() => void loadUpcoming()} />
         ) : workspaceId === null || !upcomingLoaded ? (
-          <div className="px-4 md:px-6 py-10 text-sm text-fg-3">{LOADING_NOTIFICATIONS}</div>
+          <div className="px-4 md:px-6 py-10 text-legacy-sm text-fg-3">{LOADING_NOTIFICATIONS}</div>
         ) : visibleUpcoming.length === 0 ? (
           <EmptyState icon={<IconCalendarClock size={24} />} title={UPCOMING_EMPTY} />
         ) : (
@@ -863,7 +863,7 @@ export function NotificationsPage() {
       ) : error && items.length === 0 ? (
         <LoadFailed onRetry={() => void loadActivity()} />
       ) : listLoading ? (
-        <div className="px-4 md:px-6 py-10 text-sm text-fg-3">{LOADING_NOTIFICATIONS}</div>
+        <div className="px-4 md:px-6 py-10 text-legacy-sm text-fg-3">{LOADING_NOTIFICATIONS}</div>
       ) : buckets.length === 0 ? (
         state === 'mentions' ? (
           <EmptyState icon={<IconAt size={24} />} title={EMPTY_LINES.mentions} />
@@ -887,11 +887,14 @@ export function NotificationsPage() {
             return (
               <section key={bucket.key} className="mt-4">
                 <div className="flex items-center gap-2.5 px-4 md:px-6">
-                  <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-3">
+                  <h2 className="text-legacy-xs font-semibold uppercase tracking-wide text-fg-3">
                     {bucket.label}
                   </h2>
                   <AvatarStack names={bucketActorNames(entries)} />
-                  <span data-bucket-count="" className="ml-auto text-xs tabular-nums text-fg-3">
+                  <span
+                    data-bucket-count=""
+                    className="ml-auto text-legacy-xs tabular-nums text-fg-3"
+                  >
                     {updatesLabel(entries.length)}
                   </span>
                 </div>
@@ -977,7 +980,7 @@ export function NotificationsPage() {
           </div>
         }
       >
-        <p className="truncate text-sm text-fg-2">{cancelShown?.preview ?? ''}</p>
+        <p className="truncate text-legacy-sm text-fg-2">{cancelShown?.preview ?? ''}</p>
       </Sheet>
 
       <Toasts toasts={toasts} onDismiss={dismiss} />

@@ -314,7 +314,7 @@ function AvatarCropperImpl(
           className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent-line"
         />
         {!hasPhoto ? (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-xs text-fg-3">
+          <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-legacy-xs text-fg-3">
             Choose a photo to position it inside the circle
           </div>
         ) : null}
@@ -327,7 +327,7 @@ function AvatarCropperImpl(
       ) : null}
 
       <div className="w-full max-w-[260px]">
-        <span className="mb-1 block text-xs font-medium text-fg-2">Zoom</span>
+        <span className="mb-1 block text-legacy-xs font-medium text-fg-2">Zoom</span>
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -337,7 +337,7 @@ function AvatarCropperImpl(
             variant="secondary"
             className="w-11 shrink-0 !px-0"
           >
-            <span className="text-lg leading-none">-</span>
+            <span className="text-legacy-lg leading-none">-</span>
           </Button>
           <input
             type="range"
@@ -364,12 +364,12 @@ function AvatarCropperImpl(
             variant="secondary"
             className="w-11 shrink-0 !px-0"
           >
-            <span className="text-lg leading-none">+</span>
+            <span className="text-legacy-lg leading-none">+</span>
           </Button>
         </div>
       </div>
 
-      {hasPhoto ? <p className="text-xs text-fg-3">{CROPPER_HINT}</p> : null}
+      {hasPhoto ? <p className="text-legacy-xs text-fg-3">{CROPPER_HINT}</p> : null}
     </div>
   );
 }

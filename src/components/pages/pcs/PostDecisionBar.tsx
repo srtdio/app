@@ -107,7 +107,7 @@ function creatorButton(
         {model.label}
       </Button>
       {model.helper !== null ? (
-        <p data-decision-helper="" className="text-center text-xs text-fg-3">
+        <p data-decision-helper="" className="text-center text-legacy-xs text-fg-3">
           {model.helper}
         </p>
       ) : null}
@@ -127,7 +127,7 @@ function decisionContent(
         <div
           role="alert"
           data-decision-error=""
-          className="mb-2 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+          className="mb-2 rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
         >
           {error}
         </div>
@@ -177,7 +177,7 @@ export function PostDecisionRow(props: {
   if (!hasContent(props.model, props.error) && note === null) return null;
   return (
     <div data-decision-row="" className="flex flex-col">
-      {note !== null ? <p className="mb-3 text-sm text-fg-2">{note}</p> : null}
+      {note !== null ? <p className="mb-3 text-legacy-sm text-fg-2">{note}</p> : null}
       {decisionContent(props.model, props.busy, props.error)}
     </div>
   );

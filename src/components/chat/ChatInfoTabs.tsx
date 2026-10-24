@@ -352,10 +352,12 @@ function FileRow(props: {
           <IconFile size={20} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span title={name} className="truncate text-sm font-medium text-fg">
+          <span title={name} className="truncate text-legacy-sm font-medium text-fg">
             {middleTruncate(name, VIEWER_NAME_BUDGET)}
           </span>
-          <span className="truncate text-xs text-fg-2">{fileMetaLine(item, props.timeZone)}</span>
+          <span className="truncate text-legacy-xs text-fg-2">
+            {fileMetaLine(item, props.timeZone)}
+          </span>
         </span>
       </button>
       {open && source !== null ? (
@@ -391,10 +393,10 @@ export function LinkRow(props: {
             <IconAlertTriangle size={20} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="truncate text-sm font-medium text-[color:var(--warn-ink)]">
+            <span className="truncate text-legacy-sm font-medium text-[color:var(--warn-ink)]">
               {displayUrl(props.item.url)}
             </span>
-            <span className="truncate text-xs text-fg-2">{`${props.sender} · ${props.date}`}</span>
+            <span className="truncate text-legacy-xs text-fg-2">{`${props.sender} · ${props.date}`}</span>
           </span>
         </UnsafeLinkText>
       </li>
@@ -412,10 +414,10 @@ export function LinkRow(props: {
           <IconLink size={20} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-sm font-medium text-accent">
+          <span className="truncate text-legacy-sm font-medium text-accent">
             {displayUrl(props.item.url)}
           </span>
-          <span className="truncate text-xs text-fg-2">{`${props.sender} · ${props.date}`}</span>
+          <span className="truncate text-legacy-xs text-fg-2">{`${props.sender} · ${props.date}`}</span>
         </span>
       </a>
     </li>
@@ -459,14 +461,17 @@ export function FeedBody<T>(props: {
   const { feed } = props;
   if (feed === null || feed.status === 'loading') {
     return (
-      <p data-feed="loading" className="py-10 text-center text-sm text-fg-3">
+      <p data-feed="loading" className="py-10 text-center text-legacy-sm text-fg-3">
         Loading
       </p>
     );
   }
   if (feed.status === 'error') {
     return (
-      <div data-feed="error" className="flex flex-col items-center gap-2 py-10 text-sm text-fg-3">
+      <div
+        data-feed="error"
+        className="flex flex-col items-center gap-2 py-10 text-legacy-sm text-fg-3"
+      >
         <span>Could not load</span>
         <Button onClick={props.onRetry}>Try again</Button>
       </div>
@@ -492,7 +497,7 @@ export function FeedBody<T>(props: {
       {props.isEmpty && !feed.hasMore ? (
         props.empty
       ) : props.isEmpty && props.seeAll !== undefined ? (
-        <p data-nothing-recent="" className="py-6 text-center text-sm text-fg-3">
+        <p data-nothing-recent="" className="py-6 text-center text-legacy-sm text-fg-3">
           {NOTHING_RECENT}
         </p>
       ) : (

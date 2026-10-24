@@ -165,7 +165,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     error !== null ? (
       <div
         role="alert"
-        className="mb-3 rounded-xl border border-bad bg-bad-soft px-4 py-3 text-sm text-bad"
+        className="mb-3 rounded-xl border border-bad bg-bad-soft px-4 py-3 text-legacy-sm text-bad"
       >
         {error}
       </div>
@@ -228,7 +228,11 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
   function missingLine(): ReactElement | null {
     if (missing === null) return null;
     return (
-      <p data-new-chat-missing="" role="alert" className="ml-auto text-right text-sm text-bad">
+      <p
+        data-new-chat-missing=""
+        role="alert"
+        className="ml-auto text-right text-legacy-sm text-bad"
+      >
         {missing}
       </p>
     );
@@ -273,7 +277,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
           />
         </Field>
         <div>
-          <p className="mb-1.5 text-sm font-medium">Members</p>
+          <p className="mb-1.5 text-legacy-sm font-medium">Members</p>
           <MemberPicker
             options={options}
             selectedIds={selectedIds}

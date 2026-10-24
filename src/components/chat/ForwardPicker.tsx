@@ -133,7 +133,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
         aria-label="Search chats"
       />
       {listed.length === 0 ? (
-        <p className="px-1 py-3 text-sm text-fg-3">
+        <p className="px-1 py-3 text-legacy-sm text-fg-3">
           {search.trim() !== '' ? `No chats called "${search.trim()}"` : 'No chats yet'}
         </p>
       ) : (
@@ -154,7 +154,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
                   )}
                 >
                   {forwardRowAvatar(channel, isSelected)}
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  <span className="min-w-0 flex-1 truncate text-legacy-sm font-medium">
                     {channel.title}
                   </span>
                   <SelectCheck checked={isSelected} />

@@ -430,7 +430,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         }}
         onBlur={saveSelection}
         onKeyDown={onKeyDown}
-        className="w-full whitespace-pre-wrap break-words rounded-md border border-border bg-panel-2 px-3 py-2.5 text-sm text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
+        className="w-full whitespace-pre-wrap break-words rounded-md border border-border bg-panel-2 px-3 py-2.5 text-legacy-sm text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
       />
 
       {open ? (
@@ -456,13 +456,15 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
                   {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
                 />
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium text-fg">{member.name}</span>
+                  <span className="truncate text-legacy-sm font-medium text-fg">{member.name}</span>
                   {member.username !== null ? (
-                    <span className="truncate font-mono text-xs text-fg-2">@{member.username}</span>
+                    <span className="truncate font-mono text-legacy-xs text-fg-2">
+                      @{member.username}
+                    </span>
                   ) : null}
                 </span>
                 {member.role !== '' ? (
-                  <span className="shrink-0 text-xs text-fg-3">{member.role}</span>
+                  <span className="shrink-0 text-legacy-xs text-fg-3">{member.role}</span>
                 ) : null}
               </button>
             </li>

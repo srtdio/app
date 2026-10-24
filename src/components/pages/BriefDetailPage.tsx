@@ -281,7 +281,7 @@ export function briefAuthorLabel(
   return hasCreator && !membersLoaded ? '' : FORMER_MEMBER;
 }
 
-const SECTION_LABEL = 'text-xs font-medium uppercase tracking-wide text-fg-3';
+const SECTION_LABEL = 'text-legacy-xs font-medium uppercase tracking-wide text-fg-3';
 
 /**
  * A failed reopen in plain words: invalid_payload means the brief is no longer
@@ -723,7 +723,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   // desktop (the side column): "Raised 15 Jun by Priya Raman", then "Format
   // Carousel" when a format is set. Status and due date live in the top bar.
   const detailsLines = (
-    <div className="flex min-w-0 flex-col gap-1 text-sm">
+    <div className="flex min-w-0 flex-col gap-1 text-legacy-sm">
       <p data-brief-raised="" className="min-w-0 break-words text-fg">
         <span className="text-fg-3">Raised</span>{' '}
         <span className="tabular-nums">{briefRaisedLabel(brief.created_at, timeZone)}</span>
@@ -758,7 +758,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
                 <Link
                   to={`/posts/${post.id}`}
                   data-linked-post=""
-                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-md px-2 text-sm text-fg transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-md px-2 text-legacy-sm text-fg transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <span
                     aria-hidden="true"
@@ -773,7 +773,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           <Link
             to="/pipeline"
             data-linked-posts-count=""
-            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-md px-2 text-sm tabular-nums text-accent transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-md px-2 text-legacy-sm tabular-nums text-accent transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {linkedCount}
           </Link>
@@ -838,7 +838,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             <h1 className={BRIEF_TITLE_CLASS}>
               <Highlight text={brief.title} />
             </h1>
-            {closed ? <p className="text-sm text-fg-3">{CLOSED_BRIEF_LINE}</p> : null}
+            {closed ? <p className="text-legacy-sm text-fg-3">{CLOSED_BRIEF_LINE}</p> : null}
             <div data-brief-details="phone" className="md:hidden">
               {detailsLines}
             </div>
@@ -848,7 +848,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
 
           <section className="min-w-0">
             <div className={`${SECTION_LABEL} mb-1`}>Objective</div>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
+            <p className="text-legacy-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
               <Highlight text={brief.objective} />
             </p>
           </section>
@@ -856,7 +856,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           {hasBrand ? (
             <section className="min-w-0">
               <div className={`${SECTION_LABEL} mb-1`}>Brand requirements</div>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
+              <p className="text-legacy-sm leading-relaxed whitespace-pre-wrap break-words text-fg">
                 {brief.brand_requirements}
               </p>
             </section>

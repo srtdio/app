@@ -254,7 +254,9 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
       <div className="flex flex-col gap-3">
         <div className="flex min-h-[44px] items-center gap-2 rounded-md border border-border bg-panel-2 px-3 py-2">
           <IconFile size={16} />
-          <span className="min-w-0 flex-1 truncate text-sm text-fg">{firstMedia?.filename}</span>
+          <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg">
+            {firstMedia?.filename}
+          </span>
         </div>
         <p className="text-[13px] text-fg-2">
           {spec?.documentNote ?? 'Document pages are shown as-is, with no crop.'}
@@ -263,7 +265,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
     );
   }
 
-  if (size === null) return <p className="text-sm text-fg-2">No preview.</p>;
+  if (size === null) return <p className="text-legacy-sm text-fg-2">No preview.</p>;
 
   // Shorts with an image: the same "Shorts are video only." line the post page shows.
   const note =
@@ -341,7 +343,7 @@ function SizePicker({
                 : 'border-border bg-panel-2 text-fg-2 hover:bg-panel-3',
             )}
           >
-            <span className="text-sm font-semibold">{size.label}</span>
+            <span className="text-legacy-sm font-semibold">{size.label}</span>
             <span className="text-[11px] text-fg-3">{sizeMeta(size)}</span>
           </button>
         );
@@ -376,7 +378,7 @@ function LayoutMock({
   const ratio = frameRatio(size);
   const initial = handle.trim().charAt(0).toUpperCase() || '?';
   const avatar = (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-fg">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-legacy-xs font-semibold text-accent-fg">
       {initial}
     </span>
   );
@@ -396,7 +398,7 @@ function LayoutMock({
       >
         <div className="flex items-center gap-2 px-3 py-2">
           {avatar}
-          <span className="truncate text-sm font-semibold text-fg">{handle}</span>
+          <span className="truncate text-legacy-sm font-semibold text-fg">{handle}</span>
         </div>
         <div
           data-mock-fit={feedLetterbox ? 'contain' : 'cover'}
@@ -412,7 +414,7 @@ function LayoutMock({
         </div>
         {caption !== '' ? (
           <figcaption
-            className="px-3 py-2 text-sm text-fg [overflow-wrap:anywhere]"
+            className="px-3 py-2 text-legacy-sm text-fg [overflow-wrap:anywhere]"
             style={clampStyle(captionClampLines(size))}
           >
             <span className="font-semibold">{handle}</span> {caption}
@@ -452,14 +454,14 @@ function LayoutMock({
           <span className="h-0.5 w-full rounded-full bg-white/60" />
           <span className="flex items-center gap-2">
             {avatar}
-            <span className="truncate text-sm font-semibold text-white">{handle}</span>
+            <span className="truncate text-legacy-sm font-semibold text-white">{handle}</span>
           </span>
         </div>
       ) : (
         <figcaption className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/70 to-transparent p-3 pt-10 text-white">
           <span className="flex items-center gap-2">
             {avatar}
-            <span className="truncate text-sm font-semibold">{handle}</span>
+            <span className="truncate text-legacy-sm font-semibold">{handle}</span>
           </span>
           {caption !== '' ? (
             <span
@@ -501,7 +503,7 @@ function CropBox({
         {media}
         <ShownWindow window={result.window} />
       </div>
-      <p className="text-sm text-fg">{cropLine(result)}</p>
+      <p className="text-legacy-sm text-fg">{cropLine(result)}</p>
     </section>
   );
 }
