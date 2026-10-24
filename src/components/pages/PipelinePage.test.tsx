@@ -99,7 +99,7 @@ import {
   filterControlBody,
   sortControlBody,
 } from '@/components/pages/pipeline/PipelineSortControl';
-import { IconFilterLines, IconPlus } from '@/components/ui/icons';
+import { IconFilterLines } from '@/components/ui/icons';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
@@ -663,7 +663,7 @@ describe('persisted sort sanitization (fix 1)', () => {
       counts: { all: 0 },
       canCreate: true,
     });
-    const controls = findAll(tree, (el) => el.type === PipelineSortControl);
+    const controls = findAll(tree, (el) => el.type === PipelineFilterControl);
     expect((controls[0]!.props as { order: string }).order).toBe(POST_SORT_DEFAULT);
   });
 });
@@ -905,7 +905,8 @@ describe('W4 fix 3: create gating', () => {
     expect(props['aria-label']).toBeUndefined();
     expect(props['data-induction']).toBe(INDUCTION_KEYS.pipelineCreate);
     expect(props.className).toContain('whitespace-nowrap');
-    expect(findAll(header(true), (el) => el.type === IconPlus)).toHaveLength(0);
+    // The plus icon leads the label; the button is never icon-only.
+    expect(findAll(button, (el) => el.type === IconPlus)).toHaveLength(1);
     expect(
       findAll(
         header(true),
