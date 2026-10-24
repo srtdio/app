@@ -124,7 +124,9 @@ describe('#35 versions sheet', () => {
     }>;
     const html = renderToStaticMarkup(<>{tree.props.children}</>);
     expect(html.split('Current')).toHaveLength(2);
-    expect(html.indexOf('Current')).toBeLessThan(html.indexOf('v1'));
+    // Read the visible text: icon path data (Heroicons) can contain "v1".
+    const text = html.replace(/<[^>]*>/g, ' ');
+    expect(text.indexOf('Current')).toBeLessThan(text.indexOf('v1'));
     expect(renderToStaticMarkup(<>{tree.props.footer}</>)).toContain('Compare v1 and v2');
     expect(tree.props.title).toBe('Versions');
   });

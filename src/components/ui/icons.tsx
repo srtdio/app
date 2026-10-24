@@ -1,4 +1,11 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import {
+  CalendarDaysIcon,
+  ChatBubbleOvalLeftIcon,
+  DocumentTextIcon,
+  PhotoIcon,
+  ViewColumnsIcon,
+} from '@heroicons/react/24/outline';
 
 export interface IconProps {
   className?: string;
@@ -35,6 +42,28 @@ function Svg({ className, size = 18, inline = false, box, children }: SvgProps) 
     >
       {children}
     </svg>
+  );
+}
+
+type HeroIcon = typeof ViewColumnsIcon;
+
+/**
+ * A Heroicons 24/outline glyph on the same contract as Svg: size (default 18),
+ * stroke 1.7 over Heroicons' own 1.5, decorative, and the same inline layout.
+ */
+function Hero({ icon: C, className, size = 18, inline = false }: IconProps & { icon: HeroIcon }) {
+  const style: CSSProperties = inline
+    ? { width: size, height: size, display: 'inline-block', verticalAlign: '-0.15em' }
+    : { width: size, height: size };
+  return (
+    <C
+      width={size}
+      height={size}
+      style={style}
+      strokeWidth={1.7}
+      className={className}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -81,23 +110,11 @@ export function IconPlus(props: IconProps) {
 }
 
 export function IconPipeline(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x={3} y={4} width={5} height={16} rx={1} />
-      <rect x={10} y={4} width={5} height={10} rx={1} />
-      <rect x={17} y={4} width={4} height={13} rx={1} />
-    </Svg>
-  );
+  return <Hero icon={ViewColumnsIcon} {...props} />;
 }
 
 export function IconBriefs(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M6 3h8l4 4v14H6z" />
-      <path d="M14 3v4h4" />
-      <path d="M9 12h6M9 16h4" />
-    </Svg>
-  );
+  return <Hero icon={DocumentTextIcon} {...props} />;
 }
 
 /** A draft: a page with a pencil over its corner. */
@@ -113,20 +130,11 @@ export function IconDraft(props: IconProps) {
 
 /** A plan: two layered sheets. */
 export function IconPlan(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M12 3l9 5-9 5-9-5 9-5z" />
-      <path d="M3 13l9 5 9-5" />
-    </Svg>
-  );
+  return <Hero icon={CalendarDaysIcon} {...props} />;
 }
 
 export function IconChat(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M5 4h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 3v-3H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
-    </Svg>
-  );
+  return <Hero icon={ChatBubbleOvalLeftIcon} {...props} />;
 }
 
 /** Notifications: a stacked tray (the top bar's inbox of everything). */
@@ -149,13 +157,7 @@ export function IconActivity(props: IconProps) {
 }
 
 export function IconAssets(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x={4} y={5} width={16} height={14} rx={2} />
-      <circle cx={9} cy={10} r={1.6} />
-      <path d="M5 17l4-4 3 3 3-4 4 5" />
-    </Svg>
-  );
+  return <Hero icon={PhotoIcon} {...props} />;
 }
 
 export function IconSettings(props: IconProps) {
