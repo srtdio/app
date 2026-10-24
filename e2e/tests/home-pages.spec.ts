@@ -76,6 +76,59 @@ async function expectLight(page: Page): Promise<void> {
   expect(body).toBe(WHITE);
 }
 
+interface CtaStyle {
+  height: number;
+  radius: string;
+  bg: string;
+  fg: string;
+  accentFill: string;
+}
+
+/** The CTA's painted box and colours, and the app accent fill token resolved on <html>. */
+async function ctaStyle(page: Page, selector: string): Promise<CtaStyle> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (el === null) throw new Error(`no CTA at ${sel}`);
+    const style = getComputedStyle(el);
+    // Resolve the token through a probe so hex and rgb() compare as one format.
+    const probe = document.createElement('div');
+    probe.style.backgroundColor = 'var(--accent-fill)';
+    el.parentElement!.appendChild(probe);
+    const accentFill = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return {
+      height: el.getBoundingClientRect().height,
+      radius: style.borderTopLeftRadius,
+      bg: style.backgroundColor,
+      fg: style.color,
+      accentFill,
+    };
+  }, selector);
+}
+
+/** WCAG 2 contrast ratio of two opaque rgb() colours. */
+function contrast(a: string, b: string): number {
+  const lum = (rgb: string): number => {
+    const [r, g, bl] = (rgb.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+      const c = Number(v) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * bl!;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi! + 0.05) / (lo! + 0.05);
+}
+
+/** Same Button as the app's primary (in-app New post): accent fill, 44 tall, 8px radius. */
+async function expectAppPrimary(page: Page, selector: string): Promise<void> {
+  const cta = await ctaStyle(page, selector);
+  expect(cta.height).toBe(44);
+  expect(cta.radius).toBe('8px');
+  expect(cta.accentFill).not.toBe('rgba(0, 0, 0, 0)');
+  expect(cta.bg).toBe(cta.accentFill);
+  expect(contrast(cta.fg, cta.bg)).toBeGreaterThanOrEqual(4.5);
+}
+
 /** Open the sidebar and tap a feature tile. */
 async function tapTile(page: Page, key: string): Promise<void> {
   await page.getByRole('button', { name: 'Open menu' }).click();
@@ -130,6 +183,15 @@ test.describe('phone', () => {
     await expectLight(page);
     // No mailto left: every Book a demo is /demo.
     expect(await page.locator('a[href^="mailto:"]').count()).toBe(0);
+  });
+
+  test('the hero and signup CTAs are the app primary button', async ({ page }) => {
+    await serveHome(page);
+    await page.goto('/');
+    await expect(page.locator('.home .hero .btn').first()).toBeVisible();
+    await expectAppPrimary(page, '.home .hero .btn:not(.line)');
+    await expectAppPrimary(page, '.home .top .btn:not(.ghost)');
+    await expectAppPrimary(page, '.home .band .btn:not(.line)');
   });
 
   test('cards: the clip ending moves the rail on; 3 seconds on a card nudges once', async ({

@@ -12,6 +12,7 @@ import '@fontsource/inter/latin-400.css';
 import '@fontsource/inter/latin-500.css';
 import '@fontsource/inter/latin-600.css';
 import '@fontsource/inter/latin-700.css';
+import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { BackHome, SiteShell, Tick } from './Chrome';
 import { DEMO, type DemoSlot } from './config';
 import {
@@ -159,9 +160,7 @@ function Calendar({
           style={mounted ? undefined : HIDDEN}
           onClick={() => setMonth((m) => shiftMonth(m, -1))}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
+          <IconChevronLeft size={20} />
         </button>
         <span className="cal-title" aria-live="polite">
           {mounted ? monthTitle(month) : '\u00a0'}
@@ -174,9 +173,7 @@ function Calendar({
           style={mounted ? undefined : HIDDEN}
           onClick={() => setMonth((m) => shiftMonth(m, 1))}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 5l7 7-7 7" />
-          </svg>
+          <IconChevronRight size={20} />
         </button>
       </div>
       <div className="cal-grid" ref={gridRef}>

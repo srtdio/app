@@ -3,6 +3,7 @@ import '@fontsource/inter/latin-400.css';
 import '@fontsource/inter/latin-500.css';
 import '@fontsource/inter/latin-600.css';
 import '@fontsource/inter/latin-700.css';
+import { IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { ClipVideo } from './ClipVideo';
 import { SiteShell, Tick } from './Chrome';
 import { DEMO_HREF } from './config';
@@ -277,9 +278,7 @@ function FeatureRail() {
           aria-label="Previous feature"
           onClick={() => step(-1)}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15 5l-7 7 7 7" />
-          </svg>
+          <IconChevronLeft size={20} />
         </button>
         <button
           className="icon-btn"
@@ -287,9 +286,7 @@ function FeatureRail() {
           aria-label="Next feature"
           onClick={() => step(1)}
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 5l7 7-7 7" />
-          </svg>
+          <IconChevronRight size={20} />
         </button>
       </div>
       <div
