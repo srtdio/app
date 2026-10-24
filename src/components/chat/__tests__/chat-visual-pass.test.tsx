@@ -48,8 +48,8 @@ describe('chat visual pass', () => {
     expect(drawer).not.toContain("'absolute inset-0 bg-overlay transition-opacity'");
   });
 
-  it('the laptop list column is 352px and a tile time stays clear of the ⋯', () => {
-    expect(read('../ChatConnected.tsx')).toContain('md:w-[352px]');
+  it('the list column is 352px from 1280px (288px below, so the plan panel never covers it) and a tile time stays clear of the ⋯', () => {
+    expect(read('../ChatConnected.tsx')).toContain('md:w-72 md:border-r xl:w-[352px]');
     expect(read('../ChannelList.tsx')).toContain(
       'data-tile-time="" className="mt-auto flex px-10"',
     );

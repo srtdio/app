@@ -117,12 +117,12 @@ async function openPanel(page: Page): Promise<{ panel: Locator; boxes: string[] 
 /** The scroll box of the panel's list. */
 const listBody = (panel: Locator): Locator => panel.locator('[data-plan-list]').locator('xpath=..');
 
-/** The chat's channel list column (md:w-[352px]). */
+/** The chat's channel list column (md:w-72). */
 const channelColumn = (page: Page): Locator =>
   page
     .getByText(PEER_NAME, { exact: true })
     .first()
-    .locator('xpath=ancestor::div[contains(@class,"md:w-[352px]")][1]');
+    .locator('xpath=ancestor::div[contains(@class,"md:w-72")][1]');
 
 /** Whether the focused element matches `selector`. */
 const focusedIs = (page: Page, selector: string): Promise<boolean> =>
