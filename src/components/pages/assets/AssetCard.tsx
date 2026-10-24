@@ -183,7 +183,7 @@ function AssetMedia({
 
       <div className="flex flex-col gap-1.5 border-t border-border p-2.5">
         <div className="flex items-start gap-2">
-          <span className="line-clamp-2 flex-1 break-words text-xs font-medium" title={name}>
+          <span className="line-clamp-2 flex-1 break-words text-legacy-xs font-medium" title={name}>
             {name}
           </span>
           {item.kind === 'image' ? (

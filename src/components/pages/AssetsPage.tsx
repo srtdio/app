@@ -588,7 +588,7 @@ export function AssetsPage() {
                 Cancel
               </Button>
               <span
-                className="min-w-0 flex-1 truncate text-center text-sm font-semibold text-fg"
+                className="min-w-0 flex-1 truncate text-center text-legacy-sm font-semibold text-fg"
                 aria-live="polite"
               >
                 {selectedLabel(selected.size)}
@@ -615,7 +615,7 @@ export function AssetsPage() {
               </span>
             </div>
             {selected.size > BULK_DELETE_MAX ? (
-              <span className="text-center text-xs text-fg-3">
+              <span className="text-center text-legacy-xs text-fg-3">
                 Select 200 or fewer to delete at once.
               </span>
             ) : null}
@@ -661,11 +661,15 @@ export function AssetsPage() {
         ) : visible.length === 0 ? (
           searching ? (
             <div className="px-4 md:px-6 py-12 text-center">
-              <p className="text-sm text-fg-2">No assets match &quot;{search.trim()}&quot;</p>
-              <p className="mt-1 text-xs text-fg-3">Try a different name or clear the search.</p>
+              <p className="text-legacy-sm text-fg-2">
+                No assets match &quot;{search.trim()}&quot;
+              </p>
+              <p className="mt-1 text-legacy-xs text-fg-3">
+                Try a different name or clear the search.
+              </p>
             </div>
           ) : tab !== 'all' ? (
-            <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-sm text-fg-3">
+            <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-legacy-sm text-fg-3">
               {TAB_EMPTY[tab]}
             </div>
           ) : null

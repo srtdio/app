@@ -119,7 +119,9 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
             onBlur={() => setUrlTouched(true)}
           />
           {showUrlError ? (
-            <span className="text-xs text-bad">Enter a full link starting with https://</span>
+            <span className="text-legacy-xs text-bad">
+              Enter a full link starting with https://
+            </span>
           ) : null}
         </label>
 
@@ -133,7 +135,9 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
             onChange={(event) => setName(event.target.value)}
             onBlur={() => setNameTouched(true)}
           />
-          {showNameError ? <span className="text-xs text-bad">The link needs a name</span> : null}
+          {showNameError ? (
+            <span className="text-legacy-xs text-bad">The link needs a name</span>
+          ) : null}
         </label>
       </div>
     </Sheet>

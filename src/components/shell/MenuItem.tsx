@@ -12,7 +12,7 @@ export function MenuItem({ label, onClick, icon }: MenuItemProps) {
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="flex w-full items-center gap-3 min-h-[44px] px-3 rounded-lg text-sm text-fg-2 hover:bg-panel-2 hover:text-fg transition-colors text-left"
+      className="flex w-full items-center gap-3 min-h-[44px] px-3 rounded-lg text-legacy-sm text-fg-2 hover:bg-panel-2 hover:text-fg transition-colors text-left"
     >
       {icon !== undefined ? <span className="text-fg-3 shrink-0">{icon}</span> : null}
       <span>{label}</span>

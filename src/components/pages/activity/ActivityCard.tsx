@@ -244,7 +244,7 @@ function EntryAuthor({ entry }: { entry: ActivityItem }) {
         {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
         size="sm"
       />
-      <span className="truncate text-xs font-medium text-fg-3">{entry.actorName}</span>
+      <span className="truncate text-legacy-xs font-medium text-fg-3">{entry.actorName}</span>
     </div>
   );
 }
@@ -319,7 +319,7 @@ export function TextTile({
         {icon}
         <span className="text-[10px] font-semibold uppercase tracking-wide">{eyebrow}</span>
       </span>
-      <p className="mt-auto line-clamp-3 text-xs leading-snug text-fg-2 [overflow-wrap:anywhere]">
+      <p className="mt-auto line-clamp-3 text-legacy-xs leading-snug text-fg-2 [overflow-wrap:anywhere]">
         {body}
       </p>
     </div>
@@ -342,7 +342,7 @@ function WelcomeTile({ name }: { name: string }): ReactElement {
       data-activity-welcome-tile=""
       aria-hidden="true"
       className={cn(
-        'flex aspect-square w-full items-center justify-center text-3xl font-semibold text-white',
+        'flex aspect-square w-full items-center justify-center text-legacy-3xl font-semibold text-white',
         avatarFillFor(name),
       )}
     >
@@ -539,7 +539,7 @@ export function ActivityCard({
                   size="sm"
                 />
               ) : null}
-              <span className="truncate text-xs font-medium text-fg-3">
+              <span className="truncate text-legacy-xs font-medium text-fg-3">
                 {alert !== null ? alertTopLine(lead, alert) : actorLine(actorEntry, actorName)}
               </span>
               {unread ? (
@@ -556,25 +556,25 @@ export function ActivityCard({
             </p>
 
             {alertLine !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
                 {alertLine}
               </p>
             ) : null}
 
             {showsBody ? (
-              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
                 {cardBodyLine(lead)}
               </p>
             ) : null}
 
             {filesBody !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
                 {filesBody}
               </p>
             ) : null}
 
             {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
                 {mentionPreview(lead.body, selfName, isChatMention(lead))}
               </p>
             ) : null}
@@ -637,7 +637,7 @@ export function ActivityCard({
 
         <div className="h-px bg-border" />
         <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
-          <span data-activity-time="" className="text-xs tabular-nums text-fg-3">
+          <span data-activity-time="" className="text-legacy-xs tabular-nums text-fg-3">
             {relativeTime(lead.createdAt, nowMs)}
           </span>
           {tag !== undefined ? (
@@ -702,14 +702,16 @@ export function ActivityCard({
                   <EntryAuthor entry={entry} />
                   <p
                     className={cn(
-                      'line-clamp-2 text-sm',
+                      'line-clamp-2 text-legacy-sm',
                       entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
                     )}
                   >
                     {/* The author line above already names who: the text never repeats it. */}
                     {cardBodyLine(entry, { name: entry.actorName === null })}
                   </p>
-                  <p className="mt-0.5 text-xs text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
+                  <p className="mt-0.5 text-legacy-xs text-fg-3">
+                    {relativeTime(entry.createdAt, nowMs)}
+                  </p>
                 </div>
                 {entry.readAt === null ? (
                   <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" />
@@ -777,14 +779,14 @@ export function UpcomingCard({
         >
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center gap-[7px]">
-              <span data-upcoming-tag="" className="truncate text-xs font-medium text-fg-3">
+              <span data-upcoming-tag="" className="truncate text-legacy-xs font-medium text-fg-3">
                 {upcomingTag(item)}
               </span>
             </div>
             <p className="truncate text-[15px] font-semibold leading-[1.3] text-fg">
               {upcomingChat(item)}
             </p>
-            <p className="mt-[3px] line-clamp-2 text-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
+            <p className="mt-[3px] line-clamp-2 text-legacy-sm leading-[1.4] text-fg-2 [overflow-wrap:anywhere]">
               {item.preview}
             </p>
           </div>
@@ -820,7 +822,7 @@ export function UpcomingCard({
 
         <div className="h-px bg-border" />
         <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
-          <span data-upcoming-due="" className="font-mono text-xs tabular-nums text-fg-3">
+          <span data-upcoming-due="" className="font-mono text-legacy-xs tabular-nums text-fg-3">
             {formatSendLabel(new Date(item.dueAt), now)}
           </span>
         </div>

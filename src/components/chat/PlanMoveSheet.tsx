@@ -86,7 +86,7 @@ export function PlanMoveSheet(props: {
                 )}
               >
                 <span>{d.label}</span>
-                {current ? <span className="text-xs text-fg-3">Current</span> : null}
+                {current ? <span className="text-legacy-xs text-fg-3">Current</span> : null}
               </button>
             </li>
           );
@@ -107,7 +107,7 @@ export function PlanRemoveSheet(props: {
   return (
     <Sheet open={props.open} onClose={props.onClose} title="Remove from plan?">
       <div data-plan-remove-sheet="" className="flex flex-col gap-3">
-        <p className="text-sm text-fg">
+        <p className="text-legacy-sm text-fg">
           {`"${props.title}" leaves the plan. Its comments stay with it.`}
         </p>
         <Button

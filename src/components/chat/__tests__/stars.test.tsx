@@ -286,11 +286,11 @@ describe('bubble meta', () => {
       {
         "dark": {
           "meta": "hex ffffff",
-          "peer": "hex 6b7178",
+          "peer": "hex 848a92",
         },
         "light": {
           "meta": "hex ffffff",
-          "peer": "hex 8b9096",
+          "peer": "hex 6b6f76",
         },
       }
     `);
@@ -596,7 +596,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
           "border": "hex 23262c",
           "fg": "hex f4f5f6",
           "fg-2": "hex 9aa0a8",
-          "fg-3": "hex 6b7178",
+          "fg-3": "hex 848a92",
           "panel": "hex 141519",
           "panel-2": "hex 1a1c21",
           "panel-3": "hex 212329",
@@ -608,7 +608,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
           "border": "hex e6e8eb",
           "fg": "hex 1b1c20",
           "fg-2": "hex 62666d",
-          "fg-3": "hex 8b9096",
+          "fg-3": "hex 6b6f76",
           "panel": "hex ffffff",
           "panel-2": "hex f2f3f5",
           "panel-3": "hex ecedf0",

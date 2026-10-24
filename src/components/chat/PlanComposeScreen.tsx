@@ -527,7 +527,7 @@ export function PlanComposeScreen(props: {
             className="flex min-h-[48px] items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1"
           >
             <div className="flex min-w-0 flex-col">
-              <span className="text-sm text-fg">
+              <span className="text-legacy-sm text-fg">
                 {formatCivilDayHeader(range.startsOn)} to {formatCivilDayHeader(range.endsOn)}
               </span>
               <span className="text-[12.5px] text-fg-3">
@@ -546,7 +546,7 @@ export function PlanComposeScreen(props: {
           </div>
 
           <section className="flex flex-col gap-2" aria-label="Items">
-            <h3 className="mx-1 text-xs uppercase tracking-[0.06em] text-fg-3">
+            <h3 className="mx-1 text-legacy-xs uppercase tracking-[0.06em] text-fg-3">
               Items · <span className="font-mono tabular-nums">{items.length}</span>
             </h3>
             {items.length === 0 ? (
@@ -701,7 +701,7 @@ export function ComposeItemRow(props: {
       <span
         aria-hidden="true"
         className={cn(
-          'flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-sm font-semibold',
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-legacy-sm font-semibold',
           item.kind === 'concept' && 'border-[1.5px] border-dashed border-border-strong text-fg-3',
           item.kind === 'post' && 'bg-accent-soft text-accent',
           item.kind === 'draft' && 'bg-panel-2 text-fg-3',
@@ -866,7 +866,7 @@ export function PlanSharedNotice(props: {
       )}
     >
       {shown ? (
-        <span className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-sm font-medium text-fg shadow-lg">
+        <span className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-legacy-sm font-medium text-fg shadow-lg">
           {props.text}
         </span>
       ) : null}

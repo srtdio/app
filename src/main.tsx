@@ -48,7 +48,7 @@ function recoverFromFailedBoot(target: StylesheetTarget, err: unknown): void {
 function ErrorFallback() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-bg text-fg">
-      <span className="text-sm">Something went wrong. Refresh to try again.</span>
+      <span className="text-legacy-sm">Something went wrong. Refresh to try again.</span>
     </main>
   );
 }

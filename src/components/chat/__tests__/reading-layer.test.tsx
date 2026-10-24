@@ -256,7 +256,7 @@ describe('reading layer elements', () => {
       />,
     );
     expect(html).toContain(formatClockTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
-    expect(html.match(/font-mono text-xs tabular-nums/g)?.length).toBe(1);
+    expect(html.match(/font-mono text-legacy-xs tabular-nums/g)?.length).toBe(1);
   });
 
   it('Read by line is a real button with a 44px hit area', () => {

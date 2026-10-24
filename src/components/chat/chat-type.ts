@@ -3,7 +3,7 @@
 // touch values, a mouse or trackpad at 768px and up takes the laptop values.
 // Paired constants hold both; a single string is the same on both. Chat
 // surfaces use only these; no other size literals. 12px / 16px is Tailwind's
-// text-xs.
+// text-legacy-xs.
 
 import { useEffect, useState } from 'react';
 
@@ -98,7 +98,7 @@ export const POST_CARD_TITLE_TYPE: ChatSize = {
 };
 
 /** Shared post card meta: 12/16, 400 on both. */
-export const POST_CARD_META_TYPE = 'text-xs font-normal';
+export const POST_CARD_META_TYPE = 'text-legacy-xs font-normal';
 
 /** Thread header name: 17/22/600 touch, 16/21/500 laptop. */
 export const HEADER_NAME_TYPE: ChatSize = {
@@ -137,7 +137,7 @@ export const CHAT_LIST_PREVIEW_TYPE: ChatSize = {
 /** Chat list time: 14/18 touch, 12/16 laptop, 400; sans with tabular figures. */
 export const CHAT_LIST_TIME_TYPE: ChatSize = {
   touch: 'font-sans text-[14px] leading-[18px] font-normal tabular-nums',
-  laptop: 'font-sans text-xs font-normal tabular-nums',
+  laptop: 'font-sans text-legacy-xs font-normal tabular-nums',
 };
 
 /** Thread header row padding: 8px touch, 16px laptop. */
@@ -192,7 +192,7 @@ export const EMOJI_SEARCH_TYPE: ChatSize = {
 };
 
 /** The emoji picker's group heading: 12/16/500, both. */
-export const EMOJI_GROUP_TYPE = 'text-xs font-medium';
+export const EMOJI_GROUP_TYPE = 'text-legacy-xs font-medium';
 
 /** The reason line under a disabled selection Delete: 13/18, 400 on both. */
 export const SELECTION_REASON_TYPE = 'text-[13px] leading-[18px] font-normal';

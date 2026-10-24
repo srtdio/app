@@ -32,7 +32,7 @@ export function TestInviteePage(): ReactElement {
 
   return (
     <AuthShell title="Opening the invite" subtitle={`Signing in as ${email}.`} footer={null}>
-      {error !== null ? <p className="text-sm text-bad">{error}</p> : null}
+      {error !== null ? <p className="text-legacy-sm text-bad">{error}</p> : null}
     </AuthShell>
   );
 }

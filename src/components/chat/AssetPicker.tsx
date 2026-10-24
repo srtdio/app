@@ -149,7 +149,7 @@ export function AssetPicker(props: {
     body = (
       <div
         role="alert"
-        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-sm text-bad"
+        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-legacy-sm text-bad"
       >
         {error}
       </div>
@@ -258,10 +258,10 @@ export function AssetGrid(props: {
           type="button"
           onClick={props.onLoadMore}
           disabled={props.loadingMore}
-          className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-accent transition-colors hover:bg-panel-2 disabled:text-fg-3"
+          className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-legacy-sm font-medium text-accent transition-colors hover:bg-panel-2 disabled:text-fg-3"
         >
           <span>{`Load ${ASSET_PAGE_SIZE} more`}</span>
-          <span className="text-xs font-normal tabular-nums text-fg-3">
+          <span className="text-legacy-xs font-normal tabular-nums text-fg-3">
             {assetsShownOf(props.rows.length, props.count)}
           </span>
         </button>
@@ -305,7 +305,7 @@ export function AssetTile(props: {
             </span>
           ) : null}
         </span>
-        <span className="truncate px-0.5 text-xs text-fg-2">{asset.name}</span>
+        <span className="truncate px-0.5 text-legacy-xs text-fg-2">{asset.name}</span>
       </button>
     </li>
   );

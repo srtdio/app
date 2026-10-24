@@ -49,7 +49,7 @@ function SlideRow({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
+        'flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-legacy-sm font-medium transition-colors',
         'hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         'disabled:pointer-events-none disabled:opacity-40',
         danger ? 'text-bad' : 'text-fg',
@@ -96,9 +96,9 @@ export function SlideActionsSheet({
       {confirming ? (
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium text-fg">{removeCopy.title}</p>
+            <p className="text-legacy-sm font-medium text-fg">{removeCopy.title}</p>
             {removeCopy.message !== null ? (
-              <p className="text-sm text-fg-2">{removeCopy.message}</p>
+              <p className="text-legacy-sm text-fg-2">{removeCopy.message}</p>
             ) : null}
           </div>
           <div className="flex justify-end gap-2">
@@ -123,7 +123,7 @@ export function SlideActionsSheet({
             onClick={() => setConfirming(true)}
           />
           {saving ? (
-            <p aria-live="polite" className="px-3 pt-1 text-xs text-fg-3">
+            <p aria-live="polite" className="px-3 pt-1 text-legacy-xs text-fg-3">
               Saving…
             </p>
           ) : null}

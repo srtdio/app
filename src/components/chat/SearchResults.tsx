@@ -90,7 +90,7 @@ export function useFadeIn(ref: RefObject<HTMLElement>): void {
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
-const RESULT_LABEL = 'px-1 pt-1 text-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
+const RESULT_LABEL = 'px-1 pt-1 text-legacy-xs font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(
@@ -202,7 +202,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         type="button"
         data-search-retry=""
         onClick={props.onRetry}
-        className="flex min-h-[44px] w-full items-center justify-center rounded-lg px-3 text-sm text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-h-[44px] w-full items-center justify-center rounded-lg px-3 text-legacy-sm text-fg-2 hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {SEARCH_FAILED_COPY}
       </button>
@@ -252,7 +252,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         ) : failed ? (
           retryRow
         ) : rows.length === 0 ? (
-          <li data-search-empty="" className="px-2 py-6 text-center text-sm text-fg-2">
+          <li data-search-empty="" className="px-2 py-6 text-center text-legacy-sm text-fg-2">
             {SEARCH_EMPTY_COPY}
           </li>
         ) : (
@@ -285,7 +285,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                       </span>
                       <span
                         data-search-date=""
-                        className="shrink-0 font-mono text-xs tabular-nums text-fg-2"
+                        className="shrink-0 font-mono text-legacy-xs tabular-nums text-fg-2"
                       >
                         {searchDateLabel(hit.createdAt, props.nowMs, props.timeZone)}
                       </span>

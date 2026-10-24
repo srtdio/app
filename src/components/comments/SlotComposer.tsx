@@ -320,7 +320,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                   <span
                     aria-hidden
                     data-slot-number=""
-                    className="flex h-11 w-5 shrink-0 items-center justify-center text-xs font-medium tabular-nums text-fg-3"
+                    className="flex h-11 w-5 shrink-0 items-center justify-center text-legacy-xs font-medium tabular-nums text-fg-3"
                   >
                     {index + 1}
                   </span>
@@ -376,7 +376,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
               {tone !== 'hidden' ? (
                 <span
                   className={cn(
-                    'self-end pr-1 font-mono text-xs tabular-nums',
+                    'self-end pr-1 font-mono text-legacy-xs tabular-nums',
                     tone === 'over' ? 'text-bad' : 'text-warn',
                   )}
                 >
@@ -384,7 +384,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                 </span>
               ) : null}
               {tone === 'over' ? (
-                <p role="alert" className={cn('text-xs text-bad', numbered ? 'pl-7' : '')}>
+                <p role="alert" className={cn('text-legacy-xs text-bad', numbered ? 'pl-7' : '')}>
                   {OVER_LIMIT_MESSAGE}
                 </p>
               ) : null}
@@ -430,7 +430,10 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
       </div>
 
       {error !== null ? (
-        <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+        <div
+          role="alert"
+          className="rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+        >
           {error}
         </div>
       ) : null}

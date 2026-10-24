@@ -214,7 +214,7 @@ function ViewSwitch(props: {
           aria-pressed={props.view === o.view}
           onClick={() => props.onView(o.view)}
           className={cn(
-            'h-11 min-w-[64px] px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+            'h-11 min-w-[64px] px-3 text-legacy-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
             props.view === o.view ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:text-fg',
           )}
         >

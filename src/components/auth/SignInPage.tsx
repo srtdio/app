@@ -242,7 +242,7 @@ export function SignInPage() {
       >
         <div className="flex flex-col gap-4">
           {error !== null ? (
-            <p role="alert" className="text-sm text-bad">
+            <p role="alert" className="text-legacy-sm text-bad">
               {error}
             </p>
           ) : null}
@@ -299,7 +299,7 @@ export function SignInPage() {
             onBlur={() => setEmailError(emailFieldError(email))}
           />
           {emailError !== null ? (
-            <p id="signin-email-error" role="alert" className="mt-1.5 text-sm text-bad">
+            <p id="signin-email-error" role="alert" className="mt-1.5 text-legacy-sm text-bad">
               {emailError}
             </p>
           ) : null}
@@ -308,7 +308,7 @@ export function SignInPage() {
         {noAccount ? (
           <div
             role="status"
-            className="flex flex-col gap-3 rounded-md bg-warn-soft p-3 text-sm text-fg"
+            className="flex flex-col gap-3 rounded-md bg-warn-soft p-3 text-legacy-sm text-fg"
           >
             <span>There is no account with this email yet.</span>
             <Link
@@ -321,7 +321,7 @@ export function SignInPage() {
         ) : null}
 
         {error !== null ? (
-          <p role="alert" className="text-sm text-bad">
+          <p role="alert" className="text-legacy-sm text-bad">
             {error}
           </p>
         ) : null}

@@ -174,7 +174,7 @@ function MediaSlot(props: {
           <LetterTile
             letter={props.letter}
             tone={props.tone}
-            className="h-14 w-14 rounded-2xl text-2xl"
+            className="h-14 w-14 rounded-2xl text-legacy-2xl"
           />
         </span>
       )}
@@ -207,7 +207,9 @@ function TallBody(props: {
         />
         <span className="min-w-0 truncate">{props.site}</span>
       </div>
-      <div className="line-clamp-2 h-9 text-sm font-semibold leading-[18px]">{props.title}</div>
+      <div className="line-clamp-2 h-9 text-legacy-sm font-semibold leading-[18px]">
+        {props.title}
+      </div>
       <div className="line-clamp-2 h-8 text-[12.5px] leading-4 opacity-80">{props.detail}</div>
     </div>
   );
@@ -367,7 +369,7 @@ function Tall(props: {
         site={site}
         title={
           preview.path !== '' ? (
-            <span className="break-all font-mono text-xs font-normal leading-[18px] opacity-80">
+            <span className="break-all font-mono text-legacy-xs font-normal leading-[18px] opacity-80">
               {preview.path}
             </span>
           ) : (
@@ -407,7 +409,7 @@ function Compact(props: {
           <span className="truncate text-[13.5px] font-semibold leading-[17px]">
             This link may be unsafe
           </span>
-          <span className="truncate text-xs leading-4 opacity-90">{`${preview.domain} · tap to check`}</span>
+          <span className="truncate text-legacy-xs leading-4 opacity-90">{`${preview.domain} · tap to check`}</span>
         </span>
       </button>
     );
@@ -421,7 +423,11 @@ function Compact(props: {
       type={preview.type}
       className={cn('flex h-16 items-center gap-2.5 px-2.5', SURFACE[tone])}
     >
-      <LetterTile letter={preview.letter} tone={tone} className="h-10 w-10 rounded-xl text-sm" />
+      <LetterTile
+        letter={preview.letter}
+        tone={tone}
+        className="h-10 w-10 rounded-xl text-legacy-sm"
+      />
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-[13.5px] font-semibold leading-[17px]">
           {titled ? preview.title : preview.domain}
@@ -477,7 +483,7 @@ function Draft(props: {
         <span className="block truncate text-[13px] font-semibold leading-4">
           This link may be unsafe
         </span>
-        <span className="block truncate text-xs leading-4 opacity-90">{preview.domain}</span>
+        <span className="block truncate text-legacy-xs leading-4 opacity-90">{preview.domain}</span>
       </>
     );
   } else {
@@ -498,7 +504,7 @@ function Draft(props: {
         <LetterTile
           letter={preview.letter}
           tone="plain"
-          className="h-[52px] w-[52px] rounded-lg text-lg"
+          className="h-[52px] w-[52px] rounded-lg text-legacy-lg"
         />
       );
     const titled = preview.type === 'full' || preview.type === 'text';

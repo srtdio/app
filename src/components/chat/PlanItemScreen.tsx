@@ -836,7 +836,7 @@ export function PlanItemScreen(props: {
                         : 'Comment for everyone'
                   }
                   className={cn(
-                    'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-legacy-base text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     teamNote ? 'border-warn' : askingChanges ? 'border-accent' : 'border-border',
                   )}
                 />
@@ -886,7 +886,7 @@ export function PlanItemScreen(props: {
             <ItemMedia read={read} />
             <div className="flex flex-col gap-1.5">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="min-w-0 break-words pt-[9px] text-xl font-semibold leading-[26px] text-fg">
+                <h3 className="min-w-0 break-words pt-[9px] text-legacy-xl font-semibold leading-[26px] text-fg">
                   {title}
                 </h3>
                 {editable ? (
@@ -913,7 +913,7 @@ export function PlanItemScreen(props: {
               className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
             >
               <div className="flex min-h-[28px] items-center justify-between gap-2">
-                <span className="text-sm text-fg-3">Date</span>
+                <span className="text-legacy-sm text-fg-3">Date</span>
                 <span className="flex items-center gap-1">
                   <span
                     data-plan-item-date={date.dated ? 'dated' : 'none'}
@@ -940,7 +940,7 @@ export function PlanItemScreen(props: {
                   key={row.label}
                   className="flex min-h-[28px] items-center justify-between gap-2"
                 >
-                  <span className="text-sm text-fg-3">{row.label}</span>
+                  <span className="text-legacy-sm text-fg-3">{row.label}</span>
                   <PlanPill
                     pill={{
                       label: row.value,
@@ -1163,12 +1163,12 @@ function CommentRow(props: {
       <div className="flex items-center gap-1.5 text-[13px]">
         <span className="font-semibold text-fg">{c.authorName}</span>
         {team ? (
-          <span className="inline-flex items-center gap-1 text-xs text-warn">
+          <span className="inline-flex items-center gap-1 text-legacy-xs text-warn">
             <IconLock size={12} />
             {TEAM_ONLY_LABEL}
           </span>
         ) : null}
-        <time className="ml-auto font-mono text-xs text-fg-3">
+        <time className="ml-auto font-mono text-legacy-xs text-fg-3">
           {formatClockTime(c.createdAt, props.timeZone)}
         </time>
       </div>

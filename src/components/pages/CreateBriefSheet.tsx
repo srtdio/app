@@ -345,7 +345,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
 
   function fieldError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-xs text-bad">{fieldErrors[key]}</p>
+      <p className="mt-1.5 text-legacy-xs text-bad">{fieldErrors[key]}</p>
     ) : null;
   }
 
@@ -460,7 +460,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             // still reads in the error colour.
             <p
               role="status"
-              className={`mt-1.5 text-xs ${pendingUploads > 0 ? 'text-fg-3' : 'text-bad'}`}
+              className={`mt-1.5 text-legacy-xs ${pendingUploads > 0 ? 'text-fg-3' : 'text-bad'}`}
             >
               {uploadNotice}
             </p>
@@ -478,7 +478,10 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
         </Field>
 
         {submitError !== null ? (
-          <div role="alert" className="rounded-md border border-bad px-3 py-2 text-sm text-bad">
+          <div
+            role="alert"
+            className="rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
+          >
             {submitError}
           </div>
         ) : null}

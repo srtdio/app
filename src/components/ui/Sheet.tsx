@@ -156,7 +156,7 @@ export function Sheet({
             {title}
           </h2>
           <span className="ml-auto flex items-center gap-2">
-            {busy ? <span className="text-xs text-fg-3">{busyLabel}</span> : null}
+            {busy ? <span className="text-legacy-xs text-fg-3">{busyLabel}</span> : null}
             <IconButton
               label="Close"
               onClick={requestClose}

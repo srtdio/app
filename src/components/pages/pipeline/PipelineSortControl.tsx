@@ -110,7 +110,7 @@ function radioRow(
       aria-checked={selected}
       onClick={onClick}
       className={cn(
-        'flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm transition-colors',
+        'flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-legacy-sm transition-colors',
         selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
       )}
     >
@@ -352,7 +352,7 @@ export function filterControlBody(props: {
 }): ReactElement {
   return (
     <div data-filter-body="" className="flex flex-col">
-      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold text-fg-3">Due date</p>
+      <p className="px-3 pb-1 pt-1.5 text-legacy-xs font-semibold text-fg-3">Due date</p>
       {dateControlBody({
         dateWindow: props.dateWindow,
         onDateWindowChange: props.onDateWindowChange,
@@ -360,7 +360,7 @@ export function filterControlBody(props: {
         onCustomOpen: props.onCustomOpen,
       })}
       <div className="my-1.5 border-t border-border" aria-hidden="true" />
-      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold text-fg-3">Sort</p>
+      <p className="px-3 pb-1 pt-1.5 text-legacy-xs font-semibold text-fg-3">Sort</p>
       {sortControlBody({ order: props.order, onOrderChange: props.onOrderChange })}
     </div>
   );

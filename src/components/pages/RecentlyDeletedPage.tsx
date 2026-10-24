@@ -69,14 +69,17 @@ export function RecentlyDeletedView({
 }: RecentlyDeletedViewProps) {
   return (
     <div className="px-4 md:px-6 py-4">
-      <p className="text-sm text-fg-3">
+      <p className="text-legacy-sm text-fg-3">
         Files stay here 31 days, then are deleted for good. They still count toward storage until
         then.
       </p>
 
       {failed ? (
         <div className="mt-4">
-          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-sm text-bad">
+          <div
+            role="alert"
+            className="rounded-xl border border-bad px-4 py-3 text-legacy-sm text-bad"
+          >
             Could not load assets.
           </div>
           <div className="mt-3">
@@ -97,8 +100,10 @@ export function RecentlyDeletedView({
           <ul className="mt-4 divide-y divide-border rounded-xl border border-border bg-panel">
             {items.map((item) => (
               <li key={item.id} className="px-4 py-3">
-                <p className="text-sm font-medium text-fg [overflow-wrap:anywhere]">{item.name}</p>
-                <p className="mt-0.5 text-xs text-fg-3">
+                <p className="text-legacy-sm font-medium text-fg [overflow-wrap:anywhere]">
+                  {item.name}
+                </p>
+                <p className="mt-0.5 text-legacy-xs text-fg-3">
                   {goneInLine(item.sizeBytes, daysLeft(item.deletedAt, now))}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -127,10 +132,10 @@ export function RecentlyDeletedView({
                 <Button variant="danger" disabled={busyId !== null} onClick={onEmpty}>
                   Empty now
                 </Button>
-                <p className="text-xs text-fg-3">{freesLine(deletedBytes(items))}</p>
+                <p className="text-legacy-xs text-fg-3">{freesLine(deletedBytes(items))}</p>
               </div>
             ) : (
-              <p className="text-xs text-fg-3">{MEMBER_PURGE_NOTE}</p>
+              <p className="text-legacy-xs text-fg-3">{MEMBER_PURGE_NOTE}</p>
             )}
           </div>
         </>

@@ -209,7 +209,7 @@ export function SignUpPage(): ReactElement {
       >
         <div className="flex flex-col gap-3">
           {error !== null ? (
-            <p role="alert" className="text-sm text-bad">
+            <p role="alert" className="text-legacy-sm text-bad">
               {error}
             </p>
           ) : null}
@@ -274,13 +274,13 @@ export function SignUpPage(): ReactElement {
             onBlur={() => setEmailError(emailFieldError(email))}
           />
           {emailError !== null ? (
-            <p id="signup-email-error" role="alert" className="mt-1.5 text-sm text-bad">
+            <p id="signup-email-error" role="alert" className="mt-1.5 text-legacy-sm text-bad">
               {emailError}
             </p>
           ) : null}
         </Field>
 
-        <div className="flex flex-wrap items-center gap-x-1 text-sm text-fg-2">
+        <div className="flex flex-wrap items-center gap-x-1 text-legacy-sm text-fg-2">
           <label
             htmlFor="signup-policy-consent"
             className="flex min-h-11 cursor-pointer items-center gap-2"
@@ -318,7 +318,7 @@ export function SignUpPage(): ReactElement {
         </div>
 
         {error !== null ? (
-          <p role="alert" className="text-sm text-bad">
+          <p role="alert" className="text-legacy-sm text-bad">
             {error}
           </p>
         ) : null}

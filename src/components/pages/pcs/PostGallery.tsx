@@ -391,11 +391,11 @@ export function framePins(
             )}
           >
             {at.edge === null ? (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-xs font-semibold tabular-nums text-fg shadow">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-legacy-xs font-semibold tabular-nums text-fg shadow">
                 {pin.n}
               </span>
             ) : (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg px-1 text-xs font-semibold tabular-nums text-fg shadow">
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg px-1 text-legacy-xs font-semibold tabular-nums text-fg shadow">
                 {pin.n}
               </span>
             )}
@@ -641,7 +641,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
         ) : null}
       </div>
       {error !== null ? (
-        <p role="alert" data-gallery-error="" className="text-sm text-bad">
+        <p role="alert" data-gallery-error="" className="text-legacy-sm text-bad">
           {error}
         </p>
       ) : null}
@@ -688,7 +688,7 @@ export function reorderView(model: ReorderModel): ReactElement {
   const selectedIndex = items.findIndex((item) => item.assetAttachmentId === selectedId);
   return (
     <div data-reorder="" className="flex flex-col gap-2">
-      <p className="text-sm text-fg-2">Drag to reorder, or pick a slide and move it.</p>
+      <p className="text-legacy-sm text-fg-2">Drag to reorder, or pick a slide and move it.</p>
       <div className="flex gap-2 overflow-x-auto overscroll-x-contain py-1" role="list">
         {items.map((item, index) => {
           const dragging = drag !== null && drag.id === item.assetAttachmentId;
@@ -787,7 +787,7 @@ export function reorderView(model: ReorderModel): ReactElement {
         </Button>
       </div>
       {error !== null ? (
-        <p role="alert" data-gallery-error="" className="text-sm text-bad">
+        <p role="alert" data-gallery-error="" className="text-legacy-sm text-bad">
           {error}
         </p>
       ) : null}
@@ -837,7 +837,7 @@ export function SnapshotThumbs({
         </div>
       ))}
       {extra > 0 ? (
-        <span className="shrink-0 text-xs tabular-nums text-fg-3">{`+${extra}`}</span>
+        <span className="shrink-0 text-legacy-xs tabular-nums text-fg-3">{`+${extra}`}</span>
       ) : null}
     </div>
   );
@@ -905,8 +905,8 @@ export function galleryView({
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-panel-3 text-accent">
             <IconImagePlus size={26} />
           </span>
-          <span className="text-sm font-medium text-fg">Add images</span>
-          <span className="text-xs text-fg-3">Tap to upload</span>
+          <span className="text-legacy-sm font-medium text-fg">Add images</span>
+          <span className="text-legacy-xs text-fg-3">Tap to upload</span>
         </button>
       );
       return toolbar !== undefined && toolbar !== null ? (
@@ -919,7 +919,7 @@ export function galleryView({
       );
     }
     const none = (
-      <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-sm text-fg-3">
+      <div className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-legacy-sm text-fg-3">
         <p>No images on this post yet.</p>
       </div>
     );
@@ -1013,7 +1013,7 @@ export function galleryView({
           {pinArmedIndex !== null ? (
             <div
               role="status"
-              className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-xs font-medium text-overlay-fg"
+              className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-legacy-xs font-medium text-overlay-fg"
             >
               Tap the image to place a pin
             </div>
@@ -1124,7 +1124,7 @@ export function galleryView({
         {pinArmedIndex !== null ? (
           <div
             role="status"
-            className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-xs font-medium text-overlay-fg"
+            className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-legacy-xs font-medium text-overlay-fg"
           >
             Tap the image to place a pin
           </div>

@@ -164,7 +164,7 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
           type="button"
           data-toast-action=""
           onClick={() => onAction(id)}
-          className="flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-sm font-medium text-[var(--strip-action)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--strip-action)]"
+          className="flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-legacy-sm font-medium text-[var(--strip-action)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--strip-action)]"
         >
           {action.label}
         </button>

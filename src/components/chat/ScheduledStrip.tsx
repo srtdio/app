@@ -89,7 +89,7 @@ function Thumb(props: {
       {props.more > 0 ? (
         <span
           data-thumb-more=""
-          className="absolute inset-0 flex items-center justify-center bg-overlay text-xs font-semibold text-overlay-fg"
+          className="absolute inset-0 flex items-center justify-center bg-overlay text-legacy-xs font-semibold text-overlay-fg"
         >
           +{props.more}
         </span>
@@ -139,7 +139,9 @@ export function ScheduledAttachments(props: {
           )}
         >
           <IconFile size={strip ? 14 : 16} className="shrink-0 text-fg-3" />
-          <span className="truncate text-xs">{file.name.trim() !== '' ? file.name : 'File'}</span>
+          <span className="truncate text-legacy-xs">
+            {file.name.trim() !== '' ? file.name : 'File'}
+          </span>
         </span>
       ))}
     </span>
@@ -177,11 +179,11 @@ export function ScheduledStrip(props: {
       )}
     >
       <IconCalendarClock size={20} className="shrink-0 text-accent" />
-      <span className="truncate text-sm font-semibold text-fg">
+      <span className="truncate text-legacy-sm font-semibold text-fg">
         {scheduledCountLabel(props.rows.length)}
       </span>
       <ScheduledAttachments row={next} size="strip" />
-      <span className="ml-auto truncate font-mono text-xs tabular-nums text-fg-2">
+      <span className="ml-auto truncate font-mono text-legacy-xs tabular-nums text-fg-2">
         {formatSendLabel(new Date(next.send_at), props.now ?? new Date())}
       </span>
       <IconChevronRight size={16} className="shrink-0 text-fg-2" />
@@ -207,7 +209,9 @@ export function ScheduleModeStrip(props: { label: string; onStop: () => void }):
         )}
       >
         <IconCalendarClock size={18} className="shrink-0 text-accent" />
-        <span className="flex-1 truncate text-sm font-medium text-fg">Sends {props.label}</span>
+        <span className="flex-1 truncate text-legacy-sm font-medium text-fg">
+          Sends {props.label}
+        </span>
         <IconButton label="Stop scheduling" className="shrink-0" onClick={props.onStop}>
           <IconX size={16} />
         </IconButton>

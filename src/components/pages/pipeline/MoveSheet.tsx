@@ -201,13 +201,13 @@ export function MoveSheetView({
           : {})}
       >
         <div className="flex flex-col gap-3">
-          <div data-move-current="" className="flex items-center gap-1.5 text-sm text-fg-3">
+          <div data-move-current="" className="flex items-center gap-1.5 text-legacy-sm text-fg-3">
             <span>Currently in</span>
             <StageDot stage={currentStage} />
             <span>{stageLabel(currentStage)}</span>
           </div>
           {!confirming && roleStatus === 'loading' ? (
-            <p data-role-pending="" role="status" className="text-sm text-fg-3">
+            <p data-role-pending="" role="status" className="text-legacy-sm text-fg-3">
               {ROLE_READ_PENDING}
             </p>
           ) : null}
@@ -217,7 +217,7 @@ export function MoveSheetView({
               role="alert"
               className="flex items-center gap-3 rounded-lg border border-border bg-panel-2 px-3 py-2"
             >
-              <p className="flex-1 text-sm text-fg-2">{ROLE_READ_ERROR}</p>
+              <p className="flex-1 text-legacy-sm text-fg-2">{ROLE_READ_ERROR}</p>
               <Button onClick={() => onRetryRole?.()}>Retry</Button>
             </div>
           ) : null}
@@ -237,7 +237,7 @@ export function MoveSheetView({
                   >
                     <span
                       className={cn(
-                        'text-sm font-medium',
+                        'text-legacy-sm font-medium',
                         action.tone === 'bad' ? 'text-bad' : 'text-fg',
                       )}
                     >

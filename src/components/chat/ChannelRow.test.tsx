@@ -152,7 +152,13 @@ describe('chat home sections', () => {
   it('second label gets 12px top padding; labels are 12/600 uppercase secondary', () => {
     const markup = html(view([group, dm]));
     expect(markup).toContain(`data-section-label="people" class="${SECTION_LABEL_TYPE} px-1 pt-3"`);
-    for (const t of ['text-xs', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']) {
+    for (const t of [
+      'text-legacy-xs',
+      'font-semibold',
+      'uppercase',
+      'tracking-[0.06em]',
+      'text-fg-2',
+    ]) {
       expect(SECTION_LABEL_TYPE.split(' ')).toContain(t);
     }
     tokenOnly(markup);

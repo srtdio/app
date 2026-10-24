@@ -115,7 +115,7 @@ export function ScheduledListSheet(
             >
               <div className={cn('flex items-center gap-2 text-fg-2', NO_TOUCH_SELECT)}>
                 <IconCalendarClock size={16} className="text-accent" />
-                <span className="font-mono text-xs tabular-nums">
+                <span className="font-mono text-legacy-xs tabular-nums">
                   {formatSendLabel(new Date(row.send_at), now)}
                 </span>
               </div>
@@ -212,7 +212,7 @@ export function ScheduledListSheet(
           </div>
         }
       >
-        <p className="truncate text-sm text-fg-2">
+        <p className="truncate text-legacy-sm text-fg-2">
           {cancelFor !== null ? scheduledPreviewText(cancelFor, props.nameOf) : ''}
         </p>
       </Sheet>
@@ -275,7 +275,7 @@ export function BodyEditor(props: {
       {hasFiles ? (
         <div data-scheduled-files-readonly="" className="flex flex-col gap-1.5">
           <ScheduledAttachments row={props.row} size="card" />
-          <p className="text-xs text-fg-3">{SCHEDULED_FILES_READONLY_COPY}</p>
+          <p className="text-legacy-xs text-fg-3">{SCHEDULED_FILES_READONLY_COPY}</p>
         </div>
       ) : null}
       <Textarea
@@ -283,7 +283,7 @@ export function BodyEditor(props: {
         value={text}
         autoGrow
         onChange={(event) => setText(event.target.value)}
-        className="text-base"
+        className="text-legacy-base"
       />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={props.onDone}>

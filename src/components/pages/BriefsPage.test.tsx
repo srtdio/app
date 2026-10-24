@@ -326,7 +326,7 @@ function readSection(section: ReactElement): SectionShape {
 
 // The day heading is a plain label: token colours only (text-fg-2 flips with the
 // theme), never sticky, never interactive, no transition or transform.
-const DAY_HEADING_CLASS = 'pt-3 pb-1 text-xs font-medium text-fg-2';
+const DAY_HEADING_CLASS = 'pt-3 pb-1 text-legacy-xs font-medium text-fg-2';
 
 describe('briefSections', () => {
   const cache = {

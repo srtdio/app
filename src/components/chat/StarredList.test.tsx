@@ -128,7 +128,7 @@ describe('StarredRowView', () => {
     expect(out).toContain('h-7 w-7');
     expect(out).toContain('Chitra');
     expect(out).toContain('›  Diwali shoot');
-    expect(out).toContain('font-mono text-xs tabular-nums text-fg-3');
+    expect(out).toContain('font-mono text-legacy-xs tabular-nums text-fg-3');
     expect(out).toContain('data-starred-bubble="peer"');
     expect(out).toContain('bg-panel-2 text-fg');
     expect(out).toContain('line-clamp-3');
@@ -183,7 +183,7 @@ describe('StarredRowView', () => {
           "border": "rgb(35, 38, 44)",
           "fg": "rgb(244, 245, 246)",
           "fg-2": "rgb(154, 160, 168)",
-          "fg-3": "rgb(107, 113, 120)",
+          "fg-3": "rgb(132, 138, 146)",
           "panel": "rgb(20, 21, 25)",
           "panel-2": "rgb(26, 28, 33)",
           "panel-3": "rgb(33, 35, 41)",
@@ -192,7 +192,7 @@ describe('StarredRowView', () => {
           "border": "rgb(230, 232, 235)",
           "fg": "rgb(27, 28, 32)",
           "fg-2": "rgb(98, 102, 109)",
-          "fg-3": "rgb(139, 144, 150)",
+          "fg-3": "rgb(107, 111, 118)",
           "panel": "rgb(255, 255, 255)",
           "panel-2": "rgb(242, 243, 245)",
           "panel-3": "rgb(236, 237, 240)",

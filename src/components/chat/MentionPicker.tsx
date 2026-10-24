@@ -59,13 +59,13 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
               <>
                 <span
                   aria-hidden="true"
-                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-bold text-accent-hover"
+                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-accent-soft text-legacy-xs font-bold text-accent-hover"
                 >
                   @
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-bold text-fg">@{ALL_MENTION}</span>
-                  <span className="truncate text-xs text-fg-3">{ALL_MENTION_LINE}</span>
+                  <span className="truncate text-legacy-sm font-bold text-fg">@{ALL_MENTION}</span>
+                  <span className="truncate text-legacy-xs text-fg-3">{ALL_MENTION_LINE}</span>
                 </span>
               </>
             ) : (
@@ -76,9 +76,11 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
                   size="md"
                 />
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium text-fg">{member.displayName}</span>
+                  <span className="truncate text-legacy-sm font-medium text-fg">
+                    {member.displayName}
+                  </span>
                   {member.username || member.role !== null ? (
-                    <span className="truncate text-xs text-fg-3">
+                    <span className="truncate text-legacy-xs text-fg-3">
                       {member.username ? (
                         <span className="font-mono text-fg-2">@{member.username}</span>
                       ) : null}

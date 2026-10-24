@@ -318,7 +318,7 @@ function SheetRow(props: {
       type="button"
       data-row={props.data}
       onClick={props.onClick}
-      className="flex h-12 w-full select-none items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-fg [-webkit-touch-callout:none] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+      className="flex h-12 w-full select-none items-center gap-3 rounded-lg px-3 text-left text-legacy-sm font-medium text-fg [-webkit-touch-callout:none] hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
     >
       <span className="flex w-5 shrink-0 justify-center text-fg-2">{props.icon}</span>
       {props.label}
@@ -393,12 +393,14 @@ export function GroupHero(props: {
       ) : (
         photo
       )}
-      <span className="mt-2 max-w-full truncate text-lg font-semibold text-fg">{props.name}</span>
-      <span data-group-subtitle="" className="max-w-full truncate text-sm text-fg-2">
+      <span className="mt-2 max-w-full truncate text-legacy-lg font-semibold text-fg">
+        {props.name}
+      </span>
+      <span data-group-subtitle="" className="max-w-full truncate text-legacy-sm text-fg-2">
         {props.subtitle}
       </span>
       {props.busy ? (
-        <span role="status" className="text-xs text-fg-3">
+        <span role="status" className="text-legacy-xs text-fg-3">
           Saving
         </span>
       ) : null}
@@ -434,7 +436,7 @@ export function groupInfoPage(props: {
           {props.error !== null ? (
             <div
               role="alert"
-              className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-sm text-bad"
+              className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-legacy-sm text-bad"
             >
               {props.error}
             </div>
@@ -457,7 +459,7 @@ export function groupInfoPage(props: {
 /** A section heading: small caps label over its rows. */
 function SectionLabel(props: { children: string }): ReactElement {
   return (
-    <p className="mb-1 px-1 text-xs font-medium uppercase tracking-wide text-fg-3">
+    <p className="mb-1 px-1 text-legacy-xs font-medium uppercase tracking-wide text-fg-3">
       {props.children}
     </p>
   );
@@ -798,7 +800,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         ) : members.error !== null ? (
           <div
             role="alert"
-            className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-sm text-bad"
+            className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-legacy-sm text-bad"
           >
             {members.error}
           </div>
@@ -811,7 +813,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
                   {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
                   size="md"
                 />
-                <span className="min-w-0 flex-1 truncate text-sm text-fg">
+                <span className="min-w-0 flex-1 truncate text-legacy-sm text-fg">
                   {member.displayName}
                   {member.userId === props.currentUserId ? (
                     <span className="ml-1 text-fg-3">(you)</span>

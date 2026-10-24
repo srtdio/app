@@ -410,19 +410,19 @@ export function StageReasonConfirm(props: {
       }
     >
       {body !== null ? (
-        <p data-stage-confirm-body="" className="mb-3 text-sm text-fg-2">
+        <p data-stage-confirm-body="" className="mb-3 text-legacy-sm text-fg-2">
           {body}
         </p>
       ) : null}
       <label className="flex flex-col gap-2">
-        <span className="text-sm text-fg-2">{label}</span>
+        <span className="text-legacy-sm text-fg-2">{label}</span>
         <Textarea
           aria-label={label}
           value={props.reason}
           onChange={(event) => props.onReasonChange(event.target.value)}
         />
         {helper !== null ? (
-          <span data-stage-confirm-helper="" className="text-xs text-fg-3">
+          <span data-stage-confirm-helper="" className="text-legacy-xs text-fg-3">
             {helper}
           </span>
         ) : null}
@@ -2029,7 +2029,7 @@ export function PostDetailPage({
   const phoneStageNotes =
     stageHelper !== null ? (
       <section className="rounded-xl border border-border bg-panel-2 p-4">
-        <p className="text-sm text-fg-2">{stageHelper}</p>
+        <p className="text-legacy-sm text-fg-2">{stageHelper}</p>
       </section>
     ) : null;
   const decisionBar =
@@ -2046,7 +2046,7 @@ export function PostDetailPage({
     approvedLocked && !readOnly ? (
       <div
         data-approved-banner=""
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-sm text-fg"
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-legacy-sm text-fg"
       >
         <span aria-hidden className="shrink-0 text-good">
           <IconLock size={18} />
@@ -2289,14 +2289,14 @@ export function PostDetailPage({
                 />
               )}
               {gallerySaving ? (
-                <p aria-live="polite" className="mt-2.5 text-xs text-fg-3">
+                <p aria-live="polite" className="mt-2.5 text-legacy-xs text-fg-3">
                   Saving…
                 </p>
               ) : null}
               {pinError !== null ? (
                 <div
                   role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
                 >
                   {pinError}
                 </div>
@@ -2316,7 +2316,7 @@ export function PostDetailPage({
               <div className="flex items-center gap-3">
                 <Avatar name={workspaceName ?? ''} size="md" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-fg">
+                  <div className="truncate text-legacy-sm font-semibold text-fg">
                     {workspaceName ?? ''}
                   </div>
                 </div>
@@ -2366,7 +2366,7 @@ export function PostDetailPage({
                     onChange={(event) => setCaptionDraft(event.target.value)}
                   />
                   {captionError !== null ? (
-                    <div role="alert" className="text-sm text-bad">
+                    <div role="alert" className="text-legacy-sm text-bad">
                       {captionError}
                     </div>
                   ) : null}
@@ -2381,12 +2381,14 @@ export function PostDetailPage({
                     <Button variant="ghost" disabled={captionSaving} onClick={cancelCaptionEdit}>
                       Cancel
                     </Button>
-                    <span className="ml-auto text-xs tabular-nums text-fg-3">
+                    <span className="ml-auto text-legacy-xs tabular-nums text-fg-3">
                       {captionDraft.trim().length}/5000
                     </span>
                   </div>
                   {captionSaveNote(currentVersionNumber) !== null ? (
-                    <p className="text-xs text-fg-3">{captionSaveNote(currentVersionNumber)}</p>
+                    <p className="text-legacy-xs text-fg-3">
+                      {captionSaveNote(currentVersionNumber)}
+                    </p>
                   ) : null}
                 </div>
               ) : hasCaption ? (
@@ -2402,7 +2404,7 @@ export function PostDetailPage({
                   {captionTipOpen ? (
                     <div
                       data-caption-tip=""
-                      className="mt-2 flex items-center gap-2 text-xs text-fg-3"
+                      className="mt-2 flex items-center gap-2 text-legacy-xs text-fg-3"
                     >
                       <span>{CAPTION_TIP_TEXT}</span>
                       <Button
@@ -2420,12 +2422,12 @@ export function PostDetailPage({
                   ) : null}
                 </>
               ) : (
-                <p className="mt-3 text-sm text-fg-3">No caption yet.</p>
+                <p className="mt-3 text-legacy-sm text-fg-3">No caption yet.</p>
               )}
               {annotateError !== null ? (
                 <div
                   role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-sm text-bad"
+                  className="mt-3 rounded-md border border-bad px-3 py-2 text-legacy-sm text-bad"
                 >
                   {annotateError}
                 </div>
@@ -2470,7 +2472,7 @@ export function PostDetailPage({
                   />
                 </div>
               ) : (
-                <div className="px-4 py-8 text-center text-sm text-fg-3">
+                <div className="px-4 py-8 text-center text-legacy-sm text-fg-3">
                   Select a workspace to view comments.
                 </div>
               )}

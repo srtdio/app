@@ -35,7 +35,7 @@ export function LoadError({
         className,
       )}
     >
-      <p className="text-sm text-fg-2">{loadErrorText(title)}</p>
+      <p className="text-legacy-sm text-fg-2">{loadErrorText(title)}</p>
       <Button onClick={onRetry} disabled={retrying} aria-busy={retrying}>
         {retrying ? 'Retrying…' : 'Retry'}
       </Button>

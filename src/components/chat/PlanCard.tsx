@@ -186,7 +186,7 @@ export function PlanCardTop(props: {
 }): ReactElement {
   return (
     <>
-      <span className="flex h-4 items-center gap-1.5 text-xs font-semibold leading-4 tracking-wide text-accent">
+      <span className="flex h-4 items-center gap-1.5 text-legacy-xs font-semibold leading-4 tracking-wide text-accent">
         <IconPlan size={16} />
         {PLAN_EYEBROW}
       </span>
@@ -245,7 +245,7 @@ export function PlanCardBody(props: {
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3 text-fg-3">
           <IconPlan size={18} />
         </span>
-        <span className="truncate text-sm font-medium">{PLAN_DELETED}</span>
+        <span className="truncate text-legacy-sm font-medium">{PLAN_DELETED}</span>
       </div>
     );
   }
@@ -280,7 +280,7 @@ export function PlanCardBody(props: {
           percent={progressPercent(progress)}
           side={draft ? 'team' : 'client'}
         />
-        <span data-plan-progress="" className="truncate text-xs leading-4 text-fg-3">
+        <span data-plan-progress="" className="truncate text-legacy-xs leading-4 text-fg-3">
           {progressLabel(progress)}
         </span>
       </div>
@@ -484,8 +484,10 @@ function forwardList(
               <IconChat size={18} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium leading-snug">{channel.title}</span>
-              <span className="truncate text-xs leading-snug text-fg-3">
+              <span className="truncate text-legacy-sm font-medium leading-snug">
+                {channel.title}
+              </span>
+              <span className="truncate text-legacy-xs leading-snug text-fg-3">
                 {sendingId === channel.channelId
                   ? 'Sending'
                   : channel.channelType === 'group'

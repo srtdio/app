@@ -49,7 +49,7 @@ function LockGlyph() {
 
 function RoleBadge({ role }: { role: string }) {
   return (
-    <span className="inline-flex items-center rounded-md border border-border bg-panel-2 px-2 py-0.5 text-xs font-medium text-fg-2">
+    <span className="inline-flex items-center rounded-md border border-border bg-panel-2 px-2 py-0.5 text-legacy-xs font-medium text-fg-2">
       {roleLabel(role)}
     </span>
   );
@@ -80,15 +80,17 @@ function MemberRowItem({ member, canManage, onOpenActions }: RowProps) {
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-fg">{member.displayName}</span>
+          <span className="truncate text-legacy-sm font-medium text-fg">{member.displayName}</span>
           {member.isSelf ? <SelfChip /> : null}
         </div>
         {member.email !== null ? (
-          <div className="truncate text-xs text-fg-3">{member.email}</div>
+          <div className="truncate text-legacy-xs text-fg-3">{member.email}</div>
         ) : null}
       </div>
       <RoleBadge role={member.role} />
-      {joined !== null ? <span className="hidden text-xs text-fg-3 sm:block">{joined}</span> : null}
+      {joined !== null ? (
+        <span className="hidden text-legacy-xs text-fg-3 sm:block">{joined}</span>
+      ) : null}
       {member.isOwner ? (
         <span
           className="inline-flex h-11 w-11 items-center justify-center text-fg-3"
@@ -152,7 +154,9 @@ function PendingRowItem({
         <>
           <div className="min-w-0 flex-1 self-center">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="min-w-0 truncate text-sm font-medium text-fg">{info.email}</span>
+              <span className="min-w-0 truncate text-legacy-sm font-medium text-fg">
+                {info.email}
+              </span>
               <span className="inline-flex items-center rounded-md bg-panel-2 px-1.5 py-0.5 text-[11px] font-medium text-fg-3">
                 Invited
               </span>
@@ -162,7 +166,7 @@ function PendingRowItem({
                 </span>
               ) : null}
             </div>
-            <div className="truncate text-xs text-fg-3">{inviteRoleLabel(member.role)}</div>
+            <div className="truncate text-legacy-xs text-fg-3">{inviteRoleLabel(member.role)}</div>
           </div>
           {canManage ? (
             <div className="flex shrink-0 items-center gap-1 self-center">
@@ -267,7 +271,7 @@ function PendingEditFields({
             setEmail(event.target.value);
             setError(null);
           }}
-          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-base text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-sm"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-legacy-base text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-legacy-sm"
         />
         <RolePicker
           label={`Role for ${trimmed}`}
@@ -282,15 +286,17 @@ function PendingEditFields({
         />
       </div>
       {invalid ? (
-        <p role="alert" className="text-xs text-bad">
+        <p role="alert" className="text-legacy-xs text-bad">
           {INVITE_INVALID_EMAIL_MESSAGE}
         </p>
       ) : error !== null ? (
-        <p role="alert" className="text-xs text-bad">
+        <p role="alert" className="text-legacy-xs text-bad">
           {error}
         </p>
       ) : null}
-      <p className="text-xs text-fg-3">Saving sends a fresh invite. The old link stops working.</p>
+      <p className="text-legacy-xs text-fg-3">
+        Saving sends a fresh invite. The old link stops working.
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="primary" type="submit" disabled={saving}>
           Save
@@ -323,15 +329,15 @@ function Group({
     >
       <header className="border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-fg">{title}</h3>
-          <span className="text-xs text-fg-3">{count}</span>
+          <h3 className="text-legacy-sm font-semibold text-fg">{title}</h3>
+          <span className="text-legacy-xs text-fg-3">{count}</span>
         </div>
         {subtitle !== undefined && subtitle !== '' ? (
-          <p className="mt-0.5 truncate text-xs text-fg-3">{subtitle}</p>
+          <p className="mt-0.5 truncate text-legacy-xs text-fg-3">{subtitle}</p>
         ) : null}
       </header>
       <div className="divide-y divide-border">
-        {count === 0 ? <p className="px-4 py-3 text-sm text-fg-3">{emptyText}</p> : children}
+        {count === 0 ? <p className="px-4 py-3 text-legacy-sm text-fg-3">{emptyText}</p> : children}
       </div>
     </section>
   );

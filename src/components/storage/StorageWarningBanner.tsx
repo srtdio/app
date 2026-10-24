@@ -13,7 +13,7 @@ export function StorageWarningBanner() {
     <div className="shrink-0 px-4 pt-3 md:px-6">
       <div
         role="status"
-        className="flex min-w-0 items-center gap-2 rounded-xl border border-warn bg-warn-soft py-1 pl-4 pr-1 text-sm text-fg"
+        className="flex min-w-0 items-center gap-2 rounded-xl border border-warn bg-warn-soft py-1 pl-4 pr-1 text-legacy-sm text-fg"
       >
         <p className="min-w-0 flex-1 break-words py-2">{storageWarningCopy(usage.usedBytes)}</p>
         <IconButton label="Dismiss" onClick={dismiss} className="shrink-0">

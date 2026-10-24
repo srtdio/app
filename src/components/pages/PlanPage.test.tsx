@@ -90,7 +90,7 @@ describe('PlanPage', () => {
   it('a malformed plan id shows the "Plan not available" state, never a blank page', () => {
     const html = render('/plans/not-a-plan');
     expect(html).toContain('frame title=Plan not available back=Back');
-    expect(html).toContain('<p class="text-sm">Plan not available</p>');
+    expect(html).toContain('<p class="text-legacy-sm">Plan not available</p>');
     expect(html).not.toContain('screen plan=');
   });
 

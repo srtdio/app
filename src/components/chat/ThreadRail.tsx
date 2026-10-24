@@ -158,7 +158,7 @@ export function ThreadChipRow(props: {
             NO_TOUCH_SELECT,
           )}
         >
-          <span className="inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-[14px] bg-panel pl-1 pr-2.5 text-xs">
+          <span className="inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-[14px] bg-panel pl-1 pr-2.5 text-legacy-xs">
             <PostRefThumb assetVersionId={post?.thumbnailAssetVersionId ?? null} size={20} />
             <span className="min-w-0 truncate text-fg-2">{label.title}</span>
             {label.count !== null ? (
@@ -232,7 +232,7 @@ export function RepliesSeparatorRow(props: { label: string; through: boolean }):
       className={cn('relative flex justify-center px-4 py-2', NO_TOUCH_SELECT)}
     >
       {props.through ? <RailThrough /> : null}
-      <span className="text-xs text-fg-3">{props.label}</span>
+      <span className="text-legacy-xs text-fg-3">{props.label}</span>
     </li>
   );
 }

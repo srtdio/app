@@ -520,11 +520,11 @@ export function AssetUploadSheet({
   const footer = (
     <>
       {!canCommit ? (
-        <span className="mr-auto text-xs text-fg-3">
+        <span className="mr-auto text-legacy-xs text-fg-3">
           Uploading is not enabled yet. Names are saved when the upload endpoint ships.
         </span>
       ) : nameError !== null ? (
-        <span className="mr-auto text-xs text-fg-3">{nameError}</span>
+        <span className="mr-auto text-legacy-xs text-fg-3">{nameError}</span>
       ) : null}
       <span className={canCommit && nameError === null ? 'ml-auto flex gap-2.5' : 'flex gap-2.5'}>
         {running ? (
@@ -575,8 +575,8 @@ export function AssetUploadSheet({
           className="flex min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 px-4 text-center text-fg-2 transition-colors hover:bg-panel-3"
         >
           <IconUpload size={26} />
-          <span className="text-sm font-medium">Choose files</span>
-          <span className="text-xs text-fg-3">
+          <span className="text-legacy-sm font-medium">Choose files</span>
+          <span className="text-legacy-xs text-fg-3">
             Name your upload before it is added to {ROOT_LABEL}.
           </span>
         </button>
@@ -584,7 +584,7 @@ export function AssetUploadSheet({
         <div className="flex flex-col gap-2.5">
           {/* One file takes one name; several share one base name. */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor={`${inputId}-name`} className="text-xs font-medium text-fg-2">
+            <label htmlFor={`${inputId}-name`} className="text-legacy-xs font-medium text-fg-2">
               {mode === 'root-bulk' ? 'Name these files' : 'Name'}
             </label>
             <Input
@@ -623,7 +623,7 @@ export function AssetUploadSheet({
                   )}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="truncate text-sm text-fg">{item.file.name}</span>
+                  <span className="truncate text-legacy-sm text-fg">{item.file.name}</span>
                   <span className="truncate text-[11px] text-fg-3">
                     {humanizeSize(item.file.size)}
                   </span>

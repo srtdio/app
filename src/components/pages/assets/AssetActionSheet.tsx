@@ -153,7 +153,7 @@ export function AssetActionSheet({
         aria-label={`Actions for ${name}`}
         className="relative w-full rounded-t-2xl border-t border-border bg-panel p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:mx-auto md:mb-4 md:max-w-sm md:rounded-2xl md:border"
       >
-        <div className="truncate px-3 py-2 text-sm font-semibold text-fg">{name}</div>
+        <div className="truncate px-3 py-2 text-legacy-sm font-semibold text-fg">{name}</div>
         {rows.map((row) => {
           switch (row) {
             case 'primary':

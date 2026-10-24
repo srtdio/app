@@ -106,7 +106,7 @@ describe('PlanCardBody', () => {
     expect(html).toMatch(
       /data-plan-title="" class="text-\[17px\][^"]*leading-\[22px\][^"]*\btruncate\b/,
     );
-    expect(html).toMatch(/data-plan-progress="" class="truncate text-xs leading-4/);
+    expect(html).toMatch(/data-plan-progress="" class="truncate text-legacy-xs leading-4/);
     expect(html).toMatch(/data-plan-range="" class="truncate font-mono text-\[13px\] leading-5/);
   });
 
