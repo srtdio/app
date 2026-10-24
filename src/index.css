@@ -294,7 +294,6 @@
   }
   body {
     color: var(--fg);
-    line-height: 1.45;
     touch-action: manipulation;
     /* A long unbroken string (a pasted link) wraps instead of pushing the page
        sideways. Inherited; break-word, never anywhere, so min-content sizing
