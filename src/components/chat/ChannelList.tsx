@@ -457,7 +457,7 @@ export const GROUP_NAME_TYPE = 'text-[17px] leading-[22px] font-semibold';
 export const GROUP_PREVIEW_TYPE = 'text-[14px] leading-[19px] font-normal';
 export const PERSON_NAME_TYPE = 'text-[15px] leading-[20px] font-semibold';
 export const PERSON_PREVIEW_TYPE = 'text-[13px] leading-[18px] font-normal';
-export const TILE_TIME_TYPE = 'font-sans text-xs font-normal tabular-nums';
+export const TILE_TIME_TYPE = 'font-mono text-xs font-normal tabular-nums';
 
 /**
  * The wide tile's 76px rounded-square (radius 18) group photo: the shared
@@ -639,7 +639,11 @@ export function channelRowBody(props: {
       {photo}
       <span className="mt-1.5 flex w-full min-w-0 justify-center">{name}</span>
       <span className="mt-0.5 flex w-full min-w-0 justify-center">{previewNode}</span>
-      {timeNode !== null ? <span className="mt-auto flex">{timeNode}</span> : null}
+      {timeNode !== null ? (
+        <span data-tile-time="" className="mt-auto flex px-10">
+          {timeNode}
+        </span>
+      ) : null}
       {pill !== null ? <span className="absolute right-3 top-3 flex">{pill}</span> : null}
       {check !== null ? <span className="absolute left-3 top-3 flex">{check}</span> : null}
     </>
@@ -914,7 +918,7 @@ export function searchChips(props: {
       data-search-chips=""
       role="group"
       aria-label="Filter messages"
-      className="flex min-w-0 flex-1 touch-pan-x flex-nowrap gap-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex min-w-0 flex-1 touch-pan-x flex-nowrap gap-2 overflow-x-auto overflow-y-hidden pr-10 [mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)] [scrollbar-width:none] [-webkit-mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)] [&::-webkit-scrollbar]:hidden"
     >
       {HOME_CHIPS.map((chip) => {
         const on = props.kind === chip.kind;
@@ -1075,7 +1079,8 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
             search={{
               value: props.search,
               onChange: props.onSearchChange,
-              placeholder: 'Search conversations',
+              placeholder: 'Search',
+              label: 'Search conversations',
             }}
             primaryAction={{
               node: (

@@ -35,7 +35,7 @@ import { useModalFocus } from '@/lib/modal-focus';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
 
 /** Quick-react row offered when a message's action menu is opened; "+" opens the picker after it. */
-export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🆗', '🙏'] as const;
+export const QUICK_REACTIONS = ['👍', '❤️', '😂', '👌', '🙏'] as const;
 
 /** The "+" after the quick reactions: opens the full emoji picker. */
 export const MORE_REACTIONS_LABEL = 'More reactions';

@@ -1249,6 +1249,9 @@ describe('own-bubble inner content', () => {
       '[&_.text-fg-2]:opacity-80',
       '[&_.text-fg-3]:opacity-80',
       '[&_.bg-panel]:bg-white/[.16]',
+      // The stage tag on a shared card is bg-panel-2: without this it stays a
+      // solid light block under white ink.
+      '[&_.bg-panel-2]:bg-white/[.16]',
       '[&_.bg-panel-3]:bg-white/[.16]',
       '[&_.bg-accent]:bg-white/70',
     ]) {
@@ -1595,7 +1598,8 @@ describe('bubble text sizes', () => {
       if (c.includes('rounded-full')) pill = c;
     });
     expect(pill).toContain(DATE_PILL_TYPE.touch);
-    expect(pill).not.toContain('font-mono');
+    // Times and dates in chat are mono, like the Seen and unread digits.
+    expect(pill).toContain('font-mono');
     expect(DATE_PILL_TYPE.touch).toContain('tabular-nums');
     expect(DATE_PILL_TYPE.laptop).toContain('uppercase');
   });

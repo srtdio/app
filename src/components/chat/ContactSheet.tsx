@@ -6,6 +6,8 @@
 import { createPortal } from 'react-dom';
 import type { ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
+import { avatarFillFor } from '@/components/ui/Avatar';
+import { cn } from '@/lib/cn';
 import { IconChevronLeft } from '@/components/ui/icons';
 import {
   ChatInfoTabs,
@@ -42,10 +44,18 @@ function initialsOf(name: string): string {
   return (first + last).toUpperCase();
 }
 
-/** The 72px contact photo; initials on bg-panel-3 when there is no photo. */
+/**
+ * The 72px contact photo. With no photo: initials on the same avatar fill the
+ * list and the chat header give this person, so they read as one person.
+ */
 function ContactPhoto(props: { name: string; avatarUrl: string | null }): ReactElement {
   return (
-    <span className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-panel-3 text-xl font-semibold text-fg-2">
+    <span
+      className={cn(
+        'flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full text-xl font-semibold',
+        props.avatarUrl !== null ? 'bg-panel-3' : cn(avatarFillFor(props.name), 'text-white'),
+      )}
+    >
       {props.avatarUrl !== null ? (
         <img src={props.avatarUrl} alt="" className="h-full w-full object-cover" />
       ) : (

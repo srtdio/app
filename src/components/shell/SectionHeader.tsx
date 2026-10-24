@@ -9,6 +9,8 @@ interface SectionHeaderSearch {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Accessible name for the field when the placeholder is shorter than the purpose. */
+  label?: string;
 }
 
 interface SectionHeaderSort<S extends string> {
@@ -134,6 +136,7 @@ export function SectionHeader<S extends string = string>({
               value={search.value}
               onChange={(e) => search.onChange(e.target.value)}
               placeholder={search.placeholder}
+              {...(search.label !== undefined ? { 'aria-label': search.label } : {})}
               className="h-11 w-full rounded-lg border border-border bg-panel-2 pl-9 pr-11 text-sm text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
             />
             {searching ? (

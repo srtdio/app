@@ -57,6 +57,10 @@
   --warn-line: #f2c9a2;
   --annotation-bg: #ffe9b8;
   --annotation-line: #d9a93c;
+  /* Search match fill and ink: amber with dark ink in both themes, so a match
+     stands out on the indigo own bubble too. */
+  --search-mark-bg: #ffe9b8;
+  --search-mark-fg: #1b1c20;
   --stage-review: #b45309;
   --stage-approved: #15803d;
   --stage-rejected: #b91c1c;
@@ -148,6 +152,8 @@
   --warn-line: #5a3a1c;
   --annotation-bg: #4a3a14;
   --annotation-line: #d9a93c;
+  --search-mark-bg: #e8b84a;
+  --search-mark-fg: #16171b;
   --stage-review: #e0954a;
   --stage-approved: #46b47a;
   --stage-rejected: #e0685a;

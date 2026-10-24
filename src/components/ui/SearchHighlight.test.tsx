@@ -38,8 +38,8 @@ describe('highlightNodes (the one matching rule)', () => {
 
   it('uses the annotation fill with --fg ink (readable in light and dark)', () => {
     expect(html(highlightNodes('word', ['word']))).toContain(SEARCH_MARK_CLASS);
-    expect(SEARCH_MARK_CLASS).toContain('bg-annotation-bg');
-    expect(SEARCH_MARK_CLASS).toContain('[color:var(--fg)]');
+    expect(SEARCH_MARK_CLASS).toContain('bg-search-mark');
+    expect(SEARCH_MARK_CLASS).toContain('[color:var(--search-mark-fg)]');
   });
 
   it('Highlight takes the screen jump words from context, or its own words', () => {

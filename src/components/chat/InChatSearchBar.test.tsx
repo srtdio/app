@@ -79,7 +79,7 @@ describe('InChatSearchBar', () => {
       </p>,
     );
     expect(open).toContain('<mark data-search-mark=""');
-    expect(open).toContain('bg-annotation-bg');
+    expect(open).toContain('bg-search-mark');
     expect(open).toContain('>Shoot</mark>');
     const closed = renderToStaticMarkup(
       <p>{renderBodyWithMentions('Shoot at 5', false, { ...ctx, highlight: [] })}</p>,
