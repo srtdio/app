@@ -47,6 +47,12 @@ describe('Button design system', () => {
     }
   });
 
+  it('every variant is at least 44 wide, link included', () => {
+    for (const variant of VARIANTS) {
+      expect(tokens(classOf({ variant }))).toContain('min-w-[44px]');
+    }
+  });
+
   it('sm, md and lg all render 44', () => {
     for (const size of ['sm', 'md', 'lg'] as const) {
       const t = tokens(classOf({ size }));
