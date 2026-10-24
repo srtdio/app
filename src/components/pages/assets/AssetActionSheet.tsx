@@ -72,7 +72,7 @@ function Row({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`w-full justify-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent${
+      className={`w-full !justify-start !gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent${
         destructive ? ' text-bad hover:text-bad' : ''
       }`}
     >

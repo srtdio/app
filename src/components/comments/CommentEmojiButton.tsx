@@ -99,7 +99,7 @@ export function CommentEmojiButton(props: {
           setOpen(true);
         }}
         className={cn(
-          'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
+          'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-panel-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
           open ? 'text-accent' : 'text-fg-2',
           props.className,
         )}

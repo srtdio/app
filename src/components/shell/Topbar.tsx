@@ -39,7 +39,7 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={onCreateWorkspace}
-          className="min-w-0 justify-start border-dashed text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="min-w-0 !justify-start border-dashed text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <IconPlus size={16} className="shrink-0 text-fg-3" />
           <span className="truncate">Create your workspace</span>
@@ -56,7 +56,7 @@ export function Topbar({
           className={buttonClass(
             'ghost',
             'default',
-            'md:hidden min-w-0 max-w-[190px] justify-start gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'md:hidden min-w-0 max-w-[190px] !justify-start !gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           )}
         >
           {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
@@ -73,7 +73,7 @@ export function Topbar({
           type="button"
           variant="secondary"
           onClick={onOpenPalette}
-          className="hidden md:flex min-w-[240px] justify-start"
+          className="hidden md:flex min-w-[240px] !justify-start"
         >
           <IconSearch size={16} className="text-fg-3" />
           <span className="flex-1 text-left text-fg-3">Search</span>

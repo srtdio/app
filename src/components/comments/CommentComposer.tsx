@@ -332,8 +332,8 @@ export function PendingChip({
       {onRetry !== undefined && canRetryPending(item) ? (
         <Button
           type="button"
-          variant="ghost"
-          className="min-w-[44px] shrink-0 px-2 text-accent"
+          variant="link"
+          className="min-w-[44px] shrink-0"
           aria-label={`Retry ${item.file.name}`}
           onClick={onRetry}
         >
@@ -341,7 +341,7 @@ export function PendingChip({
         </Button>
       ) : null}
       <IconButton label={`Remove ${item.file.name}`} onClick={onRemove}>
-        <IconX size={16} />
+        <IconX size={20} />
       </IconButton>
     </li>
   );

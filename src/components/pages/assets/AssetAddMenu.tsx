@@ -5,7 +5,7 @@ import { IconLink, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 /** A menu row: the shared ghost button, full width, text from the left. */
-const MENU_ITEM = 'w-full justify-start gap-3 text-left';
+const MENU_ITEM = 'w-full !justify-start !gap-3 text-left';
 
 interface AssetAddMenuProps {
   /** Open the upload sheet (the "Upload files" option). */

@@ -929,7 +929,7 @@ export function searchChips(props: {
               'secondary',
               'default',
               cn(
-                'shrink-0 gap-1.5 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'shrink-0 !gap-1.5 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 NO_TOUCH_SELECT,
                 on ? 'border-accent-line bg-accent-soft text-accent' : 'text-fg-2',
               ),

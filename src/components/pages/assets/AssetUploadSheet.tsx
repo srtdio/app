@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Button, buttonClass } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
@@ -670,10 +670,6 @@ export function AssetUploadSheet({
   );
 }
 
-/** The per-file Retry: a 44px target, colour change only. */
-/** The failed row's Retry: the shared ghost button (44 tall, 8px radius), kept from shrinking. */
-export const RETRY_BUTTON = buttonClass('ghost', 'default', 'shrink-0 text-fg');
-
 /** Per-file progress / outcome line: an indeterminate bar while uploading, a
  *  success marker on done, and an inline Retry on error. */
 function UploadStatusRow({
@@ -716,7 +712,7 @@ function UploadStatusRow({
           type="button"
           onClick={onRetry}
           disabled={disabled}
-          className="shrink-0 text-fg"
+          className="shrink-0"
         >
           Retry
         </Button>

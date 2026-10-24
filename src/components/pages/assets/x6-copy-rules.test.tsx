@@ -20,7 +20,6 @@ import {
   viewerBarLine,
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
-import { RETRY_BUTTON } from '@/components/pages/assets/AssetUploadSheet';
 
 vi.mock('@/lib/files/office/run', () => ({ runOffice: vi.fn() }));
 
@@ -114,13 +113,6 @@ describe('X6 role and Recently deleted copy', () => {
     );
     expect(out).toContain(MEMBER_PURGE_NOTE);
     expect(MEMBER_PURGE_NOTE).toBe('Only the workspace owner can delete files early.');
-  });
-});
-
-describe('X6 per-file Retry', () => {
-  it('is a 44px target', () => {
-    expect(RETRY_BUTTON).toContain('min-h-[44px]');
-    expect(RETRY_BUTTON).toContain('min-w-[44px]');
   });
 });
 

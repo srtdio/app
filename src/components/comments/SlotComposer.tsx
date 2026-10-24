@@ -369,7 +369,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                     disabled={submitting}
                     onClick={() => removeSlot(slot.id)}
                   >
-                    <IconX size={18} />
+                    <IconX size={20} />
                   </IconButton>
                 ) : null}
               </div>
