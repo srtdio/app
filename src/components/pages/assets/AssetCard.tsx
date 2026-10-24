@@ -3,6 +3,7 @@ import { useLongPress } from '@/components/pages/assets/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { ICON_SIZE, IconCheck, IconMore } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { PresignCache } from '@/lib/asset-presign';
 import { FileTile } from '@/components/ui/FileTile';
 import { classifyFileKind } from '@/lib/chat/attachments';
@@ -67,14 +68,14 @@ export function AssetCard({
 
   return (
     <div className="relative">
-      <button
+      <PressableRow
         type="button"
         {...interaction}
         style={{ touchAction: 'manipulation' }}
         className={cn(
-          'group relative flex h-full w-full flex-col overflow-hidden rounded-xl border bg-panel text-left transition-colors',
+          'group relative flex h-full flex-col overflow-hidden border bg-panel transition-colors',
           selectMode && selected ? 'border-accent' : 'border-border',
-          'hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'hover:border-border-strong',
         )}
       >
         {selectMode ? (
@@ -108,7 +109,7 @@ export function AssetCard({
         ) : (
           <AssetMedia item={item} name={name} cache={cache} presignEnabled={presignEnabled} />
         )}
-      </button>
+      </PressableRow>
       {selectMode ? null : <CardMenuButton name={name} onPress={onLongPress} />}
       {selectMode || onStartSelect === undefined ? null : (
         <CardSelectBox name={name} onPress={onStartSelect} />

@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { removeImageConfirmCopy } from '@/components/pages/pcs/PostLightbox';
 import { ICON_SIZE, IconPlus, IconTrash } from '@/components/ui/icons';
@@ -44,14 +45,13 @@ function SlideRow({
   danger?: boolean;
 }) {
   return (
-    <button
+    <PressableRow
       type="button"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-base font-medium transition-colors',
-        'hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        'disabled:pointer-events-none disabled:opacity-40',
+        'flex items-center gap-3 px-3 py-2 text-base font-medium transition-colors',
+        'disabled:!opacity-40',
         danger ? 'text-bad' : 'text-fg',
       )}
     >
@@ -64,7 +64,7 @@ function SlideRow({
         {icon}
       </span>
       <span className="truncate">{label}</span>
-    </button>
+    </PressableRow>
   );
 }
 

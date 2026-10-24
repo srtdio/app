@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Button, buttonClass } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import {
@@ -39,10 +39,20 @@ const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
 const SWIPE_THRESHOLD = 48;
 
 // The top bar's 44px icon buttons on the overlay (light and dark share it).
+// Passed to the shared IconButton; overlay tokens sort after its own, so they win.
 const BAR_BUTTON =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
-  'transition-colors duration-fast hover:bg-overlay-surface disabled:opacity-40 ' +
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg';
+  'transition-colors duration-fast hover:bg-overlay-surface hover:text-overlay-fg ' +
+  'disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg';
+
+/**
+ * A bar class handed in (the lightbox's or the FileViewer's tone) on the shared
+ * IconButton: an overlay bar keeps its ink on hover instead of the IconButton's
+ * hover:text-fg. Pure.
+ */
+function onBarClass(barClass: string): string {
+  return barClass.includes('text-overlay-fg') ? cn(barClass, 'hover:text-overlay-fg') : barClass;
+}
 
 // The stage's previous / next arrows (laptop only): the shared IconButton in the
 // overlay colours. Overlay tokens sort after the IconButton's own, so they win.
@@ -388,39 +398,42 @@ export function AssetLightbox({
 
   // Download, Copy link, Info and Delete: the same four on the lightbox bar and
   // on the FileViewer's bar for a PDF or Office file, so they are always on top.
-  const renderActions = (barClass: string, onInfo: () => void) => (
-    <>
-      <button
-        type="button"
-        aria-label="Download"
-        onClick={handleDownload}
-        disabled={busy}
-        className={barClass}
-      >
-        <IconDownload size={ICON_SIZE.control} />
-      </button>
-      <button
-        type="button"
-        aria-label="Copy link"
-        onClick={handleCopy}
-        disabled={busy}
-        className={barClass}
-      >
-        <IconCopy size={ICON_SIZE.control} />
-      </button>
-      <button type="button" aria-label="Info" onClick={onInfo} className={barClass}>
-        <IconInfo size={ICON_SIZE.control} />
-      </button>
-      <button
-        type="button"
-        aria-label="Delete"
-        onClick={handleDelete}
-        className={cn(barClass, BAD)}
-      >
-        <IconTrash size={ICON_SIZE.control} />
-      </button>
-    </>
-  );
+  const renderActions = (bar: string, onInfo: () => void) => {
+    const barClass = onBarClass(bar);
+    return (
+      <>
+        <IconButton
+          type="button"
+          label="Download"
+          onClick={handleDownload}
+          disabled={busy}
+          className={barClass}
+        >
+          <IconDownload size={ICON_SIZE.control} />
+        </IconButton>
+        <IconButton
+          type="button"
+          label="Copy link"
+          onClick={handleCopy}
+          disabled={busy}
+          className={barClass}
+        >
+          <IconCopy size={ICON_SIZE.control} />
+        </IconButton>
+        <IconButton type="button" label="Info" onClick={onInfo} className={barClass}>
+          <IconInfo size={ICON_SIZE.control} />
+        </IconButton>
+        <IconButton
+          type="button"
+          label="Delete"
+          onClick={handleDelete}
+          className={cn(barClass, BAD)}
+        >
+          <IconTrash size={ICON_SIZE.control} />
+        </IconButton>
+      </>
+    );
+  };
   // From the FileViewer, Info closes the viewer onto the lightbox's details.
   const viewerActions = (barClass: string) =>
     renderActions(barClass, () => {
@@ -485,15 +498,15 @@ export function AssetLightbox({
         data-lightbox-bar=""
         className="flex shrink-0 items-center gap-1 px-1 pb-1 pt-[max(env(safe-area-inset-top),4px)] text-overlay-fg"
       >
-        <button
-          ref={closeRef}
+        <IconButton
+          buttonRef={closeRef}
           type="button"
-          aria-label="Close viewer"
+          label="Close viewer"
           onClick={onClose}
           className={BAR_BUTTON}
         >
           <IconX size={ICON_SIZE.control} />
-        </button>
+        </IconButton>
         <div className="min-w-0 flex-1 px-1 text-center">
           <p className="truncate text-base font-medium">
             <Highlight text={name} />
@@ -564,14 +577,9 @@ export function AssetLightbox({
               ) : null}
             </div>
             {viewable ? (
-              <button
-                ref={openRef}
-                type="button"
-                onClick={handleOpen}
-                className={buttonClass('primary')}
-              >
+              <Button variant="primary" buttonRef={openRef} type="button" onClick={handleOpen}>
                 Open
-              </button>
+              </Button>
             ) : (
               <Button variant="primary" type="button" onClick={handleDownload} disabled={busy}>
                 <IconDownload size={ICON_SIZE.inline} />

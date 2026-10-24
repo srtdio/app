@@ -18,6 +18,7 @@ import type { ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconCheck, IconChevronDown, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { STATUS_LABEL, TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
@@ -91,8 +92,9 @@ export function PriorityChip(props: {
   if (pick === undefined) return chip;
   return (
     <>
-      <button
-        ref={chipRef}
+      <Button
+        variant="ghost"
+        buttonRef={chipRef}
         type="button"
         data-task-chip=""
         aria-haspopup="menu"
@@ -102,12 +104,12 @@ export function PriorityChip(props: {
         onClick={() => setOpen((v) => !v)}
         onContextMenu={(e) => e.preventDefault()}
         className={cn(
-          'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'shrink-0 !px-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           NO_TOUCH_SELECT,
         )}
       >
         {chip}
-      </button>
+      </Button>
       {open ? (
         <PriorityMenu
           anchor={chipRef}
@@ -184,7 +186,7 @@ function PriorityMenu(props: {
       )}
     >
       {TASK_PRIORITIES.map((p) => (
-        <button
+        <PressableRow
           key={p}
           type="button"
           role="menuitemradio"
@@ -193,7 +195,7 @@ function PriorityMenu(props: {
           onClick={() => props.onPick(p)}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            'flex h-11 w-full items-center gap-2 rounded-[7px] px-2.5 text-left text-base text-fg hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+            'flex h-11 items-center gap-2 px-2.5 text-base text-fg focus-visible:ring-inset',
             NO_TOUCH_SELECT,
           )}
         >
@@ -202,7 +204,7 @@ function PriorityMenu(props: {
           {p === props.current ? (
             <IconCheck size={ICON_SIZE.inline} className="text-accent" />
           ) : null}
-        </button>
+        </PressableRow>
       ))}
     </div>,
     document.body,
@@ -284,18 +286,18 @@ function TitleCell(props: {
     );
   }
   return (
-    <button
+    <PressableRow
       type="button"
       data-task-title=""
       onClick={begin}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        'min-h-[44px] min-w-0 flex-1 py-3 text-left text-base font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        'min-w-0 flex-1 py-3 text-base font-medium focus-visible:ring-inset',
         props.done ? 'text-fg-3 line-through' : 'text-fg',
       )}
     >
       <Highlight text={props.title} />
-    </button>
+    </PressableRow>
   );
 }
 
@@ -365,22 +367,22 @@ export function TaskRow(props: TaskRowProps): ReactElement {
       className={cn('flex flex-col', props.dot && 'bg-accent-soft')}
     >
       <div className="flex min-h-[44px] items-start gap-1 pl-1 pr-1">
-        <button
+        <IconButton
           type="button"
           role="checkbox"
           aria-checked={props.done}
-          aria-label={`${props.done ? STATUS_LABEL.done : STATUS_LABEL.todo}: ${props.title}`}
+          label={`${props.done ? STATUS_LABEL.done : STATUS_LABEL.todo}: ${props.title}`}
           data-task-tick=""
           disabled={props.queuedDelete || props.canTick === false}
           onClick={props.onToggle}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'relative shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             NO_TOUCH_SELECT,
           )}
         >
           <TaskGlyph status={props.done ? 'done' : 'todo'} />
-        </button>
+        </IconButton>
         <span className="flex h-11 w-6 shrink-0 items-center font-mono text-sm text-fg-2">
           {props.dot ? (
             <span

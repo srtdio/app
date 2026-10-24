@@ -5,7 +5,8 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { Button, buttonClass } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import {
   computeMenuPlacement,
   Select,
@@ -1506,13 +1507,13 @@ export function CreatePostSheet({
             ) : null}
           </div>
 
-          <button
+          <PressableRow
             type="button"
             data-more-options=""
             aria-expanded={moreOpen}
             aria-controls="post-more-options"
             onClick={() => setMoreOpen((prev) => !prev)}
-            className="flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-border bg-panel-2 px-3 py-2 text-left transition-colors hover:bg-panel-3"
+            className="flex items-center gap-3 border border-border bg-panel-2 px-3 py-2 transition-colors hover:!bg-panel-3"
           >
             <span className="min-w-0 flex-1">
               <span className="block text-base font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
@@ -1525,7 +1526,7 @@ export function CreatePostSheet({
                 moreOpen && 'rotate-180',
               )}
             />
-          </button>
+          </PressableRow>
 
           {moreOpen ? (
             <div id="post-more-options" className="flex flex-col gap-4">
@@ -1696,10 +1697,11 @@ export function FormatRow({
       <span data-format-source="" className="min-w-0 flex-1 truncate text-sm text-fg-3">
         {source !== null ? formatSourceLine(source) : ''}
       </span>
-      <button
-        ref={buttonRef}
+      <Button
+        variant="link"
+        buttonRef={buttonRef}
         type="button"
-        className={buttonClass('link', 'default', 'shrink-0')}
+        className="shrink-0"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Change format"
@@ -1707,7 +1709,7 @@ export function FormatRow({
         onClick={toggle}
       >
         Change
-      </button>
+      </Button>
       {open ? (
         <SelectMenu
           options={options}

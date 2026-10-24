@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/Button';
 import type { ToastItem } from '@/components/pages/assets/useToasts';
 
 interface ToastsProps {
@@ -14,14 +15,15 @@ export function Toasts({ toasts, onDismiss }: ToastsProps) {
       className="pointer-events-none fixed inset-x-0 bottom-[72px] z-[60] flex flex-col items-center gap-2 px-3 md:bottom-6"
     >
       {toasts.map((toast) => (
-        <button
+        <Button
+          variant="secondary"
           key={toast.id}
           type="button"
           onClick={() => onDismiss(toast.id)}
-          className="pointer-events-auto max-w-sm rounded-lg border border-border bg-panel px-4 py-2.5 text-base text-fg shadow-lg"
+          className="pointer-events-auto max-w-sm !h-auto py-2.5 !font-normal shadow-lg"
         >
           {toast.message}
-        </button>
+        </Button>
       ))}
     </div>
   );

@@ -10,6 +10,7 @@ import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import type { AttachmentItem } from '@/components/pages/create/AttachmentsField';
 import { RemoveButton } from '@/components/pages/create/RemoveButton';
 import { clampDrag, dropIndex, shiftFor } from '@/components/pages/create/reorder';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 
 /** A tile for a file still uploading (or failed): its own local picture. */
@@ -212,18 +213,18 @@ export function FileTiles({
               count > 1 && !dragging && 'cursor-grab',
             )}
           >
-            <button
+            <PressableRow
               type="button"
               aria-label={`Show ${item.name}`}
               aria-current={index === activeIndex ? 'true' : undefined}
               onClick={() => tap(index)}
               className={cn(
-                'block h-full w-full overflow-hidden rounded-md border bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'block h-full overflow-hidden border bg-panel-3',
                 index === activeIndex ? 'border-accent ring-2 ring-accent-soft' : 'border-border',
               )}
             >
               <TilePicture src={item.previewUrl} video={item.mime?.startsWith('video/') === true} />
-            </button>
+            </PressableRow>
             <RemoveButton label={`Remove ${item.name}`} onRemove={() => onRemove(index)} />
           </li>
         );

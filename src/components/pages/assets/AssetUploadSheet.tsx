@@ -4,6 +4,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconCheck, IconFile, IconPlus, IconUpload, IconX } from '@/components/ui/icons';
 import { fileExtension, humanizeSize } from '@/lib/assets';
 import {
@@ -569,17 +570,17 @@ export function AssetUploadSheet({
       />
 
       {!hasFiles ? (
-        <button
+        <PressableRow
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 px-4 text-center text-fg-2 transition-colors hover:bg-panel-3"
+          className="flex !min-h-[160px] flex-col items-center justify-center gap-2 border border-dashed border-border-strong bg-panel-2 px-4 !text-center text-fg-2 transition-colors hover:!bg-panel-3"
         >
           <IconUpload size={ICON_SIZE.status} />
           <span className="text-base font-medium">Choose files</span>
           <span className="text-sm text-fg-3">
             Name your upload before it is added to {ROOT_LABEL}.
           </span>
-        </button>
+        </PressableRow>
       ) : (
         <div className="flex flex-col gap-2.5">
           {/* One file takes one name; several share one base name. */}

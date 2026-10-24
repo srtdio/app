@@ -17,6 +17,7 @@ import { formatDue, formatOverdue } from '@/lib/display-date';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
 import type { CardFirstMedia } from '../../../packages/posts/src/reads';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
@@ -255,11 +256,11 @@ export function PostCard({
       data-induction-post={post.id}
       className="relative flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel transition-colors hover:bg-panel-2"
     >
-      <button
+      <PressableRow
         type="button"
         aria-label={`Open post ${post.title}`}
         onClick={() => navigate(href)}
-        className="absolute inset-0 rounded-lg"
+        className="absolute inset-0"
       />
       {/* The tile is relative, so it would paint over the absolute Open post button;
           pointer-events-none lets a tap on the thumbnail reach the button. */}
