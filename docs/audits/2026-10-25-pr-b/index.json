@@ -11,6 +11,7 @@
   "post-detail": ["F5-01", "F6-02", "B2-01", "B5-01"],
   "post-detail-approver": ["F5-01", "F6-02", "B2-01", "B5-01"],
   "chat-post-sheet": ["F5-01", "F6-02", "A3-03", "B5-01"],
+  "chat-post-sheet-scrolled": ["F5-01", "F6-02"],
   "chat-post-sheet-approver": ["F5-01", "F6-02", "A3-03", "B5-01"],
   "brief-detail": ["F6-02", "B2-01", "B5-01", "A1-01"],
   "post-more-menu": ["A6-01", "B1-05", "A3-01"],
@@ -24,6 +25,7 @@
   "undo-strip-after-delete": ["A3-01", "C4"],
   "approve-confirm-approver": ["A3-03", "A1-06"],
   "on-behalf-confirm": ["A3-03", "F5-01", "A1-06"],
+  "recently-deleted-empty": ["C1-04", "C1-03"],
   "recently-deleted": ["C1-04", "A3-01"],
   "toast-copy-link": ["C4", "A4-01"]
 }

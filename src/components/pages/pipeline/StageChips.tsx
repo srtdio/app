@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import type { Stage } from '@srtdio/posts';
+import { StageDot } from '@/components/pages/pipeline/stage-meta';
 
 export interface StageChipItem {
   /** The chip's filter key: a Stage, or the UI-only 'all'. */
@@ -34,7 +35,7 @@ export function chipRowMask(fadeStart: boolean, fadeEnd: boolean): string {
 
 /**
  * The Pipeline stage switcher: one horizontally scrollable, non-wrapping row of
- * the shared ui/Chip (the stages plus the UI-only All), the same chip and
+ * the shared ui/Chip (the stages, each with its stage dot, plus the UI-only All), the same chip and
  * selected style as Briefs, Activity and Help. A chip shows its count only when
  * above 0. Runs full-bleed to the right edge with an edge-cut fade applied only
  * when the row overflows. Each chip is a 44px touch target; the active chip is
@@ -80,6 +81,7 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
           <Chip
             key={item.key}
             label={item.label}
+            {...(item.stage !== undefined ? { dot: <StageDot stage={item.stage} /> } : {})}
             {...(item.count !== undefined ? { count: item.count } : {})}
             selected={isActive}
             size="tap"

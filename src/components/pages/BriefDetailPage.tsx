@@ -895,6 +895,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           <div aria-hidden="true" data-brief-action-space="" className="h-[76px]" />
           <div
             data-brief-action-bar=""
+            data-undo-anchor=""
             className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
           >
             <Button

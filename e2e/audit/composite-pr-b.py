@@ -32,6 +32,7 @@ SCREENS = [
     "post-detail-approver",
     "chat-post-sheet",
     "chat-post-sheet-approver",
+    "chat-post-sheet-scrolled",
     "brief-detail",
     "post-more-menu",
     "brief-more-menu",
@@ -45,6 +46,7 @@ SCREENS = [
     "approve-confirm-approver",
     "on-behalf-confirm",
     "recently-deleted",
+    "recently-deleted-empty",
     "toast-copy-link",
 ]
 

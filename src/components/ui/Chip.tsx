@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, Ref } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 
 interface ChipProps extends Omit<
@@ -6,6 +6,8 @@ interface ChipProps extends Omit<
   'className' | 'onClick' | 'children'
 > {
   label: string;
+  /** An optional leading mark before the label (Pipeline's stage dot). */
+  dot?: ReactNode;
   /** A filter's count, shown after the label only when above 0. */
   count?: number;
   selected?: boolean;
@@ -33,6 +35,7 @@ const sizes: Record<NonNullable<ChipProps['size']>, string> = {
 
 export function Chip({
   label,
+  dot,
   count,
   selected = false,
   variant = 'default',
@@ -57,6 +60,7 @@ export function Chip({
         className,
       )}
     >
+      {dot}
       {label}
       {count !== undefined && count > 0 ? (
         <>

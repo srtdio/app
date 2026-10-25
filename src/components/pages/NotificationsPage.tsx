@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Sheet } from '@/components/ui/Sheet';
 import { PageHead } from '@/components/shell/PageHead';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import {
   ICON_SIZE,
   IconActivity,
@@ -13,6 +14,7 @@ import {
   IconAt,
   IconBriefs,
   IconCalendarClock,
+  IconCheck,
   IconPlan,
 } from '@/components/ui/icons';
 import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
@@ -823,17 +825,26 @@ export function NotificationsPage() {
         title={ACTIVITY_TITLE}
         actions={
           <>
-            {chipUnread > 0 ? (
-              <Button variant="ghost" onClick={handleMarkAll}>
-                Mark all read
-              </Button>
-            ) : null}
             <SortMenu<ActivityDirection>
               options={SORT_OPTIONS}
               value={sort}
               onChange={setSort}
               label="Sort activity"
             />
+            {/* Mark all read lives in the ⋯ menu (list-toolbar rule); hidden with nothing unread. */}
+            {chipUnread > 0 ? (
+              <ActionMenu
+                title="Activity"
+                items={[
+                  {
+                    id: 'mark-all-read',
+                    label: 'Mark all read',
+                    icon: IconCheck,
+                    onSelect: () => void handleMarkAll(),
+                  },
+                ]}
+              />
+            ) : null}
           </>
         }
       />

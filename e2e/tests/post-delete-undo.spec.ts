@@ -45,3 +45,31 @@ test('Post detail: Delete post shows the Undo strip, no dialog; Undo restores th
   await expect(title).toBeVisible();
   expect(network.blocked).toEqual([]);
 });
+
+test('Post detail on phone: the Undo strip sits above the decision bar, never over it', async ({
+  page,
+}) => {
+  await installHarnessNetwork(page);
+  await page.goto(`/posts/${POST}`);
+  await expect(page.getByRole('heading', { name: 'Monday carousel', level: 1 })).toBeVisible({
+    timeout: 15_000,
+  });
+  const bar = page.locator('[data-decision-bar]');
+  await expect(bar).toBeVisible();
+
+  await page.getByRole('button', { name: 'More actions', exact: true }).first().click();
+  const menu = page.getByRole('dialog', { name: 'Post actions', exact: true });
+  await menu.getByRole('menuitem').last().click();
+
+  const strip = undoStrip(page, 'Post deleted');
+  await expect(strip).toBeVisible();
+  // Let the strip finish its slide in before measuring.
+  await page.waitForTimeout(600);
+  const stripBox = await strip.boundingBox();
+  const barBox = await bar.boundingBox();
+  expect(stripBox).not.toBeNull();
+  expect(barBox).not.toBeNull();
+  // No overlap: the strip's bottom edge is at or above the bar's top edge.
+  expect(stripBox!.y + stripBox!.height).toBeLessThanOrEqual(barBox!.y);
+  await strip.getByRole('button', { name: 'Undo', exact: true }).click();
+});

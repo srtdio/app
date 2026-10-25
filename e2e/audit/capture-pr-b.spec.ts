@@ -185,6 +185,20 @@ const SCREENS: Screen[] = [
   { name: 'chat-post-sheet', seed: creator, url: '/chat', steps: openChatPostSheet },
   { name: 'chat-post-sheet-approver', seed: approver, url: '/chat', steps: openChatPostSheet },
   {
+    // The sheet's lower half: Comment on this post and Talk about this post.
+    name: 'chat-post-sheet-scrolled',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPostSheet(page);
+      const talk = page.getByText('Talk about this post').last();
+      const comment = page.getByText('Comment on this post').last();
+      const target = (await talk.count()) > 0 ? talk : comment;
+      await target.scrollIntoViewIfNeeded().catch(() => undefined);
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     name: 'brief-detail',
     seed: creator,
     url: `/briefs/${AUDIT_BRIEF_ID}`,
@@ -378,6 +392,23 @@ const SCREENS: Screen[] = [
     seed: creator,
     url: '/deleted',
     steps: async (page) => waitFor(page, [page.getByText('Old logo.png')], 'recently deleted'),
+  },
+  {
+    // Nothing deleted: the zero state.
+    name: 'recently-deleted-empty',
+    seed: { ...creator, noAssets: true },
+    url: '/deleted',
+    steps: async (page) => {
+      await waitFor(
+        page,
+        [
+          page.getByText('Deleted posts and files show up here.'),
+          page.getByRole('heading', { name: 'Recently deleted' }),
+        ],
+        'recently deleted (empty)',
+      );
+      await page.waitForTimeout(2500);
+    },
   },
   {
     name: 'toast-copy-link',

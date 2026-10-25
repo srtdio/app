@@ -151,7 +151,8 @@ export function hasDecisionContent(model: DecisionModel | null, error: string | 
 /**
  * The phone bar. 'fixed' (a page): pinned above the safe area, below md only.
  * 'footer' (a sheet): the same row filling the host Sheet's footer, which is
- * already pinned to the bottom and pads for the safe area.
+ * already pinned to the bottom and pads for the safe area. Either way the phone
+ * Undo strip floats above it (the bar, or the Sheet footer, is an undo anchor).
  */
 export function PostDecisionBar(props: {
   model: DecisionModel | null;
@@ -170,6 +171,7 @@ export function PostDecisionBar(props: {
   return (
     <div
       data-decision-bar=""
+      data-undo-anchor=""
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
     >
       {decisionContent(props.model, props.busy, props.error)}

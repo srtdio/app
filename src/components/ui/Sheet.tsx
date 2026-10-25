@@ -182,8 +182,12 @@ export function Sheet({
           {children}
         </div>
         {footer !== undefined ? (
-          // The footer's bottom padding clears the iPhone home bar.
-          <div className="flex items-center gap-2.5 px-[18px] pt-3 pb-[max(12px,env(safe-area-inset-bottom))] border-t border-border">
+          // The footer's bottom padding clears the iPhone home bar. It is an
+          // undo anchor: the phone Undo strip floats above it, never over it.
+          <div
+            data-undo-anchor=""
+            className="flex items-center gap-2.5 px-[18px] pt-3 pb-[max(12px,env(safe-area-inset-bottom))] border-t border-border"
+          >
             {footer}
           </div>
         ) : null}
