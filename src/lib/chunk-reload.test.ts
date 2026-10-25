@@ -62,6 +62,24 @@ describe('chunk reload guard', () => {
     expect(deps.reload).toHaveBeenCalledTimes(1);
   });
 
+  it('never reloads while the page is being left (aborted imports are not stale chunks)', async () => {
+    const deps = { ...memoryDeps(), isLeaving: () => true };
+    const load = withChunkReload(() => Promise.reject(chunkError()), deps);
+
+    let settled = false;
+    void load().then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    // No reload, no error surfaced: the page is going away anyway.
+    expect(settled).toBe(false);
+    expect(reloadOnce(deps)).toBe(false);
+    expect(deps.reload).not.toHaveBeenCalled();
+    // The guard is untouched, so a real stale chunk later still gets its reload.
+    expect(deps.storage().getItem(CHUNK_RELOAD_KEY)).toBeNull();
+  });
+
   it('never reloads when storage throws', () => {
     const reload = vi.fn();
     const issued = reloadOnce({

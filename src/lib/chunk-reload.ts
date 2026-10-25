@@ -14,11 +14,29 @@ export interface ChunkReloadDeps {
   /** A getter because touching window.sessionStorage itself can throw. */
   storage: () => Pick<Storage, 'getItem' | 'setItem'>;
   reload: () => void;
+  /** True while the page is being left; imports in flight then fail by design. */
+  isLeaving?: () => boolean;
+}
+
+// Leaving the page (a link, a typed URL, a test's page.goto) aborts every
+// import still in flight, and the abort rejects like a missing chunk. Reloading
+// then would hijack the navigation back to this page, so a page being left
+// never reloads. pagehide (never cancelled, unlike beforeunload) marks it; a
+// page restored from the back/forward cache clears it.
+let leaving = false;
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    leaving = true;
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) leaving = false;
+  });
 }
 
 const browserDeps: ChunkReloadDeps = {
   storage: () => window.sessionStorage,
   reload: () => window.location.reload(),
+  isLeaving: () => leaving,
 };
 
 /**
@@ -36,6 +54,7 @@ export function isChunkLoadError(err: unknown): boolean {
 
 /** Reload once per session. Returns true when a reload was issued. */
 export function reloadOnce(deps: ChunkReloadDeps = browserDeps): boolean {
+  if (deps.isLeaving?.() === true) return false;
   try {
     const storage = deps.storage();
     if (storage.getItem(CHUNK_RELOAD_KEY) !== null) return false;
@@ -58,7 +77,11 @@ export function withChunkReload<T>(
 ): () => Promise<T> {
   return () =>
     load().catch((err: unknown) => {
-      if (isChunkLoadError(err) && reloadOnce(deps)) return new Promise<T>(() => {});
+      if (isChunkLoadError(err)) {
+        // Leaving: the import was aborted, the page is going; keep the fallback up.
+        if (deps.isLeaving?.() === true) return new Promise<T>(() => {});
+        if (reloadOnce(deps)) return new Promise<T>(() => {});
+      }
       throw err;
     });
 }
