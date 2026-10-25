@@ -1,7 +1,9 @@
 // The workspace's members and their names, read ONCE per (user, workspace) and
 // shared by every screen that needs them: the post owner picker, the brief
 // detail, the Settings members panel, the chat member pickers and the comment
-// @-mention picker. The reads are exactly the ones those screens made on their
+// @-mention picker; a chat open answers its names and mention picker rows from
+// it while it is fresh (peekWorkspaceMembers, src/lib/chat/open-members.ts).
+// The reads are exactly the ones those screens made on their
 // own before: @srtdio/workspace's listMembers (RLS-scoped workspace_members
 // select) and chat-reads' batched readProfiles over the distinct user ids. RLS
 // stays the only boundary: nothing here widens a read, it only de-duplicates.
@@ -273,6 +275,25 @@ export function ensureWorkspaceMembers(userId: string, workspaceId: string): voi
     return;
   }
   if (Date.now() - entry.loadedAt > MEMBERS_STALE_MS) startRead(key, entry, 'background');
+}
+
+/**
+ * The held members when a good read landed within MEMBERS_STALE_MS, else null.
+ * Never reads: a caller that gets null reads on its own (and may warm the
+ * cache with ensureWorkspaceMembers). The chat open answers its names and
+ * picker rows from here, so a warm cache costs no request.
+ */
+export function peekWorkspaceMembers(
+  userId: string,
+  workspaceId: string,
+  nowMs: number = Date.now(),
+): WorkspaceMembersData | null {
+  if (userId === '' || workspaceId === '') return null;
+  const entry = entries.get(keyFor(userId, workspaceId));
+  if (entry === undefined || entry.loadedAt === null) return null;
+  if (nowMs - entry.loadedAt > MEMBERS_STALE_MS) return null;
+  const snapshot = entry.snapshot;
+  return snapshot.error === null && !snapshot.loading ? snapshot : null;
 }
 
 /** Re-read this workspace's members for every subscriber. */
