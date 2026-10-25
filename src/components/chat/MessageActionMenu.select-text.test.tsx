@@ -1,5 +1,7 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath, URL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('agora-chat', () => ({
@@ -7,10 +9,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import {
-  computeMenuPlacement,
-  heldTransform,
   MENU_ICON_SIZE,
-  MENU_PANEL,
   MENU_ROW,
   MENU_WIDTH_PX,
   MenuRow,
@@ -264,19 +263,20 @@ describe('menu style', () => {
   };
   const items = [...messageMenuItems(styleProps), ...moreMenuItems(styleProps)];
 
-  it('panel: 12px radius, border-border hairline, no inner padding, tokens only', () => {
-    const cls = MENU_PANEL.split(' ');
-    expect(cls).toEqual(expect.arrayContaining(['rounded-xl', 'border', 'border-border']));
-    expect(cls).toEqual(expect.arrayContaining(['bg-panel', 'shadow-2xl']));
-    expect(cls).not.toContain('border-border-strong');
-    expect(cls.some((c) => /^p-/.test(c))).toBe(false);
-    expect(MENU_PANEL).not.toContain(DARK);
-    expect(MENU_PANEL).not.toContain(HASH);
+  it('container: ui/Sheet on phone, shell/MenuPopover on laptop (the ActionMenu rule)', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./MessageActionMenu.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toContain('const isLaptop = useIsLaptop();');
+    expect(src).toContain('<Sheet open={active} onClose={onClose} title="Message actions">');
+    expect(src).toContain("<MenuPopover open onClose={onClose} align={mine ? 'right' : 'left'}>");
+    expect(src).not.toContain(['Icon', 'More'].join(''));
     // Six 44px reaction cells, the row's 10px sides and the 1px border each side.
     expect(MENU_WIDTH_PX).toBeGreaterThanOrEqual(6 * 44 + 20 + 2);
   });
 
-  it('rows: full-bleed, >= 44px, 16px sides, 14px gap, 16px fg text', () => {
+  it('rows: full-bleed, >= 44px, 16px sides, 14px gap, base fg text', () => {
     const cls = MENU_ROW.split(' ');
     expect(cls).toEqual(expect.arrayContaining(['min-h-[44px]', 'px-4', 'gap-[14px]']));
     const html = renderToStaticMarkup(
@@ -288,7 +288,8 @@ describe('menu style', () => {
     );
     expect(html).not.toContain('rounded-lg');
     expect(html).not.toContain('text-fg-2');
-    expect(html).toContain('text-lg');
+    expect(html).toContain('text-base');
+    expect(html).not.toContain('text-lg');
     expect(html).not.toContain(DARK);
     expect(html).not.toContain(HASH);
   });
@@ -340,95 +341,11 @@ describe('menu style', () => {
   });
 });
 
-describe('computeMenuPlacement', () => {
-  const base = { safeTop: 0, safeBottom: 0, gap: 8, margin: 8 };
-
-  it('room below: no shift, menu 8px under the bubble', () => {
+describe('visibleViewportHeight', () => {
+  it('the visual viewport (keyboard out) when present, else innerHeight', () => {
     expect(
-      computeMenuPlacement({
-        ...base,
-        bubbleRect: { top: 100, bottom: 160 },
-        menuHeight: 400,
-        viewportHeight: 844,
-      }),
-    ).toEqual({ bubbleShiftY: 0, menuTop: 168, clipBubbleHeight: undefined });
-  });
-
-  it('near the bottom: the copy moves up by the shortfall, menu still below', () => {
-    const p = computeMenuPlacement({
-      ...base,
-      bubbleRect: { top: 700, bottom: 760 },
-      menuHeight: 400,
-      viewportHeight: 844,
-    });
-    // 760 + 8 + 400 = 1168 > 836: shift 332.
-    expect(p.bubbleShiftY).toBe(-332);
-    expect(p.menuTop).toBe(760 - 332 + 8);
-    expect(p.menuTop + 400).toBeLessThanOrEqual(844 - 8);
-    expect(p.clipBubbleHeight).toBeUndefined();
-  });
-
-  it('tall bubble: clipped to the room left, top at safeTop + 8, menu right under it', () => {
-    const p = computeMenuPlacement({
-      ...base,
-      safeTop: 47,
-      safeBottom: 34,
-      bubbleRect: { top: 300, bottom: 900 },
-      menuHeight: 450,
-      viewportHeight: 844,
-    });
-    expect(p.bubbleShiftY).toBe(55 - 300);
-    const floor = 844 - 34 - 8;
-    expect(p.clipBubbleHeight).toBe(floor - 450 - 8 - 55);
-    expect(p.menuTop).toBe(55 + (p.clipBubbleHeight ?? 0) + 8);
-    expect(p.menuTop + 450).toBe(floor);
-  });
-
-  it('keyboard open: the visual viewport is shorter, so the copy moves further up', () => {
-    const full = computeMenuPlacement({
-      ...base,
-      bubbleRect: { top: 300, bottom: 360 },
-      menuHeight: 400,
-      viewportHeight: 844,
-    });
-    const keyboard = computeMenuPlacement({
-      ...base,
-      bubbleRect: { top: 300, bottom: 360 },
-      menuHeight: 400,
-      viewportHeight: visibleViewportHeight({
-        innerHeight: 844,
-        visualViewport: { height: 500, offsetTop: 0 },
-      }),
-    });
-    expect(full.bubbleShiftY).toBe(0);
-    expect(keyboard.bubbleShiftY).toBe(-(360 + 8 + 400 - 492));
-    expect(keyboard.menuTop + 400).toBeLessThanOrEqual(492);
+      visibleViewportHeight({ innerHeight: 844, visualViewport: { height: 500, offsetTop: 0 } }),
+    ).toBe(500);
     expect(visibleViewportHeight({ innerHeight: 700 })).toBe(700);
-  });
-
-  it('never above the bubble, never shifted down, for any bubble position', () => {
-    for (let top = -100; top <= 900; top += 37) {
-      for (const height of [20, 80, 300, 700]) {
-        for (const menuHeight of [120, 300, 520]) {
-          const p = computeMenuPlacement({
-            ...base,
-            safeTop: 20,
-            safeBottom: 20,
-            bubbleRect: { top, bottom: top + height },
-            menuHeight,
-            viewportHeight: 844,
-          });
-          const copyTop = top + p.bubbleShiftY;
-          const copyBottom = copyTop + (p.clipBubbleHeight ?? height);
-          expect(p.bubbleShiftY).toBeLessThanOrEqual(0);
-          expect(p.menuTop).toBeGreaterThanOrEqual(copyBottom + 8 - 1e-9);
-        }
-      }
-    }
-  });
-
-  it('the copy moves on Y only', () => {
-    expect(heldTransform(-120)).toBe('translateY(-120px)');
-    expect(heldTransform(0)).not.toMatch(/scale|rotate|translateX/);
   });
 });

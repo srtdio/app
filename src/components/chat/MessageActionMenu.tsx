@@ -12,7 +12,6 @@ import {
   IconEdit,
   IconFile,
   IconForward,
-  IconMore,
   IconPlus,
   IconReply,
   IconSelectText,
@@ -26,6 +25,9 @@ import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { Sheet } from '@/components/ui/Sheet';
+import { MenuPopover } from '@/components/shell/MenuPopover';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { MARK_TONE } from '@/components/chat/MarkBits';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
 import { useReminderOptional } from '@/components/chat/ReminderContext';
@@ -149,10 +151,7 @@ interface MessageActionMenuProps {
   open: boolean;
   onClose: () => void;
   anchor: DOMRect | null;
-  /**
-   * The pressed bubble: a copy of it is drawn above the dimmed thread, in its
-   * own colours, at its on-screen rect.
-   */
+  /** The pressed bubble: "Remind me" finds its message through it. */
   held?: HTMLElement | null;
   mine: boolean;
   currentReaction: string | null;
@@ -312,7 +311,7 @@ export function runMenuItem(
   menu.close();
 }
 
-/** The menu's glyph size (the row icons, 22px at stroke 1.7). */
+/** The phone sheet's glyph size (ICON_SIZE.tray); the laptop popover uses ICON_SIZE.inline. */
 export const MENU_ICON_SIZE = ICON_SIZE.tray;
 
 /** The row that selects part of one message's text in place. */
@@ -328,8 +327,10 @@ export const MORE_LABEL = 'More';
  * dividers. Rows that do not apply are not rendered. Pure (no hooks) so the
  * row set is unit-tested without a DOM.
  */
-export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
-  const size = MENU_ICON_SIZE;
+export function messageMenuItems(
+  props: MenuItemProps,
+  size: number = MENU_ICON_SIZE,
+): MessageMenuItem[] {
   const locked = props.lockedByMark === true;
   const items: MessageMenuItem[] = [
     {
@@ -379,11 +380,12 @@ export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
     });
   }
   if (moreMenuItems(props).length > 0) {
+    // The ⋯ glyph is the menu opener's alone; More leads with the chevron Back mirrors.
     items.push({
       kind: 'action',
       key: 'more',
       label: MORE_LABEL,
-      icon: <IconMore size={size} />,
+      icon: <IconChevronRight size={size} />,
       run: () => {},
       submenu: true,
     });
@@ -414,8 +416,10 @@ export function messageMenuItems(props: MenuItemProps): MessageMenuItem[] {
  * "Remind me" (or "Reminder · <time>"), "Mark as" (or the static "Marked as
  * <type>"). Rows that do not apply are not rendered; empty hides More. Pure.
  */
-export function moreMenuItems(props: MenuItemProps): MessageMenuItem[] {
-  const size = MENU_ICON_SIZE;
+export function moreMenuItems(
+  props: MenuItemProps,
+  size: number = MENU_ICON_SIZE,
+): MessageMenuItem[] {
   const items: MessageMenuItem[] = [];
   if (props.canTranscribe === true) {
     items.push({
@@ -478,17 +482,21 @@ export function moreMenuItems(props: MenuItemProps): MessageMenuItem[] {
 }
 
 /** The More submenu: Back, then its rows (see moreMenuItems). */
-export function moreSubmenuItems(props: MenuItemProps, onBack: () => void): MessageMenuItem[] {
+export function moreSubmenuItems(
+  props: MenuItemProps,
+  onBack: () => void,
+  size: number = MENU_ICON_SIZE,
+): MessageMenuItem[] {
   return [
     {
       kind: 'action',
       key: 'back',
       label: 'Back',
-      icon: <IconChevronLeft size={MENU_ICON_SIZE} />,
+      icon: <IconChevronLeft size={size} />,
       run: onBack,
       submenu: true,
     },
-    ...moreMenuItems(props),
+    ...moreMenuItems(props, size),
   ];
 }
 
@@ -496,13 +504,14 @@ export function moreSubmenuItems(props: MenuItemProps, onBack: () => void): Mess
 export function markSubmenuItems(
   props: Pick<MessageActionMenuProps, 'markOptions' | 'onMark'>,
   onBack: () => void,
+  size: number = MENU_ICON_SIZE,
 ): MessageMenuItem[] {
   return [
     {
       kind: 'action',
       key: 'back',
       label: 'Back',
-      icon: <IconChevronLeft size={MENU_ICON_SIZE} />,
+      icon: <IconChevronLeft size={size} />,
       run: onBack,
       submenu: true,
     },
@@ -551,7 +560,10 @@ export function focusFirstMenuItem(root: MenuRoot | null): boolean {
 /** A row's box: full-bleed, at least 44px, 16px side padding, 14px to the label. */
 export const MENU_ROW = 'flex min-h-[44px] w-full items-center gap-[14px] px-4';
 
-/** One row of the menu box: 16px text, the 22px icon (or dot) left in the row's ink, a muted hint or chevron right. */
+/**
+ * One row, ActionMenu's row look: base text, the icon (or dot) left in the
+ * row's ink, Delete in bad, a muted sm hint or a submenu chevron right.
+ */
 export function MenuRow(props: {
   item: MessageMenuItem;
   onRun: (item: MessageMenuItem) => void;
@@ -563,7 +575,7 @@ export function MenuRow(props: {
         role="menuitem"
         aria-disabled="true"
         data-menu-note={item.key}
-        className={cn(MENU_ROW, 'text-lg text-fg-3')}
+        className={cn(MENU_ROW, 'text-base text-fg-3')}
       >
         <span className="flex w-[22px] shrink-0 justify-center">{item.icon}</span>
         <span className="min-w-0">{item.label}</span>
@@ -588,7 +600,7 @@ export function MenuRow(props: {
       onClick={() => props.onRun(item)}
       className={cn(
         MENU_ROW,
-        'text-lg transition-colors focus-visible:bg-panel-2',
+        'text-base transition-colors focus-visible:bg-panel-2',
         item.danger === true ? 'text-bad' : 'text-fg',
       )}
     >
@@ -604,9 +616,9 @@ export function MenuRow(props: {
         ) : null}
       </span>
       {item.hint !== undefined ? (
-        <span className="shrink-0 text-md text-fg-3">{item.hint}</span>
+        <span className="shrink-0 text-sm text-fg-3">{item.hint}</span>
       ) : null}
-      {item.submenu === true && item.key !== 'back' ? (
+      {item.submenu === true && item.key !== 'back' && item.key !== 'more' ? (
         <span className="shrink-0 text-fg-3">
           <IconChevronRight />
         </span>
@@ -615,62 +627,11 @@ export function MenuRow(props: {
   );
 }
 
-interface Coords {
-  top: number;
-  left: number;
-}
-
 /**
- * The menu panel's width. Six 44x44 reaction cells (the touch-target floor),
- * the row's 10px sides and the 1px border each side need 286px, so the panel
- * is that wide, never less.
+ * The laptop popover's width. Six 44x44 reaction cells (the touch-target
+ * floor), the row's 10px sides and the 1px border each side need 286px.
  */
 export const MENU_WIDTH_PX = 286;
-
-/** What computeMenuPlacement decides; see there. */
-export interface MenuPlacement {
-  /** How far the held bubble's copy moves on Y (0 or negative: up only). */
-  bubbleShiftY: number;
-  /** The menu's top edge (viewport px): always below the held copy. */
-  menuTop: number;
-  /** The held copy's visible height when it is too tall to fit above the menu. */
-  clipBubbleHeight: number | undefined;
-}
-
-/**
- * WhatsApp-style placement: the menu always opens below the held bubble,
- * `gap` under it. When there is no room below, the bubble's copy moves up by
- * the shortfall (never so far that its top passes safeTop + margin). A copy
- * still too tall is clipped to the room left (its top stays visible) and the
- * menu sits right under the clipped copy. Never above the bubble. Pure.
- */
-export function computeMenuPlacement(input: {
-  bubbleRect: { top: number; bottom: number };
-  menuHeight: number;
-  /** The visible viewport's height (visualViewport when present: the keyboard is out). */
-  viewportHeight: number;
-  safeTop: number;
-  safeBottom: number;
-  gap: number;
-  margin: number;
-}): MenuPlacement {
-  const { bubbleRect, menuHeight, gap, margin } = input;
-  const bubbleHeight = Math.max(0, bubbleRect.bottom - bubbleRect.top);
-  const floor = input.viewportHeight - input.safeBottom - margin;
-  const ceiling = input.safeTop + margin;
-  const shortfall = bubbleRect.bottom + gap + menuHeight - floor;
-  if (shortfall <= 0) {
-    return { bubbleShiftY: 0, menuTop: bubbleRect.bottom + gap, clipBubbleHeight: undefined };
-  }
-  // Up by the shortfall, but the copy's top never above the ceiling (and never down).
-  const bubbleShiftY = Math.min(0, Math.max(-shortfall, ceiling - bubbleRect.top));
-  const top = bubbleRect.top + bubbleShiftY;
-  const room = Math.max(0, floor - menuHeight - gap - top);
-  if (bubbleHeight <= room) {
-    return { bubbleShiftY, menuTop: top + bubbleHeight + gap, clipBubbleHeight: undefined };
-  }
-  return { bubbleShiftY, menuTop: top + room + gap, clipBubbleHeight: room };
-}
 
 /** The visible viewport's bottom in layout px: visualViewport (the iOS keyboard) when present. */
 export function visibleViewportHeight(win: {
@@ -688,11 +649,6 @@ export function visibleViewportHeight(win: {
  */
 export function menuMaxHeight(viewportHeight: number): number {
   return Math.max(0, viewportHeight - 16);
-}
-
-/** The held copy's transform: translateY only, never X, scale or rotate. */
-export function heldTransform(shiftY: number): string {
-  return `translateY(${shiftY}px)`;
 }
 
 /**
@@ -1109,22 +1065,6 @@ export function EmojiPickerShell(props: {
   );
 }
 
-/**
- * Floating, anchored action menu opened by long-press (touch), right-click, the
- * hover ⋯ control (pointer devices) or Enter / Space on a focused bubble. One
- * box: the quick reactions on top (hairline under them), then the action rows.
- * "Mark as" swaps the rows for its submenu in place (no slide). While open, a
- * 55% black backdrop dims the thread and a copy of the held bubble sits above
- * it in its own colours. It focuses the first row on open and hands focus back
- * on close. Renders into document.body via a portal (mirrors Sheet.tsx) so it
- * escapes the scrolling thread. Position is computed from the anchor rect in a
- * two-pass layout effect: measured while hidden, then always placed below the
- * bubble (computeMenuPlacement; the held copy moves up, translateY only, when
- * there is no room) and aligned to the bubble's side. Closes on backdrop
- * click, Escape, scroll, or resize (scroll and resize never while the emoji
- * picker is open). The menu's motion is opacity + scale only. All colours
- * are design tokens, so light and dark stay at parity.
- */
 /** The reminder row's label when one is pending; the time follows in mono. */
 export const REMINDER_SET_LABEL = 'Reminder · ';
 
@@ -1166,43 +1106,20 @@ export function remindProps(
 }
 
 /**
- * The menu panel (its own look; the shared popover panel stays as it is):
- * 18px radius, a 1px border-border hairline, no inner padding (rows are
- * full-bleed), clipped to the radius.
+ * The message action menu, opened by long-press (touch), right-click, the
+ * hover ⋯ control (pointer devices) or Enter / Space on a focused bubble. The
+ * one ⋯ container rule (ui/ActionMenu): phone (useIsLaptop false) a ui/Sheet,
+ * laptop a shell/MenuPopover anchored under the bubble on its side (lifted to
+ * stay on screen). The quick reactions sit on top (hairline under them), then
+ * the rows; More and "Mark as" swap the rows for their submenu in place, Back
+ * returns. It focuses the first row on open and hands focus back on close.
+ * The laptop popover also closes on scroll or resize (never while the emoji
+ * picker is open). Tokens only, so light and dark stay at parity.
  */
-export const MENU_PANEL =
-  'overflow-hidden rounded-xl border border-border bg-panel shadow-2xl transition-[opacity,transform] duration-fast motion-reduce:transition-none';
-
-/** The held copy's return on close, ms (the --dur-fast token). */
-export const HELD_RETURN_MS = 120;
-
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-
-/** Whether the viewer asked for reduced motion (read once per open). */
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.(REDUCED_MOTION).matches === true;
-}
-
-/** A probe's padding in px (the safe-area insets, which JS cannot read directly). */
-function px(value: string): number {
-  const n = Number.parseFloat(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** The menu's placement and the held copy's shift, decided in the measuring pass. */
-interface Placed extends Coords {
-  shift: number;
-  clip: number | undefined;
-}
-
 export function MessageActionMenu(props: MessageActionMenuProps): ReactElement | null {
   const { open, onClose, anchor, mine, currentReaction, onReact, held } = props;
+  const isLaptop = useIsLaptop();
   const containerRef = useRef<HTMLDivElement>(null);
-  const heldRef = useRef<HTMLDivElement>(null);
-  const safeRef = useRef<HTMLDivElement>(null);
-  const [coords, setCoords] = useState<Placed | null>(null);
-  const [heldRect, setHeldRect] = useState<DOMRect | null>(null);
-  const [shown, setShown] = useState(false);
   const [view, setView] = useState<'main' | 'more' | 'mark'>('main');
   const [picking, setPicking] = useState(false);
   const pickingRef = useRef(false);
@@ -1210,21 +1127,8 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const moreRef = useRef<HTMLButtonElement>(null);
   const layout = useChatLayout();
   const reminders = useReminderOptional();
-  // The held copy glides back on close (translateY only) when it had moved;
-  // Select, scroll, resize and reduced motion close at once.
-  const [instantClose, setInstantClose] = useState(false);
-  const [returning, setReturning] = useState(false);
-  const [reduced, setReduced] = useState(false);
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) {
-      setReturning(false);
-      setInstantClose(false);
-    } else if (coords !== null && coords.shift !== 0 && !instantClose && !reduced) {
-      setReturning(true);
-    }
-  }
+  // Laptop: how far the popover lifts so its bottom stays on screen.
+  const [lift, setLift] = useState(0);
 
   // The picker's chunk starts loading as the menu opens, so "+" opens it ready.
   useEffect(() => {
@@ -1240,85 +1144,26 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     setPicking(false);
   }, [open]);
 
-  // Measured while hidden, then placed below the held bubble (never above).
+  // Laptop: measured under the bubble, then lifted by any overflow past the
+  // visible bottom (never above the viewport's top margin).
   useLayoutEffect(() => {
-    if (!open || anchor === null) {
-      if (!returning) setCoords(null);
+    if (!open || !isLaptop || anchor === null) {
+      setLift(0);
       return;
     }
-    const el = containerRef.current;
-    if (el === null) return;
-    setReduced(prefersReducedMotion());
-    // Layout size, not the rect: the entrance scale (0.96) would shrink it.
-    const rect = { width: el.offsetWidth, height: el.offsetHeight };
-    const safe = safeRef.current !== null ? getComputedStyle(safeRef.current) : null;
-    const placement = computeMenuPlacement({
-      bubbleRect: anchor,
-      menuHeight: rect.height,
-      viewportHeight: visibleViewportHeight(window),
-      safeTop: px(safe?.paddingTop ?? ''),
-      safeBottom: px(safe?.paddingBottom ?? ''),
-      gap: 8,
-      margin: 8,
-    });
-    const rawLeft = mine ? anchor.right - rect.width : anchor.left;
-    const left = Math.max(8, Math.min(rawLeft, window.innerWidth - rect.width - 8));
-    // A menu at its max height still ends 8px above the visible bottom.
-    const lowest = Math.max(8, visibleViewportHeight(window) - 8 - rect.height);
-    setCoords({
-      top: Math.min(placement.menuTop, lowest),
-      left,
-      shift: placement.bubbleShiftY,
-      clip: placement.clipBubbleHeight,
-    });
-  }, [open, anchor, mine, view, returning]);
+    const panel = containerRef.current?.parentElement ?? null;
+    if (panel === null) return;
+    const overflow = anchor.bottom + 8 + panel.offsetHeight - (visibleViewportHeight(window) - 8);
+    setLift(overflow > 0 ? Math.min(overflow, Math.max(0, anchor.bottom - 8)) : 0);
+  }, [open, isLaptop, anchor, view]);
 
-  // The held bubble: a static copy (no handlers, not focusable) at its rect.
-  useLayoutEffect(() => {
-    const slot = heldRef.current;
-    if (!open && returning) return;
-    if (!open || held == null || !held.isConnected) {
-      setHeldRect(null);
-      slot?.replaceChildren();
-      return;
-    }
-    setHeldRect(held.getBoundingClientRect());
-    if (slot === null) return;
-    const copy = held.cloneNode(true) as HTMLElement;
-    copy.removeAttribute('tabindex');
-    copy.style.transform = '';
-    copy.style.transition = '';
-    slot.replaceChildren(copy);
-  }, [open, held, returning]);
-
-  // The return glide ends: drop the copy.
+  // Focus the first row on open and on each submenu swap; hand it back on close.
   useEffect(() => {
-    if (!returning) return;
-    const id = window.setTimeout(() => {
-      setReturning(false);
-      setCoords(null);
-    }, HELD_RETURN_MS);
-    return () => window.clearTimeout(id);
-  }, [returning]);
-
-  // Entrance motion: flip to the shown state after the menu mounts so the
-  // opacity + scale transition runs (no translate, no rotate).
-  useEffect(() => {
-    if (!open) {
-      setShown(false);
-      return;
-    }
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
-  }, [open]);
-
-  // Coords land after the measuring pass; focus the first row once placed.
-  const placed = coords !== null;
-  useEffect(() => {
-    if (!open || !placed) return;
+    if (!open) return;
     const previous = document.activeElement;
-    focusFirstMenuItem(containerRef.current);
+    const raf = requestAnimationFrame(() => focusFirstMenuItem(containerRef.current));
     return () => {
+      cancelAnimationFrame(raf);
       // Only when nothing else took focus (Reply may focus the composer).
       const current = document.activeElement;
       const idle = current === null || current === document.body;
@@ -1326,176 +1171,147 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
         previous.focus({ preventScroll: true });
       }
     };
-  }, [open, placed]);
-
-  // The submenu swap moves focus to its first row (Back), and back again.
+  }, [open]);
   useEffect(() => {
-    if (!open || !placed) return;
+    if (!open) return;
     focusFirstMenuItem(containerRef.current);
-  }, [open, placed, view]);
+  }, [open, view]);
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: KeyboardEvent): void {
       if (menuClosesOnKey(event.key)) onClose();
     }
-    // While the picker is open the menu ignores scroll and resize (the
-    // keyboard opening, iOS scrolling its input into view); otherwise a scroll
-    // outside the picker or any resize closes it, at once (no glide back).
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  // The laptop popover sits at the bubble's rect: a scroll outside it or any
+  // resize closes it, except while the picker is open (the keyboard, iOS
+  // scrolling its input into view). The phone sheet stays put on its own.
+  useEffect(() => {
+    if (!open || !isLaptop) return;
     function onScroll(event: Event): void {
       // A long menu scrolls inside itself: that never closes it.
       if (scrollFromMenu(containerRef.current, event.target)) return;
       if (menuClosesOnViewport('scroll', { picking: pickingRef.current, target: event.target })) {
-        setInstantClose(true);
         onClose();
       }
     }
     function onResize(): void {
       if (menuClosesOnViewport('resize', { picking: pickingRef.current, target: null })) {
-        setInstantClose(true);
         onClose();
       }
     }
-    document.addEventListener('keydown', onKeyDown);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onResize);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onResize);
     };
-  }, [open, onClose]);
+  }, [open, isLaptop, onClose]);
 
   const active = open && anchor !== null;
-  if (!active && !returning) return null;
-
   const reactionsOnly = props.reactionsOnly === true;
+  const size = isLaptop ? ICON_SIZE.inline : MENU_ICON_SIZE;
   const items = !active
     ? []
     : reactionsOnly
       ? []
       : view === 'mark'
-        ? markSubmenuItems(props, () => setView('more'))
+        ? markSubmenuItems(props, () => setView('more'), size)
         : view === 'more'
-          ? moreSubmenuItems({ ...props, ...remindProps(props, reminders, held) }, () =>
-              setView('main'),
+          ? moreSubmenuItems(
+              { ...props, ...remindProps(props, reminders, held) },
+              () => setView('main'),
+              size,
             )
-          : messageMenuItems({ ...props, ...remindProps(props, reminders, held) });
+          : messageMenuItems({ ...props, ...remindProps(props, reminders, held) }, size);
   const run = (item: MessageMenuItem): void => {
-    // Select hands the bubble to the native selection: no glide back.
-    if (item.key === 'select-text') setInstantClose(true);
     runMenuItem(item, {
       openMark: () => setView('mark'),
       openMore: () => setView('more'),
       close: onClose,
     });
   };
-  // The copy's Y: the shift once shown (at once under reduced motion), home on the way out.
-  const shift = coords?.shift ?? 0;
-  const heldY = returning ? 0 : shown || reduced ? shift : 0;
-  const clip = coords?.clip;
 
-  return createPortal(
-    <>
-      {/* The wrapper keeps the menu's own fade out and the inert return; the
-          Backdrop is the one scrim. */}
-      <div
-        data-menu-backdrop=""
-        className={cn(
-          'fixed inset-0 z-40 transition-opacity duration-fast motion-reduce:transition-none',
-          shown && !returning ? 'opacity-100' : 'opacity-0',
-          returning && 'pointer-events-none',
-        )}
-      >
-        <Backdrop aria-label="Close actions" onClick={onClose} position="absolute" />
-      </div>
-      <div
-        ref={safeRef}
-        aria-hidden="true"
-        data-menu-safe=""
-        className="pointer-events-none invisible fixed left-0 top-0 h-0 w-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
-      />
-      <div
-        ref={heldRef}
-        aria-hidden="true"
-        data-menu-held=""
-        data-shift={shift}
-        className={cn(
-          'pointer-events-none fixed z-40 flex transition-transform duration-fast motion-reduce:transition-none',
-          returning ? 'ease-exit' : 'ease-enter',
-          clip !== undefined && 'overflow-hidden',
-        )}
-        style={
-          heldRect !== null
-            ? {
-                top: heldRect.top,
-                left: heldRect.left,
-                width: heldRect.width,
-                transform: heldTransform(heldY),
-                ...(clip !== undefined ? { height: clip } : {}),
-              }
-            : { visibility: 'hidden' }
-        }
-      />
-      {active ? (
-        <div
-          ref={containerRef}
-          role="menu"
-          aria-label="Message actions"
-          data-menu-items=""
-          onKeyDown={(event) => {
-            // FB2: a popover menu (no aria-modal): arrow keys move between items.
-            if (moveMenuFocus(containerRef.current, event.key)) event.preventDefault();
+  const body = (
+    <div
+      ref={containerRef}
+      role="menu"
+      aria-label="Message actions"
+      data-menu-items=""
+      onKeyDown={(event) => {
+        // FB2: arrow keys move between items.
+        if (moveMenuFocus(containerRef.current, event.key)) event.preventDefault();
+      }}
+      className={cn('flex flex-col', isLaptop && '-m-1.5 overflow-y-auto overscroll-contain')}
+      style={
+        isLaptop
+          ? { width: MENU_WIDTH_PX, maxHeight: menuMaxHeight(visibleViewportHeight(window)) }
+          : undefined
+      }
+    >
+      {props.canReact !== false && view === 'main' ? (
+        <ReactionsRow
+          currentReaction={currentReaction}
+          reactionsOnly={reactionsOnly}
+          onReact={(emoji) => {
+            onReact(emoji);
+            onClose();
           }}
-          className={cn(
-            'fixed z-50 max-w-[calc(100vw-16px)]',
-            MENU_PANEL,
-            // Past its max height the menu scrolls inside (the panel clips X only).
-            'overflow-y-auto overscroll-contain',
-            mine ? 'origin-top-right' : 'origin-top-left',
-            shown ? 'scale-100 opacity-100 ease-enter' : 'scale-[0.96] opacity-0 ease-exit',
-          )}
-          style={{
-            width: MENU_WIDTH_PX,
-            maxHeight: menuMaxHeight(visibleViewportHeight(window)),
-            top: coords?.top ?? 0,
-            left: coords?.left ?? 0,
-            visibility: coords === null ? 'hidden' : 'visible',
-          }}
-        >
-          {props.canReact !== false && view === 'main' ? (
-            <ReactionsRow
-              currentReaction={currentReaction}
-              reactionsOnly={reactionsOnly}
-              onReact={(emoji) => {
-                onReact(emoji);
-                onClose();
-              }}
-              onMore={() => setPicking(true)}
-              moreRef={moreRef}
-            />
-          ) : null}
-          {items.map((item) => (
-            <MenuRow key={item.key} item={item} onRun={run} />
-          ))}
-        </div>
-      ) : null}
-      {active ? (
-        <EmojiPickerShell
-          open={picking}
-          onClose={() => setPicking(false)}
-          layout={layout}
-          returnFocus={moreRef}
-          anchor={containerRef.current?.getBoundingClientRect() ?? anchor}
-          onPick={(emoji) =>
-            pickReaction(emoji, {
-              onReact,
-              closePicker: () => setPicking(false),
-              closeMenu: onClose,
-            })
-          }
+          onMore={() => setPicking(true)}
+          moreRef={moreRef}
         />
       ) : null}
+      {items.map((item) => (
+        <MenuRow key={item.key} item={item} onRun={run} />
+      ))}
+    </div>
+  );
+
+  const picker = active ? (
+    <EmojiPickerShell
+      open={picking}
+      onClose={() => setPicking(false)}
+      layout={layout}
+      returnFocus={moreRef}
+      anchor={containerRef.current?.getBoundingClientRect() ?? anchor}
+      onPick={(emoji) =>
+        pickReaction(emoji, {
+          onReact,
+          closePicker: () => setPicking(false),
+          closeMenu: onClose,
+        })
+      }
+    />
+  ) : null;
+
+  if (!isLaptop) {
+    return (
+      <>
+        <Sheet open={active} onClose={onClose} title="Message actions">
+          {active ? body : null}
+        </Sheet>
+        {picker}
+      </>
+    );
+  }
+  if (!active || anchor === null) return null;
+  return createPortal(
+    <>
+      <span
+        data-menu-anchor=""
+        className="fixed z-50"
+        style={{ top: anchor.bottom - lift, left: mine ? anchor.right : anchor.left }}
+      >
+        <span className="relative block">
+          <MenuPopover open onClose={onClose} align={mine ? 'right' : 'left'}>
+            {body}
+          </MenuPopover>
+        </span>
+      </span>
+      {picker}
     </>,
     document.body,
   );

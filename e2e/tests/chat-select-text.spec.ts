@@ -92,7 +92,7 @@ async function pickSelect(page: Page): Promise<void> {
   await expect(menu(page)).toHaveCount(0);
 }
 
-/** Menu style in the current theme: radius 12, 1px border-border, icons in the row ink. */
+/** Menu style in the current theme: icons in the row ink, 44px rows and reaction cells. */
 async function expectMenuStyle(page: Page): Promise<void> {
   // Let the entrance scale finish so sizes read at 1.
   await page.waitForTimeout(400);
@@ -101,7 +101,6 @@ async function expectMenuStyle(page: Page): Promise<void> {
     probe.className = 'border border-border text-fg';
     document.body.appendChild(probe);
     const ref = getComputedStyle(probe);
-    const panelStyle = getComputedStyle(panel);
     const rows = Array.from(panel.querySelectorAll<HTMLElement>('[data-menu-item]'))
       .filter((row) => row.getAttribute('data-menu-item') !== 'delete')
       .filter((row) => !row.getAttribute('data-menu-item')?.startsWith('react'));
@@ -118,10 +117,6 @@ async function expectMenuStyle(page: Page): Promise<void> {
       panel.querySelectorAll<HTMLElement>('[data-menu-reactions] button'),
     ).map((b) => b.getBoundingClientRect());
     const out = {
-      radius: panelStyle.borderTopLeftRadius,
-      borderWidth: panelStyle.borderTopWidth,
-      borderColor: panelStyle.borderTopColor,
-      refBorder: ref.borderTopColor,
       fg: ref.color,
       icons,
       cells: cells.map((r) => ({ width: r.width, height: r.height })),
@@ -129,9 +124,6 @@ async function expectMenuStyle(page: Page): Promise<void> {
     probe.remove();
     return out;
   });
-  expect(style.radius).toBe('12px');
-  expect(style.borderWidth).toBe('1px');
-  expect(style.borderColor).toBe(style.refBorder);
   expect(style.icons.length).toBeGreaterThan(3);
   for (const icon of style.icons) {
     expect(icon.icon).toBe(icon.row);
@@ -144,15 +136,14 @@ async function expectMenuStyle(page: Page): Promise<void> {
 }
 
 test.describe('iPhone', () => {
-  test('menu opens below the bottom-most bubble, styled from tokens', async ({ page }) => {
+  test('menu opens as the bottom sheet, styled from tokens', async ({ page }) => {
     await openDm(page);
     const last = page.locator('[data-msg-id]:has([data-msg-body]) [data-bubble]').last();
     await hold(page, last);
     await page.waitForTimeout(400);
-    const held = await page.locator('[data-menu-held]').boundingBox();
+    await expect(page.getByRole('dialog', { name: 'Message actions' })).toBeVisible();
     const panel = await menu(page).boundingBox();
-    if (held === null || panel === null) throw new Error('no box');
-    expect(panel.y).toBeGreaterThanOrEqual(held.y + held.height);
+    if (panel === null) throw new Error('no box');
     const viewport = page.viewportSize();
     if (viewport !== null) expect(panel.y + panel.height).toBeLessThanOrEqual(viewport.height);
     await expectMenuStyle(page);
