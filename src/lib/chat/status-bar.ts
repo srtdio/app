@@ -199,7 +199,7 @@ export function anyReadFailed(input: StatusInput): boolean {
 }
 
 /**
- * What the bar paints: its items; "Nothing open between you" only when every
+ * What the bar paints: its items; "Open posts and marks show up here." only when every
  * read succeeded with zero; else a blank inert bar (something failed and
  * nothing else is open, so it never claims nothing is). Pure.
  */

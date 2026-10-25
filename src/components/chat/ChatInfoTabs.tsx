@@ -445,7 +445,7 @@ export function SeeAllRow(props: { onClick: () => void }): ReactElement {
  * The first page's loading or error state, or the body once it resolved, plus
  * a 44px "Load more" when the last page came back full. A capped preview tab
  * passes `seeAll` instead: it never pages, and shows See all when `show`; when
- * it is empty but an older page may exist it reads "Nothing recent" above See
+ * it is empty but an older page may exist it reads "Recent items show up here." above See
  * all rather than a blank area. Hook-free.
  */
 export function FeedBody<T>(props: {

@@ -389,7 +389,7 @@ interface MessageThreadProps {
   marks?: Map<string, ChatMark>;
   /** The channel's marks read has settled; the open-loops strip holds its first paint until then. */
   marksLoaded: boolean;
-  /** The marks have never been read (failed or timed out): the strip shows no content, never "Nothing open". */
+  /** The marks have never been read (failed or timed out): the strip shows no content, never "Open posts and marks show up here.". */
   marksFailed?: boolean;
   /** Marked messages read from the record, for sheet rows beyond loaded history. */
   markedMessages?: Map<string, ThreadMessage>;
@@ -6170,7 +6170,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       {stripSlot === 'loops' && props.marksFailed === true ? (
         // Marks never read (failed or timed out): the ticker's 36px slot
         // stays, empty and inert (no layout jump, nothing to open, never
-        // "Nothing open"), until a re-read (visible, online, connected) lands.
+        // "Open posts and marks show up here."), until a re-read (visible, online, connected) lands.
         <div
           data-loops-strip="unread"
           aria-hidden="true"

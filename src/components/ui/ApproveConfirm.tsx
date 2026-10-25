@@ -10,7 +10,7 @@
 import type { ReactElement } from 'react';
 import { confirmCopy, postSubject } from '@/components/chat/post-sheet';
 import { Button } from '@/components/ui/Button';
-import { formatDate } from '@/lib/time';
+import { formatDueDate } from '@/lib/time';
 
 /** The post screen's approve sheet title: the question, never the post's format or title. */
 export const APPROVE_CONFIRM_TITLE = 'Approve this post?';
@@ -21,14 +21,14 @@ export const APPROVE_LABEL = 'Approve';
 
 /**
  * The target date in the app's day format ("2 Oct", "4 Jan 2027" outside now's
- * year), read on the viewer's clock (`timeZone` is for tests); empty when not set.
+ * year), its calendar day on the workspace zone; empty when not set.
  */
 export function approveTargetDate(
   targetDate: string | null,
-  timeZone?: string,
+  workspaceZone: string | null | undefined,
   now: Date = new Date(),
 ): string {
-  return targetDate !== null ? formatDate(targetDate, now, timeZone) : '';
+  return targetDate !== null ? formatDueDate(targetDate, workspaceZone, now) : '';
 }
 
 /**

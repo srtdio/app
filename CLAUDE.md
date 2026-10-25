@@ -100,6 +100,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Zero results use ui/NoResults only. Zero states are one positive line, "{Things} show up here." Never "Nothing", "No matches" or "empty" in a zero state.
 - Errors: "Couldn't {action}. {reason}". Never mention connection state.
 - Dates and times come from src/lib/time.ts only. No toLocale\*, Intl.DateTimeFormat or date libraries in components.
+- Due dates are calendar days on the workspace zone; moments (message, comment, activity times) are on the device zone.
 - Motion: duration-fast/base/slow and ease-enter/exit only. No duration-[Nms] or raw transition values.
 - If no shared component or function fits, stop and ask. Never hand-build a new variant.
 

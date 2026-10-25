@@ -349,6 +349,10 @@ describe('live toast labels for approve, reject, park and deletes', () => {
   it('post_deleted and assets_deleted have their own labels', () => {
     expect(eventLabel('post_deleted')).toBe('Post deleted');
     expect(eventLabel('assets_deleted')).toBe('Assets deleted');
+    expect(eventLabel('asset_uploaded')).toBe('New file');
+    expect(eventLabel('asset_version_added')).toBe('New file');
+    expect(eventVerb({ eventType: 'asset_uploaded' })).toBe('uploaded a file');
+    expect(eventVerb({ eventType: 'asset_version_added' })).toBe('added a file version');
   });
 
   it('a single stage_change lead with its target stage toasts the outcome', () => {

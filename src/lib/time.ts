@@ -6,10 +6,15 @@
 //   formatDateTime    "23 Oct, 2:14 PM"; "23 Oct 2025, 2:14 PM" off the current year
 //   formatDate        "23 Oct"; "23 Oct 2025" off the current year
 //   formatDayRange    "19 - 25 Oct"; "28 Oct - 3 Nov"
-//   formatDue         "Due 23 Oct"
+//   formatDueDate     "23 Oct" for a due/target date, on the workspace zone
+//   formatDue         "Due 23 Oct", on the workspace zone
 //   formatOverdue     "Overdue · 12 Oct" up to a month late, then "Overdue 5 months"
 //   formatSpokenDate  "Monday, 19 October 2026" (accessible names)
-// Days and clock times are read on the VIEWER's device time zone. A date-only
+// Moments (message, comment, activity times) are read on the VIEWER's device
+// time zone. Due dates (posts.target_date, brief due dates, plan days and plan
+// ranges) are calendar days: formatDueDate, formatDue, formatOverdue and
+// formatDayRange take the WORKSPACE zone as a required argument (null or blank
+// only when the workspace has none, which degrades to the device zone). A date-only
 // "YYYY-MM-DD" value is read off the string itself so no zone can shift it.
 // 'en-US' parts are re-assembled by type so the output never follows the
 // browser locale. `now` defaults to the current instant; tests pass it (and a
@@ -222,13 +227,14 @@ export function formatDateTime(
   return `${formatDate(instant, now, zone)}, ${formatTime(instant, zone)}`;
 }
 
-/** "19 - 25 Oct", "28 Oct - 3 Nov"; years appear only off the current year. */
+/** "19 - 25 Oct", "28 Oct - 3 Nov" on the workspace zone; years appear only off the current year. */
 export function formatDayRange(
   start: DateInput,
   end: DateInput,
+  workspaceZone: string | null | undefined,
   now: Date = new Date(),
-  timeZone?: string,
 ): string {
+  const timeZone = workspaceZone ?? undefined;
   const zone = safeTimeZone(timeZone);
   const a = civilOf(start, zone);
   const b = civilOf(end, zone);
@@ -244,9 +250,26 @@ export function formatDayRange(
   return `${a.day} ${monthName(a.month)} - ${b.day} ${monthName(b.month)}${year}`;
 }
 
-/** "Due 23 Oct" (year rule as formatDate); '' for unparseable input. */
-export function formatDue(value: DateInput, now: Date = new Date(), timeZone?: string): string {
-  const day = formatDate(value, now, timeZone);
+/**
+ * A due or target date as its calendar day on the WORKSPACE zone: "23 Oct",
+ * "23 Oct 2025" off the current year. posts.target_date is stored as noon in
+ * the workspace zone, so every viewer sees the day that was picked.
+ */
+export function formatDueDate(
+  value: DateInput,
+  workspaceZone: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  return formatDate(value, now, workspaceZone ?? undefined);
+}
+
+/** "Due 23 Oct" on the workspace zone (year rule as formatDate); '' for unparseable input. */
+export function formatDue(
+  value: DateInput,
+  workspaceZone: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  const day = formatDueDate(value, workspaceZone, now);
   return day === '' ? '' : `Due ${day}`;
 }
 
@@ -258,15 +281,16 @@ export interface OverdueLabel {
 
 /**
  * Up to one calendar month late: "Overdue · 12 Oct". More than a month late:
- * whole months, "Overdue 1 month" / "Overdue 5 months". Days are civil days.
+ * whole months, "Overdue 1 month" / "Overdue 5 months". Days are civil days on
+ * the workspace zone, so overdue flips at the workspace's midnight.
  * Unparseable input reads as plain "Overdue".
  */
 export function formatOverdue(
   value: DateInput,
+  workspaceZone: string | null | undefined,
   now: Date = new Date(),
-  timeZone?: string,
 ): OverdueLabel {
-  const zone = safeTimeZone(timeZone);
+  const zone = safeTimeZone(workspaceZone);
   const civil = civilOf(value, zone);
   if (civil === undefined) return { text: 'Overdue', bad: true };
   const today = civilOfInstant(now, zone);

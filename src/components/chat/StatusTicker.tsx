@@ -9,7 +9,7 @@
 // Both plan items stay; if the compact row still overflows, their titles drop
 // whole trailing words (measured on a second hidden copy, never a cut glyph).
 // Until every read has settled the slot is empty and inert, so the first
-// painted bar is final; "Nothing open between you" shows only when every read
+// painted bar is final; "Open posts and marks show up here." shows only when every read
 // succeeded with nothing open, never as a button. The drawer opens by a tap on the bar (top of the list), a tap on an
 // item (scrolled to its section before paint) or a drag down; it closes by
 // the scrim, a drag up on its handle, or another tap on the bar. It moves on

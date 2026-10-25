@@ -7,17 +7,18 @@ import { describe, expect, it } from 'vitest';
 // surface is Activity, the date is Due date, and no copy mentions connection
 // state. Scans src/components/**/*.tsx except home/** and test-site/**.
 const ROOT = fileURLToPath(new URL('../components/', import.meta.url));
+const INBOX = fileURLToPath(new URL('../lib/inbox/', import.meta.url));
 const EXEMPT_DIRS = ['home/', 'test-site/'];
 
-function tsxFiles(dir: string): string[] {
+function sourceFiles(dir: string, ext: RegExp): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) return tsxFiles(path);
-    return name.endsWith('.tsx') && !name.endsWith('.test.tsx') ? [path] : [];
+    if (statSync(path).isDirectory()) return sourceFiles(path, ext);
+    return ext.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
   });
 }
 
-const FILES = tsxFiles(ROOT)
+const FILES = sourceFiles(ROOT, /\.tsx$/)
   .map((path) => relative(ROOT, path).split(sep).join('/'))
   .filter((rel) => !EXEMPT_DIRS.some((d) => rel.startsWith(d)))
   .map((rel) => ({ rel, source: readFileSync(join(ROOT, rel), 'utf8') }));
@@ -43,6 +44,12 @@ function offenders(pattern: RegExp, skip: (text: string) => boolean = () => fals
   );
 }
 
+// Activity toast strings live in src/lib/inbox; items in Assets are files there too.
+const INBOX_FILES = sourceFiles(INBOX, /\.tsx?$/).map((path) => ({
+  rel: relative(INBOX, path).split(sep).join('/'),
+  source: readFileSync(path, 'utf8'),
+}));
+
 describe('copy rules', () => {
   it('zero states never open with "Nothing ..."', () => {
     expect(
@@ -67,5 +74,14 @@ describe('copy rules', () => {
 
   it('copy never mentions connection state', () => {
     expect(offenders(/You['’]re offline|Reconnecting|Check your connection/i)).toEqual([]);
+  });
+
+  it('Activity toasts in src/lib/inbox say "file", never "an asset" or "New asset"', () => {
+    const hits = INBOX_FILES.flatMap(({ rel, source }) =>
+      visibleText(source)
+        .filter((text) => /\ban asset\b|\bNew asset\b/.test(text))
+        .map((text) => `lib/inbox/${rel}: ${text.trim()}`),
+    );
+    expect(hits).toEqual([]);
   });
 });

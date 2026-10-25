@@ -116,9 +116,9 @@ export function eventVerb(item: VerbSource): string | null {
     case 'brief_reopened':
       return REOPEN_VERB;
     case 'asset_uploaded':
-      return 'uploaded an asset';
+      return 'uploaded a file';
     case 'asset_version_added':
-      return 'added an asset version';
+      return 'added a file version';
     case 'invite':
       return 'invited a new member';
     case 'plan_review':
@@ -302,7 +302,7 @@ export function eventLabel(
       return 'Comment resolved';
     case 'asset_uploaded':
     case 'asset_version_added':
-      return 'New asset';
+      return 'New file';
     case 'checkpoints_added':
       return 'Points sent';
     case 'post_ready':

@@ -979,7 +979,7 @@ export function PipelinePage() {
   // Per-tab counts over the filtered list: each stage plus the 'all' total.
   const counts = useMemo(() => stageCounts(grouped, STAGES), [grouped]);
 
-  // The empty view under active search/date filters gets "Nothing fits these filters".
+  // The empty view under active search/date filters gets NoResults ("Try fewer filters.").
   const visibleCount = (stage === ALL_KEY ? counts.all : counts[stage]) ?? 0;
   const inStage = (list: PipelinePost[]): PipelinePost[] =>
     stage === ALL_KEY ? list : list.filter((post) => post.stage === stage);
