@@ -27,7 +27,10 @@ vi.mock('@/lib/workspace-context', () => ({
 }));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
+vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
+  useMediaQuery: () => false,
+}));
 vi.mock('@/lib/search/jump', () => ({ useSearchJump: () => ({ words: [] }) }));
 vi.mock('@/components/pages/pcs/use-post-members', () => ({
   usePostMembers: () => ({ options: [], loading: false, error: null }),

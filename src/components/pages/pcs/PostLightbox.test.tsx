@@ -855,16 +855,16 @@ describe('W2 gallery and download', () => {
     expect(strings(idle)).not.toContain('Saving…');
   });
 
-  it('the remove confirm copy is the one shared helper, also used by the slide actions sheet', () => {
+  it('the remove confirm copy is this viewer\'s; the slide actions sheet removes at once (Undo strip)', () => {
     expect(removeImageConfirmCopy(1).title).toBe('Delete the only image?');
     expect(removeImageConfirmCopy(3)).toEqual({ title: 'Remove this image?', message: null });
     const sheet = readFileSync(
       fileURLToPath(new URL('./SlideActionsSheet.tsx', import.meta.url)),
       'utf8',
     );
-    expect(sheet).toContain('removeImageConfirmCopy(count)');
-    // Remove image opens the confirm; only its Remove runs the handler.
-    expect(sheet).toContain('onClick={() => setConfirming(true)}');
+    // PR B delete rule: no confirm; the page's Undo strip is the safety net.
+    expect(sheet).not.toContain('removeImageConfirmCopy');
+    expect(sheet).not.toContain('setConfirming');
     expect(sheet).toContain('onClick={() => run(onRemove)}');
   });
 

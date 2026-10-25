@@ -1,35 +1,35 @@
-// F8 PCS post action sheet: one "more" sheet on the live post header offering
-// Send to chat, Copy link, and Download all images. Frontend only, no schema, no
-// Postgres write, no new RPC. Each action reuses an existing path:
-//   - Send to chat -> the existing Agora sendText via ConversationPicker.
+// F8 PCS post ⋯ menu (ui/ActionMenu: a Sheet on phone, a popover on laptop)
+// on the live post header: Open in pipeline (embedded in a plan item), Copy
+// link, the creator's stage moves, Send to chat, Download all images, Remove
+// image and Delete post, in the one ⋯ order (Open, Copy link, the rest, Delete
+// last). Frontend only, no schema, no Postgres write, no new RPC. Each action
+// reuses an existing path:
+//   - Send to chat -> the existing Agora sendText via ConversationPicker, in
+//                     its own sheet once the menu closes.
 //   - Copy link    -> an in-app authenticated deep link built from
 //                     window.location.origin + the pretty short route
 //                     (/p/<key>-<number>) when the workspace key is known, falling
 //                     back to the classic /posts/<uuid> route otherwise (no domain
 //                     hardcoded, no share token: there is no public-share concept).
+//                     The ui/toast says "Link copied".
 //   - Download all -> the same attachment-disposition presigned URL the PCS
 //                     lightbox already uses per image, looped over the gallery.
 // It is mounted in LIVE PCS only (never the read-only old-version view).
-// Embedded in a plan item, the same sheet leads with Open in pipeline. Delete
-// post asks nothing (spec B7): the sheet closes and the page deletes behind its
-// 4s "Post deleted" Undo strip. Remove image (agency, editable stage) acts on
-// the slide the gallery shows; it was the picture's own ⋮ and asks first with
-// the lightbox's confirm copy (Cancel / Remove).
+// Delete post and Remove image ask nothing: the menu closes and the page acts
+// at once behind its UNDO_MS Undo strip ("Post deleted", "Image removed").
 
 import { useContext, useMemo, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
+import { ActionMenu, orderActionItems, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Sheet } from '@/components/ui/Sheet';
-import { ActionRow } from '@/components/ui/ActionRow';
-import { Button } from '@/components/ui/Button';
-import { removeImageConfirmCopy } from '@/components/pages/pcs/PostLightbox';
 import {
-  ICON_SIZE,
   IconCalendar,
   IconDownload,
   IconLink,
   IconPipeline,
   IconSend,
   IconTrash,
+  type IconProps,
 } from '@/components/ui/icons';
 import { requestPresignedUrl, type PresignDeps } from '@/lib/asset-presign';
 import { postRoute } from '@/components/chat/post-card';
@@ -48,22 +48,32 @@ import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
 
 /**
- * One stage move offered in the sheet (flow B 31): the creator's Approve on
+ * One stage move offered in the menu (flow B 31): the creator's Approve on
  * their behalf, Park and Reject. The page owns the move (its confirm, Undo and
- * errors); the sheet closes, then hands off.
+ * errors); the menu closes, then hands off.
  */
 export interface PostMoveRow {
   key: string;
-  icon: ReactNode;
+  icon: ComponentType<IconProps>;
   label: string;
   sub?: string;
   danger?: boolean;
   onPick: () => void;
 }
 
+/** A toast from the menu: neutral for a success, the bad tone for a failure. */
+export type PostActionToast = (message: string, tone?: 'error') => void;
+
 interface PostActionSheetProps {
+  /** Controlled open state; the trigger (or the host) asks through onOpenChange. */
   open: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  /**
+   * The opener. Absent: ActionMenu's default ⋯ "More actions", where the page
+   * renders this (top-right of the header). null: the host opens it (the plan
+   * item's own header button).
+   */
+  trigger?: ReactNode | null;
   postId: string;
   workspaceId: string;
   currentUserId: string;
@@ -79,33 +89,33 @@ interface PostActionSheetProps {
   workspaceKey: string | null;
   /** The post's per-workspace entity number, used to build the short link. */
   postNumber: number;
-  /** Push a toast onto the page's stack. */
-  onToast: (message: string) => void;
+  /** Show a toast on the app-wide ui/toast. */
+  onToast: PostActionToast;
   /** Owner, admin or agency (canDeletePost): gates the Delete post row. */
   canDelete: boolean;
   /**
-   * Delete the post at once; the page runs the 4s "Post deleted" Undo window,
-   * the proc call, the failure toast and the navigation.
+   * Delete the post at once; the page runs the UNDO_MS "Post deleted" Undo
+   * window, the proc call, the failure toast and the navigation.
    */
   onDeletePost: () => Promise<void> | void;
   /** Embedded in a plan item: the first row, Open in pipeline. Absent elsewhere. */
   onOpenInPipeline?: () => void;
-  /** Stage moves listed first (creators only); absent or empty shows none. */
+  /** Stage moves (creators only); absent or empty shows none. */
   moveRows?: readonly PostMoveRow[];
   /**
    * Remove the slide the gallery shows (agency, editable stage only); absent
-   * hides the row. Asks first, then hands off to the page's gallery write.
+   * hides the row. Hands off to the page, which removes it behind an Undo strip.
    */
   removeImage?: RemoveImageAction | undefined;
 }
 
-/** The header sheet's Remove image row: which slide, and the page's remove. */
+/** The header menu's Remove image row: which slide, and the page's remove. */
 export interface RemoveImageAction {
   /** Zero-based slide the gallery shows. */
   index: number;
-  /** Total slides, for the row line and the confirm copy. */
+  /** Total slides, for the row line. */
   count: number;
-  /** A gallery write is in flight: Remove is disabled. */
+  /** A gallery write is in flight: the row says "Saving…" and does nothing. */
   saving: boolean;
   onRemove: () => void;
 }
@@ -116,21 +126,123 @@ export interface RemoveImageAction {
  */
 export const DELETE_CONFIRM_BASE = 'Moves to Recently deleted. You can restore it there.';
 
-/** The action rows in order (Open in pipeline first when offered, Delete last). Pure. */
+/** The menu's accessible name and phone sheet title. */
+export const POST_ACTIONS_TITLE = 'Post actions';
+
+/** What the menu offers and what each row does. */
+export interface PostActionItemsInput {
+  onOpenInPipeline?: (() => void) | undefined;
+  /** The plan item's Move to another day, when the item screen provides it. */
+  onMoveInPlan?: (() => void) | undefined;
+  moveRows?: readonly PostMoveRow[];
+  onSendToChat: () => void;
+  onCopyLink: () => void;
+  /** The image count for Download all images; null hides the row. */
+  download: { count: number; busy: boolean; onSelect: () => void } | null;
+  removeImage?: RemoveImageAction | undefined;
+  onDelete: (() => void) | null;
+}
+
+/** The menu rows in the one ⋯ order (Open, Copy link, the rest, Delete last). Pure. */
+export function postActionItems(input: PostActionItemsInput): ActionMenuItem[] {
+  const items: ActionMenuItem[] = [];
+  if (input.onOpenInPipeline !== undefined) {
+    items.push({
+      id: 'open-pipeline',
+      label: 'Open in pipeline',
+      icon: IconPipeline,
+      description: 'See this post in the pipeline',
+      onSelect: input.onOpenInPipeline,
+    });
+  }
+  items.push({
+    id: 'copy-link',
+    label: 'Copy link',
+    icon: IconLink,
+    description: 'In-app link to this post',
+    onSelect: input.onCopyLink,
+  });
+  if (input.onMoveInPlan !== undefined) {
+    items.push({
+      id: 'move-plan',
+      label: MOVE_ROW_LABEL,
+      icon: IconCalendar,
+      onSelect: input.onMoveInPlan,
+    });
+  }
+  for (const row of input.moveRows ?? []) {
+    items.push({
+      id: `move-${row.key}`,
+      label: row.label,
+      icon: row.icon,
+      ...(row.sub !== undefined ? { description: row.sub } : {}),
+      ...(row.danger === true ? { tone: 'danger' as const } : {}),
+      onSelect: row.onPick,
+    });
+  }
+  items.push({
+    id: 'send-to-chat',
+    label: 'Send to chat',
+    icon: IconSend,
+    description: 'Share this post in a conversation',
+    onSelect: input.onSendToChat,
+  });
+  if (input.download !== null) {
+    const { count, busy, onSelect } = input.download;
+    items.push({
+      id: 'download-all',
+      label: 'Download all images',
+      icon: IconDownload,
+      description: busy ? 'Preparing downloads' : `${count} image${count === 1 ? '' : 's'}`,
+      onSelect,
+    });
+  }
+  const remove = input.removeImage;
+  if (remove !== undefined && remove.count > 0) {
+    items.push({
+      id: 'remove-image',
+      label: 'Remove image',
+      icon: IconTrash,
+      tone: 'danger',
+      description: remove.saving
+        ? 'Saving…'
+        : `Image ${Math.min(remove.index, remove.count - 1) + 1} of ${remove.count}`,
+      onSelect: () => {
+        if (!remove.saving) remove.onRemove();
+      },
+    });
+  }
+  if (input.onDelete !== null) {
+    items.push({
+      id: 'delete-post',
+      label: 'Delete post',
+      icon: IconTrash,
+      tone: 'danger',
+      description: DELETE_CONFIRM_BASE,
+      onSelect: input.onDelete,
+    });
+  }
+  return orderActionItems(items);
+}
+
+/** The action row labels in menu order. Pure. */
 export function postActionLabels(opts: {
   openInPipeline: boolean;
   download: boolean;
   canDelete: boolean;
   removeImage?: boolean;
 }): string[] {
-  return [
-    ...(opts.openInPipeline ? ['Open in pipeline'] : []),
-    'Send to chat',
-    'Copy link',
-    ...(opts.download ? ['Download all images'] : []),
-    ...(opts.removeImage === true ? ['Remove image'] : []),
-    ...(opts.canDelete ? ['Delete post'] : []),
-  ];
+  const noop = (): void => {};
+  return postActionItems({
+    ...(opts.openInPipeline ? { onOpenInPipeline: noop } : {}),
+    onSendToChat: noop,
+    onCopyLink: noop,
+    download: opts.download ? { count: 1, busy: false, onSelect: noop } : null,
+    ...(opts.removeImage === true
+      ? { removeImage: { index: 0, count: 1, saving: false, onRemove: noop } }
+      : {}),
+    onDelete: opts.canDelete ? noop : null,
+  }).map((item) => item.label);
 }
 
 /** Save one resolved URL as a file via a throwaway download anchor. */
@@ -171,7 +283,8 @@ export function postCopyLink(
 
 export function PostActionSheet({
   open,
-  onClose,
+  onOpenChange,
+  trigger,
   postId,
   workspaceId,
   currentUserId,
@@ -187,22 +300,17 @@ export function PostActionSheet({
   removeImage,
 }: PostActionSheetProps): ReactElement {
   const planRows = useContext(PostSheetPlanRowsContext);
-  const [view, setView] = useState<'actions' | 'chat' | 'remove'>('actions');
+  const [chatOpen, setChatOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const images = useMemo(() => gallery.filter(isDownloadableImage), [gallery]);
   const showDownload = canDownloadAll(gallery);
 
-  function close(): void {
-    setView('actions');
-    onClose();
-  }
-
   async function handleCopyLink(): Promise<void> {
     const link = postCopyLink(window.location.origin, workspaceKey, postNumber, postId);
     const ok = await copyText(link);
-    onToast(ok ? 'Link copied' : COPY_FAILED);
-    close();
+    if (ok) onToast('Link copied');
+    else onToast(COPY_FAILED, 'error');
   }
 
   async function handleDownloadAll(): Promise<void> {
@@ -221,7 +329,7 @@ export function PostActionSheet({
       );
       const descriptors = toDownloadDescriptors(resolved);
       if (descriptors.length === 0) {
-        onToast(errorText('prepare the images for download', null));
+        onToast(errorText('prepare the images for download', null), 'error');
         return;
       }
       for (let i = 0; i < descriptors.length; i += 1) {
@@ -230,148 +338,49 @@ export function PostActionSheet({
         triggerDownload(descriptor.url, descriptor.filename);
         if (i < descriptors.length - 1) await wait(DOWNLOAD_GAP_MS);
       }
-      onToast(
-        descriptors.length < images.length
-          ? "Some images couldn't be downloaded"
-          : `Downloading ${descriptors.length} image${descriptors.length === 1 ? '' : 's'}`,
-      );
-      close();
+      if (descriptors.length < images.length) {
+        onToast("Some images couldn't be downloaded", 'error');
+      } else {
+        onToast(`Downloading ${descriptors.length} image${descriptors.length === 1 ? '' : 's'}`);
+      }
     } finally {
       setDownloading(false);
     }
   }
 
-  // Spec B7: no confirm. The sheet closes, then the page deletes behind its
-  // Undo strip ("Post deleted" · Undo, 4s).
-  function handleDelete(): void {
-    close();
-    void onDeletePost();
-  }
-
-  const removeCopy = removeImage !== undefined ? removeImageConfirmCopy(removeImage.count) : null;
-  const title =
-    view === 'chat'
-      ? 'Send to chat'
-      : view === 'remove' && removeCopy !== null
-        ? removeCopy.title
-        : 'Post actions';
+  // Spec B7: no confirm. The menu closes, then the page deletes behind its
+  // Undo strip ("Post deleted" · Undo, UNDO_MS).
+  const items = postActionItems({
+    onOpenInPipeline,
+    ...(planRows !== null ? { onMoveInPlan: planRows.onMove } : {}),
+    moveRows,
+    onSendToChat: () => setChatOpen(true),
+    onCopyLink: () => void handleCopyLink(),
+    download: showDownload
+      ? { count: images.length, busy: downloading, onSelect: () => void handleDownloadAll() }
+      : null,
+    removeImage,
+    onDelete: canDelete ? () => void onDeletePost() : null,
+  });
 
   return (
-    <Sheet open={open} onClose={close} title={title}>
-      {view === 'remove' && removeImage !== undefined && removeCopy !== null ? (
-        <div data-remove-image-confirm="" className="flex flex-col gap-3">
-          {removeCopy.message !== null ? (
-            <p className="text-base text-fg-2">{removeCopy.message}</p>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => setView('actions')}>Cancel</Button>
-            <Button
-              variant="danger"
-              disabled={removeImage.saving}
-              onClick={() => {
-                close();
-                removeImage.onRemove();
-              }}
-            >
-              Remove
-            </Button>
-          </div>
-        </div>
-      ) : view === 'chat' ? (
+    <>
+      <ActionMenu
+        title={POST_ACTIONS_TITLE}
+        items={items}
+        open={open}
+        onOpenChange={onOpenChange}
+        {...(trigger !== undefined ? { trigger } : {})}
+      />
+      <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title="Send to chat">
         <ConversationPicker
           postId={postId}
           workspaceId={workspaceId}
           currentUserId={currentUserId}
-          onToast={onToast}
-          onSent={close}
+          onToast={(message) => onToast(message)}
+          onSent={() => setChatOpen(false)}
         />
-      ) : (
-        <div className="flex flex-col gap-1">
-          {onOpenInPipeline !== undefined ? (
-            <ActionRow
-              icon={<IconPipeline size={ICON_SIZE.nav} />}
-              label="Open in pipeline"
-              sub="See this post in the pipeline"
-              onClick={() => {
-                close();
-                onOpenInPipeline();
-              }}
-            />
-          ) : null}
-          {planRows !== null ? (
-            <ActionRow
-              icon={<IconCalendar size={ICON_SIZE.nav} />}
-              label={MOVE_ROW_LABEL}
-              onClick={() => {
-                close();
-                planRows.onMove();
-              }}
-            />
-          ) : null}
-          {moveRows.map((row) => (
-            <ActionRow
-              key={row.key}
-              icon={row.icon}
-              label={row.label}
-              {...(row.sub !== undefined ? { sub: row.sub } : {})}
-              {...(row.danger === true ? { danger: true } : {})}
-              onClick={() => {
-                close();
-                row.onPick();
-              }}
-            />
-          ))}
-          <ActionRow
-            icon={<IconSend size={ICON_SIZE.nav} />}
-            label="Send to chat"
-            sub="Share this post in a conversation"
-            chevron
-            onClick={() => setView('chat')}
-          />
-          <ActionRow
-            icon={<IconLink size={ICON_SIZE.nav} />}
-            label="Copy link"
-            sub="In-app link to this post"
-            onClick={() => void handleCopyLink()}
-          />
-          {showDownload ? (
-            <ActionRow
-              icon={<IconDownload size={ICON_SIZE.nav} />}
-              label="Download all images"
-              sub={
-                downloading
-                  ? 'Preparing downloads'
-                  : `${images.length} image${images.length === 1 ? '' : 's'}`
-              }
-              onClick={() => void handleDownloadAll()}
-            />
-          ) : null}
-          {removeImage !== undefined && removeImage.count > 0 ? (
-            <ActionRow
-              danger
-              icon={<IconTrash size={ICON_SIZE.nav} />}
-              label="Remove image"
-              sub={
-                removeImage.saving
-                  ? 'Saving…'
-                  : `Image ${Math.min(removeImage.index, removeImage.count - 1) + 1} of ${removeImage.count}`
-              }
-              onClick={() => {
-                if (!removeImage.saving) setView('remove');
-              }}
-            />
-          ) : null}
-          {canDelete ? (
-            <ActionRow
-              danger
-              icon={<IconTrash size={ICON_SIZE.nav} />}
-              label="Delete post"
-              sub={DELETE_CONFIRM_BASE}
-              onClick={handleDelete}
-            />
-          ) : null}
-        </div>
-      )}
-    </Sheet>
+      </Sheet>
+    </>
   );
 }

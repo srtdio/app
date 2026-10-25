@@ -65,22 +65,22 @@ describe('postCopyLink', () => {
 });
 
 describe('post actions (W9)', () => {
-  it('Open in pipeline leads when offered; Delete is last and agency only', () => {
+  it('Open in pipeline leads when offered, Copy link next; Delete is last and agency only', () => {
     expect(postActionLabels({ openInPipeline: true, download: true, canDelete: true })).toEqual([
       'Open in pipeline',
-      'Send to chat',
       'Copy link',
+      'Send to chat',
       'Download all images',
       'Delete post',
     ]);
     expect(postActionLabels({ openInPipeline: true, download: false, canDelete: false })).toEqual([
       'Open in pipeline',
-      'Send to chat',
       'Copy link',
+      'Send to chat',
     ]);
     expect(postActionLabels({ openInPipeline: false, download: false, canDelete: true })).toEqual([
-      'Send to chat',
       'Copy link',
+      'Send to chat',
       'Delete post',
     ]);
   });
@@ -93,31 +93,29 @@ describe('post actions (W9)', () => {
         canDelete: true,
         removeImage: true,
       }),
-    ).toEqual(['Send to chat', 'Copy link', 'Download all images', 'Remove image', 'Delete post']);
+    ).toEqual(['Copy link', 'Send to chat', 'Download all images', 'Remove image', 'Delete post']);
   });
 
-  it('the sheet renders Open in pipeline first, only when the host passes it', () => {
+  it('the menu is ui/ActionMenu, with no IconMore of its own', () => {
     const src = readFileSync(
       fileURLToPath(new URL('./PostActionSheet.tsx', import.meta.url)),
       'utf8',
     );
-    const rows = src.slice(src.indexOf('<div className="flex flex-col gap-1">'));
-    expect(rows.indexOf('label="Open in pipeline"')).toBeLessThan(
-      rows.indexOf('label="Send to chat"'),
-    );
-    expect(rows).toContain('{onOpenInPipeline !== undefined ? (');
-    expect(rows).toContain('{canDelete ? (');
+    expect(src).toContain('<ActionMenu');
+    expect(src).not.toContain('IconMore');
+    expect(src).not.toContain('ActionRow');
   });
 });
 
-describe('Delete post has no confirm (spec B7)', () => {
-  it('no confirm view, no plans read; the row hands off to the page at once', () => {
+describe('Delete post and Remove image have no confirm (spec B7, PR B delete rule)', () => {
+  it('no confirm view, no plans read; the rows hand off to the page at once', () => {
     const src = readFileSync(
       fileURLToPath(new URL('./PostActionSheet.tsx', import.meta.url)),
       'utf8',
     );
     expect(src).not.toContain('confirm-delete');
     expect(src).not.toContain('readPostPlans(');
-    expect(src).toContain('onClick={handleDelete}');
+    expect(src).not.toContain('removeImageConfirmCopy');
+    expect(src).toContain('onDelete: canDelete ? () => void onDeletePost() : null');
   });
 });

@@ -62,6 +62,7 @@ vi.mock('@/lib/session-context', () => ({
 }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
   useMediaQuery: (query: string) => (query === '(min-width: 1024px)' ? h.wide : h.desktop),
 }));
 vi.mock('@/lib/search/jump', () => ({ useSearchJump: () => ({ words: [] }) }));

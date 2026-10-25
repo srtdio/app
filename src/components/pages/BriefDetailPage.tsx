@@ -5,23 +5,27 @@ import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { ReactElement } from 'react';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
-import { PressableRow } from '@/components/ui/PressableRow';
 import { Comments } from '@/components/comments/Comments';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { LoadError } from '@/components/ui/LoadError';
-import { popoverClass } from '@/components/ui/popover-classes';
 import { useOptionalToast } from '@/components/ui/toast';
-import { ICON_SIZE, IconBriefs, IconChevronLeft, IconMore } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconBriefs,
+  IconCheck,
+  IconChevronLeft,
+  IconCopy,
+  IconLink,
+  IconPlus,
+} from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import { BriefLink } from '@/components/pages/BriefLink';
 import { BRIEF_NOTE_PARAM } from '@/lib/brief-list';
-import { Toasts } from '@/components/pages/assets/Toasts';
-import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
@@ -34,12 +38,11 @@ import { civilDay, formatDate, formatDue, formatDueDate, formatOverdue } from '@
 import { postFormatLabel } from '@/lib/post-format';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
-import { useEscapeLayer } from '@/lib/escape-stack';
 import { hasPreviousEntry } from '@/lib/chat/use-history-step';
 import { useSession } from '@/lib/session-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
-import { cn } from '@/lib/cn';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import { getBrief, getBriefGallery, reopenBrief } from '@srtdio/briefs';
 import type { Brief, BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
@@ -309,81 +312,40 @@ export function briefCopyLink(
   return origin + path;
 }
 
-interface BriefMenuRow {
-  label: string;
-  testId: string;
-  onSelect: () => void;
-}
-
 /**
- * The header ⋯ menu, on every brief for every member: Copy link, Copy brief,
- * then Close brief (open, and the viewer may close) or Reopen brief (closed,
- * any member).
- * Escape or a tap outside closes it.
+ * The header ⋯ menu's rows (ui/ActionMenu), on every brief for every member:
+ * Copy link, Copy brief, then Close brief (open, and the viewer may close) or
+ * Reopen brief (closed, any member). Briefs are never deleted, so there is no
+ * Delete row. Pure.
  */
-function BriefActionsMenu({
-  closed,
-  canClose,
-  onCopyLink,
-  onCopyBrief,
-  onCloseBrief,
-  onReopenBrief,
-}: {
+export function briefMenuItems(args: {
   closed: boolean;
   canClose: boolean;
   onCopyLink: () => void;
   onCopyBrief: () => void;
   onCloseBrief: () => void;
   onReopenBrief: () => void;
-}): ReactElement {
-  const [open, setOpen] = useState(false);
-  useEscapeLayer(open, () => setOpen(false));
-  const rows: BriefMenuRow[] = [
-    { label: 'Copy link', testId: 'brief-menu-copy-link', onSelect: onCopyLink },
-    { label: 'Copy brief', testId: 'brief-menu-copy-brief', onSelect: onCopyBrief },
+}): ActionMenuItem[] {
+  const items: ActionMenuItem[] = [
+    { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: args.onCopyLink },
+    { id: 'copy-brief', label: 'Copy brief', icon: IconCopy, onSelect: args.onCopyBrief },
   ];
-  if (closed) {
-    rows.push({ label: 'Reopen brief', testId: 'brief-menu-reopen', onSelect: onReopenBrief });
-  } else if (canClose) {
-    rows.push({ label: 'Close brief', testId: 'brief-menu-close', onSelect: onCloseBrief });
+  if (args.closed) {
+    items.push({
+      id: 'reopen-brief',
+      label: 'Reopen brief',
+      icon: IconBriefs,
+      onSelect: args.onReopenBrief,
+    });
+  } else if (args.canClose) {
+    items.push({
+      id: 'close-brief',
+      label: 'Close brief',
+      icon: IconCheck,
+      onSelect: args.onCloseBrief,
+    });
   }
-  return (
-    <div className="relative shrink-0">
-      <IconButton
-        label="Brief actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <IconMore size={ICON_SIZE.control} />
-      </IconButton>
-      {open ? (
-        <>
-          <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
-          <div className={cn('absolute right-0 top-full z-50 mt-1.5 w-52', popoverClass(true))}>
-            <div role="menu" aria-label="Brief actions" className="flex flex-col">
-              {rows.map((row, index) => (
-                <div key={row.testId} className={index > 0 ? 'border-t border-border' : undefined}>
-                  <PressableRow
-                    type="button"
-                    role="menuitem"
-                    data-testid={row.testId}
-                    onClick={() => {
-                      setOpen(false);
-                      row.onSelect();
-                    }}
-                    className="flex items-center px-4 text-base font-medium text-fg-2 transition-colors duration-fast hover:text-fg"
-                  >
-                    {row.label}
-                  </PressableRow>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
+  return items;
 }
 
 export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } = {}) {
@@ -395,8 +357,8 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const navigate = useNavigate();
   const newTrace = useNewTrace();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
-  const { toasts, push, dismiss } = useToasts();
   const toast = useOptionalToast();
+  const isLaptop = useIsLaptop();
   const { run: runUndoable } = useUndoableAction();
   const { session } = useSession();
   const viewerId = session?.user.id ?? null;
@@ -465,8 +427,6 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [notFound, setNotFound] = useState(false);
-
-  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // One presign setup for this page, built exactly as the post detail page does:
   // the asset-read endpoint env, the existing access-token source, and the trace
@@ -576,12 +536,12 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     };
   }, [briefId, workspaceId, linkedCount]);
 
-  // Close behind a 4s Undo: the badge flips to Closed at once, Undo puts it
-  // back, and brief_close runs only once the window passes. A failed close
-  // restores Open and says so in plain words.
+  // Close straight away behind the UNDO_MS Undo (PR B: a close comes back
+  // with Reopen, so it asks nothing): the badge flips to Closed at once, Undo
+  // puts it back, and brief_close runs only once the window passes. A failed
+  // close restores Open and says so in plain words.
   function closeWithUndo(): void {
     if (briefId === undefined || detail === null) return;
-    setConfirmingClose(false);
     const before = detail.brief.status;
     const setStatus = (status: string): void =>
       setDetail((prev) => (prev === null ? prev : { ...prev, brief: { ...prev.brief, status } }));
@@ -633,12 +593,18 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   function copyLink(): void {
     if (briefId === undefined || detail === null) return;
     const link = briefCopyLink(window.location.origin, workspaceKey, detail.brief.number, briefId);
-    void copyText(link).then((ok) => push(ok ? 'Link copied' : COPY_FAILED));
+    void copyText(link).then((ok) => {
+      if (ok) toast?.show({ title: 'Link copied' });
+      else toast?.show({ title: COPY_FAILED, tone: 'error' });
+    });
   }
 
   function copyBrief(): void {
     if (detail === null) return;
-    void copyText(briefCopyText(detail.brief)).then((ok) => push(ok ? 'Copied' : COPY_FAILED));
+    void copyText(briefCopyText(detail.brief)).then((ok) => {
+      if (ok) toast?.show({ title: 'Copied' });
+      else toast?.show({ title: COPY_FAILED, tone: 'error' });
+    });
   }
 
   function goBack(): void {
@@ -707,6 +673,14 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
   const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone);
   const showNewPost = canCreatePost && !isApprover && !closed && briefId !== undefined;
+  // The brief's one action, placed as Post detail places its decision: the
+  // right of the header on laptop (useIsLaptop), a bottom bar on phone.
+  const newPostLabel = (
+    <>
+      <IconPlus size={ICON_SIZE.inline} />
+      New post from this brief
+    </>
+  );
   const startPost = (): void => navigate(`/pipeline?new=1&brief=${encodeURIComponent(brief.id)}`);
   const authorLabel = briefAuthorLabel(
     brief.created_by,
@@ -804,24 +778,29 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
             ) : null}
           </span>
         </div>
-        {showNewPost ? (
+        {showNewPost && isLaptop ? (
           <Button
             variant="primary"
             data-new-post-from-brief="top"
-            className="hidden shrink-0 md:inline-flex"
+            className="shrink-0"
             onClick={startPost}
           >
-            New post from this brief
+            {newPostLabel}
           </Button>
         ) : null}
-        <BriefActionsMenu
-          closed={closed}
-          canClose={canClose}
-          onCopyLink={copyLink}
-          onCopyBrief={copyBrief}
-          onCloseBrief={() => setConfirmingClose(true)}
-          onReopenBrief={reopenWithUndo}
-        />
+        <div data-brief-more="" className="shrink-0">
+          <ActionMenu
+            title="Brief actions"
+            items={briefMenuItems({
+              closed,
+              canClose,
+              onCopyLink: copyLink,
+              onCopyBrief: copyBrief,
+              onCloseBrief: closeWithUndo,
+              onReopenBrief: reopenWithUndo,
+            })}
+          />
+        </div>
       </div>
 
       <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -907,15 +886,16 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
         </aside>
       </div>
 
-      {/* Phone: the primary action in a bar pinned above the tab bar (safe-area
-          aware), with room under the content so it never covers the comments.
-          Desktop has it in the top bar instead. */}
-      {showNewPost ? (
+      {/* Phone: the primary action in a bar pinned to the bottom (the shell
+          drops the tab bar on this route; safe-area aware), with room under
+          the content so it never covers the comments. Laptop has it in the
+          top bar instead. */}
+      {showNewPost && !isLaptop ? (
         <>
-          <div aria-hidden="true" data-brief-action-space="" className="h-[76px] md:hidden" />
+          <div aria-hidden="true" data-brief-action-space="" className="h-[76px]" />
           <div
             data-brief-action-bar=""
-            className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 border-t border-border bg-panel px-4 py-3 md:hidden"
+            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
           >
             <Button
               variant="primary"
@@ -923,22 +903,11 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
               className="w-full"
               onClick={startPost}
             >
-              New post from this brief
+              {newPostLabel}
             </Button>
           </div>
         </>
       ) : null}
-
-      {confirmingClose ? (
-        <ConfirmDialog
-          title="Close this brief?"
-          message={CLOSED_BRIEF_LINE}
-          confirmLabel="Close brief"
-          onConfirm={closeWithUndo}
-          onCancel={() => setConfirmingClose(false)}
-        />
-      ) : null}
-      <Toasts toasts={toasts} onDismiss={dismiss} />
     </SearchWordsContext.Provider>
   );
 }

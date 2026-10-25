@@ -20,6 +20,8 @@ function read(rel: string): string {
 }
 
 const PAGE = read('./PostDetailPage.tsx');
+// PR B: the decision flow lives in the one hook Post detail and the chat sheet share.
+const DECISIONS = read('./pcs/use-post-decisions.tsx');
 const DETAILS = read('./pcs/PostDetailsSheet.tsx');
 const SLIDE_ACTIONS = read('./pcs/SlideActionsSheet.tsx');
 const VERSION_HISTORY = read('./pcs/VersionHistorySheet.tsx');
@@ -77,7 +79,7 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
     expect(PAGE).not.toContain('<div className="hidden md:block">{stageSection}</div>');
     expect(PAGE.split('{phoneLayout ? null : stageSection}')).toHaveLength(2);
     expect(PAGE.split('{phoneLayout ? phoneStageNotes : null}')).toHaveLength(2);
-    expect(PAGE).toContain('const phoneLayout = !isDesktop && !embedded;');
+    expect(PAGE).toContain('const phoneLayout = !isLaptop && !embedded;');
   });
 
   it('the phone bar is the pcs PostDecisionBar, only off read-only, with room reserved under the page', () => {
@@ -92,10 +94,10 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
   });
 
   it('FN10: stage buttons stay enabled during the undo window and a pick flushes the pending commit', () => {
-    expect(PAGE).toContain('const decisionBusy = transitioning || notifying;');
-    expect(PAGE).not.toContain('optimisticStage !== null || transitioning');
-    expect(PAGE).toMatch(
-      /function pickStage\(to: Stage\): void \{\s*if \(optimisticStage !== null\) flushUndoable\(\);/,
+    expect(DECISIONS).toContain('busy: transitioning || notifying,');
+    expect(DECISIONS).not.toContain('optimisticStage !== null || transitioning');
+    expect(DECISIONS).toMatch(
+      /function pick\(to: Stage\): void \{[^}]*?if \(optimisticStage !== null\) flushUndoable\(\);/,
     );
   });
 });
@@ -124,27 +126,27 @@ describe('7. FB6 reject / park commit', () => {
   });
 
   it('the commit runs through runStageMoveCommit with the app-wide toast, Open, document and no rethrow', () => {
-    const body = PAGE.slice(
-      PAGE.indexOf('function confirmReasonMove'),
-      PAGE.indexOf('function leave'),
+    const body = DECISIONS.slice(
+      DECISIONS.indexOf('function confirmReasonMove'),
+      DECISIONS.indexOf('async function sendForReviewAgain'),
     );
     expect(body).toContain('return runStageMoveCommit({');
     expect(body).toContain('toast: toastRef.current,');
-    expect(body).toContain('openPost: () => navigate(`/posts/${movedPostId}`),');
+    expect(body).toContain('openPost: () => navigate(`/posts/${id}`),');
     expect(body).toContain('doc: document,');
-    expect(body).toContain(
-      'stillHere: () => mountedRef.current && postIdRef.current === movedPostId,',
-    );
+    expect(body).toContain('stillHere: () => stillHere(id),');
     expect(body).toContain('setInlineError: setActionError,');
     expect(body).toContain('friendlyError: postActionErrorCopy,');
     expect(body).not.toMatch(/\bthrow\b/);
   });
 
   it('mountedRef is declared before useUndoableAction so its cleanup runs before the unmount flush', () => {
-    const mounted = PAGE.indexOf('const mountedRef = useRef(false);');
-    const hook = PAGE.indexOf('useUndoableAction();');
-    expect(mounted).toBeGreaterThan(-1);
-    expect(mounted).toBeLessThan(hook);
+    for (const src of [PAGE, DECISIONS]) {
+      const mounted = src.indexOf('const mountedRef = useRef(false);');
+      const hook = src.indexOf('useUndoableAction();');
+      expect(mounted).toBeGreaterThan(-1);
+      expect(mounted).toBeLessThan(hook);
+    }
   });
 });
 

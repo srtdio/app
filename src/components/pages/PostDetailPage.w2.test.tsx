@@ -30,6 +30,8 @@ function read(rel: string): string {
 }
 
 const PAGE = read('./PostDetailPage.tsx');
+// PR B: the decision flow lives in the one hook Post detail and the chat sheet share.
+const DECISIONS = read('./pcs/use-post-decisions.tsx');
 
 function collect(node: ReactNode, out: ReactElement[]): void {
   if (Array.isArray(node)) {
@@ -101,7 +103,7 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
     )!;
     expect((confirm.props as { variant?: string }).variant).toBe('default');
     // Only the reject confirm passes destructive.
-    expect(PAGE).toMatch(/reasonTarget === 'rejected'[\s\S]{0,200}destructive: true/);
+    expect(DECISIONS).toMatch(/reasonTarget === 'rejected'[\s\S]{0,200}destructive: true/);
   });
 
   it('closed when there is no target', () => {
@@ -117,16 +119,16 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
 
   it('confirm shows the stage now and sends the RPC only in commit, then the reason comment', () => {
     // Reject / park go to the confirm, never straight to the gate.
-    expect(PAGE).toMatch(
-      /if \(stageReasonConfirm\(to\) !== null\) \{[\s\S]*?setReasonTarget\(to\);\s*return;\s*\}\s*approveGate\.request\(post\.id, to\);/,
+    expect(DECISIONS).toMatch(
+      /if \(stageReasonConfirm\(to\) !== null\) \{[\s\S]*?setReasonTarget\(to\);\s*return;\s*\}\s*approveGate\.request\(id, to\);/,
     );
-    const body = PAGE.slice(PAGE.indexOf('function confirmReasonMove'));
+    const body = DECISIONS.slice(DECISIONS.indexOf('function confirmReasonMove'));
     const optimistic = body.indexOf('setOptimisticStage(to);');
     const run = body.indexOf('runUndoable({');
     const commit = body.indexOf('commit: () => {');
     const runner = body.indexOf('return runStageMoveCommit({');
     const rpc = body.indexOf('await stageTransition(supabase');
-    const comment = body.indexOf('postReason: (body) => createAnchoredComment(body, traceId)');
+    const comment = body.indexOf('postReason: (body) => postReason(id, body, traceId)');
     expect(optimistic).toBeGreaterThan(-1);
     expect(optimistic).toBeLessThan(run);
     // The RPC lives only inside commit (X2: through runStageMoveCommit, whose
@@ -136,7 +138,8 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
     expect(rpc).toBeLessThan(comment);
     // Undo restores the old stage locally and sends nothing.
     expect(body).toContain('revert: () => setOptimisticStage(null),');
-    expect(PAGE).toContain('const currentStage = optimisticStage ?? (post.stage as Stage);');
+    expect(DECISIONS).toContain('const stage = optimisticStage ?? input.stage;');
+    expect(PAGE).toContain('const currentStage = decisions.stage ?? (post.stage as Stage);');
   });
 });
 

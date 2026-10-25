@@ -3,15 +3,8 @@ import { appPresignCache } from '@/lib/shared-presign';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import {
-  ApproveConfirm,
-  APPROVE_CONFIRM_TITLE,
-  approveTargetDate,
-} from '@/components/ui/ApproveConfirm';
-import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
-import { useWorkspaceApprovers } from '@/components/pages/pcs/use-approvers';
+import { approveTargetDate } from '@/components/ui/ApproveConfirm';
 import { briefRoute } from '@/lib/chat/briefs';
-import { Sheet } from '@/components/ui/Sheet';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -30,22 +23,18 @@ import { flashNode } from '@/components/comments/flash-node';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
 import { cn } from '@/lib/cn';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   ICON_SIZE,
   IconCalendar,
   IconChat,
-  IconCheck,
   IconChevronDown,
   IconChevronLeft,
   IconCopy,
   IconEdit,
   IconLock,
-  IconMore,
-  IconPause,
   IconPipeline,
-  IconX,
 } from '@/components/ui/icons';
 import { PlatformPreviewPanel, PreviewChip } from '@/components/preview/PlatformPreviewPanel';
 import { galleryFrame, PostGallery } from '@/components/pages/pcs/PostGallery';
@@ -60,7 +49,6 @@ import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
 import { buildPinData } from '@/components/pages/pcs/pin-annotations';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
 import { CheckpointStrip } from '@/components/pages/pcs/CheckpointStrip';
-import { runPostReadyNotify } from '@/components/pages/pcs/PostReadyNotice';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
 import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
 import {
@@ -76,23 +64,12 @@ import {
 } from '@/lib/post-versions';
 import { usePostMembers } from '@/components/pages/pcs/use-post-members';
 import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/roles';
-import {
-  stageReasonComment,
-  stageReasonConfirm,
-  visibleStageActions,
-  type StageReasonConfirmCopy,
-} from '@/components/pages/pcs/stage-actions';
-import {
-  useApproveGate,
-  type ApproveGate,
-  type GateState,
-} from '@/components/pages/pipeline/approve-gate';
-import { PostActionSheet, type PostMoveRow } from '@/components/pages/pcs/PostActionSheet';
+import { PostActionSheet } from '@/components/pages/pcs/PostActionSheet';
+import { postActionErrorCopy, usePostDecisions } from '@/components/pages/pcs/use-post-decisions';
 import {
   append,
   galleryWriteErrorCopy,
   insertAfter,
-  POST_APPROVED_LOCKED,
   removeAt,
   replaceAt,
 } from '@/components/pages/pcs/gallery-transforms';
@@ -104,10 +81,8 @@ import {
   decisionBarSpace,
   PostDecisionBar,
   PostDecisionRow,
-  SEND_AGAIN_LABEL,
-  type DecisionModel,
 } from '@/components/pages/pcs/PostDecisionBar';
-import { runStageMoveCommit, showWhenVisible } from '@/components/pages/pcs/stage-move-commit';
+import { showWhenVisible } from '@/components/pages/pcs/stage-move-commit';
 import {
   CAPTION_TIP_TEXT,
   captionTipDismissed,
@@ -134,16 +109,13 @@ import {
   gallerySet,
   postCaptionUpdate,
   postUpdate,
-  stageTransition as stageMove,
 } from '@srtdio/posts';
 import type { GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
-import { friendlyTransitionError } from '@/lib/post-transition-errors';
 import { errorText } from '@/lib/error-copy';
 import { createComment } from '@srtdio/comments';
 import { getBrief } from '@srtdio/briefs';
 import type { Json } from '@srtdio/schemas';
-import { postSoftDelete, stageTransition } from '@srtdio/rpc';
-import type { DomainError } from '@srtdio/rpc';
+import { postSoftDelete } from '@srtdio/rpc';
 
 /** Where an upload run lands in the gallery (#26 adds Replace). */
 type AddTarget =
@@ -151,88 +123,26 @@ type AddTarget =
   | { mode: 'insertAfter'; index: number }
   | { mode: 'replace'; index: number };
 
-// A refused RPC carries a DomainError ({ code, message }); a thrown transport
-// error does not, and reads as the unknown line.
-function isDomainError(error: unknown): error is DomainError {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    typeof (error as { code?: unknown }).code === 'string' &&
-    typeof (error as { message?: unknown }).message === 'string'
-  );
-}
-
-/**
- * Flow B 37 / 41: a failed stage move or edit on this page in plain words,
- * "Couldn't {action}. {reason}". The approved lock and the stage proc's known
- * refusals get their own reason; anything else (a thrown transport error
- * included) the retry line. Never the raw text. Pure.
- */
-export function postActionErrorCopy(error: unknown, action = 'move the post'): string {
-  if (isDomainError(error) && !error.message.includes(POST_APPROVED_LOCKED)) {
-    if (
-      error.code === 'forbidden_role' ||
-      error.code === 'invalid_stage_transition' ||
-      error.code === 'workspace_member_only'
-    ) {
-      return friendlyTransitionError(error, action);
-    }
-  }
-  return errorText(action, error);
-}
-
-/** The action a failed "Send for review again" names. */
-const SEND_AGAIN_ACTION = 'send the post for review';
-
-/**
- * Flow B 33 / 41: a failed "Send for review again" (post_ready_notify) in plain
- * words, from the proc's raised message. Pure.
- */
-export function sendAgainErrorCopy(message: string | null): string {
-  if (message === 'invalid_stage') {
-    return `Couldn't ${SEND_AGAIN_ACTION}. Someone else changed it. Refresh to see the latest.`;
-  }
-  return errorText(SEND_AGAIN_ACTION, message);
-}
-
-/** Flow B 33: the toast after a landed "Send for review again". */
-export const SENT_AGAIN_TOAST = 'Sent for review again';
-
-/**
- * Flow B 31: the creator's on-behalf approve row in the ⋯ sheet. Always
- * "Approve on their behalf", whatever the workspace is called.
- */
-export const APPROVE_ON_BEHALF_LABEL = 'Approve on their behalf';
-
-/**
- * Flow B 33: the confirm before "Send for review again" while comments are
- * still open. Open comments never block the send; they only ask first.
- */
-export function sendAnywayTitle(openCount: number): string {
-  return openCount === 1
-    ? '1 comment is still open. Send anyway?'
-    : `${openCount} comments are still open. Send anyway?`;
-}
-export const SEND_ANYWAY_LABEL = 'Send anyway';
-
-/**
- * Flow B 40 / spec B6: the reject confirm's reason field label. The "optional,
- * goes to the comments" idea is said once, here; the body and the menu row
- * no longer repeat it.
- */
-export const REJECT_REASON_LABEL = 'Reason (optional)';
-export function rejectConfirmBody(creatorName: string | null): string {
-  const first = creatorName?.trim().split(/\s+/)[0] ?? '';
-  return `${first !== '' ? first : 'The creator'} gets it back to rework.`;
-}
+// The decision copy and confirms moved to pcs/use-post-decisions (one hook for
+// Post detail and the chat post sheet); re-exported for the page's callers.
+export {
+  APPROVE_ON_BEHALF_LABEL,
+  CLIENT_REVIEW_NOTE,
+  PcsApproveConfirm,
+  REJECT_REASON_LABEL,
+  SEND_ANYWAY_LABEL,
+  SENT_AGAIN_TOAST,
+  StageReasonConfirm,
+  postActionErrorCopy,
+  rejectConfirmBody,
+  sendAgainErrorCopy,
+  sendAnywayTitle,
+} from '@/components/pages/pcs/use-post-decisions';
 
 /** Spec B4: the approved banner beside the lock. */
 export const APPROVED_LOCK_LINE = 'To make changes, move it to Parked.';
 /** Spec B4: the banner's button (agency roles only). */
 export const MOVE_TO_PARKED_LABEL = 'Move to Parked';
-
-/** Spec B5: the approver's line above Approve / Reject while in review. */
-export const CLIENT_REVIEW_NOTE = 'Review and approve one post at a time.';
 
 /** Spec B2: the header line's brief part, "From brief: {title}". */
 export function fromBriefLabel(briefTitle: string): string {
@@ -325,116 +235,6 @@ export function postPageGrid(embedded: boolean): {
   };
 }
 
-/**
- * The approve confirm (decision 22, spec C1): the shared Sheet (translateY
- * axis) titled "Approve this post?", one line "{n} slides · due {date}" (each
- * part only when known; never the post title), then Back / Approve. The
- * confirm sits in the body, not the footer, so no empty band shows above it.
- * Open while the approve waits on a confirm or is in flight; a failure keeps
- * it open with the error and Approve re-armed. Back, the close button, the
- * backdrop and Escape send nothing. Hookless, so it is unit tested by walking
- * the tree.
- */
-export function PcsApproveConfirm(props: {
-  gate: ApproveGate;
-  gateState: GateState;
-  /** Slides in the loaded gallery; null leaves the clause out. */
-  mediaCount: number | null;
-  /** The due day ("20 Jul"), or '' to leave it out. */
-  targetDate: string;
-  busy: boolean;
-  error: string | null;
-}) {
-  const { gate, gateState } = props;
-  return (
-    <Sheet open={gateState.pendingId !== null} onClose={gate.cancel} title={APPROVE_CONFIRM_TITLE}>
-      <ApproveConfirm
-        mode="summary"
-        postTitle={null}
-        mediaCount={props.mediaCount}
-        targetDate={props.targetDate}
-        error={props.error}
-        busy={props.busy || gateState.sent}
-        onBack={gate.cancel}
-        onConfirm={gate.confirm}
-        induction={INDUCTION_KEYS.postApproveConfirm}
-      />
-    </Sheet>
-  );
-}
-
-/**
- * The reject / park confirm (W2): the shared Sheet with an optional reason that
- * goes to the comments, Cancel and the destructive Reject / Park. Confirm hands
- * off to the page, which shows the new stage at once behind an Undo toast and
- * only sends the move when the window ends. Hookless, so it is unit tested by
- * walking the tree.
- */
-export function StageReasonConfirm(props: {
-  copy: StageReasonConfirmCopy | null;
-  reason: string;
-  onReasonChange: (reason: string) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-  /** Flow B 40: the line under the title (reject: who gets it back), or none. */
-  body?: string | null;
-  /** The reason field's label; the shared park / reject label when absent. */
-  label?: string;
-  /** A quiet line under the field (reject: "Goes to the comments."), or none. */
-  helper?: string | null;
-  /** Reject is red; Park uses the default button. */
-  destructive?: boolean;
-}) {
-  const { copy } = props;
-  const label = props.label ?? REJECT_REASON_LABEL;
-  const body = props.body ?? null;
-  const helper = props.helper ?? null;
-  return (
-    <Sheet
-      open={copy !== null}
-      onClose={props.onCancel}
-      title={copy?.title ?? ''}
-      // FT12: a typed reason is unsaved input: Esc, X, the backdrop and system
-      // Back all ask before dropping it.
-      dirty={props.reason.trim() !== ''}
-      discard={{ title: 'Discard your reason?', message: 'Your reason will be lost.' }}
-      footer={
-        <>
-          <Button className="ml-auto" onClick={props.onCancel}>
-            Cancel
-          </Button>
-          <Button
-            variant={props.destructive === true ? 'danger' : 'default'}
-            data-stage-confirm=""
-            onClick={props.onConfirm}
-          >
-            {copy?.confirmLabel ?? ''}
-          </Button>
-        </>
-      }
-    >
-      {body !== null ? (
-        <p data-stage-confirm-body="" className="mb-3 text-base text-fg-2">
-          {body}
-        </p>
-      ) : null}
-      <label className="flex flex-col gap-2">
-        <span className="text-base text-fg-2">{label}</span>
-        <Textarea
-          aria-label={label}
-          value={props.reason}
-          onChange={(event) => props.onReasonChange(event.target.value)}
-        />
-        {helper !== null ? (
-          <span data-stage-confirm-helper="" className="text-sm text-fg-3">
-            {helper}
-          </span>
-        ) : null}
-      </label>
-    </Sheet>
-  );
-}
-
 /** The caption Save label: the version this save creates, or plain Save before any version. */
 export function captionSaveLabel(currentVersionNumber: number | null): string {
   return currentVersionNumber === null ? 'Save' : `Save as v${currentVersionNumber + 1}`;
@@ -516,11 +316,9 @@ export function PostDetailPage({
     setSearchParams(next, { replace: true });
   }, [embedded, searchParams, setSearchParams]);
 
-  // The sticky phone decision bar shows below md; md and up keep the stage
-  // card inline (the laptop two-column layout itself switches at lg).
-  const isDesktop = useMediaQuery('(min-width: 768px)');
-  // Spec D2: at lg the stage action sits in the header bar beside the ⋮.
-  const isWide = useMediaQuery('(min-width: 1024px)');
+  // PR B: phone pins the decision row to the bottom; laptop (useIsLaptop, the
+  // one switch) puts it at the right of the header, beside the ⋯.
+  const isLaptop = useIsLaptop();
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
@@ -539,28 +337,6 @@ export function PostDetailPage({
   // The one-time caption tip (dismissed per user in localStorage).
   const [captionTipOpen, setCaptionTipOpen] = useState(false);
 
-  const [transitioning, setTransitioning] = useState(false);
-  // Flow B 41: a failed move shows once, where it was tapped. actionError
-  // belongs to the decision row / bar (and the reject / park commit); a failed
-  // approve shows only inside the approve confirm (approveError).
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [approveError, setApproveError] = useState<string | null>(null);
-  // Flow B 33: "Send for review again" (post_ready_notify) in flight.
-  const [notifying, setNotifying] = useState(false);
-  // Flow B 33: the "{n} comments are still open. Send anyway?" confirm.
-  const [confirmSendAnyway, setConfirmSendAnyway] = useState(false);
-  // Spec D: the agency's "Approve on their behalf" sheet, its in-flight flag
-  // and its one error line (shown inside the sheet only).
-  const [onBehalfOpen, setOnBehalfOpen] = useState(false);
-  const [onBehalfBusy, setOnBehalfBusy] = useState(false);
-  const [onBehalfError, setOnBehalfError] = useState<string | null>(null);
-
-  // Reject / park (W2): the confirm's target and reason, then the stage shown
-  // optimistically while the Undo window runs. The move is sent only when the
-  // window ends; Undo clears the optimistic stage and sends nothing.
-  const [reasonTarget, setReasonTarget] = useState<Stage | null>(null);
-  const [reasonDraft, setReasonDraft] = useState('');
-  const [optimisticStage, setOptimisticStage] = useState<Stage | null>(null);
   // True while mounted. Declared BEFORE useUndoableAction so this cleanup runs
   // before the hook's unmount flush: a commit that starts during unmount sees
   // the page as gone (no state writes, no navigation from a leaving page).
@@ -587,6 +363,14 @@ export function PostDetailPage({
   const pushError = useCallback((message: string): void => {
     toastRef.current?.show({ title: message, tone: 'error' });
   }, []);
+  // For children that report a tone with the message (the ⋯ menu, uploads).
+  const toastWithTone = useCallback(
+    (message: string, tone?: 'error'): void => {
+      if (tone === 'error') pushError(message);
+      else push(message);
+    },
+    [push, pushError],
+  );
 
   // Caption annotation state: the pending selection drives the composer, and a
   // bump of commentsRefresh re-fetches the comments list after a post.
@@ -646,8 +430,6 @@ export function PostDetailPage({
   // Only a list that loaded proves someone is not a current member: until then a
   // person not in it renders nothing extra, never "Former member".
   const membersLoaded = !membersLoading && membersError === null;
-  // The workspace's approvers, for the on-behalf approve sheet's picker.
-  const approvers = useWorkspaceApprovers(workspaceId);
 
   const [showDetails, setShowDetails] = useState(false);
   // Spec A4: the slide on show, so the header ⋮ can remove it (the ⋮ circle
@@ -737,17 +519,9 @@ export function PostDetailPage({
     // A stale open count never bleeds across posts; Comments re-lifts the
     // real counts once its fetch for the new post lands.
     setCommentCounts({ open: 0, resolved: 0 });
-    setActionError(null);
-    setApproveError(null);
-    setNotifying(false);
-    setOnBehalfOpen(false);
-    setOnBehalfBusy(false);
-    setOnBehalfError(null);
-    // A pending reject / park commits for its own post (flush); the next post
-    // never shows that optimistic stage.
+    // A pending delete or image removal commits for its own post (flush). The
+    // decisions hook resets its own state per post.
     flushUndoable();
-    setOptimisticStage(null);
-    setReasonTarget(null);
     setCommentDrafts({});
   }, [postId, flushUndoable]);
 
@@ -1018,6 +792,39 @@ export function PostDetailPage({
     if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);
   }, [actionsOpenProp, sheetMountable, onActionsOpenChange]);
 
+  // The workspace zone: target_date is a due date, a calendar day on the
+  // workspace zone (the details sheet's date input round-trips on it too).
+  // Moments (status line, comments) read the viewer's device clock.
+  const approveTimeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
+
+  // PR B: every decision (the row, the creator's ⋯ moves, the confirms) comes
+  // from the one hook the chat post sheet also calls, so the two never differ.
+  const ownerForDecisions =
+    detail === null
+      ? null
+      : resolveOwner(detail.post.owner_user_id, detail.post.legacy_author_name);
+  const decisions = usePostDecisions({
+    postId,
+    stage: detail === null ? null : (detail.post.stage as Stage),
+    role,
+    enabled: !readOnly,
+    workspaceId,
+    brand: workspaceName ?? null,
+    postTitle: detail?.post.title ?? '',
+    creatorName:
+      detail !== null &&
+      ownerForDecisions !== null &&
+      ownerForDecisions.name !== '' &&
+      !(detail.post.owner_user_id === null && detail.post.legacy_author_name === null)
+        ? ownerForDecisions.name
+        : null,
+    mediaCount: gallery.length > 0 ? gallery.length : null,
+    approveDay: detail === null ? '' : approveTargetDate(detail.post.target_date, approveTimeZone),
+    openCount,
+    reload: () => load(true),
+    onCommentsChanged: () => setCommentsRefresh((n) => n + 1),
+  });
+
   // Resolve a version's createdBy to a display name via the same members read PCS
   // already uses; a null author or one who is no longer a current member reads
   // "Former member", never a raw uuid.
@@ -1273,138 +1080,6 @@ export function PostDetailPage({
     dispatchInductionRefresh();
   }
 
-  /**
-   * Resolves true once the move landed, false on a failure. Flow B 41: the
-   * error shows once, where it was tapped: a failed approve inside the approve
-   * confirm, any other move in the decision row / bar.
-   */
-  async function handleTransition(to: Stage): Promise<boolean> {
-    if (postId === undefined) return false;
-    setTransitioning(true);
-    setActionError(null);
-    setApproveError(null);
-    const result = await stageTransition(supabase, {
-      p_post_id: postId,
-      p_to_stage: to,
-      p_trace_id: newTrace(),
-    });
-    if (!result.ok) {
-      setTransitioning(false);
-      const message = postActionErrorCopy(
-        result.error,
-        to === 'approved' ? 'approve the post' : 'move the post',
-      );
-      if (to === 'approved') setApproveError(message);
-      else setActionError(message);
-      return false;
-    }
-    // Re-fetch so the stage badge and the set of available buttons update.
-    await load(true);
-    setTransitioning(false);
-    dispatchInductionRefresh();
-    return true;
-  }
-
-  // Approve asks first; every other target moves at once through the same
-  // handleTransition. A landed approve closes the confirm; a failed one keeps it
-  // open with the error and re-arms Confirm.
-  const { gate: approveGate, state: approveState } = useApproveGate((_postId, to) => {
-    void handleTransition(to).then((ok) => {
-      if (to !== 'approved') return;
-      if (ok) approveGate.cancel();
-      else approveGate.settle();
-    });
-  });
-
-  // Spec D: the agency approves on a named approver's behalf. The actor stays
-  // auth.uid() server-side; onBehalfOf only names whom it was for. A landed
-  // approve closes the sheet; a failure keeps it open with the error once.
-  async function confirmOnBehalf(onBehalfOf: string | undefined): Promise<void> {
-    if (postId === undefined || onBehalfBusy) return;
-    const approvedFor = postId;
-    setOnBehalfBusy(true);
-    setOnBehalfError(null);
-    setActionError(null);
-    const result = await stageMove(supabase, {
-      postId: approvedFor,
-      toStage: 'approved',
-      traceId: newTrace(),
-      ...(onBehalfOf !== undefined ? { onBehalfOf } : {}),
-    }).catch((error: unknown) => ({ ok: false as const, error }));
-    if (!mountedRef.current || postIdRef.current !== approvedFor) return;
-    if (!result.ok) {
-      setOnBehalfBusy(false);
-      setOnBehalfError(postActionErrorCopy(result.error, 'approve the post'));
-      return;
-    }
-    await load(true);
-    setOnBehalfBusy(false);
-    setOnBehalfOpen(false);
-    dispatchInductionRefresh();
-  }
-
-  // Reject / park confirmed: show the new stage now, commit after the Undo
-  // window. Commit is the existing stage RPC, then (when a reason was typed)
-  // the reason as a comment through the same create path as every comment. A
-  // failed move puts the old stage back with the friendly error; a failed
-  // reason comment leaves the move in place and says so.
-  //
-  // FB6: the commit may land after this page is gone (the undo hook flushes on
-  // unmount, hidden and pagehide), so it runs through runStageMoveCommit: a
-  // refusal or a thrown error reverts and shows the inline error while still
-  // here, and ALWAYS shows the app-wide toast ("Couldn't reject {title}. It's
-  // still in review." with Open), held while the document is hidden. It never
-  // rethrows, so the hook's own failure toast never doubles it.
-  function confirmReasonMove(): void {
-    const to = reasonTarget;
-    const copy = to === null ? null : stageReasonConfirm(to);
-    if (to === null || copy === null || postId === undefined || detail === null) return;
-    const movedPostId = postId;
-    const fromStage = detail.post.stage as Stage;
-    const postTitle = detail.post.title;
-    const reason = stageReasonComment(reasonDraft);
-    setReasonTarget(null);
-    setReasonDraft('');
-    setActionError(null);
-    setOptimisticStage(to);
-    runUndoable({
-      label: copy.undoLabel,
-      revert: () => setOptimisticStage(null),
-      commit: () => {
-        const traceId = newTrace();
-        return runStageMoveCommit({
-          to,
-          fromStage,
-          postTitle,
-          reason,
-          transition: async () => {
-            const result = await stageTransition(supabase, {
-              p_post_id: movedPostId,
-              p_to_stage: to,
-              p_trace_id: traceId,
-            });
-            return result.ok ? { ok: true } : { ok: false, error: result.error };
-          },
-          postReason: (body) => createAnchoredComment(body, traceId),
-          stillHere: () => mountedRef.current && postIdRef.current === movedPostId,
-          revert: () => setOptimisticStage(null),
-          setInlineError: setActionError,
-          friendlyError: postActionErrorCopy,
-          afterSuccess: async () => {
-            await load(true);
-            setOptimisticStage(null);
-            setCommentsRefresh((n) => n + 1);
-            dispatchInductionRefresh();
-          },
-          toast: toastRef.current,
-          openPost: () => navigate(`/posts/${movedPostId}`),
-          doc: document,
-          log: (message, data) => logger.warn(message, data),
-        });
-      },
-    });
-  }
-
   // Leaving the post (FT13): the host's own close when embedded; else one step
   // back when there is in-app history to return to, else the pipeline.
   function leave(): void {
@@ -1588,7 +1263,26 @@ export function PostDetailPage({
     // Removing the last image is allowed now: gallery_set accepts an empty list,
     // the post keeps its review stage, and the surface falls back to the empty
     // state. The stage is never touched here.
-    void commitGallery(removeAt(orderedIds, index));
+    // PR B delete rule: the image goes at once behind the UNDO_MS Undo strip
+    // ("Image removed"), no confirm; the file stays in Assets and the old
+    // version keeps it. The one gallery write runs when the window ends; a
+    // refused write shows its inline line and reloads the gallery.
+    if (gallerySavingRef.current) return;
+    const before = gallery;
+    const ids = removeAt(orderedIds, index);
+    const removedFor = postId;
+    const stillHere = (): boolean => mountedRef.current && postIdRef.current === removedFor;
+    setGallery(before.filter((_, i) => i !== index));
+    runUndoable({
+      label: 'Image removed',
+      revert: () => {
+        if (stillHere()) setGallery(before);
+      },
+      commit: async () => {
+        const ok = await commitGallery(ids);
+        if (!ok && stillHere()) await reloadGallery();
+      },
+    });
   }
   function openAdd(target: AddTarget): void {
     uploadedVersionIds.current = [];
@@ -1745,7 +1439,7 @@ export function PostDetailPage({
   }
 
   const post = detail.post;
-  const currentStage = optimisticStage ?? (post.stage as Stage);
+  const currentStage = decisions.stage ?? (post.stage as Stage);
   // #35: version pictures (sheet rows, old-version view), platform-shaped.
   const versionThumbs: VersionThumbs = {
     gallery,
@@ -1753,77 +1447,11 @@ export function PostDetailPage({
     presignEnabled,
     ratio: galleryFrame(post.platform, post.format, gallery, {})?.ratio ?? 4 / 5,
   };
-  const stageActions = visibleStageActions(currentStage, role);
   const ownerInfo = resolveOwner(post.owner_user_id, post.legacy_author_name);
   const hasCaption = post.caption !== null && post.caption.trim() !== '';
   const composerKey = composer !== null ? captionDraftKey(composer.start, composer.end) : null;
   const pinKey =
     pinComposer !== null ? pinDraftKey(pinComposer.index, pinComposer.x, pinComposer.y) : null;
-
-  // A stage pick. Any pick clears the last error (flow B 41: one error, where
-  // it was tapped). FN10: while a reject / park Undo window runs the buttons
-  // stay enabled, and a pick flushes that pending commit first.
-  function pickStage(to: Stage): void {
-    if (optimisticStage !== null) flushUndoable();
-    setActionError(null);
-    setApproveError(null);
-    if (stageReasonConfirm(to) !== null) {
-      setReasonDraft('');
-      setReasonTarget(to);
-      return;
-    }
-    approveGate.request(post.id, to);
-  }
-
-  // Spec D: the ⋯ sheet's "Approve on their behalf" opens the on-behalf sheet.
-  function openOnBehalf(): void {
-    if (optimisticStage !== null) flushUndoable();
-    setActionError(null);
-    setOnBehalfError(null);
-    setOnBehalfOpen(true);
-  }
-
-  // Flow B 33: the creator's "Send for review again" tells the approvers
-  // through the existing post_ready_notify wrapper. A refusal shows once, in
-  // plain words, in the decision row / bar that was tapped. With comments still
-  // open the tap asks first ("Send anyway?"); with none it sends straight away.
-  function requestSendForReviewAgain(): void {
-    if (notifying) return;
-    if (openCount > 0) {
-      setActionError(null);
-      setConfirmSendAnyway(true);
-      return;
-    }
-    void sendForReviewAgain();
-  }
-
-  async function sendForReviewAgain(): Promise<void> {
-    if (postId === undefined || notifying) return;
-    const sentFor = postId;
-    setActionError(null);
-    setNotifying(true);
-    const result = await runPostReadyNotify(supabase, {
-      postId: sentFor,
-      traceId: newTrace(),
-    }).catch(() => null);
-    if (!mountedRef.current || postIdRef.current !== sentFor) return;
-    setNotifying(false);
-    if (result === null || !result.ok) {
-      logger.warn('post page: send for review again failed', {
-        error: result === null ? 'thrown' : result.error.message,
-      });
-      setActionError(sendAgainErrorCopy(result === null ? null : result.error.message));
-      return;
-    }
-    push(SENT_AGAIN_TOAST);
-    setCommentsRefresh((n) => n + 1);
-    dispatchInductionRefresh();
-  }
-
-  // The workspace zone: target_date is a due date, a calendar day on the
-  // workspace zone (the details sheet's date input round-trips on it too).
-  // Moments (status line, comments) read the viewer's device clock.
-  const approveTimeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
   // Spec A1: one meta line under the title. Owner · "Due 20 Jul" · "From
   // brief: {title}" (a link), each only when it has a value; one line that
@@ -1933,90 +1561,21 @@ export function PostDetailPage({
       </Button>
     ) : null;
 
-  // The approver's quiet note in review, or null.
-  const stageHelper = currentStage === 'review' && clientRole ? CLIENT_REVIEW_NOTE : null;
-
-  // Flow B 30 / 33: the decision row's model. Approvers: Comment (review),
-  // Reject, Approve. Creators: one main button; in review it is "Send for
-  // review again", disabled only while the send is in flight (open comments
-  // ask first, they never block). Their other moves sit
-  // in the ⋯ sheet (moveRows below).
-  const reviewMove = stageActions.find((action) => action.to === 'review') ?? null;
-  const decisionModel: DecisionModel | null = readOnly
-    ? null
-    : clientRole
-      ? stageActions.length > 0 || currentStage === 'review'
-        ? {
-            kind: 'approver',
-            actions: stageActions,
-            onPick: pickStage,
-          }
-        : null
-      : agencySide && currentStage === 'review'
-        ? {
-            kind: 'creator',
-            label: SEND_AGAIN_LABEL,
-            disabled: notifying,
-            helper: null,
-            onPress: requestSendForReviewAgain,
-          }
-        : agencySide && reviewMove !== null
-          ? {
-              kind: 'creator',
-              label: reviewMove.label,
-              disabled: false,
-              helper: null,
-              onPress: () => pickStage('review'),
-            }
-          : null;
-  const decisionBusy = transitioning || notifying;
-
-  // Flow B 31: the creator's other moves, as rows in the ⋯ sheet. "Approve on
-  // their behalf" opens the existing on-behalf approve confirm; Park and Reject open
-  // their reason confirms.
-  const moveRows: PostMoveRow[] =
-    agencySide && !readOnly
-      ? stageActions
-          .filter((action) => action.to !== 'review')
-          .map((action): PostMoveRow => {
-            if (action.to === 'approved') {
-              return {
-                key: 'approved',
-                icon: <IconCheck size={ICON_SIZE.nav} />,
-                label: APPROVE_ON_BEHALF_LABEL,
-                onPick: openOnBehalf,
-              };
-            }
-            if (action.to === 'rejected') {
-              return {
-                key: 'rejected',
-                icon: <IconX size={ICON_SIZE.nav} />,
-                label: action.label,
-                danger: true,
-                onPick: () => pickStage('rejected'),
-              };
-            }
-            return {
-              key: action.to,
-              icon: <IconPause size={ICON_SIZE.nav} />,
-              label: action.label,
-              sub: 'Keeps it aside. You can send it for review later.',
-              onPick: () => pickStage(action.to),
-            };
-          })
-      : [];
-
-  // The decision row, rendered ONCE per breakpoint. md and up (and embedded):
-  // inline in the decision slot (laptop: the right column, above the caption).
-  // Phone: the same row in the sticky decision bar (T12 / FN8), and only the
-  // approver's note stays inline, under the caption. A failed tap's error
-  // shows inside whichever row is on screen, so role=alert never duplicates.
-  const phoneLayout = !isDesktop && !embedded;
+  // The decision row, rendered ONCE per breakpoint (usePostDecisions builds
+  // it, the same as the chat post sheet). Laptop: the buttons at the right of
+  // the header, beside the ⋯; the approver's note and a failed tap's error stay
+  // in the content's decision slot. Phone: the same row in the bottom bar
+  // (T12 / FN8), and only the note stays inline, under the caption. Embedded
+  // (a plan item): the whole row inline. A failed tap's error shows inside
+  // whichever row is on screen, so role=alert never duplicates.
+  const stageHelper = decisions.note;
+  const decisionModel = decisions.model;
+  const decisionBusy = decisions.busy;
+  const actionError = decisions.error;
+  const phoneLayout = !isLaptop && !embedded;
   // Flow B 27: the stage shows once, in the top bar; with no moves to offer
   // (and nothing to say) nothing is rendered.
-  // Spec D2: at lg (not embedded) the buttons move to the header bar beside
-  // the ⋮; the note and a failed tap's error stay in the content.
-  const headerDecision = isWide && !embedded && !readOnly;
+  const headerDecision = isLaptop && !embedded && !readOnly;
   const stageSection = readOnly ? null : (
     <PostDecisionRow
       model={headerDecision ? null : decisionModel}
@@ -2045,7 +1604,7 @@ export function PostDetailPage({
   // Spec B4: beside the lock, how to change it, and (agency roles, when the
   // move is legal) "Move to Parked", which opens the existing park confirm.
   // Who approved is not repeated here (the top bar already says Approved).
-  const canParkApproved = agencySide && stageActions.some((action) => action.to === 'parked');
+  const canParkApproved = decisions.moveRows.some((row) => row.key === 'parked');
   const approvedBanner =
     approvedLocked && !readOnly ? (
       <div
@@ -2057,12 +1616,49 @@ export function PostDetailPage({
         </span>
         <p className="min-w-0 flex-1 py-2">{APPROVED_LOCK_LINE}</p>
         {canParkApproved ? (
-          <Button data-approved-park="" className="shrink-0" onClick={() => pickStage('parked')}>
+          <Button
+            data-approved-park=""
+            className="shrink-0"
+            onClick={() => decisions.pick('parked')}
+          >
             {MOVE_TO_PARKED_LABEL}
           </Button>
         ) : null}
       </div>
     ) : null;
+
+  // The post ⋯ menu (ui/ActionMenu): its default trigger at the top right of
+  // the header, or, embedded, opened by the host's own header button. Live
+  // PCS only, never an old version or a compare.
+  const actionMenu = readOnly ? null : (
+    <PostActionSheet
+      open={actionsOpen}
+      onOpenChange={setActionsOpen}
+      {...(embedded ? { trigger: null } : {})}
+      postId={post.id}
+      workspaceId={workspaceId ?? ''}
+      currentUserId={userId ?? ''}
+      gallery={gallery}
+      deps={deps}
+      workspaceKey={workspaceKey}
+      postNumber={post.number}
+      onToast={toastWithTone}
+      canDelete={canDelete}
+      onDeletePost={handleDeletePost}
+      moveRows={decisions.moveRows}
+      removeImage={
+        canEditContent && gallery.length > 0
+          ? {
+              index: Math.min(galleryIndex, gallery.length - 1),
+              count: gallery.length,
+              saving: gallerySaving,
+              onRemove: () => handleRemove(Math.min(galleryIndex, gallery.length - 1)),
+            }
+          : undefined
+      }
+      {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
+    />
+  );
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
@@ -2079,15 +1675,10 @@ export function PostDetailPage({
             </span>
           </div>
           {headerStageAction}
-          {!readOnly ? (
-            <IconButton
-              type="button"
-              label="Post actions"
-              onClick={() => setActionsOpen(true)}
-              className="shrink-0 text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <IconMore size={ICON_SIZE.control} />
-            </IconButton>
+          {actionMenu !== null ? (
+            <div data-header-more="" className="shrink-0">
+              {actionMenu}
+            </div>
           ) : (
             <div className="h-11 w-11 shrink-0" />
           )}
@@ -2537,32 +2128,7 @@ export function PostDetailPage({
         onSubmit={submitPinAnnotation}
       />
 
-      <StageReasonConfirm
-        copy={reasonTarget !== null ? stageReasonConfirm(reasonTarget) : null}
-        reason={reasonDraft}
-        onReasonChange={setReasonDraft}
-        onCancel={() => setReasonTarget(null)}
-        onConfirm={confirmReasonMove}
-        {...(reasonTarget === 'rejected'
-          ? {
-              body: rejectConfirmBody(ownerKnown ? ownerInfo.name : null),
-              destructive: true,
-            }
-          : {})}
-      />
-
-      {confirmSendAnyway ? (
-        <ConfirmDialog
-          title={sendAnywayTitle(openCount)}
-          confirmLabel={SEND_ANYWAY_LABEL}
-          cancelLabel="Cancel"
-          onConfirm={() => {
-            setConfirmSendAnyway(false);
-            void sendForReviewAgain();
-          }}
-          onCancel={() => setConfirmSendAnyway(false)}
-        />
-      ) : null}
+      {decisions.confirms}
 
       {confirmCaptionDiscard ? (
         <ConfirmDialog
@@ -2632,29 +2198,6 @@ export function PostDetailPage({
         presignEnabled={presignEnabled}
       />
 
-      <PcsApproveConfirm
-        gate={approveGate}
-        gateState={approveState}
-        mediaCount={gallery.length > 0 ? gallery.length : null}
-        targetDate={approveTargetDate(post.target_date, approveTimeZone)}
-        busy={transitioning}
-        error={approveError}
-      />
-
-      <OnBehalfApproveSheet
-        open={onBehalfOpen}
-        approvers={approvers}
-        brand={workspaceName ?? null}
-        busy={onBehalfBusy}
-        error={onBehalfError}
-        onCancel={() => {
-          if (onBehalfBusy) return;
-          setOnBehalfOpen(false);
-          setOnBehalfError(null);
-        }}
-        onConfirm={(onBehalfOf) => void confirmOnBehalf(onBehalfOf)}
-      />
-
       <SlideActionsSheet
         open={slideIndex !== null && canEditContent}
         onClose={() => setSlideIndex(null)}
@@ -2678,7 +2221,7 @@ export function PostDetailPage({
         onSubmit={
           uploadEndpoint !== undefined && uploadEndpoint !== '' ? handleUploadFile : undefined
         }
-        onToast={push}
+        onToast={toastWithTone}
         onUploaded={() => void handleUploaded()}
         siblingLabels={rootLabels}
         defaultBaseName={post.title}
@@ -2703,34 +2246,8 @@ export function PostDetailPage({
         }}
       />
 
-      {!readOnly ? (
-        <PostActionSheet
-          open={actionsOpen}
-          onClose={() => setActionsOpen(false)}
-          postId={post.id}
-          workspaceId={workspaceId ?? ''}
-          currentUserId={userId ?? ''}
-          gallery={gallery}
-          deps={deps}
-          workspaceKey={workspaceKey}
-          postNumber={post.number}
-          onToast={push}
-          canDelete={canDelete}
-          onDeletePost={handleDeletePost}
-          moveRows={moveRows}
-          removeImage={
-            canEditContent && gallery.length > 0
-              ? {
-                  index: Math.min(galleryIndex, gallery.length - 1),
-                  count: gallery.length,
-                  saving: gallerySaving,
-                  onRemove: () => handleRemove(Math.min(galleryIndex, gallery.length - 1)),
-                }
-              : undefined
-          }
-          {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
-        />
-      ) : null}
+      {/* Embedded: the host's own header button opens the menu. */}
+      {embedded ? actionMenu : null}
     </SearchWordsContext.Provider>
   );
 }
