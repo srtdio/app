@@ -70,6 +70,46 @@ export interface SelectionStar {
   onRun: () => void;
 }
 
+/** The bottom bar's frame: a top border on the panel, clear of the safe-area inset. */
+const SELECTION_BAR_CLASS =
+  'flex shrink-0 flex-col gap-1 border-t border-border bg-panel px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3';
+
+/**
+ * The remove-only bottom bar (chat info Media and Files select mode): the same
+ * frame as SelectionBarView with one danger Remove, disabled only while
+ * nothing is selected. Hook-free.
+ */
+export function RemoveSelectionBarView(props: {
+  count: number;
+  /** The button's copy (REMOVE_LABEL). */
+  label: string;
+  onRemove: () => void;
+  barTestId?: string | undefined;
+  removeTestId?: string | undefined;
+}): ReactElement {
+  return (
+    <div
+      data-selection-bar=""
+      data-testid={props.barTestId}
+      // A bottom bar: the Undo strip stacks above it.
+      {...bottomAnchorProps}
+      className={SELECTION_BAR_CLASS}
+    >
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          variant="danger"
+          data-selection-remove=""
+          data-testid={props.removeTestId}
+          disabled={props.count === 0}
+          onClick={props.onRemove}
+        >
+          {props.label}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The bottom bar's view: Forward, Star or Unstar, then Delete, with the reason line under the
  * pair when Delete is blocked. Hook-free so the tests call it directly.
@@ -93,7 +133,7 @@ export function SelectionBarView(props: {
       data-selection-bar=""
       // A bottom bar in place of the composer: the Undo strip stacks above it.
       {...bottomAnchorProps}
-      className="flex shrink-0 flex-col gap-1 border-t border-border bg-panel px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3"
+      className={SELECTION_BAR_CLASS}
     >
       <div className="flex items-center justify-between gap-2">
         {props.onForward !== undefined ? (

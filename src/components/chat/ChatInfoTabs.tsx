@@ -9,14 +9,20 @@
 // come from the profiles map, and senders missing from it are read in ONE
 // batched readProfiles call per page (never per row). In 'preview' mode each
 // tab shows its first few items and a "See all" row that expands that tab in
-// place. No motion; colours are tokens only, so light and dark match.
+// place. Media and Files offer Select (top right of the host's header) when
+// the viewer has a file there they may remove: select mode ticks own files
+// only, and Remove hands them to onRemoveFiles (the thread owns the Undo strip
+// and the write). Files removed through the shared overlay drop out at once
+// and come back on Undo. No motion; colours are tokens only, so light and
+// dark match.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SelectCheck } from '@/components/ui/SelectCheck';
 import {
   ICON_SIZE,
   IconAlertTriangle,
@@ -33,7 +39,19 @@ import { FileViewer, remoteFileSource } from '@/components/ui/FileViewer';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { MarksList, type MarksListProps } from '@/components/chat/MarksSheet';
 import { StarredList } from '@/components/chat/StarredList';
+import { RemoveSelectionBarView, SelectionHeader } from '@/components/chat/SelectionBar';
+import { useChatLayout } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
+import { useHistoryStep } from '@/lib/chat/use-history-step';
+import {
+  REMOVE_LABEL,
+  SELECT_LABEL,
+  canRemoveFile,
+  isFileRemoved,
+  removedFilesStore,
+  type MarkedLookup,
+  type RemovableFile,
+} from '@/lib/chat/remove-files';
 import { humanizeSize } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
 import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
@@ -150,6 +168,90 @@ export function previewLimit(
 ): number | null {
   return mode === 'preview' && !expanded.has(tab) ? PREVIEW_COUNT[tab] : null;
 }
+
+/** The history.state key of the info tabs' select mode (back leaves it first). */
+export const INFO_SELECT_HISTORY_KEY = 'chatInfoSelection';
+
+/** One listed file's selection key. Pure. */
+export function fileKey(item: Pick<ChannelAttachmentItem, 'messageId' | 'versionId'>): string {
+  return `${item.messageId}:${item.versionId}`;
+}
+
+/** A listed file as the removal takes it. Pure. */
+export function toRemovableFile(item: ChannelAttachmentItem): RemovableFile {
+  return { messageId: item.messageId, assetId: item.versionId, mime: item.mime };
+}
+
+/**
+ * Whether the viewer may tick this listed file: their own, unmarked, recorded,
+ * not a voice note (canRemoveFile). Pure.
+ */
+export function canTickFile(
+  item: ChannelAttachmentItem,
+  viewerId: string,
+  marks: MarkedLookup,
+): boolean {
+  return canRemoveFile(
+    { id: item.messageId, senderUserId: item.senderUserId },
+    { assetId: item.versionId, mime: item.mime },
+    viewerId,
+    marks,
+  );
+}
+
+/** The Media or Files list a tab shows (null for the other tabs). Pure. */
+export function selectableTabItems(
+  tab: ContactTab,
+  items: readonly ChannelAttachmentItem[],
+): ChannelAttachmentItem[] | null {
+  if (tab !== 'media' && tab !== 'files') return null;
+  const split = splitMediaFiles(items);
+  return tab === 'media' ? split.images : split.files;
+}
+
+/** Select shows only on Media or Files, and only with one file there the viewer may remove. Pure. */
+export function showSelect(
+  tab: ContactTab,
+  shown: readonly ChannelAttachmentItem[],
+  viewerId: string,
+  marks: MarkedLookup,
+): boolean {
+  if (tab !== 'media' && tab !== 'files') return false;
+  return shown.some((item) => canTickFile(item, viewerId, marks));
+}
+
+/** The ticked files, in list order, as the removal takes them. Pure. */
+export function tickedFiles(
+  items: readonly ChannelAttachmentItem[],
+  selected: ReadonlySet<string>,
+): RemovableFile[] {
+  return items.filter((item) => selected.has(fileKey(item))).map(toRemovableFile);
+}
+
+/** A tile or row's tick in select mode; null for a file the viewer may not tick. */
+interface Tick {
+  checked: boolean;
+  onToggle: () => void;
+}
+
+/** What the view needs while selecting: the ticked keys and the rule. */
+export interface InfoSelection {
+  selected: ReadonlySet<string>;
+  canTick: (item: ChannelAttachmentItem) => boolean;
+  onToggle: (item: ChannelAttachmentItem) => void;
+}
+
+/** What the host's header and foot show for select mode (see ChatInfoTabsProps.frame). */
+export interface InfoSelectChrome {
+  /** In select mode the header is `header` alone ("n selected" and Cancel). */
+  selecting: boolean;
+  /** Select (top right) or the selection header; null when neither shows. */
+  header: ReactElement | null;
+  /** The Remove bar under the page while selecting, else null. */
+  bar: ReactElement | null;
+}
+
+const NO_TAP = (): void => undefined;
 
 /** "You" for the viewer, the profile name otherwise; never a user read. */
 export function contactSenderName(
@@ -292,15 +394,23 @@ function MediaTile(props: {
   cache: PresignCache;
   presignEnabled: boolean;
   onOpen: () => void;
+  /** Select mode: a tap ticks (own files) or does nothing (the rest). */
+  selecting: boolean;
+  tick: Tick | null;
 }): ReactElement {
   const { url } = useAttachmentUrl(props.item.versionId, props.cache, props.presignEnabled);
+  const { tick } = props;
   return (
     <PressableRow
       type="button"
       aria-label={props.item.name !== '' ? props.item.name : 'Photo'}
-      onClick={props.onOpen}
+      onClick={props.selecting ? (tick?.onToggle ?? NO_TAP) : props.onOpen}
+      {...(tick !== null ? { 'aria-pressed': tick.checked, 'data-info-tick': '' } : {})}
       flat
-      className="relative block aspect-square cursor-zoom-in overflow-hidden bg-panel-3 focus-visible:ring-inset"
+      className={cn(
+        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:ring-inset',
+        !props.selecting && 'cursor-zoom-in',
+      )}
     >
       {url !== null ? (
         <img
@@ -309,6 +419,11 @@ function MediaTile(props: {
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover"
         />
+      ) : null}
+      {tick !== null ? (
+        <span className="absolute right-1.5 top-1.5">
+          <SelectCheck checked={tick.checked} />
+        </span>
       ) : null}
     </PressableRow>
   );
@@ -335,8 +450,11 @@ function FileRow(props: {
   presignEnabled: boolean;
   /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
   timeZone?: string | undefined;
+  /** Select mode: a tap ticks (own files) or does nothing (the rest). */
+  selecting: boolean;
+  tick: Tick | null;
 }): ReactElement {
-  const { item, cache, presignEnabled } = props;
+  const { item, cache, presignEnabled, tick } = props;
   const [open, setOpen] = useState(false);
   const name = item.name !== '' ? item.name : 'File';
   const source = useMemo(
@@ -348,10 +466,12 @@ function FileRow(props: {
       <PressableRow
         type="button"
         data-file-row={classifyFileKind(item.mime)}
-        disabled={source === null}
-        onClick={() => setOpen(true)}
+        disabled={!props.selecting && source === null}
+        onClick={props.selecting ? (tick?.onToggle ?? NO_TAP) : () => setOpen(true)}
+        {...(tick !== null ? { 'aria-pressed': tick.checked, 'data-info-tick': '' } : {})}
         className={ROW}
       >
+        {tick !== null ? <SelectCheck checked={tick.checked} /> : null}
         <span className={ROW_ICON}>
           <IconFile size={ICON_SIZE.control} />
         </span>
@@ -532,6 +652,8 @@ export interface ChatInfoTabsViewProps {
   /** Preview tabs whose See all was tapped; ignored in full mode. */
   expanded?: ReadonlySet<ContactTab>;
   onSeeAll?: (tab: ContactTab) => void;
+  /** Media and Files select mode; absent or null outside it. */
+  selection?: InfoSelection | null | undefined;
 }
 
 const NONE_EXPANDED: ReadonlySet<ContactTab> = new Set();
@@ -543,6 +665,16 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
   const onSeeAll = props.onSeeAll ?? NO_SEE_ALL;
   const limit = previewLimit(props.mode, props.tab, expanded);
   const split = splitMediaFiles(props.attachments?.items ?? []);
+  const selection = props.selection ?? null;
+  const selecting = selection !== null;
+  // Only own removable files get a tick; the rest show none while selecting.
+  const tickOf = (item: ChannelAttachmentItem): Tick | null =>
+    selection !== null && selection.canTick(item)
+      ? {
+          checked: selection.selected.has(fileKey(item)),
+          onToggle: () => selection.onToggle(item),
+        }
+      : null;
   const feedProps = (kind: 'attachments' | 'links', seeAll: boolean) => ({
     onLoadMore: () => props.onLoadMore(kind),
     onRetry: () => props.onRetry(kind),
@@ -568,6 +700,8 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               cache={props.cache}
               presignEnabled={props.presignEnabled}
               onOpen={() => props.onOpenImage(index)}
+              selecting={selecting}
+              tick={tickOf(item)}
             />
           ))}
         </div>
@@ -590,6 +724,8 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               cache={props.cache}
               presignEnabled={props.presignEnabled}
               timeZone={props.timeZone}
+              selecting={selecting}
+              tick={tickOf(item)}
             />
           ))}
         </ul>
@@ -679,11 +815,23 @@ export interface ChatInfoTabsProps {
    * rendered, but the tab, feeds and names are kept for the next open.
    */
   open?: boolean;
-  /** Wraps the tabs in the host's page; the lightbox stays outside it. */
-  frame?: (tabs: ReactElement) => ReactElement;
+  /**
+   * Wraps the tabs in the host's page; the lightbox stays outside it. `select`
+   * is what the host's header (Select, or "n selected" and Cancel) and foot
+   * (the Remove bar) show.
+   */
+  frame?: (tabs: ReactElement, select: InfoSelectChrome) => ReactElement;
   /** Escape while open and no lightbox is up (the lightbox owns Escape then). */
   onEscape?: () => void;
+  /**
+   * Remove these own files, keep their messages (the thread runs the Undo
+   * strip and the write). Absent hides Select and the viewer's bin.
+   */
+  onRemoveFiles?: (files: RemovableFile[]) => void;
 }
+
+const NO_MARKS: MarkedLookup = new Set<string>();
+const NONE_SELECTED: ReadonlySet<string> = new Set();
 
 const NO_FRAME = (tabs: ReactElement): ReactElement => tabs;
 
@@ -724,7 +872,9 @@ export function starredTab(input: {
 
 /**
  * The stateful tabs: the selected tab, each tab's See-all state, the two
- * feeds, the batched sender names and the Media lightbox. Key it by channel.
+ * feeds, the batched sender names, the Media lightbox and Media / Files select
+ * mode (Escape, Cancel, back, a tab switch or closing leaves it). Key it by
+ * channel.
  */
 export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
   const open = props.open ?? true;
@@ -733,6 +883,12 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
   const [expanded, setExpanded] = useState<ReadonlySet<ContactTab>>(NONE_EXPANDED);
   const [viewer, setViewer] = useState<number | null>(null);
   const [names, setNames] = useState<Map<string, ChatProfile>>(() => new Map());
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(NONE_SELECTED);
+  const layout = useChatLayout();
+  const selectRef = useRef<HTMLButtonElement>(null);
+  // Escape and Cancel hand focus back to Select once it is back in the header.
+  const refocusSelect = useRef(false);
   const { channelId, profiles, currentUserId } = props;
 
   // What the resolver may skip: the viewer and anyone the profiles map holds.
@@ -787,18 +943,98 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
     [currentUserId, known],
   );
 
-  const images = splitMediaFiles(attachments.feed?.items ?? []).images;
+  // Files removed here (pending Undo) or by a live signal drop out at once;
+  // Undo takes the overlay entry back and they show again.
+  const overlay = useSyncExternalStore(removedFilesStore.subscribe, () =>
+    removedFilesStore.get(channelId),
+  );
+  const attachmentsFeed = useMemo(() => {
+    const feed = attachments.feed;
+    if (feed === null) return null;
+    const items = feed.items.filter(
+      (item) => !isFileRemoved(overlay, item.messageId, item.versionId),
+    );
+    return items.length === feed.items.length ? feed : { ...feed, items };
+  }, [attachments.feed, overlay]);
+
+  const images = splitMediaFiles(attachmentsFeed?.items ?? []).images;
   const current = viewer !== null ? images[Math.min(viewer, images.length - 1)] : undefined;
+  // The last image went (removed): the viewer is closed, not left pending.
+  useEffect(() => {
+    if (viewer !== null && images.length === 0) setViewer(null);
+  }, [viewer, images.length]);
+
+  // Select mode: own, unmarked, non-voice files on the open Media or Files tab.
+  const removeFiles = props.onRemoveFiles;
+  const marked: MarkedLookup = props.marks?.marks ?? NO_MARKS;
+  const canTick = useCallback(
+    (item: ChannelAttachmentItem) => canTickFile(item, currentUserId, marked),
+    [currentUserId, marked],
+  );
+  const tabItems = selectableTabItems(tab, attachmentsFeed?.items ?? []) ?? [];
+  const shownItems = previewOf(
+    tabItems,
+    attachmentsFeed?.hasMore ?? false,
+    previewLimit(props.mode, tab, expanded),
+  ).shown;
+  const canSelect =
+    open &&
+    removeFiles !== undefined &&
+    attachmentsFeed?.status === 'ready' &&
+    showSelect(tab, shownItems, currentUserId, marked);
+  const selectedFiles = tickedFiles(shownItems, selected);
+
+  const exitSelect = useCallback(() => {
+    setSelecting(false);
+    setSelected(NONE_SELECTED);
+  }, []);
+  const leaveSelect = useCallback(() => {
+    refocusSelect.current = true;
+    exitSelect();
+  }, [exitSelect]);
+  // Back (phone history) leaves select mode first, like the thread's selection.
+  useHistoryStep(open && selecting, INFO_SELECT_HISTORY_KEY, exitSelect);
+  // Closing the surface, or nothing left to remove here, leaves select mode.
+  useEffect(() => {
+    if (selecting && !canSelect) exitSelect();
+  }, [selecting, canSelect, exitSelect]);
+  useEffect(() => {
+    if (selecting || !refocusSelect.current) return;
+    refocusSelect.current = false;
+    selectRef.current?.focus();
+  }, [selecting]);
+  const toggle = useCallback((item: ChannelAttachmentItem) => {
+    const key = fileKey(item);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+  const runRemove = (): void => {
+    if (removeFiles === undefined || selectedFiles.length === 0) return;
+    removeFiles(selectedFiles);
+    leaveSelect();
+  };
+  // Switching tabs leaves select mode.
+  const onTab = (next: ContactTab): void => {
+    if (next !== tab) exitSelect();
+    setTab(next);
+  };
 
   const { onEscape } = props;
   useEffect(() => {
     if (!open || viewer !== null || onEscape === undefined) return;
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') onEscape?.();
+      if (event.key !== 'Escape') return;
+      // Select mode takes the first Escape; the next one closes the surface.
+      if (selecting) leaveSelect();
+      else onEscape?.();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, viewer, onEscape]);
+  }, [open, viewer, onEscape, selecting, leaveSelect]);
 
   // The Starred tab mounts its list only while it shows: its first page is
   // read when the tab opens. No Edit here; a row closes the surface and jumps.
@@ -820,8 +1056,8 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
     <ChatInfoTabsView
       tab={tab}
       starred={starred}
-      onTab={setTab}
-      attachments={attachments.feed}
+      onTab={onTab}
+      attachments={attachmentsFeed}
       links={links.feed}
       onLoadMore={(kind) => (kind === 'attachments' ? attachments.loadMore() : links.loadMore())}
       onRetry={(kind) => (kind === 'attachments' ? attachments.retry() : links.retry())}
@@ -836,15 +1072,51 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
       mode={props.mode}
       expanded={expanded}
       onSeeAll={(key) => setExpanded((prev) => new Set(prev).add(key))}
+      selection={selecting ? { selected, canTick, onToggle: toggle } : null}
     />
   );
 
+  const select: InfoSelectChrome = {
+    selecting,
+    header: selecting ? (
+      <SelectionHeader count={selectedFiles.length} onCancel={leaveSelect} layout={layout} />
+    ) : canSelect ? (
+      <Button
+        type="button"
+        variant="link"
+        buttonRef={selectRef}
+        aria-label={SELECT_LABEL}
+        data-testid="info-select"
+        onClick={() => setSelecting(true)}
+        className="ml-auto shrink-0"
+      >
+        {SELECT_LABEL}
+      </Button>
+    ) : null,
+    bar: selecting ? (
+      <RemoveSelectionBarView
+        count={selectedFiles.length}
+        label={REMOVE_LABEL}
+        onRemove={runRemove}
+        barTestId="info-select-bar"
+        removeTestId="info-remove"
+      />
+    ) : null,
+  };
+
   return (
     <>
-      {open ? frame(tabs) : null}
+      {open ? frame(tabs, select) : null}
       {open && viewer !== null && current !== undefined ? (
         <ImageLightbox
-          images={images.map((item) => ({ assetId: item.versionId, name: item.name }))}
+          images={images.map((item) => ({
+            assetId: item.versionId,
+            name: item.name,
+            // The bin shows only on the viewer's own removable photos.
+            ...(removeFiles !== undefined && canTick(item)
+              ? { onRemove: () => removeFiles([toRemovableFile(item)]) }
+              : {}),
+          }))}
           index={Math.min(viewer, images.length - 1)}
           cache={props.cache}
           presignEnabled={props.presignEnabled}
