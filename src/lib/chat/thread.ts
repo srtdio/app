@@ -193,6 +193,11 @@ export interface ThreadMessage {
   mine: boolean;
   /** Asset attachments; from the row's ids + attachment_meta, or the live `ext`. */
   attachments: MessageAttachment[];
+  /**
+   * Files the sender removed from this message (row removed_files), per kind;
+   * the bubble shows one "removed" line from it. Absent when none were removed.
+   */
+  removedFiles?: RemovedFiles;
   /** Shared post uuids (row `shared_post_ids` or live `ext`); empty when there are none. */
   sharedPostIds: string[];
   /** Shared brief uuids (row `shared_brief_ids`); empty when there are none. */
@@ -260,6 +265,32 @@ export interface ThreadMessage {
    * forward). Absent while the row has not been read from Postgres (live).
    */
   mentions?: string[] | null;
+}
+
+/** Per-kind counts of files removed from a message (chat_messages.removed_files). */
+export interface RemovedFiles {
+  photo: number;
+  video: number;
+  file: number;
+}
+
+/** The removed-files kind of an attachment mime, as chat_message_remove_files counts it. Pure. */
+export function removedKindOf(mime: string): keyof RemovedFiles {
+  if (mime.startsWith('image/')) return 'photo';
+  if (mime.startsWith('video/')) return 'video';
+  return 'file';
+}
+
+/** A row's removed_files as counts; null when nothing was removed (or the value is malformed). Pure. */
+export function parseRemovedFiles(raw: unknown): RemovedFiles | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const count = (key: keyof RemovedFiles): number => {
+    const value = record[key];
+    return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 0;
+  };
+  const counts = { photo: count('photo'), video: count('video'), file: count('file') };
+  return counts.photo + counts.video + counts.file > 0 ? counts : null;
 }
 
 /** A row's stored mentions as user ids (lowercase); null when it has none. */
@@ -376,6 +407,7 @@ export type LiveEvent =
   | { kind: 'delete'; messageIds: string[] }
   | { kind: 'edit'; messageId: string; body: string; editedAt: string }
   | { kind: 'task'; channelId: string; taskId: string }
+  | { kind: 'files_removed'; messageIds: string[] }
   | { kind: 'unknown' };
 
 /** Read a live signal off a command message's `ext`; 'unknown' for anything else. */
@@ -388,6 +420,12 @@ export function parseLiveEvent(ext: unknown): LiveEvent {
     if (!Array.isArray(ids)) return { kind: 'unknown' };
     const messageIds = ids.filter((id): id is string => typeof id === 'string' && id !== '');
     return messageIds.length > 0 ? { kind: 'delete', messageIds } : { kind: 'unknown' };
+  }
+  if (event === 'files_removed') {
+    const ids = record.message_ids;
+    if (!Array.isArray(ids)) return { kind: 'unknown' };
+    const messageIds = ids.filter((id): id is string => typeof id === 'string' && id !== '');
+    return messageIds.length > 0 ? { kind: 'files_removed', messageIds } : { kind: 'unknown' };
   }
   if (event === 'edit') {
     const ids = record.message_ids;
@@ -466,6 +504,16 @@ export function taskEventExt(input: {
   return { [LIVE_EVENT_KEY]: 'task', channel_id: input.channelId, task_id: input.taskId };
 }
 
+/**
+ * Build the `ext` for a live files-removed signal: receivers re-read these rows
+ * from chat_messages (never trust the payload) and update bubbles and tabs.
+ */
+export function filesRemovedEventExt(input: {
+  messageIds: readonly string[];
+}): Record<string, unknown> {
+  return { [LIVE_EVENT_KEY]: 'files_removed', message_ids: [...input.messageIds] };
+}
+
 /** Build the `ext` for a live delete signal (receivers turn these ids into tombstones). */
 export function deleteEventExt(input: { messageIds: readonly string[] }): Record<string, unknown> {
   return { [LIVE_EVENT_KEY]: 'delete', message_ids: [...input.messageIds] };
@@ -532,8 +580,10 @@ export function rowToThreadMessage(
       ? { id: row.reply_to_message_id, authorUserId: null, preview: '' }
       : null);
   const root = rowThreadRoot(row);
+  const removedFiles = parseRemovedFiles(row.removed_files);
   return {
     ...(root !== null ? { threadRootId: root } : {}),
+    ...(removedFiles !== null ? { removedFiles } : {}),
     id: row.id,
     senderUserId,
     body: row.body ?? '',
@@ -1061,6 +1111,43 @@ export function applyEditFromRow(messages: ThreadMessage[], row: ChatMessageRow)
   });
 }
 
+/**
+ * Remove files from loaded messages (asset ids per message id): each listed
+ * attachment drops out and its kind counts into removedFiles. A message left
+ * with no files, no text and no shared post, brief or plan becomes a
+ * tombstone, as chat_message_remove_files records it. Idempotent: an asset no
+ * longer on the message counts nothing. The same list when nothing changes.
+ */
+export function applyFilesRemoved(
+  messages: ThreadMessage[],
+  removals: ReadonlyMap<string, ReadonlySet<string>>,
+): ThreadMessage[] {
+  let changed = false;
+  const emptied: string[] = [];
+  const next = messages.map((m) => {
+    const assetIds = removals.get(m.id);
+    if (assetIds === undefined || m.deleted === true) return m;
+    const gone = m.attachments.filter((a) => a.assetId !== '' && assetIds.has(a.assetId));
+    if (gone.length === 0) return m;
+    changed = true;
+    const counts: RemovedFiles = { photo: 0, video: 0, file: 0, ...m.removedFiles };
+    for (const a of gone) counts[removedKindOf(a.mime)] += 1;
+    const attachments = m.attachments.filter((a) => !gone.includes(a));
+    if (
+      attachments.length === 0 &&
+      m.body.trim() === '' &&
+      m.sharedPostIds.length === 0 &&
+      m.sharedBriefIds.length === 0 &&
+      (m.sharedPlanIds ?? []).length === 0
+    ) {
+      emptied.push(m.id);
+    }
+    return { ...m, attachments, removedFiles: counts };
+  });
+  if (!changed) return messages;
+  return emptied.length > 0 ? markMessagesDeleted(next, emptied) : next;
+}
+
 /** Drop messages by id; the same list when none match. */
 export function removeMessages(messages: ThreadMessage[], ids: readonly string[]): ThreadMessage[] {
   const drop = new Set(ids);
@@ -1466,6 +1553,8 @@ export function subscribeIncoming(params: {
       if (event.kind === 'mark') return;
       // Task signals are consumed by the task list (subscribeTaskEvents).
       if (event.kind === 'task') return;
+      // Files-removed signals are consumed by subscribeFilesRemoved (remove-files.ts).
+      if (event.kind === 'files_removed') return;
       if (event.channelId === channelId) onRead({ messageId: event.messageId, fromUserId });
     },
   });

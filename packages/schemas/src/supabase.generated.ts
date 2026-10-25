@@ -2406,6 +2406,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2426,6 +2427,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2446,6 +2448,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2484,6 +2487,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2504,6 +2508,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2524,6 +2529,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2547,6 +2553,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2567,6 +2574,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2587,6 +2595,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2610,6 +2619,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2630,6 +2640,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2650,6 +2661,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2673,6 +2685,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2693,6 +2706,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2713,6 +2727,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2736,6 +2751,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2756,6 +2772,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2776,6 +2793,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2799,6 +2817,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2819,6 +2838,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2839,6 +2859,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2862,6 +2883,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2882,6 +2904,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2902,6 +2925,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2925,6 +2949,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -2945,6 +2970,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2965,6 +2991,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -2988,6 +3015,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3008,6 +3036,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3028,6 +3057,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3051,6 +3081,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3071,6 +3102,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3091,6 +3123,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3114,6 +3147,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3134,6 +3168,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3154,6 +3189,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3177,6 +3213,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3197,6 +3234,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3217,6 +3255,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3240,6 +3279,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3260,6 +3300,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3280,6 +3321,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3303,6 +3345,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3323,6 +3366,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3343,6 +3387,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3366,6 +3411,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3386,6 +3432,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3406,6 +3453,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3429,6 +3477,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3449,6 +3498,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3469,6 +3519,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3492,6 +3543,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3512,6 +3564,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3532,6 +3585,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3555,6 +3609,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3575,6 +3630,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3595,6 +3651,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3618,6 +3675,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3638,6 +3696,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3658,6 +3717,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3681,6 +3741,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3701,6 +3762,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3721,6 +3783,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3744,6 +3807,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3764,6 +3828,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3784,6 +3849,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3807,6 +3873,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3827,6 +3894,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3847,6 +3915,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3870,6 +3939,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3890,6 +3960,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3910,6 +3981,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3933,6 +4005,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -3953,6 +4026,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3973,6 +4047,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -3996,6 +4071,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4016,6 +4092,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4036,6 +4113,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4059,6 +4137,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4079,6 +4158,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4099,6 +4179,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4122,6 +4203,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4142,6 +4224,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4162,6 +4245,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4185,6 +4269,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4205,6 +4290,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4225,6 +4311,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4248,6 +4335,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4268,6 +4356,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4288,6 +4377,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4311,6 +4401,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4331,6 +4422,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4351,6 +4443,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4374,6 +4467,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4394,6 +4488,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4414,6 +4509,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4437,6 +4533,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4457,6 +4554,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4477,6 +4575,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4500,6 +4599,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -4520,6 +4620,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -4540,6 +4641,7 @@ export type Database = {
           forwarded_from_message_id?: string | null
           id?: string
           mentions?: Json | null
+          removed_files?: Json
           reply_to_message_id?: string | null
           sender_user_id?: string | null
           shared_brief_ids?: string[] | null
@@ -9092,6 +9194,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -9106,6 +9209,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      chat_message_remove_files: {
+        Args: {
+          p_asset_ids: string[]
+          p_channel_id: string
+          p_message_ids: string[]
+          p_trace_id: string
+        }
+        Returns: undefined
       }
       chat_message_schedule: {
         Args: {
@@ -9170,6 +9282,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -9211,6 +9324,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -9257,6 +9371,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -9292,6 +9407,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -9366,6 +9482,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null
@@ -9404,6 +9521,7 @@ export type Database = {
           forwarded_from_message_id: string | null
           id: string
           mentions: Json | null
+          removed_files: Json
           reply_to_message_id: string | null
           sender_user_id: string | null
           shared_brief_ids: string[] | null

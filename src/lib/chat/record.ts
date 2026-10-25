@@ -229,7 +229,8 @@ async function voidProc<
     | 'chat_mark_set'
     | 'chat_mark_resolve'
     | 'chat_mark_reopen'
-    | 'chat_message_delete',
+    | 'chat_message_delete'
+    | 'chat_message_remove_files',
 >(client: Client, fn: N, args: Functions[N]['Args']): Promise<WriteResult> {
   try {
     const { error } = await client.rpc(fn, args);
@@ -422,4 +423,50 @@ export async function clearChannelRecord(params: ClearChannelParams): Promise<Wr
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Upper bound of asset ids per chat_message_remove_files call (the proc refuses more). */
+export const REMOVE_FILES_CHUNK_SIZE = 100;
+
+/** One file to remove: its message and its asset id. */
+export interface RemoveFileTarget {
+  messageId: string;
+  assetId: string;
+}
+
+export interface RemoveFilesParams {
+  client: Client;
+  channelId: string;
+  files: readonly RemoveFileTarget[];
+  traceId: string;
+  /** Called after each chunk the record accepted, with that chunk's files. */
+  onChunkRemoved?: (files: RemoveFileTarget[]) => void;
+}
+
+/** Removed files so far, plus the proc's message when a chunk failed. */
+export type RemoveFilesResult =
+  | { ok: true; removed: RemoveFileTarget[] }
+  | { ok: false; removed: RemoveFileTarget[]; message: string };
+
+/**
+ * Remove own files from their messages through chat_message_remove_files,
+ * chunked at REMOVE_FILES_CHUNK_SIZE asset ids per call and run in order. Each
+ * call names the messages of its own files. The first failing chunk stops the
+ * run; the chunks already accepted stay removed and are reported.
+ */
+export async function removeFilesRecord(params: RemoveFilesParams): Promise<RemoveFilesResult> {
+  const removed: RemoveFileTarget[] = [];
+  for (let i = 0; i < params.files.length; i += REMOVE_FILES_CHUNK_SIZE) {
+    const chunk = params.files.slice(i, i + REMOVE_FILES_CHUNK_SIZE);
+    const result = await voidProc(params.client, 'chat_message_remove_files', {
+      p_channel_id: params.channelId,
+      p_message_ids: [...new Set(chunk.map((f) => f.messageId))],
+      p_asset_ids: chunk.map((f) => f.assetId),
+      p_trace_id: params.traceId,
+    });
+    if (!result.ok) return { ok: false, removed, message: result.message };
+    removed.push(...chunk);
+    params.onChunkRemoved?.(chunk);
+  }
+  return { ok: true, removed };
 }
