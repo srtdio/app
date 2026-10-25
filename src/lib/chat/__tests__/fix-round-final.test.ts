@@ -46,7 +46,9 @@ function tableClient(results: Record<string, Promise<{ data: unknown; error: nul
   const from = (table: string) => {
     started.push(table);
     const b: Record<string, unknown> = {};
-    for (const m of ['select', 'eq', 'order', 'in', 'is', 'or', 'limit']) b[m] = () => b;
+    for (const m of ['select', 'eq', 'order', 'in', 'is', 'or', 'gte', 'lt', 'lte', 'limit']) {
+      b[m] = () => b;
+    }
     b.abortSignal = (signal: AbortSignal) => {
       signals[table] = signal;
       return b;

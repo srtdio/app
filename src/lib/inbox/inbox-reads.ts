@@ -20,6 +20,8 @@ import {
 } from '@/lib/inbox/inbox-live';
 import { BELL_CHAT_ENTITY, BELL_MENTION_EVENT, withoutBellEntries } from '@/lib/inbox/bell-types';
 import { personAvatar, personMentionLabel, personName, resolvePeople } from '@/lib/people-names';
+import { readBoundedPage, upperFromNow, type TimeBounds } from '@/lib/chat/bounded-window';
+import { readInboxOldest } from '@/lib/inbox/inbox-oldest';
 
 const SELECT_COLS =
   'id, workspace_id, user_id, actor_user_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload';
@@ -80,21 +82,35 @@ export async function fetchUnreadMentionCount(
 /**
  * The created_at of the caller's newest inbox row in a workspace (deleted rows
  * included), or null when there is none. Seeds the live layer's "seen up to"
- * mark from the server's clock, never the device's. One row, one round trip.
+ * mark from the server's clock, never the device's. One row; the read is
+ * partition-bounded (the last 30 days first, widening back to the oldest entry
+ * only when that window is empty), so one round trip for an active inbox.
  */
 export async function fetchNewestInboxAt(
   client: Client,
   params: { workspaceId: string; userId: string },
 ): Promise<Result<string | null>> {
-  const res = await client
-    .from('inbox_entries')
-    .select('created_at')
-    .eq('workspace_id', params.workspaceId)
-    .eq('user_id', params.userId)
-    .order('created_at', { ascending: false })
-    .limit(1);
-  if (res.error) return fail(`fetchNewestInboxAt: ${res.error.message}`);
-  const first = (res.data ?? [])[0];
+  const res = await readBoundedPage<{ created_at: string }>({
+    pageSize: 1,
+    upper: upperFromNow(),
+    upperInclusive: false,
+    openEnded: true,
+    oldest: () => readInboxOldest(client, params.workspaceId),
+    read: async (bounds: TimeBounds, limit: number) => {
+      const base = client
+        .from('inbox_entries')
+        .select('created_at')
+        .eq('workspace_id', params.workspaceId)
+        .eq('user_id', params.userId)
+        .gte('created_at', bounds.from);
+      const capped = bounds.to === null ? base : base.lt('created_at', bounds.to);
+      const page = await capped.order('created_at', { ascending: false }).limit(limit);
+      if (page.error) return fail(`fetchNewestInboxAt: ${page.error.message}`);
+      return { ok: true, data: page.data ?? [] };
+    },
+  });
+  if (!res.ok) return res;
+  const first = res.data[0];
   return { ok: true, data: first !== undefined ? first.created_at : null };
 }
 
@@ -124,6 +140,8 @@ export async function fetchInboxSince(
   client: Client,
   params: { workspaceId: string; userId: string; sinceIso: string; limit?: number },
 ): Promise<Result<InboxSince>> {
+  // Both partition-key bounds: since the mark, up to now plus the skew margin.
+  const sinceCeiling = upperFromNow();
   const base = () =>
     client
       .from('inbox_entries')
@@ -131,7 +149,8 @@ export async function fetchInboxSince(
       .eq('workspace_id', params.workspaceId)
       .eq('user_id', params.userId)
       .is('deleted_at', null)
-      .gt('created_at', params.sinceIso);
+      .gt('created_at', params.sinceIso)
+      .lt('created_at', sinceCeiling);
   const [activityRes, mentionRes] = await Promise.all([
     withoutBellEntries(base())
       .order('created_at', { ascending: false })

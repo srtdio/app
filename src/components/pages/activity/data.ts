@@ -79,6 +79,13 @@ import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
 import { civilDay, zonedParts as readZonedParts, type ZonedParts } from '@/lib/time';
+import {
+  readBoundedForward,
+  readBoundedPage,
+  upperFromNow,
+  type TimeBounds,
+} from '@/lib/chat/bounded-window';
+import { readInboxOldest } from '@/lib/inbox/inbox-oldest';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -1576,6 +1583,48 @@ function stitchAlert(alert: AlertInfo, messageId: string | null, from: AlertSour
 }
 
 /**
+ * One page of inbox rows in `ascending` order through partition-bounded
+ * windows: newest-first walks back from the cursor (or now) to the inbox's
+ * oldest entry; oldest-first walks forward from the cursor (or the oldest
+ * entry) to now. Either way every entry is reachable. The oldest entry is
+ * read at most once per page, and only when a window comes back short (or
+ * an oldest-first page has no cursor).
+ */
+async function readInboxPage(
+  client: Client,
+  workspaceId: string,
+  opts: {
+    ascending: boolean;
+    cursor: ActivityCursor | undefined;
+    readWindow: (bounds: TimeBounds, limit: number) => Promise<Result<InboxEntryRow[]>>;
+  },
+): Promise<Result<InboxEntryRow[]>> {
+  const { ascending, cursor, readWindow } = opts;
+  if (!ascending) {
+    return readBoundedPage<InboxEntryRow>({
+      pageSize: ACTIVITY_PAGE_SIZE,
+      upper: cursor !== undefined ? cursor.createdAt : upperFromNow(),
+      upperInclusive: cursor !== undefined,
+      openEnded: cursor === undefined,
+      oldest: () => readInboxOldest(client, workspaceId),
+      read: readWindow,
+    });
+  }
+  let lower = cursor?.createdAt;
+  if (lower === undefined) {
+    const oldest = await readInboxOldest(client, workspaceId);
+    if (!oldest.ok) return oldest;
+    if (oldest.data === null) return { ok: true, data: [] };
+    lower = oldest.data;
+  }
+  return readBoundedForward<InboxEntryRow>({
+    pageSize: ACTIVITY_PAGE_SIZE,
+    lower,
+    read: readWindow,
+  });
+}
+
+/**
  * Read one page of the caller's inbox for a workspace and enrich each row with the
  * data the live (minimal) payloads omit: the actor's display name and the entity
  * title, both resolved by batched joins (no N+1). One RLS-scoped select, then wave
@@ -1590,41 +1639,58 @@ function stitchAlert(alert: AlertInfo, messageId: string | null, from: AlertSour
  * active chip (Unread, Mentions, Briefs, Plans, Snoozed; All has no filter;
  * Upcoming is not an inbox slice, so the page loads fetchUpcoming for it
  * instead), so older matches are never hidden behind the page cap. `nowIso` is
- * the snooze cut-off (defaults to now).
+ * the snooze cut-off (defaults to now). The page is read through
+ * partition-bounded windows (readInboxPage), so only recent months are opened.
  */
 export async function fetchActivityEntries(
   client: Client,
   workspaceId: string,
   input: ActivityPageInput = {},
 ): Promise<LoadResult> {
-  const base = client
-    .from('inbox_entries')
-    .select(SELECT_COLS)
-    .eq('workspace_id', workspaceId)
-    .is('deleted_at', null);
   const nowIso = input.nowIso ?? new Date().toISOString();
-  const typed =
-    input.state === 'mentions'
-      ? base.eq('event_type', MENTION_EVENT_TYPE)
-      : input.state === 'briefs'
-        ? base.eq('scope', BRIEFS_SCOPE)
-        : input.state === 'plans'
-          ? base.in('event_type', [...BELL_PLAN_EVENT_TYPES])
-          : input.state === 'unread'
-            ? base.is('read_at', null).or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
-            : input.state === 'snoozed'
-              ? base.gt('snoozed_until', nowIso)
-              : base;
   const ascending = input.direction === 'oldest';
-  const scoped =
-    input.cursor !== undefined ? typed.or(keysetFilter(input.cursor, ascending)) : typed;
-  const res = await scoped
-    .order('created_at', { ascending })
-    .order('id', { ascending })
-    .limit(ACTIVITY_PAGE_SIZE);
-  if (res.error) return { ok: false, error: res.error.message };
+  const cursor = input.cursor;
+  // One partition-bounded window of the page (see bounded-window.ts).
+  const readWindow = async (
+    bounds: TimeBounds,
+    limit: number,
+  ): Promise<Result<InboxEntryRow[]>> => {
+    const base = client
+      .from('inbox_entries')
+      .select(SELECT_COLS)
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null)
+      .gte('created_at', bounds.from);
+    const capped =
+      bounds.to === null
+        ? base
+        : bounds.toInclusive
+          ? base.lte('created_at', bounds.to)
+          : base.lt('created_at', bounds.to);
+    const typed =
+      input.state === 'mentions'
+        ? capped.eq('event_type', MENTION_EVENT_TYPE)
+        : input.state === 'briefs'
+          ? capped.eq('scope', BRIEFS_SCOPE)
+          : input.state === 'plans'
+            ? capped.in('event_type', [...BELL_PLAN_EVENT_TYPES])
+            : input.state === 'unread'
+              ? capped.is('read_at', null).or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
+              : input.state === 'snoozed'
+                ? capped.gt('snoozed_until', nowIso)
+                : capped;
+    const scoped = cursor !== undefined ? typed.or(keysetFilter(cursor, ascending)) : typed;
+    const res = await scoped
+      .order('created_at', { ascending })
+      .order('id', { ascending })
+      .limit(limit);
+    if (res.error) return { ok: false, error: { code: 'unknown', message: res.error.message } };
+    return { ok: true, data: (res.data ?? []).map((row) => row as InboxEntryRow) };
+  };
+  const read = await readInboxPage(client, workspaceId, { ascending, cursor, readWindow });
+  if (!read.ok) return { ok: false, error: read.error.message };
 
-  const rows = (res.data ?? []).map((row) => row as InboxEntryRow);
+  const rows = read.data;
   const items = rows.map(mapEntry);
   // Loudly surface any event_type the app does not know (never blank-renders it).
   for (const et of unique(items.map((item) => item.eventType))) warnUnknownEventType(et);

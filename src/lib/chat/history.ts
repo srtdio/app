@@ -18,6 +18,14 @@
 // keep the deleted_at filter: a deleted message is never counted or shown as
 // a chat's last line.
 //
+// Partition bounds: chat_messages is RANGE (created_at) partitioned by month,
+// so every list read (latest, older, catch-up, thread pages, previews) carries
+// a lower AND an upper created_at bound and Postgres opens only the months it
+// covers. Pages walk back through bounded windows (bounded-window.ts): 30 days
+// from the page's edge, widening backwards until the page is full or the
+// channel's oldest row (read once, cached) is reached, so no older message is
+// ever hidden.
+//
 // Every read here is bounded by withReadTimeout (5s): a hang resolves to a
 // failed Result, so no caller can wait forever on one, and the request is
 // aborted on the wire (.abortSignal). The raw readers (read*) are unbounded
@@ -26,6 +34,13 @@
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable, withLinkedSignal, withReadTimeout } from '@/lib/chat-reads';
+import {
+  CLOCK_SKEW_MS,
+  OldestCache,
+  readBoundedPage,
+  upperFromNow,
+  type TimeBounds,
+} from '@/lib/chat/bounded-window';
 import {
   classifyAttachment,
   parseAttachmentMeta,
@@ -82,6 +97,84 @@ function toPage(rows: ChatMessageRow[]): HistoryPage {
   return { rows: [...rows].reverse(), hasMore: rows.length >= HISTORY_PAGE_SIZE };
 }
 
+/** Each channel's oldest created_at, read once per session (the paging floor). */
+const oldestByChannel = new OldestCache<string>();
+
+/** Each workspace's oldest chat message time, read once per session (the preview scan's floor). */
+const oldestByWorkspace = new OldestCache<string>();
+
+/**
+ * A channel's oldest created_at, deleted rows included (they still render as
+ * tombstones), or null for an empty channel. One ordered LIMIT 1 read, cached.
+ */
+export function readChannelOldest(
+  client: Client,
+  channelId: string,
+  signal?: AbortSignal,
+): Promise<Result<string | null>> {
+  return oldestByChannel.read(channelId, async () => {
+    const res = await abortable(
+      client
+        .from('chat_messages')
+        .select('created_at')
+        .eq('channel_id', channelId)
+        .order('created_at', { ascending: true })
+        .limit(1),
+      signal,
+    );
+    if (res.error) return fail(`readChannelOldest: ${res.error.message}`);
+    const first = ((res.data ?? []) as Pick<ChatMessageRow, 'created_at'>[])[0];
+    return { ok: true, data: first !== undefined ? first.created_at : null };
+  });
+}
+
+/**
+ * One newest-first history page of a channel (optionally one thread), read
+ * through partition-bounded windows. `before` continues from the oldest
+ * loaded row; without it the page starts at now (plus the skew margin).
+ */
+async function readHistoryPage(
+  client: Client,
+  channelId: string,
+  opts: { before?: MessageCursor; threadRootId?: string; signal?: AbortSignal; label: string },
+): Promise<Result<HistoryPage>> {
+  const { before, threadRootId, signal, label } = opts;
+  const res = await readBoundedPage<ChatMessageRow>({
+    pageSize: HISTORY_PAGE_SIZE,
+    upper: before !== undefined ? before.createdAt : upperFromNow(),
+    upperInclusive: before !== undefined,
+    openEnded: before === undefined,
+    oldest: () => readChannelOldest(client, channelId, signal),
+    read: async (bounds: TimeBounds, limit: number) => {
+      const base = client
+        .from('chat_messages')
+        .select(MESSAGE_COLUMNS)
+        .eq('channel_id', channelId)
+        .gte('created_at', bounds.from);
+      const capped =
+        bounds.to === null
+          ? base
+          : bounds.toInclusive
+            ? base.lte('created_at', bounds.to)
+            : base.lt('created_at', bounds.to);
+      const threaded =
+        threadRootId !== undefined ? capped.eq('thread_root_message_id', threadRootId) : capped;
+      const keyed = before !== undefined ? threaded.or(olderThanFilter(before)) : threaded;
+      const page = await abortable(
+        keyed
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(limit),
+        signal,
+      );
+      if (page.error) return fail(`${label}: ${page.error.message}`);
+      return { ok: true, data: (page.data ?? []) as ChatMessageRow[] };
+    },
+  });
+  if (!res.ok) return res;
+  return { ok: true, data: toPage(res.data) };
+}
+
 /** The newest page of a channel (50 rows, returned oldest-first). 5s timeout. */
 export function loadLatestMessages(
   client: Client,
@@ -130,9 +223,11 @@ export function prefetchLatestMessages(client: Client, channelId: string): void 
   });
 }
 
-/** Forget every prefetched page (sign-out, user or workspace change). */
+/** Forget every prefetched page and paging floor (sign-out, user or workspace change). */
 export function clearMessagePrefetch(): void {
   prefetched.clear();
+  oldestByChannel.clear();
+  oldestByWorkspace.clear();
 }
 
 /**
@@ -159,24 +254,13 @@ export function readLatestMessages(
   });
 }
 
-/** The latest-page select itself, unbounded; `signal` cancels it. */
-async function queryLatestMessages(
+/** The latest-page read itself (partition-bounded, no timeout); `signal` cancels it. */
+function queryLatestMessages(
   client: Client,
   channelId: string,
   signal?: AbortSignal,
 ): Promise<Result<HistoryPage>> {
-  const res = await abortable(
-    client
-      .from('chat_messages')
-      .select(MESSAGE_COLUMNS)
-      .eq('channel_id', channelId)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(HISTORY_PAGE_SIZE),
-    signal,
-  );
-  if (res.error) return fail(`loadLatestMessages: ${res.error.message}`);
-  return { ok: true, data: toPage((res.data ?? []) as ChatMessageRow[]) };
+  return readHistoryPage(client, channelId, { signal, label: 'loadLatestMessages' });
 }
 
 /**
@@ -189,22 +273,18 @@ export function loadOlderMessages(
   cursor: MessageCursor,
   signal?: AbortSignal,
 ): Promise<Result<HistoryPage>> {
-  return withReadTimeout(async (deadline) => {
-    const query = client
-      .from('chat_messages')
-      .select(MESSAGE_COLUMNS)
-      .eq('channel_id', channelId)
-      .or(olderThanFilter(cursor))
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(HISTORY_PAGE_SIZE);
-    const res = await withLinkedSignal(deadline, signal, async (s) => abortable(query, s));
-    if (res.error) return fail(`loadOlderMessages: ${res.error.message}`);
-    return { ok: true, data: toPage((res.data ?? []) as ChatMessageRow[]) };
-  });
+  return withReadTimeout((deadline) =>
+    withLinkedSignal(deadline, signal, (s) =>
+      readHistoryPage(client, channelId, { before: cursor, signal: s, label: 'loadOlderMessages' }),
+    ),
+  );
 }
 
-/** Everything recorded after `cursor` (the newest loaded row), oldest-first. */
+/**
+ * Everything recorded after `cursor` (the newest loaded row), oldest-first.
+ * Bounded from the cursor up to now (or the cursor, if later) plus the skew
+ * margin, so only the months since the cursor are opened.
+ */
 export function loadNewerMessages(
   client: Client,
   channelId: string,
@@ -216,6 +296,8 @@ export function loadNewerMessages(
       .from('chat_messages')
       .select(MESSAGE_COLUMNS)
       .eq('channel_id', channelId)
+      .gte('created_at', cursor.createdAt)
+      .lt('created_at', catchUpCeiling(cursor))
       .or(newerThanFilter(cursor))
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
@@ -224,6 +306,12 @@ export function loadNewerMessages(
     if (res.error) return fail(`loadNewerMessages: ${res.error.message}`);
     return { ok: true, data: (res.data ?? []) as ChatMessageRow[] };
   });
+}
+
+/** The catch-up read's upper bound: now or the cursor, whichever is later, plus the skew margin. */
+export function catchUpCeiling(cursor: MessageCursor, nowMs: number = Date.now()): string {
+  const at = Date.parse(cursor.createdAt);
+  return new Date(Math.max(nowMs, Number.isNaN(at) ? nowMs : at) + CLOCK_SKEW_MS).toISOString();
 }
 
 /** One row looked up by id: found, or absent (never recorded, deleted, or not visible under RLS). */
@@ -284,20 +372,14 @@ export function loadThreadPage(
   rootId: string,
   before?: MessageCursor,
 ): Promise<Result<HistoryPage>> {
-  return withReadTimeout(async (signal) => {
-    const base = client
-      .from('chat_messages')
-      .select(MESSAGE_COLUMNS)
-      .eq('channel_id', channelId)
-      .eq('thread_root_message_id', rootId);
-    const query = (before !== undefined ? base.or(olderThanFilter(before)) : base)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(HISTORY_PAGE_SIZE);
-    const res = await abortable(query, signal);
-    if (res.error) return fail(`loadThreadPage: ${res.error.message}`);
-    return { ok: true, data: toPage((res.data ?? []) as ChatMessageRow[]) };
-  });
+  return withReadTimeout((signal) =>
+    readHistoryPage(client, channelId, {
+      before,
+      threadRootId: rootId,
+      signal,
+      label: 'loadThreadPage',
+    }),
+  );
 }
 
 /** The live replies of one thread root. */
@@ -663,7 +745,8 @@ export function latestPerChannel(rows: readonly PreviewScanRow[]): ConversationP
 
 /**
  * One bounded read (newest PREVIEW_SCAN_LIMIT rows the caller can see in the
- * workspace) reduced to the latest message per channel. A channel whose last
+ * workspace, through partition-bounded windows) reduced to the latest message
+ * per channel. A channel whose last
  * message is older than the scan window simply gets no preview line; its
  * ordering and badge still come from chat_unread_counts.
  */
@@ -680,16 +763,51 @@ export async function readConversationPreviews(
   workspaceId: string,
   signal?: AbortSignal,
 ): Promise<Result<ConversationPreview[]>> {
-  const res = await abortable(
-    client
-      .from('chat_messages')
-      .select(PREVIEW_COLUMNS)
-      .eq('workspace_id', workspaceId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(PREVIEW_SCAN_LIMIT),
-    signal,
-  );
-  if (res.error) return fail(`loadConversationPreviews: ${res.error.message}`);
-  return { ok: true, data: latestPerChannel((res.data ?? []) as PreviewScanRow[]) };
+  const res = await readBoundedPage<PreviewScanRow>({
+    pageSize: PREVIEW_SCAN_LIMIT,
+    upper: upperFromNow(),
+    upperInclusive: false,
+    openEnded: true,
+    oldest: () => readWorkspaceOldest(client, workspaceId, signal),
+    read: async (bounds: TimeBounds, limit: number) => {
+      const base = client
+        .from('chat_messages')
+        .select(PREVIEW_COLUMNS)
+        .eq('workspace_id', workspaceId)
+        .is('deleted_at', null)
+        .gte('created_at', bounds.from);
+      const capped = bounds.to === null ? base : base.lt('created_at', bounds.to);
+      const page = await abortable(
+        capped.order('created_at', { ascending: false }).limit(limit),
+        signal,
+      );
+      if (page.error) return fail(`loadConversationPreviews: ${page.error.message}`);
+      return { ok: true, data: (page.data ?? []) as PreviewScanRow[] };
+    },
+  });
+  if (!res.ok) return res;
+  return { ok: true, data: latestPerChannel(res.data) };
+}
+
+/** A workspace's oldest live chat message created_at, or null. One ordered LIMIT 1 read, cached. */
+function readWorkspaceOldest(
+  client: Client,
+  workspaceId: string,
+  signal?: AbortSignal,
+): Promise<Result<string | null>> {
+  return oldestByWorkspace.read(workspaceId, async () => {
+    const res = await abortable(
+      client
+        .from('chat_messages')
+        .select('created_at')
+        .eq('workspace_id', workspaceId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true })
+        .limit(1),
+      signal,
+    );
+    if (res.error) return fail(`loadConversationPreviews: ${res.error.message}`);
+    const first = ((res.data ?? []) as Pick<ChatMessageRow, 'created_at'>[])[0];
+    return { ok: true, data: first !== undefined ? first.created_at : null };
+  });
 }

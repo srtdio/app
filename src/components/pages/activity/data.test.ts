@@ -51,6 +51,7 @@ import {
   type ActivityItem,
 } from '@/components/pages/activity/data';
 import { FORMER_MEMBER, resetMentionNames } from '@/lib/chat/mentions';
+import { newWindowState, trackWindow, windowed } from '@/lib/chat/__tests__/partition-fake';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -612,26 +613,47 @@ describe('fetchActivityEntries enrichment', () => {
     order(col: string, opts?: unknown): FakeBuilder;
     limit(n: number): FakeBuilder;
     lt(col: string, val: unknown): FakeBuilder;
+    gt(col: string, val: unknown): FakeBuilder;
+    gte(col: string, val: unknown): FakeBuilder;
+    lte(col: string, val: unknown): FakeBuilder;
     like(col: string, pattern: string): FakeBuilder;
     in(col: string, vals: readonly unknown[]): FakeBuilder;
     not(col: string, op: string, val: unknown): FakeBuilder;
     or(filters: string): FakeBuilder;
   }
 
-  function builder(result: QueryResult): FakeBuilder {
+  // `windowRows`: the inbox read walks partition-bounded windows, so answer each
+  // window (and the paging floor probe) with only the canned rows it holds.
+  function builder(result: QueryResult, windowRows = false): FakeBuilder {
+    const w = newWindowState();
+    const range = (op: string, col: string, val: unknown): void => {
+      if (col === 'created_at') w.range.push([op, String(val)]);
+    };
     const self: FakeBuilder = {
       select: () => self,
       eq: () => self,
       is: () => self,
-      order: () => self,
-      limit: () => self,
-      lt: () => self,
+      order: (col, opts) => {
+        const ascending = (opts as { ascending?: boolean } | undefined)?.ascending !== false;
+        w.order.push({ column: col, ascending });
+        return self;
+      },
+      limit: (n) => {
+        w.limit = n;
+        return self;
+      },
+      lt: (col, val) => (range('lt', col, val), self),
+      gt: (col, val) => (range('gt', col, val), self),
+      gte: (col, val) => (range('gte', col, val), self),
+      lte: (col, val) => (range('lte', col, val), self),
       like: () => self,
       in: () => self,
       not: () => self,
       or: () => self,
       then(onfulfilled, onrejected) {
-        return Promise.resolve(result).then(onfulfilled, onrejected);
+        const answer =
+          windowRows && result.data !== null ? { ...result, data: windowed(result.data, w) } : result;
+        return Promise.resolve(answer).then(onfulfilled, onrejected);
       },
     };
     return self;
@@ -646,7 +668,7 @@ describe('fetchActivityEntries enrichment', () => {
     const client = {
       from(table: string): FakeBuilder {
         if (table === 'workspace_members') return builder(members);
-        return builder(tables[table] ?? { data: [], error: null });
+        return builder(tables[table] ?? { data: [], error: null }, table === 'inbox_entries');
       },
     };
     return client as unknown as FakeClient;
@@ -1247,6 +1269,7 @@ describe('fetchActivityEntries query composition', () => {
     const calls: Call[] = [];
     function builder(result: QueryResult, record: boolean): Record<string, unknown> {
       const self: Record<string, unknown> = {};
+      const w = newWindowState();
       for (const method of [
         'select',
         'eq',
@@ -1259,16 +1282,22 @@ describe('fetchActivityEntries query composition', () => {
         'not',
         'or',
         'gt',
+        'gte',
+        'lte',
       ]) {
         self[method] = (...args: unknown[]) => {
           if (record) calls.push({ method, args });
+          trackWindow(w, method, args);
           return self;
         };
       }
       self.then = (
         onfulfilled: (v: QueryResult) => unknown,
         onrejected?: (e: unknown) => unknown,
-      ) => Promise.resolve(result).then(onfulfilled, onrejected);
+      ) =>
+        Promise.resolve(
+          record && result.data !== null ? { ...result, data: windowed(result.data, w) } : result,
+        ).then(onfulfilled, onrejected);
       return self;
     }
     const client = {
@@ -1589,13 +1618,18 @@ describe('plan comments and approvals', () => {
         };
         const result =
           tables[table] ?? (table === 'workspace_members' ? members : { data: [], error: null });
+        const w = newWindowState();
+        const track = (method: string, ...args: unknown[]): void => trackWindow(w, method, args);
         const self = {
           select: () => self,
           eq: () => self,
           is: () => self,
-          order: () => self,
-          limit: () => self,
-          lt: () => self,
+          order: (...args: unknown[]) => (track('order', ...args), self),
+          limit: (...args: unknown[]) => (track('limit', ...args), self),
+          lt: (...args: unknown[]) => (track('lt', ...args), self),
+          gt: (...args: unknown[]) => (track('gt', ...args), self),
+          gte: (...args: unknown[]) => (track('gte', ...args), self),
+          lte: (...args: unknown[]) => (track('lte', ...args), self),
           like: () => self,
           not: () => self,
           or: () => self,
@@ -1607,7 +1641,11 @@ describe('plan comments and approvals', () => {
             onfulfilled?: (value: QueryResult) => unknown,
             onrejected?: (reason: unknown) => unknown,
           ) {
-            return Promise.resolve(result).then(onfulfilled, onrejected);
+            const answer =
+              table === 'inbox_entries' && result.data !== null
+                ? { ...result, data: windowed(result.data, w) }
+                : result;
+            return Promise.resolve(answer).then(onfulfilled, onrejected);
           },
         };
         return self;
@@ -1979,12 +2017,37 @@ describe('brief reopened rows', () => {
         error: null,
       };
       const self: Record<string, unknown> = {};
-      const methods = ['select', 'eq', 'is', 'order', 'limit', 'lt', 'like', 'in', 'not', 'or'];
-      for (const method of methods) self[method] = () => self;
+      const w = newWindowState();
+      const methods = [
+        'select',
+        'eq',
+        'is',
+        'order',
+        'limit',
+        'lt',
+        'gt',
+        'gte',
+        'lte',
+        'like',
+        'in',
+        'not',
+        'or',
+      ];
+      for (const method of methods) {
+        self[method] = (...args: unknown[]) => {
+          trackWindow(w, method, args);
+          return self;
+        };
+      }
       self.then = (
         onfulfilled: (value: QueryResult) => unknown,
         onrejected?: (reason: unknown) => unknown,
-      ) => Promise.resolve(result).then(onfulfilled, onrejected);
+      ) =>
+        Promise.resolve(
+          table === 'inbox_entries' && result.data !== null
+            ? { ...result, data: windowed(result.data, w) }
+            : result,
+        ).then(onfulfilled, onrejected);
       return self;
     };
     return { from } as unknown as FakeClient;

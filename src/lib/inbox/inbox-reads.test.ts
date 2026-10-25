@@ -54,6 +54,9 @@ interface FakeBuilder extends PromiseLike<QueryResult> {
   or(filter: string): FakeBuilder;
   not(col: string, op: string, val: unknown): FakeBuilder;
   gt(col: string, val: unknown): FakeBuilder;
+  gte(col: string, val: unknown): FakeBuilder;
+  lt(col: string, val: unknown): FakeBuilder;
+  lte(col: string, val: unknown): FakeBuilder;
   order(col: string, opts?: unknown): FakeBuilder;
   limit(n: number): FakeBuilder;
   in(col: string, vals: readonly unknown[]): FakeBuilder;
@@ -67,6 +70,9 @@ function builder(result: QueryResult): FakeBuilder {
     or: () => self,
     not: () => self,
     gt: () => self,
+    gte: () => self,
+    lt: () => self,
+    lte: () => self,
     order: () => self,
     limit: () => self,
     in: () => self,
@@ -210,6 +216,7 @@ describe('fetchInboxSince', () => {
           eq: (c: string, v: unknown) => (call.eqs.push([c, v]), self),
           is: () => self,
           gt: () => self,
+          lt: () => self,
           or: (f: string) => (call.ors.push(f), self),
           not: (...a: unknown[]) => (call.nots.push(a), self),
           order: () => self,
@@ -480,7 +487,7 @@ describe('merged counts: the Notifications badge and the Mentions chip count eve
   } {
     const calls: { method: string; args: unknown[] }[] = [];
     const self: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'or', 'not', 'gt', 'order', 'limit', 'in']) {
+    for (const method of ['select', 'eq', 'is', 'or', 'not', 'gt', 'gte', 'lt', 'lte', 'order', 'limit', 'in']) {
       self[method] = (...args: unknown[]) => {
         calls.push({ method, args });
         return self;
@@ -526,7 +533,7 @@ describe('fix 28: fetchNewestInboxAt seeds the live mark from the server clock',
     const calls: { method: string; args: unknown[] }[] = [];
     const tables: string[] = [];
     const self: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'or', 'not', 'gt', 'order', 'limit', 'in']) {
+    for (const method of ['select', 'eq', 'is', 'or', 'not', 'gt', 'gte', 'lt', 'lte', 'order', 'limit', 'in']) {
       self[method] = (...args: unknown[]) => {
         calls.push({ method, args });
         return self;
@@ -555,6 +562,9 @@ describe('fix 28: fetchNewestInboxAt seeds the live mark from the server clock',
       { method: 'select', args: ['created_at'] },
       { method: 'eq', args: ['workspace_id', 'w1'] },
       { method: 'eq', args: ['user_id', 'u1'] },
+      // Both partition-key bounds: the last 30 days up to now plus the skew margin.
+      { method: 'gte', args: ['created_at', expect.any(String)] },
+      { method: 'lt', args: ['created_at', expect.any(String)] },
       { method: 'order', args: ['created_at', { ascending: false }] },
       { method: 'limit', args: [1] },
     ]);
