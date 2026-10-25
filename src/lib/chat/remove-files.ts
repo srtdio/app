@@ -90,6 +90,11 @@ export function removedCountsOf(mimes: readonly string[]): RemovedFiles {
   return counts;
 }
 
+/** A file a surface hands to the removal: its message, asset id and mime (for the counts). */
+export interface RemovableFile extends RemoveFileTarget {
+  mime: string;
+}
+
 /** Voice notes go only by Delete. */
 export function isVoiceMime(mime: string): boolean {
   return mime.startsWith('audio/');
