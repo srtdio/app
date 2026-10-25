@@ -377,9 +377,11 @@ CREATE POLICY workspace_members_select ON public.workspace_members AS PERMISSIVE
 -- the job exists. CI containers have no pg_cron.
 DO $$
 BEGIN
-  IF to_regclass('cron.job') IS NOT NULL
-     AND EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'chat-tasks-fire-due') THEN
-    PERFORM cron.unschedule('chat-tasks-fire-due');
+  -- Nested and dynamic so cron.job is never parsed when pg_cron is absent.
+  IF to_regclass('cron.job') IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+      EXECUTE 'SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = ''chat-tasks-fire-due''';
+    END IF;
   END IF;
 END $$;
 DROP FUNCTION IF EXISTS public.chat_task_create(text, text, text, text, smallint, timestamptz, uuid);
