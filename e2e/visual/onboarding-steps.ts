@@ -56,8 +56,6 @@ export interface OnboardingScreen {
   prepare?: (network: HarnessNetwork, page: Page, now: number) => Promise<void> | void;
   /** Waits for the page, then walks to the state to capture. */
   steps: (page: Page) => Promise<void>;
-  /** Regions the visual lock masks: a product race no walker can settle. */
-  mask?: (page: Page) => Locator[];
 }
 
 // ---------------------------------------------------------------------------

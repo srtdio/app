@@ -55,8 +55,6 @@ interface Screen {
   prepare?: (network: HarnessNetwork, page: Page, now: number) => Promise<void> | void;
   /** No session (the guest routes and the invite link's Join card). */
   signedOut?: boolean;
-  /** Regions masked in the screenshot (a product race no walker can settle). */
-  mask?: (page: Page) => Locator[];
   url: string;
   /** Waits for the page, then walks to the state to capture. */
   steps: (page: Page) => Promise<void>;
@@ -690,7 +688,6 @@ for (const screen of SCREENS) {
       maxDiffPixelRatio: 0.002,
       animations: 'disabled',
       caret: 'hide',
-      ...(screen.mask !== undefined ? { mask: screen.mask(page) } : {}),
     });
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   });
