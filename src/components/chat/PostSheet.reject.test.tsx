@@ -192,7 +192,7 @@ async function press(el: Element | null | undefined): Promise<void> {
   await settle();
 }
 
-function buttonNamed(label: string, scope: ParentNode = document): HTMLButtonElement | undefined {
+function buttonNamed(label: string, scope: Document | Element = document): HTMLButtonElement | undefined {
   return [...scope.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
 }
 
