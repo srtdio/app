@@ -23,6 +23,7 @@ const DOCUMENTED = [
   'IconCarousel',
   'IconChat',
   'IconCheck',
+  'IconCheckCircle',
   'IconChevronDown',
   'IconChevronLeft',
   'IconChevronRight',

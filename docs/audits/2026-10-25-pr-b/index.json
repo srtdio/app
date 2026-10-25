@@ -2,6 +2,7 @@
   "pipeline": ["B1-03", "B1-04", "A1-01", "A1-03", "A6-01"],
   "pipeline-approver": ["B1-03", "B1-04", "A4-01"],
   "plan-tab": ["B1-01", "B1-04", "A1-01"],
+  "notifications": ["B1-03", "B1-04", "B5-01"],
   "briefs-approver": ["B1-03", "B1-04", "A1-01"],
   "briefs-empty": ["C1-03", "A1-03", "B1-04"],
   "assets": ["B1-03", "B1-04", "A1-01"],

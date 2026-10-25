@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
-import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
-import { IconCheck, IconChevronDown, IconSort, ICON_SIZE } from '@/components/ui/icons';
+import { IconCheck, IconSort, ICON_SIZE } from '@/components/ui/icons';
 import { useMediaQuery } from '@/lib/use-media-query';
 
 export interface SortOption<T extends string = string> {
@@ -52,11 +51,10 @@ interface SortMenuProps<T extends string> {
   onChange: (value: T) => void;
   /** Accessible label for the trigger and menu. Defaults to "Sort". */
   label?: string;
-  /** List toolbars: one IconButton (sort icon, no label text, no chevron). */
-  iconOnly?: boolean;
 }
 
-// Canonical sort control. Generic over the option value so every page
+// Canonical sort control: one IconButton (sort icon, label, no chevron), the
+// list-toolbar rule. Generic over the option value so every page
 // (Assets first, then Pipeline/Briefs/Activity) reuses it without hardcoding.
 // Desktop = popover anchored under the trigger; mobile = bottom Sheet. The
 // active option carries a checkmark and aria-checked.
@@ -65,18 +63,16 @@ export function SortMenu<T extends string>({
   value,
   onChange,
   label = 'Sort',
-  iconOnly = false,
 }: SortMenuProps<T>) {
   const [open, setOpen] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const active = options.find((option) => option.value === value);
 
   function choose(next: T): void {
     onChange(next);
     setOpen(false);
   }
 
-  const trigger = iconOnly ? (
+  const trigger = (
     <IconButton
       type="button"
       label={label}
@@ -87,20 +83,6 @@ export function SortMenu<T extends string>({
     >
       <IconSort size={ICON_SIZE.control} />
     </IconButton>
-  ) : (
-    <Button
-      type="button"
-      variant="secondary"
-      aria-haspopup="menu"
-      aria-expanded={open}
-      aria-label={label}
-      onClick={() => setOpen((prev) => !prev)}
-      className="shrink-0"
-    >
-      <IconSort size={ICON_SIZE.inline} />
-      <span className="hidden sm:inline">{active?.label ?? label}</span>
-      <IconChevronDown size={ICON_SIZE.inline} className="text-fg-3" />
-    </Button>
   );
 
   const list = (

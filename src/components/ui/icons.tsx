@@ -20,6 +20,7 @@ import {
   CalendarDaysIcon,
   CameraIcon,
   ChatBubbleOvalLeftIcon,
+  CheckCircleIcon,
   CheckIcon,
   CheckBadgeIcon,
   ChevronDownIcon,
@@ -154,6 +155,11 @@ export function IconUser(props: IconProps) {
 
 export function IconCheck(props: IconProps) {
   return <Hero icon={CheckIcon} {...props} />;
+}
+
+/** Select mode (chat list): a tick in a circle. Tasks keep IconTaskSquare. */
+export function IconCheckCircle(props: IconProps) {
+  return <Hero icon={CheckCircleIcon} {...props} />;
 }
 
 export function IconSearch(props: IconProps) {

@@ -22,6 +22,7 @@ SCREENS = [
     "pipeline",
     "pipeline-approver",
     "plan-tab",
+    "notifications",
     "briefs-approver",
     "briefs-empty",
     "assets",

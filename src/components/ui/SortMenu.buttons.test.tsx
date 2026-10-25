@@ -24,15 +24,19 @@ function classOf(el: ReactElement): string[] {
 const BAD = ['h-9', 'md:h-9', 'h-12', 'rounded-md', 'rounded-xl', 'font-semibold', 'text-sm'];
 
 describe('SortMenu buttons', () => {
-  it('the trigger is a 44px, 8px-radius secondary button at every width', () => {
+  it('the trigger is one 44px, 8px-radius IconButton labelled Sort, no chevron', () => {
     const html = renderToStaticMarkup(
       <SortMenu options={options} value="recent" onChange={() => {}} />,
     );
     const trigger = /<button[^>]*aria-haspopup="menu"[^>]*>/.exec(html)?.[0] ?? '';
     expect(trigger).toContain('h-11');
+    expect(trigger).toContain('w-11');
     expect(trigger).toContain('rounded-lg');
-    expect(trigger).toContain('text-base');
-    expect(trigger).toContain('font-medium');
+    expect(trigger).toContain('aria-label="Sort"');
+    // One sort icon only: no label text, no dropdown chevron.
+    const body = /aria-haspopup="menu"[^>]*>([\s\S]*?)<\/button>/.exec(html)?.[1] ?? '';
+    expect(body.match(/<svg/g)).toHaveLength(1);
+    expect(body).not.toContain('Recent');
     for (const bad of BAD) expect(trigger.split(/[\s"]/)).not.toContain(bad);
   });
 

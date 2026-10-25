@@ -137,6 +137,13 @@ const SCREENS: Screen[] = [
       ),
   },
   {
+    name: 'notifications',
+    seed: creator,
+    url: '/activity',
+    steps: async (page) =>
+      waitFor(page, [page.getByText('Priya Raman mentioned you').first()], 'activity'),
+  },
+  {
     name: 'briefs-approver',
     seed: approver,
     url: '/briefs',

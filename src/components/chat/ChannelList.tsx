@@ -16,10 +16,10 @@ import { Chip } from '@/components/ui/Chip';
 import {
   ICON_SIZE,
   IconChat,
+  IconCheckCircle,
   IconEyeOff,
   IconMore,
   IconPlus,
-  IconTaskSquare,
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
@@ -1114,7 +1114,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                 <>
                   {select !== undefined && hasChannels ? (
                     <IconButton label="Select" onClick={select.onStart}>
-                      <IconTaskSquare size={ICON_SIZE.control} />
+                      <IconCheckCircle size={ICON_SIZE.control} />
                     </IconButton>
                   ) : null}
                   <Button
