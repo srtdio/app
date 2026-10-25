@@ -6,9 +6,8 @@ import type { Row } from '../fixtures/postgrest';
 // The chat thread mounts a bounded window of rows (src/lib/chat/thread-window.ts):
 // the latest 50 on open, 50 more each time the reader scrolls to the top
 // (loaded rows first, else the older page), never more than 300. Each prepend
-// keeps the first message on screen exactly where it was, whether the rows
-// came from the network (an older page) or from memory (rows still loaded
-// after Scroll to latest). Tagged @theme so it runs in dark and light. Linux
+// keeps the first message on screen exactly where it was (each older page
+// comes from the network). Tagged @theme so it runs in dark and light. Linux
 // WebKit approximates iOS WebKit; it is not iOS.
 
 const MAX_MOUNTED = 300;
@@ -141,14 +140,10 @@ test('chat thread window: prepends keep the first visible message in place @them
   const afterPage = await mounted(page);
   expect(afterPage).toBeGreaterThan(open);
 
-  // 2. Scroll to latest: the latest rows only; the rest stay loaded, so the
-  // next scroll to the top mounts them from memory (no skeleton).
+  // 2. Scroll to latest: the newest row is already mounted, so the window
+  // keeps every mounted row (nothing unmounts, nothing is read again).
   await page.locator('[data-latest-button]').click();
-  await expect.poll(() => mounted(page)).toBe(STEP);
   await frames(page);
-  first = await firstMounted(page);
-  const fromMemory = await scrollToTop(page);
-  await expectPrependHolds(page, fromMemory, first);
   expect(await mounted(page)).toBe(afterPage);
 
   // 3. Page to the oldest row: never more than MAX_MOUNTED rows mounted.
