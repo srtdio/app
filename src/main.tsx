@@ -8,7 +8,7 @@ import {
   runStaleDeployGuard,
   type StaleDeployWarn,
 } from '@/lib/stale-deploy';
-import { isChunkLoadError, reloadOnce } from '@/lib/chunk-reload';
+import { reloadIfStale } from '@/lib/chunk-reload';
 
 // Entry point. Decides synchronously whether "/" is a guest visit; a guest gets
 // the homepage chunk only (no App, router, Supabase, Sentry, Agora or app CSS).
@@ -25,10 +25,12 @@ const lazyWarn: StaleDeployWarn = (message, context) => {
 };
 
 // A stale tab can ask for chunks that no longer exist after a deploy. A failed
-// boot import goes through the app's one chunk-error handler (reload once per
-// session, shared guard). Anything else (a config error, a bug) is rethrown.
-function recoverFromFailedBoot(err: unknown): void {
-  if (isChunkLoadError(err) && reloadOnce()) return;
+// boot import goes through the app's one chunk-error handler: it reloads once
+// per session (shared guard) only when the missing chunk is proven stale (HEAD
+// 404 or 410). Anything else (a config error, a bug, an aborted import) is
+// rethrown.
+async function recoverFromFailedBoot(err: unknown): Promise<void> {
+  if (await reloadIfStale(err)) return;
   throw err;
 }
 

@@ -157,6 +157,7 @@ export const AREAS: Area[] = [
       'chat-plan',
       'chat-post-sheet-decisions',
       'chat-status-ticker',
+      'chunk-reload-navigation',
       'detail-frame',
       'files-open-in-viewer',
       'onboarding-creator',
