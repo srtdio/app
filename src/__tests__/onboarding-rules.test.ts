@@ -106,6 +106,16 @@ describe('onboarding and induction follow the design rules', () => {
     expect(flow).toContain('max-w-[340px] rounded-xl border border-border bg-panel p-3.5"');
   });
 
+  it('the intro card is the step card role on the panel: Start primary, Skip tour ghost', () => {
+    const guide = FILES.find(({ rel }) => rel === 'induction/GuideParts.tsx')?.src ?? '';
+    expect(guide).toContain("kind === 'intro' ? 'rounded-2xl border-border'");
+    expect(guide).toContain('border bg-panel p-4 text-fg shadow-2xl');
+    expect(guide).not.toMatch(/bg-accent text-accent-fg|text-accent-fg/);
+    expect(guide).toContain('<Button variant="primary" onClick={onPress}>');
+    // Skip tour is ghost (text-fg-2), which contrast.test holds at 4.5:1 on panel in both themes.
+    expect(guide).not.toMatch(/variant=\{hero/);
+  });
+
   it('errors read "Couldn\'t {action}. {reason}"', () => {
     const literals = hits(/setError\((['"`])(?:(?!\1).)*\1/);
     expect(literals.length).toBeGreaterThan(0);

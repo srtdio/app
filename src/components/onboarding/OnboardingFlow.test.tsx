@@ -534,7 +534,7 @@ describe('pre-app screens', () => {
     await type(document.querySelector<HTMLInputElement>('#ob-brand')!, 'Kite');
     await click(button('Ask them to join'));
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(
-      'You have sent this 5 times. Ask them to check spam, or write to us.',
+      "Couldn't send that again. You have sent it 5 times, so ask them to check spam, or write to us.",
     );
   });
 

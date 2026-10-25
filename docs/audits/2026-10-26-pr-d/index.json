@@ -95,10 +95,12 @@
       "rows": ["light", "dark"],
       "columns": ["phone before", "phone after", "laptop before", "laptop after"],
       "changes": [
-        "Start secondary (no overrides)",
+        "intro card on the panel: border, radius 16, shadow-2xl",
+        "Start primary",
+        "Skip tour ghost (fg-2, 4.5:1 on panel)",
         "card title base/500",
         "eyebrow sm",
-        "pills bg-overlay-surface"
+        "pills bg-panel-2"
       ]
     },
     "onboarding-tour-1": {

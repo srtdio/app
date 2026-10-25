@@ -11,12 +11,21 @@
 // (tsconfig.json paths, '@/' included). A changed file selects the specs of
 // every area whose closure holds it. The whole suite runs for anything in the
 // app shell's closure, anything in ALWAYS_FULL, and any file no closure
-// reaches (unknown files stay safe).
+// reaches (unknown files stay safe). A file that sets a data-induction anchor
+// also runs the onboarding tour walks (INDUCTION_ANCHOR_SPECS).
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
-import { ALWAYS_FULL, AREAS, FULL_EXTENSIONS, SHELL_ROOTS, type Area } from './e2e-areas.ts';
+import {
+  ALWAYS_FULL,
+  AREAS,
+  FULL_EXTENSIONS,
+  INDUCTION_ANCHOR_MARK,
+  INDUCTION_ANCHOR_SPECS,
+  SHELL_ROOTS,
+  type Area,
+} from './e2e-areas.ts';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -134,10 +143,22 @@ export function checkSpecCoverage(areas: Area[] = AREAS): void {
   if (problems.length > 0) throw new Error(`e2e-select: ${problems.join('; ')}`);
 }
 
+/** A changed file's text, or null when it no longer exists (a deletion). */
+export function readRepoFile(rel: string): string | null {
+  const abs = path.join(REPO_ROOT, rel);
+  return existsSync(abs) && statSync(abs).isFile() ? readFileSync(abs, 'utf8') : null;
+}
+
+/** true when the file sets a data-induction anchor the tour may point at. */
+export function setsInductionAnchor(text: string | null): boolean {
+  return text !== null && INDUCTION_ANCHOR_MARK.test(text);
+}
+
 export function select(
   changed: string[],
   graph: Graph = buildGraph(),
   areas: Area[] = AREAS,
+  readFile: (rel: string) => string | null = readRepoFile,
 ): Selection {
   const log: string[] = [];
   const specs = new Set<string>();
@@ -145,6 +166,10 @@ export function select(
   for (const raw of changed) {
     const file = raw.trim().replace(/^\.\//, '');
     if (!file) continue;
+    if (setsInductionAnchor(readFile(file))) {
+      for (const s of INDUCTION_ANCHOR_SPECS) specs.add(s);
+      log.push(`${file}: sets a data-induction anchor, onboarding tour specs`);
+    }
     if (ALWAYS_FULL.some((p) => (p.endsWith('/') ? file.startsWith(p) : file === p))) {
       log.push(`${file}: shared file, whole suite`);
       all = true;

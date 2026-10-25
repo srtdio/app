@@ -1,8 +1,15 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { AREAS } from './e2e-areas.ts';
-import { REPO_ROOT, buildGraph, checkSpecCoverage, select, type Graph } from './e2e-select.ts';
+import { AREAS, INDUCTION_ANCHOR_SPECS } from './e2e-areas.ts';
+import {
+  REPO_ROOT,
+  buildGraph,
+  checkSpecCoverage,
+  select,
+  setsInductionAnchor,
+  type Graph,
+} from './e2e-select.ts';
 
 const HOME = ['e2e/tests/demo-booking.spec.ts', 'e2e/tests/home-pages.spec.ts'];
 const isChat = (s: string): boolean => s.startsWith('e2e/tests/chat-');
@@ -77,5 +84,38 @@ describe('e2e-select', () => {
       specs: a.specs.filter((s) => s !== 'e2e/tests/smoke.spec.ts'),
     }));
     expect(() => checkSpecCoverage(without)).toThrow(/smoke\.spec\.ts/);
+  });
+
+  it('a file that sets a data-induction anchor adds the three onboarding tour specs', () => {
+    const settings = 'src/components/settings/ProfileSettingsPanel.tsx';
+    const marked = (rel: string): string | null =>
+      rel === settings ? '<Button data-induction={INDUCTION_KEYS.membersInvite} />' : null;
+    const r = select([settings], graph, AREAS, marked);
+    expect(r.all).toBe(false);
+    for (const spec of INDUCTION_ANCHOR_SPECS) expect(r.specs).toContain(spec);
+    expect(r.log.some((line) => line.includes('data-induction anchor'))).toBe(true);
+  });
+
+  it('a file with no anchor adds no onboarding tour spec beyond its area', () => {
+    const r = select(['src/components/home/X.tsx'], graph, AREAS, () => '<p>No anchor</p>');
+    expect(r.specs).toEqual(HOME);
+  });
+
+  it('real anchor files in the repo select the tour specs', () => {
+    const r = select(['src/components/pages/BriefsPage.tsx'], graph);
+    expect(r.all || INDUCTION_ANCHOR_SPECS.every((s) => r.specs.includes(s))).toBe(true);
+  });
+
+  it('reads every anchor form: attribute, prop object key and setAttribute name', () => {
+    expect(setsInductionAnchor('data-induction={K.x}')).toBe(true);
+    expect(setsInductionAnchor("{ 'data-induction': K.x }")).toBe(true);
+    expect(setsInductionAnchor("el.setAttribute('data-induction', K.x)")).toBe(true);
+    expect(setsInductionAnchor('data-induction-box=""')).toBe(false);
+    expect(setsInductionAnchor(null)).toBe(false);
+  });
+
+  it('the tour specs exist and are listed by an area', () => {
+    const listed = new Set(AREAS.flatMap((a) => a.specs));
+    for (const spec of INDUCTION_ANCHOR_SPECS) expect(listed.has(spec), spec).toBe(true);
   });
 });

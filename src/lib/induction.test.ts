@@ -713,10 +713,18 @@ describe('the first post', () => {
 describe('brandRequestErrorMessage', () => {
   it('maps too_many_requests to the five-sends line', () => {
     expect(brandRequestErrorMessage('too_many_requests')).toBe(
-      'You have sent this 5 times. Ask them to check spam, or write to us.',
+      "Couldn't send that again. You have sent it 5 times, so ask them to check spam, or write to us.",
     );
-    expect(brandRequestErrorMessage('invalid_payload')).toContain('email');
+    expect(brandRequestErrorMessage('invalid_payload')).toBe(
+      "Couldn't send that. Check the email address and try again.",
+    );
     expect(brandRequestErrorMessage('boom')).toBe("Couldn't send that. Try again.");
+  });
+
+  it('every message reads "Couldn\'t {action}. {reason}"', () => {
+    for (const code of ['too_many_requests', 'invalid_payload', 'boom']) {
+      expect(brandRequestErrorMessage(code)).toMatch(/^Couldn't [^.]+\. \S/);
+    }
   });
 });
 

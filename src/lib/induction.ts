@@ -700,8 +700,10 @@ export async function withRetries<T>(
 /** brand_agency_request failures as people read them. */
 export function brandRequestErrorMessage(message: string): string {
   if (message.includes('too_many_requests')) {
-    return 'You have sent this 5 times. Ask them to check spam, or write to us.';
+    return "Couldn't send that again. You have sent it 5 times, so ask them to check spam, or write to us.";
   }
-  if (message.includes('invalid_payload')) return 'Check the email address and try again.';
+  if (message.includes('invalid_payload')) {
+    return "Couldn't send that. Check the email address and try again.";
+  }
   return "Couldn't send that. Try again.";
 }

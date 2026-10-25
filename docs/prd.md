@@ -152,6 +152,7 @@ Subscription is per workspace. No caps on workspaces per account.
 | Additional workspaces | From workspace switcher |
 | First-run state | Empty Pipeline, empty Activity, empty Assets |
 | Profile completion | Designation and avatar optional, added later. |
+| Current design | Onboarding and the tour always run on the current app design; every UI change that touches a tour control updates the tour in the same PR. |
 
 ### Empty-state checklist
 

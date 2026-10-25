@@ -117,6 +117,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Long-press on touch and right-click on laptop open the same ActionMenu. Esc closes every overlay and returns focus to its trigger.
 - Exception: plan edit rows open their menu on right-click only; long-press there is drag.
 - Every UI change updates the visual baselines in the same PR and lists the changed screens. Never update baselines to hide an unplanned change.
+- Onboarding follows the app: it uses only shared pieces, the tour finds controls by data-induction. Any UI change that moves, renames or removes a data-induction control updates the tour step, its copy (src/lib/induction-copy.ts) and its visual baselines in the same PR. Never delete a data-induction attribute without updating the tour.
 
 ## Canonical living docs
 

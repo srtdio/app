@@ -333,7 +333,7 @@ export interface CardCopy {
   skip?: string;
 }
 
-/** The intro (hero, indigo, chapter pills, Start) or closing (plain, Done) card, docked like the bar. */
+/** The intro (chapter pills, Start) or closing (Done) card on the panel, docked like the bar. */
 export function GuideCard({
   kind,
   copy,
@@ -349,25 +349,21 @@ export function GuideCard({
   dock: DockAt;
 }): ReactElement {
   const placed = dockStyle(dock);
-  const hero = kind === 'intro';
+  // The intro is the step card's role (sheet/dialog: 16, shadow-2xl); the
+  // closing and clear cards keep the popover radius.
+  const shape = kind === 'intro' ? 'rounded-2xl border-border' : 'rounded-xl border-border-strong';
   return (
     <section
       {...{ [CHROME_ATTR]: '' }}
       data-induction-card={kind}
       aria-label={copy.title}
       aria-live="polite"
-      className={`fixed ${GUIDE_Z} ${placed.className} rounded-xl p-4 shadow-2xl ${hero ? 'bg-accent text-accent-fg' : 'border border-border-strong bg-panel text-fg'}`}
+      className={`fixed ${GUIDE_Z} ${placed.className} ${shape} border bg-panel p-4 text-fg shadow-2xl`}
       style={placed.style}
     >
-      {copy.eyebrow !== '' ? (
-        <p className={`font-mono text-sm ${hero ? 'opacity-80' : 'text-fg-3'}`}>{copy.eyebrow}</p>
-      ) : null}
+      {copy.eyebrow !== '' ? <p className="font-mono text-sm text-fg-3">{copy.eyebrow}</p> : null}
       <p className="mt-1 text-base font-medium [text-wrap:balance]">{copy.title}</p>
-      <p
-        className={`mt-1 text-base leading-snug [text-wrap:pretty] ${hero ? 'opacity-90' : 'text-fg-2'}`}
-      >
-        {copy.body}
-      </p>
+      <p className="mt-1 text-base leading-snug text-fg-2 [text-wrap:pretty]">{copy.body}</p>
       {copy.stats !== undefined && copy.stats.length > 0 ? (
         <div className="mt-3 flex gap-3">
           {copy.stats.map((stat) => (
@@ -383,7 +379,7 @@ export function GuideCard({
           {copy.pills.map((pill) => (
             <span
               key={pill}
-              className="rounded-full bg-overlay-surface px-2.5 py-1 text-sm font-semibold"
+              className="rounded-full bg-panel-2 px-2.5 py-1 text-sm font-semibold text-fg-2"
             >
               {pill}
             </span>
@@ -394,15 +390,15 @@ export function GuideCard({
         {onSkip !== undefined && copy.skip !== undefined ? (
           <Button
             type="button"
-            variant={hero ? 'link' : 'ghost'}
+            variant="ghost"
             data-induction-skip=""
             onClick={onSkip}
-            className={`${GUIDE_ACTION} ${hero ? 'opacity-90 focus-visible:ring-accent-fg' : ''}`}
+            className={GUIDE_ACTION}
           >
-            {hero ? <span className="text-accent-fg">{copy.skip}</span> : copy.skip}
+            {copy.skip}
           </Button>
         ) : null}
-        <Button variant={hero ? 'secondary' : 'primary'} onClick={onPress}>
+        <Button variant="primary" onClick={onPress}>
           {copy.button}
         </Button>
       </div>
