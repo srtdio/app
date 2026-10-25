@@ -74,14 +74,22 @@ async function reserveNumbers(g: GenericClient, workspaceId: string, count: numb
   return first;
 }
 
+/** Insert rows one per request (GenericClient's insert takes one row), 25 at a time, ids in row order. */
 async function bulkInsertBriefs(g: GenericClient, rows: Record<string, unknown>[]) {
-  const res = await g.from('briefs').insert(rows).select('id');
-  if (res.error) throw new Error(`briefs bulk insert failed: ${res.error.message}`);
-  const inserted = (res.data as { id: string }[] | null) ?? [];
-  if (inserted.length !== rows.length) {
-    throw new Error(`briefs bulk insert returned ${inserted.length} of ${rows.length}`);
+  const ids: string[] = [];
+  for (let start = 0; start < rows.length; start += 25) {
+    const chunk = rows.slice(start, start + 25);
+    const results = await Promise.all(
+      chunk.map((row) => g.from('briefs').insert(row).select('id')),
+    );
+    for (const res of results) {
+      if (res.error) throw new Error(`briefs insert failed: ${res.error.message}`);
+      const id = (res.data as { id: string }[] | null)?.[0]?.id;
+      if (id === undefined) throw new Error('briefs insert returned no row');
+      ids.push(id);
+    }
   }
-  return inserted.map((row) => row.id);
+  return ids;
 }
 
 /** Read every page through listBriefsPage; returns the ids in read order and the page count. */
