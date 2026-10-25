@@ -22,7 +22,7 @@ export interface PipelineFeedProps {
   /** The active workspace key, threaded into every card for its pretty /p link. */
   workspaceKey?: string | null;
   /** The card's ⋯ Move row (also reached by long-press or right-click) opens the move sheet. */
-  onLongPressPost: (post: PipelinePost) => void;
+  onLongPressPost: (post: PipelinePost, to?: Stage) => void;
   /**
    * sessionStorage key for the Show more depth, built from the filter query, so
    * Back to the same filters restores the same depth. Absent: not remembered.
@@ -60,7 +60,7 @@ function cardGrid(
   posts: PipelinePost[],
   cache: PresignCache,
   presignEnabled: boolean,
-  onLongPressPost: (post: PipelinePost) => void,
+  onLongPressPost: (post: PipelinePost, to?: Stage) => void,
   workspaceKey: string | null,
   showStage: boolean,
   timeZone: string | null | undefined,

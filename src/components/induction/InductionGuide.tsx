@@ -76,35 +76,35 @@ import {
   useTypingNow,
   APP_TYPING_PAUSE_MS,
 } from './guide-hooks';
+import { useBottomInset } from '@/lib/bottom-inset';
 import { useLiveTick } from './useLiveTick';
-
-const PHONE_TAB_BAR = 56;
 
 type StepResolution = Extract<Resolution, { kind: 'step' }>;
 type CardResolution = Extract<Resolution, { kind: 'intro' | 'closing' }>;
 
-export function InductionGuide({ tabsShown }: { tabsShown: boolean }): ReactElement | null {
+export function InductionGuide(): ReactElement | null {
   const ctx = useInduction();
   if (ctx === null || ctx.resolution.kind === 'off' || ctx.script === undefined) return null;
-  return <ActiveGuide ctx={ctx} script={ctx.script} tabsShown={tabsShown} />;
+  return <ActiveGuide ctx={ctx} script={ctx.script} />;
 }
 
 function ActiveGuide({
   ctx,
   script,
-  tabsShown,
 }: {
   ctx: InductionContextValue;
   script: RouteScript;
-  tabsShown: boolean;
 }): ReactElement | null {
   const laptop = useIsLaptop();
   useStepNavigation(ctx);
   const safeTop = useRef<HTMLDivElement>(null);
   const safeBottom = useRef<HTMLDivElement>(null);
+  // The bar docks above the shared bottom inset on a phone (the tab bar, a
+  // composer or decision bar, each with its safe area), else the safe area.
+  const sharedInset = useBottomInset();
   const insets = {
     top: safeTop.current?.offsetHeight ?? 0,
-    bottom: (safeBottom.current?.offsetHeight ?? 0) + (tabsShown && !laptop ? PHONE_TAB_BAR : 0),
+    bottom: Math.max(safeBottom.current?.offsetHeight ?? 0, laptop ? 0 : sharedInset),
   };
   const { resolution } = ctx;
   const hold = useResultHold(ctx);

@@ -471,7 +471,7 @@ export interface PipelineSurfaceProps {
   workspaceKey: string | null;
   onViewAll: (stage: Stage) => void;
   onMovePost: (postId: string, toStage: Stage, options?: MoveOptions) => void;
-  onLongPressPost: (post: PipelinePost) => void;
+  onLongPressPost: (post: PipelinePost, to?: Stage) => void;
   /** The viewer's workspace role: filters the board's drop targets. */
   role: string | null;
   /** The role read has landed: only then are board cards draggable. Default true. */
@@ -782,6 +782,8 @@ export function PipelinePage() {
   const [postsFailed, setPostsFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [movePostTarget, setMovePostTarget] = useState<PipelinePost | null>(null);
+  // The ⋯ menu's Approve row: the move sheet opens on its approve confirm.
+  const [moveIntent, setMoveIntent] = useState<Stage | null>(null);
   // A Reject, Park or Send for review waiting on its ask-first sheet.
   const [confirmMove, setConfirmMove] = useState<{
     post: PipelinePost;
@@ -1055,12 +1057,20 @@ export function PipelinePage() {
     [movePost],
   );
   // Move on a card this viewer cannot move does nothing.
+  // A ⋯ move row passes its target: Approve opens the move sheet straight on
+  // its approve confirm, every other target takes the sheet's own path
+  // (ask first where it asks). No target (the Move row): the move sheet.
   const openMove = useCallback(
-    (post: PipelinePost): void => {
+    (post: PipelinePost, to?: Stage): void => {
       if (roleStatus === 'ready' && !hasAllowedMove(role, post.stage as Stage)) return;
+      if (to !== undefined && to !== 'approved') {
+        requestSheetMove(post.id, to);
+        return;
+      }
+      setMoveIntent(to ?? null);
       setMovePostTarget(post);
     },
-    [role, roleStatus],
+    [role, roleStatus, requestSheetMove],
   );
   const confirmCreator =
     confirmMove === null
@@ -1142,7 +1152,11 @@ export function PipelinePage() {
       <MoveSheet
         open={movePostTarget !== null}
         post={movePostTarget}
-        onClose={() => setMovePostTarget(null)}
+        intent={moveIntent}
+        onClose={() => {
+          setMovePostTarget(null);
+          setMoveIntent(null);
+        }}
         onMove={requestSheetMove}
         role={role}
         roleStatus={roleStatus}

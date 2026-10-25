@@ -20,6 +20,7 @@ import {
   IconTickSingle,
 } from '@/components/ui/icons';
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
+import { useMenuGesture } from '@/components/ui/useLongPress';
 import {
   ACTOR_ROW_EVENTS,
   MENTION_EVENT_TYPE,
@@ -456,6 +457,9 @@ export function ActivityCard({
     const frame = window.requestAnimationFrame(() => setSettled(true));
     return () => window.cancelAnimationFrame(frame);
   }, [settled]);
+  // Long-press on touch and right-click on laptop open the row's ⋯ menu.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const gesture = useMenuGesture(() => setMenuOpen(true));
 
   const lead = group[0];
   if (lead === undefined) return null;
@@ -504,6 +508,13 @@ export function ActivityCard({
       data-activity-event={lead.eventType}
       data-activity-id={lead.id}
       {...(entering ? { 'data-activity-entering': '' } : {})}
+      {...gesture.handlers}
+      onClickCapture={(event) => {
+        // The click that trails a long-press never also opens the row.
+        if (!gesture.consumeClickSuppression()) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
       className={cn(
         'flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-200',
         unread ? 'border-accent-line' : 'border-border',
@@ -665,6 +676,8 @@ export function ActivityCard({
           ) : null}
           <div data-activity-menu="" className={cn('-mr-2', rest.length === 0 && 'ml-auto')}>
             <ActivityRowMenu
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
               snoozed={snoozed}
               unread={unread}
               onSnooze={(kind) => {

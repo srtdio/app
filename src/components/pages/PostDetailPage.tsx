@@ -1901,7 +1901,7 @@ export function PostDetailPage({
               className="rounded-xl border border-border bg-panel-2 p-4"
             >
               <div className="flex items-center gap-3">
-                <Avatar name={workspaceName ?? ''} role="header" />
+                <Avatar name={workspaceName ?? ''} role="header" kind="group" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-base font-medium text-fg">
                     {workspaceName ?? ''}

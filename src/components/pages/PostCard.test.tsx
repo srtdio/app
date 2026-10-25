@@ -490,3 +490,53 @@ describe('menu gesture', () => {
     expect(src).toContain('onOpenChange={setMenuOpen}');
   });
 });
+
+describe('PostCard ⋯ menu: every move the move sheet offers', () => {
+  it('lists each moveActions row for the role, in order, after Open and Copy link', async () => {
+    const { cardMenuItems } = await import('@/components/pages/PostCard');
+    const { moveActions } = await import('@/components/pages/pipeline/MoveSheet');
+    const noop = (): void => {};
+    for (const role of ['client', 'agency', 'creator', null]) {
+      for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected'] as const) {
+        const moves = moveActions(role, stage);
+        const items = cardMenuItems({
+          onOpen: noop,
+          onCopyLink: noop,
+          onMove: noop,
+          moves: moves.map((m) => ({ ...m, onSelect: noop })),
+        });
+        const labels = items.map((i) => i.label);
+        expect(labels.slice(0, 2)).toEqual(['Open', 'Copy link']);
+        if (moves.length > 0) {
+          expect(labels.slice(2)).toEqual(moves.map((m) => m.label));
+          expect(labels).not.toContain('Move');
+        } else {
+          expect(labels.slice(2)).toEqual(['Move']);
+        }
+      }
+    }
+  });
+
+  it('Reject is the danger row; icons: review arrow, approve check, park pause, reject X', async () => {
+    const { cardMenuItems } = await import('@/components/pages/PostCard');
+    const icons = await import('@/components/ui/icons');
+    const noop = (): void => {};
+    const items = cardMenuItems({
+      onOpen: noop,
+      onCopyLink: noop,
+      moves: [
+        { to: 'review', label: 'Send for review', tone: 'default', onSelect: noop },
+        { to: 'approved', label: 'Approve', tone: 'default', onSelect: noop },
+        { to: 'parked', label: 'Park', tone: 'default', onSelect: noop },
+        { to: 'rejected', label: 'Reject', tone: 'bad', onSelect: noop },
+      ],
+    });
+    const byLabel = new Map(items.map((i) => [i.label, i]));
+    expect(byLabel.get('Send for review')?.icon).toBe(icons.IconArrowUpRight);
+    expect(byLabel.get('Approve')?.icon).toBe(icons.IconCheck);
+    expect(byLabel.get('Park')?.icon).toBe(icons.IconPause);
+    expect(byLabel.get('Reject')?.icon).toBe(icons.IconX);
+    expect(byLabel.get('Reject')?.tone).toBe('danger');
+    expect(byLabel.get('Park')?.tone).toBeUndefined();
+  });
+});

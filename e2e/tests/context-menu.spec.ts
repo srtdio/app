@@ -10,7 +10,8 @@ import {
 // PR C: anything with a long-press menu on touch opens the same ActionMenu on
 // right-click on a laptop (useMenuGesture). Laptop only (@desktop,
 // desktop-webkit 1280x800): a right-click on a chat row, a message bubble, a
-// Pipeline card and a file tile on Assets opens a menu with its rows. The
+// Pipeline card, a file tile on Assets, an Activity row and a Members row opens
+// a menu with its rows. The
 // iPhone project skips (long-press is covered by the chat and assets specs).
 
 test.beforeEach(({ page }) => {
@@ -63,4 +64,19 @@ test('right-click a file tile on Assets opens its ActionMenu @desktop', async ({
   await page.goto('/assets');
   const tile = page.getByRole('button', { name: `View ${IN_USE_NAME}`, exact: true });
   await rightClickOpensMenu(page, tile);
+});
+
+test('right-click an Activity row opens its ActionMenu @desktop', async ({ page }) => {
+  await installHarnessNetwork(page);
+  await page.goto('/activity');
+  const lead = page.locator('[data-activity-lead]').first();
+  await rightClickOpensMenu(page, lead);
+  await expect(page.getByRole('menuitem', { name: /^Snooze/ }).first()).toBeVisible();
+});
+
+test('right-click a Members row opens its ActionMenu @desktop', async ({ page }) => {
+  await installHarnessNetwork(page);
+  await page.goto('/settings?panel=members');
+  const row = page.locator('[data-member-row]').filter({ hasText: PEER_NAME }).first();
+  await rightClickOpensMenu(page, row.getByText(PEER_NAME, { exact: true }).first());
 });

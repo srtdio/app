@@ -1,16 +1,60 @@
 {
-  "chat-list": ["E3-01", "E5-01", "PRC1-avatars", "PRC2-badges"],
-  "chat-thread": ["E3-01", "PRC1-avatars", "PRC3-icons"],
-  "chat-thread-group": ["E3-01", "PRC1-avatars", "PRC3-icons"],
-  "chat-search-empty": ["E3-01", "PRC1-avatars"],
-  "chat-info-group": ["PRC1-avatars", "PRC3-icons"],
-  "members": ["PRC1-avatars"],
-  "pipeline": ["E5-01", "PRC2-badges", "PRC3-icons"],
-  "notifications": ["E5-01", "PRC1-avatars", "PRC2-badges"],
-  "post-more-menu": ["PRC3-icons", "PRC5-gestures"],
-  "message-action-menu": ["PRC3-icons", "PRC5-gestures"],
-  "composer-tray": ["PRC3-icons"],
-  "post-detail-approver": ["PRC1-avatars", "PRC3-icons"],
-  "chat-list-ipad": ["PRC4-breakpoint"],
-  "pipeline-ipad": ["PRC4-breakpoint"]
+  "chat-list": [
+    "E3-01",
+    "E5-01",
+    "PRC1-avatars",
+    "PRC2-badges"
+  ],
+  "chat-thread": [
+    "E3-01",
+    "PRC1-avatars",
+    "PRC3-icons"
+  ],
+  "chat-thread-group": [
+    "E3-01",
+    "PRC1-avatars",
+    "PRC3-icons"
+  ],
+  "chat-search-empty": [
+    "E3-01",
+    "PRC1-avatars"
+  ],
+  "chat-info-group": [
+    "PRC1-avatars",
+    "PRC3-icons"
+  ],
+  "members": [
+    "PRC1-avatars"
+  ],
+  "pipeline": [
+    "E5-01",
+    "PRC2-badges",
+    "PRC3-icons"
+  ],
+  "notifications": [
+    "E5-01",
+    "PRC1-avatars",
+    "PRC2-badges"
+  ],
+  "post-more-menu": [
+    "PRC3-icons",
+    "PRC5-gestures"
+  ],
+  "message-action-menu": [
+    "PRC3-icons",
+    "PRC5-gestures"
+  ],
+  "composer-tray": [
+    "PRC3-icons"
+  ],
+  "post-detail-approver": [
+    "PRC1-avatars",
+    "PRC3-icons"
+  ],
+  "chat-list-ipad": [
+    "PRC4-breakpoint"
+  ],
+  "pipeline-ipad": [
+    "PRC4-breakpoint"
+  ]
 }

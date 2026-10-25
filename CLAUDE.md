@@ -115,6 +115,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Counts and unread badges: ui/CountBadge only. Filter chip counts are plain text.
 - Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; attach = paper clip. Decision bar buttons have no icons.
 - Long-press on touch and right-click on laptop open the same ActionMenu. Esc closes every overlay and returns focus to its trigger.
+- Exception: plan edit rows open their menu on right-click only; long-press there is drag.
 - Every UI change updates the visual baselines in the same PR and lists the changed screens. Never update baselines to hide an unplanned change.
 
 ## Canonical living docs

@@ -150,7 +150,7 @@ function render(d: InductionData, options: { route?: string; canCreateBrief?: bo
         canCreateBrief={options.canCreateBrief ?? null}
       >
         <Where />
-        <InductionGuide tabsShown />
+        <InductionGuide />
       </InductionProvider>
     </MemoryRouter>,
   );
@@ -320,7 +320,7 @@ describe('the guide bar', () => {
       root!.render(
         <MemoryRouter initialEntries={['/pipeline']}>
           <InductionProvider data={current!} workspaceId={null} workspaceLabel="">
-            <InductionGuide tabsShown={false} />
+            <InductionGuide />
           </InductionProvider>
         </MemoryRouter>,
       );
@@ -369,7 +369,7 @@ describe('after a refresh', () => {
       root!.render(
         <MemoryRouter initialEntries={['/pipeline']}>
           <InductionProvider data={current!} workspaceId={null} workspaceLabel="">
-            <InductionGuide tabsShown={false} />
+            <InductionGuide />
           </InductionProvider>
         </MemoryRouter>,
       );
@@ -389,7 +389,7 @@ describe('Back', () => {
       root!.render(
         <MemoryRouter initialEntries={['/pipeline']}>
           <InductionProvider data={current!} workspaceId={null} workspaceLabel="">
-            <InductionGuide tabsShown={false} />
+            <InductionGuide />
           </InductionProvider>
         </MemoryRouter>,
       );

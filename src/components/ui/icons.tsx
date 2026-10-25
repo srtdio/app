@@ -56,7 +56,6 @@ import {
   QuestionMarkCircleIcon,
   RectangleStackIcon,
   ScaleIcon,
-  Squares2X2Icon,
   StarIcon,
   SunIcon,
   TrashIcon,
@@ -333,9 +332,9 @@ export function IconImage(props: IconProps) {
   return <Hero icon={PhotoIcon} {...props} />;
 }
 
-/** Photos (chat info, Assets Media): a grid of shots, distinct from the Assets tab's own icon. */
+/** Photos (chat info, the composer tray, Assets Media). */
 export function IconPhoto(props: IconProps) {
-  return <Hero icon={Squares2X2Icon} {...props} />;
+  return <Hero icon={PhotoIcon} {...props} />;
 }
 
 /** A carousel badge: stacked cards. Hand-drawn: Square2StackIcon reads as copy at badge size. */

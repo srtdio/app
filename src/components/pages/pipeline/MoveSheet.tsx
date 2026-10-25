@@ -69,6 +69,11 @@ export interface MoveSheetProps {
   roleStatus?: RoleStatus;
   /** Re-runs the role read (the error state's Retry). */
   onRetryRole?: () => void;
+  /**
+   * 'approved' when the card's ⋯ Approve row opened the sheet: it opens on the
+   * approve confirm (or the on-behalf sheet) instead of the action list.
+   */
+  intent?: Stage | null;
 }
 
 /**
@@ -89,6 +94,11 @@ export function MoveSheet(props: MoveSheetProps): ReactElement | null {
   useEffect(() => {
     gate.cancel();
   }, [gate, props.open, postId]);
+  // Opened from the card's ⋯ Approve row: go straight to the approve confirm.
+  const intent = props.intent ?? null;
+  useEffect(() => {
+    if (props.open && postId !== null && intent === 'approved') gate.request(postId, 'approved');
+  }, [gate, props.open, postId, intent]);
   // A move that settles with the sheet still open (a failure, toasted by the
   // page) re-arms Confirm so the user can retry or go Back.
   useEffect(() => {

@@ -1,14 +1,18 @@
-import { useState, type MouseEvent } from 'react';
+import { useState, type ComponentType, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import {
   ICON_SIZE,
   IconArrowUpRight,
   IconCarousel,
+  IconCheck,
   IconLink,
   IconMore,
+  IconPause,
   IconPlay,
   IconSwitch,
+  IconX,
+  type IconProps,
 } from '@/components/ui/icons';
 import { type FormatGlyphToken } from '@/components/ui/format-icon';
 import { postFormatLabel } from '@/lib/post-format';
@@ -16,6 +20,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath } from '@/lib/entityRef';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { moveActions } from '@/components/pages/pipeline/MoveSheet';
 import {
   hasAllowedMove,
   reservesStatusLine,
@@ -43,10 +48,12 @@ export interface PostCardProps {
    *  absent the card falls back to the classic /posts/:id route. */
   workspaceKey?: string | null;
   /**
-   * Opens the move sheet for this post; renders the ⋯ (ui/ActionMenu: Open,
-   * Copy link, Move) at the right end of the due row.
+   * Renders the ⋯ (ui/ActionMenu) at the right end of the due row. With a
+   * known role the menu lists each move this viewer can make (Send for review,
+   * Approve, Park, Reject) and calls this with its target; without one it has a
+   * single Move row that calls it with no target (the move sheet).
    */
-  onMove?: (post: PipelinePost) => void;
+  onMove?: (post: PipelinePost, to?: Stage) => void;
   /**
    * The viewer's role and the workspace approvers: drives the review status line
    * and hides the ⋯ menu's Move row when this viewer has no allowed move.
@@ -215,22 +222,54 @@ function PlayBadge() {
   );
 }
 
+/** One move row in the card's ⋯ menu (the move sheet's actions, moveActions). */
+export interface CardMoveRow {
+  to: Stage;
+  label: string;
+  tone: 'default' | 'bad';
+  onSelect: () => void;
+}
+
 /** What the card's ⋯ menu runs. */
 export interface CardMenuActions {
   onOpen: () => void;
   onCopyLink: () => void;
+  /** The viewer's moves, each its own row; when present, no Move row. */
+  moves?: readonly CardMoveRow[];
   /** Absent: this viewer has no allowed move, so the Move row is hidden. */
   onMove?: () => void;
 }
 
-/** The card's ⋯ rows: Open, Copy link, then Move when allowed. Pure. */
+/** One icon per move: Send for review arrow, Approve check, Park pause, Reject X. */
+const MOVE_ICON: Record<Stage, ComponentType<IconProps>> = {
+  draft: IconSwitch,
+  review: IconArrowUpRight,
+  approved: IconCheck,
+  parked: IconPause,
+  rejected: IconX,
+};
+
+/**
+ * The card's ⋯ rows: Open, Copy link, then every move this viewer can make
+ * (the same moves the move sheet lists), else Move when allowed. Pure.
+ */
 export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
+  const moves: ActionMenuItem[] =
+    actions.moves !== undefined && actions.moves.length > 0
+      ? actions.moves.map((move) => ({
+          id: `move-${move.to}`,
+          label: move.label,
+          icon: MOVE_ICON[move.to],
+          ...(move.tone === 'bad' ? { tone: 'danger' as const } : {}),
+          onSelect: move.onSelect,
+        }))
+      : actions.onMove !== undefined
+        ? [{ id: 'move', label: 'Move', icon: IconSwitch, onSelect: actions.onMove }]
+        : [];
   return [
     { id: 'open', label: 'Open', icon: IconArrowUpRight, onSelect: actions.onOpen },
     { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: actions.onCopyLink },
-    ...(actions.onMove !== undefined
-      ? [{ id: 'move', label: 'Move', icon: IconSwitch, onSelect: actions.onMove }]
-      : []),
+    ...moves,
   ];
 }
 
@@ -291,6 +330,9 @@ export function PostCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const gesture = useMenuGesture(() => setMenuOpen(true));
   const hasMenu = onMove !== undefined;
+  // A known role lists its moves in the menu; while it loads, the Move row.
+  const directMoves =
+    viewer !== undefined && viewer.pending !== true ? moveActions(viewer.role, stage) : [];
 
   return (
     <div
@@ -434,7 +476,16 @@ export function PostCard({
                 items={cardMenuItems({
                   onOpen: () => navigate(href),
                   onCopyLink: copyLink,
-                  ...(canMove ? { onMove: () => onMove(post) } : {}),
+                  ...(canMove && directMoves.length > 0
+                    ? {
+                        moves: directMoves.map((move) => ({
+                          ...move,
+                          onSelect: () => onMove(post, move.to),
+                        })),
+                      }
+                    : canMove
+                      ? { onMove: () => onMove(post) }
+                      : {}),
                 })}
                 trigger={
                   <IconButton
