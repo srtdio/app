@@ -66,7 +66,7 @@ import { friendlyPointFreezeError, tickCircle } from '@/components/pages/pcs/che
 import type { DomainError } from '@srtdio/rpc';
 import { resolveName } from '@/components/comments/commentProfiles';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
-import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
+import type { MentionCandidate } from '@/lib/workspace-members';
 import { attachmentView } from '@/components/chat/MessageAttachments';
 import { PressableRow } from '@/components/ui/PressableRow';
 

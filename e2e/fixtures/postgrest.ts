@@ -1,5 +1,6 @@
 // A small in-memory PostgREST stand-in for the harness. It answers the read
-// shapes the app sends (eq/neq/in/is/lt/lte/gt/gte/like, nested or/and, order,
+// shapes the app sends (eq/neq/in/is/lt/lte/gt/gte/like, nested or/and, filters
+// on an embed's column (`embed.column`), order,
 // limit, single-object Accept, exact counts) from fixture tables. Projection is
 // not applied: rows carry their full column set, which supabase-js tolerates.
 
@@ -44,7 +45,21 @@ function splitTopLevel(input: string): string[] {
   return parts;
 }
 
+// A dotted column filters an embedded resource (`current_version.kind`): rows
+// carry their embeds as nested objects, so walk the path. A missing or null
+// embed has no value, so the filter drops the row, as an !inner embed does.
+function valueAt(row: Row, column: string): unknown {
+  if (!column.includes('.')) return row[column];
+  let value: unknown = row;
+  for (const key of column.split('.')) {
+    if (value === null || typeof value !== 'object') return undefined;
+    value = (value as Row)[key];
+  }
+  return value;
+}
+
 function operatorPredicate(column: string, expression: string): Predicate {
+  const get = (row: Row): unknown => valueAt(row, column);
   let negate = false;
   let expr = expression;
   if (expr.startsWith('not.')) {
@@ -58,28 +73,26 @@ function operatorPredicate(column: string, expression: string): Predicate {
   switch (op) {
     case 'eq':
       base = (row) =>
-        row[column] !== null &&
-        row[column] !== undefined &&
-        compare(row[column], unquote(raw)) === 0;
+        get(row) !== null && get(row) !== undefined && compare(get(row), unquote(raw)) === 0;
       break;
     case 'neq':
-      base = (row) => row[column] === null || compare(row[column], unquote(raw)) !== 0;
+      base = (row) => get(row) === null || compare(get(row), unquote(raw)) !== 0;
       break;
     case 'lt':
-      base = (row) => row[column] != null && compare(row[column], unquote(raw)) < 0;
+      base = (row) => get(row) != null && compare(get(row), unquote(raw)) < 0;
       break;
     case 'lte':
-      base = (row) => row[column] != null && compare(row[column], unquote(raw)) <= 0;
+      base = (row) => get(row) != null && compare(get(row), unquote(raw)) <= 0;
       break;
     case 'gt':
-      base = (row) => row[column] != null && compare(row[column], unquote(raw)) > 0;
+      base = (row) => get(row) != null && compare(get(row), unquote(raw)) > 0;
       break;
     case 'gte':
-      base = (row) => row[column] != null && compare(row[column], unquote(raw)) >= 0;
+      base = (row) => get(row) != null && compare(get(row), unquote(raw)) >= 0;
       break;
     case 'is':
       base = (row) => {
-        const value = row[column];
+        const value = get(row);
         if (raw === 'null') return value === null || value === undefined;
         if (raw === 'true') return value === true;
         if (raw === 'false') return value === false;
@@ -88,13 +101,13 @@ function operatorPredicate(column: string, expression: string): Predicate {
       break;
     case 'in': {
       const list = splitTopLevel(raw.slice(1, -1)).map(unquote);
-      base = (row) => row[column] != null && list.includes(String(row[column]));
+      base = (row) => get(row) != null && list.includes(String(get(row)));
       break;
     }
     case 'cs': {
       const list = splitTopLevel(raw.slice(1, -1)).map(unquote);
       base = (row) => {
-        const value = row[column];
+        const value = get(row);
         return Array.isArray(value) && list.every((item) => value.map(String).includes(item));
       };
       break;
@@ -108,7 +121,7 @@ function operatorPredicate(column: string, expression: string): Predicate {
           .replace(/%/g, '.*')}$`,
         op === 'ilike' ? 'i' : '',
       );
-      base = (row) => row[column] != null && pattern.test(String(row[column]));
+      base = (row) => get(row) != null && pattern.test(String(get(row)));
       break;
     }
     default:

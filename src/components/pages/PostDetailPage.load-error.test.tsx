@@ -32,8 +32,16 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   useIsLaptop: () => false,
 }));
 vi.mock('@/lib/search/jump', () => ({ useSearchJump: () => ({ words: [] }) }));
-vi.mock('@/components/pages/pcs/use-post-members', () => ({
-  usePostMembers: () => ({ options: [], loading: false, error: null }),
+vi.mock('@/lib/workspace-members', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspace-members')>()),
+  useWorkspaceMembers: () => ({
+    options: [],
+    loading: false,
+    error: null,
+    rows: [],
+    profiles: new Map(),
+    refetch: () => {},
+  }),
 }));
 vi.mock('@/lib/buckets', () => ({
   listBuckets: async () => ({ ok: true, data: [] }),
@@ -44,19 +52,26 @@ vi.mock('@/lib/assets', async (importOriginal) => {
     ...actual,
     fetchMemberRole: async () => null,
     listAssets: async () => ({ ok: true, data: [] }),
+    listRootAssetLabels: async () => ({ ok: true, data: [] }),
   };
 });
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: { getSession: async () => ({ data: { session: null } }) },
     from: () => {
+      // Awaitable at any step: the side panel (Comments) mounts with the first
+      // render and pages its read with .order().range().
+      const result = { data: [], error: null };
       const chain = {
         select: () => chain,
         eq: () => chain,
         in: () => chain,
         not: () => chain,
         is: () => chain,
-        order: async () => ({ data: [], error: null }),
+        order: () => chain,
+        range: async () => result,
+        limit: async () => result,
+        then: (resolve: (value: typeof result) => unknown) => resolve(result),
       };
       return chain;
     },

@@ -1,9 +1,13 @@
 // The workspace's active members for the Pipeline: approver first names (the
-// card status line and the Send for review helper) and a user id -> display
-// name map (the creator's name in the reject confirm). One membership read and
-// one batched profile read per workspace, the same reads use-post-members
-// makes. A failed read leaves the lists empty, so the copy falls back to
-// "approvers" and "The creator".
+// card status line and the Send for review helper), a user id -> display
+// name map (the creator's name in the reject confirm) and the on-behalf
+// approver options (the board's and the move sheet's approve sheets). One
+// membership read and one batched profile read per workspace, shared by every
+// Pipeline consumer: the board and the move sheet take `approvers` from here
+// instead of each running useWorkspaceApprovers (two more membership + profile
+// pairs). The approvers are a subset of the active members whose profiles are
+// read here anyway, so nothing extra is read. A failed read leaves the lists
+// empty, so the copy falls back to "approvers" and "The creator".
 
 import { useEffect, useState } from 'react';
 import { listMembers } from '@srtdio/workspace';
@@ -11,14 +15,20 @@ import { supabase } from '@/lib/supabase';
 import { readProfiles } from '@/lib/chat-reads';
 import { isClient } from '@/components/pages/pcs/roles';
 import { firstNameOf } from '@/components/pages/pipeline/card-status';
+import { toApproverOptions, type ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
 
 export interface WorkspacePeople {
   approverFirstNames: string[];
   /** Active members' display names by user id. */
   names: ReadonlyMap<string, string>;
+  /**
+   * The on-behalf picker's approvers (active client members with a name), the
+   * same list useWorkspaceApprovers builds, from the same reads.
+   */
+  approvers: ApproverOption[];
 }
 
-const EMPTY: WorkspacePeople = { approverFirstNames: [], names: new Map() };
+const EMPTY: WorkspacePeople = { approverFirstNames: [], names: new Map(), approvers: [] };
 
 /** Members as people: approvers' first names in member order plus every name. Pure. */
 export function toWorkspacePeople(
@@ -35,7 +45,7 @@ export function toWorkspacePeople(
     .filter((m) => m.active && isClient(m.role))
     .map((m) => firstNameOf(names.get(m.user_id)))
     .filter((name) => name !== '');
-  return { approverFirstNames, names };
+  return { approverFirstNames, names, approvers: toApproverOptions(members, names) };
 }
 
 export function useWorkspacePeople(workspaceId: string | null): WorkspacePeople {

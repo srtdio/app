@@ -1,10 +1,15 @@
 // Pure status filter for the Briefs surface. Search and sort are shared via
 // list-sort; this covers the All / Open / Closed chips, the URL state they live
-// in (?status=&q=), and the paged workspace read the list loads from.
+// in (?status=&q=), and the keyset-paged workspace read the list loads from.
+// The chips' counts are server counts (see brief-counts), never these rows.
 
-import type { Brief, ListBriefsFilters } from '@srtdio/briefs';
-import type { Result } from '@srtdio/rpc';
-import type { BriefStatus } from '@/components/pages/BriefCard';
+import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
+import type { Client, Result } from '@srtdio/rpc';
+
+// The same status type BriefCard's BriefStatus is built from. Read off the
+// package here (type only) so this module imports nothing from components and
+// the DB-backed briefs suite can load it without the UI tree.
+type BriefStatus = NonNullable<ListBriefsFilters['status']>;
 
 export type BriefFilter = 'all' | BriefStatus;
 
@@ -45,24 +50,138 @@ export function briefListParams(
  */
 export const BRIEF_NOTE_PARAM = 'note';
 
-/** Most pages one load reads (50 each), so a runaway loop can never hang the list. */
-export const BRIEF_PAGE_LIMIT = 40;
+/** Briefs per list page. */
+export const BRIEF_LIST_PAGE_SIZE = 100;
+
+/** Where the next briefs page starts: the last loaded row's (created_at, id). */
+export interface BriefCursor {
+  createdAt: string;
+  id: string;
+}
+
+/** Whether another page follows, and where it starts. Never null. */
+export type BriefPageNext = { done: true } | { done: false; cursor: BriefCursor };
+
+/** One page of a workspace's briefs, newest first. */
+export interface BriefPage {
+  items: BriefWithThumbnail[];
+  next: BriefPageNext;
+}
 
 /**
- * Every brief in one workspace, read page by page on the server (workspace_id
- * filter, limit/offset) until a short page. A failed page fails the whole read.
+ * The PostgREST `or` filter for "strictly after the cursor" in (created_at
+ * desc, id desc) order: an older brief, or the same instant with a smaller id.
+ * Values are double-quoted so the timestamp's punctuation is never read as
+ * filter syntax. Pure.
  */
-export async function listWorkspaceBriefs<T>(
-  workspaceId: string,
-  pageSize: number,
-  readPage: (filters: ListBriefsFilters) => Promise<Result<T[]>>,
-): Promise<Result<T[]>> {
-  const all: T[] = [];
-  for (let page = 0; page < BRIEF_PAGE_LIMIT; page += 1) {
-    const result = await readPage({ workspaceId, limit: pageSize, offset: page * pageSize });
-    if (!result.ok) return result;
-    all.push(...result.data);
-    if (result.data.length < pageSize) break;
+export function briefKeysetFilter(cursor: BriefCursor): string {
+  const at = `"${cursor.createdAt}"`;
+  const id = `"${cursor.id}"`;
+  return `created_at.lt.${at},and(created_at.eq.${at},id.lt.${id})`;
+}
+
+/**
+ * Append `incoming` to `existing`, skipping any id already present (a brief
+ * created between two page reads can arrive twice). Keeps the existing order;
+ * pure and non-mutating.
+ */
+export function mergeBriefPages<T extends { id: string }>(
+  existing: readonly T[],
+  incoming: readonly T[],
+): T[] {
+  const seen = new Set(existing.map((item) => item.id));
+  const out = [...existing];
+  for (const item of incoming) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
   }
-  return { ok: true, data: all };
+  return out;
+}
+
+// One row of the batched first-image lookup (mirrors @srtdio/briefs listBriefs):
+// an asset_attachments row with its pinned version's mime_type embedded via an
+// inner join, so only image-backed attachments survive.
+interface FirstImageRow {
+  entity_id: string;
+  asset_version_id: string;
+  asset_versions: { mime_type: string | null } | null;
+}
+
+/**
+ * Each brief's first live image attachment (lowest position, then earliest
+ * attached_at) in ONE IN read over the page's ids, the same read
+ * @srtdio/briefs listBriefs makes for its thumbnails. No ids, no round trip.
+ */
+async function firstImageByBrief(
+  client: Client,
+  briefIds: string[],
+): Promise<Result<Map<string, string>>> {
+  if (briefIds.length === 0) return { ok: true, data: new Map() };
+  const { data, error } = await client
+    .from('asset_attachments')
+    .select('entity_id, asset_version_id, asset_versions!inner(mime_type)')
+    .eq('entity_type', 'brief')
+    .in('entity_id', briefIds)
+    .is('deleted_at', null)
+    .like('asset_versions.mime_type', 'image/%')
+    .order('entity_id', { ascending: true })
+    .order('position', { ascending: true })
+    .order('attached_at', { ascending: true });
+  if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
+  const first = new Map<string, string>();
+  for (const row of (data ?? []) as unknown as FirstImageRow[]) {
+    if (!first.has(row.entity_id)) first.set(row.entity_id, row.asset_version_id);
+  }
+  return { ok: true, data: first };
+}
+
+/**
+ * One page of a workspace's live briefs, newest first (created_at desc, id
+ * desc), each with its card thumbnail. Keyset paged: pass the previous page's
+ * `next.cursor` for the following page. The same table, columns, filters and
+ * RLS as @srtdio/briefs listBriefs (which pages by offset); this reads one row
+ * past the page size to learn whether another page exists, then one IN read for
+ * the page's thumbnails. Two requests per page, never N+1.
+ */
+export async function listBriefsPage(
+  client: Client,
+  workspaceId: string,
+  cursor?: BriefCursor,
+): Promise<Result<BriefPage>> {
+  let query = client
+    .from('briefs')
+    .select('*')
+    .is('deleted_at', null)
+    .eq('workspace_id', workspaceId);
+  if (cursor !== undefined) query = query.or(briefKeysetFilter(cursor));
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(BRIEF_LIST_PAGE_SIZE + 1);
+  if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
+
+  const fetched: Brief[] = data ?? [];
+  const rows = fetched.slice(0, BRIEF_LIST_PAGE_SIZE);
+  const thumbnails = await firstImageByBrief(
+    client,
+    rows.map((brief) => brief.id),
+  );
+  if (!thumbnails.ok) return thumbnails;
+
+  const last = rows[rows.length - 1];
+  const next: BriefPageNext =
+    fetched.length > BRIEF_LIST_PAGE_SIZE && last !== undefined
+      ? { done: false, cursor: { createdAt: last.created_at, id: last.id } }
+      : { done: true };
+  return {
+    ok: true,
+    data: {
+      items: rows.map((brief) => ({
+        ...brief,
+        thumbnailAssetVersionId: thumbnails.data.get(brief.id) ?? null,
+      })),
+      next,
+    },
+  };
 }

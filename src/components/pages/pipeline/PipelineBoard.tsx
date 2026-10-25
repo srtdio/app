@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { DragEvent, ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfirm';
-import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
+import { OnBehalfApproveSheet, type ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
 import { Sheet } from '@/components/ui/Sheet';
 import { PostCard } from '@/components/pages/PostCard';
 import {
@@ -62,6 +62,12 @@ export interface PipelineBoardProps {
   viewer?: CardViewer;
   /** Each post's first photo or video, so its card takes the platform frame. */
   covers?: CoverLookup;
+  /**
+   * The workspace's approvers for the on-behalf sheet, when the page already
+   * holds them (PipelinePage passes its one shared members read). Absent: the
+   * board reads them itself.
+   */
+  approvers?: readonly ApproverOption[];
 }
 
 // Native HTML5 DnD keeps dataTransfer unreadable during dragover (it is exposed
@@ -145,7 +151,9 @@ function onColumnDrop(
 export function PipelineBoard(props: PipelineBoardProps): ReactElement {
   const { gate, state } = useApproveGate(props.onMovePost);
   const { workspaces, workspaceId, workspaceName } = useWorkspace();
-  const approvers = useWorkspaceApprovers(workspaceId);
+  // Only read the approvers when the page did not hand them down (null: no read).
+  const ownApprovers = useWorkspaceApprovers(props.approvers === undefined ? workspaceId : null);
+  const approvers = props.approvers ?? ownApprovers;
   // Due dates are calendar days on the workspace zone (src/lib/time.ts).
   const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
   const pending = pendingPost(props.grouped, state.pendingId);

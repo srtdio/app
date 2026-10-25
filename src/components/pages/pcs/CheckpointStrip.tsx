@@ -38,6 +38,23 @@ export type CheckpointChipRow = Pick<
   'id' | 'ledger_seq' | 'resolved_at' | 'accepted_at'
 >;
 
+/** A row of the host's shared checkpoint read (Comments' fetchCheckpoints):
+ *  soft-deleted checkpoints ride along there, so the strip drops them. */
+export type SharedCheckpointRow = CheckpointChipRow & Pick<CommentRow, 'deleted_at'>;
+
+/** The chips from the host's shared read: live checkpoints only, the chip
+ *  columns only (the same rows the strip's own read selects). Pure. */
+export function chipRowsFrom(rows: readonly SharedCheckpointRow[]): CheckpointChipRow[] {
+  return rows
+    .filter((row) => row.deleted_at === null && row.ledger_seq !== null)
+    .map((row) => ({
+      id: row.id,
+      ledger_seq: row.ledger_seq,
+      resolved_at: row.resolved_at,
+      accepted_at: row.accepted_at,
+    }));
+}
+
 /** The lifted counts PostDetailPage consumes for its header chip and tab badge.
  *  The shape is unchanged from the former LedgerCounts; only the name reflects
  *  that the source is now the strip, not a ledger. */
@@ -145,6 +162,12 @@ export interface CheckpointStripProps {
   refreshSignal: number;
   /** Lifted counts so the page renders its header chip without a second fetch. */
   onCounts?: (counts: CheckpointCounts) => void;
+  /**
+   * The host's one checkpoint read (PostDetailPage, shared with Comments); null
+   * until it lands. When set the strip never reads on its own and the host
+   * owns every refresh. Absent: the strip reads itself, as before.
+   */
+  checkpoints?: readonly SharedCheckpointRow[] | null;
 }
 
 export function CheckpointStrip({
@@ -152,9 +175,17 @@ export function CheckpointStrip({
   postId,
   refreshSignal,
   onCounts,
+  checkpoints,
 }: CheckpointStripProps): ReactElement | null {
-  const [rows, setRows] = useState<CheckpointChipRow[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [ownRows, setRows] = useState<CheckpointChipRow[]>([]);
+  const [ownLoaded, setLoaded] = useState(false);
+  const shared = checkpoints !== undefined;
+  const sharedRows = useMemo(
+    () => (checkpoints === undefined || checkpoints === null ? null : chipRowsFrom(checkpoints)),
+    [checkpoints],
+  );
+  const rows = shared ? (sharedRows ?? ownRows) : ownRows;
+  const loaded = shared ? sharedRows !== null : ownLoaded;
 
   // Switching posts drops the prior rows so nothing bleeds across.
   useEffect(() => {
@@ -165,7 +196,9 @@ export function CheckpointStrip({
   // Self-fetch, mirroring the feed: one plain RLS-scoped select of this post's
   // checkpoint rows, narrowed to the columns the chips and counter need. One
   // query, never a query inside a loop. A failed read keeps whatever was shown.
+  // A host-owned read (checkpoints set) replaces it: no read here.
   const load = useCallback(async (): Promise<void> => {
+    if (shared) return;
     const { data, error } = await supabase
       .from('comments')
       .select(CHECKPOINT_SELECT)
@@ -178,7 +211,7 @@ export function CheckpointStrip({
     if (error) return;
     setRows(data ?? []);
     setLoaded(true);
-  }, [workspaceId, postId]);
+  }, [workspaceId, postId, shared]);
 
   useEffect(() => {
     void load();

@@ -62,8 +62,8 @@ import { CommentComposer } from '@/components/comments/CommentComposer';
 import { SlotComposer } from '@/components/comments/SlotComposer';
 import type { CheckpointPoint } from '@/components/comments/SlotComposer';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
-import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
-import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
+import { useMentionCandidates } from '@/lib/workspace-members';
+import type { MentionCandidate } from '@/lib/workspace-members';
 import {
   resolveMentionHandle,
   resolveName,
@@ -134,6 +134,23 @@ interface CommentsProps {
    *  once loaded and on every change, optimistic resolves included. Lets the page
    *  render its "{n} open checkpoints" pill and the creator's resubmit gate. */
   onCountsChange?: (counts: CommentCounts) => void;
+  /**
+   * Posts: the host's one checkpoint read (PostDetailPage), shared with the
+   * CheckpointStrip. When set, Comments never reads the checkpoints itself: it
+   * merges these rows and calls `reload` wherever it would have re-read them
+   * (after its own writes, Retry). Absent (brief detail, chat, any other host):
+   * Comments reads them itself after each page-zero load, exactly as before.
+   */
+  sharedCheckpoints?: SharedCheckpoints;
+}
+
+/** One checkpoint read owned by the host and shared by Comments and the strip. */
+export interface SharedCheckpoints {
+  /** Every checkpoint for the post as {@link fetchCheckpoints} reads it; null
+   *  until the first read lands. */
+  rows: readonly CommentRow[] | null;
+  /** Re-run the host's read (resolves once it has landed). */
+  reload: () => Promise<void>;
 }
 
 /** Open vs resolved top-level threads, as the header reads them. */
@@ -1052,6 +1069,7 @@ export function Comments({
   showHeader = false,
   belowHeader,
   onCountsChange,
+  sharedCheckpoints,
 }: CommentsProps) {
   const newTrace = useNewTrace();
   // The Open / All thread filter (posts' header); All by default.
@@ -1064,7 +1082,22 @@ export function Comments({
   // Every checkpoint for this post, loaded whole in one query so none paginates
   // away; merged with the paginated `comments` below (de-duped, newest-first).
   const [checkpoints, setCheckpoints] = useState<CommentRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  // A host-owned read: each new set of rows replaces the local copy (the
+  // optimistic patches below edit that copy), adopted during render so the
+  // list never paints a frame behind the read.
+  const sharedRows = sharedCheckpoints?.rows ?? null;
+  const [adoptedRows, setAdoptedRows] = useState<readonly CommentRow[] | null>(null);
+  if (sharedRows !== adoptedRows) {
+    setAdoptedRows(sharedRows);
+    if (sharedRows !== null) setCheckpoints([...sharedRows]);
+  }
+  const sharedMode = sharedCheckpoints !== undefined;
+  const reloadShared = useRef<(() => Promise<void>) | null>(null);
+  reloadShared.current = sharedCheckpoints?.reload ?? null;
+  const [listLoading, setLoading] = useState(true);
+  // With a host-owned read, the list waits for its first rows too, so the
+  // checkpoints never pop in after the list (the same paint as a self read).
+  const loading = listLoading || (sharedMode && sharedRows === null);
   const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -1166,7 +1199,8 @@ export function Comments({
       // One extra query, only on a page-zero load: every checkpoint for the post,
       // so none is paginated out of reach. Posts only (checkpoints never exist on
       // a brief); a failed read keeps whatever was already shown.
-      if (nextPage === 0 && entityType === 'post') {
+      // A host-owned read (sharedCheckpoints) is never repeated here.
+      if (nextPage === 0 && entityType === 'post' && !sharedMode) {
         const checkpointRows = await fetchCheckpoints(supabase, workspaceId, entityId);
         if (stale()) return;
         setCheckpoints(checkpointRows);
@@ -1177,8 +1211,16 @@ export function Comments({
       if (nextPage === 0) setLoading(false);
       else setLoadingMore(false);
     },
-    [workspaceId, entityType, entityId],
+    [workspaceId, entityType, entityId, sharedMode],
   );
+
+  // Page zero after a write (or Retry): the list, and the checkpoints with it.
+  // A self read does both inside loadPage; a host-owned read is asked to
+  // re-run alongside, concurrently, so the two still land together.
+  const reloadAll = useCallback(async (): Promise<void> => {
+    const reload = reloadShared.current;
+    await Promise.all([loadPage(0), reload !== null ? reload() : Promise.resolve()]);
+  }, [loadPage]);
 
   // The rendered list: the always-loaded checkpoints merged into the paginated
   // comments, de-duped by id and newest-first. Only non-checkpoint comments
@@ -1330,7 +1372,7 @@ export function Comments({
       });
       clearReplyTarget(parentId);
     }
-    await loadPage(0);
+    await reloadAll();
     return { ok: true };
   }
 
@@ -1350,7 +1392,7 @@ export function Comments({
     if (!result.ok) {
       return { ok: false, error: friendlyCommentError(result.error, 'add the checkpoints') };
     }
-    await loadPage(0);
+    await reloadAll();
     return { ok: true };
   }
 
@@ -1386,7 +1428,7 @@ export function Comments({
     }
     setEditingId(null);
     setEditBody('');
-    await loadPage(0);
+    await reloadAll();
   }
 
   // Delete hides the row at once behind an Undo toast. The soft-delete RPC runs
@@ -1417,7 +1459,7 @@ export function Comments({
           });
           return;
         }
-        await loadPage(0);
+        await reloadAll();
         unhide();
       },
       revert: unhide,
@@ -1442,7 +1484,7 @@ export function Comments({
       });
       return;
     }
-    await loadPage(0);
+    await reloadAll();
   }
 
   // Flip one row's resolved_at in place (both the paged list and the always-loaded
@@ -2246,7 +2288,7 @@ export function Comments({
           ))}
         </div>
       ) : loadError ? (
-        <LoadError title="comments" onRetry={() => void loadPage(0)} />
+        <LoadError title="comments" onRetry={() => void reloadAll()} />
       ) : threads.length === 0 ? (
         <div
           data-comments-empty=""

@@ -49,7 +49,7 @@ import {
   toMemberOptions,
   type MemberOption,
 } from '@/components/chat/member-picker';
-import { useWorkspaceMembers } from '@/components/chat/use-workspace-members';
+import { useWorkspaceMembers, withMembersLoadCopy } from '@/lib/workspace-members';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { SHEET_NOTICE_TYPE } from '@/components/chat/chat-type';
 import { ModalPanel } from '@/components/chat/ModalPanel';
@@ -518,7 +518,7 @@ export function membersAfterRefresh(
  */
 export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
   const newTrace = useNewTrace();
-  const workspaceMembers = useWorkspaceMembers(props.workspaceId);
+  const workspaceMembers = withMembersLoadCopy(useWorkspaceMembers(props.workspaceId));
 
   const [members, setMembers] = useState<MembersState>({
     options: [],

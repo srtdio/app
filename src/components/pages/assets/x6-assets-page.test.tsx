@@ -12,13 +12,15 @@ import type { AssetListItem } from '@/lib/assets';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const { showToast, listAssets, findAssetsInUse, assetDelete, assetDeleteMany } = vi.hoisted(() => ({
-  showToast: vi.fn<(options: unknown) => string>(() => 'toast-1'),
-  listAssets: vi.fn(),
-  findAssetsInUse: vi.fn(),
-  assetDelete: vi.fn(),
-  assetDeleteMany: vi.fn(),
-}));
+const { showToast, listAssets, getAssetItem, findAssetsInUse, assetDelete, assetDeleteMany } =
+  vi.hoisted(() => ({
+    showToast: vi.fn<(options: unknown) => string>(() => 'toast-1'),
+    listAssets: vi.fn(),
+    getAssetItem: vi.fn(),
+    findAssetsInUse: vi.fn(),
+    assetDelete: vi.fn(),
+    assetDeleteMany: vi.fn(),
+  }));
 
 vi.mock('@/lib/env', () => ({ env: { VITE_ASSET_UPLOAD_URL: 'https://upload.test' } }));
 vi.mock('@/lib/supabase', () => ({
@@ -39,6 +41,16 @@ vi.mock('@/lib/assets', async (importOriginal) => {
   return {
     ...actual,
     listAssets: (...args: unknown[]) => listAssets(...args),
+    // The page reads keyset pages; a mocked plain list is one (last) page, and a
+    // mocked { items, next } page passes through as is.
+    listAssetsPage: async (...args: unknown[]) => {
+      const result = (await listAssets(...args)) as
+        | { ok: true; data: unknown }
+        | { ok: false; error: unknown };
+      if (!result.ok || !Array.isArray(result.data)) return result;
+      return { ok: true, data: { items: result.data, next: { done: true } } };
+    },
+    getAssetItem: (...args: unknown[]) => getAssetItem(...args),
     fetchMemberRole: async () => 'owner',
     findAssetsInUse: (...args: unknown[]) => findAssetsInUse(...args),
   };
@@ -114,6 +126,7 @@ const button = (label: string) =>
 beforeEach(() => {
   showToast.mockClear();
   listAssets.mockReset();
+  getAssetItem.mockReset().mockResolvedValue({ ok: true, data: [] });
   findAssetsInUse.mockReset();
   assetDelete.mockReset();
   assetDeleteMany.mockReset();
@@ -265,5 +278,103 @@ describe('Assets has no folders', () => {
     expect(button('Move')).toBeUndefined();
     const labels = [...document.querySelectorAll('button')].map((b) => b.textContent ?? '');
     expect(labels.some((label) => label.includes('Move'))).toBe(false);
+  });
+});
+
+describe('Assets Load more (keyset pages)', () => {
+  const cursor = { uploadedAt: '2026-10-01T00:00:00Z', id: 'a1' };
+  const loadMore = () => document.querySelector<HTMLButtonElement>('[data-assets-load-more]');
+
+  it('renders no Load more when the first page is the last', async () => {
+    listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
+    await mount();
+    expect(text()).toContain('inside-brand.png');
+    expect(loadMore()).toBeNull();
+    expect(button('Load more')).toBeUndefined();
+  });
+
+  it('renders Load more when another page exists, reads the next page from the cursor, and appends without duplicates', async () => {
+    listAssets
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          items: [asset({ id: 'a1', filename: 'one.png', folderId: null })],
+          next: { done: false, cursor },
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          // a1 again (uploaded between reads) must not render twice.
+          items: [
+            asset({ id: 'a1', filename: 'one.png', folderId: null }),
+            asset({ id: 'a2', filename: 'two.png', folderId: null }),
+          ],
+          next: { done: true },
+        },
+      });
+    await mount();
+    const control = loadMore();
+    expect(control).not.toBeNull();
+    expect(control?.textContent?.trim()).toBe('Load more');
+    // The shared Button: 44px touch target, token classes only.
+    expect(control?.className).toContain('min-h-[44px]');
+    expect(control?.className).not.toContain('dark:');
+
+    await act(async () => control?.click());
+    await flush();
+
+    expect(listAssets).toHaveBeenCalledTimes(2);
+    expect(listAssets.mock.calls[0]?.[2]).toBeUndefined();
+    expect(listAssets.mock.calls[1]?.[1]).toBe('w1');
+    expect(listAssets.mock.calls[1]?.[2]).toEqual(cursor);
+    const titles = [...document.querySelectorAll<HTMLElement>('span[title]')].map((el) =>
+      el.getAttribute('title'),
+    );
+    expect(titles.filter((t) => t === 'one.png')).toHaveLength(1);
+    expect(titles).toContain('two.png');
+    // The last page hides the control.
+    expect(loadMore()).toBeNull();
+  });
+
+  it('a failed next page keeps the loaded files and toasts "Couldn\'t load more files."', async () => {
+    listAssets
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { items: [asset({ id: 'a1', filename: 'one.png' })], next: { done: false, cursor } },
+      })
+      .mockResolvedValueOnce({ ok: false, error: { message: 'boom' } });
+    await mount();
+    await act(async () => loadMore()?.click());
+    await flush();
+    expect(text()).toContain('one.png');
+    expect(text()).not.toContain('boom');
+    expect(
+      showToast.mock.calls.some(
+        ([options]) =>
+          (options as { title?: string }).title === "Couldn't load more files. Try again.",
+      ),
+    ).toBe(true);
+    expect(loadMore()).not.toBeNull();
+  });
+
+  it('?asset= for a file beyond the loaded pages is read on its own, never called gone', async () => {
+    listAssets.mockResolvedValue({
+      ok: true,
+      data: { items: [asset({ id: 'a1', filename: 'one.png' })], next: { done: false, cursor } },
+    });
+    getAssetItem.mockResolvedValue({
+      ok: true,
+      data: [asset({ id: 'old-1', filename: 'older.png' })],
+    });
+    await mount('/assets?asset=old-1');
+    await flush();
+    expect(getAssetItem).toHaveBeenCalledTimes(1);
+    expect(getAssetItem.mock.calls[0]?.slice(1)).toEqual(['w1', 'old-1']);
+    expect(
+      showToast.mock.calls.some(
+        ([options]) => (options as { title?: string }).title === 'This file was deleted.',
+      ),
+    ).toBe(false);
   });
 });

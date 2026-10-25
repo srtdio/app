@@ -4,7 +4,7 @@
 // ConfirmDialog. The invite form stays at the top and refetches the list on a
 // successful send.
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { memberRemove } from '@srtdio/rpc';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/toast';
@@ -37,14 +37,28 @@ import {
   memberRemoveErrorMessage,
 } from './members-data';
 import type { MemberEntry } from './members-data';
-import { useMembersData } from './useMembersData';
+import { useWorkspaceMembers } from '@/lib/workspace-members';
+import { useInviteDelivery } from './useInviteDelivery';
 
 export function MembersPanel() {
   const { workspaceId, workspaceName, workspaceDisplayName } = useWorkspace();
   const { session } = useSession();
   const newTrace = useNewTrace();
   const toast = useToast();
-  const { loading, error, rows, profiles, delivery, refetch } = useMembersData(workspaceId);
+  const {
+    loading,
+    error,
+    rows,
+    profiles,
+    refetch: refetchMembers,
+  } = useWorkspaceMembers(workspaceId);
+  const { delivery, refetch: refetchDelivery } = useInviteDelivery(workspaceId);
+  // After a remove, a cancelled or edited invite, a role change or a fresh
+  // invite: the shared members list re-reads for every screen, plus the pills.
+  const refetch = useCallback(() => {
+    refetchMembers();
+    refetchDelivery();
+  }, [refetchMembers, refetchDelivery]);
 
   const currentUserId = session?.user.id ?? null;
   const selfEmail = session?.user.email ?? null;

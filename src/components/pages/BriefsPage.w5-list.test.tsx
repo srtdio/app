@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // W5 Briefs list: a load failure shows LoadError ("Couldn't load briefs.") with
 // Retry and never the server's text, and Retry re-runs the same workspace read;
-// the read is workspace-scoped and paged on the server; the chip defaults to
-// Open and lives in the URL with the search; empty states (Clear only with a
+// the read is workspace-scoped and keyset paged on the server (Load more); the
+// chip defaults to Open and lives in the URL with the search; empty states (Clear only with a
 // typed search); agency sort; the loading skeleton; cards carry a real title
 // link with no buttons nested in a role=link, and no Close.
 import { act } from 'react';
@@ -10,7 +10,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
-import { BriefsPage } from '@/components/pages/BriefsPage';
+import { BriefsPage, briefsLoadMore } from '@/components/pages/BriefsPage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -27,14 +27,30 @@ if (typeof window.matchMedia !== 'function') {
   });
 }
 
-const { listBriefs, capability } = vi.hoisted(() => ({
+const { listBriefs, countBriefs, capability } = vi.hoisted(() => ({
   listBriefs: vi.fn(),
+  countBriefs: vi.fn(),
   capability: { create: true },
 }));
 
-vi.mock('@srtdio/briefs', () => ({
-  BRIEFS_PAGE_SIZE: 50,
-  listBriefs: (...args: unknown[]) => listBriefs(...args),
+vi.mock('@/lib/brief-list', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    // The page reads keyset pages; a mocked plain list is one (last) page, and a
+    // mocked { items, next } page passes through as is.
+    listBriefsPage: async (...args: unknown[]) => {
+      const result = (await listBriefs(...args)) as
+        | { ok: true; data: unknown }
+        | { ok: false; error: unknown };
+      if (!result.ok || !Array.isArray(result.data)) return result;
+      return { ok: true, data: { items: result.data, next: { done: true } } };
+    },
+  };
+});
+// Chip counts are server HEAD counts; the page reads them through this module.
+vi.mock('@/lib/brief-counts', () => ({
+  countBriefsByFilter: (...args: unknown[]) => countBriefs(...args),
 }));
 vi.mock('@/lib/supabase', () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
@@ -120,6 +136,8 @@ const button = (label: string) =>
 
 beforeEach(() => {
   listBriefs.mockReset();
+  countBriefs.mockReset();
+  countBriefs.mockResolvedValue({ ok: true, data: { all: 0, open: 0, closed: 0 } });
   capability.create = true;
   location = '';
 });
@@ -154,16 +172,60 @@ describe('Briefs list load failure', () => {
 });
 
 describe('Briefs list read', () => {
-  it('reads by workspace_id on the server, one page at a time', async () => {
-    const full = Array.from({ length: 50 }, (_, i) => brief(`p${i + 1}`));
-    listBriefs
-      .mockResolvedValueOnce({ ok: true, data: full })
-      .mockResolvedValueOnce({ ok: true, data: [brief('p51')] });
+  const cursor = { createdAt: '2026-10-01T00:00:00Z', id: 'p1' };
+  const loadMore = () => document.querySelector<HTMLButtonElement>('[data-briefs-load-more]');
+
+  it('reads the first keyset page by workspace_id, with no Load more when it is the last', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('p1')] });
     await mount('/briefs?status=all');
+    expect(listBriefs).toHaveBeenCalledTimes(1);
+    expect(listBriefs.mock.calls[0]?.[1]).toBe('w1');
+    expect(listBriefs.mock.calls[0]?.[2]).toBeUndefined();
+    expect(text()).toContain('Brief p1');
+    expect(loadMore()).toBeNull();
+    expect(button('Load more')).toBeUndefined();
+  });
+
+  it('Load more reads the next page from the cursor and appends without duplicates', async () => {
+    listBriefs
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { items: [brief('p1')], next: { done: false, cursor } },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        // p1 again (created between reads) must not render twice.
+        data: { items: [brief('p1'), brief('p2')], next: { done: true } },
+      });
+    await mount('/briefs?status=all');
+    const control = loadMore();
+    expect(control?.textContent?.trim()).toBe('Load more');
+    // The shared Button: 44px touch target, token classes only.
+    expect(control?.className).toContain('min-h-[44px]');
+    expect(control?.className).not.toContain('dark:');
+
+    await act(async () => control?.click());
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+
     expect(listBriefs).toHaveBeenCalledTimes(2);
-    expect(listBriefs.mock.calls[0]?.[1]).toEqual({ workspaceId: 'w1', limit: 50, offset: 0 });
-    expect(listBriefs.mock.calls[1]?.[1]).toEqual({ workspaceId: 'w1', limit: 50, offset: 50 });
-    expect(text()).toContain('Brief p51');
+    expect(listBriefs.mock.calls[1]?.[1]).toBe('w1');
+    expect(listBriefs.mock.calls[1]?.[2]).toEqual(cursor);
+    const links = [...document.querySelectorAll('a')].map((a) => a.getAttribute('aria-label'));
+    expect(links.filter((label) => label === 'Brief p1')).toHaveLength(1);
+    expect(links).toContain('Brief p2');
+    expect(loadMore()).toBeNull();
+  });
+});
+
+describe('briefsLoadMore', () => {
+  it('renders the control only while another page exists', () => {
+    expect(briefsLoadMore({ done: true }, false, () => {})).toEqual([]);
+    const shown = briefsLoadMore(
+      { done: false, cursor: { createdAt: '2026-10-01T00:00:00Z', id: 'b1' } },
+      false,
+      () => {},
+    );
+    expect(shown).toHaveLength(1);
   });
 });
 
@@ -317,5 +379,71 @@ describe('Briefs list cards', () => {
     expect(document.querySelector('[role="link"]')).toBeNull();
     expect(document.querySelector('a button, [role="link"] button')).toBeNull();
     expect(button('Close')).toBeUndefined();
+  });
+});
+
+// The chip buttons by label (the count, when shown, follows the label).
+const chipText = (label: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>('button')]
+    .map((b) => b.textContent?.trim() ?? '')
+    .find((t) => t === label || t.startsWith(`${label} `));
+
+async function typeSearch(value: string) {
+  const input = document.querySelector<HTMLInputElement>('input[placeholder="Search briefs"]');
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  await act(async () => {
+    if (input === null || setter === undefined) return;
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+describe('Briefs chip counts', () => {
+  it('shows the server totals, not the loaded rows, as plain text', async () => {
+    // One loaded row, but the workspace holds 250: the chips say 250 / 200 / 50.
+    listBriefs.mockResolvedValue({
+      ok: true,
+      data: { items: [brief('p1')], next: { done: false, cursor: { createdAt: 'x', id: 'p1' } } },
+    });
+    countBriefs.mockResolvedValue({ ok: true, data: { all: 250, open: 200, closed: 50 } });
+    await mount();
+    expect(countBriefs).toHaveBeenCalledTimes(1);
+    expect(countBriefs.mock.calls[0]?.[1]).toBe('w1');
+    expect(countBriefs.mock.calls[0]?.[2]).toBe('');
+    expect(chipText('All')).toBe('All 250');
+    expect(chipText('Open')).toBe('Open 200');
+    expect(chipText('Closed')).toBe('Closed 50');
+  });
+
+  it('shows labels alone when the count read fails', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('p1')] });
+    countBriefs.mockResolvedValue({ ok: false, error: { code: 'unknown', message: 'x' } });
+    await mount();
+    expect(chipText('All')).toBe('All');
+    expect(chipText('Open')).toBe('Open');
+  });
+
+  it('re-reads the counts with the list on Retry', async () => {
+    listBriefs
+      .mockResolvedValueOnce({ ok: false, error: { code: 'unknown', message: 'x' } })
+      .mockResolvedValue({ ok: true, data: [brief('b1')] });
+    await mount();
+    expect(countBriefs).toHaveBeenCalledTimes(1);
+    await act(async () => button('Retry')?.click());
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    expect(countBriefs).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-reads the counts for a typed search once typing pauses, not per keystroke', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { title: 'Launch reel' })] });
+    await mount();
+    expect(countBriefs).toHaveBeenCalledTimes(1);
+    await typeSearch('la');
+    await typeSearch('lau');
+    await act(async () => new Promise((r) => setTimeout(r, 400)));
+    expect(countBriefs).toHaveBeenCalledTimes(2);
+    expect(countBriefs.mock.calls[1]?.[2]).toBe('lau');
+    // The list itself is not re-read for a search.
+    expect(listBriefs).toHaveBeenCalledTimes(1);
   });
 });

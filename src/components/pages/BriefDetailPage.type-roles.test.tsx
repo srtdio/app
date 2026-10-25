@@ -46,8 +46,9 @@ vi.mock('@/lib/workspace-context', () => ({
 vi.mock('@/lib/workspace-context-capability', () => ({
   useWorkspaceCapability: () => false,
 }));
-vi.mock('@/components/pages/pcs/use-post-members', () => ({
-  usePostMembers: () => ({
+vi.mock('@/lib/workspace-members', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspace-members')>()),
+  useWorkspaceMembers: () => ({
     options: [{ userId: 'u1', displayName: 'Asha Rao' }],
     loading: false,
     error: null,

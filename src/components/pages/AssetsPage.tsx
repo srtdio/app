@@ -26,9 +26,8 @@ import {
   assetParamIsGone,
   deleteFailedLabel,
   deleteToastLabel,
-  selectAllCapLabel,
-  selectAllIds,
-  selectCapLabel,
+  partialDeleteLabel,
+  SELECT_ALL_FAILED,
   selectedLabel,
 } from '@/components/pages/assets/assets-nav';
 import { useOptionalToast } from '@/components/ui/toast';
@@ -58,10 +57,10 @@ import { assetDelete, assetDeleteMany } from '@srtdio/rpc';
 import {
   ASSET_SORT_DEFAULT,
   ASSET_SORT_OPTIONS,
-  BULK_DELETE_MAX,
+  BULK_BATCH_SIZE,
   ASSET_TAB_DEFAULT,
-  buildTabCounts,
-  canBulkDelete,
+  countAssetTabs,
+  deleteInBatches,
   displayLabel,
   fetchMemberRole,
   filterAssets,
@@ -71,18 +70,35 @@ import {
   inUseTitle,
   isAssetInUseError,
   splitFreeAssets,
-  listAssets,
+  getAssetItem,
+  listAssetIds,
+  listAssetsPage,
+  mergeAssetPages,
   parseAssetTab,
   removeAssetsById,
   renameAssetInList,
   sortAssets,
   TAB_EMPTY,
   type AssetListItem,
+  type AssetPageNext,
   type AssetSort,
   type AssetTab,
 } from '@/lib/assets';
 
 const SKELETON_COUNT = 12;
+
+/** The Load more failure toast: "Couldn't {action}. {reason}". */
+export const LOAD_MORE_FAILED = "Couldn't load more files. Try again.";
+
+/** Tab counts before the first server count lands: zero shows no number. */
+const NO_COUNTS: Record<AssetTab, number> = {
+  all: 0,
+  media: 0,
+  pdf: 0,
+  docs: 0,
+  sheets: 0,
+  links: 0,
+};
 
 /** A viewer target: the index into the navigable list, plus whether Info opens. */
 interface ViewerState {
@@ -103,6 +119,16 @@ export function AssetsPage() {
   const [assetsFailed, setAssetsFailed] = useState(false);
   const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // Keyset paging: where the next page starts, or done. Load more appends it.
+  const [next, setNext] = useState<AssetPageNext>({ done: true });
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Bumped by every first-page load, so a Load more that resolves after a
+  // reload (or a workspace switch) never appends onto the fresh list.
+  const loadGeneration = useRef(0);
+  // Tab totals from the server (HEAD counts), never from the loaded pages.
+  // Null until the first read lands; a failed read keeps the last good counts.
+  const [counts, setCounts] = useState<Record<AssetTab, number> | null>(null);
+  const countGeneration = useRef(0);
 
   const [search, setSearch] = useState('');
   const [viewer, setViewer] = useState<ViewerState | null>(null);
@@ -116,6 +142,10 @@ export function AssetsPage() {
   const selectBarRef = useRef<HTMLDivElement>(null);
   const selectBarInset = useBottomInset(selectBarRef);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  // Select all reads every matching id from the server; bumped on Cancel or a
+  // workspace switch so a late answer never reselects.
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectAllGeneration = useRef(0);
   const [renameItem, setRenameItem] = useState<AssetListItem | null>(null);
   // Deleted but still inside the Undo window: hidden from every list until the
   // delete commits (then the rows go) or Undo brings them back.
@@ -137,6 +167,11 @@ export function AssetsPage() {
   const { run: runUndoable } = useUndoableAction();
   const [searchParams, setSearchParams] = useSearchParams();
   const openedAssetParam = useRef<string | null>(null);
+  // A ?asset= id beyond the loaded pages is looked up once on its own (one
+  // row, same read and RLS as the list); the tick re-runs the deep-link effect.
+  const lookedUpAssetParam = useRef<string | null>(null);
+  const pendingAssetLookup = useRef<string | null>(null);
+  const [assetLookupTick, setAssetLookupTick] = useState(0);
 
   // The tab lives in ?type= (default All, unknown is All), so it survives Back
   // and refresh. Switching only filters the loaded list: no read, instant.
@@ -162,20 +197,62 @@ export function AssetsPage() {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
 
+  // Every tab's total in one parallel burst of HEAD counts. Runs with every
+  // first-page load and after every delete; the latest read wins.
+  const loadCounts = useCallback(async () => {
+    if (workspaceId === null) return;
+    countGeneration.current += 1;
+    const generation = countGeneration.current;
+    const result = await countAssetTabs(supabase, workspaceId);
+    if (generation !== countGeneration.current) return;
+    if (!result.ok) {
+      logger.warn('assets: tab counts read failed', { error: result.error.message });
+      return;
+    }
+    setCounts(result.data);
+  }, [workspaceId]);
+
+  // The first page. Every reload (upload, link, data change, Retry) starts over
+  // from the newest page, so the list never mixes a stale tail with fresh rows.
+  // The counts reload alongside it, not after it.
   const loadAssets = useCallback(async () => {
     if (workspaceId === null) return;
+    void loadCounts();
+    loadGeneration.current += 1;
+    const generation = loadGeneration.current;
     setLoading(true);
-    const result = await listAssets(supabase, workspaceId);
+    const result = await listAssetsPage(supabase, workspaceId);
+    if (generation !== loadGeneration.current) return;
     setLoading(false);
+    setLoadingMore(false);
     if (!result.ok) {
       logger.warn('assets: list read failed', { error: result.error.message });
       setAssetsFailed(true);
       return;
     }
     setAssetsFailed(false);
-    setItems(result.data);
+    setItems(result.data.items);
+    setNext(result.data.next);
     setAssetsLoaded(true);
-  }, [workspaceId]);
+  }, [workspaceId, loadCounts]);
+
+  // The next page, appended with duplicates (by id) dropped. A failure keeps
+  // what is loaded and says so in a toast; the button stays for another try.
+  const loadMore = useCallback(async () => {
+    if (workspaceId === null || next.done || loadingMore) return;
+    const generation = loadGeneration.current;
+    setLoadingMore(true);
+    const result = await listAssetsPage(supabase, workspaceId, next.cursor);
+    if (generation !== loadGeneration.current) return;
+    setLoadingMore(false);
+    if (!result.ok) {
+      logger.warn('assets: next page read failed', { error: result.error.message });
+      showToast?.({ title: LOAD_MORE_FAILED, tone: 'error' });
+      return;
+    }
+    setItems((prev) => mergeAssetPages(prev, result.data.items));
+    setNext(result.data.next);
+  }, [workspaceId, next, loadingMore, showToast]);
 
   const retryLoad = useCallback(async () => {
     setRetrying(true);
@@ -201,6 +278,7 @@ export function AssetsPage() {
     if (previous !== null && previous !== workspaceId) {
       setAssetsLoaded(false);
       setAssetsFailed(false);
+      setCounts(null);
     }
   }, [workspaceId]);
 
@@ -211,6 +289,8 @@ export function AssetsPage() {
     setAddLinkOpen(false);
     setSelectMode(false);
     setSelected(new Set());
+    selectAllGeneration.current += 1;
+    setSelectingAll(false);
     setRenameItem(null);
     setPendingDelete(new Set());
     setInUse(null);
@@ -243,9 +323,6 @@ export function AssetsPage() {
     [items, pendingDelete],
   );
 
-  // Tab counts reflect the whole library. Same loaded list, no extra read.
-  const counts = useMemo(() => buildTabCounts(liveItems), [liveItems]);
-
   const visible = useMemo(
     () => sortAssets(filterAssets(liveItems, tab, search), sort),
     [liveItems, tab, search, sort],
@@ -259,26 +336,39 @@ export function AssetsPage() {
   // continues numbering past them when auto-naming.
   const siblingLabels = useMemo(() => liveItems.map(displayLabel), [liveItems]);
 
-  // Toggle one asset's selection, capping the set at 200 (the delete batch limit);
-  // adding past the cap is ignored with a toast rather than silently dropped.
-  const toggleSelect = useCallback(
-    (item: AssetListItem): void => {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(item.id)) {
-          next.delete(item.id);
-          return next;
-        }
-        if (next.size >= BULK_DELETE_MAX) {
-          push(selectCapLabel(BULK_DELETE_MAX));
-          return prev;
-        }
-        next.add(item.id);
-        return next;
-      });
-    },
-    [push],
-  );
+  // Toggle one asset's selection. No cap: a delete runs in batches the server
+  // accepts (BULK_BATCH_SIZE), so any selection size can be deleted.
+  const toggleSelect = useCallback((item: AssetListItem): void => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
+  }, []);
+
+  // Select all = every file in the current tab, loaded or not: its ids are read
+  // from the server (keyset pages of 1000). Search filters the loaded pages on
+  // the device, so while searching Select all takes the shown matches only.
+  const selectAll = useCallback(async (): Promise<void> => {
+    if (searching) {
+      setSelected(new Set(visible.map((item) => item.id)));
+      return;
+    }
+    if (workspaceId === null) return;
+    selectAllGeneration.current += 1;
+    const generation = selectAllGeneration.current;
+    setSelectingAll(true);
+    const result = await listAssetIds(supabase, workspaceId, tab);
+    if (generation !== selectAllGeneration.current) return;
+    setSelectingAll(false);
+    if (!result.ok) {
+      logger.warn('assets: select all read failed', { error: result.error.message });
+      push(SELECT_ALL_FAILED, 'error');
+      return;
+    }
+    setSelected(new Set(result.data.filter((id) => !pendingDelete.has(id))));
+  }, [searching, visible, workspaceId, tab, push, pendingDelete]);
 
   // Tap a card: open its external link in a new tab, or open the lightbox at
   // that asset. Opening a link never navigates the current Sorted tab.
@@ -308,10 +398,29 @@ export function AssetsPage() {
     if (asset === null || asset === '') return;
     if (openedAssetParam.current === asset) return;
     const item = items.find((candidate) => candidate.id === asset);
+    if (
+      item === undefined &&
+      !next.done &&
+      workspaceId !== null &&
+      lookedUpAssetParam.current !== asset
+    ) {
+      lookedUpAssetParam.current = asset;
+      pendingAssetLookup.current = asset;
+      void getAssetItem(supabase, workspaceId, asset).then((found) => {
+        if (found.ok && found.data.length > 0) {
+          setItems((prev) => mergeAssetPages(prev, found.data));
+        }
+        pendingAssetLookup.current = null;
+        setAssetLookupTick((tick) => tick + 1);
+      });
+      return;
+    }
+    // The one-row lookup is still in flight: the tick re-runs this.
+    if (item === undefined && pendingAssetLookup.current === asset) return;
     if (item !== undefined && item.kind !== 'link' && !searching && tab !== ASSET_TAB_DEFAULT) {
-      const next = new URLSearchParams(searchParams);
-      next.delete('type');
-      setSearchParams(next, { replace: true });
+      const params = new URLSearchParams(searchParams);
+      params.delete('type');
+      setSearchParams(params, { replace: true });
       return;
     }
     openedAssetParam.current = asset;
@@ -322,9 +431,9 @@ export function AssetsPage() {
         action: { label: RECENTLY_DELETED_LABEL, onPress: () => navigate(RECENTLY_DELETED_PATH) },
       });
     }
-    const next = new URLSearchParams(searchParams);
-    next.delete(ASSET_PARAM);
-    setSearchParams(next, { replace: true });
+    const params = new URLSearchParams(searchParams);
+    params.delete(ASSET_PARAM);
+    setSearchParams(params, { replace: true });
   }, [
     items,
     assetsLoaded,
@@ -335,6 +444,9 @@ export function AssetsPage() {
     openAsset,
     tab,
     searching,
+    next.done,
+    workspaceId,
+    assetLookupTick,
   ]);
 
   // Mint an attachment-disposition presigned URL for a stored asset version, so
@@ -407,50 +519,68 @@ export function AssetsPage() {
 
   const deleteItems = useCallback(
     (ids: string[]): void => {
-      if (ids.length === 0 || (ids.length > 1 && !canBulkDelete(ids.length))) return;
+      if (ids.length === 0) return;
       setPendingDelete((prev) => new Set([...prev, ...ids]));
       runUndoable({
         label: deleteToastLabel(ids.length),
         revert: () => unhide(ids),
         commit: async () => {
           const traceId = newTrace();
-          // asset_delete_many is all-or-nothing: one file in use refuses the
-          // whole call. A bulk delete checks once which files are in use, deletes
-          // the free ones in one call and keeps the rest, saying how many.
-          let targets = ids;
-          let kept: string[] = [];
-          if (ids.length > 1) {
-            const found = await findAssetsInUse(supabase, ids);
-            if (found.ok) ({ free: targets, kept } = splitFreeAssets(ids, found.data));
-          }
-          if (targets.length === 0) {
-            unhide(ids);
-            await showInUse(ids, itemsRef.current);
-            return;
-          }
-          const [only] = targets;
-          const result =
-            targets.length === 1 && only !== undefined
-              ? await assetDelete(supabase, { p_asset_id: only, p_trace_id: traceId })
-              : await assetDeleteMany(supabase, { p_asset_ids: targets, p_trace_id: traceId });
-          if (!result.ok) {
-            unhide(ids);
-            if (isAssetInUseError(result.error)) await showInUse(targets, itemsRef.current);
-            else push(deleteFailedLabel(ids.length), 'error');
-            return;
-          }
-          setItems((prev) => removeAssetsById(prev, targets));
+          // asset_delete_many is all-or-nothing and takes at most
+          // BULK_DELETE_MAX ids, so the ids go in batches of BULK_BATCH_SIZE,
+          // one batch at a time, stopping at the first failure. Each batch of a
+          // bulk delete checks once which files are in use, deletes the free
+          // ones in one call and keeps the rest, saying how many.
+          let failedTargets: string[] = [];
+          const outcome = await deleteInBatches(ids, BULK_BATCH_SIZE, async (batch) => {
+            let targets = batch;
+            let kept: string[] = [];
+            if (ids.length > 1) {
+              const found = await findAssetsInUse(supabase, batch);
+              if (found.ok) ({ free: targets, kept } = splitFreeAssets(batch, found.data));
+            }
+            if (targets.length === 0) return { ok: true, data: { deleted: [], kept } };
+            const [only] = targets;
+            const result =
+              targets.length === 1 && only !== undefined
+                ? await assetDelete(supabase, { p_asset_id: only, p_trace_id: traceId })
+                : await assetDeleteMany(supabase, { p_asset_ids: targets, p_trace_id: traceId });
+            if (!result.ok) {
+              failedTargets = targets;
+              return { ok: false, error: result.error };
+            }
+            return { ok: true, data: { deleted: targets, kept } };
+          });
+          const { deleted, kept, failure } = outcome;
+          if (deleted.length > 0) setItems((prev) => removeAssetsById(prev, deleted));
           unhide(ids);
+          void loadCounts();
+          if (failure !== null) {
+            // Some batches went through: say how many, the rest are back.
+            if (deleted.length > 0) {
+              push(partialDeleteLabel(ids.length - deleted.length, deleted.length), 'error');
+            } else if (isAssetInUseError(failure.error)) {
+              await showInUse(failedTargets, itemsRef.current);
+            } else {
+              push(deleteFailedLabel(ids.length), 'error');
+            }
+            return;
+          }
+          if (deleted.length === 0) {
+            // Every file is in use. The lookup stays one batch wide.
+            await showInUse(kept.slice(0, BULK_BATCH_SIZE), itemsRef.current);
+            return;
+          }
           if (kept.length > 0) push(inUseKeptLabel(kept.length), 'error');
         },
       });
     },
-    [runUndoable, unhide, newTrace, showInUse, push],
+    [runUndoable, unhide, newTrace, showInUse, push, loadCounts],
   );
 
   const deleteSelected = useCallback((): void => {
     const ids = Array.from(selected);
-    if (!canBulkDelete(ids.length)) return;
+    if (ids.length === 0) return;
     setSelectMode(false);
     setSelected(new Set());
     deleteItems(ids);
@@ -577,9 +707,15 @@ export function AssetsPage() {
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
 
   const exitSelectMode = (): void => {
+    selectAllGeneration.current += 1;
+    setSelectingAll(false);
     setSelectMode(false);
     setSelected(new Set());
   };
+
+  // Nothing to select: no shown file and, outside a search, a server total of 0.
+  const nothingToSelect =
+    visible.length === 0 && (searching || counts === null || counts[tab] === 0);
 
   // The round box on a card: one tap starts selecting with that file ticked.
   const startSelectWith = (item: AssetListItem): void => {
@@ -617,11 +753,10 @@ export function AssetsPage() {
               </span>
               <Button
                 variant="ghost"
-                disabled={visible.length === 0}
-                onClick={() => {
-                  setSelected(new Set(selectAllIds(visible, BULK_DELETE_MAX)));
-                  if (visible.length > BULK_DELETE_MAX) push(selectAllCapLabel(BULK_DELETE_MAX));
-                }}
+                data-assets-select-all=""
+                disabled={nothingToSelect || selectingAll}
+                aria-busy={selectingAll}
+                onClick={() => void selectAll()}
               >
                 Select all
               </Button>
@@ -629,21 +764,16 @@ export function AssetsPage() {
               <span className="hidden gap-2 md:flex">
                 <Button
                   variant="danger"
-                  disabled={!canBulkDelete(selected.size)}
+                  disabled={selected.size === 0 || selectingAll}
                   onClick={deleteSelected}
                 >
                   Delete
                 </Button>
               </span>
             </div>
-            {selected.size > BULK_DELETE_MAX ? (
-              <span className="text-center text-sm text-fg-3">
-                Select 200 or fewer to delete at once.
-              </span>
-            ) : null}
           </div>
         ) : assetsFailed ? null : (
-          <AssetTabs value={tab} counts={counts} onChange={setTab} />
+          <AssetTabs value={tab} counts={counts ?? NO_COUNTS} onChange={setTab} />
         )}
       </SectionHeader>
 
@@ -701,6 +831,22 @@ export function AssetsPage() {
             />
           </div>
         )}
+        {/* Older files load a page at a time; search, tabs and sort work over
+            what is loaded. Shown only while another page exists. */}
+        {!assetsFailed && !listLoading && !next.done ? (
+          <div className="px-4 md:px-6 pb-4 flex justify-center">
+            <Button
+              variant="secondary"
+              type="button"
+              data-assets-load-more=""
+              disabled={loadingMore}
+              aria-busy={loadingMore}
+              onClick={() => void loadMore()}
+            >
+              Load more
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {/* Deleted files wait 31 days in Recently deleted; the way there from Assets. */}
@@ -740,7 +886,7 @@ export function AssetsPage() {
               <Button
                 variant="danger"
                 className="min-w-[44px] flex-1"
-                disabled={!canBulkDelete(selected.size)}
+                disabled={selected.size === 0 || selectingAll}
                 onClick={deleteSelected}
               >
                 {selected.size > 0 ? `Delete ${selected.size}` : 'Delete'}

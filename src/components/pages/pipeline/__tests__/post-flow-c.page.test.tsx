@@ -42,9 +42,10 @@ vi.mock('@/lib/shared-presign', () => ({ appPresignCache: () => ({}) }));
 vi.mock('@/lib/chat/post-covers', () => ({
   usePostCovers: () => () => undefined,
   requestPostCovers: async () => {},
+  primeCovers: () => {},
 }));
 vi.mock('@/components/pages/pipeline/use-workspace-people', () => ({
-  useWorkspacePeople: () => ({ approverFirstNames: [], names: new Map() }),
+  useWorkspacePeople: () => ({ approverFirstNames: [], names: new Map(), approvers: [] }),
 }));
 vi.mock('@/components/induction/InductionProvider', () => ({
   useInductionPostPreset: () => undefined,

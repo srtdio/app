@@ -74,6 +74,12 @@ export interface MoveSheetProps {
    * approve confirm (or the on-behalf sheet) instead of the action list.
    */
   intent?: Stage | null;
+  /**
+   * The workspace's approvers for the on-behalf picker, when the page already
+   * holds them (PipelinePage passes its one shared members read). Absent: the
+   * sheet reads them itself.
+   */
+  approvers?: readonly ApproverOption[];
 }
 
 /**
@@ -85,7 +91,9 @@ export interface MoveSheetProps {
 export function MoveSheet(props: MoveSheetProps): ReactElement | null {
   const { onMove, busy = false } = props;
   const { workspaces, workspaceId, workspaceName } = useWorkspace();
-  const approvers = useWorkspaceApprovers(workspaceId);
+  // Only read the approvers when the page did not hand them down (null: no read).
+  const ownApprovers = useWorkspaceApprovers(props.approvers === undefined ? workspaceId : null);
+  const approvers = props.approvers ?? ownApprovers;
   // Due dates are calendar days on the workspace zone (src/lib/time.ts).
   const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
   const { gate, state } = useApproveGate(onMove);
@@ -123,8 +131,6 @@ export interface MoveSheetViewProps extends Omit<MoveSheetProps, 'onMove'> {
   targetDate: string;
   /** The workspace's brand name for the on-behalf picker ("Name (Brand)"). */
   brand?: string | null;
-  /** The workspace's approvers for the on-behalf picker. */
-  approvers?: readonly ApproverOption[];
 }
 
 /** One move the viewer can make: its target, label and tone. One line, no helper. */

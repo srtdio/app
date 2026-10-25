@@ -1,7 +1,8 @@
 // Post covers for the chat post lists (Share a post / Pick a post rows, the
 // status drop-down, the composer chips): each post's first photo or video,
 // kept in one session store so a list opened twice, or warmed before it
-// opens, paints its pictures at once. Reads are batched: one asset_attachments
+// opens, paints its pictures at once. A caller that already read the covers
+// (the Pipeline's listPosts) seeds them with primeCovers. Reads are batched: one asset_attachments
 // query per set of ids not yet known (never one per row), and ids already in
 // flight are never asked for twice. A cover older than COVER_TTL_MS is shown
 // as is and read again in the background, so a changed first picture catches
@@ -136,6 +137,31 @@ export async function requestPostCovers(
   } finally {
     for (const id of need) inflight.delete(keyOf(workspaceId, id));
   }
+}
+
+/**
+ * Seed the store with covers a caller already read (the Pipeline's listPosts
+ * folds the same asset_attachments rows {@link requestPostCovers} would read),
+ * so those ids are fresh and no separate cover read runs for them. Stored,
+ * persisted and announced exactly as a read's result is. No round trip.
+ */
+export function primeCovers(
+  workspaceId: string,
+  covers: Iterable<readonly [postId: string, cover: CardFirstMedia | null]>,
+): void {
+  loadPersisted();
+  const at = Date.now();
+  let changed = false;
+  for (const [id, cover] of covers) {
+    const key = keyOf(workspaceId, id);
+    // Re-insert so the newest covers are the last kept when the cap trims.
+    entries.delete(key);
+    entries.set(key, { cover, at });
+    changed = true;
+  }
+  if (!changed) return;
+  writeEntries(POST_COVERS_KEY, [...entries]);
+  notify();
 }
 
 /**

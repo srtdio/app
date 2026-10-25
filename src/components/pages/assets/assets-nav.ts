@@ -64,6 +64,21 @@ export function deleteFailedLabel(count: number): string {
     : "Couldn't delete the files. Try again.";
 }
 
+function filesCount(count: number): string {
+  return `${count} ${count === 1 ? 'file' : 'files'}`;
+}
+
+/**
+ * A batched delete stopped part way: "Couldn't delete N files. M deleted." N is
+ * what is back in the library, M what went to Recently deleted. Pure.
+ */
+export function partialDeleteLabel(notDeleted: number, deleted: number): string {
+  return `Couldn't delete ${filesCount(notDeleted)}. ${deleted} deleted.`;
+}
+
+/** The toast when Select all could not read the matching files. Pure. */
+export const SELECT_ALL_FAILED = "Couldn't select all files. Try again.";
+
 /** The select-mode count line. */
 export function selectedLabel(count: number): string {
   return `${count} selected`;
