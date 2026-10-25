@@ -49,7 +49,9 @@ export function AuthShell({
           >
             <Wordmark />
           </Link>
-          <div className="mt-4 text-3xl font-semibold tracking-tight [text-wrap:balance]">{title}</div>
+          <div className="mt-4 text-3xl font-semibold tracking-tight [text-wrap:balance]">
+            {title}
+          </div>
           <p className="mt-1 text-base text-fg-2 [text-wrap:balance]">{subtitle}</p>
         </div>
         {children}
