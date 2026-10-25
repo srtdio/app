@@ -167,6 +167,9 @@ describe.runIf(RPC_SUITE)('storage_workspace_cutover and the workspace restore w
 
   it('rejects a missing trace id, an invalid bucket name and a soft-deleted workspace', async () => {
     const ws = await seed('Cutover invalid');
+    // The proc's trace parameter is p_trace_id, deliberately null here to hit
+    // its 'trace_id required' guard; no _trace_id exists in its signature.
+    // eslint-disable-next-line no-restricted-syntax
     const noTrace = await admin.rpc('storage_workspace_cutover', {
       p_workspace_id: ws.id,
       p_bucket: bucketName(),
