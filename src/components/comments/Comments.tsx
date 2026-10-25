@@ -20,15 +20,16 @@ import { checkLink } from '@/lib/links/safety';
 import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { glowById, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
-import { IconCheck, IconMore, ICON_SIZE } from '@/components/ui/icons';
+import { IconCheck, IconEdit, IconMore, IconTrash, ICON_SIZE } from '@/components/ui/icons';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { LoadError } from '@/components/ui/LoadError';
 import { roleLabel } from '@/components/pages/settings/members-data';
-import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatDateTime, formatRelative } from '@/lib/time';
-import { UNDO_WINDOW_MS, useUndoableAction } from '@/lib/use-undoable-action';
+import { useUndoableAction } from '@/lib/use-undoable-action';
+import { UNDO_MS } from '@/lib/undo';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { friendlyCommentError } from '@/components/comments/comment-errors';
@@ -1472,7 +1473,7 @@ export function Comments({
 
   // One-tap Resolve: no box, note, sheet or confirm. The row flips to Resolved
   // at once (optimistic) while the RPC runs, and the bottom strip offers "Undo"
-  // for UNDO_WINDOW_MS. Undo flips the row back and sends resolved=false (after
+  // for UNDO_MS. Undo flips the row back and sends resolved=false (after
   // the first write settles, so the two never race). A failure on either leg
   // reverts and shows the one inline line, once.
   function handleOneTapResolve(comment: CommentRow): void {
@@ -1501,7 +1502,7 @@ export function Comments({
             });
           },
         },
-        durationMs: UNDO_WINDOW_MS,
+        durationMs: UNDO_MS,
         kind: 'undo',
       }) ?? null;
     // No page-0 refetch on success: the optimistic row is already right, and a
@@ -1538,7 +1539,7 @@ export function Comments({
 
   // The approver's one-tap Confirm on a resolved checkpoint. Same shape as the
   // creator's one-tap Resolve: the tick fills at once (optimistic) while the RPC
-  // runs, and the bottom strip shows "Confirmed" + "Undo" for UNDO_WINDOW_MS.
+  // runs, and the bottom strip shows "Confirmed" + "Undo" for UNDO_MS.
   // Undo empties the tick and sends accepted=false once the first write settles.
   // A failure on either leg reverts and shows the one inline line, once.
   function handleConfirm(comment: CommentRow): void {
@@ -1567,7 +1568,7 @@ export function Comments({
             });
           },
         },
-        durationMs: UNDO_WINDOW_MS,
+        durationMs: UNDO_MS,
         kind: 'undo',
       }) ?? null;
     void sent.then((landed) => {
@@ -1775,46 +1776,41 @@ export function Comments({
     );
   }
 
-  // The author-only Edit / Delete kebab in a row's header, or nothing. Every
-  // menu row closes the popover and calls the existing handler.
+  // The author-only Edit / Delete ⋯ in a row's header (ui/ActionMenu), or
+  // nothing. Every row closes the menu and calls the existing handler.
   function rowMenu(comment: CommentRow, actions: CommentActions, label: string): ReactNode {
     if (editingId === comment.id || pointMenuMode(actions) !== 'menu') return null;
-    const closeMenu = (): void => setMenuOpenId(null);
+    const items: ActionMenuItem[] = [];
+    if (actions.canEdit) {
+      items.push({ id: 'edit', label: 'Edit', icon: IconEdit, onSelect: () => startEdit(comment) });
+    }
+    if (actions.canDelete) {
+      items.push({
+        id: 'delete',
+        label: 'Delete',
+        icon: IconTrash,
+        tone: 'danger',
+        onSelect: () => handleDelete(comment.id),
+      });
+    }
     return (
       // -my-2 keeps the 44px target from making the header taller than its text.
       <div className="relative -my-2 shrink-0">
-        <IconButton
-          label={label}
-          onClick={() => setMenuOpenId((current) => (current === comment.id ? null : comment.id))}
-        >
-          <IconMore size={ICON_SIZE.control} />
-        </IconButton>
-        <MenuPopover open={menuOpenId === comment.id} onClose={closeMenu} align="right">
-          {actions.canEdit ? (
-            <PressableRow
-              type="button"
-              className="flex items-center px-3 text-base text-fg"
-              onClick={() => {
-                closeMenu();
-                startEdit(comment);
-              }}
+        <ActionMenu
+          title={label}
+          items={items}
+          open={menuOpenId === comment.id}
+          onOpenChange={(open) => setMenuOpenId(open ? comment.id : null)}
+          trigger={
+            <IconButton
+              label={label}
+              aria-haspopup="menu"
+              aria-expanded={menuOpenId === comment.id}
             >
-              Edit
-            </PressableRow>
-          ) : null}
-          {actions.canDelete ? (
-            <PressableRow
-              type="button"
-              className="flex items-center px-3 text-base text-bad"
-              onClick={() => {
-                closeMenu();
-                handleDelete(comment.id);
-              }}
-            >
-              Delete
-            </PressableRow>
-          ) : null}
-        </MenuPopover>
+              <IconMore size={ICON_SIZE.control} />
+            </IconButton>
+          }
+        />
       </div>
     );
   }

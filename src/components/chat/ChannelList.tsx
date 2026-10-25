@@ -1,14 +1,12 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -18,10 +16,11 @@ import { countBadgeText } from '@/components/ui/CountBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { SelectCheck } from '@/components/ui/SelectCheck';
-import { popoverClass } from '@/components/ui/popover-classes';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { ActionRow, useLongPress } from '@/components/ui';
-import { ICON_SIZE, IconChat, IconEyeOff, IconMore, IconStarFilled } from '@/components/ui/icons';
+import { useLongPress } from '@/components/ui';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { Chip } from '@/components/ui/Chip';
+import { ICON_SIZE, IconChat, IconEyeOff, IconMore, IconPlus } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -64,7 +63,6 @@ import {
   useChatLayout,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { moveMenuFocus } from '@/lib/chat/menu-keys';
 
 /** Per-channel draft text lookup ('' when the chat has no draft). */
 type DraftLookup = (channelId: string) => string;
@@ -173,6 +171,12 @@ interface ChannelListBodyProps extends Omit<ChannelListProps, 'status' | 'onRetr
   draftFor?: DraftLookup;
   /** A row was long-pressed (or right-clicked): open its menu at the row. */
   onLongPress?: (channel: ChannelSummary, rect: DOMRect | null) => void;
+  /** The chat whose row menu is open, or null. */
+  menuOpenId?: string | null;
+  /** The open row menu closed without a pick. */
+  onMenuClose?: () => void;
+  /** The row menu's Hide chat. */
+  onHide?: (channel: ChannelSummary) => void;
   /** The list's input, read once per list (never per row); touch when absent. */
   input?: ChannelListInput;
 }
@@ -207,7 +211,8 @@ export function useChannelListInput(): ChannelListInput {
 
 /**
  * The channel list body. Pure and exported so its three states are unit tested:
- * the zero-state when no conversations exist (with a real "New chat" action), a
+ * the zero-state when no conversations exist (the header's New chat is the
+ * only create button), a
  * NoResults state when a search hides every conversation, and one row
  * per channel otherwise.
  */
@@ -217,11 +222,6 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
       <EmptyState
         icon={<IconChat size={ICON_SIZE.status} />}
         title="Chats with your team show up here."
-        action={
-          <Button variant="primary" onClick={props.onNewChat}>
-            New chat
-          </Button>
-        }
       />
     );
   }
@@ -263,7 +263,14 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
               onToggle: props.selecting.onToggle,
             }
           : {})}
-        {...(props.onLongPress !== undefined ? { onLongPress: props.onLongPress } : {})}
+        {...(props.onLongPress !== undefined
+          ? {
+              onLongPress: props.onLongPress,
+              menuOpen: props.menuOpenId === channel.channelId,
+              ...(props.onMenuClose !== undefined ? { onMenuClose: props.onMenuClose } : {}),
+              ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
+            }
+          : {})}
       />
     </li>
   );
@@ -655,18 +662,20 @@ export function channelRowBody(props: {
 
 /**
  * The tile's ⋯ (H5): always visible at the tile's right (a wide tile's middle,
- * a square tile's bottom corner), 44px, fg-3,
- * opening the same menu a long-press opens. Tokens only.
+ * a square tile's bottom corner), 44px, fg-3, the trigger of the same
+ * ActionMenu a long-press opens. rowMoreClass places its slot; the button
+ * itself is ROW_MORE_BUTTON. Tokens only.
  */
-const ROW_MORE_BASE =
+export const ROW_MORE_BUTTON =
   'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 transition-colors duration-fast hover:bg-panel-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 export function rowMoreClass(kind: TileKind): string {
-  return cn(
-    'absolute right-1',
-    kind === 'wide' ? 'top-1/2 -translate-y-1/2' : 'bottom-1',
-    ROW_MORE_BASE,
-  );
+  return cn('absolute right-1 flex', kind === 'wide' ? 'top-1/2 -translate-y-1/2' : 'bottom-1');
+}
+
+/** A chat row's menu rows: Hide chat (non-destructive: eye-off, never red; FT43). */
+export function chatRowMenuItems(onHide: () => void): ActionMenuItem[] {
+  return [{ id: 'hide', label: 'Hide chat', icon: IconEyeOff, onSelect: onHide }];
 }
 
 /**
@@ -691,6 +700,11 @@ export function ChannelCard(props: {
   checked?: boolean;
   onToggle?: (channelId: string) => void;
   onLongPress?: (channel: ChannelSummary, rect: DOMRect | null) => void;
+  /** This tile's menu is open (the list holds which one). */
+  menuOpen?: boolean;
+  onMenuClose?: () => void;
+  /** The menu's Hide chat. */
+  onHide?: (channel: ChannelSummary) => void;
 }): ReactElement {
   const { channel, summary } = props;
   const rowRef = useRef<HTMLButtonElement>(null);
@@ -787,17 +801,30 @@ export function ChannelCard(props: {
         })}
       </PressableRow>
       {menuEnabled ? (
-        <IconButton
-          type="button"
-          data-more=""
-          data-row-more=""
-          label={`Actions for ${chatDisplayName(channel)}`}
-          aria-haspopup="menu"
-          onClick={(e) => openMenu(e.currentTarget.getBoundingClientRect())}
-          className={rowMoreClass(tileKind(channel))}
-        >
-          <IconMore size={ICON_SIZE.control} />
-        </IconButton>
+        <div className={rowMoreClass(tileKind(channel))}>
+          <ActionMenu
+            title={chatDisplayName(channel)}
+            items={chatRowMenuItems(() => props.onHide?.(channel))}
+            open={props.menuOpen === true}
+            onOpenChange={(open) => {
+              if (open) openMenu();
+              else props.onMenuClose?.();
+            }}
+            trigger={
+              <IconButton
+                type="button"
+                data-more=""
+                data-row-more=""
+                label={`Actions for ${chatDisplayName(channel)}`}
+                aria-haspopup="menu"
+                aria-expanded={props.menuOpen === true}
+                className={ROW_MORE_BUTTON}
+              >
+                <IconMore size={ICON_SIZE.control} />
+              </IconButton>
+            }
+          />
+        </div>
       ) : null}
     </div>
   );
@@ -907,11 +934,11 @@ export function searchKindOf(chip: HomeChip | null): SearchKind | null {
 }
 
 /**
- * The chips under the search box: Starred (a filled star in accent), then
- * Photos, Links, Files, Voice notes. One at a time (tap again to clear). Each
- * is the shared 44px chip (8px radius); the row scrolls on X when it
- * overflows (no scrollbar), chips never wrap or shrink. Tokens only, no
- * motion. Hook-free.
+ * The chips under the search box: Starred, then Photos, Links, Files, Voice
+ * notes. One at a time (tap again to clear). Each is ui/Chip with its
+ * selected style, as on the other list pages (no counts: these filter
+ * messages, nothing is tallied); the row scrolls on X when it overflows (no
+ * scrollbar), chips never wrap or shrink. Tokens only, no motion. Hook-free.
  */
 export function searchChips(props: {
   kind: HomeChip | null;
@@ -927,24 +954,19 @@ export function searchChips(props: {
       {HOME_CHIPS.map((chip) => {
         const on = props.kind === chip.kind;
         return (
-          <Button
+          <Chip
             key={chip.kind}
-            variant="secondary"
-            type="button"
+            label={chip.label}
+            selected={on}
+            size="tap"
             data-search-chip={chip.kind}
             aria-pressed={on}
             onClick={() => props.onChange(toggleHomeChip(props.kind, chip.kind))}
             className={cn(
               'shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               NO_TOUCH_SELECT,
-              on ? 'border-accent-line bg-accent-soft text-accent' : 'text-fg-2',
             )}
-          >
-            {chip.kind === 'starred' ? (
-              <IconStarFilled size={ICON_SIZE.inline} className="shrink-0 text-accent" />
-            ) : null}
-            {chip.label}
-          </Button>
+          />
         );
       })}
     </div>
@@ -964,6 +986,10 @@ interface ChannelListContentProps extends ChannelListProps {
   select?: ChannelSelectMode;
   /** Row long-press; absent disables the row menu. */
   onLongPress?: (channel: ChannelSummary, rect: DOMRect | null) => void;
+  /** The chat whose row menu is open, its close, and its Hide chat. */
+  menuOpenId?: string | null;
+  onMenuClose?: () => void;
+  onHide?: (channel: ChannelSummary) => void;
   /** Unsent draft text per chat; absent in pure tests (no drafts). */
   draftFor?: DraftLookup;
   /** The list's input, read once by ChannelList; touch when absent. */
@@ -1096,6 +1122,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                     className="shrink-0 whitespace-nowrap"
                     onClick={newChat}
                   >
+                    <IconPlus size={ICON_SIZE.inline} />
                     New chat
                   </Button>
                 </>
@@ -1144,7 +1171,14 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                       }
                     : {}),
                   ...(props.onLongPress !== undefined && selecting === undefined
-                    ? { onLongPress: props.onLongPress }
+                    ? {
+                        onLongPress: props.onLongPress,
+                        menuOpenId: props.menuOpenId ?? null,
+                        ...(props.onMenuClose !== undefined
+                          ? { onMenuClose: props.onMenuClose }
+                          : {}),
+                        ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
+                      }
                     : {}),
                   ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
                   ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
@@ -1153,113 +1187,6 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
       </div>
       {selecting !== undefined ? selectBar(selecting) : null}
     </div>
-  );
-}
-
-/**
- * The small menu a long-pressed row (or its ⋯) opens: one "Hide chat" row
- * (non-destructive: the eye-off icon, never red; FT43). Fixed
- * over the list (portal) and placed under the row, or above it when there is no
- * room; closes on backdrop tap, Escape, scroll or resize. Design tokens only.
- */
-function ChannelRowMenu(props: {
-  anchor: DOMRect | null;
-  onClose: () => void;
-  onDelete: () => void;
-}): ReactElement | null {
-  const { anchor, onClose } = props;
-  const ref = useRef<HTMLDivElement>(null);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
-  const [shown, setShown] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (anchor === null || el === null) {
-      setCoords(null);
-      return;
-    }
-    const { width, height } = el.getBoundingClientRect();
-    let top = anchor.bottom + 4;
-    if (top + height > window.innerHeight - 8) top = Math.max(8, anchor.top - height - 4);
-    const left = Math.max(8, Math.min(anchor.left + 12, window.innerWidth - width - 8));
-    setCoords({ top, left });
-  }, [anchor]);
-
-  // Enter motion: flip to shown once the menu has been placed.
-  const placed = coords !== null;
-  useEffect(() => {
-    if (!placed) {
-      setShown(false);
-      return;
-    }
-    const raf = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(raf);
-  }, [placed]);
-
-  // Focus the first item once placed; hand focus back on close if nothing took it.
-  useEffect(() => {
-    if (!placed) return;
-    const previous = document.activeElement;
-    ref.current?.querySelector('button')?.focus({ preventScroll: true });
-    return () => {
-      const current = document.activeElement;
-      const idle = current === null || current === document.body;
-      if (idle && previous instanceof HTMLElement && previous.isConnected) {
-        previous.focus({ preventScroll: true });
-      }
-    };
-  }, [placed]);
-
-  useEffect(() => {
-    if (anchor === null) return;
-    function onKeyDown(event: globalThis.KeyboardEvent): void {
-      if (event.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    window.addEventListener('scroll', onClose, true);
-    window.addEventListener('resize', onClose);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('scroll', onClose, true);
-      window.removeEventListener('resize', onClose);
-    };
-  }, [anchor, onClose]);
-
-  if (anchor === null) return null;
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        ref={ref}
-        role="menu"
-        aria-label="Chat actions"
-        onKeyDown={(event) => {
-          // FB2: a popover menu (no aria-modal): arrow keys move between items.
-          if (moveMenuFocus(ref.current, event.key)) event.preventDefault();
-        }}
-        className={cn(
-          'fixed z-50 min-w-[200px] origin-top-left whitespace-nowrap',
-          popoverClass(shown),
-        )}
-        style={{
-          top: coords?.top ?? 0,
-          left: coords?.left ?? 0,
-          visibility: coords === null ? 'hidden' : 'visible',
-        }}
-      >
-        <div role="menuitem">
-          <ActionRow
-            icon={<IconEyeOff />}
-            label="Hide chat"
-            onClick={() => {
-              onClose();
-              props.onDelete();
-            }}
-          />
-        </div>
-      </div>
-    </>,
-    document.body,
   );
 }
 
@@ -1307,7 +1234,8 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   useEffect(() => setStarEditing(false), [kind]);
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [menu, setMenu] = useState<{ channel: ChannelSummary; rect: DOMRect | null } | null>(null);
+  // The chat whose row menu is open (ActionMenu: a sheet on phone, a popover at its ⋯ on laptop).
+  const [menu, setMenu] = useState<ChannelSummary | null>(null);
   const [confirm, setConfirm] = useState<ChannelSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
@@ -1473,27 +1401,20 @@ export function ChannelList(props: ChannelListProps): ReactElement {
                 onDelete: () =>
                   setConfirm(props.channels.filter((c) => selectedIds.has(c.channelId))),
               },
-              onLongPress: (channel: ChannelSummary, rect: DOMRect | null) =>
-                setMenu({ channel, rect }),
+              onLongPress: (channel: ChannelSummary) => setMenu(channel),
+              menuOpenId: menu?.channelId ?? null,
+              onMenuClose: closeMenu,
+              onHide: (channel: ChannelSummary) => setConfirm([channel]),
             }
           : {}),
       })}
       {onDeleteChats !== undefined ? (
-        <>
-          <ChannelRowMenu
-            anchor={menu?.rect ?? null}
-            onClose={closeMenu}
-            onDelete={() => {
-              if (menu !== null) setConfirm([menu.channel]);
-            }}
-          />
-          {deleteChatsConfirm({
-            channels: confirm,
-            busy,
-            onCancel: () => setConfirm(null),
-            onConfirm: () => void runDelete(confirm ?? []),
-          })}
-        </>
+        deleteChatsConfirm({
+          channels: confirm,
+          busy,
+          onCancel: () => setConfirm(null),
+          onConfirm: () => void runDelete(confirm ?? []),
+        })
       ) : null}
     </>
   );

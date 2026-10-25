@@ -105,7 +105,6 @@ import {
   ADD_FAILED,
   CANCEL_EDIT_LABEL,
   DELETE_PLAN_LABEL,
-  DELETE_PLAN_TITLE,
   DISCARD_EDITS,
   DISCARD_LABEL,
   DRAFT_NOT_READY,
@@ -142,7 +141,6 @@ import {
   canDeletePlan,
   countPercent,
   dayHeaderOf,
-  deletePlanBody,
   deletePlanErrorCopy,
   draftLocked,
   draftProblem,
@@ -239,6 +237,7 @@ import { useBackGuard } from '@/lib/back-guard';
 import { useModalFocus } from '@/lib/modal-focus';
 import { useSession } from '@/lib/session-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
+import { UNDO_MS } from '@/lib/undo';
 import {
   PLAN_CHANGED_EVENT,
   dispatchPlanChanged,
@@ -1029,9 +1028,6 @@ export function PlanScreen(props: {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameBusy, setRenameBusy] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [openConfirm, setOpenConfirm] = useState(false);
   const [openBusy, setOpenBusy] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -1080,8 +1076,6 @@ export function PlanScreen(props: {
     setPicked([]);
     setMenuOpen(false);
     setRenaming(null);
-    setDeleteOpen(false);
-    setDeleteError(null);
     setOpenConfirm(false);
     setOpenError(null);
     setSendError(null);
@@ -1257,26 +1251,34 @@ export function PlanScreen(props: {
     dispatchPlanChanged(window, planId);
   };
 
-  const deletePlan = async (): Promise<void> => {
-    if (deleteBusy) return;
-    setDeleteBusy(true);
-    setDeleteError(null);
+  // Delete plan: at once, no confirm. The screen closes and the bottom strip
+  // offers Undo for UNDO_MS; the write goes only when the strip ends (Undo
+  // means it never goes). The toast outlives this screen, so the commit rides
+  // the toast's onExpire rather than useUndoableAction (which flushes on
+  // unmount). A failed write says so in the bad tone.
+  const commitDelete = async (): Promise<void> => {
     const traceId = generateTraceId();
     const result = await planDelete(supabase, { p_plan_id: planId, p_trace_id: traceId });
-    setDeleteBusy(false);
     if (!result.ok) {
       logger.warn('chat: plan delete failed', {
         trace_id: traceId,
         plan_id: planId,
         error: result.error.message,
       });
-      setDeleteError(deletePlanErrorCopy(result.error.message));
+      toast.show({ title: deletePlanErrorCopy(result.error.message), tone: 'error' });
       return;
     }
-    setDeleteOpen(false);
-    toast.show({ title: PLAN_DELETED_TOAST });
     dispatchPlanChanged(window, planId);
+  };
+  const deletePlan = (): void => {
     props.onClose();
+    toast.show({
+      title: PLAN_DELETED_TOAST,
+      action: { label: 'Undo', onPress: () => undefined },
+      durationMs: UNDO_MS,
+      kind: 'undo',
+      onExpire: () => void commitDelete(),
+    });
   };
 
   const chat = props.chat ?? null;
@@ -2113,8 +2115,7 @@ export function PlanScreen(props: {
                     }}
                     onDelete={() => {
                       setMenuOpen(false);
-                      setDeleteError(null);
-                      setDeleteOpen(true);
+                      deletePlan();
                     }}
                     onClose={() => setMenuOpen(false)}
                   />
@@ -2302,19 +2303,6 @@ export function PlanScreen(props: {
       ) : null}
       {agency ? (
         <>
-          <PlanConfirmSheet
-            open={props.open && deleteOpen}
-            title={DELETE_PLAN_TITLE}
-            message={deletePlanBody(bundle?.plan.audience ?? 'team')}
-            confirmLabel={DELETE_PLAN_LABEL}
-            destructive
-            busy={deleteBusy}
-            error={deleteError}
-            onConfirm={() => void deletePlan()}
-            onCancel={() => {
-              if (!deleteBusy) setDeleteOpen(false);
-            }}
-          />
           <PlanConfirmSheet
             open={props.open && openConfirm}
             title={OPEN_FOR_CLIENT_TITLE}

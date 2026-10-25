@@ -21,7 +21,10 @@ vi.mock('@/lib/trace-context', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   useNewTrace: () => () => 'trace',
 }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
+vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
+  useMediaQuery: () => false,
+}));
 vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'me' } }, loading: false }),
 }));
@@ -345,14 +348,12 @@ describe('chat home chips', () => {
     expect(out.indexOf('data-search-chip="starred"')).toBeLessThan(
       out.indexOf('data-search-chip="photo"'),
     );
-    // The filled star in accent; the row scrolls on X, chips never wrap or shrink.
-    expect(out).toContain('fill="currentColor"');
-    expect(out).toContain('text-accent');
+    // ui/Chip (label only, no counts); the row scrolls on X, chips never wrap or shrink.
     expect(out).toContain('flex-nowrap');
     expect(out).toContain('overflow-x-auto');
     expect(out).toContain('[scrollbar-width:none]');
     expect(out).toContain('touch-pan-x');
-    expect(out).toContain('h-11 min-h-[44px]');
+    expect(out).toContain('min-h-[44px]');
     expect(out).toContain('shrink-0');
     expect(out).toContain('whitespace-nowrap');
   });

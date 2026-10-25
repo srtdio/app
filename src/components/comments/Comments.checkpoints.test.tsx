@@ -80,7 +80,10 @@ vi.mock('@/lib/people-names', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/people-names')>();
   return { ...actual, resolvePeople: async () => true };
 });
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
+vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
+  useMediaQuery: () => false,
+}));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@/lib/chat/use-chat-attachments', () => ({
   useCommentAttachments: () => ({
@@ -101,7 +104,7 @@ vi.mock('@/components/comments/useMentionCandidates', () => ({
 }));
 
 import { Comments } from '@/components/comments/Comments';
-import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
+import { UNDO_MS } from '@/lib/undo';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -250,8 +253,8 @@ describe('checkpoint checkbox', () => {
     expect(toasts).toHaveLength(1);
     expect(toasts[0]?.title).toBe('Resolved');
     expect(toasts[0]?.action?.label).toBe('Undo');
-    expect(toasts[0]?.durationMs).toBe(UNDO_WINDOW_MS);
-    expect(UNDO_WINDOW_MS).toBe(4000);
+    expect(toasts[0]?.durationMs).toBe(UNDO_MS);
+    expect(UNDO_MS).toBe(4000);
   });
 
   it('keeps the approver one-tap Confirm on a creator-resolved checkpoint, and no "Not done"', async () => {

@@ -786,7 +786,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         {/* FN23: an explicit Save / Cancel; leaving the field never saves. */}
         {name !== props.groupName ? (
           <div data-group-rename-actions="" className="mt-2 flex justify-end gap-2">
-            <Button disabled={busy} onClick={() => setName(props.groupName)}>
+            <Button variant="ghost" disabled={busy} onClick={() => setName(props.groupName)}>
               Cancel
             </Button>
             <Button variant="primary" disabled={busy} onClick={() => void submitRename()}>

@@ -39,7 +39,10 @@ vi.mock('@/lib/supabase', () => ({
     },
   },
 }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
+vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
+  useMediaQuery: () => false,
+}));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@/lib/chat/use-chat-attachments', () => ({
   useCommentAttachments: () => ({

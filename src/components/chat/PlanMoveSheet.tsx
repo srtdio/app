@@ -1,5 +1,6 @@
 // An item's plan actions (agency only), outside the embedded post view's
-// own sheet: the concept overflow (Move to another day, Edit concept), the
+// own sheet: the concept ⋯ rows (Move to another day, Edit concept; the item
+// screen shows them in ui/ActionMenu), the
 // day list Move opens (each plan day and No date, the current one marked),
 // the Remove confirm (the item screen's red "Remove from plan" button opens
 // it) and "Keep the approval?" for a move of an Open plan's client-approved
@@ -8,7 +9,7 @@
 import { createContext } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
-import { ActionRow } from '@/components/ui/ActionRow';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconCalendar, IconCheck, IconEdit, IconTrash } from '@/components/ui/icons';
@@ -37,30 +38,15 @@ export interface MoveDay {
   label: string;
 }
 
-/** A concept's overflow: Move, Edit concept. */
-export function PlanConceptActionsSheet(props: {
-  open: boolean;
-  title: string;
+/** A concept's ⋯ rows (ui/ActionMenu): Move to another day, Edit concept. Pure. */
+export function planConceptMenuItems(props: {
   onMove: () => void;
   onEdit: () => void;
-  onClose: () => void;
-}): ReactElement {
-  return (
-    <Sheet open={props.open} onClose={props.onClose} title={props.title}>
-      <div data-plan-item-actions="" className="flex flex-col gap-1">
-        <ActionRow
-          icon={<IconCalendar size={ICON_SIZE.nav} />}
-          label={MOVE_ROW_LABEL}
-          onClick={props.onMove}
-        />
-        <ActionRow
-          icon={<IconEdit size={ICON_SIZE.nav} />}
-          label="Edit concept"
-          onClick={props.onEdit}
-        />
-      </div>
-    </Sheet>
-  );
+}): ActionMenuItem[] {
+  return [
+    { id: 'move', label: MOVE_ROW_LABEL, icon: IconCalendar, onSelect: props.onMove },
+    { id: 'edit', label: 'Edit concept', icon: IconEdit, onSelect: props.onEdit },
+  ];
 }
 
 /** The day list: each plan day and No date, the current one marked; a pick moves it. */
@@ -101,7 +87,7 @@ export function PlanMoveSheet(props: {
   );
 }
 
-/** Remove from plan, confirmed in a sheet. */
+/** Remove from plan, confirmed in a sheet: Cancel (ghost) left of Remove in the footer. */
 export function PlanRemoveSheet(props: {
   open: boolean;
   title: string;
@@ -110,23 +96,29 @@ export function PlanRemoveSheet(props: {
   onClose: () => void;
 }): ReactElement {
   return (
-    <Sheet open={props.open} onClose={props.onClose} title="Remove from plan?">
-      <div data-plan-remove-sheet="" className="flex flex-col gap-3">
-        <p className="text-base text-fg">
-          {`"${props.title}" leaves the plan. Its comments stay with it.`}
-        </p>
-        <Button
-          variant="danger"
-          data-plan-remove-confirm=""
-          disabled={props.busy}
-          onClick={props.onConfirm}
-        >
-          Remove
-        </Button>
-        <Button variant="ghost" disabled={props.busy} onClick={props.onClose}>
-          Cancel
-        </Button>
-      </div>
+    <Sheet
+      open={props.open}
+      onClose={props.onClose}
+      title="Remove from plan?"
+      footer={
+        <div className="grid w-full grid-cols-2 gap-2">
+          <Button variant="ghost" disabled={props.busy} onClick={props.onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            data-plan-remove-confirm=""
+            disabled={props.busy}
+            onClick={props.onConfirm}
+          >
+            Remove
+          </Button>
+        </div>
+      }
+    >
+      <p data-plan-remove-sheet="" className="text-base text-fg">
+        {`"${props.title}" leaves the plan. Its comments stay with it.`}
+      </p>
     </Sheet>
   );
 }

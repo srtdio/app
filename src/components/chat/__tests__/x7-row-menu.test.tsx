@@ -13,7 +13,10 @@ vi.mock('agora-chat', () => ({
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: 'w1', workspaceKey: 'w1', workspaces: [] }),
 }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
+vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
+  useMediaQuery: () => false,
+}));
 vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'me' } }, loading: false }),
 }));
@@ -24,11 +27,14 @@ vi.mock('@/lib/logger', () => ({
 import {
   ChannelCard,
   DEFAULT_LIST_INPUT,
+  ROW_MORE_BUTTON,
   channelRowClass,
+  chatRowMenuItems,
   channelTileLabel,
   rowMoreClass,
 } from '@/components/chat/ChannelList';
 import { deleteChatFailedMessage } from '@/lib/chat/clear-flow';
+import { IconEyeOff } from '@/components/ui/icons';
 import type { ChannelSummary } from '@/lib/chat-reads';
 
 const source = (path: string): string =>
@@ -57,10 +63,10 @@ describe('X7 H5: the row ⋯', () => {
     expect(out).toContain('data-row-more=""');
     expect(out).toContain('aria-label="Actions for Launch"');
     expect(out).toContain('aria-haspopup="menu"');
-    const cls = rowMoreClass('wide');
-    expect(cls).toContain('h-11 w-11');
-    expect(cls).toContain('text-fg-3');
-    expect(cls).not.toContain('opacity-0');
+    expect(rowMoreClass('wide')).toContain('absolute right-1');
+    expect(ROW_MORE_BUTTON).toContain('h-11 w-11');
+    expect(ROW_MORE_BUTTON).toContain('text-fg-3');
+    expect(ROW_MORE_BUTTON).not.toContain('opacity-0');
   });
 
   it('no menu wiring (no hide action): no ⋯', () => {
@@ -89,13 +95,10 @@ describe('X7 H5: the row ⋯', () => {
 describe('X7 FT43: Hide is not a destructive action', () => {
   it('menu and bar use the eye-off icon, no danger red, no trash', () => {
     const list = source('../ChannelList.tsx');
-    const menu = list.slice(
-      list.indexOf('function ChannelRowMenu('),
-      list.indexOf('export function hideChatsTitle'),
-    );
-    expect(menu).toContain('<IconEyeOff />');
-    expect(menu).not.toContain('danger');
-    expect(menu).not.toContain('IconTrash');
+    const items = chatRowMenuItems(() => {});
+    expect(items.map((i) => i.label)).toEqual(['Hide chat']);
+    expect(items[0]?.icon).toBe(IconEyeOff);
+    expect(items[0]?.tone).toBeUndefined();
     expect(list).not.toContain('IconTrash');
     const confirm = list.slice(list.indexOf('export function deleteChatsConfirm('));
     expect(confirm.slice(0, confirm.indexOf('export function ChannelList('))).not.toContain(

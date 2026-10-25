@@ -16,7 +16,7 @@ import {
   ASK_CHANGES_PLACEHOLDER,
   askChangesSteps,
 } from '@/components/chat/PlanItemScreen';
-import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
+import { UNDO_MS } from '@/lib/undo';
 
 const dir = fileURLToPath(new URL('..', import.meta.url));
 const read = (name: string): string => readFileSync(`${dir}${name}`, 'utf8');
@@ -77,7 +77,7 @@ describe('Not OK on a row: the item screen asks changes at once', () => {
 
 describe('FT52: plan undo toasts use useUndoableAction (the 4s bottom strip)', () => {
   it('the item screen defers a move that resets nothing; the Plan screen defers an OK', () => {
-    expect(UNDO_WINDOW_MS).toBe(4000);
+    expect(UNDO_MS).toBe(4000);
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain("import { useUndoableAction } from '@/lib/use-undoable-action';");
     expect(item).toContain('useUndoableAction()');
@@ -99,7 +99,7 @@ describe('FT52: plan undo toasts use useUndoableAction (the 4s bottom strip)', (
       fileURLToPath(new URL('../../../lib/use-undoable-action.ts', import.meta.url)),
       'utf8',
     );
-    expect(hook).toContain('export const UNDO_WINDOW_MS = 4000;');
+    expect(hook).toContain("import { UNDO_MS } from '@/lib/undo';");
     expect(hook).toContain("kind: 'undo',");
     expect(hook).toContain('durationMs: UNDO_WINDOW_MS,');
     expect(hook).not.toContain('countdown');
