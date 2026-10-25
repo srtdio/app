@@ -1,17 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
-// The hook's import graph reaches the agora-chat browser SDK through
-// connection.ts; mock it so the pure key helper imports in node.
+// connection.ts loads the agora-chat browser SDK with a dynamic import; mock
+// it so the load and the pure key helper run in node.
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
 import websdk from 'agora-chat';
-import { createAgoraConnection } from '@/lib/chat/connection';
+import { createAgoraConnection, loadAgoraSdk } from '@/lib/chat/connection';
 import { connectionKey } from '@/lib/chat/use-chat-client';
 
 describe('createAgoraConnection', () => {
-  it('lets the SDK auto-reconnect up to 10 times before surfacing a disconnect', () => {
+  it('lets the SDK auto-reconnect up to 10 times before surfacing a disconnect', async () => {
+    // The SDK is a lazy chunk: the hook awaits this load before any connection.
+    await loadAgoraSdk();
     createAgoraConnection('org#app');
     expect(websdk.connection).toHaveBeenCalledWith({
       appKey: 'org#app',

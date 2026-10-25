@@ -67,10 +67,9 @@ describe('entity route regression', () => {
 
   it('App declares the /plans/:planId route exactly once', () => {
     const app = readFileSync(fileURLToPath(new URL('../../App.tsx', import.meta.url)), 'utf8');
-    expect(
-      app.split('path="/plans/:planId" element={<PlanPage fallback="/notifications" />}').length -
-        1,
-    ).toBe(1);
+    // Pages are lazy (React.lazy + Suspense), so the element is a named const.
+    expect(app.split('path="/plans/:planId"').length - 1).toBe(1);
+    expect(app).toContain('page(<PlanPage fallback="/notifications" />)');
   });
 
   it('mounts the /b/:ref resolver (loading before resolution)', () => {

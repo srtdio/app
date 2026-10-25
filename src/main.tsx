@@ -7,8 +7,8 @@ import {
   browserStaleDeployDeps,
   runStaleDeployGuard,
   type StaleDeployWarn,
-  type StylesheetTarget,
 } from '@/lib/stale-deploy';
+import { isChunkLoadError, reloadOnce } from '@/lib/chunk-reload';
 
 // Entry point. Decides synchronously whether "/" is a guest visit; a guest gets
 // the homepage chunk only (no App, router, Supabase, Sentry, Agora or app CSS).
@@ -24,25 +24,12 @@ const lazyWarn: StaleDeployWarn = (message, context) => {
   void import('@/lib/logger').then(({ logger }) => logger.warn(message, context));
 };
 
-// A failed dynamic import surfaces as a TypeError in every browser; Vite's
-// preload helper rejects with this message when a chunk's CSS fails to load.
-function isChunkLoadError(err: unknown): boolean {
-  return (
-    err instanceof TypeError ||
-    (err instanceof Error && err.message.startsWith('Unable to preload CSS'))
-  );
-}
-
-// A stale tab can ask for chunks that no longer exist after a deploy. Treat a
-// failed boot import like an unstyled load: reload once with the same guard.
-// Anything else (a config error, a bug) is rethrown untouched.
-function recoverFromFailedBoot(target: StylesheetTarget, err: unknown): void {
-  if (!isChunkLoadError(err)) throw err;
-  void runStaleDeployGuard({
-    ...browserStaleDeployDeps(target, lazyWarn),
-    stylesheet: null,
-    readToken: () => '',
-  });
+// A stale tab can ask for chunks that no longer exist after a deploy. A failed
+// boot import goes through the app's one chunk-error handler (reload once per
+// session, shared guard). Anything else (a config error, a bug) is rethrown.
+function recoverFromFailedBoot(err: unknown): void {
+  if (isChunkLoadError(err) && reloadOnce()) return;
+  throw err;
 }
 
 function ErrorFallback() {
@@ -130,7 +117,7 @@ const guest = isGuestHome({
 });
 
 if (guest || isHomeBundlePath(window.location.pathname)) {
-  bootHome(rootElement).catch((err: unknown) => recoverFromFailedBoot(HOME_STYLESHEET, err));
+  bootHome(rootElement).catch(recoverFromFailedBoot);
 } else {
-  bootApp(rootElement).catch((err: unknown) => recoverFromFailedBoot(APP_STYLESHEET, err));
+  bootApp(rootElement).catch(recoverFromFailedBoot);
 }

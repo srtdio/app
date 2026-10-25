@@ -1,0 +1,69 @@
+name: Bundle Size Report
+
+# Builds the web app and writes per-chunk raw and gzip sizes to the job
+# summary. Report only: every step tolerates failure and the job never fails.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  bundle-size:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        id: install
+        continue-on-error: true
+        run: pnpm install --frozen-lockfile
+
+      # vite build only (no typecheck, no prerender): chunk sizes are all this
+      # job reports. CI=false keeps the Sentry upload plugin out of the build;
+      # placeholder env values are enough because nothing runs.
+      - name: Build web app
+        id: build
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        env:
+          CI: 'false'
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_000000000000
+        run: pnpm exec vite build
+
+      - name: Write chunk sizes to job summary
+        if: always()
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          {
+            echo "## Bundle size"
+            echo
+            if [ ! -d dist/assets ]; then
+              echo "Build did not produce dist/assets (install: ${{ steps.install.outcome }}, build: ${{ steps.build.outcome }})."
+              exit 0
+            fi
+            echo "| Chunk | Raw (KB) | Gzip (KB) |"
+            echo "| --- | ---: | ---: |"
+            while IFS= read -r f; do
+              raw=$(stat -c%s "$f")
+              gz=$(gzip -c -9 "$f" | wc -c)
+              printf '%s\t%s\t%s\n' "$gz" "$raw" "${f#dist/assets/}"
+            done < <(find dist/assets -type f \( -name '*.js' -o -name '*.css' \)) \
+              | sort -rn \
+              | awk -F'\t' '{ printf "| %s | %.1f | %.1f |\n", $3, $2 / 1024, $1 / 1024 }'
+            raw_all=$(find dist/assets -type f \( -name '*.js' -o -name '*.css' \) -exec cat {} + | wc -c)
+            gz_all=0
+            while IFS= read -r f; do
+              gz_all=$((gz_all + $(gzip -c -9 "$f" | wc -c)))
+            done < <(find dist/assets -type f \( -name '*.js' -o -name '*.css' \))
+            awk -v r="$raw_all" -v g="$gz_all" 'BEGIN { printf "| **Total** | %.1f | %.1f |\n", r / 1024, g / 1024 }'
+          } >> "$GITHUB_STEP_SUMMARY"
