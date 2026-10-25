@@ -63,6 +63,8 @@ function opPredicate(column: string, op: string, raw: string): Predicate {
   switch (op) {
     case 'eq':
       return (row) => compare(column, row[column], value) === 0;
+    case 'neq':
+      return (row) => compare(column, row[column], value) !== 0;
     case 'is':
       return (row) => (value === 'null' ? row[column] === null || row[column] === undefined : true);
     case 'gt':

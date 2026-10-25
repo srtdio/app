@@ -7,7 +7,7 @@
 // counting mounted rows; the row memo through the same stable caches and
 // callbacks the list hands MessageRow, plus a check on the list's source.
 import { readFileSync } from 'node:fs';
-import { fileURLToPath, URL } from 'node:url';
+import { join } from 'node:path';
 import { act, memo, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -245,7 +245,7 @@ describe('MessageThread window: memoised rows', () => {
 });
 
 describe('MessageThread window: the list wiring', () => {
-  const src = readFileSync(fileURLToPath(new URL('./MessageThread.tsx', import.meta.url)), 'utf8');
+  const src = readFileSync(join(process.cwd(), 'src/components/chat/MessageThread.tsx'), 'utf8');
   const rowJsx = src.slice(
     src.indexOf('<MessageRow\n'),
     src.indexOf('selectingText={selectingTextId === row.message.id}'),
