@@ -88,7 +88,6 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 
 - Type: Tailwind fontSize scale only (xs 11, sm 12, md 13, base 14, lg 15, xl 17, 2xl 20, 3xl 28). No text-[Npx]. Inputs render 16px on phone (iOS zoom). Weights 400/500/600 only.
 - Roles: page title 3xl/600; screen header lg/600; section label sm/600 uppercase tracking-[0.06em] fg-2; card title base/500; body base fg; meta sm fg-3, meta only, never copy or controls.
-- Radius: 8 controls and cards, 12 popovers, 16 sheet tops, full pills. No rounded-[Npx].
 - Buttons: only Button / IconButton / Chip from src/components/ui. 44 tall. Variants primary secondary ghost link success danger; shape round for the composer.
 - Icons: only src/components/ui/icons.tsx, stroke 1.7, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
 - Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots.
@@ -97,6 +96,12 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Shadows: cards none; menus/popovers/sheets/dialogs shadow-2xl; dragged items shadow-lg; tokens for toast, auth card, spotlight.
 - Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".
 - Icon sizes come from ICON_SIZE in ui/icons.tsx.
+- Words: Activity (never Notifications), file (the tab is Assets), Due date, stages Draft/Review/Approved/Parked/Rejected. Format, chat and workspace names come from their src/lib functions only.
+- Zero results use ui/NoResults only. Zero states are one positive line, "{Things} show up here." Never "Nothing", "No matches" or "empty" in a zero state.
+- Errors: "Couldn't {action}. {reason}". Never mention connection state.
+- Dates and times come from src/lib/time.ts only. No toLocale*, Intl.DateTimeFormat or date libraries in components.
+- Motion: duration-fast/base/slow and ease-enter/exit only. No duration-[Nms] or raw transition values.
+- If no shared component or function fits, stop and ask. Never hand-build a new variant.
 
 ## Canonical living docs
 

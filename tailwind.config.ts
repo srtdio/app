@@ -117,13 +117,13 @@ export default {
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       transitionDuration: {
-        fast: 'rgb(var(--dur-fast-rgb) / <alpha-value>)',
-        base: 'rgb(var(--dur-base-rgb) / <alpha-value>)',
-        slow: 'rgb(var(--dur-slow-rgb) / <alpha-value>)',
+        fast: 'var(--dur-fast)',
+        base: 'var(--dur-base)',
+        slow: 'var(--dur-slow)',
       },
       transitionTimingFunction: {
-        enter: 'rgb(var(--ease-enter-rgb) / <alpha-value>)',
-        exit: 'rgb(var(--ease-exit-rgb) / <alpha-value>)',
+        enter: 'var(--ease-enter)',
+        exit: 'var(--ease-exit)',
       },
     },
   },
