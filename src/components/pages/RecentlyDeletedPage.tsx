@@ -79,7 +79,7 @@ export function RecentlyDeletedView({
       {failed ? (
         <div className="mt-4">
           <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-base text-bad">
-            Couldn't load deleted files. Try again.
+            {"Couldn't load deleted files. Try again."}
           </div>
           <div className="mt-3">
             <Button onClick={onRetry}>Retry</Button>

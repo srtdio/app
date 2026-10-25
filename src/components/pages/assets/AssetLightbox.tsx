@@ -578,7 +578,7 @@ export function AssetLightbox({
               </p>
               <p className="mt-1 text-sm text-fg-3">{humanizeSize(item.sizeBytes)}</p>
               {mediaFailed ? (
-                <p className="mt-1 text-sm text-fg-3">Couldn't load this file. Try again.</p>
+                <p className="mt-1 text-sm text-fg-3">{"Couldn't load this file. Try again."}</p>
               ) : null}
               {openFailed ? (
                 <p role="status" className="mt-1 text-sm text-fg-3">
