@@ -11,11 +11,20 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
-// File bubbles render SharedPostCards, which reads the workspace and session
-// providers; this message shares no post, so the cards render nothing here.
+// File bubbles render the shared post, brief and plan cards, which read the
+// workspace and session providers; these messages share none, so the cards
+// render nothing here.
 vi.mock('@/components/chat/PostCard', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/chat/PostCard')>()),
   SharedPostCards: () => null,
+}));
+vi.mock('@/components/chat/BriefCard', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/chat/BriefCard')>()),
+  SharedBriefCards: () => null,
+}));
+vi.mock('@/components/chat/PlanCard', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/chat/PlanCard')>()),
+  SharedPlanCards: () => null,
 }));
 
 import { MessageBubble, removeFilesAction } from '@/components/chat/MessageThread';
