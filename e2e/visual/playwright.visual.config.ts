@@ -7,7 +7,7 @@ import { defineConfig, devices } from '@playwright/test';
 // .github/workflows/visual-ci.yml.
 //
 //   Check:   pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts
-//   Update:  pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --update-snapshots
+//   Update:  pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --update-snapshots=all
 //
 // Baselines must be rendered on the CI WebKit image (fonts and antialiasing
 // differ between machines): push a commit whose message contains

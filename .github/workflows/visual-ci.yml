@@ -4,7 +4,7 @@ name: Visual CI
 #   Runs on every pull request and every push to main (no paths filter, so the check always reports).
 # Baseline refresh: on a pull request from this repo whose head commit message contains [update-visual-baselines], visual re-renders every screen (--update-snapshots=all) on this CI WebKit image and uploads the visual-baselines artifact,
 #   then commit-baselines commits them to the PR's head branch. That push is made with GITHUB_TOKEN, so it starts no new run: push any later commit (without the tag) to get the visual check on it.
-# Locally: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts (add --update-snapshots to refresh; local baselines differ from CI's, commit only CI-rendered ones).
+# Locally: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts (add --update-snapshots=all to refresh; local baselines differ from CI's, commit only CI-rendered ones).
 on:
   pull_request:
   push:
