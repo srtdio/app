@@ -542,13 +542,22 @@ export const ONBOARDING_SCREENS: OnboardingScreen[] = [
   {
     name: 'onboarding-first-post',
     url: '/pipeline',
-    prepare: (network) =>
-      seedCreatorAt(network, { step: 'c_post_create', ownPost: false, client: true }),
+    prepare: async (network, page) => {
+      seedCreatorAt(network, { step: 'c_post_create', ownPost: false, client: true });
+      // The laptop composer preview races the photo's measure against the upload
+      // finishing (PlatformPreviewPanel resets the measure when the version id
+      // lands): it ends on "Measuring the original." or on the crop, run to run,
+      // and its height moves the sheet around it, so a mask cannot hold. The
+      // shot leaves the preview out (laptop only; phone never shows it).
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const style = document.createElement('style');
+          style.textContent = '[data-composer-preview] { display: none !important; }';
+          document.head.appendChild(style);
+        });
+      });
+    },
     steps: firstPostFilled,
-    // The laptop composer preview races the photo's measure against the upload
-    // finishing (PlatformPreviewPanel resets the measure when the version id
-    // lands): it ends on "Measuring the original." or on the crop, run to run.
-    mask: (page) => [page.locator('[data-composer-preview]')],
   },
   {
     name: 'onboarding-invite-approver',
