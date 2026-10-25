@@ -4,7 +4,8 @@ compatibility_date = "2026-05-16"
 compatibility_flags = ["nodejs_compat"]
 
 # Nightly 03:30 UTC: removes the R2 bytes of purged assets, then tears down
-# deleted workspaces (Agora groups, bucket objects, bucket, rows).
+# workspaces deleted more than 30 days ago (Agora groups, bucket objects,
+# bucket, rows).
 # Handler: src/server/cron/storage-purge.ts.
 [triggers]
 crons = ["30 3 * * *"]
@@ -25,3 +26,5 @@ head_sampling_rate = 1.0
 #   AGORA_APP_ID                    - Agora App ID; pairs with the certificate to sign tokens
 #   AGORA_APP_CERTIFICATE           - Agora App Certificate; REST app-token signing secret
 #   AGORA_CHAT_REST_URL             - Agora Chat REST base URL (host + org + app)
+#   SHARED_ASSET_BUCKET             - optional: the shared asset bucket (keys under ws/<workspace_id>/);
+#                                     unset until that bucket exists, then no workspace matches it

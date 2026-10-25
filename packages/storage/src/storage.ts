@@ -106,9 +106,13 @@ export interface ObjectPage {
  * valid.
  */
 export interface BucketStorage {
-  /** One page of keys (at most `limit`, R2 caps at 1000), resumed from `cursor`. */
+  /**
+   * One page of keys (at most `limit`, R2 caps at 1000), resumed from `cursor`.
+   * With `prefix`, only keys that start with it.
+   */
   listObjects(input: {
     bucket: string;
+    prefix?: string;
     cursor?: string | null;
     limit?: number;
     traceId: string;
@@ -628,6 +632,7 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
 
   async listObjects(input: {
     bucket: string;
+    prefix?: string;
     cursor?: string | null;
     limit?: number;
     traceId: string;
@@ -636,6 +641,9 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
       ['list-type', '2'],
       ['max-keys', String(Math.min(Math.max(input.limit ?? 1000, 1), 1000))],
     ];
+    if (input.prefix !== undefined && input.prefix !== '') {
+      query.push(['prefix', input.prefix]);
+    }
     if (input.cursor !== undefined && input.cursor !== null) {
       query.push(['continuation-token', input.cursor]);
     }
@@ -983,13 +991,20 @@ export class InMemoryMultipartStorage
   /** Keys in byte order; the cursor is the last key of the previous page. */
   listObjects(input: {
     bucket: string;
+    prefix?: string;
     cursor?: string | null;
     limit?: number;
   }): Promise<ObjectPage> {
     const limit = Math.min(Math.max(input.limit ?? 1000, 1), 1000);
     const cursor = input.cursor ?? null;
+    const prefix = input.prefix ?? '';
     const keys = [...this.objects.values()]
-      .filter((o) => o.bucket === input.bucket && (cursor === null || o.key > cursor))
+      .filter(
+        (o) =>
+          o.bucket === input.bucket &&
+          o.key.startsWith(prefix) &&
+          (cursor === null || o.key > cursor),
+      )
       .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
     const page = keys.slice(0, limit);
     const last = page[page.length - 1];

@@ -117,7 +117,7 @@ One workspace = one end-client = one platform.
 | subscription_state_expires_at / trial_ends_at / activated_at | timestamptz | nullable |
 | digest_default_time | time | default 09:00 |
 | target_distributions | jsonb | nullable |
-| asset_bucket | text | permanent R2 bucket name, set on insert by trigger (set_workspace_asset_bucket), immutable thereafter. Unique among all workspaces including soft-deleted ones (20261018120000); never ends in "-". |
+| asset_bucket | text | permanent R2 bucket name, set on insert by trigger (set_workspace_asset_bucket), immutable thereafter (trigger workspaces_asset_bucket_immutable raises 'asset_bucket is permanent and cannot be changed' unless the transaction-local flag sorted.storage_cutover is 'on', which only storage_workspace_cutover sets; 20261026000000). Unique among live workspaces (index workspaces_asset_bucket_active_uk, WHERE deleted_at IS NULL), so a soft-deleted row may share a live one's name; never ends in "-". |
 | key | text | short workspace key used in entity numbers |
 | platform | text | not null: instagram / x / threads / linkedin / facebook / tiktok / youtube_shorts. Existing rows backfilled to linkedin |
 | client_domain | text | nullable, ^[a-z0-9.-]+\.[a-z]{2,}$. Recorded by member_invite from the first client invite; later client invites must pass the approver email rule (see workspace_client_domains) |
@@ -483,7 +483,8 @@ Workspace rules: storage, delete guards, purge list (20261017120000_workspace_ru
 - workspace_delete(p_workspace_id, p_confirm_name text, p_trace_id) RETURNS void (authenticated): owner only ('owner_only'), p_confirm_name must equal workspaces.name ('confirm_name_mismatch'); sets workspaces.deleted_at (bumping row_version) and deactivates all members. audit_log 'workspace_delete'.
 - storage_purge_due(p_limit integer) RETURNS TABLE (asset_id, workspace_id, bucket text, r2_keys text[]), SQL STABLE (service_role only): soft-deleted assets with purge_requested_at set or deleted_at older than 31 days, not asset_in_use; r2_keys = version + rendition keys; ordered by coalesce(purge_requested_at, deleted_at), limit clamped 1 to 1000 (default 100).
 - storage_purge_done(p_asset_ids uuid[]) RETURNS integer (service_role only): re-checks the same purge rule, deletes their asset_attachments then the assets; returns assets deleted.
-- workspace_purge_due() RETURNS TABLE (workspace_id, bucket text, deleted_at), SQL STABLE (service_role only): soft-deleted workspaces, oldest first, limit 50.
+- workspace_purge_due() RETURNS TABLE (workspace_id, bucket text, deleted_at), SQL STABLE (service_role only): workspaces soft-deleted more than 30 days ago (the restore window; 20261026000000), oldest first, limit 50.
+- storage_workspace_cutover(p_workspace_id uuid, p_bucket text, p_trace_id uuid) RETURNS void (service_role only; EXECUTE revoked from PUBLIC, anon, authenticated; 20261026000000): 'trace_id required' / 'invalid bucket' (must match ^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$) / 'workspace not found' (live workspaces only, row locked). Same bucket is a no-op. Otherwise sets the transaction-local flag sorted.storage_cutover = 'on', updates workspaces.asset_bucket (bumping row_version by 1), resets the flag, and writes audit_log 'storage_workspace_cutover' (entity workspace, payload {from, to}, outcome success, trace_id).
 - workspace_purge_done(p_workspace_id uuid) RETURNS void (service_role only): 'not_deleted' unless soft-deleted; deletes asset_attachments, assets, folders, comments, posts, then the workspace row.
 
 ### asset_renditions

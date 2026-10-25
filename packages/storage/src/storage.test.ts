@@ -135,6 +135,20 @@ describe('InMemoryMultipartStorage listObjects / deleteBucket', () => {
     ]);
   });
 
+  it('lists only the keys under a prefix', async () => {
+    const storage = await seeded(2);
+    await storage.putObject({
+      bucket: 'assets-a',
+      key: 'ws/w1/images/x',
+      body: new Uint8Array(1),
+      contentType: 'image/png',
+      traceId: 't',
+    });
+    const page = await storage.listObjects({ bucket: 'assets-a', prefix: 'ws/w1/' });
+    expect(page.objects.map((o) => o.key)).toEqual(['ws/w1/images/x']);
+    expect(page.nextCursor).toBeNull();
+  });
+
   it('returns a single last page when everything fits', async () => {
     const storage = await seeded(2);
     const page = await storage.listObjects({ bucket: 'assets-a' });
@@ -218,6 +232,19 @@ describe('R2StorageClient listObjects / deleteBucket', () => {
     expect(page).toEqual({ objects: [{ key: 'a', size: 4 }], nextCursor: null });
     expect(calls[0]).toEqual({
       url: 'https://acct.r2.cloudflarestorage.com/assets-a?continuation-token=c%2F1&list-type=2&max-keys=50',
+      method: 'GET',
+    });
+  });
+
+  it('signs the prefix into the ListObjectsV2 query when one is given', async () => {
+    const { r2, calls } = client([
+      new Response('<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>', {
+        status: 200,
+      }),
+    ]);
+    await r2.listObjects({ bucket: 'assets-shared', prefix: 'ws/w1/', limit: 10, traceId: 't' });
+    expect(calls[0]).toEqual({
+      url: 'https://acct.r2.cloudflarestorage.com/assets-shared?list-type=2&max-keys=10&prefix=ws%2Fw1%2F',
       method: 'GET',
     });
   });

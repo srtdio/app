@@ -10089,6 +10089,10 @@ export type Database = {
           workspace_id: string
         }[]
       }
+      storage_workspace_cutover: {
+        Args: { p_bucket: string; p_trace_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
       test_session_create: {
         Args: { p_email: string; p_trace_id: string }
         Returns: Json

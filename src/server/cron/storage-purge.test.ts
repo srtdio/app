@@ -18,7 +18,7 @@ vi.mock('@supabase/supabase-js', () => ({
       const record = { target, chain: [first] };
       supa.calls.push(record);
       const chain: Record<string, unknown> = {};
-      for (const name of ['select', 'eq', 'is', 'neq', 'not']) {
+      for (const name of ['select', 'eq', 'is', 'neq', 'not', 'in']) {
         chain[name] = (...args: unknown[]) => {
           record.chain.push([name, args]);
           return chain;
@@ -41,8 +41,10 @@ import {
   MAX_ASSET_BATCHES,
   RUN_CALL_BUDGET,
   createAgoraPurgeApi,
+  SAMPLE_KEY_PREFIX,
   handleScheduled,
   runPurge,
+  sharedBucketName,
   type StoragePurgeEnv,
   type DueAsset,
   type DueWorkspace,
@@ -61,20 +63,27 @@ const TRACE_ID = '0192f000-0000-7000-8000-000000000001';
 /**
  * In-memory DB: due assets stay due until storagePurgeDone drops them, as the
  * real proc does; storagePurgeDue returns the first `limit` still-due rows.
+ * `rows` holds every workspaces row (live or soft-deleted) by id -> asset_bucket;
+ * the due workspaces are seeded into it and workspacePurgeDone removes them.
  */
 function fakeDb(seed: { assets?: DueAsset[]; workspaces?: DueWorkspace[] } = {}) {
   const assets = [...(seed.assets ?? [])];
   const groups = new Map<string, string[]>();
-  const liveBuckets = new Set<string>();
+  const rows = new Map<string, string | null>(
+    (seed.workspaces ?? []).map((w) => [w.workspaceId, w.bucket]),
+  );
   const doneCalls: string[][] = [];
   const workspacesDone: string[] = [];
   let dueCalls = 0;
+  let calls = 0;
   const db: PurgeDb = {
     storagePurgeDue(limit) {
+      calls += 1;
       dueCalls += 1;
       return Promise.resolve(assets.slice(0, limit));
     },
     storagePurgeDone(ids) {
+      calls += 1;
       doneCalls.push(ids);
       let n = 0;
       for (const id of ids) {
@@ -86,22 +95,35 @@ function fakeDb(seed: { assets?: DueAsset[]; workspaces?: DueWorkspace[] } = {})
       }
       return Promise.resolve(n);
     },
-    workspacePurgeDue: () => Promise.resolve(seed.workspaces ?? []),
-    workspaceAgoraGroupIds: (id) => Promise.resolve(groups.get(id) ?? []),
-    bucketInUse: (bucket) => Promise.resolve(liveBuckets.has(bucket)),
+    workspacePurgeDue: () => {
+      calls += 1;
+      return Promise.resolve(seed.workspaces ?? []);
+    },
+    workspaceAgoraGroupIds: (ids) => {
+      calls += 1;
+      return Promise.resolve(new Map(ids.map((id) => [id, groups.get(id) ?? []])));
+    },
+    bucketSharers: (bucket, workspaceId) => {
+      calls += 1;
+      const sharers = [...rows].filter(([id, b]) => b === bucket && id !== workspaceId);
+      return Promise.resolve(sharers.length);
+    },
     workspacePurgeDone(id) {
+      calls += 1;
       workspacesDone.push(id);
+      rows.delete(id);
       return Promise.resolve();
     },
   };
   return {
     db,
     groups,
-    liveBuckets,
+    rows,
     doneCalls,
     workspacesDone,
     remaining: () => assets.map((a) => a.assetId),
     dueCalls: () => dueCalls,
+    calls: () => calls,
   };
 }
 
@@ -112,6 +134,7 @@ function fakeStorage(objects: Record<string, string[]> = {}, pageSize = 2) {
   const deleted: string[] = [];
   const deletedBuckets: string[] = [];
   const listCursors: Array<string | null> = [];
+  const listPrefixes: Array<string | null> = [];
   const storage: PurgeStorage = {
     deleteObject(bucket, key) {
       if (failKeys.has(key)) return Promise.reject(new Error(`R2 deleteObject failed (500)`));
@@ -119,12 +142,15 @@ function fakeStorage(objects: Record<string, string[]> = {}, pageSize = 2) {
       deleted.push(`${bucket}/${key}`);
       return Promise.resolve();
     },
-    listObjects({ bucket, cursor }) {
+    listObjects({ bucket, prefix, cursor }) {
       listCursors.push(cursor ?? null);
+      listPrefixes.push(prefix ?? null);
       // The cursor is the last key returned (S3 start-after), so it stays valid
       // while keys from earlier pages are being deleted.
       const after = cursor ?? '';
-      const keys = [...(store.get(bucket) ?? [])].sort().filter((key) => key > after);
+      const keys = [...(store.get(bucket) ?? [])]
+        .sort()
+        .filter((key) => key.startsWith(prefix ?? '') && key > after);
       const slice = keys.slice(0, pageSize);
       const next = keys.length > pageSize ? (slice[slice.length - 1] ?? null) : null;
       const page: ObjectPage = {
@@ -142,30 +168,41 @@ function fakeStorage(objects: Record<string, string[]> = {}, pageSize = 2) {
       return Promise.resolve();
     },
   };
-  return { storage, failKeys, deleted, deletedBuckets, listCursors, store };
+  return { storage, failKeys, deleted, deletedBuckets, listCursors, listPrefixes, store };
 }
 
 function fakeAgora() {
   const deleted: string[] = [];
   const failGroups = new Set<string>();
+  let calls = 0;
   const agora: PurgeAgora = {
     deleteGroup(groupId) {
+      calls += 1;
       if (failGroups.has(groupId))
-        return Promise.reject(new Error('Agora delete_group failed: 500'));
+        return Promise.reject(new Error('Agora delete_group failed: 401 unauthorized'));
       deleted.push(groupId);
       return Promise.resolve();
     },
   };
-  return { agora, deleted, failGroups };
+  return { agora, deleted, failGroups, calls: () => calls };
 }
 
-function deps(parts: Pick<PurgeDeps, 'db' | 'storage' | 'agora'>): PurgeDeps {
-  return { ...parts, traceId: TRACE_ID, log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } };
+function deps(
+  parts: Pick<PurgeDeps, 'db' | 'storage' | 'agora'> & { sharedBucket?: string | null },
+): PurgeDeps {
+  return {
+    sharedBucket: null,
+    ...parts,
+    traceId: TRACE_ID,
+    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  };
 }
 
 function asset(id: string, keys: string[] = [`images/${id}/v1-a.png`]): DueAsset {
   return { assetId: id, bucket: 'assets-acme', keys };
 }
+
+const keys = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
 
 describe('runPurge: assets', () => {
   it('deletes every key and marks the rows done', async () => {
@@ -190,6 +227,24 @@ describe('runPurge: assets', () => {
     expect(summary.assetsPurged).toBe(1);
   });
 
+  it('never deletes an induction-sample/ key; the row still goes', async () => {
+    const sample = `${SAMPLE_KEY_PREFIX}np-01.jpg`;
+    const db = fakeDb({
+      assets: [
+        asset('a1', [sample, 'images/a1/v1-a.png']),
+        { assetId: 'a2', bucket: null, keys: [`${SAMPLE_KEY_PREFIX}look-1.jpg`] },
+      ],
+    });
+    const r2 = fakeStorage({ 'assets-acme': [sample] });
+    const summary = await runPurge(
+      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
+    );
+    expect(r2.deleted).toEqual(['assets-acme/images/a1/v1-a.png']);
+    expect(r2.store.get('assets-acme')?.has(sample)).toBe(true);
+    expect(db.doneCalls).toEqual([['a1', 'a2']]);
+    expect(summary).toMatchObject({ assetsPurged: 2, assetsFailed: 0 });
+  });
+
   it('does not mark a row with a failed key and stops instead of spinning on it', async () => {
     const db = fakeDb({ assets: [asset('bad', ['ok', 'boom']), asset('good', ['fine'])] });
     const r2 = fakeStorage();
@@ -198,8 +253,6 @@ describe('runPurge: assets', () => {
     const summary = await runPurge(d);
     expect(db.doneCalls).toEqual([['good']]);
     expect(db.remaining()).toEqual(['bad']);
-    // Batch 1 marks good; batch 2 returns only bad, which is skipped, so nothing new is marked.
-    expect(db.dueCalls()).toBe(2);
     expect(summary).toMatchObject({ assetsPurged: 1, assetsFailed: 1, keysFailed: 1 });
     expect(d.log.error).toHaveBeenCalledWith(
       'storage purge asset failed',
@@ -208,32 +261,43 @@ describe('runPurge: assets', () => {
   });
 
   it('stops after one batch when every row fails', async () => {
-    const db = fakeDb({ assets: [asset('a1', ['boom'])] });
+    const db = fakeDb({ assets: [asset('bad', ['boom'])] });
     const r2 = fakeStorage();
     r2.failKeys.add('boom');
-    await runPurge(deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }));
+    const summary = await runPurge(
+      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
+    );
     expect(db.dueCalls()).toBe(1);
     expect(db.doneCalls).toEqual([]);
+    expect(summary.batches).toBe(1);
   });
 
-  it('asks for batches of ASSET_BATCH_SIZE and caps the run at MAX_ASSET_BATCHES', async () => {
-    const total = ASSET_BATCH_SIZE * (MAX_ASSET_BATCHES + 2);
-    const db = fakeDb({
-      assets: Array.from({ length: total }, (_, i) => asset(`a${i}`, [])),
-    });
+  it('asks for batches of ASSET_BATCH_SIZE', async () => {
+    const db = fakeDb({ assets: [asset('a1', [])] });
     const due = vi.spyOn(db.db, 'storagePurgeDue');
+    await runPurge(deps({ db: db.db, storage: fakeStorage().storage, agora: fakeAgora().agora }));
+    expect(due).toHaveBeenCalledWith(ASSET_BATCH_SIZE);
+  });
+
+  it('caps the run at MAX_ASSET_BATCHES even when every batch makes progress', async () => {
+    // Keyless rows cost no R2 calls; a db that always answers with a fresh row
+    // would otherwise loop forever.
+    const db = fakeDb();
+    let n = 0;
+    vi.spyOn(db.db, 'storagePurgeDue').mockImplementation(() =>
+      Promise.resolve([{ assetId: `a${(n += 1)}`, bucket: 'assets-acme', keys: [] }]),
+    );
+    vi.spyOn(db.db, 'storagePurgeDone').mockResolvedValue(1);
     const summary = await runPurge(
       deps({ db: db.db, storage: fakeStorage().storage, agora: fakeAgora().agora }),
     );
-    expect(due).toHaveBeenCalledTimes(MAX_ASSET_BATCHES);
-    expect(due).toHaveBeenCalledWith(ASSET_BATCH_SIZE);
-    expect(summary.assetsPurged).toBe(ASSET_BATCH_SIZE * MAX_ASSET_BATCHES);
-    expect(db.remaining()).toHaveLength(ASSET_BATCH_SIZE * 2);
+    expect(summary.batches).toBeLessThanOrEqual(MAX_ASSET_BATCHES);
+    expect(summary.calls).toBeLessThanOrEqual(RUN_CALL_BUDGET);
   });
 });
 
 describe('runPurge: workspaces', () => {
-  it('deletes Agora groups, pages through and empties the bucket, deletes it, then marks done', async () => {
+  it('deletes Agora groups, pages through and empties a legacy bucket no other row names, deletes it, then marks done', async () => {
     const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-acme' }] });
     db.groups.set('w1', ['g1', 'g2']);
     const r2 = fakeStorage({ 'assets-acme': ['k1', 'k2', 'k3', 'k4', 'k5'] }, 2);
@@ -241,46 +305,25 @@ describe('runPurge: workspaces', () => {
     const summary = await runPurge(deps({ db: db.db, storage: r2.storage, agora: agora.agora }));
     expect(agora.deleted).toEqual(['g1', 'g2']);
     expect(r2.listCursors).toEqual([null, 'k2', 'k4']);
+    expect(r2.listPrefixes).toEqual([null, null, null]);
     expect(r2.deleted).toHaveLength(5);
     expect(r2.deletedBuckets).toEqual(['assets-acme']);
     expect(db.workspacesDone).toEqual(['w1']);
     expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 0 });
   });
 
-  it('isolates a failing workspace: the others still purge and it is not marked done', async () => {
+  it('reads the Agora groups of every due workspace in one query', async () => {
     const db = fakeDb({
       workspaces: [
-        { workspaceId: 'w1', bucket: 'assets-one' },
-        { workspaceId: 'w2', bucket: 'assets-two' },
-        { workspaceId: 'w3', bucket: 'assets-three' },
+        { workspaceId: 'w1', bucket: null },
+        { workspaceId: 'w2', bucket: null },
       ],
     });
-    db.groups.set('w1', ['g1']);
-    const agora = fakeAgora();
-    agora.failGroups.add('g1');
-    const r2 = fakeStorage({ 'assets-two': ['x'], 'assets-three': ['boom'] });
-    r2.failKeys.add('boom');
-    const d = deps({ db: db.db, storage: r2.storage, agora: agora.agora });
-    const summary = await runPurge(d);
-    expect(db.workspacesDone).toEqual(['w2']);
-    expect(r2.deletedBuckets).toEqual(['assets-two']);
-    expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 2 });
-    expect(d.log.error).toHaveBeenCalledWith(
-      'storage purge workspace failed',
-      expect.objectContaining({ workspace_id: 'w1' }),
-    );
-  });
-
-  it('never wipes a bucket a live workspace now uses', async () => {
-    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-acme' }] });
-    db.liveBuckets.add('assets-acme');
-    const r2 = fakeStorage({ 'assets-acme': ['live-file'] });
-    const summary = await runPurge(
-      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
-    );
-    expect(r2.deleted).toEqual([]);
-    expect(db.workspacesDone).toEqual([]);
-    expect(summary.workspacesFailed).toBe(1);
+    const groupsQuery = vi.spyOn(db.db, 'workspaceAgoraGroupIds');
+    await runPurge(deps({ db: db.db, storage: fakeStorage().storage, agora: fakeAgora().agora }));
+    expect(groupsQuery).toHaveBeenCalledTimes(1);
+    expect(groupsQuery).toHaveBeenCalledWith(['w1', 'w2']);
+    expect(db.workspacesDone).toEqual(['w1', 'w2']);
   });
 
   it('marks a workspace with no bucket done after its Agora groups go', async () => {
@@ -298,6 +341,168 @@ describe('runPurge: workspaces', () => {
     const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: null }] });
     vi.spyOn(db.db, 'storagePurgeDue').mockRejectedValue(new Error('db down'));
     await runPurge(deps({ db: db.db, storage: fakeStorage().storage, agora: fakeAgora().agora }));
+    expect(db.workspacesDone).toEqual(['w1']);
+  });
+});
+
+describe('runPurge: root cause regression (Agora 401 stranded every workspace)', () => {
+  it('a failing Agora group delete is logged and never blocks the bytes or purge_done', async () => {
+    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-acme' }] });
+    db.groups.set('w1', ['g1', 'g2']);
+    const agora = fakeAgora();
+    agora.failGroups.add('g1');
+    const r2 = fakeStorage({ 'assets-acme': ['k1'] });
+    const d = deps({ db: db.db, storage: r2.storage, agora: agora.agora });
+    const summary = await runPurge(d);
+    expect(agora.deleted).toEqual(['g2']);
+    expect(r2.deletedBuckets).toEqual(['assets-acme']);
+    expect(db.workspacesDone).toEqual(['w1']);
+    expect(summary).toMatchObject({
+      workspacesPurged: 1,
+      workspacesFailed: 0,
+      agoraGroupsFailed: 1,
+    });
+    expect(d.log.error).toHaveBeenCalledWith(
+      'storage purge agora group not deleted',
+      expect.objectContaining({
+        workspace_id: 'w1',
+        group_ids: ['g1'],
+        error: expect.stringContaining('401') as unknown,
+      }),
+    );
+    expect(d.log.error).not.toHaveBeenCalledWith(
+      'storage purge workspace failed',
+      expect.anything(),
+    );
+  });
+
+  it('35 due workspaces whose Agora deletes all fail still drain within the run budget', async () => {
+    const due = Array.from({ length: 35 }, (_, i) => ({ workspaceId: `w${i}`, bucket: null }));
+    const db = fakeDb({ workspaces: due });
+    for (const w of due) db.groups.set(w.workspaceId, [`g-${w.workspaceId}`]);
+    const agora = fakeAgora();
+    for (const w of due) agora.failGroups.add(`g-${w.workspaceId}`);
+    const r2 = fakeStorage();
+    const summary = await runPurge(deps({ db: db.db, storage: r2.storage, agora: agora.agora }));
+    // Every call (Supabase, R2, Agora) counts, so the run never passes the cap
+    // the old 900-call budget ignored ("Too many subrequests").
+    expect(db.calls() + agora.calls()).toBe(summary.calls);
+    expect(summary.calls).toBeLessThanOrEqual(RUN_CALL_BUDGET);
+    expect(summary.workspacesPurged).toBeGreaterThan(0);
+    expect(summary.workspacesFailed).toBe(0);
+    expect(db.workspacesDone).toHaveLength(summary.workspacesPurged);
+  });
+});
+
+describe('runPurge: rule a, the shared bucket', () => {
+  it('deletes only ws/<id>/ keys; other workspaces keys and the bucket stay', async () => {
+    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-shared' }] });
+    db.rows.set('w2', 'assets-shared');
+    const r2 = fakeStorage(
+      {
+        'assets-shared': ['ws/w1/images/a', 'ws/w1/images/b', 'ws/w1/docs/c', 'ws/w2/images/d'],
+      },
+      2,
+    );
+    const deleteBucket = vi.spyOn(r2.storage, 'deleteBucket');
+    const sharers = vi.spyOn(db.db, 'bucketSharers');
+    const summary = await runPurge(
+      deps({
+        db: db.db,
+        storage: r2.storage,
+        agora: fakeAgora().agora,
+        sharedBucket: 'assets-shared',
+      }),
+    );
+    expect(r2.listPrefixes.every((p) => p === 'ws/w1/')).toBe(true);
+    expect([...r2.deleted].sort()).toEqual([
+      'assets-shared/ws/w1/docs/c',
+      'assets-shared/ws/w1/images/a',
+      'assets-shared/ws/w1/images/b',
+    ]);
+    expect([...(r2.store.get('assets-shared') ?? [])]).toEqual(['ws/w2/images/d']);
+    expect(deleteBucket).not.toHaveBeenCalled();
+    expect(sharers).not.toHaveBeenCalled();
+    expect(db.workspacesDone).toEqual(['w1']);
+    expect(summary.workspacesPurged).toBe(1);
+  });
+
+  it('with SHARED_ASSET_BUCKET unset, rule a never matches: the bucket is treated as legacy', async () => {
+    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-shared' }] });
+    db.rows.set('w2', 'assets-shared');
+    const r2 = fakeStorage({ 'assets-shared': ['ws/w2/images/d'] });
+    await runPurge(
+      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora, sharedBucket: null }),
+    );
+    expect(r2.deleted).toEqual([]);
+    expect(r2.deletedBuckets).toEqual([]);
+    expect(db.workspacesDone).toEqual(['w1']);
+  });
+
+  it('sharedBucketName reads SHARED_ASSET_BUCKET and treats unset or blank as null', () => {
+    expect(sharedBucketName({})).toBeNull();
+    expect(sharedBucketName({ SHARED_ASSET_BUCKET: '  ' })).toBeNull();
+    expect(sharedBucketName({ SHARED_ASSET_BUCKET: ' assets-shared ' })).toBe('assets-shared');
+  });
+});
+
+describe('runPurge: rule b, legacy buckets shared with other rows', () => {
+  it('a bucket another soft-deleted row names: R2 untouched, purge_done still runs, sharers logged', async () => {
+    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-legacy' }] });
+    db.rows.set('w9', 'assets-legacy'); // soft-deleted, not yet due
+    const r2 = fakeStorage({ 'assets-legacy': ['images/x'] });
+    const d = deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora });
+    const summary = await runPurge(d);
+    expect(r2.listCursors).toEqual([]);
+    expect(r2.deleted).toEqual([]);
+    expect(r2.deletedBuckets).toEqual([]);
+    expect(db.workspacesDone).toEqual(['w1']);
+    expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 0 });
+    expect(d.log.info).toHaveBeenCalledWith(
+      'storage purge bucket shared; left in place',
+      expect.objectContaining({ workspace_id: 'w1', bucket: 'assets-legacy', sharers: 1 }),
+    );
+  });
+
+  it('a bucket a live workspace now uses keeps its objects; the deleted row still goes', async () => {
+    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-acme' }] });
+    db.rows.set('live', 'assets-acme');
+    const r2 = fakeStorage({ 'assets-acme': ['live-file'] });
+    await runPurge(deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }));
+    expect(r2.deleted).toEqual([]);
+    expect(r2.store.get('assets-acme')?.has('live-file')).toBe(true);
+    expect(db.workspacesDone).toEqual(['w1']);
+  });
+
+  it('the last row referencing the bucket is the one that empties and deletes it', async () => {
+    const db = fakeDb({
+      workspaces: [
+        { workspaceId: 'w1', bucket: 'assets-legacy' },
+        { workspaceId: 'w2', bucket: 'assets-legacy' },
+      ],
+    });
+    const r2 = fakeStorage({ 'assets-legacy': ['images/a', 'images/b'] });
+    const sharers = vi.spyOn(db.db, 'bucketSharers');
+    await runPurge(deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }));
+    expect(sharers).toHaveBeenNthCalledWith(1, 'assets-legacy', 'w1');
+    expect(sharers).toHaveBeenNthCalledWith(2, 'assets-legacy', 'w2');
+    expect(r2.listCursors).toEqual([null]);
+    expect(r2.deleted).toHaveLength(2);
+    expect(r2.deletedBuckets).toEqual(['assets-legacy']);
+    expect(db.workspacesDone).toEqual(['w1', 'w2']);
+  });
+});
+
+describe('runPurge: rule c, induction-sample keys', () => {
+  it('a legacy bucket holding a sample key keeps that key and the bucket; the rest go', async () => {
+    const sample = `${SAMPLE_KEY_PREFIX}np-01.jpg`;
+    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-acme' }] });
+    const r2 = fakeStorage({ 'assets-acme': [sample, 'images/x', 'images/y'] });
+    const deleteBucket = vi.spyOn(r2.storage, 'deleteBucket');
+    await runPurge(deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }));
+    expect([...r2.deleted].sort()).toEqual(['assets-acme/images/x', 'assets-acme/images/y']);
+    expect(r2.store.get('assets-acme')?.has(sample)).toBe(true);
+    expect(deleteBucket).not.toHaveBeenCalled();
     expect(db.workspacesDone).toEqual(['w1']);
   });
 });
@@ -334,46 +539,25 @@ describe('createAgoraPurgeApi.deleteGroup', () => {
   });
 });
 
-describe('runPurge: per-workspace isolation and the live-bucket guard', () => {
-  it('checks the guard first: a live bucket keeps its Agora groups and its objects', async () => {
-    const db = fakeDb({ workspaces: [{ workspaceId: 'w1', bucket: 'assets-acme' }] });
-    db.groups.set('w1', ['g1']);
-    db.liveBuckets.add('assets-acme');
-    const inUse = vi.spyOn(db.db, 'bucketInUse');
-    const agora = fakeAgora();
-    const r2 = fakeStorage({ 'assets-acme': ['live-file'] });
-    const d = deps({ db: db.db, storage: r2.storage, agora: agora.agora });
-    await runPurge(d);
-    expect(inUse).toHaveBeenCalledWith('assets-acme', 'w1');
-    expect(agora.deleted).toEqual([]);
-    expect(r2.listCursors).toEqual([]);
-    expect(r2.deletedBuckets).toEqual([]);
-    expect(r2.store.get('assets-acme')?.has('live-file')).toBe(true);
-    expect(d.log.error).toHaveBeenCalledWith(
-      'storage purge workspace failed',
-      expect.objectContaining({
-        workspace_id: 'w1',
-        error: expect.stringContaining('in use by a live workspace') as unknown,
-      }),
-    );
-  });
-
-  it('a guarded workspace does not stop the next one', async () => {
+describe('runPurge: per-workspace isolation', () => {
+  it('a workspace whose key delete fails is not marked done; the others still purge', async () => {
     const db = fakeDb({
       workspaces: [
-        { workspaceId: 'w1', bucket: 'assets-shared' },
+        { workspaceId: 'w1', bucket: 'assets-one' },
         { workspaceId: 'w2', bucket: 'assets-two' },
       ],
     });
-    db.liveBuckets.add('assets-shared');
-    const r2 = fakeStorage({ 'assets-shared': ['keep'], 'assets-two': ['x', 'y'] });
-    const summary = await runPurge(
-      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
-    );
+    const r2 = fakeStorage({ 'assets-one': ['boom'], 'assets-two': ['x'] });
+    r2.failKeys.add('boom');
+    const d = deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora });
+    const summary = await runPurge(d);
     expect(db.workspacesDone).toEqual(['w2']);
     expect(r2.deletedBuckets).toEqual(['assets-two']);
-    expect(r2.store.get('assets-shared')?.size).toBe(1);
     expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 1 });
+    expect(d.log.error).toHaveBeenCalledWith(
+      'storage purge workspace failed',
+      expect.objectContaining({ workspace_id: 'w1' }),
+    );
   });
 
   it('a workspace whose bucket fails to delete is not marked done; the next still purges', async () => {
@@ -415,28 +599,28 @@ describe('runPurge: per-workspace isolation and the live-bucket guard', () => {
   });
 });
 
-describe('runPurge: call budget', () => {
-  const keys = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
-
+describe('runPurge: call budget (every Supabase, R2 and Agora call counts)', () => {
   it('lets the asset pass spend at most its share, whole rows only, and leaves the rest due', async () => {
-    // 10 rows of 100 keys: only 4 fit in 450 calls.
+    // The share covers the due read, the done write and 20 key deletes: 4 rows of 5.
     const db = fakeDb({
-      assets: Array.from({ length: 10 }, (_, i) => asset(`a${i}`, keys(`a${i}-`, 100))),
+      assets: Array.from({ length: 10 }, (_, i) => asset(`a${i}`, keys(`a${i}-`, 5))),
     });
     const r2 = fakeStorage();
     const summary = await runPurge(
       deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
     );
-    expect(r2.deleted).toHaveLength(400);
+    expect(r2.deleted).toHaveLength(ASSET_CALL_BUDGET - 2);
     expect(db.doneCalls).toEqual([['a0', 'a1', 'a2', 'a3']]);
     expect(db.remaining()).toHaveLength(6);
     expect(db.dueCalls()).toBe(1);
-    expect(summary).toMatchObject({ assetsPurged: 4, calls: 400, budgetExhausted: true });
+    expect(summary.budgetExhausted).toBe(true);
+    // + the workspace pass's own due read.
+    expect(summary.calls).toBe(ASSET_CALL_BUDGET + 1);
   });
 
   it('skips a row with more keys than the asset share instead of stalling on it', async () => {
     const db = fakeDb({
-      assets: [asset('huge', keys('h', ASSET_CALL_BUDGET + 1)), asset('small', ['s'])],
+      assets: [asset('huge', keys('h', ASSET_CALL_BUDGET - 1)), asset('small', ['s'])],
     });
     const r2 = fakeStorage();
     const summary = await runPurge(
@@ -449,17 +633,22 @@ describe('runPurge: call budget', () => {
 
   it('gives the workspace pass what the asset pass left, and never exceeds the run budget', async () => {
     const db = fakeDb({
-      assets: [asset('a1', keys('k', 100))],
+      assets: [asset('a1', keys('k', 10))],
       workspaces: [{ workspaceId: 'w1', bucket: 'assets-big' }],
     });
     const r2 = fakeStorage({ 'assets-big': keys('o', 2000) }, 1000);
-    const summary = await runPurge(
-      deps({ db: db.db, storage: r2.storage, agora: fakeAgora().agora }),
-    );
-    const total = r2.deleted.length + r2.listCursors.length + r2.deletedBuckets.length;
+    const agora = fakeAgora();
+    const summary = await runPurge(deps({ db: db.db, storage: r2.storage, agora: agora.agora }));
+    const total =
+      db.calls() +
+      agora.calls() +
+      r2.deleted.length +
+      r2.listCursors.length +
+      r2.deletedBuckets.length;
     expect(total).toBe(RUN_CALL_BUDGET);
     expect(summary.calls).toBe(RUN_CALL_BUDGET);
     expect(summary.budgetExhausted).toBe(true);
+    expect(db.workspacesDone).toEqual([]);
   });
 
   it('stops the workspace pass cleanly: the unfinished workspace is not marked done or failed', async () => {
@@ -471,7 +660,7 @@ describe('runPurge: call budget', () => {
       ],
     });
     db.groups.set('w3', ['g3']);
-    // w1 costs list + 3 deletes + bucket = 5 calls; w2 cannot finish in the rest.
+    // w1 costs sharers + list + 3 deletes + bucket + done = 7 calls; w2 cannot finish in the rest.
     const r2 = fakeStorage({ 'assets-one': keys('a', 3), 'assets-two': keys('b', 2000) }, 1000);
     const agora = fakeAgora();
     const d = deps({ db: db.db, storage: r2.storage, agora: agora.agora });
@@ -499,7 +688,8 @@ describe('runPurge: call budget', () => {
     const summary = await runPurge(
       deps({ db: db.db, storage: fakeStorage().storage, agora: agora.agora }),
     );
-    expect(agora.deleted).toHaveLength(RUN_CALL_BUDGET);
+    // Asset due read + workspace due read + the groups query, then Agora.
+    expect(agora.deleted).toHaveLength(RUN_CALL_BUDGET - 3);
     expect(db.workspacesDone).toEqual([]);
     expect(summary.budgetExhausted).toBe(true);
   });
@@ -517,30 +707,37 @@ describe('handleScheduled live wiring', () => {
     AGORA_CHAT_REST_URL: 'https://agora.test/org/app',
   };
 
-  it('asks for live workspaces other than this one on the bucket, and keeps a bucket one uses', async () => {
+  it('counts every other row (live or soft-deleted) on the bucket, and leaves a shared one in R2', async () => {
     supa.calls = [];
     supa.answers = {
       storage_purge_due: { data: [], error: null },
       workspace_purge_due: { data: [{ workspace_id: 'w1', bucket: 'assets-acme' }], error: null },
+      chat_channels: { data: [], error: null },
       workspaces: { count: 1, error: null },
+      workspace_purge_done: { data: null, error: null },
     };
     const fetchSpy = vi.fn(() => Promise.resolve(new Response(null, { status: 500 })));
     vi.stubGlobal('fetch', fetchSpy);
     try {
       const summary = await handleScheduled(ENV);
       expect(supa.key).toBe('service-role-key');
+      const groups = supa.calls.find((c) => c.target === 'chat_channels');
+      expect(groups?.chain).toEqual([
+        ['from', ['chat_channels']],
+        ['select', ['workspace_id, agora_group_id']],
+        ['in', ['workspace_id', ['w1']]],
+        ['not', ['agora_group_id', 'is', null]],
+      ]);
       const guard = supa.calls.find((c) => c.target === 'workspaces');
       expect(guard?.chain).toEqual([
         ['from', ['workspaces']],
         ['select', ['id', { count: 'exact', head: true }]],
         ['eq', ['asset_bucket', 'assets-acme']],
-        ['is', ['deleted_at', null]],
         ['neq', ['id', 'w1']],
       ]);
-      expect(supa.calls.map((c) => c.target)).not.toContain('workspace_purge_done');
-      expect(supa.calls.map((c) => c.target)).not.toContain('chat_channels');
+      expect(supa.calls.map((c) => c.target)).toContain('workspace_purge_done');
       expect(fetchSpy).not.toHaveBeenCalled();
-      expect(summary).toMatchObject({ workspacesPurged: 0, workspacesFailed: 1 });
+      expect(summary).toMatchObject({ workspacesPurged: 1, workspacesFailed: 0 });
     } finally {
       vi.unstubAllGlobals();
     }
