@@ -61,11 +61,17 @@ export function withChunkReload<T>(
     });
 }
 
-/** React.lazy over a dynamic import, with the one-time stale chunk reload. */
-export function lazyRoute<P extends object>(
-  load: () => Promise<{ default: ComponentType<P> }>,
+/**
+ * React.lazy over a dynamic import, with the one-time stale chunk reload.
+ * `pick` names the component in the loaded module (pages use named exports).
+ */
+export function lazyRoute<M, P extends object>(
+  load: () => Promise<M>,
+  pick: (module: M) => ComponentType<P>,
 ): LazyExoticComponent<ComponentType<P>> {
-  return lazy(withChunkReload(load));
+  return lazy<ComponentType<P>>(
+    withChunkReload(() => load().then((module) => ({ default: pick(module) }))),
+  );
 }
 
 /** Run a task once the browser is idle (setTimeout fallback); returns a cancel. */

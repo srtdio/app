@@ -17,72 +17,91 @@ warmMonoFont();
 const loadPipeline = () => import('@/components/pages/PipelinePage');
 const loadChat = () => import('@/components/pages/ChatPage');
 
-const PipelinePage = lazyRoute(() => loadPipeline().then((m) => ({ default: m.PipelinePage })));
-const ChatPage = lazyRoute(() => loadChat().then((m) => ({ default: m.ChatPage })));
-const PostDetailPage = lazyRoute(() =>
-  import('@/components/pages/PostDetailPage').then((m) => ({ default: m.PostDetailPage })),
+const PipelinePage = lazyRoute(loadPipeline, (m) => m.PipelinePage);
+const ChatPage = lazyRoute(loadChat, (m) => m.ChatPage);
+const PostDetailPage = lazyRoute(
+  () => import('@/components/pages/PostDetailPage'),
+  (m) => m.PostDetailPage,
 );
-const BriefsPage = lazyRoute(() =>
-  import('@/components/pages/BriefsPage').then((m) => ({ default: m.BriefsPage })),
+const BriefsPage = lazyRoute(
+  () => import('@/components/pages/BriefsPage'),
+  (m) => m.BriefsPage,
 );
-const BriefDetailPage = lazyRoute(() =>
-  import('@/components/pages/BriefDetailPage').then((m) => ({ default: m.BriefDetailPage })),
+const BriefDetailPage = lazyRoute(
+  () => import('@/components/pages/BriefDetailPage'),
+  (m) => m.BriefDetailPage,
 );
-const AssetsPage = lazyRoute(() =>
-  import('@/components/pages/AssetsPage').then((m) => ({ default: m.AssetsPage })),
+const AssetsPage = lazyRoute(
+  () => import('@/components/pages/AssetsPage'),
+  (m) => m.AssetsPage,
 );
-const RecentlyDeletedPage = lazyRoute(() =>
-  import('@/components/pages/RecentlyDeletedPage').then((m) => ({
-    default: m.RecentlyDeletedPage,
-  })),
+const RecentlyDeletedPage = lazyRoute(
+  () => import('@/components/pages/RecentlyDeletedPage'),
+  (m) => m.RecentlyDeletedPage,
 );
-const SettingsPage = lazyRoute(() =>
-  import('@/components/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+const SettingsPage = lazyRoute(
+  () => import('@/components/pages/SettingsPage'),
+  (m) => m.SettingsPage,
 );
-const HelpPage = lazyRoute(() =>
-  import('@/components/pages/HelpPage').then((m) => ({ default: m.HelpPage })),
+const HelpPage = lazyRoute(
+  () => import('@/components/pages/HelpPage'),
+  (m) => m.HelpPage,
 );
-const NotificationsPage = lazyRoute(() =>
-  import('@/components/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })),
+const NotificationsPage = lazyRoute(
+  () => import('@/components/pages/NotificationsPage'),
+  (m) => m.NotificationsPage,
 );
-const PlanTabPage = lazyRoute(() =>
-  import('@/components/pages/PlanTabPage').then((m) => ({ default: m.PlanTabPage })),
+const PlanTabPage = lazyRoute(
+  () => import('@/components/pages/PlanTabPage'),
+  (m) => m.PlanTabPage,
 );
-const PlanBesideLayout = lazyRoute(() =>
-  import('@/components/pages/PlanPage').then((m) => ({ default: m.PlanBesideLayout })),
+const PlanBesideLayout = lazyRoute(
+  () => import('@/components/pages/PlanPage'),
+  (m) => m.PlanBesideLayout,
 );
-const PlanPage = lazyRoute(() =>
-  import('@/components/pages/PlanPage').then((m) => ({ default: m.PlanPage })),
+const PlanPage = lazyRoute(
+  () => import('@/components/pages/PlanPage'),
+  (m) => m.PlanPage,
 );
-const ActivityRedirect = lazyRoute(() =>
-  import('@/components/shell/ActivityRedirect').then((m) => ({ default: m.ActivityRedirect })),
+const ActivityRedirect = lazyRoute(
+  () => import('@/components/shell/ActivityRedirect'),
+  (m) => m.ActivityRedirect,
 );
-const PostRefResolver = lazyRoute(() =>
-  import('@/components/refs/PostRefResolver').then((m) => ({ default: m.PostRefResolver })),
+const PostRefResolver = lazyRoute(
+  () => import('@/components/refs/PostRefResolver'),
+  (m) => m.PostRefResolver,
 );
-const BriefRefResolver = lazyRoute(() =>
-  import('@/components/refs/BriefRefResolver').then((m) => ({ default: m.BriefRefResolver })),
+const BriefRefResolver = lazyRoute(
+  () => import('@/components/refs/BriefRefResolver'),
+  (m) => m.BriefRefResolver,
 );
-const SignInPage = lazyRoute(() =>
-  import('@/components/auth/SignInPage').then((m) => ({ default: m.SignInPage })),
+const SignInPage = lazyRoute(
+  () => import('@/components/auth/SignInPage'),
+  (m) => m.SignInPage,
 );
-const SignUpPage = lazyRoute(() =>
-  import('@/components/auth/SignUpPage').then((m) => ({ default: m.SignUpPage })),
+const SignUpPage = lazyRoute(
+  () => import('@/components/auth/SignUpPage'),
+  (m) => m.SignUpPage,
 );
-const AuthCallbackPage = lazyRoute(() =>
-  import('@/components/auth/AuthCallbackPage').then((m) => ({ default: m.AuthCallbackPage })),
+const AuthCallbackPage = lazyRoute(
+  () => import('@/components/auth/AuthCallbackPage'),
+  (m) => m.AuthCallbackPage,
 );
-const LegalPolicyPage = lazyRoute(() =>
-  import('@/components/auth/LegalPolicyPage').then((m) => ({ default: m.LegalPolicyPage })),
+const LegalPolicyPage = lazyRoute(
+  () => import('@/components/auth/LegalPolicyPage'),
+  (m) => m.LegalPolicyPage,
 );
-const UnsubscribePage = lazyRoute(() =>
-  import('@/components/unsubscribe/UnsubscribePage').then((m) => ({ default: m.UnsubscribePage })),
+const UnsubscribePage = lazyRoute(
+  () => import('@/components/unsubscribe/UnsubscribePage'),
+  (m) => m.UnsubscribePage,
 );
-const AcceptInvitePage = lazyRoute(() =>
-  import('@/components/auth/AcceptInvitePage').then((m) => ({ default: m.AcceptInvitePage })),
+const AcceptInvitePage = lazyRoute(
+  () => import('@/components/auth/AcceptInvitePage'),
+  (m) => m.AcceptInvitePage,
 );
-const TestInviteePage = lazyRoute(() =>
-  import('@/components/test-site/TestInviteePage').then((m) => ({ default: m.TestInviteePage })),
+const TestInviteePage = lazyRoute(
+  () => import('@/components/test-site/TestInviteePage'),
+  (m) => m.TestInviteePage,
 );
 
 // The active workspace resolves only for signed-in users, so WorkspaceProvider
@@ -93,13 +112,15 @@ const TestInviteePage = lazyRoute(() =>
 // connection now lives at the shell: it opens once per session and persists
 // across route changes, tearing down only on signout or workspace switch.
 // The three modules load as one lazy unit (in parallel, no waterfall).
-const WorkspaceLayout = lazyRoute(() =>
-  Promise.all([
-    import('@/lib/workspace-context'),
-    import('@/lib/chat'),
-    import('@/components/shell/AppLayout'),
-  ]).then(([{ WorkspaceProvider }, { ChatProvider }, { AppLayout }]) => ({
-    default: function WorkspaceLayout(): ReactElement {
+const WorkspaceLayout = lazyRoute(
+  () =>
+    Promise.all([
+      import('@/lib/workspace-context'),
+      import('@/lib/chat'),
+      import('@/components/shell/AppLayout'),
+    ]),
+  ([{ WorkspaceProvider }, { ChatProvider }, { AppLayout }]) =>
+    function WorkspaceLayout(): ReactElement {
       useEffect(() => prefetchShellPages(), []);
       return (
         <WorkspaceProvider>
@@ -109,7 +130,6 @@ const WorkspaceLayout = lazyRoute(() =>
         </WorkspaceProvider>
       );
     },
-  })),
 );
 
 /** Once the signed-in shell is idle, warm the Pipeline and Chat chunks (code only, no data). */
