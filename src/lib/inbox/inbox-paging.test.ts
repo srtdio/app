@@ -66,7 +66,10 @@ async function pageAll(
   const ids: string[] = [];
   let cursor: ActivityCursor | undefined;
   for (let i = 0; i < 100; i += 1) {
-    const res = await fetchActivityEntries(client, workspaceId, { direction, cursor });
+    const res = await fetchActivityEntries(client, workspaceId, {
+      direction,
+      ...(cursor !== undefined ? { cursor } : {}),
+    });
     if (!res.ok) throw new Error(res.error);
     expect(res.data.length).toBeLessThanOrEqual(ACTIVITY_PAGE_SIZE);
     ids.push(...res.data.map((item) => item.id));

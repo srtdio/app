@@ -136,7 +136,12 @@ export function readChannelOldest(
 async function readHistoryPage(
   client: Client,
   channelId: string,
-  opts: { before?: MessageCursor; threadRootId?: string; signal?: AbortSignal; label: string },
+  opts: {
+    before?: MessageCursor | undefined;
+    threadRootId?: string | undefined;
+    signal?: AbortSignal | undefined;
+    label: string;
+  },
 ): Promise<Result<HistoryPage>> {
   const { before, threadRootId, signal, label } = opts;
   const res = await readBoundedPage<ChatMessageRow>({
