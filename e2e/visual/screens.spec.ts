@@ -658,7 +658,7 @@ async function stabilise(page: Page): Promise<void> {
       document
         .getAnimations()
         .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-        .every((a) => a.playState !== 'running' && a.playState !== 'pending'),
+        .every((a) => !a.pending && a.playState !== 'running'),
     undefined,
     { timeout: 5_000 },
   );
