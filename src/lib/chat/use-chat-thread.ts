@@ -1875,7 +1875,7 @@ export function useChatThread(params: {
   const editMessage = useCallback<UseChatThread['editMessage']>(
     async (messageId, body) => {
       const forChannel = channelRef.current;
-      if (forChannel === null) return { ok: false, message: "Couldn't edit, try again" };
+      if (forChannel === null) return { ok: false, message: "Couldn't edit. Try again." };
       const traceId = generateTraceId();
       const connection = clientRef.current;
       const liveTarget = targetRef.current;

@@ -11,6 +11,7 @@
 // DOM: refused after unmount, refused while hidden, thrown while on the page.
 
 import type { Stage } from '@srtdio/posts';
+import { errorText } from '@/lib/error-copy';
 
 /** The slice of the app-wide ToastApi this commit needs. */
 export interface StageMoveToast {
@@ -50,9 +51,9 @@ export function showWhenVisible(doc: VisibilityDoc, show: () => void): void {
 const VERB: Partial<Record<Stage, string>> = { rejected: 'reject', parked: 'park' };
 const DONE: Partial<Record<Stage, string>> = { rejected: 'Rejected', parked: 'Parked' };
 
-/** "Couldn't reject {title}. It's still in review." Pure. */
-export function stageMoveFailureTitle(to: Stage, postTitle: string, fromStage: Stage): string {
-  return `Couldn't ${VERB[to] ?? 'move'} ${postTitle}. It's still in ${fromStage}.`;
+/** "Couldn't reject {title}. {reason}", the reason read off the error. Pure. */
+export function stageMoveFailureTitle(to: Stage, postTitle: string, error: unknown = null): string {
+  return errorText(`${VERB[to] ?? 'move'} ${postTitle}`, error);
 }
 
 /** "Rejected, but your reason didn't post." Pure. */
@@ -103,7 +104,7 @@ export async function runStageMoveCommit(deps: StageMoveCommitDeps): Promise<voi
       deps.revert();
       deps.setInlineError(deps.friendlyError(error));
     }
-    const title = stageMoveFailureTitle(deps.to, deps.postTitle, deps.fromStage);
+    const title = stageMoveFailureTitle(deps.to, deps.postTitle, error);
     showWhenVisible(deps.doc, () => {
       deps.toast?.show({ title, tone: 'error', action: openAction });
     });

@@ -75,9 +75,9 @@ describe('AssetLightbox buttons', () => {
   it.each([
     'aria-label="Close viewer"',
     'aria-label="Download"',
-    'aria-label="Previous asset"',
-    'aria-label="Next asset"',
-    'aria-label="Rename asset"',
+    'aria-label="Previous file"',
+    'aria-label="Next file"',
+    'aria-label="Rename file"',
   ])('%s is a 44px, 8px-radius control', (marker) => {
     const cls = buttonClassOf(html, marker);
     expect(cls).toContain('h-11');

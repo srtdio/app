@@ -15,7 +15,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ForwardPicker } from '@/components/chat/ForwardPicker';
 
 describe('ForwardPicker zero state', () => {
-  it('empty query and no chats reads "No chats yet"', () => {
+  it('empty query and no chats reads "Chats show up here."', () => {
     const html = renderToStaticMarkup(
       <ForwardPicker
         open
@@ -25,8 +25,8 @@ describe('ForwardPicker zero state', () => {
         onSent={() => undefined}
       />,
     );
-    expect(html).toContain('No chats yet');
+    expect(html).toContain('Chats show up here.');
     expect(html).not.toContain('No matches');
-    expect(html).not.toContain('No chats called');
+    expect(html).not.toContain('Try another word');
   });
 });

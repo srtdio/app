@@ -64,10 +64,10 @@ describe('chat visual pass', () => {
     expect(html).toContain('pr-10');
   });
 
-  it('the list search is "Search" with "Search conversations" as its name', () => {
+  it('the list search is "Search chats", placeholder and name', () => {
     const list = read('../ChannelList.tsx');
-    expect(list).toContain("placeholder: 'Search',");
-    expect(list).toContain("label: 'Search conversations',");
+    expect(list).toContain("placeholder: 'Search chats',");
+    expect(list).toContain("label: 'Search chats',");
     expect(read('../../shell/SectionHeader.tsx')).toContain("'aria-label': search.label");
   });
 

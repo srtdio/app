@@ -21,7 +21,7 @@ import {
 } from '@/lib/chat/thread';
 import { withDaySeparators } from '@/components/chat/day-separators';
 import { bubbleMeta, messageTimeSource } from '@/components/chat/MessageThread';
-import { formatClockTime } from '@/lib/chat/time-format';
+import { formatTime } from '@/lib/time';
 import {
   applyServerClock,
   initialState,
@@ -91,10 +91,10 @@ describe('pending bubble time', () => {
     expect(pending?.time).toBe(TAP);
     expect(messageTimeSource(pending as ThreadMessage)).toBe(TAP);
     expect(bubbleMeta(pending as ThreadMessage, TZ, { showTicks: true }).time).toBe(
-      formatClockTime(TAP, TZ),
+      formatTime(TAP, TZ),
     );
     expect(bubbleMeta(pending as ThreadMessage, TZ, { showTicks: true }).time).not.toBe(
-      formatClockTime(YESTERDAY_ROW.time + 1, TZ),
+      formatTime(YESTERDAY_ROW.time + 1, TZ),
     );
   });
 
@@ -102,7 +102,7 @@ describe('pending bubble time', () => {
     const [pending] = withOutboxBubbles([], [send('p1', TAP)], ME);
     expect(pending?.time).toBe(TAP);
     expect(bubbleMeta(pending as ThreadMessage, TZ, { showTicks: false }).time).toBe(
-      formatClockTime(TAP, TZ),
+      formatTime(TAP, TZ),
     );
   });
 

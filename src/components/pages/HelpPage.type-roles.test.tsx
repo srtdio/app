@@ -88,10 +88,10 @@ describe('Help page type roles', () => {
   it('no match reads as an empty state', async () => {
     await mount();
     await typeSearch('zzzz-no-such-article');
-    expectRole(byText('No help articles like that'), ['text-lg', 'font-semibold']);
-    expectRole(byText('Try another search or choose a different topic.'), [
-      'text-base',
-      'text-fg-2',
+    expectRole(byText('Try another word for "zzzz-no-such-article".'), [
+      'text-lg',
+      'font-semibold',
     ]);
+    expect(byText('Clear search')).toBeTruthy();
   });
 });

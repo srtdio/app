@@ -143,7 +143,7 @@ describe('AttachmentsField flow A (framed)', () => {
     });
     await act(async () => pick(mediaInput(), photos('a.png', 'b.png')));
     const bar = document.querySelector('[data-upload-failed]');
-    expect(bar?.textContent).toContain("2 files didn't upload.");
+    expect(bar?.textContent).toContain("Couldn't upload 2 files. Try again.");
     expect(onFailedChange).toHaveBeenLastCalledWith(2);
     expect(document.querySelectorAll('[data-pending-tile][data-failed]')).toHaveLength(2);
     // No old per-file rows in the framed sheet.
@@ -175,7 +175,7 @@ describe('AttachmentsField flow A (framed)', () => {
     );
 
     const bar = document.querySelector('[data-upload-failed]');
-    expect(bar?.textContent).toContain("1 file didn't upload.");
+    expect(bar?.textContent).toContain("Couldn't upload 1 file. Try again.");
     const barButtons = [...(bar?.querySelectorAll('button') ?? [])].map((b) =>
       (b.textContent ?? '').trim(),
     );
@@ -184,7 +184,7 @@ describe('AttachmentsField flow A (framed)', () => {
     // The document row still names the file, but the failure is said once (the bar).
     const text = document.body.textContent ?? '';
     expect(text).toContain('brief.pdf');
-    expect(text.split("didn't upload").length - 1).toBe(1);
+    expect(text.split("Couldn't upload").length - 1).toBe(1);
     expect(text).not.toContain("Couldn't upload. Try again.");
     expect(document.querySelector('button[aria-label="Retry brief.pdf"]')).toBeNull();
     expect(document.querySelector('button[aria-label="Dismiss brief.pdf"]')).toBeNull();

@@ -209,7 +209,7 @@ test('failed files read: Retry, and Save keeps the files', async ({ page }) => {
   const sheet = page.getByRole('dialog', { name: 'Edit concept' });
   await expect(sheet).toBeVisible();
   const failed = sheet.locator('[data-plan-concept-files-failed]');
-  await expect(failed).toContainText("Couldn't load files.");
+  await expect(failed).toContainText("Couldn't load files. Try again.");
   const retry = sheet.locator('[data-plan-concept-files-retry]');
   expectMinTouchTarget(await retry.boundingBox());
   await expect(sheet.locator('[data-plan-concept-files]')).toHaveCount(0);

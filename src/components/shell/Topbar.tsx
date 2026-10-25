@@ -85,7 +85,7 @@ export function Topbar({
             <IconSearch />
           </IconButton>
         )}
-        {/* Notifications on every main screen (its one mount), with the unread count. */}
+        {/* Activity on every main screen (its one mount), with the unread count. */}
         {workspaceName !== null && onCreateWorkspace === undefined ? <NotificationsButton /> : null}
 
         <IconButton type="button" label="Account menu" onClick={onOpenAvatar}>

@@ -18,7 +18,8 @@ export type ErrorReason =
 
 /** The approved reason lines (23 Oct 2026), one per reason. */
 export const REASON_COPY: Record<ErrorReason, string> = {
-  offline: "You're offline.",
+  // Never "You're offline": no copy names connection state; it reads as any retry.
+  offline: 'Try again.',
   forbidden: "You don't have access to do this.",
   not_found: 'It was deleted.',
   stale: 'Someone else changed it. Refresh to see the latest.',

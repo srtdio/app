@@ -417,7 +417,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
       'Marks',
     ]);
     expect(PREVIEW_COUNT.starred).toBe(3);
-    expect(CONTACT_EMPTY.starred).toBe('No starred messages');
+    expect(CONTACT_EMPTY.starred).toBe('Starred messages show up here.');
   });
 
   const tabProps = (over: Partial<ChatInfoTabsViewProps> = {}): ChatInfoTabsViewProps => ({

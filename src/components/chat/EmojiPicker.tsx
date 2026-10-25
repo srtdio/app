@@ -25,7 +25,7 @@ import {
 } from '@/components/chat/chat-type';
 
 /** The empty result line. */
-export const EMOJI_NO_RESULTS = 'No emoji like that';
+export const EMOJI_NO_RESULTS = 'Try another word.';
 
 /** The search field's placeholder. */
 export const EMOJI_SEARCH_PLACEHOLDER = 'Search emoji';

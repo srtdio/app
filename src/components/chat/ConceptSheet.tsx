@@ -71,7 +71,7 @@ export const FIELD =
 export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} files.`;
 
 /** The files section when the concept's files could not be read. */
-export const CONCEPT_FILES_READ_FAILED = "Couldn't load files.";
+export const CONCEPT_FILES_READ_FAILED = "Couldn't load files. Try again.";
 
 /** The Save label while it waits for uploads. */
 export const CONCEPT_SAVE_UPLOADING = 'Uploading...';

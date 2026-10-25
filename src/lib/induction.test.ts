@@ -716,7 +716,7 @@ describe('brandRequestErrorMessage', () => {
       'You have sent this 5 times. Ask them to check spam, or write to us.',
     );
     expect(brandRequestErrorMessage('invalid_payload')).toContain('email');
-    expect(brandRequestErrorMessage('boom')).toBe("We couldn't send that. Try again.");
+    expect(brandRequestErrorMessage('boom')).toBe("Couldn't send that. Try again.");
   });
 });
 

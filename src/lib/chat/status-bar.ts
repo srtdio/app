@@ -10,6 +10,7 @@
 import { NOTHING_OPEN, type MarkCounts, type ChatMark, type MarkType } from '@/lib/chat/marks';
 import type { PlanBundle } from '@/lib/chat/plans';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
+import { formatDate } from '@/lib/time';
 
 /** The bar's items and the drawer's sections, in their one fixed order. */
 export type StatusKey = 'plan' | 'posts' | 'briefs' | 'commitments' | 'decisions' | 'pending';
@@ -198,7 +199,7 @@ export function anyReadFailed(input: StatusInput): boolean {
 }
 
 /**
- * What the bar paints: its items; "Nothing open between you" only when every
+ * What the bar paints: its items; "Open posts and marks show up here." only when every
  * read succeeded with zero; else a blank inert bar (something failed and
  * nothing else is open, so it never claims nothing is). Pure.
  */
@@ -432,32 +433,15 @@ export const SEGMENT_PILL: Record<PlanSegment, string> = {
   waiting: 'Waiting',
 };
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /**
- * The drawer's date column: "12 Oct". A calendar date ("YYYY-MM-DD") reads
- * as is; an instant reads on the workspace clock; '' when unparseable. Pure.
+ * The drawer's date column: "12 Oct" ("12 Oct 2025" off the current year). A
+ * calendar date ("YYYY-MM-DD") reads as is; an instant reads on `timeZone`:
+ * the workspace zone for a due date (a post's target_date), absent for a
+ * moment (the viewer's device clock); '' when unparseable. Pure.
  */
-export function drawerDay(value: string | null, timeZone: string): string {
+export function drawerDay(value: string | null, timeZone?: string | null): string {
   if (value === null || value === '') return '';
-  let day = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
-  if (day === '') {
-    const at = new Date(value);
-    if (Number.isNaN(at.getTime())) return '';
-    try {
-      day = new Intl.DateTimeFormat('en-CA', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(at);
-    } catch {
-      day = at.toISOString().slice(0, 10);
-    }
-  }
-  const [, m, d] = day.split('-');
-  const month = MONTHS[Number(m) - 1];
-  return month === undefined ? '' : `${Number(d)} ${month}`;
+  return formatDate(value, undefined, timeZone ?? undefined);
 }
 
 /**

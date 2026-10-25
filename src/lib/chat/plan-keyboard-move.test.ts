@@ -115,7 +115,7 @@ describe('copy', () => {
     expect(slotAnnouncement('Wed 14 Oct', 1)).toBe('Wed 14 Oct, position 2');
     // D2: posts name the Pipeline date; concepts do not. Both keep Undo.
     expect(dayMoveToast('Thu 15 Oct', true, false)).toEqual({
-      title: 'Moved to Thu 15 Oct. Pipeline date updated.',
+      title: 'Moved to Thu 15 Oct. Due date updated.',
       undo: true,
     });
     expect(dayMoveToast('Thu 15 Oct', false, false)).toEqual({
@@ -125,7 +125,7 @@ describe('copy', () => {
     expect(dayMoveToast(null, false, false).title).toBe('Moved to No date.');
     // F4: a reset says so and has no Undo.
     expect(dayMoveToast('Wed 14 Oct', true, true)).toEqual({
-      title: 'Moved to Wed 14 Oct. Pipeline date updated. Its ticks were reset.',
+      title: 'Moved to Wed 14 Oct. Due date updated. Its ticks were reset.',
       undo: false,
     });
     expect(dayMoveToast('Wed 14 Oct', false, true)).toEqual({

@@ -23,7 +23,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ComposeRange } from '@/lib/chat/plans';
-import { workspaceTimeZone } from '@/lib/chat/time-format';
+import { safeTimeZone } from '@/lib/time';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import {
   CREATE_PLAN_BUTTON,
@@ -58,7 +58,7 @@ export function PlanTabPage(): ReactElement {
   const desktop = useMediaQuery(LAPTOP_QUERY);
   const navigate = useNavigate();
   const { workspaceId, workspaces } = useWorkspace();
-  const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
+  const timeZone = safeTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
   const { side, ready } = useViewerSide(workspaceId);
   const onboarded = onboardingFinished(useInduction()?.resolution.kind ?? null);
   const today = civilToday(new Date(), timeZone);

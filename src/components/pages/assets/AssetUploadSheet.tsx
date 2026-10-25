@@ -122,14 +122,17 @@ export function uploadSummary(args: {
         title:
           failed === 1
             ? "Couldn't upload the file. Try again."
-            : `${failed} uploads failed. Try again.`,
+            : `Couldn't upload ${failed} files. Try again.`,
         sticky: true,
       };
     }
-    return { title: `Uploaded ${ok} of ${ok + failed}. ${failed} failed.`, sticky: true };
+    return {
+      title: `Uploaded ${ok} of ${ok + failed}. Couldn't upload ${failed}. Try again.`,
+      sticky: true,
+    };
   }
   if (ok === 0) return null;
-  if (uploaded === 0) return { title: 'Already in your assets', sticky: false };
+  if (uploaded === 0) return { title: 'Already in Assets', sticky: false };
   return { title: ok === 1 ? 'Uploaded 1 file' : `Uploaded ${ok} files`, sticky: false };
 }
 
@@ -445,7 +448,7 @@ export function AssetUploadSheet({
             setStatus(id, { state: 'done' });
             if (outcome.reused) reused += 1;
             if (onSummary === undefined) {
-              onToast?.(outcome.reused ? 'Already in your assets' : `Uploaded ${name}`);
+              onToast?.(outcome.reused ? 'Already in Assets' : `Uploaded ${name}`);
             }
           } else {
             setStatus(id, { state: 'error', message: outcome.message });
@@ -549,7 +552,7 @@ export function AssetUploadSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title="Upload assets"
+      title="Upload files"
       footer={footer}
       busy={running}
       busyLabel={uploadBusyLabel(progress.current, progress.total)}

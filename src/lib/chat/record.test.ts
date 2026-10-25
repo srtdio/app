@@ -503,8 +503,8 @@ describe('editMessageRecord', () => {
     expect(editFailureCopy('marked messages cannot be edited')).toBe(
       "Marked messages can't be edited",
     );
-    expect(editFailureCopy('deleted messages cannot be edited')).toBe("Couldn't edit, try again");
-    expect(editFailureCopy('AbortError')).toBe("Couldn't edit, try again");
+    expect(editFailureCopy('deleted messages cannot be edited')).toBe("Couldn't edit. Try again.");
+    expect(editFailureCopy('AbortError')).toBe("Couldn't edit. Try again.");
   });
 });
 
@@ -526,7 +526,7 @@ describe('D2: deleteFailureCopy', () => {
       'select between 1 and 100 messages',
       '',
     ]) {
-      expect(deleteFailureCopy(raw)).toBe("Couldn't delete, try again");
+      expect(deleteFailureCopy(raw)).toBe("Couldn't delete. Try again.");
     }
   });
 });

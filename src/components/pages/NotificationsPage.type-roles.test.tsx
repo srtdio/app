@@ -161,7 +161,7 @@ describe('Notifications type roles', () => {
   it('the page head is the screen header (lg/600)', async () => {
     await mount();
     const head = [...document.querySelectorAll('h1')].find(
-      (el) => el.textContent?.trim() === 'Notifications',
+      (el) => el.textContent?.trim() === 'Activity',
     );
     expect(head).toBeDefined();
     expectRole(head as HTMLElement, ['text-lg', 'font-semibold']);

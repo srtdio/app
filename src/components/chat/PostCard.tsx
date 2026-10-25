@@ -56,7 +56,7 @@ import {
   type SharedCardCache,
   type SharedCardReaders,
 } from '@/lib/chat/shared-cards';
-import { formatClockTime, formatShortDate, workspaceTimeZone } from '@/lib/chat/time-format';
+import { formatDateTime, formatDueDate } from '@/lib/time';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
@@ -498,8 +498,9 @@ export function SharedPostCards({
 }): ReactElement | null {
   const { workspaceId, workspaces, workspaceName } = useWorkspace();
   const { side, ready, known } = useSettledViewerSide(workspaceId);
+  // Due dates are calendar days on the workspace zone (src/lib/time.ts).
+  const workspaceZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
   const { views, loading, failed, cache } = useSharedPosts(postIds);
-  const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
   const retryInView = useRetryInView(cache, { postIds }, loading);
   if (postIds.length === 0) return null;
   if (loading || !ready) {
@@ -518,7 +519,7 @@ export function SharedPostCards({
       onRetry={(ids) => cache?.retry({ postIds: ids })}
       side={side}
       sideKnown={known}
-      timeZone={timeZone}
+      workspaceZone={workspaceZone}
       brand={workspaceName ?? null}
       onTalkAbout={
         onTalkAbout !== undefined && messageId !== undefined
@@ -533,20 +534,20 @@ export function SharedPostCards({
 /**
  * An approved card whose approver name is not loaded (none on record, or the
  * name read failed) reads "Approved · <date time>" from approved_at, never a
- * blank name. Other footers pass through. Pure.
+ * blank name. Other footers pass through. `timeZone` is for tests. Pure.
  */
 export function approvedWithoutName<F extends { state: string }>(
   footer: F,
   post: Pick<PostCardRow, 'stage' | 'approved_at'>,
   approverName: string | null,
-  timeZone: string,
+  timeZone?: string,
 ): F {
   if (post.stage !== 'approved' || approverName !== null || post.approved_at === null) {
     return footer;
   }
-  const date = formatShortDate(post.approved_at, timeZone);
-  if (date === '') return footer;
-  return { ...footer, state: `Approved · ${date} ${formatClockTime(post.approved_at, timeZone)}` };
+  const at = formatDateTime(post.approved_at, undefined, timeZone);
+  if (at === '') return footer;
+  return { ...footer, state: `Approved · ${at}` };
 }
 
 /** Everything a card needs besides its view; resolved once per message. */
@@ -554,7 +555,10 @@ export interface CardContext {
   side: ViewerSide;
   /** The side read has answered; false after its 5s cap: no footer is painted. */
   sideKnown?: boolean;
-  timeZone: string;
+  /** For tests: the zone moments render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
+  /** The workspace's zone: the target (due) date reads its calendar day on it. */
+  workspaceZone?: string | null | undefined;
   /** The workspace's brand name for "on behalf of <Brand>"; null falls back. */
   brand?: string | null;
 }
@@ -718,7 +722,8 @@ export function PostCardItem(
     approver,
     timeZone,
   );
-  const target = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
+  const target =
+    post.target_date !== null ? formatDueDate(post.target_date, props.workspaceZone) : '';
   const frame = cardFrame(post);
   // The card shows media only when it has a first photo or video AND a frame.
   const media = frame !== null ? post.firstMedia : null;

@@ -767,7 +767,7 @@ describe('ActivityCard: notifications fixes', () => {
     const time = /<span data-activity-time="" class="([^"]*)"/.exec(html)?.[1] ?? '';
     expect(time.split(' ')).toContain('tabular-nums');
     expect(time).not.toContain('font-mono');
-    expect(html).toMatch(/data-activity-time=""[^>]*>1h</);
+    expect(html).toMatch(/data-activity-time=""[^>]*>1 hour ago</);
   });
 
   it('fix 8: a posts row still shows its "Posts" scope tag', () => {

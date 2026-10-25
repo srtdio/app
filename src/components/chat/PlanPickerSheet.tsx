@@ -27,8 +27,7 @@ import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 
 export const PICKER_TITLE = 'Plans';
-export const PICKER_EMPTY = 'No upcoming plans';
-export const PICKER_EMPTY_SUB = "Plans that have ended don't show here.";
+export const PICKER_EMPTY = 'Upcoming plans show up here.';
 export const NEW_PLAN_LABEL = 'New plan';
 
 /**
@@ -113,7 +112,6 @@ export function PlanPickerSheet(props: {
               {read.data.length === 0 ? (
                 <div data-plan-picker-empty="" className="pb-4 pt-6 text-center">
                   <p className="text-base leading-5 text-fg-2">{PICKER_EMPTY}</p>
-                  <p className="mt-1 text-sm text-fg-3">{PICKER_EMPTY_SUB}</p>
                 </div>
               ) : (
                 pickerRows(read.data, inChat).map(({ bundle, chips }) => (

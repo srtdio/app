@@ -7,7 +7,7 @@ process.env.TZ = 'America/Los_Angeles';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { formatDay } from '@/lib/display-date';
+import { formatDueDate } from '@/lib/time';
 import { BriefCard, briefDueLabel } from '@/components/pages/BriefCard';
 import { briefDueDateLabel } from '@/components/pages/BriefDetailPage';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -47,15 +47,15 @@ describe('brief target dates in America/Los_Angeles', () => {
     expect(new Date('2026-10-08').getDate()).toBe(7);
   });
 
-  it('formats "2026-10-08" as 8 Oct, the year only outside now', () => {
-    expect(formatDay('2026-10-08', 'America/Los_Angeles', NOW)).toBe('8 Oct');
-    expect(formatDay('2026-10-08', 'America/Los_Angeles', new Date('2027-03-01T12:00:00Z'))).toBe(
-      '8 Oct 2026',
-    );
+  it('formats "2026-10-08" as 8 Oct in any workspace zone, the year only outside now', () => {
+    for (const zone of ['Asia/Kolkata', 'America/Los_Angeles', 'Pacific/Auckland', null]) {
+      expect(formatDueDate('2026-10-08', zone, NOW)).toBe('8 Oct');
+    }
+    expect(formatDueDate('2026-10-08', 'UTC', new Date('2027-03-01T12:00:00Z'))).toBe('8 Oct 2026');
   });
 
   it('the card reads "Due 8 Oct"', () => {
-    expect(briefDueLabel('2026-10-08', NOW)).toBe('Due 8 Oct');
+    expect(briefDueLabel('2026-10-08', 'Asia/Kolkata', NOW)).toBe('Due 8 Oct');
     const out = renderToStaticMarkup(
       <MemoryRouter>
         <BriefCard brief={brief('2026-10-08')} cache={cache} presignEnabled href="/briefs/b1" />
@@ -66,17 +66,17 @@ describe('brief target dates in America/Los_Angeles', () => {
   });
 
   it('the detail page reads "8 Oct", and "Not set" with no date', () => {
-    expect(briefDueDateLabel('2026-10-08', NOW)).toBe('8 Oct');
-    expect(briefDueDateLabel(null, NOW)).toBe('Not set');
+    expect(briefDueDateLabel('2026-10-08', 'Asia/Kolkata', NOW)).toBe('8 Oct');
+    expect(briefDueDateLabel(null, 'Asia/Kolkata', NOW)).toBe('Not set');
   });
 
   it('month and year edges never roll over', () => {
-    expect(briefDueDateLabel('2026-01-01', NOW)).toBe('1 Jan');
-    expect(briefDueDateLabel('2026-12-31', NOW)).toBe('31 Dec');
+    expect(briefDueDateLabel('2026-01-01', 'UTC', NOW)).toBe('1 Jan');
+    expect(briefDueDateLabel('2026-12-31', 'UTC', NOW)).toBe('31 Dec');
   });
 
   it('a value that is not a civil date is returned unchanged', () => {
-    expect(briefDueDateLabel('soon', NOW)).toBe('soon');
-    expect(briefDueDateLabel('2026-13-01', NOW)).toBe('2026-13-01');
+    expect(briefDueDateLabel('soon', 'UTC', NOW)).toBe('soon');
+    expect(briefDueDateLabel('2026-13-01', 'UTC', NOW)).toBe('2026-13-01');
   });
 });

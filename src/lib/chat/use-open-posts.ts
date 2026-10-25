@@ -67,7 +67,7 @@ export interface OpenPostsView {
  * Fold one round into what is shown. A good list replaces everything (a failed
  * count falls back to the rows). A failed list keeps the previous rows and
  * takes a good count; with nothing before, it is `failed` so the strip never
- * claims "Nothing open" on a read it does not have.
+ * claims "Open posts and marks show up here." on a read it does not have.
  */
 export function mergeOpenPosts(prev: OpenPostsView | null, next: OpenPostsData): OpenPostsView {
   if (next.posts !== null) {

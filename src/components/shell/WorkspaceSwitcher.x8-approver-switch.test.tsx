@@ -188,7 +188,7 @@ describe('X8 I approve posts instead', () => {
     await click(button(WORKSPACE_CREATE_COPY.approveInstead));
     await click(button('Switch'));
     expect(setStep).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("We couldn't switch that. Try again.");
+    expect(document.body.textContent).toContain("Couldn't switch. Try again.");
     expect(findButton('Continue')).toBeDefined();
   });
 

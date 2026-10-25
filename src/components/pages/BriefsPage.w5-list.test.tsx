@@ -185,7 +185,7 @@ describe('Briefs list filter and search', () => {
       data: [brief('b1', { title: 'Launch reel' }), brief('b2', { status: 'closed' })],
     });
     await mount('/briefs?status=closed&q=zzz');
-    expect(text()).toContain('No briefs with “zzz” in the title');
+    expect(text()).toContain('Try another word for "zzz".');
     // Clear clears the search only: the Closed chip stays.
     await act(async () => clearText()?.click());
     expect(location).toBe('/briefs?status=closed');
@@ -193,11 +193,11 @@ describe('Briefs list filter and search', () => {
     expect(text()).not.toContain('Launch reel');
   });
 
-  it('client with no briefs: "No open briefs yet" with New brief (same label as the header)', async () => {
+  it('client with no briefs: "Open briefs show up here." with New brief (same label as the header)', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [] });
     await mount();
-    expect(text()).toContain('No open briefs yet');
-    expect(text()).toContain('Tell the agency what you need next.');
+    expect(text()).toContain('Open briefs show up here.');
+    expect(text()).not.toContain('Tell the agency what you need next.');
     const newBriefs = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
       (b) => b.textContent?.trim() === 'New brief',
     );
@@ -212,7 +212,7 @@ describe('Briefs list filter and search', () => {
     expect(button('New brief')).toBeUndefined();
     expect(text()).toContain('Briefs from the client show up here.');
     expect(text()).not.toContain('No briefs yet');
-    expect(text()).not.toContain('No open briefs yet');
+    expect(text()).not.toContain('Open briefs show up here.');
   });
 });
 
@@ -238,32 +238,32 @@ describe('Briefs sort and loading', () => {
   });
 });
 
-// The empty state's own "Clear" text button (not the header X, whose
-// aria-label is "Clear search").
+// The empty state's own "Clear search" text button (not the header X, which
+// has only an aria-label and no text).
 const clearText = () =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (b) => b.textContent?.trim() === 'Clear',
+    (b) => b.textContent?.trim() === 'Clear search',
   );
 
 describe('Briefs zero-result headings', () => {
-  it('client, Open chip, no open briefs, no search: "No open briefs yet" and no Clear', async () => {
+  it('client, Open chip, no open briefs, no search: "Open briefs show up here." and no Clear', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { status: 'closed' })] });
     await mount();
-    expect(text()).toContain('No open briefs yet');
+    expect(text()).toContain('Open briefs show up here.');
     expect(clearText()).toBeUndefined();
   });
 
-  it('Closed chip, empty search, no closed briefs: "No closed briefs yet" and no Clear', async () => {
+  it('Closed chip, empty search, no closed briefs: "Closed briefs show up here." and no Clear', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
     await mount('/briefs?status=closed');
-    expect(text()).toContain('No closed briefs yet');
+    expect(text()).toContain('Closed briefs show up here.');
     expect(clearText()).toBeUndefined();
   });
 
   it('non-empty search, zero results: names the query with Clear', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { title: 'Launch reel' })] });
     await mount('/briefs?q=diwali');
-    expect(text()).toContain('No briefs with “diwali” in the title');
+    expect(text()).toContain('Try another word for "diwali".');
     expect(clearText()).toBeDefined();
     await act(async () => clearText()?.click());
     expect(location).toBe('/briefs');
@@ -274,13 +274,17 @@ describe('Briefs zero-result headings', () => {
       {
         path: '/briefs',
         data: [brief('b1', { status: 'closed' })],
-        heading: 'No open briefs yet',
+        heading: 'Open briefs show up here.',
       },
-      { path: '/briefs?status=closed', data: [brief('b1')], heading: 'No closed briefs yet' },
+      {
+        path: '/briefs?status=closed',
+        data: [brief('b1')],
+        heading: 'Closed briefs show up here.',
+      },
       {
         path: '/briefs?q=diwali',
         data: [brief('b1')],
-        heading: 'No briefs with “diwali” in the title',
+        heading: 'Try another word for "diwali".',
       },
     ];
     for (const item of cases) {

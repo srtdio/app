@@ -19,6 +19,7 @@ import {
 } from '@/components/chat/ChannelList';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults } from '@/components/ui/NoResults';
 import { IconPlus } from '@/components/ui/icons';
 import type { ChannelSummary } from '@/lib/chat-reads';
 
@@ -117,11 +118,11 @@ describe('channelListView', () => {
     });
     expect(view.type).toBe(EmptyState);
     const props = view.props as { title: string; action?: unknown };
-    expect(props.title).toBe('No conversations yet');
+    expect(props.title).toBe('Chats with your team show up here.');
     expect(props.action).toBeDefined();
   });
 
-  it('renders a distinct no-chats-called state, not the zero-state, when search hides all', () => {
+  it('renders NoResults, not the zero-state, when search hides all', () => {
     const view = channelListView({
       channels: [],
       hasChannels: true,
@@ -131,7 +132,9 @@ describe('channelListView', () => {
       onNewChat: () => {},
     });
     expect(view.type).not.toBe(EmptyState);
-    expect(texts(view)).toContain('No chats called "zzz"');
+    expect(view.type).toBe(NoResults);
+    expect((view.props as { query: string; filtersActive: boolean }).query).toBe(' zzz ');
+    expect((view.props as { query: string; filtersActive: boolean }).filtersActive).toBe(false);
   });
 
   it('renders one row per channel when there are matches', () => {
@@ -165,14 +168,18 @@ describe('channelListContent', () => {
   it('names the query (not the zero-state) when a search matches nothing', () => {
     const tree = content({ channels, search: 'zzz' });
     expect(findAll(tree, (el) => el.type === EmptyState)).toHaveLength(0);
-    expect(texts(tree)).toContain('No chats called "zzz"');
+    const none = findAll(tree, (el) => el.type === NoResults);
+    expect(none).toHaveLength(1);
+    expect((none[0]!.props as { query: string }).query).toBe('zzz');
   });
 
   it('still shows the zero-state with New chat when there are no channels', () => {
     const tree = content({ channels: [], search: '' });
     const empties = findAll(tree, (el) => el.type === EmptyState);
     expect(empties).toHaveLength(1);
-    expect((empties[0]!.props as { title: string }).title).toBe('No conversations yet');
+    expect((empties[0]!.props as { title: string }).title).toBe(
+      'Chats with your team show up here.',
+    );
   });
 
   it('fires onNewChat from the header New chat text button', () => {
@@ -373,7 +380,7 @@ describe('load status', () => {
     expect(findAll(tree, (el) => el.type === EmptyState)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === ChannelCard)).toHaveLength(0);
     expect(texts(tree)).not.toContain('Select');
-    expect(texts(tree)).not.toContain('No conversations yet');
+    expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
   it('skeleton tiles match the real tile boxes (wide 100 + 76px photo, square 168 + 72px disc)', () => {
@@ -473,11 +480,11 @@ describe('message search wiring (S1)', () => {
     expect(after).toEqual(before);
   });
 
-  it('the SectionHeader search box is untouched (one header, same placeholder)', () => {
+  it('the SectionHeader search box is untouched (one header, "Search chats")', () => {
     const headers = findAll(content('sh'), (el) => el.type === SectionHeader);
     expect(headers).toHaveLength(1);
     expect((headers[0]!.props as { search: { placeholder: string } }).search.placeholder).toBe(
-      'Search',
+      'Search chats',
     );
   });
 });

@@ -226,7 +226,7 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
       /data-plan-save-error=""[^>]*role="alert"|role="alert"[^>]*data-plan-save-error=""/,
     );
     // The static markup HTML-escapes the apostrophe: match the copy's tail.
-    expect(failed).toContain('t save the plan. Nothing was saved. Try again.');
+    expect(failed).toContain('t save the plan. Try again. Nothing was saved.');
     expect(failed).toMatch(
       /class="[^"]*h-11 min-h-\[44px\][^"]*rounded-lg[^"]*"[^>]*data-plan-save-retry=""/,
     );
@@ -299,7 +299,7 @@ describe('the footer (item 6)', () => {
     );
     expect(src).toContain('? SEND_AFTER_OPEN_FAILED');
     expect(SEND_AFTER_OPEN_FAILED).toBe(
-      "Plan is open for approvers, but the card didn't post. Try again.",
+      "Couldn't post the card. Try again. The plan is open for approvers.",
     );
     // Retry only reposts.
     expect(src).toMatch(/if \(sendError !== null\) \{[\s\S]*?void sendHere\(true\);/);

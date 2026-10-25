@@ -40,7 +40,6 @@ import {
   msUntilZonedMidnight,
   payloadNum,
   payloadStr,
-  relativeTime,
   resolveBodyMentions,
   segmentSelfMentions,
   shortLine,
@@ -511,20 +510,6 @@ describe('filterByState briefs', () => {
       item({ id: 'c', scope: 'briefs', snoozedUntil: '2026-06-15T00:00:00.000Z' }),
     ];
     expect(filterByState(all, 'briefs', now).map((i) => i.id)).toEqual(['b']);
-  });
-});
-
-describe('relativeTime', () => {
-  const now = Date.parse('2026-06-14T12:00:00.000Z');
-  it('buckets elapsed time', () => {
-    expect(relativeTime('2026-06-14T11:59:40.000Z', now)).toBe('just now');
-    expect(relativeTime('2026-06-14T11:30:00.000Z', now)).toBe('30m');
-    expect(relativeTime('2026-06-14T09:00:00.000Z', now)).toBe('3h');
-    expect(relativeTime('2026-06-12T12:00:00.000Z', now)).toBe('2d');
-  });
-  it('collapses future / unparseable to just now / empty', () => {
-    expect(relativeTime('2026-06-14T13:00:00.000Z', now)).toBe('just now');
-    expect(relativeTime('not-a-date', now)).toBe('');
   });
 });
 
@@ -2094,7 +2079,7 @@ describe('notifications fixes: pure helpers', () => {
   });
 
   it('fix 12: loading, refresh and snooze copy is fixed, plain and has no em-dash', () => {
-    expect(LOADING_NOTIFICATIONS).toBe('Loading notifications');
+    expect(LOADING_NOTIFICATIONS).toBe('Loading activity');
     expect(REFRESH_FAILED).toBe("Couldn't refresh. Try again.");
     expect(SNOOZE_FAILED).toBe("Couldn't snooze. Try again.");
     for (const copy of [LOADING_NOTIFICATIONS, REFRESH_FAILED, SNOOZE_FAILED]) {
@@ -2124,7 +2109,7 @@ describe('notifications fixes: pure helpers', () => {
   });
 
   it('fix 24: a refresh failure has its own toast copy, not the load error', () => {
-    expect(REFRESH_FAILED).not.toBe("Couldn't load activity. Check your connection and try again.");
+    expect(REFRESH_FAILED).not.toBe("Couldn't load activity. Try again.");
   });
 
   it('fix 25: a snooze failure is the fixed copy, never a raw error', () => {

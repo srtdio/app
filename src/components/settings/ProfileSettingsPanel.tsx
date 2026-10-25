@@ -128,7 +128,7 @@ export async function submitUsePhoto(deps: {
   if (file === null) {
     return {
       ok: false,
-      error: { code: 'unknown', message: 'Could not read the photo. Choose it again' },
+      error: { code: 'unknown', message: "Couldn't read the photo. Try again." },
     };
   }
   deps.onExported(file);
@@ -180,7 +180,7 @@ export interface PhotoView {
 
 export const PHOTO_VIEW_INITIAL: PhotoView = { previewUrl: null, removed: false, expect: null };
 
-const SAVE_FALLBACK = 'Could not save your profile. Try again';
+const SAVE_FALLBACK = "Couldn't save your profile. Try again.";
 
 /** One readable line for a server / upload error. Pure. */
 export function profileErrorMessage(message: string): string {
@@ -336,7 +336,10 @@ export function ProfileSettingsPanel(): React.ReactElement {
     return (async () => {
       const endpoint = env.VITE_AVATAR_UPLOAD_URL;
       if (endpoint === undefined) {
-        return { ok: false, error: { code: 'unknown', message: 'Photo upload is not configured' } };
+        return {
+          ok: false,
+          error: { code: 'unknown', message: "Couldn't upload the photo. Try again." },
+        };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       return uploadAvatarFile(file, {
@@ -476,7 +479,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
   if (mode === 'error' || profile === null) {
     return (
       <div className="max-w-[520px] flex flex-col gap-3">
-        <p className="text-base text-bad">Could not load your profile.</p>
+        <p className="text-base text-bad">{"Couldn't load your profile. Try again."}</p>
         <div>
           <Button onClick={refetch}>Retry</Button>
         </div>

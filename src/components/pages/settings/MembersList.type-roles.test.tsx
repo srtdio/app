@@ -119,6 +119,6 @@ describe('MembersList type roles', () => {
 
   it('an empty group line is base fg-2 copy', () => {
     mount();
-    expectRole(byText('No approvers yet'), ['text-base', 'text-fg-2']);
+    expectRole(byText('Approvers show up here.'), ['text-base', 'text-fg-2']);
   });
 });

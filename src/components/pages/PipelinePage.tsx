@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { SectionHeader } from '@/components/shell/SectionHeader';
@@ -256,7 +257,7 @@ export const MOVE_FALLBACK_MESSAGE = errorText(MOVE_ACTION, null);
 
 /**
  * Map a failed move (a proc DomainError, a bare code, or a transport throw) to
- * the shared copy: "Couldn't move the post. You're offline." with Retry, no
+ * the shared copy: "Couldn't move the post. Try again." with Retry, no
  * access, deleted, or the retry line. Raw server text never reaches the user.
  */
 export function moveErrorCopy(error: unknown): ErrorCopy {
@@ -452,12 +453,7 @@ export function emptyPipeline(canCreate: boolean): ReactElement {
     <div data-pipeline-empty="" className="px-4 md:px-6">
       <EmptyState
         icon={<IconPipeline size={ICON_SIZE.tray} />}
-        title="No posts yet"
-        description={
-          canCreate
-            ? 'Create the first post to start the pipeline.'
-            : 'Posts show up here once creators make them.'
-        }
+        title="Posts show up here."
         {...(canCreate
           ? {
               action: (
@@ -500,7 +496,7 @@ export interface PipelineSurfaceProps {
   onBlockedMove: (reason: string) => void;
   /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
   shownKey: string;
-  /** The workspace zone each card reads its target day in. */
+  /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
   timeZone?: string;
   /** The viewer's role and approvers: each card's status line and its ⋯. */
   viewer?: CardViewer;
@@ -563,21 +559,18 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
 
 /**
  * The filtered empty state: search or a date window hides every post on this
- * view. "Clear filters" resets both (the stage chip stays). The unfiltered
- * empty states (feed and board) are untouched.
+ * view. The shared NoResults names what narrows it; its button resets both
+ * (the stage chip stays). The unfiltered empty states (feed and board) are
+ * untouched.
  */
-export function filteredEmpty(onClear: () => void): ReactElement {
+export function filteredEmpty(
+  search: string,
+  dateActive: boolean,
+  onClear: () => void,
+): ReactElement {
   return (
     <div data-filtered-empty="" className="px-4 md:px-6">
-      <EmptyState
-        icon={<IconPipeline size={ICON_SIZE.tray} />}
-        title="Nothing fits these filters"
-        action={
-          <Button variant="default" onClick={onClear}>
-            Clear filters
-          </Button>
-        }
-      />
+      <NoResults query={search} filtersActive={dateActive} onClear={onClear} />
     </div>
   );
 }
@@ -986,7 +979,7 @@ export function PipelinePage() {
   // Per-tab counts over the filtered list: each stage plus the 'all' total.
   const counts = useMemo(() => stageCounts(grouped, STAGES), [grouped]);
 
-  // The empty view under active search/date filters gets "Nothing fits these filters".
+  // The empty view under active search/date filters gets NoResults ("Try fewer filters.").
   const visibleCount = (stage === ALL_KEY ? counts.all : counts[stage]) ?? 0;
   const inStage = (list: PipelinePost[]): PipelinePost[] =>
     stage === ALL_KEY ? list : list.filter((post) => post.stage === stage);
@@ -1140,7 +1133,7 @@ export function PipelinePage() {
           : pipelineEmpty
             ? emptyPipeline(canCreate)
             : showFilteredEmpty
-              ? filteredEmpty(clearFilters)
+              ? filteredEmpty(query.search, dateFilterActive(query), clearFilters)
               : pipelineSurface({
                   stage,
                   isDesktop,

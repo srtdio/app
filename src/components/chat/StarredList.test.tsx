@@ -27,7 +27,6 @@ import {
   createStarStore,
   EMPTY_STARS,
   StarStoreContext,
-  STARRED_EMPTY_LINE,
   STARRED_EMPTY_TITLE,
   type StarredRow,
 } from '@/lib/chat/stars';
@@ -203,12 +202,10 @@ describe('StarredRowView', () => {
 });
 
 describe('starredListView', () => {
-  it('empty state: the title and one line, no illustration', () => {
+  it('empty state: one positive line, no illustration', () => {
     const out = html(starredListView(viewProps({ feed: ready([]) })));
     expect(out).toContain(STARRED_EMPTY_TITLE);
-    expect(out).toContain(STARRED_EMPTY_LINE);
-    expect(STARRED_EMPTY_TITLE).toBe('No starred messages');
-    expect(STARRED_EMPTY_LINE).toBe('Long-press a message and tap Star.');
+    expect(STARRED_EMPTY_TITLE).toBe('Starred messages show up here.');
     expect(out).not.toContain('<svg');
     expect(html(StarredEmpty())).toContain('data-starred-empty');
   });

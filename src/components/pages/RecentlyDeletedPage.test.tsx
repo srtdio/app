@@ -91,7 +91,7 @@ describe('RecentlyDeletedView', () => {
         onEmpty={() => {}}
       />,
     );
-    expect(out).toMatch(/role="alert"[^>]*>Could not load assets\.<\/div>/);
+    expect(out).toMatch(/role="alert"[^>]*>Couldn&#x27;t load deleted files\. Try again\.<\/div>/);
     expect(out).toContain('Retry');
     expect(out).toContain('h-11');
   });

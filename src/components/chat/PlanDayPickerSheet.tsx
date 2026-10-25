@@ -158,7 +158,7 @@ export function dayPickerSubline(
   range: ComposeRange,
 ): string {
   if (item.kind === 'concept') return 'Concept';
-  if (item.orig === null) return 'No Pipeline date yet';
+  if (item.orig === null) return 'No due date yet';
   const inside = item.orig >= range.startsOn && item.orig <= range.endsOn;
   return `In Pipeline: ${formatCivilDayHeader(item.orig)}${inside ? '' : ' (outside this plan)'}`;
 }

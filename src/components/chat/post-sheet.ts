@@ -7,7 +7,7 @@
 import type { DomainError, Result } from '@srtdio/rpc';
 import type { PostCardRow } from '../../../packages/posts/src/reads';
 import type { StageTransitionInput } from '../../../packages/posts/src/stage-machine';
-import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
+import { formatDate, formatDateTime, formatDueDate } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { errorText } from '@/lib/error-copy';
@@ -53,7 +53,8 @@ export const CLIENT_REVIEW_HINT = 'One post at a time. Comments keep it in revie
 export function sheetActions(
   side: ViewerSide,
   post: Pick<PostCardRow, 'stage' | 'stage_entered_at'>,
-  timeZone: string,
+  /** For tests; the app passes none (the viewer's device zone). */
+  timeZone?: string,
 ): SheetActionSet {
   if (side === 'client') {
     if (post.stage === 'review') {
@@ -72,7 +73,7 @@ export function sheetActions(
     if (post.stage === 'draft') {
       return { actions: ['send_review', 'open_pipeline'], hint: null, approvedPill: false };
     }
-    const since = formatShortDate(post.stage_entered_at, timeZone);
+    const since = formatDate(post.stage_entered_at, undefined, timeZone);
     const hint =
       post.stage === 'review'
         ? since === ''
@@ -272,17 +273,13 @@ export interface DetailRow {
   value: string;
 }
 
-/** "2 Oct 2:05 pm" (device hour cycle, workspace zone), or '' for an unparseable instant. */
-function dateTime(iso: string, timeZone: string): string {
-  const date = formatShortDate(iso, timeZone);
-  return date === '' ? '' : `${date} ${formatClockTime(iso, timeZone)}`;
-}
-
 /**
  * The rows after Stage: target date, format (with "· N slides" past one item),
- * and the approval. With an approver on record the value is "Name · 2 Oct 2:05 pm"
+ * and the approval. With an approver on record the value is "Name · 2 Oct, 2:05 PM"
  * ("Name on behalf of client · ..." for an agency-side approver); an approved
- * post with no approver reads the date it entered approved.
+ * post with no approver reads the date it entered approved. The target date is
+ * a due date: its calendar day on the workspace zone; the approval reads the
+ * viewer's device zone.
  */
 export function detailRows(
   post: Pick<
@@ -296,12 +293,15 @@ export function detailRows(
     | 'stage_entered_at'
   >,
   approverName: string | null,
-  timeZone: string,
+  /** For tests; the app passes undefined (the viewer's device zone). */
+  timeZone: string | undefined,
+  /** The workspace's zone, the target (due) day reads on it. */
+  workspaceZone: string | null | undefined,
   approverRole: string | null = null,
   brand: string | null = null,
 ): DetailRow[] {
   const rows: DetailRow[] = [];
-  const target = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
+  const target = post.target_date !== null ? formatDueDate(post.target_date, workspaceZone) : '';
   if (target !== '') rows.push({ key: 'target', label: 'Target date', value: target });
   const format = formatLabel(post.format);
   rows.push({
@@ -310,13 +310,14 @@ export function detailRows(
     value: post.mediaCount > 1 ? `${format} · ${post.mediaCount} slides` : format,
   });
   if (post.approved_by !== null) {
-    const at = post.approved_at !== null ? dateTime(post.approved_at, timeZone) : '';
+    const at =
+      post.approved_at !== null ? formatDateTime(post.approved_at, undefined, timeZone) : '';
     const who =
       approverName !== null ? `${approverName}${onBehalfSuffix(approverRole, brand)}` : '';
     const value = [who, at].filter((part) => part !== '').join(' · ');
     if (value !== '') rows.push({ key: 'approved', label: 'Approved', value });
   } else if (post.stage === 'approved') {
-    const on = formatShortDate(post.stage_entered_at, timeZone);
+    const on = formatDate(post.stage_entered_at, undefined, timeZone);
     if (on !== '') rows.push({ key: 'approved', label: 'Approved', value: on });
   }
   return rows;

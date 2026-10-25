@@ -666,7 +666,7 @@ describe('37. approved posts are locked', () => {
       "Couldn't move the post. Try again.",
     );
     expect(postActionErrorCopy(new Error('Failed to fetch'))).toBe(
-      "Couldn't move the post. You're offline.",
+      "Couldn't move the post. Try again.",
     );
   });
 

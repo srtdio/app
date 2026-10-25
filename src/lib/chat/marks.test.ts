@@ -164,7 +164,7 @@ describe('open posts wording', () => {
     expect(openPostsPart(1, 'client')).toBe('1 post waiting on you');
     expect(openPostsPart(2, 'agency')).toBe('2 posts waiting on approvers');
     expect(openPostsPart(1, 'unknown')).toBe('1 post in review');
-    expect(NOTHING_OPEN).toBe('Nothing open between you');
+    expect(NOTHING_OPEN).toBe('Open posts and marks show up here.');
   });
 
   it('sheet headings follow the side', () => {

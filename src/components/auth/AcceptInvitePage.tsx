@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase';
 
 // Friendly, code-free copy: the screen never parses server error codes.
 export const ACCEPT_ERROR_MESSAGE =
-  "This invitation couldn't be accepted. It may be invalid or already used.";
+  "Couldn't accept this invitation. It may be invalid or already used.";
 
 /**
  * Where an accepted invite lands. Creators and approvers both go to /pipeline,
@@ -286,7 +286,7 @@ export function AcceptInvitePage() {
   // No id in the link: explain and bounce to sign in. Never call the function.
   if (inviteId === '') {
     return (
-      <AuthShell title="Invite link" subtitle="We couldn't read this invitation." footer={null}>
+      <AuthShell title="Invite link" subtitle="Couldn't read this invitation." footer={null}>
         <div className="flex flex-col gap-4">
           <p className="text-base text-bad">This invite link is invalid.</p>
           <Link to="/signin" className={buttonClass('primary', 'default', 'w-full')}>

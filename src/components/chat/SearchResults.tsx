@@ -2,9 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import type { ChannelSummary } from '@/lib/chat-reads';
+import { chatDisplayName } from '@/lib/chat/chat-name';
 import type { PreviewNameOf } from '@/lib/chat/chat-store';
 import {
   createSearchRunner,
@@ -18,7 +20,6 @@ import {
   searchReady,
   searchSenderPrefix,
   snippetText,
-  SEARCH_EMPTY_COPY,
   SEARCH_FAILED_COPY,
   type SearchHit,
   type SearchKind,
@@ -107,7 +108,7 @@ function resultAvatar(channel: ChannelSummary): ReactElement {
   return (
     <span className={cn('flex shrink-0', channel.channelType === 'group' && '[&>*]:!rounded-xl')}>
       <Avatar
-        name={channel.title}
+        name={chatDisplayName(channel)}
         {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
         size="row"
         shape={channel.channelType === 'group' ? 'rounded' : 'circle'}
@@ -164,10 +165,13 @@ export interface SearchResultsProps {
   /** Names already loaded (group sender first names, mentions). */
   nameOf: PreviewNameOf;
   nowMs: number;
-  timeZone: string;
+  /** For tests: the zone hit dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   onOpenChat: (channel: ChannelSummary) => void;
   onOpenHit: (channel: ChannelSummary, hit: SearchHit, query: string) => void;
   onRetry: () => void;
+  /** Clears the search box and the chip (NoResults' button); absent shows the line alone. */
+  onClear?: () => void;
   /** The end-of-list marker the next-page observer watches. */
   sentinelRef?: RefObject<HTMLLIElement>;
 }
@@ -219,14 +223,14 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
               <li key={channel.channelId} className="min-w-0">
                 <PressableRow
                   type="button"
-                  aria-label={`Open ${channel.title}`}
+                  aria-label={`Open ${chatDisplayName(channel)}`}
                   onClick={() => props.onOpenChat(channel)}
                   onContextMenu={noCallout}
                   className={RESULT_ROW}
                 >
                   {resultAvatar(channel)}
                   <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
-                    {highlightName(channel.title, query)}
+                    {highlightName(chatDisplayName(channel), query)}
                   </span>
                 </PressableRow>
               </li>
@@ -251,9 +255,15 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         ) : failed ? (
           retryRow
         ) : rows.length === 0 ? (
-          <li data-search-empty="" className="px-2 py-6 text-center text-base text-fg-2">
-            {SEARCH_EMPTY_COPY}
-          </li>
+          props.onClear !== undefined ? (
+            <li data-search-empty="">
+              <NoResults query={query} filtersActive={kind !== null} onClear={props.onClear} />
+            </li>
+          ) : (
+            <li data-search-empty="" className="px-2 py-6 text-center text-base text-fg-2">
+              {noResultsCopy(query, kind !== null).title}
+            </li>
+          )
         ) : (
           rows.map(({ hit, channel }) => {
             // Notes are all mine: no "You:" before the line.
@@ -271,7 +281,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                 <PressableRow
                   type="button"
                   data-search-hit={hit.id}
-                  aria-label={`Open message in ${channel.title}`}
+                  aria-label={`Open message in ${chatDisplayName(channel)}`}
                   onClick={() => props.onOpenHit(channel, hit, query)}
                   onContextMenu={noCallout}
                   className={RESULT_ROW}
@@ -280,7 +290,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex min-w-0 items-baseline gap-2">
                       <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
-                        {channel.title}
+                        {chatDisplayName(channel)}
                       </span>
                       <span
                         data-search-date=""

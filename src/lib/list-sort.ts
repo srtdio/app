@@ -5,6 +5,7 @@
 // so deriving here is correct and never triggers a refetch or N+1.
 
 import type { SortOption } from '@/components/ui/SortMenu';
+import { civilDay, isValidTimeZone } from '@/lib/time';
 
 /** The date-keyed sort orders, in menu order. Used by Briefs. */
 export type DateSort = 'newest' | 'oldest' | 'target';
@@ -116,12 +117,7 @@ export interface WindowBounds {
 
 /** Probe a zone once; a blank or non-IANA value degrades to UTC, never throws. */
 function safeZone(timeZone: string): string {
-  try {
-    new Intl.DateTimeFormat('en-CA', { timeZone });
-    return timeZone;
-  } catch {
-    return 'UTC';
-  }
+  return isValidTimeZone(timeZone) ? timeZone : 'UTC';
 }
 
 /**
@@ -130,12 +126,7 @@ function safeZone(timeZone: string): string {
  * exact same civil-date reading this filter uses; behaviour is unchanged.
  */
 export function civilDate(instant: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(instant);
+  return civilDay(instant, timeZone);
 }
 
 /** Parse 'YYYY-MM-DD' into [year, month1to12, day]. */

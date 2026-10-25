@@ -135,7 +135,7 @@ describe('Briefs list type roles', () => {
 
   it('the due line is sm fg-3 meta', async () => {
     await mount();
-    const due = byText(briefDueLabel(TARGET_DATE));
+    const due = byText(briefDueLabel(TARGET_DATE, 'UTC'));
     const meta = due.parentElement;
     expect(meta).not.toBeNull();
     expectRole(meta as HTMLElement, ['text-sm', 'text-fg-3']);

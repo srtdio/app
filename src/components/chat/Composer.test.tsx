@@ -541,11 +541,13 @@ describe('F14: composer toasts never show raw error text', () => {
     expect(attachRejectCopy("This file type isn't supported")).toBe(
       "This file type isn't supported",
     );
-    expect(attachRejectCopy('TypeError: x is undefined')).toBe("Couldn't add that file, try again");
+    expect(attachRejectCopy('TypeError: x is undefined')).toBe(
+      "Couldn't add that file. Try again.",
+    );
   });
 
   it('an edit failure maps through editFailureCopy (idempotent on its own copy)', () => {
-    expect(editFailureCopy('PGRST: connection reset')).toBe("Couldn't edit, try again");
+    expect(editFailureCopy('PGRST: connection reset')).toBe("Couldn't edit. Try again.");
     expect(editFailureCopy("Marked messages can't be edited")).toBe(
       "Marked messages can't be edited",
     );
@@ -555,7 +557,7 @@ describe('F14: composer toasts never show raw error text', () => {
   });
 
   it('a voice upload failure reads the send copy', () => {
-    expect(SEND_FAILED_COPY).toBe("Couldn't send, try again");
+    expect(SEND_FAILED_COPY).toBe("Couldn't send. Try again.");
   });
 });
 

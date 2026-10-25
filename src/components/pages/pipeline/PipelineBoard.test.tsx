@@ -166,9 +166,9 @@ describe('PipelineFeed', () => {
     expect(markup).toContain(emptyStageMessage(first));
   });
 
-  it('an empty All tab shows the "No posts yet" EmptyState', () => {
+  it('an empty All tab shows the "Posts show up here." EmptyState', () => {
     const markup = renderFeed({ posts: [], activeStage: 'all' });
-    expect(markup).toContain('No posts yet');
+    expect(markup).toContain('Posts show up here.');
   });
 });
 

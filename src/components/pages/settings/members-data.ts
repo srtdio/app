@@ -6,8 +6,7 @@
 import type { Database } from '@srtdio/schemas';
 import type { DomainErrorCode } from '@srtdio/rpc';
 import type { ChatProfile } from '@/lib/chat-reads';
-import { browserTimeZone } from '@/lib/chat/time-format';
-import { formatDay } from '@/lib/display-date';
+import { formatDate } from '@/lib/time';
 
 export type WorkspaceMemberRow = Database['public']['Tables']['workspace_members']['Row'];
 
@@ -134,19 +133,19 @@ export function canInviteMembers(
 export function memberRemoveErrorMessage(code: DomainErrorCode): string {
   switch (code) {
     case 'forbidden_role':
-      return 'You do not have permission to remove members. Ask an owner or admin.';
+      return "Couldn't remove the member. You don't have access to do this.";
     case 'workspace_member_only':
-      return 'That person is no longer a member of this workspace.';
+      return "Couldn't remove the member. Someone else changed it. Refresh to see the latest.";
     default:
-      return "Couldn't complete that. Refresh the list and try again.";
+      return "Couldn't remove the member. Try again.";
   }
 }
 
 /** Format accepted_at for the "joined" column with the app day format ("23 Oct",
- *  the year only outside now's year; browser zone); null when never accepted. */
+ *  the year only outside now's year; the viewer's clock); null when never accepted. */
 export function formatJoined(acceptedAt: string | null, now: Date = new Date()): string | null {
   if (acceptedAt === null) return null;
-  const day = formatDay(acceptedAt, browserTimeZone(), now);
+  const day = formatDate(acceptedAt, now);
   return day === '' ? null : day;
 }
 

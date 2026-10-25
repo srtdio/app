@@ -84,7 +84,7 @@ describe('performSignUp', () => {
       timezone: 'UTC',
       policyConsent: true,
     });
-    expect(result).toEqual({ status: 'error', message: 'Something went wrong. Try again.' });
+    expect(result).toEqual({ status: 'error', message: "Couldn't send the link. Try again." });
   });
 
   it('words the rate limit as Too many tries', () => {
@@ -270,6 +270,6 @@ describe('testSignUpMessage', () => {
     expect(testSignUpMessage('rate_limited')).toBe(
       'Too many test accounts this hour. Try again later.',
     );
-    expect(testSignUpMessage('boom')).toBe("We couldn't start that. Try again.");
+    expect(testSignUpMessage('boom')).toBe("Couldn't start that. Try again.");
   });
 });

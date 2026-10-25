@@ -1,9 +1,9 @@
 // Day pills between thread messages. Pure render-time grouping over the loaded
 // message array (no data change): a pill goes before the first message and
-// before every message whose calendar day, on the workspace clock, differs from
+// before every message whose calendar day, on the viewer's clock, differs from
 // the one above it. Labels are computed against a supplied now, so no timer.
 
-import { civilDay } from '@/lib/chat/time-format';
+import { civilDay } from '@/lib/time';
 import type { ThreadMessage } from '@/lib/chat/thread';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -15,8 +15,8 @@ function previousDay(day: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** "Today", "Yesterday", else "D MMM" for a civil day key. */
-export function dayPillLabel(day: string, nowMs: number, timeZone: string): string {
+/** "Today", "Yesterday", else "D MMM" for a civil day key. `timeZone` is for tests. */
+export function dayPillLabel(day: string, nowMs: number, timeZone?: string): string {
   const today = civilDay(nowMs, timeZone);
   if (day === today) return 'Today';
   if (day === previousDay(today)) return 'Yesterday';
@@ -35,7 +35,7 @@ export type ThreadItem =
 export function withDaySeparators(
   messages: readonly ThreadMessage[],
   nowMs: number,
-  timeZone: string,
+  timeZone?: string,
 ): ThreadItem[] {
   const items: ThreadItem[] = [];
   let current: string | null = null;

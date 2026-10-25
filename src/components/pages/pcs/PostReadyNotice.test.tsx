@@ -70,12 +70,14 @@ describe('notify copy and gating', () => {
     expect(notifyErrorMessage('checkpoints_open')).toBe(
       'Some checkpoints are still open. Resolve them all first.',
     );
-    expect(notifyErrorMessage('forbidden_role')).toBe('Only creators can send this.');
-    expect(notifyErrorMessage('invalid_stage')).toBe("This post isn't in review anymore.");
-    expect(notifyErrorMessage('boom')).toBe("Couldn't notify the approvers. Try again.");
-    expect(notifyErrorMessage('Failed to fetch')).toBe(
-      "Couldn't notify the approvers. You're offline.",
+    expect(notifyErrorMessage('forbidden_role')).toBe(
+      "Couldn't notify the approvers. You don't have access to do this.",
     );
+    expect(notifyErrorMessage('invalid_stage')).toBe(
+      "Couldn't notify the approvers. Someone else changed it. Refresh to see the latest.",
+    );
+    expect(notifyErrorMessage('boom')).toBe("Couldn't notify the approvers. Try again.");
+    expect(notifyErrorMessage('Failed to fetch')).toBe("Couldn't notify the approvers. Try again.");
   });
 
   it('states the open count as the disabled reason, pluralised, and null when clear', () => {

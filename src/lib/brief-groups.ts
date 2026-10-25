@@ -7,7 +7,7 @@
 // reuses the shared helpers (src/lib/list-sort.ts, src/lib/plan-week.ts); nothing
 // here does zone maths of its own.
 
-import { formatDay } from '@/lib/display-date';
+import { formatDate, isValidTimeZone } from '@/lib/time';
 import { addCivilDays, civilDate } from '@/lib/list-sort';
 import { weekBounds } from '@/lib/plan-week';
 
@@ -45,12 +45,7 @@ const MONTH_NAMES = [
 
 /** Probe a zone once; a blank or non-IANA value degrades to UTC, never throws. */
 function safeZone(timeZone: string): string {
-  try {
-    new Intl.DateTimeFormat('en-CA', { timeZone });
-    return timeZone;
-  } catch {
-    return 'UTC';
-  }
+  return isValidTimeZone(timeZone) ? timeZone : 'UTC';
 }
 
 /**
@@ -160,7 +155,8 @@ export function groupBriefsByDay<T extends { created_at: string }>(
     }
     const group: BriefGroup<T> = {
       key,
-      label: formatDay(item.created_at, zone, now) || item.created_at,
+      // The workspace zone, so the label always names the day the key groups by.
+      label: formatDate(item.created_at, now, zone) || item.created_at,
       items: [item],
     };
     byKey.set(key, group);

@@ -56,7 +56,7 @@ export interface UseChatMarks {
   loaded: boolean;
   /**
    * The open channel's marks have never been read (the read failed or timed
-   * out): the strip stays hidden, never "Nothing open". The next catch-up
+   * out): the strip stays hidden, never "Open posts and marks show up here.". The next catch-up
    * (tab visible, online, connected) re-reads them.
    */
   failed: boolean;
@@ -74,7 +74,7 @@ export interface UseChatMarks {
 
 /**
  * The open channel's marks read settled without ever succeeding: the strip is
- * hidden (never "Nothing open") until a re-read lands. Pure.
+ * hidden (never "Open posts and marks show up here.") until a re-read lands. Pure.
  */
 export function marksReadFailed(
   loaded: boolean,

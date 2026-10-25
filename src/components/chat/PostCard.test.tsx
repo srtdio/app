@@ -95,7 +95,7 @@ function cardRow(id: string, over: Partial<PostCardRow> = {}): PostCardRow {
   };
 }
 
-const CONTEXT: CardContext = { side: 'agency', timeZone: 'UTC' };
+const CONTEXT: CardContext = { side: 'agency', timeZone: 'UTC', workspaceZone: 'UTC' };
 
 /** A KEY-N code anywhere in the visible text (tags stripped). */
 const CODE = /\b[A-Z]{2,}-\d+\b/;
@@ -207,10 +207,10 @@ describe('SharedPostCardList', () => {
         new Map([['u1', 'Asha Rao']]),
       );
     deviceLocale('en-IN');
-    expect(named()).toContain('Approved by Asha · 21 Sep 2:05 pm');
+    expect(named()).toContain('Approved by Asha · 21 Sep, 2:05 PM');
     vi.restoreAllMocks();
     deviceLocale('en-GB');
-    expect(named()).toContain('Approved by Asha · 21 Sep 14:05');
+    expect(named()).toContain('Approved by Asha · 21 Sep, 2:05 PM');
     const fallback = render(['p1'], [cardRow('p1', { stage: 'approved' })]);
     expect(fallback).toContain('Approved · 20 Sep');
   });
@@ -218,6 +218,17 @@ describe('SharedPostCardList', () => {
   it('shows the target date when set', () => {
     const html = render(['p1'], [cardRow('p1', { target_date: '2026-10-02T09:00:00Z' })]);
     expect(html).toMatch(/data-card-target="">2 Oct</);
+  });
+
+  it('the target date reads on the workspace zone, not the device zone', () => {
+    // 20:00Z on 1 Oct is already 2 Oct in Kolkata.
+    const post = cardRow('p1', { target_date: '2026-10-01T20:00:00Z' });
+    expect(render(['p1'], [post], { workspaceZone: 'Asia/Kolkata' })).toMatch(
+      /data-card-target="">2 Oct</,
+    );
+    expect(render(['p1'], [post], { timeZone: 'Asia/Kolkata', workspaceZone: 'UTC' })).toMatch(
+      /data-card-target="">1 Oct</,
+    );
   });
 
   it('preserves postIds order and keeps not-visible cards in place', () => {

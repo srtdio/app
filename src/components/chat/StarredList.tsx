@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { SelectCheck } from '@/components/ui/SelectCheck';
+import { NoResults } from '@/components/ui/NoResults';
 import { ICON_SIZE, IconChevronLeft, IconChevronRight, IconStar } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { BUBBLE_SHAPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -27,8 +28,8 @@ import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
 import { knownMentionName, resolveMentionText, withFormer } from '@/lib/chat/mentions';
-import { searchDateLabel } from '@/lib/chat/search';
-import { safeTimeZone } from '@/lib/chat/time-format';
+import { formatChatTime } from '@/lib/time';
+import { chatDisplayName } from '@/lib/chat/chat-name';
 import type { Result } from '@srtdio/rpc';
 import {
   listRowStarred,
@@ -40,7 +41,6 @@ import {
   useStarSnapshot,
   useStarStore,
   STAR_FAILED_TOAST,
-  STARRED_EMPTY_LINE,
   STARRED_EMPTY_TITLE,
   STARRED_TITLE,
   type StarredCursor,
@@ -347,12 +347,11 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
   );
 }
 
-/** The empty state: a title and one line, no illustration. Hook-free. */
+/** The empty state: one positive line, no illustration. Hook-free. */
 export function StarredEmpty(): ReactElement {
   return (
     <div data-starred-empty="" className="flex flex-col items-center gap-1 px-4 py-10 text-center">
-      <p className="text-lg font-semibold text-fg">{STARRED_EMPTY_TITLE}</p>
-      <p className="text-base text-fg-2">{STARRED_EMPTY_LINE}</p>
+      <p className="text-base text-fg-2">{STARRED_EMPTY_TITLE}</p>
     </div>
   );
 }
@@ -365,6 +364,8 @@ export interface StarredListProps {
   channelId: string | null;
   /** The search box text; 2+ characters narrow the list. */
   query?: string;
+  /** Clears the search box (the no-results state's Clear search); absent keeps the empty state. */
+  onClearQuery?: () => void;
   /** Show "› Chat" after the sender (the all-chats list). */
   showChat: boolean;
   /** Chat names and kinds (already loaded). */
@@ -372,7 +373,8 @@ export interface StarredListProps {
   /** Names and photos already loaded (the open thread's). */
   profiles?: Map<string, ChatProfile>;
   currentUserId: string;
-  timeZone: string;
+  /** For tests: the zone row dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   onOpen: (row: StarredRow) => void;
   /** Edit mode (controlled); absent never edits. */
   editing?: boolean;
@@ -467,7 +469,6 @@ export function StarredList(props: StarredListProps): ReactElement {
   };
 
   const nowMs = props.nowMs ?? Date.now();
-  const zone = safeTimeZone(props.timeZone);
   return starredListView({
     listId: props.channelId ?? 'all',
     available: store !== null || props.fetchPage !== undefined,
@@ -479,7 +480,7 @@ export function StarredList(props: StarredListProps): ReactElement {
         senderUserId: row.senderUserId,
         currentUserId,
         nameOf,
-        chatTitle: channel?.title ?? null,
+        chatTitle: channel !== undefined ? chatDisplayName(channel) : null,
         showChat: props.showChat,
         isDm: channel?.channelType === 'dm',
       });
@@ -493,7 +494,7 @@ export function StarredList(props: StarredListProps): ReactElement {
               null)
             : null,
         mine: row.senderUserId !== null && row.senderUserId === currentUserId,
-        date: searchDateLabel(row.createdAt, nowMs, zone),
+        date: formatChatTime(row.createdAt, new Date(nowMs), props.timeZone),
         text: row.body.trim() !== '' ? resolveMentionText(row.body, nameOf) : row.mediaLine,
         // The all-chats list (chat home's Starred chip) shows every line.
         fullText: props.channelId === null,
@@ -517,6 +518,9 @@ export function StarredList(props: StarredListProps): ReactElement {
     onUnstar: () => void unstarSelected(),
     onRetry: retry,
     sentinelRef,
+    ...(props.onClearQuery !== undefined && starredQuery(props.query ?? '') !== null
+      ? { noResults: { query: props.query ?? '', onClear: props.onClearQuery } }
+      : {}),
   });
 }
 
@@ -551,6 +555,8 @@ export interface StarredListViewProps {
   onUnstar: () => void;
   onRetry: () => void;
   sentinelRef?: Ref<HTMLLIElement>;
+  /** A search is narrowing the list: zero rows show NoResults, not the empty state. */
+  noResults?: { query: string; onClear: () => void };
 }
 
 /** The list's tree for a given state. Hook-free so tests walk every state. */
@@ -593,7 +599,16 @@ export function starredListView(props: StarredListViewProps): ReactElement {
   } else if (feed.status === 'error') {
     body = <ul className="flex flex-col">{retryRow}</ul>;
   } else if (visible.length === 0 && feed.next === null) {
-    body = <StarredEmpty />;
+    body =
+      props.noResults !== undefined ? (
+        <NoResults
+          query={props.noResults.query}
+          filtersActive={false}
+          onClear={props.noResults.onClear}
+        />
+      ) : (
+        <StarredEmpty />
+      );
   } else {
     body = (
       <ul data-starred-rows="" className="flex flex-col gap-2.5">
@@ -683,7 +698,8 @@ export function StarredSheet(props: {
   channelsById: ReadonlyMap<string, ChannelSummary>;
   profiles?: Map<string, ChatProfile>;
   currentUserId: string;
-  timeZone: string;
+  /** For tests: the zone row dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   onJump: (messageId: string) => void;
   fetchPage?: StarredPageFetch;
 }): ReactElement | null {

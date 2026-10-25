@@ -400,7 +400,7 @@ describe('week list layout (L1-L4)', () => {
     expect(row).toMatch(/data-plan-line="plan"[\s\S]*?>PLAN<[\s\S]*?data-plan-control="pill"/);
     expect(row).toMatch(/data-plan-post-status="review"[\s\S]*?>Review</);
     expect(html).toMatch(
-      /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-md text-fg-3">Nothing planned/,
+      /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-md text-fg-3">Planned posts show up here\./,
     );
     // Day block: 16px all round, a 1px line between days, rows 16px apart.
     expect(html).toContain('flex flex-col gap-4 border-t border-border px-4 py-4');

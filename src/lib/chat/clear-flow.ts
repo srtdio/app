@@ -17,7 +17,7 @@ export function deleteChatsTitle(count: number): string {
 
 /** Toast when a chat could not be hidden (the list's action reads "Hide"). */
 export function deleteChatFailedMessage(title: string): string {
-  return `Couldn't hide ${title}.`;
+  return `Couldn't hide ${title}. Try again.`;
 }
 
 export type ClearRunResult<T> = { ok: true } | { ok: false; failed: T; message: string };

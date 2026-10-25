@@ -141,7 +141,7 @@ describe('uploadChatAttachment', () => {
 
     expect(outcome).toEqual({
       ok: false,
-      message: 'Upload failed. Try again',
+      message: "Couldn't upload. Try again.",
     });
   });
 
@@ -159,7 +159,7 @@ describe('uploadChatAttachment', () => {
 
     expect(outcome).toEqual({
       ok: false,
-      message: 'Upload failed. Try again',
+      message: "Couldn't upload. Try again.",
     });
   });
 });

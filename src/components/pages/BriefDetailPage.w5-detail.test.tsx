@@ -735,7 +735,7 @@ describe('Brief detail polish', () => {
 
   it('briefFormatLabel proper-cases the requested format', () => {
     expect(briefFormatLabel('carousel')).toBe('Carousel');
-    expect(briefFormatLabel('single_image')).toBe('Single Image');
+    expect(briefFormatLabel('single_image')).toBe('Single image');
   });
 
   it('the top bar reads the status and due day with a 7px dot at 15px semibold', async () => {

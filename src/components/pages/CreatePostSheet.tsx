@@ -81,10 +81,10 @@ import { newMessageId } from '@/lib/chat/message-id';
 import { sharePostToChannel } from '@/lib/chat/share-post';
 import { createInFlightGuard } from '@/lib/chat/thread-actions';
 import { cn } from '@/lib/cn';
+import { postFormatLabel } from '@/lib/post-format';
 import {
   FORMATS_BY_PLATFORM,
   PostCreatePayloadSchema,
-  formatLabel,
   type GalleryItem,
   type PostPlatform,
 } from '@srtdio/posts';
@@ -197,7 +197,7 @@ export function presetCanSubmit(input: {
 export function formatOptionsFor(platform: PostPlatform): SelectOption[] {
   return FORMATS_BY_PLATFORM[platform].map((value) => ({
     value,
-    label: formatLabel(platform, value),
+    label: postFormatLabel(value, platform),
   }));
 }
 
@@ -1684,7 +1684,7 @@ export function FormatRow({
     setOpen((prev) => !prev);
   }
 
-  const name = platform !== null && format !== '' ? formatLabel(platform, format) : '';
+  const name = platform !== null && format !== '' ? postFormatLabel(format, platform) : '';
   return (
     <div data-format-row="" className="relative flex min-h-[44px] min-w-0 items-center gap-3">
       <span className="shrink-0 text-base font-medium text-fg">Format</span>

@@ -5,6 +5,7 @@
 // a zoned instant of its own, so the browser's default zone never leaks in.
 
 import { addCivilDays, civilDate } from '@/lib/list-sort';
+import { isValidTimeZone, zonedParts } from '@/lib/time';
 import type { Stage } from '@srtdio/posts';
 
 /** Weekday index 0=Sun..6=Sat, in the order Intl's 'short' weekday returns. */
@@ -30,12 +31,7 @@ export const PLAN_WEEK_DAYS = 7;
 
 /** Probe a zone once; a blank or non-IANA value degrades to UTC, never throws. */
 function safeZone(timeZone: string): string {
-  try {
-    new Intl.DateTimeFormat('en-CA', { timeZone });
-    return timeZone;
-  } catch {
-    return 'UTC';
-  }
+  return isValidTimeZone(timeZone) ? timeZone : 'UTC';
 }
 
 /** Clamp any stored week_start_day (0=Sun..6=Sat) into range without throwing. */
@@ -50,11 +46,7 @@ function safeWeekStart(weekStartDay: number): number {
  * browser's, and so no instant arithmetic is needed to get it.
  */
 function zonedWeekday(instant: Date, zone: string): number {
-  const short = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short' }).format(
-    instant,
-  );
-  const index = WEEKDAY_NAMES.indexOf(short);
-  return index === -1 ? 0 : index;
+  return zonedParts(instant, zone).weekday;
 }
 
 /** The civil date 'YYYY-MM-DD' of `now` in the workspace zone (UTC if invalid). */
@@ -117,26 +109,8 @@ export function sortByUrgency<T extends { stage: string }>(posts: T[]): T[] {
 
 /** The zone's UTC offset in ms at an instant, read through Intl (no libraries). */
 function zoneOffsetMs(instant: Date, zone: string): number {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: zone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(instant);
-  const read = (type: string): number => Number(parts.find((part) => part.type === type)?.value);
-  // hourCycle 'h23' still reports midnight as '24' in some engines; % 24 folds it.
-  const wall = Date.UTC(
-    read('year'),
-    read('month') - 1,
-    read('day'),
-    read('hour') % 24,
-    read('minute'),
-    read('second'),
-  );
+  const p = zonedParts(instant, zone);
+  const wall = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
   return wall - instant.getTime();
 }
 

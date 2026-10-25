@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { ICON_SIZE, IconCarousel, IconMore, IconPlay } from '@/components/ui/icons';
-import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
+import { type FormatGlyphToken } from '@/components/ui/format-icon';
+import { postFormatLabel } from '@/lib/post-format';
 import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath } from '@/lib/entityRef';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
@@ -12,8 +13,7 @@ import {
   reviewStatus,
   type CardViewer,
 } from '@/components/pages/pipeline/card-status';
-import { civilDate } from '@/lib/list-sort';
-import { formatDue, formatOverdue } from '@/lib/display-date';
+import { civilDay, formatDue, formatOverdue } from '@/lib/time';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
 import { IconButton } from '@/components/ui/IconButton';
@@ -51,30 +51,25 @@ export interface PostCardProps {
    */
   inColumn?: boolean;
   /**
-   * The workspace's IANA zone (the one the move sheet and approve confirm use).
-   * target_date is a timestamptz, so its day is read in this zone, never the
-   * browser's. Default UTC.
+   * The workspace's IANA zone: target_date is a due date, a calendar day on the
+   * workspace zone (src/lib/time.ts). Absent or null: the device zone.
    */
-  timeZone?: string;
+  timeZone?: string | null | undefined;
 }
 
 /**
  * The card's due line via the app formatter: "Due 15 Mar" ("Due 4 Jan 2027"
- * outside now's year). The instant is read to its civil day in the workspace
- * zone (civilDate, the filter's own reading; a bad zone reads as UTC), and that
- * date-only day is formatted so the browser zone can never shift it. An
- * unparseable value shows as stored.
+ * outside now's year), the day read on the workspace zone. An unparseable value
+ * shows as stored.
  */
-export function dueLabel(value: string, timeZone = 'UTC', now: Date = new Date()): string {
+export function dueLabel(
+  value: string,
+  workspaceZone: string | null | undefined,
+  now: Date = new Date(),
+): string {
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return `Due ${value}`;
-  let civil: string;
-  try {
-    civil = civilDate(instant, timeZone);
-  } catch {
-    civil = civilDate(instant, 'UTC');
-  }
-  return formatDue(civil, 'UTC', now);
+  return formatDue(value, workspaceZone, now);
 }
 
 /** The card's due reading: the due line, or the overdue line in the bad tone. */
@@ -84,7 +79,7 @@ export interface CardDue {
 }
 
 /**
- * "Due 15 Mar" while the day is today or ahead; once the civil day (in the
+ * "Due 15 Mar" while the day is today or ahead; once the civil day (on the
  * workspace zone) has passed, "Overdue · 12 Oct" / "Overdue 5 months" via the
  * shared formatter. An approved post is done, so it never reads overdue. An
  * unparseable value shows as stored.
@@ -92,23 +87,17 @@ export interface CardDue {
 export function cardDue(
   value: string,
   stage: Stage,
-  timeZone = 'UTC',
+  workspaceZone: string | null | undefined,
   now: Date = new Date(),
 ): CardDue {
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return { text: `Due ${value}`, overdue: false };
-  const read = (at: Date): string => {
-    try {
-      return civilDate(at, timeZone);
-    } catch {
-      return civilDate(at, 'UTC');
-    }
-  };
-  const civil = read(instant);
-  if (stage !== 'approved' && civil < read(now)) {
-    return { text: formatOverdue(civil, timeZone, now).text, overdue: true };
+  const zone = workspaceZone ?? undefined;
+  const civil = civilDay(value, zone);
+  if (stage !== 'approved' && civil < civilDay(now, zone)) {
+    return { text: formatOverdue(civil, workspaceZone, now).text, overdue: true };
   }
-  return { text: dueLabel(value, timeZone, now), overdue: false };
+  return { text: dueLabel(value, workspaceZone, now), overdue: false };
 }
 
 /**
@@ -176,7 +165,13 @@ function postFallback(post: PipelinePost): ThumbnailFallback {
   const hasCaption = post.caption !== null && post.caption.trim() !== '';
   const body = captionPreview(post) !== null ? null : hasCaption ? post.caption : post.title;
   const layout = token === 'video' || token === 'link' ? 'media' : 'text';
-  return { kind: 'post', glyph: token, label: FORMAT_GLYPH_LABEL[token], body, layout };
+  return {
+    kind: 'post',
+    glyph: token,
+    label: postFormatLabel(post.format, post.platform),
+    body,
+    layout,
+  };
 }
 
 /** A small "multiple images" badge (stacked squares) shown on carousel posts. */
@@ -230,7 +225,7 @@ export function PostCard({
   now,
   showStage = false,
   inColumn = false,
-  timeZone = 'UTC',
+  timeZone,
 }: PostCardProps) {
   const navigate = useNavigate();
   const hasPoster = post.thumbnailAssetVersionId !== null;

@@ -703,5 +703,5 @@ export function brandRequestErrorMessage(message: string): string {
     return 'You have sent this 5 times. Ask them to check spam, or write to us.';
   }
   if (message.includes('invalid_payload')) return 'Check the email address and try again.';
-  return "We couldn't send that. Try again.";
+  return "Couldn't send that. Try again.";
 }

@@ -42,7 +42,6 @@ import { PLAN_DELETED_TOAST } from '@/lib/inbox/alerts';
 import { TASKS_SHEET_ONLY } from '@/lib/chat/tasks';
 import { resetMentionNames } from '@/lib/chat/mentions';
 import type { PresignCache } from '@/lib/asset-presign';
-import { NOTIFICATIONS_TITLE } from '@/components/shell/NotificationsButton';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -184,14 +183,14 @@ const ids = (state: ActivityState, items: readonly ActivityItem[] = feed): strin
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 
 describe('the page', () => {
-  it('is titled "Notifications"; the Plans chip has a positive zero state', () => {
+  it('is titled "Activity"; the Plans chip has a positive zero state', () => {
     const src = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    expect(NOTIFICATIONS_TITLE).toBe('Notifications');
-    expect(src).toContain('title={NOTIFICATIONS_TITLE}');
-    expect(src).not.toContain('title="Activity"');
+    expect(src).toContain("export const ACTIVITY_TITLE = 'Activity';");
+    expect(src).toContain('title={ACTIVITY_TITLE}');
+    expect(src).not.toContain('NOTIFICATIONS_TITLE');
     expect(src).toMatch(
       /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{ICON_SIZE\.status\} \/>\} title=\{EMPTY_LINES\.plans\} \/>/,
     );
@@ -689,10 +688,10 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).toContain('if (timer !== null) window.clearInterval(timer);');
   });
 
-  it('fix 12: the page speaks of notifications, never activity, in its loading and sort copy', () => {
-    expect(page).toContain('label="Sort notifications"');
-    expect(page).not.toContain('Sort activity');
-    expect(page).not.toContain('Loading activity');
+  it('fix 12: the page speaks of activity, never notifications, in its loading and sort copy', () => {
+    expect(page).toContain('label="Sort activity"');
+    expect(page).not.toContain('Sort notifications');
+    expect(page).not.toContain('Loading notifications');
     expect(count(page, '{LOADING_NOTIFICATIONS}')).toBe(2);
     expect(page).toContain('{updatesLabel(entries.length)}');
   });

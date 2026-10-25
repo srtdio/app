@@ -14,7 +14,7 @@ const create = (message: string): string =>
 describe('planWriteErrorCopy: New plan create', () => {
   it('maps each cause; never "Try again" alone', () => {
     expect(create('TypeError: Failed to fetch')).toBe(
-      "Couldn't reach Sorted. Nothing was saved. Check your connection and tap Create plan again.",
+      "Couldn't create the plan. Try again. Nothing was saved.",
     );
     expect(create('Load failed')).toBe(PLAN_CREATE_ERROR_COPY.network);
     expect(create('date_outside_plan')).toBe(
@@ -23,8 +23,12 @@ describe('planWriteErrorCopy: New plan create', () => {
     expect(create('invalid_payload')).toBe(
       'Something in this plan is no longer available, such as a deleted post. Nothing was saved.',
     );
-    expect(create('forbidden_role')).toBe('Only creators can create plans.');
-    expect(create('workspace_member_only')).toBe('Only creators can create plans.');
+    expect(create('forbidden_role')).toBe(
+      "Couldn't create the plan. You don't have access to do this.",
+    );
+    expect(create('workspace_member_only')).toBe(
+      "Couldn't create the plan. You don't have access to do this.",
+    );
     expect(create('boom')).toBe(PLAN_CREATE_FAILED_COPY);
     for (const copy of [...Object.values(PLAN_CREATE_ERROR_COPY), PLAN_CREATE_FAILED_COPY]) {
       expect(copy).not.toBe('Try again');

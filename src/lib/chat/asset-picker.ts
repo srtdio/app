@@ -24,7 +24,7 @@ export const ASSET_PAGE_SIZE = 50;
 export const ASSET_SEARCH_DEBOUNCE_MS = 200;
 
 /** The library picker's error line when a read fails; the raw text is only logged. */
-export const ASSETS_LOAD_FAILED = "Couldn't load assets, try again";
+export const ASSETS_LOAD_FAILED = "Couldn't load files. Try again.";
 
 /** One library asset as the picker shows and sends it. */
 export interface LibraryAsset {

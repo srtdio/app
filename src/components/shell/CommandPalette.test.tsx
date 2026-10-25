@@ -344,14 +344,14 @@ describe('CommandPalette', () => {
     ]);
   });
 
-  it('shows the chat sender, highlights matched words, and a relative time', () => {
+  it('shows the chat sender, highlights matched words, and the chat time', () => {
     const tree = body('diwali', ready('diwali', [], [chatHit]));
     const all = texts(tree);
     expect(all).toContain('asha');
     expect(sections('diwali', ready('diwali', [], [chatHit]))[0]?.items[0]).toMatchObject({
       title: 'asha',
     });
-    expect(all).toContain('30m');
+    expect(all).toContain('11:30 AM');
     const marked = findAll(tree, 'data-search-mark').map((el) => texts(el).join(''));
     expect(marked).toContain('diwali');
   });
@@ -450,7 +450,7 @@ describe('CommandPalette', () => {
     expect(texts(body('diwali', loading))).toContain('Searching…');
 
     expect(texts(body('diwali', ready('diwali', [], [])))).toContain(emptyCopy('diwali'));
-    expect(emptyCopy(' diwali ')).toBe('Nothing called "diwali"');
+    expect(emptyCopy(' diwali ')).toBe('Try another word for "diwali".');
 
     let retried = 0;
     const errTree = PaletteBody({

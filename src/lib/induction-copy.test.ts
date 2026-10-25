@@ -104,7 +104,7 @@ describe('entry screen copy is unchanged', () => {
       sending: 'Sending link',
       rateLimited: 'Too many tries. Wait a minute and try again.',
       invalidEmail: 'Enter a valid email, like name@company.com',
-      genericError: 'Something went wrong. Try again.',
+      genericError: "Couldn't send the link. Try again.",
     });
   });
 

@@ -28,6 +28,7 @@ vi.mock('@/lib/workspace-context', () => ({
     workspaceId: 'ws-1',
     workspaceName: 'Zomato',
     workspaceKey: mocks.workspaceKey,
+    workspaces: [{ id: 'ws-1', timezone: 'UTC' }],
   }),
 }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));

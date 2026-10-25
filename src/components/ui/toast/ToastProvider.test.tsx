@@ -46,7 +46,7 @@ describe('createToastStore', () => {
 
   it('keeps the error tone on the shown toast', () => {
     const store = createToastStore();
-    store.show({ title: "Couldn't move the post. You're offline.", tone: 'error' });
+    store.show({ title: "Couldn't move the post. Try again.", tone: 'error' });
     expect(store.getSnapshot()[0]!.tone).toBe('error');
     store.dispose();
   });

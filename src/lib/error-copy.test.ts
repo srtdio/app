@@ -6,9 +6,9 @@ afterEach(() => {
 });
 
 describe('errorCopy', () => {
-  it('offline: a fetch TypeError reads "You\'re offline." with Retry', () => {
+  it('offline: a fetch TypeError reads "Try again." with Retry', () => {
     const copy = errorCopy('move the post', new TypeError('Failed to fetch'));
-    expect(copy.text).toBe("Couldn't move the post. You're offline.");
+    expect(copy.text).toBe("Couldn't move the post. Try again.");
     expect(copy.retryable).toBe(true);
   });
 
@@ -16,7 +16,7 @@ describe('errorCopy', () => {
     vi.stubGlobal('navigator', { onLine: false });
     expect(errorCopy('post the reply', { code: 'unknown', message: 'boom' })).toEqual({
       reason: 'offline',
-      text: "Couldn't post the reply. You're offline.",
+      text: "Couldn't post the reply. Try again.",
       retryable: true,
     });
   });
@@ -74,7 +74,7 @@ describe('errorCopy', () => {
 
   it('keeps the approved reason lines verbatim', () => {
     expect(REASON_COPY).toEqual({
-      offline: "You're offline.",
+      offline: 'Try again.',
       forbidden: "You don't have access to do this.",
       not_found: 'It was deleted.',
       stale: 'Someone else changed it. Refresh to see the latest.',

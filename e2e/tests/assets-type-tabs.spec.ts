@@ -113,7 +113,7 @@ test('six tabs filter the loaded list, with counts, empty states and ?type= @the
   }
   await tab(page, 'Sheets').click();
   await expect(cards(page)).toHaveCount(0);
-  await expect(page.getByText('No sheets yet.')).toBeVisible();
+  await expect(page.getByText('Sheets show up here.')).toBeVisible();
   await tab(page, 'All').click();
   await expect(cards(page)).toHaveCount(6);
   expect(new URL(page.url()).searchParams.has('type')).toBe(false);

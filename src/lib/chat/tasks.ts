@@ -10,7 +10,7 @@
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
 import { abortable } from '@/lib/chat-reads';
-import { civilDay, safeTimeZone } from '@/lib/chat/time-format';
+import { civilDay, formatDateTime, formatTime } from '@/lib/time';
 
 type Functions = Database['public']['Functions'];
 type TaskRow = Database['public']['Tables']['chat_tasks']['Row'];
@@ -153,21 +153,10 @@ function epoch(iso: string | null | undefined): number {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace clock (the snapshot stamp, change times)
+// Viewer clock (the snapshot stamp, change times), via src/lib/time.ts
 // ---------------------------------------------------------------------------
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function zonedHourMinute(ms: number, timeZone: string): { hour: number; minute: number } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: safeTimeZone(timeZone),
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date(ms));
-  const read = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
-  return { hour: read('hour') % 24, minute: read('minute') };
-}
 
 /** "16 Oct" for a civil date. Pure. */
 export function civilDayLabel(civil: string): string {
@@ -175,17 +164,15 @@ export function civilDayLabel(civil: string): string {
   return `${d ?? ''} ${MONTHS[(m ?? 1) - 1] ?? ''}`;
 }
 
-/** An instant's clock on the workspace clock, always with minutes: "11:05 am". Pure. */
-export function clockLabelFull(iso: string, timeZone: string): string {
+/** An instant's clock on the viewer's clock: "11:05 AM". `timeZone` is for tests. Pure. */
+export function clockLabelFull(iso: string, timeZone?: string): string {
   const ms = epoch(iso);
   if (Number.isNaN(ms)) return '';
-  const p = zonedHourMinute(ms, timeZone);
-  const h = p.hour % 12 === 0 ? 12 : p.hour % 12;
-  return `${h}:${String(p.minute).padStart(2, '0')} ${p.hour < 12 ? 'am' : 'pm'}`;
+  return formatTime(ms, timeZone);
 }
 
-/** An event or change time: "7:30 pm" today, else "12 Oct 7:30 pm". Pure. */
-export function changeTimeLabel(iso: string, nowMs: number, timeZone: string): string {
+/** An event or change time: "7:30 PM" today, else "12 Oct 7:30 PM". Pure. */
+export function changeTimeLabel(iso: string, nowMs: number, timeZone?: string): string {
   const ms = epoch(iso);
   if (Number.isNaN(ms)) return '';
   const clock = clockLabelFull(iso, timeZone);
@@ -983,16 +970,9 @@ function snapshotItem(task: ChatTask): string {
   return `${task.number}. ${task.title} · P${task.priority}`;
 }
 
-function clockLabel(ms: number, timeZone: string): string {
-  const p = zonedHourMinute(ms, timeZone);
-  const h = p.hour % 12 === 0 ? 12 : p.hour % 12;
-  const mm = p.minute === 0 ? '' : `:${String(p.minute).padStart(2, '0')}`;
-  return `${h}${mm} ${p.hour < 12 ? 'am' : 'pm'}`;
-}
-
 /**
- * The plain-text snapshot Share sends, on the workspace clock:
- *   Tasks · Chat · 13 Oct, 7:30 pm
+ * The plain-text snapshot Share sends, on the viewer's clock:
+ *   Tasks · Chat · 13 Oct, 7:30 PM
  *   1. Title · P1
  *   Done
  *   3. Title · P2
@@ -1003,7 +983,8 @@ export function shareSnapshot(input: {
   chatName: string;
   tasks: readonly ChatTask[];
   nowMs: number;
-  timeZone: string;
+  /** For tests; the app passes none (the viewer's device zone). */
+  timeZone?: string;
   max?: number;
 }): string {
   const { nowMs, timeZone } = input;
@@ -1011,7 +992,7 @@ export function shareSnapshot(input: {
   const list = listTasks(input.tasks);
   const open = list.filter((t) => t.status !== 'done').map(snapshotItem);
   const done = list.filter((t) => t.status === 'done').map(snapshotItem);
-  const stamp = `${civilDayLabel(civilDay(nowMs, timeZone))}, ${clockLabel(nowMs, timeZone)}`;
+  const stamp = formatDateTime(nowMs, new Date(nowMs), timeZone);
   const header = `Tasks · ${input.chatName} · ${stamp}`;
   const build = (kept: number, withDone: boolean): string => {
     const lines = [header, ...open.slice(0, kept)];

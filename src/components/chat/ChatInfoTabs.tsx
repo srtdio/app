@@ -40,7 +40,7 @@ import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Result } from '@srtdio/rpc';
 import type { MessageCursor } from '@/lib/chat/thread';
-import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
+import { formatDate, formatTime } from '@/lib/time';
 import { classifyFileKind } from '@/lib/chat/attachments';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { APP_ENTITY_ROUTES, currentOrigin, displayUrl } from '@/lib/chat/message-links';
@@ -67,10 +67,10 @@ export const CONTACT_TABS: ReadonlyArray<{ key: ContactTab; label: string }> = [
 ];
 
 export const CONTACT_EMPTY: Record<Exclude<ContactTab, 'marks'>, string> = {
-  media: 'No photos yet',
-  files: 'No files yet',
-  links: 'No links yet',
-  starred: 'No starred messages',
+  media: 'Photos in this chat show up here.',
+  files: 'Files in this chat show up here.',
+  links: 'Links in this chat show up here.',
+  starred: 'Starred messages show up here.',
 };
 
 /** How many items each tab shows in preview mode before See all. */
@@ -85,7 +85,7 @@ export const PREVIEW_COUNT: Readonly<Record<ContactTab, number>> = {
 export const SEE_ALL_LABEL = 'See all';
 
 /** A capped preview tab with nothing loaded yet but an older page that may hold some. */
-export const NOTHING_RECENT = 'Nothing recent';
+export const NOTHING_RECENT = 'Recent items show up here.';
 
 /** The longest a sender-name read may take before the names stay "Unknown". */
 export const SENDER_READ_TIMEOUT_MS = 5000;
@@ -320,8 +320,8 @@ const ROW_ICON =
   'flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-panel-2 text-fg-3';
 
 /** "size · date" under a file name. Pure. */
-export function fileMetaLine(item: ChannelAttachmentItem, timeZone: string): string {
-  return `${humanizeSize(item.size)} · ${formatShortDate(item.createdAt, timeZone)}`;
+export function fileMetaLine(item: ChannelAttachmentItem, timeZone?: string): string {
+  return `${humanizeSize(item.size)} · ${formatDate(item.createdAt, undefined, timeZone)}`;
 }
 
 /**
@@ -333,7 +333,8 @@ function FileRow(props: {
   item: ChannelAttachmentItem;
   cache: PresignCache;
   presignEnabled: boolean;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
 }): ReactElement {
   const { item, cache, presignEnabled } = props;
   const [open, setOpen] = useState(false);
@@ -444,7 +445,7 @@ export function SeeAllRow(props: { onClick: () => void }): ReactElement {
  * The first page's loading or error state, or the body once it resolved, plus
  * a 44px "Load more" when the last page came back full. A capped preview tab
  * passes `seeAll` instead: it never pages, and shows See all when `show`; when
- * it is empty but an older page may exist it reads "Nothing recent" above See
+ * it is empty but an older page may exist it reads "Recent items show up here." above See
  * all rather than a blank area. Hook-free.
  */
 export function FeedBody<T>(props: {
@@ -467,7 +468,7 @@ export function FeedBody<T>(props: {
   if (feed.status === 'error') {
     return (
       <div data-feed="error" className="flex flex-col items-center gap-2 py-10 text-base text-fg-3">
-        <span>Could not load</span>
+        <span>Couldn&apos;t load</span>
         <Button onClick={props.onRetry}>Try again</Button>
       </div>
     );
@@ -513,7 +514,8 @@ export interface ChatInfoTabsViewProps {
   onRetry: (feed: 'attachments' | 'links') => void;
   cache: PresignCache;
   presignEnabled: boolean;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   senderName: (userId: string | null) => string;
   onOpenImage: (index: number) => void;
   /**
@@ -609,7 +611,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               key={`${item.messageId}-${index}`}
               item={item}
               sender={props.senderName(item.senderUserId)}
-              date={formatShortDate(item.createdAt, props.timeZone)}
+              date={formatDate(item.createdAt, undefined, props.timeZone)}
             />
           ))}
         </ul>
@@ -635,7 +637,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
             : {})}
         />
       ) : (
-        <EmptyState icon={<IconBookmark size={ICON_SIZE.tray} />} title="All clear" />
+        <EmptyState icon={<IconBookmark size={ICON_SIZE.tray} />} title="Marks show up here." />
       );
   }
 
@@ -665,7 +667,8 @@ export interface ChatInfoTabsProps {
   channelId: string;
   profiles: Map<string, ChatProfile>;
   currentUserId: string;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   cache: PresignCache;
   presignEnabled: boolean;
   marks: Omit<MarksListProps, 'open' | 'onJump'> | null;
@@ -697,7 +700,8 @@ export function starredTab(input: {
   channelId: string;
   profiles: Map<string, ChatProfile>;
   currentUserId: string;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   onJump: (messageId: string) => void;
   onSeeAll: () => void;
 }): ReactElement {
@@ -846,7 +850,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
           presignEnabled={props.presignEnabled}
           details={{
             sender: senderName(current.senderUserId),
-            time: formatClockTime(current.createdAt, props.timeZone),
+            time: formatTime(current.createdAt, props.timeZone),
           }}
           onIndexChange={setViewer}
           onClose={() => setViewer(null)}

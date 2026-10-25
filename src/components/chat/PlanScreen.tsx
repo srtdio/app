@@ -2,7 +2,7 @@
 // title, "{range} · Draft" or "{range} · Shared with approvers", progress, and
 // one list grouped by each item's plan day (a post slot's day is its post's
 // posts.target_date in the workspace zone, a concept's plan_items.target_date)
-// for every day of the range ("Nothing planned" on an empty day, "No date"
+// for every day of the range ("Planned posts show up here." on an empty day, "No date"
 // last; a plan longer than a week adds a sticky "Week of" header per week).
 //
 // View mode (the default, everyone): each day shows one calendar date tile
@@ -257,7 +257,7 @@ import {
   type ReviewSide,
   type ReviewStatus,
 } from '@/lib/chat/plans';
-import { workspaceTimeZone } from '@/lib/chat/time-format';
+import { safeTimeZone } from '@/lib/time';
 import { HISTORY_STEP_KEYS, useHistoryStep } from '@/lib/chat/use-history-step';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
@@ -987,7 +987,7 @@ export function PlanScreen(props: {
   onClose: () => void;
 }): ReactElement | null {
   const { workspaceId, workspaces } = useWorkspace();
-  const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
+  const timeZone = safeTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
   const { side } = useViewerSide(workspaceId);
   const { session } = useSession();
   const me = session?.user.id ?? null;
@@ -3153,7 +3153,7 @@ export function PlanBody(props: {
                     data-plan-day-empty=""
                     className="flex min-h-[44px] items-center text-md text-fg-3"
                   >
-                    Nothing planned
+                    Planned posts show up here.
                   </p>
                 ) : null;
               return (
@@ -3242,7 +3242,7 @@ function AddRow(props: {
     >
       {props.empty ? (
         <p data-plan-day-empty="" className="flex-1 text-md text-fg-3">
-          Nothing planned
+          Planned posts show up here.
         </p>
       ) : null}
       <Button

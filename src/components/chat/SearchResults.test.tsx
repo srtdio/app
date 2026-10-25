@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { boldMatches, highlightName, searchResultsView } from '@/components/chat/SearchResults';
 import type { ChannelSummary } from '@/lib/chat-reads';
-import {
-  IDLE_SEARCH,
-  SEARCH_EMPTY_COPY,
-  SEARCH_FAILED_COPY,
-  type SearchState,
-} from '@/lib/chat/search';
+import { IDLE_SEARCH, SEARCH_FAILED_COPY, type SearchState } from '@/lib/chat/search';
 
 function channel(over: Partial<ChannelSummary>): ChannelSummary {
   return {
@@ -104,8 +99,9 @@ describe('searchResultsView', () => {
     expect(html).toContain('[-webkit-touch-callout:none]');
   });
 
-  it('shows "No messages like that" when nothing matches', () => {
-    expect(view(ready([]))).toContain(SEARCH_EMPTY_COPY);
+  it('shows the NoResults line naming the query when nothing matches', () => {
+    expect(view(ready([]))).toContain('Try another word for');
+    expect(view(ready([]))).not.toContain('No messages like that');
   });
 
   it('shows the retry row on failure, never connection wording', () => {
@@ -131,8 +127,8 @@ describe('searchResultsView', () => {
     expect(html).not.toContain('data-search-hit');
   });
 
-  it('a 101 character query reads "No messages like that"', () => {
-    expect(view(IDLE_SEARCH, 'x'.repeat(101))).toContain(SEARCH_EMPTY_COPY);
+  it('a 101 character query reads the NoResults line', () => {
+    expect(view(IDLE_SEARCH, 'x'.repeat(101))).toContain('Try another word for');
   });
 
   it('keeps a scroll marker while more pages exist', () => {

@@ -197,7 +197,7 @@ export function markConfirmAction(type: MarkType, action: MarkTransition): strin
 }
 
 /** Toast when a stamp or reopen write fails (the row has already reverted). */
-export const MARK_UPDATE_FAILED = 'Could not update';
+export const MARK_UPDATE_FAILED = "Couldn't update. Try again.";
 
 /**
  * The mark as it looks after a transition: stamped by `actorId` at `nowIso`, or
@@ -281,7 +281,7 @@ export function openPostsHeading(side: LoopsSide): string {
   return 'Posts in review';
 }
 
-export const NOTHING_OPEN = 'Nothing open between you';
+export const NOTHING_OPEN = 'Open posts and marks show up here.';
 
 /** The pin board tabs: open marks, and stamped marks. */
 export type MarkTab = 'open' | 'history';

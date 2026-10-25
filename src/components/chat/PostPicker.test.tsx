@@ -211,7 +211,7 @@ describe('loadPickerSections', () => {
       allowDrafts: false,
     });
     expect(result).toEqual({ ok: false, message: POSTS_LOAD_FAILED });
-    expect(POSTS_LOAD_FAILED).toBe("Couldn't load posts, try again");
+    expect(POSTS_LOAD_FAILED).toBe("Couldn't load posts. Try again.");
   });
 
   it('F14: a failed search page and a failed briefs read show mapped copy', async () => {
@@ -225,7 +225,7 @@ describe('loadPickerSections', () => {
     });
     expect(page).toEqual({ ok: false, message: POSTS_LOAD_FAILED });
     expect(briefsLoadError({ ok: false, error: { message: 'relation boom' } })).toBe(
-      "Couldn't load briefs, try again",
+      "Couldn't load briefs. Try again.",
     );
     expect(briefsLoadError({ ok: true })).toBeNull();
   });
@@ -504,21 +504,23 @@ describe('empty copy', () => {
   const none = { sections: [], olderApprovedCount: 0 };
   const visible = (html: string): string => html.replace(/<[^>]*>/g, ' ');
 
-  it('drafts mode with nothing in draft reads "No drafts yet"', () => {
-    expect(sectionsEmptyCopy('drafts').title).toBe('No drafts yet');
+  it('drafts mode with nothing in draft reads "Drafts show up here."', () => {
+    expect(sectionsEmptyCopy('drafts').title).toBe('Drafts show up here.');
     const html = renderToStaticMarkup(<PostSectionsView data={none} mode="drafts" {...ctx} />);
-    expect(html).toContain('No drafts yet');
+    expect(html).toContain('Drafts show up here.');
   });
 
-  it('posts and inline modes with nothing to show read "No posts yet"', () => {
-    expect(sectionsEmptyCopy('posts').title).toBe('No posts yet');
-    expect(sectionsEmptyCopy('inline').title).toBe('No posts yet');
+  it('posts and inline modes with nothing to show read one positive line', () => {
+    expect(sectionsEmptyCopy('posts').title).toBe('Posts show up here.');
+    expect(sectionsEmptyCopy('inline').title).toBe(
+      'Posts in review and recently approved show up here.',
+    );
     const html = renderToStaticMarkup(<PostSectionsView data={none} mode="posts" {...ctx} />);
-    expect(html).toContain('No posts yet');
+    expect(html).toContain('Posts show up here.');
   });
 
-  it('a search with no match names the query and suggests another word', () => {
-    expect(searchEmptyTitle('  diwali  ')).toBe('Nothing called "diwali". Try another word.');
+  it('a search with no match is NoResults: names the query, offers Clear search', () => {
+    expect(searchEmptyTitle('  diwali  ')).toBe('Try another word for "diwali".');
     const html = renderToStaticMarkup(
       <SearchResultsView
         rows={[]}
@@ -526,15 +528,16 @@ describe('empty copy', () => {
         query=" diwali "
         loadingMore={false}
         onLoadMore={() => undefined}
+        onClearSearch={() => undefined}
         {...ctx}
       />,
     );
-    expect(visible(html)).toContain('Nothing called &quot;diwali&quot;. Try another word.');
-    expect(html).not.toContain('No posts called');
+    expect(visible(html)).toContain('Try another word for &quot;diwali&quot;.');
+    expect(visible(html)).toContain('Clear search');
   });
 
-  it('the briefs tab with no match under a filter reads "No briefs fit this filter yet."', () => {
-    expect(BRIEFS_EMPTY_COPY).toBe('No briefs fit this filter yet.');
+  it('the briefs tab with nothing narrowing it reads "Briefs show up here."', () => {
+    expect(BRIEFS_EMPTY_COPY).toBe('Briefs show up here.');
     const html = renderToStaticMarkup(
       <BriefPickerList
         briefs={[]}
@@ -545,8 +548,24 @@ describe('empty copy', () => {
         timeZone="UTC"
       />,
     );
-    expect(html).toContain('No briefs fit this filter yet.');
-    expect(html).not.toContain('No briefs match this filter.');
+    expect(html).toContain('Briefs show up here.');
+  });
+
+  it('the briefs tab with no match under a filter is NoResults with Clear filters', () => {
+    const html = renderToStaticMarkup(
+      <BriefPickerList
+        briefs={[]}
+        loading={false}
+        error={null}
+        selected={[]}
+        onToggle={() => undefined}
+        timeZone="UTC"
+        filtersActive
+        onClear={() => undefined}
+      />,
+    );
+    expect(html).toContain('Try fewer filters.');
+    expect(html).toContain('Clear filters');
   });
 
   it('no empty copy carries an em-dash', () => {

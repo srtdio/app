@@ -29,8 +29,8 @@ export interface PipelineFeedProps {
    * Back to the same filters restores the same depth. Absent: not remembered.
    */
   shownKey?: string;
-  /** The workspace zone each card reads its target day in. Default UTC. */
-  timeZone?: string;
+  /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
+  timeZone?: string | null;
   /** The viewer's role and approvers: each card's status line and its ⋯. */
   viewer?: CardViewer;
   /** Each post's first photo or video, so its card takes the platform frame. */
@@ -86,7 +86,7 @@ function cardGrid(
   onLongPressPost: (post: PipelinePost) => void,
   workspaceKey: string | null,
   showStage: boolean,
-  timeZone: string,
+  timeZone: string | null | undefined,
   viewer: CardViewer | undefined,
   covers: CoverLookup | undefined,
 ): ReactElement {
@@ -127,7 +127,7 @@ export function PipelineFeed({
   workspaceKey = null,
   onLongPressPost,
   shownKey,
-  timeZone = 'UTC',
+  timeZone,
   viewer,
   covers,
 }: PipelineFeedProps): ReactElement {
@@ -152,7 +152,7 @@ export function PipelineFeed({
     <div className="px-4 py-4">
       {list.length === 0 ? (
         activeStage === 'all' ? (
-          <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="No posts yet" />
+          <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="Posts show up here." />
         ) : (
           <StageEmpty stage={activeStage as Stage} compact />
         )

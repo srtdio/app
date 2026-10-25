@@ -104,7 +104,7 @@ describe('X7 FT43: Hide is not a destructive action', () => {
   });
 
   it('the failure toast reads "Couldn\'t hide"', () => {
-    expect(deleteChatFailedMessage('Launch')).toBe("Couldn't hide Launch.");
+    expect(deleteChatFailedMessage('Launch')).toBe("Couldn't hide Launch. Try again.");
   });
 });
 

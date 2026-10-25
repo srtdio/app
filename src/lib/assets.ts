@@ -59,11 +59,11 @@ export const TAB_LABELS: Record<AssetTab, string> = {
 
 /** What an empty tab says. All keeps the page's own empty states. */
 export const TAB_EMPTY: Record<Exclude<AssetTab, 'all'>, string> = {
-  media: 'No media yet.',
-  pdf: 'No PDFs yet.',
-  docs: 'No docs yet.',
-  sheets: 'No sheets yet.',
-  links: 'No links yet.',
+  media: 'Photos and videos show up here.',
+  pdf: 'PDFs show up here.',
+  docs: 'Docs show up here.',
+  sheets: 'Sheets show up here.',
+  links: 'Links show up here.',
 };
 
 /** The version's raw kind, or null when it is missing or not a known kind. */

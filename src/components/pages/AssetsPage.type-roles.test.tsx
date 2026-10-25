@@ -144,12 +144,8 @@ describe('Assets page type roles', () => {
   it('a search with no match reads as an empty state', async () => {
     await mount();
     await typeSearch('zzz');
-    const title = [...document.querySelectorAll('p')].find((p) =>
-      p.textContent?.startsWith('No assets match'),
-    );
-    expect(title).toBeDefined();
-    expectRole(title as HTMLElement, ['text-lg', 'font-semibold', 'text-fg']);
-    expectRole(byText('Try a different name or clear the search.'), ['text-base', 'text-fg-2']);
+    expectRole(byText('Try another word for "zzz".'), ['text-lg', 'font-semibold', 'text-fg']);
+    expect(byText('Clear search')).toBeTruthy();
   });
 
   it('an empty tab line is base fg-2 copy', async () => {

@@ -19,7 +19,7 @@ export const CHECK_EMAIL_COPY = {
   /** Shown under the email field when it loses focus with a malformed address. */
   invalidEmail: 'Enter a valid email, like name@company.com',
   /** Any other refusal from the link request: never the raw provider text. */
-  genericError: 'Something went wrong. Try again.',
+  genericError: "Couldn't send the link. Try again.",
 } as const;
 
 /** The pre-app screens (OnboardingFlow): only the lines that changed in W11. */
@@ -47,7 +47,7 @@ export const WORKSPACE_CREATE_COPY = {
   keepCreator: 'Keep as Creator',
   switchConfirm: 'Switch',
   switching: 'Switching',
-  switchFailed: "We couldn't switch that. Try again.",
+  switchFailed: "Couldn't switch. Try again.",
   discardTitle: 'Discard this workspace?',
   discardMessage: 'The brand name and platform you picked will be lost.',
   discardConfirm: 'Discard',

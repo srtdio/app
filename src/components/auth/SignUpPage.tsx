@@ -10,17 +10,14 @@ import { isValidInviteEmail } from '@/components/pages/settings/MembersInviteFor
 import { CHECK_EMAIL_COPY, fillCopy } from '@/lib/induction-copy';
 import { entryCopyContext } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
+import { deviceTimeZone } from '@/lib/time';
 
 /** Seconds before Resend link can be tapped again. */
 export const RESEND_COOLDOWN_SECONDS = 60;
 
 /** Runtime-detected IANA timezone, stored for the workspace step. */
 function detectTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return '';
-  }
+  return deviceTimeZone();
 }
 
 /**
@@ -118,7 +115,7 @@ export function testSignUpMessage(code: string): string {
   }
   if (code.includes('invalid_email')) return 'Enter a valid email address.';
   if (code.includes('rate_limited')) return 'Too many test accounts this hour. Try again later.';
-  return "We couldn't start that. Try again.";
+  return "Couldn't start that. Try again.";
 }
 
 export function SignUpPage(): ReactElement {

@@ -1,12 +1,12 @@
-// The browser is in Los Angeles for this file: a post date must still read as
-// the WORKSPACE zone's day (FB8). TZ is set before any Date work; Node honours
-// a runtime change, and the assertions below do not depend on it taking (the
-// "browser" reading is produced explicitly with the LA zone).
+// The browser is in Los Angeles for this file: a post date (a due date) must
+// still read as the WORKSPACE zone's day (FB8), on display and in the details
+// sheet's date input. TZ is set before any Date work; the assertions pass every
+// zone explicitly (the "browser" reading is produced with the LA zone).
 process.env.TZ = 'America/Los_Angeles';
 
 import { describe, expect, it } from 'vitest';
 import { targetDateFromInput, targetDateInputValue } from '@/components/pages/pcs/post-date';
-import { formatDay, formatDue } from '@/lib/display-date';
+import { formatDue, formatDueDate } from '@/lib/time';
 
 // 02:30 UTC on 20 Oct: still 19 Oct in Los Angeles, already 20 Oct in Mumbai.
 const INSTANT = '2026-10-20T02:30:00.000Z';
@@ -14,16 +14,16 @@ const NOW = new Date('2026-10-23T12:00:00Z');
 
 describe('post target date display', () => {
   it('renders the workspace-zone day for a browser in America/Los_Angeles', () => {
-    expect(formatDay(INSTANT, 'Asia/Kolkata', NOW)).toBe('20 Oct');
+    expect(formatDueDate(INSTANT, 'Asia/Kolkata', NOW)).toBe('20 Oct');
     // The same instant read on the browser's own clock is a day earlier: the
-    // page never shows that.
-    expect(formatDay(INSTANT, 'America/Los_Angeles', NOW)).toBe('19 Oct');
+    // page never shows that for an Asia/Kolkata workspace.
+    expect(formatDueDate(INSTANT, 'America/Los_Angeles', NOW)).toBe('19 Oct');
   });
 
   it('adds the year outside the current year and never throws on a bad zone', () => {
-    expect(formatDay('2027-01-05T12:00:00.000Z', 'UTC', NOW)).toBe('5 Jan 2027');
-    expect(() => formatDay(INSTANT, 'Not/AZone', NOW)).not.toThrow();
-    expect(formatDay('garbage', 'Asia/Kolkata', NOW)).toBe('');
+    expect(formatDueDate('2027-01-05T12:00:00.000Z', 'UTC', NOW)).toBe('5 Jan 2027');
+    expect(() => formatDueDate(INSTANT, 'Not/AZone', NOW)).not.toThrow();
+    expect(formatDueDate('garbage', 'Asia/Kolkata', NOW)).toBe('');
   });
 });
 
@@ -38,7 +38,7 @@ describe('the details sheet date input reads and writes the workspace-zone day',
     for (const zone of ['Asia/Kolkata', 'America/Los_Angeles', 'Pacific/Auckland', 'UTC']) {
       const stored = targetDateFromInput('2026-10-20', zone);
       expect(targetDateInputValue(stored, zone)).toBe('2026-10-20');
-      expect(formatDay(stored, zone, NOW)).toBe('20 Oct');
+      expect(formatDueDate(stored, zone, NOW)).toBe('20 Oct');
     }
   });
 });

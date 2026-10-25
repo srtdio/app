@@ -414,8 +414,10 @@ describe('one row template for checkpoints and comments', () => {
     expect(host?.querySelector('[data-open-count]')).toBeNull();
   });
 
-  it('reads "No checkpoints yet" on an empty post', async () => {
+  it('reads "Checkpoints show up here." on an empty post', async () => {
     await mount(false);
-    expect(host?.querySelector('[data-comments-empty]')?.textContent).toBe('No checkpoints yet');
+    expect(host?.querySelector('[data-comments-empty]')?.textContent).toBe(
+      'Checkpoints show up here.',
+    );
   });
 });

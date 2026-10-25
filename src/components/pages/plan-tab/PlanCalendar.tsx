@@ -53,6 +53,7 @@ import {
   postStageLine,
   rangeLabel,
   shiftAnchor,
+  stageStatusWord,
   weekDays,
   weekRangeOf,
   type CalendarEntry,
@@ -585,7 +586,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
         <span className="truncate text-sm text-fg-3">
           {entry.kind === 'item'
             ? postStageLine(entry.bundle, entry.item)
-            : `Post: ${entry.post.stage}`}
+            : `Post: ${stageStatusWord(entry.post.stage)}`}
         </span>
       </span>
     </PressableRow>

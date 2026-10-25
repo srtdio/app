@@ -1,10 +1,9 @@
 // The post's target date on the WORKSPACE civil clock (FB8). posts.target_date
 // is a timestamptz; the browser's own zone must never decide which day it
-// reads as, so every read goes through Intl with the workspace zone (the same
-// approach chat's time-format and the plan's civil helpers use), and the
-// details sheet's date input reads and writes that same workspace-zone day.
-// Display goes through the app formatter (src/lib/display-date.ts: formatDay,
-// formatDue); this module only owns the date input round trip.
+// reads as, so the details sheet's input reads and writes the workspace-zone
+// day (the plan's civil helpers). Display goes through the app formatter
+// (src/lib/time.ts: formatDueDate, formatDue, on the same workspace zone);
+// this module only owns the date input round trip.
 
 import { civilDayOf, civilNoonInZoneIso } from '@/lib/plan-week';
 

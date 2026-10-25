@@ -21,7 +21,7 @@ export const KEY_HINTS =
 
 /**
  * The toast after an item changes day, phone and laptop alike: "Moved to Wed
- * 14 Oct." (a post adds " Pipeline date updated."), and when the move reset
+ * 14 Oct." (a post adds " Due date updated."), and when the move reset
  * its ticks " Its ticks were reset." with no Undo (the agency cannot put a
  * client's tick back); a move that reset nothing offers Undo. Pure.
  */
@@ -30,7 +30,7 @@ export function dayMoveToast(
   post: boolean,
   ticksReset: boolean,
 ): { title: string; undo: boolean } {
-  const moved = `Moved to ${dayHeader ?? 'No date'}.${post ? ' Pipeline date updated.' : ''}`;
+  const moved = `Moved to ${dayHeader ?? 'No date'}.${post ? ' Due date updated.' : ''}`;
   return ticksReset
     ? { title: `${moved} Its ticks were reset.`, undo: false }
     : { title: moved, undo: true };

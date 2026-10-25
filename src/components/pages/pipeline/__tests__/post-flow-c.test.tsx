@@ -252,8 +252,10 @@ describe('post flow C: Pipeline card', () => {
     expect(dueLabel('2026-03-15T02:00:00Z', 'America/New_York', now)).toBe('Due 14 Mar');
     expect(dueLabel('2026-12-01T00:00:00Z', 'UTC', now)).toBe('Due 1 Dec');
     expect(dueLabel('2027-01-04T00:00:00Z', 'UTC', now)).toBe('Due 4 Jan 2027');
-    expect(dueLabel('2026-03-15T02:00:00Z', 'Not/AZone', now)).toBe('Due 15 Mar');
-    expect(dueLabel('soon')).toBe('Due soon');
+    expect(dueLabel('2026-03-15T02:00:00Z', 'Not/AZone', now)).toBe(
+      dueLabel('2026-03-15T02:00:00Z', undefined, now),
+    );
+    expect(dueLabel('soon', 'UTC')).toBe('Due soon');
     const out = card({
       post: x5Post({ target_date: '2026-03-15T02:00:00Z' }),
       timeZone: 'UTC',
@@ -438,11 +440,12 @@ describe('post flow C: header, count and filters', () => {
     expect(parsePipelineQuery(new URLSearchParams(), INITIAL_STAGE).stage).toBe('review');
   });
 
-  it('empty copy: non-creators read "Posts show up here once creators make them."', () => {
+  it('empty copy: one positive line, "Posts show up here."', () => {
     const out = renderToStaticMarkup(emptyPipeline(false));
-    expect(out).toContain('Posts show up here once creators make them.');
+    expect(out).toContain('Posts show up here.');
     expect(out).not.toContain('agency');
-    expect(renderToStaticMarkup(emptyPipeline(true))).not.toContain('once creators make them');
+    expect(out).not.toContain('No posts yet');
+    expect(renderToStaticMarkup(emptyPipeline(true))).toContain('Posts show up here.');
   });
 });
 

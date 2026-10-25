@@ -5,7 +5,8 @@ import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
-import { FORMAT_GLYPH_LABEL, type FormatGlyphToken } from '@/components/ui/format-icon';
+import { type FormatGlyphToken } from '@/components/ui/format-icon';
+import { postFormatLabel } from '@/lib/post-format';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
   ICON_SIZE,
@@ -36,7 +37,6 @@ import {
   fileKindLabel,
   filesPhrase,
   isSnoozed,
-  relativeTime,
   isChatMention,
   isWelcome,
   opensNothing,
@@ -51,6 +51,7 @@ import {
 import { NOT_SENT_LABEL, failureInPlainWords } from '@/lib/inbox/alerts';
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
+import { formatRelative } from '@/lib/time';
 
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (threaded). */
@@ -147,7 +148,7 @@ function leadFallback(lead: ActivityItem): ThumbnailFallback {
     return {
       kind: 'post',
       glyph: token,
-      label: FORMAT_GLYPH_LABEL[token],
+      label: postFormatLabel(lead.format),
       body: lead.caption ?? null,
       layout,
     };
@@ -638,7 +639,7 @@ export function ActivityCard({
         <div className="h-px bg-border" />
         <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
           <span data-activity-time="" className="text-sm tabular-nums text-fg-3">
-            {relativeTime(lead.createdAt, nowMs)}
+            {formatRelative(lead.createdAt, new Date(nowMs))}
           </span>
           {tag !== undefined ? (
             <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2">
@@ -709,7 +710,9 @@ export function ActivityCard({
                     {/* The author line above already names who: the text never repeats it. */}
                     {cardBodyLine(entry, { name: entry.actorName === null })}
                   </p>
-                  <p className="mt-0.5 text-sm text-fg-3">{relativeTime(entry.createdAt, nowMs)}</p>
+                  <p className="mt-0.5 text-sm text-fg-3">
+                    {formatRelative(entry.createdAt, new Date(nowMs))}
+                  </p>
                 </div>
                 {entry.readAt === null ? (
                   <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" />

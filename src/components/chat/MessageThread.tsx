@@ -120,7 +120,7 @@ import {
   transcribeVoiceNote,
   useVoiceRecord,
 } from '@/lib/chat/transcript-store';
-import { civilDay, formatClockTime } from '@/lib/chat/time-format';
+import { civilDay, formatTime } from '@/lib/time';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   BUBBLE_BODY_TYPE,
@@ -377,7 +377,10 @@ interface MessageThreadProps {
   onLoadOlder?: () => void;
   /** The newest message is on screen; the thread advances the read cursor. */
   onNewestVisible?: () => void;
-  /** The workspace IANA zone every timestamp renders in. */
+  /**
+   * The workspace IANA zone the plan logic reads "today" on (the status
+   * ticker's current plans). Visible times read the viewer's device clock.
+   */
   timeZone: string;
   /** False when sending is impossible (no channel selected). */
   canSend: boolean;
@@ -386,7 +389,7 @@ interface MessageThreadProps {
   marks?: Map<string, ChatMark>;
   /** The channel's marks read has settled; the open-loops strip holds its first paint until then. */
   marksLoaded: boolean;
-  /** The marks have never been read (failed or timed out): the strip shows no content, never "Nothing open". */
+  /** The marks have never been read (failed or timed out): the strip shows no content, never "Open posts and marks show up here.". */
   marksFailed?: boolean;
   /** Marked messages read from the record, for sheet rows beyond loaded history. */
   markedMessages?: Map<string, ThreadMessage>;
@@ -820,12 +823,13 @@ export function hasAlbum(message: Pick<ThreadMessage, 'attachments'>): boolean {
 /**
  * What the thread's one image viewer shows for a message: its album images (a
  * local preview stands in for an own instant send still uploading), plus the
- * bottom bar's sender and the clock time (device hour cycle, workspace zone). Pure.
+ * bottom bar's sender and the clock time ("2:05 PM", the viewer's clock;
+ * `timeZone` is for tests). Pure.
  */
 export function threadLightbox(
   message: ThreadMessage,
   profiles: Map<string, ChatProfile>,
-  timeZone: string,
+  timeZone?: string,
 ): { images: LightboxImage[]; details: LightboxDetails } {
   const images = splitAlbum(message.attachments).images.map((a) => {
     const src = a.local?.previewUrl;
@@ -835,7 +839,7 @@ export function threadLightbox(
     images,
     details: {
       sender: senderName(message, profiles),
-      time: formatClockTime(messageTimeSource(message), timeZone),
+      time: formatTime(messageTimeSource(message), timeZone),
     },
   };
 }
@@ -897,10 +901,10 @@ export function bubbleChip(
 export const ABOUT_UNAVAILABLE_TOAST = 'That post is not available here';
 
 /** Toast when a share cannot be sent (no open conversation). */
-export const SHARE_UNAVAILABLE_TOAST = 'Could not share right now';
+export const SHARE_UNAVAILABLE_TOAST = "Couldn't share. Try again.";
 
 /** Toast when a thread's root or first page cannot be read; the chat stays as it is. */
-const THREAD_OPEN_FAILED_TOAST = 'Could not open this thread';
+const THREAD_OPEN_FAILED_TOAST = "Couldn't open this thread. Try again.";
 
 /** The thread view composer's placeholder. */
 const THREAD_REPLY_PLACEHOLDER = 'Reply in thread';
@@ -1179,14 +1183,14 @@ export function messageTimeSource(
 }
 
 /**
- * A bubble's spoken time for its aria-label: the server time on the workspace
- * clock ("2:05 pm") once recorded, 'Sending' while the record write is in
+ * A bubble's spoken time for its aria-label: the server time on the viewer's
+ * clock ("2:05 PM"; `timeZone` is for tests) once recorded, 'Sending' while the record write is in
  * flight or retrying, and 'Not sent' once the background retries gave up.
  */
-export function bubbleTimeLabel(message: ThreadMessage, timeZone: string): string {
+export function bubbleTimeLabel(message: ThreadMessage, timeZone?: string): string {
   if (message.state === 'sending') return 'Sending';
   if (message.state === 'failed') return message.filesMissing === true ? FILES_MISSING : 'Not sent';
-  const time = formatClockTime(messageTimeSource(message), timeZone);
+  const time = formatTime(messageTimeSource(message), timeZone);
   return isEdited(message) ? `${EDITED_LABEL}, ${time}` : time;
 }
 
@@ -1245,14 +1249,18 @@ export function MetaStar({ mine }: { mine: boolean }): ReactElement {
   );
 }
 
-/** A message's in-bubble meta, on the workspace clock in the device hour cycle. Pure. */
+/**
+ * A message's in-bubble meta: the clock time ("2:05 PM") on the viewer's clock.
+ * formatTime, not formatChatTime: a bubble already sits under its day pill, so
+ * it always shows its time. `timeZone` is for tests. Pure.
+ */
 export function bubbleMeta(
   message: ThreadMessage,
-  timeZone: string,
+  timeZone: string | undefined,
   opts: { showTicks: boolean },
 ): BubbleMeta {
   return {
-    time: formatClockTime(messageTimeSource(message), timeZone),
+    time: formatTime(messageTimeSource(message), timeZone),
     edited: isEdited(message),
     status: bubbleStatus(message, opts),
   };
@@ -2012,7 +2020,8 @@ export function MessageBubble(props: {
   tail: boolean;
   /** Directly under a DayPill, which carries the gap: no top padding. */
   afterLabel?: boolean;
-  timeZone: string;
+  /** For tests: the zone the meta time renders in (the app passes none: device zone). */
+  timeZone?: string | undefined;
   /** The size table (touch or laptop) the bubble is drawn with. */
   layout: ChatLayout;
   /** The viewer's user id: a quote of their own deleted message reads "You deleted". */
@@ -2584,7 +2593,7 @@ export function withTaskLines(
   messages: readonly ThreadMessage[],
   events: readonly TaskEvent[],
   nowMs: number,
-  timeZone: string,
+  timeZone?: string,
 ): ThreadListItem[] {
   const items: ThreadListItem[] = [];
   let current: string | null = null;
@@ -2638,14 +2647,15 @@ export function withTaskLines(
  * The thread's render list: day pills, then runs. A run is consecutive messages
  * from one sender with no day pill and no 10-minute gap between neighbours; its
  * first message is the head, its last the tail. There are no time rows: every
- * message row carries its own meta (time on the workspace clock, "edited", and
+ * message row carries its own meta (time on the viewer's clock, "edited", and
  * the tick) for inside its bubble. Pure, so the list is grouped in one pass and
  * never re-groups after painting.
  */
 export function threadRows(
   messages: readonly ThreadMessage[],
   nowMs: number,
-  timeZone: string,
+  /** For tests; the app passes undefined (the viewer's device zone). */
+  timeZone: string | undefined,
   /**
    * `days: false` (the thread view): one run of replies, no day pills (and no
    * task lines). `taskEvents`: the chat's task changes for the loaded window,
@@ -2777,7 +2787,6 @@ function MessageRow(props: {
   head: boolean;
   tail: boolean;
   afterLabel: boolean;
-  timeZone: string;
   layout: ChatLayout;
   viewerUserId?: string | undefined;
   mentions?: BubbleMentions | undefined;
@@ -2945,7 +2954,6 @@ function MessageRow(props: {
       head={props.head}
       tail={props.tail}
       afterLabel={props.afterLabel}
-      timeZone={props.timeZone}
       layout={props.layout}
       viewerUserId={props.viewerUserId}
       mentions={props.mentions}
@@ -3266,7 +3274,6 @@ function ThreadBody(
     | 'onRetry'
     | 'onDiscard'
     | 'onCancelUpload'
-    | 'timeZone'
   > & {
     cache: PresignCache;
     layout: ChatLayout;
@@ -3945,11 +3952,7 @@ function ThreadBody(
             description={NOTES_EMPTY_LINE}
           />
         ) : (
-          <EmptyState
-            icon={<IconChat size={ICON_SIZE.tray} />}
-            title="No messages yet"
-            description="Say hello."
-          />
+          <EmptyState icon={<IconChat size={ICON_SIZE.tray} />} title="Messages show up here." />
         )}
       </div>
     );
@@ -3971,14 +3974,12 @@ function ThreadBody(
   const viewerMessage =
     viewer !== null ? props.messages.find((m) => m.id === viewer.messageId) : undefined;
   const viewerData =
-    viewerMessage !== undefined
-      ? threadLightbox(viewerMessage, props.profiles, props.timeZone)
-      : null;
+    viewerMessage !== undefined ? threadLightbox(viewerMessage, props.profiles) : null;
   // Card threads: decided per row at first paint; the rail, its chips and
   // "N replies" are hidden while selecting (rows then keep today's place).
   const memberOf = props.threads?.memberOf;
   const threads = props.selection === undefined ? props.threads : undefined;
-  const listRows = threadRows(props.messages, nowMs, props.timeZone, {
+  const listRows = threadRows(props.messages, nowMs, undefined, {
     showTicks: props.showTicks,
     days: props.threads?.viewRootId === undefined,
     ...(props.taskLines !== undefined ? { taskEvents: props.taskLines.events } : {}),
@@ -4109,7 +4110,6 @@ function ThreadBody(
                       head={row.head}
                       tail={row.tail}
                       afterLabel={afterLabel}
-                      timeZone={props.timeZone}
                       layout={props.layout}
                       viewerUserId={props.viewerUserId}
                       mentions={props.mentions}
@@ -4184,11 +4184,7 @@ function ThreadBody(
                     <RepliesSeparatorRow label={replies} through={plan.continues} />
                   ) : null}
                   {props.reading?.seen?.messageId === row.message.id ? (
-                    <SeenLine
-                      readAt={props.reading.seen.readAt}
-                      timeZone={props.timeZone}
-                      rail={plan.continues}
-                    />
+                    <SeenLine readAt={props.reading.seen.readAt} rail={plan.continues} />
                   ) : null}
                   {props.reading?.readBy?.messageId === row.message.id ? (
                     <ReadByLine
@@ -5692,7 +5688,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           messageFor,
           profiles: props.profiles,
           currentUserId: props.currentUserId ?? '',
-          timeZone: props.timeZone,
           onResolve: props.onResolveMark,
           onReopen: props.onReopenMark,
         }
@@ -6087,7 +6082,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     presignEnabled,
     showTicks: props.showTicks ?? false,
     isGroup: props.isGroup ?? false,
-    timeZone: props.timeZone,
     ...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {}),
     ...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {}),
     ...(onCancelUpload !== undefined ? { onCancelUpload } : {}),
@@ -6176,7 +6170,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       {stripSlot === 'loops' && props.marksFailed === true ? (
         // Marks never read (failed or timed out): the ticker's 36px slot
         // stays, empty and inert (no layout jump, nothing to open, never
-        // "Nothing open"), until a re-read (visible, online, connected) lands.
+        // "Open posts and marks show up here."), until a re-read (visible, online, connected) lands.
         <div
           data-loops-strip="unread"
           aria-hidden="true"
@@ -6192,7 +6186,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                 ? drawerKeys(statusBarState.items)
                 : [],
             side: viewerSide.side,
-            timeZone: props.timeZone,
+            workspaceZone: props.timeZone,
             plans: statusOpenPlans,
             posts: {
               heading: openPostsHeading(viewerSide.side),
@@ -6276,7 +6270,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           open={readInfoOpen}
           onClose={() => setReadInfoOpen(false)}
           createdAt={readBy.message.createdAt}
-          timeZone={props.timeZone}
           nowMs={serverNow()}
           read={readBy.read}
           unread={readBy.unread}
@@ -6350,7 +6343,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           messageFor={messageFor}
           profiles={props.profiles}
           currentUserId={props.currentUserId ?? ''}
-          timeZone={props.timeZone}
           onJump={(id) => {
             setMarksOpen(false);
             jumpTo(id);
@@ -6361,6 +6353,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             heading: openPostsHeading(viewerSide.side),
             posts: openPosts.posts,
             sharedIds: sharedInChat,
+            timeZone: props.timeZone,
             onJump: (postId) => {
               setMarksOpen(false);
               const card = newestCardFor(props.messages, postId);
@@ -6387,7 +6380,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           roleLine={contactRoleLine}
           profiles={props.profiles}
           currentUserId={props.currentUserId ?? ''}
-          timeZone={props.timeZone}
           cache={presignCache}
           presignEnabled={presignEnabled}
           marks={infoMarks}
@@ -6404,7 +6396,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           channelsById={starChannels}
           profiles={props.profiles}
           currentUserId={props.currentUserId ?? ''}
-          timeZone={props.timeZone}
           onJump={jumpTo}
         />
       ) : null}
@@ -6413,7 +6404,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             channelId: props.channelId,
             profiles: props.profiles,
             currentUserId: props.currentUserId ?? '',
-            timeZone: props.timeZone,
             cache: presignCache,
             presignEnabled,
             marks: infoMarks,
@@ -6478,7 +6468,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                         chatName: props.title,
                         tasks: chatTasks.tasks,
                         nowMs: Date.now(),
-                        timeZone: props.timeZone,
                       }),
                     onShared: jumpTo,
                   },

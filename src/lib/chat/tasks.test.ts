@@ -39,7 +39,7 @@ import {
   type TaskEvent,
 } from '@/lib/chat/tasks';
 
-// 13 Oct 2026, 2 pm UTC.
+// 13 Oct 2026, 2:00 PM UTC.
 const NOW = Date.parse('2026-10-13T14:00:00.000Z');
 const UTC = 'UTC';
 const T0 = '2026-10-12T09:00:00.000Z';
@@ -467,7 +467,7 @@ describe('shareSnapshot', () => {
   it('flat numbered list, done items under Done; no side, no due', () => {
     expect(shareSnapshot({ chatName: 'Launch crew', tasks, nowMs: NOW, timeZone: UTC })).toBe(
       [
-        'Tasks · Launch crew · 13 Oct, 2 pm',
+        'Tasks · Launch crew · 13 Oct, 2:00 PM',
         '1. Reel cut · P1',
         '3. Hook copy · P0',
         'Done',
@@ -482,7 +482,7 @@ describe('shareSnapshot', () => {
       nowMs: NOW,
       timeZone: UTC,
     });
-    expect(text).toBe('Tasks · X · 13 Oct, 2 pm\n3. Hook copy · P0');
+    expect(text).toBe('Tasks · X · 13 Oct, 2:00 PM\n3. Hook copy · P0');
   });
   it('past the limit: drops Done, then trailing items, ending "+k more"', () => {
     const many = Array.from({ length: 300 }, (_, k) =>

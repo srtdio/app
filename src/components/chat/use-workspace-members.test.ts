@@ -37,7 +37,7 @@ describe('R9: a members load failure never shows raw error text', () => {
       profiles: () => Promise.resolve({ ok: true, data: [] }),
     });
     expect(state).toEqual({ options: [], loading: false, error: MEMBERS_LOAD_FAILED });
-    expect(MEMBERS_LOAD_FAILED).toBe("Couldn't load members, try again");
+    expect(MEMBERS_LOAD_FAILED).toBe("Couldn't load members. Try again.");
   });
 
   it('the profile read failing maps to the fixed copy', async () => {

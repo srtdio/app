@@ -283,15 +283,24 @@ describe('media labels', () => {
 
 describe('detailRows', () => {
   it('target date, then format with the slide count past one', () => {
-    const rows = detailRows(row({ mediaCount: 4 }), null, TZ);
+    const rows = detailRows(row({ mediaCount: 4 }), null, TZ, TZ);
     expect(rows.map((r) => r.key)).toEqual(['target', 'format']);
     expect(rows[0]).toMatchObject({ label: 'Target date', value: '2 Oct' });
     expect(rows[1]?.value).toMatch(/ · 4 slides$/);
-    expect(detailRows(row({ mediaCount: 1 }), null, TZ)[1]?.value).not.toContain('slides');
+    expect(detailRows(row({ mediaCount: 1 }), null, TZ, TZ)[1]?.value).not.toContain('slides');
+  });
+
+  it('the target date is its calendar day on the workspace zone, not the device zone', () => {
+    // 20:00Z on 1 Oct is already 2 Oct in Kolkata.
+    const at = row({ target_date: '2026-10-01T20:00:00Z' });
+    expect(detailRows(at, null, 'UTC', 'Asia/Kolkata')[0]?.value).toBe('2 Oct');
+    expect(detailRows(at, null, 'Asia/Kolkata', 'UTC')[0]?.value).toBe('1 Oct');
   });
 
   it('no target date: no target row', () => {
-    expect(detailRows(row({ target_date: null }), null, TZ).map((r) => r.key)).toEqual(['format']);
+    expect(detailRows(row({ target_date: null }), null, TZ, TZ).map((r) => r.key)).toEqual([
+      'format',
+    ]);
   });
 
   it('approved with an approver: name · date time', () => {
@@ -299,19 +308,20 @@ describe('detailRows', () => {
       row({ stage: 'approved', approved_by: 'u1', approved_at: '2026-10-01T09:05:00Z' }),
       'Asha',
       TZ,
+      TZ,
     );
     const approved = rows.find((r) => r.key === 'approved');
     expect(approved?.label).toBe('Approved');
-    expect(approved?.value).toMatch(/^Asha · 1 Oct /);
+    expect(approved?.value).toBe('Asha · 1 Oct, 9:05 AM');
   });
 
   it('approved with no approver: the date it entered approved', () => {
-    const rows = detailRows(row({ stage: 'approved' }), null, TZ);
+    const rows = detailRows(row({ stage: 'approved' }), null, TZ, TZ);
     expect(rows.find((r) => r.key === 'approved')?.value).toBe('20 Sep');
   });
 
   it('not approved and no approver: no approval row', () => {
-    expect(detailRows(row(), null, TZ).find((r) => r.key === 'approved')).toBeUndefined();
+    expect(detailRows(row(), null, TZ, TZ).find((r) => r.key === 'approved')).toBeUndefined();
   });
 });
 
@@ -469,13 +479,15 @@ describe('detailRows approver suffix', () => {
   });
 
   it('suffixes an agency-side approver', () => {
-    const value = detailRows(approved, 'Chitra', TZ, 'agency').find((r) => r.key === 'approved');
+    const value = detailRows(approved, 'Chitra', TZ, TZ, 'agency').find(
+      (r) => r.key === 'approved',
+    );
     expect(value?.value.startsWith('Chitra on behalf of the approvers · ')).toBe(true);
   });
 
   it('a client approver or a missing role: name only', () => {
     for (const role of ['client', null]) {
-      const value = detailRows(approved, 'Asha', TZ, role).find((r) => r.key === 'approved');
+      const value = detailRows(approved, 'Asha', TZ, TZ, role).find((r) => r.key === 'approved');
       expect(value?.value.startsWith('Asha · ')).toBe(true);
     }
   });

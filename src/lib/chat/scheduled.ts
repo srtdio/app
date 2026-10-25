@@ -27,6 +27,7 @@ import {
   type MessageAttachment,
 } from '@/lib/chat/attachments';
 import { SEND_TIMEOUT_MS, type RecordFailed } from '@/lib/chat/record';
+import { formatTime } from '@/lib/time';
 
 type Functions = Database['public']['Functions'];
 
@@ -78,11 +79,9 @@ const MONTHS = [
   'Dec',
 ] as const;
 
-/** "9:00 AM" in local time. Pure. */
+/** "9:00 AM" on the device clock (src/lib/time.ts formatTime). Pure. */
 export function formatClock(date: Date): string {
-  const h = date.getHours();
-  const hour = h % 12 === 0 ? 12 : h % 12;
-  return `${hour}:${String(date.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  return formatTime(date);
 }
 
 /** "Wed 7 Oct" (plus the year when it differs from now's). Pure. */
@@ -153,17 +152,7 @@ export function fromInputs(date: string, time: string): Date | null {
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
-/** The device's short zone name from Intl ("IST", "GMT+5:30"); never hardcoded. */
-export function shortZoneName(now: Date, locale?: string): string {
-  try {
-    const part = new Intl.DateTimeFormat(locale, { timeZoneName: 'short' })
-      .formatToParts(now)
-      .find((p) => p.type === 'timeZoneName');
-    return part?.value ?? '';
-  } catch {
-    return '';
-  }
-}
+export { shortZoneName } from '@/lib/time';
 
 export const SCHEDULE_RANGE_COPY = 'Pick a time at least 1 minute from now';
 export const SCHEDULE_LIMIT_COPY = 'You already have 100 scheduled messages';

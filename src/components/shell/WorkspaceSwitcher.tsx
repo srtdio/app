@@ -34,6 +34,7 @@ import { ROUTE_PREFIX } from '@/lib/induction-model';
 import { useBackGuard } from '@/lib/back-guard';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
+import { deviceTimeZone } from '@/lib/time';
 
 const NAME_MIN = 1;
 const NAME_MAX = 80;
@@ -267,7 +268,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
     setSubmitting(true);
     setFormError(null);
     try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const timezone = deviceTimeZone();
       const payload = workspaceCreatePayload({ name: trimmedName, platform, timezone });
       const res = await workspaceCreate(supabase, { p_payload: payload, p_trace_id: newTrace() });
       if (!res.ok) {
@@ -317,7 +318,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
             ) : error !== null ? (
               <p className="px-3 py-4 text-base text-bad">{error}</p>
             ) : workspaces.length === 0 ? (
-              <p className="px-3 py-4 text-base text-fg-3">No workspaces yet.</p>
+              <p className="px-3 py-4 text-base text-fg-3">Workspaces you join show up here.</p>
             ) : (
               workspaces.map((ws) => {
                 const isActive = ws.id === workspaceId;

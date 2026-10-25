@@ -15,7 +15,8 @@ import type {
 } from '@/lib/chat/plans';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
-import { civilToday, formatCivilDayHeader } from '@/lib/plan-week';
+import { formatCivilDayHeader } from '@/lib/plan-week';
+import { civilDay, formatTime } from '@/lib/time';
 
 /** Card and screen copy. */
 export const PLAN_EYEBROW = 'PLAN';
@@ -346,14 +347,7 @@ export function planTileEnabled(side: ViewerSide): boolean {
 
 /** "YYYY-MM-DD" for `now` in the zone. Pure (given the clock). */
 export function todayInZone(now: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
-  return `${get('year')}-${get('month')}-${get('day')}`;
+  return civilDay(now, timeZone);
 }
 
 function addDays(isoDate: string, days: number): string {
@@ -725,18 +719,16 @@ export const PLAN_WRITE_ERROR_COPY: PlanWriteErrorTable = { date_outside_plan: D
 
 /** New plan's Create (one transaction: a failure always saved nothing). */
 export const PLAN_CREATE_ERROR_COPY: PlanWriteErrorTable = {
-  network:
-    "Couldn't reach Sorted. Nothing was saved. Check your connection and tap Create plan again.",
+  network: "Couldn't create the plan. Try again. Nothing was saved.",
   date_outside_plan:
     "A post's date changed and is now outside this plan. Nothing was saved. Check the orange items.",
   invalid_payload:
     'Something in this plan is no longer available, such as a deleted post. Nothing was saved.',
-  forbidden: 'Only creators can create plans.',
+  forbidden: "Couldn't create the plan. You don't have access to do this.",
 };
 
 /** New plan's Create, any other failure. */
-export const PLAN_CREATE_FAILED_COPY =
-  "Couldn't create the plan. Nothing was saved. Tap Create plan again.";
+export const PLAN_CREATE_FAILED_COPY = "Couldn't create the plan. Try again. Nothing was saved.";
 
 /** Whether a raw error reads as the request never reaching the server. Pure. */
 export function isNetworkFailure(message: string): boolean {
@@ -794,7 +786,7 @@ export const RENAME_FAILED = "Couldn't rename. Try again.";
 export const DELETE_PLAN_LABEL = 'Delete plan';
 export const DELETE_PLAN_TITLE = 'Delete this plan?';
 export const PLAN_DELETED_TOAST = 'Plan deleted';
-export const DELETE_FORBIDDEN = "Only the plan's creator or a workspace admin can delete it.";
+export const DELETE_FORBIDDEN = "Couldn't delete the plan. You don't have access to do this.";
 export const DELETE_FAILED = "Couldn't delete. Try again.";
 export const OPEN_FOR_CLIENT_LABEL = 'Open for approvers';
 export const OPEN_FOR_CLIENT_TITLE = 'Open this plan for approvers?';
@@ -807,7 +799,7 @@ export const SEND_NEEDS_OPEN = 'Open the plan for approvers to send it here.';
 export const SEND_FAILED = "Couldn't send. Try again.";
 /** Send to approvers: the plan opened but chat_plan_share failed; Retry only reposts. */
 export const SEND_AFTER_OPEN_FAILED =
-  "Plan is open for approvers, but the card didn't post. Try again.";
+  "Couldn't post the card. Try again. The plan is open for approvers.";
 export const RETRY_LABEL = 'Retry';
 export const GO_TO_CARD_LABEL = 'Go to card';
 
@@ -835,14 +827,14 @@ export const EDIT_TO_LABEL = 'To';
 
 /** Save changes failures, in plain words; nothing is ever half saved. */
 export const PLAN_SAVE_ERROR_COPY: PlanWriteErrorTable = {
-  network: "Couldn't reach Sorted. Nothing was saved. Check your connection and try again.",
+  network: "Couldn't save the plan. Try again. Nothing was saved.",
   date_outside_plan:
     'An item sits on a day outside the plan dates. Nothing was saved. Move it or widen the dates.',
   invalid_payload:
     'Something in this plan is no longer available, such as a removed item. Nothing was saved.',
-  forbidden: 'Only creators can change a plan. Nothing was saved.',
+  forbidden: "Couldn't save the plan. You don't have access to do this. Nothing was saved.",
 };
-export const PLAN_SAVE_FAILED_COPY = "Couldn't save the plan. Nothing was saved. Try again.";
+export const PLAN_SAVE_FAILED_COPY = "Couldn't save the plan. Try again. Nothing was saved.";
 
 /** A failed plan_save's copy by cause. Pure. */
 export function planSaveErrorCopy(message: string): string {
@@ -1062,30 +1054,19 @@ export function approverIds(bundle: PlanBundle): string[] {
   return [...ids];
 }
 
-/** "6:45 pm" for an instant in the zone. Pure. */
-function clockInZone(at: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  }).formatToParts(at);
-  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
-  return `${Number(get('hour'))}:${get('minute')} ${get('dayPeriod').toLowerCase()}`;
-}
-
 /**
- * When a slot was approved, in the workspace zone: "today, 6:45 pm",
- * "yesterday, 6:45 pm", else "12 Oct, 6:45 pm". Pure (given the clock).
+ * When a slot was approved, on the viewer's clock: "today, 6:45 PM",
+ * "yesterday, 6:45 PM", else "12 Oct, 6:45 PM". `timeZone` is for tests.
+ * Pure (given the clock).
  */
-export function approvedWhen(iso: string, now: Date, timeZone: string): string {
+export function approvedWhen(iso: string, now: Date, timeZone?: string): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return '';
-  const day = todayInZone(at, timeZone);
-  const today = civilToday(now, timeZone);
+  const day = civilDay(at, timeZone);
+  const today = civilDay(now, timeZone);
   const yesterday = addDays(today, -1);
   const lead = day === today ? 'today' : day === yesterday ? 'yesterday' : shortDay(day);
-  return `${lead}, ${clockInZone(at, timeZone)}`;
+  return `${lead}, ${formatTime(at, timeZone)}`;
 }
 
 /** "Approved by {name} · {when}". Pure. */
