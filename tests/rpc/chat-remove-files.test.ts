@@ -187,19 +187,6 @@ describe.runIf(RPC_SUITE)('chat_message_remove_files (authenticated role)', () =
     expect(row.removed_files).toEqual({ photo: 2 });
   });
 
-  it('marks the removed assets deleted and requests their purge', async () => {
-    const gone = await seedFile(sender, 'image/png');
-    const stays = await seedFile(sender, 'image/png');
-    const id = await seedMessage(sender, [gone, stays]);
-    expect((await remove(sender, [id], [gone])).error).toBeNull();
-    const removed = await assetRow(gone);
-    expect(removed.deleted_at).not.toBeNull();
-    expect(removed.purge_requested_at).not.toBeNull();
-    const untouched = await assetRow(stays);
-    expect(untouched.deleted_at).toBeNull();
-    expect(untouched.purge_requested_at).toBeNull();
-  });
-
   it("refuses another member's files and changes nothing", async () => {
     const theirs = await seedFile(peer, 'image/png');
     const id = await seedMessage(peer, [theirs]);

@@ -193,7 +193,10 @@ describe('runRemoveFiles', () => {
       p_trace_id: 't',
     });
     expect(purgeChat).toHaveBeenCalledWith(['a1', 'a2']);
-    expect(signal).toHaveBeenCalledWith({ sorted_event: 'files_removed', message_ids: ['m1', 'm2'] });
+    expect(signal).toHaveBeenCalledWith({
+      sorted_event: 'files_removed',
+      message_ids: ['m1', 'm2'],
+    });
     expect(parseLiveEvent((signal.mock.calls[0] as unknown[])[0])).toEqual({
       kind: 'files_removed',
       messageIds: ['m1', 'm2'],

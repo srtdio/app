@@ -201,7 +201,9 @@ describe('applyFilesRemoved', () => {
   const pdf = { assetId: 'f1', name: 'brief.pdf', mime: 'application/pdf' };
 
   it('drops the listed files and adds their kinds to the counts', () => {
-    const list = [mine({ attachments: [photo, photo2, pdf], removedFiles: { photo: 1, video: 0, file: 0 } })];
+    const list = [
+      mine({ attachments: [photo, photo2, pdf], removedFiles: { photo: 1, video: 0, file: 0 } }),
+    ];
     const [out] = applyFilesRemoved(list, new Map([['m1', new Set(['a1', 'f1'])]]));
     expect(out?.attachments).toEqual([photo2]);
     expect(out?.removedFiles).toEqual({ photo: 2, video: 0, file: 1 });
