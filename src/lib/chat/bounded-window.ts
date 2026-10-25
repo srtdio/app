@@ -5,7 +5,7 @@
 // months the window covers. So every list page here is read as a sequence of
 // bounded windows walking back from the page's newest edge:
 //
-//   1. [edge - 30 days, edge] (the edge is the cursor, or now + a day of skew
+//   1. [edge - 30 days, edge] (the edge is the cursor, or the SERVER's now
 //      for the newest page), limit = page size.
 //   2. A short window widens backwards: the next window is the span just
 //      before it, twice as long, limit = what the page still needs. Windows
@@ -16,7 +16,15 @@
 //      the loop always terminates and never hides an older row: scrolling
 //      back always reaches the first message or inbox entry.
 //
-// Pure apart from the injected reads, so it is unit-tested with fakes.
+// "Now" is never the device clock: it is the server's clock, learned from the
+// Date header of Supabase responses the app already makes (noteServerDate
+// stores offset = serverDate - Date.now() on each response; the latest wins).
+// Until the first response lands, a newest page has no upper bound (its lower
+// bound is then only a starting point: a short window still widens back to
+// the oldest row, so nothing is hidden whatever the device clock says).
+//
+// Pure apart from the injected reads and the server clock, so it is
+// unit-tested with fakes.
 
 import type { Result } from '@srtdio/rpc';
 
@@ -26,10 +34,39 @@ const DAY_MS = 86_400_000;
 export const HISTORY_WINDOW_MS = 30 * DAY_MS;
 
 /**
- * Upper-bound margin on reads that start at "now": a row stamped by the
- * server's clock can be ahead of a device clock that runs slow.
+ * Upper-bound margin over the server's now: a Date header has one-second
+ * resolution (truncated) and is read a network trip after it was stamped, so
+ * the server's real now can be a little ahead of the estimate.
  */
-export const CLOCK_SKEW_MS = DAY_MS;
+export const SERVER_NOW_MARGIN_MS = 60_000;
+
+/** offset = server time - device time, from the latest Supabase response; null before the first. */
+let serverOffsetMs: number | null = null;
+
+/**
+ * Record the server's clock from one response's Date header (an HTTP-date).
+ * `receivedAtMs` is the device time it arrived. A missing or unparsable header
+ * leaves the offset as it was. Called on every Supabase response.
+ */
+export function noteServerDate(
+  dateHeader: string | null | undefined,
+  receivedAtMs: number = Date.now(),
+): void {
+  if (dateHeader === null || dateHeader === undefined || dateHeader === '') return;
+  const serverMs = Date.parse(dateHeader);
+  if (Number.isNaN(serverMs)) return;
+  serverOffsetMs = serverMs - receivedAtMs;
+}
+
+/** The server's now (device now + the latest offset), or null before any response. */
+export function serverNowMs(): number | null {
+  return serverOffsetMs === null ? null : Date.now() + serverOffsetMs;
+}
+
+/** Forget the server clock (tests; a fresh session learns it again on its first response). */
+export function resetServerClock(): void {
+  serverOffsetMs = null;
+}
 
 /** Widening steps before the next window jumps straight to the oldest row. */
 export const MAX_WIDEN_STEPS = 12;
@@ -37,7 +74,8 @@ export const MAX_WIDEN_STEPS = 12;
 /**
  * One window's created_at bounds: `from` is inclusive (gte); `to` is
  * inclusive (lte) on a page's first window when it is a cursor, exclusive (lt)
- * otherwise; null only on the slow-clock fallback (see readBoundedPage).
+ * otherwise; null on a newest page before the server clock is known, on the
+ * last forward window, and on the fallback re-read (see readBoundedPage).
  */
 export interface TimeBounds {
   from: string;
@@ -48,8 +86,11 @@ export interface TimeBounds {
 export interface BoundedPageInput<Row> {
   /** Rows a full page holds. */
   pageSize: number;
-  /** The page's newest edge: the cursor's created_at, or upperFromNow(). */
-  upper: string;
+  /**
+   * The page's newest edge: the cursor's created_at, or upperFromNow() (null
+   * before the server clock is known: the first window then has no upper bound).
+   */
+  upper: string | null;
   /** True when `upper` is a cursor (the keyset or-filter then excludes the cursor row itself). */
   upperInclusive: boolean;
   /** One bounded window, newest first, at most `limit` rows. */
@@ -66,9 +107,13 @@ export interface BoundedPageInput<Row> {
   windowMs?: number;
 }
 
-/** The newest-page edge: now plus the clock-skew margin, as an ISO string. */
-export function upperFromNow(nowMs: number = Date.now()): string {
-  return new Date(nowMs + CLOCK_SKEW_MS).toISOString();
+/**
+ * The newest-page edge: the server's now plus SERVER_NOW_MARGIN_MS, as an ISO
+ * string; null while the server clock is unknown (no upper bound then).
+ */
+export function upperFromNow(): string | null {
+  const now = serverNowMs();
+  return now === null ? null : new Date(now + SERVER_NOW_MARGIN_MS).toISOString();
 }
 
 function isoAt(ms: number): string {
@@ -83,11 +128,13 @@ function isoAt(ms: number): string {
  */
 export async function readBoundedPage<Row>(input: BoundedPageInput<Row>): Promise<Result<Row[]>> {
   const rows: Row[] = [];
-  const upperMs = Date.parse(input.upper);
+  // No known server clock: the first window is open above and starts its
+  // lower bound from the device clock (a starting point only, see above).
+  const upperMs = input.upper !== null ? Date.parse(input.upper) : Date.now();
   if (Number.isNaN(upperMs)) {
     return { ok: false, error: { code: 'unknown', message: 'readBoundedPage: bad upper bound' } };
   }
-  let to = input.upper;
+  let to: string | null = input.upper;
   let toMs = upperMs;
   let toInclusive = input.upperInclusive;
   let span = input.windowMs ?? HISTORY_WINDOW_MS;
@@ -116,7 +163,13 @@ export async function readBoundedPage<Row>(input: BoundedPageInput<Row>): Promis
     toInclusive = false;
     span = step + 1 >= MAX_WIDEN_STEPS ? Math.max(toMs - oldest.ms, 1) : span * 2;
   }
-  if (rows.length === 0 && input.openEnded === true && oldest != null && oldest.ms > upperMs) {
+  if (
+    rows.length === 0 &&
+    input.openEnded === true &&
+    input.upper !== null &&
+    oldest != null &&
+    oldest.ms > upperMs
+  ) {
     return input.read({ from: oldest.iso, to: null, toInclusive: false }, input.pageSize);
   }
   return { ok: true, data: rows };
@@ -134,9 +187,9 @@ export interface BoundedForwardInput<Row> {
 
 /**
  * The oldest-first mirror of readBoundedPage: windows walk forward from
- * `lower`, doubling, until the page is full or a window reaches now + the
- * skew margin; that last window has no upper bound (rows from a server clock
- * ahead of this device are never cut). `from` here is the window's lower
+ * `lower`, doubling, until the page is full or a window reaches the server's
+ * now (the device's until the server clock is known); that last window has no
+ * upper bound, so a clock estimate never cuts a row. `from` here is the window's lower
  * edge: inclusive on the first window, and each later window starts where the
  * previous one ended (`to` exclusive there, `from` inclusive here), so windows
  * are disjoint.
@@ -152,7 +205,7 @@ export async function readBoundedForward<Row>(
       error: { code: 'unknown', message: 'readBoundedForward: bad lower bound' },
     };
   }
-  const ceilingMs = (input.nowMs ?? Date.now()) + CLOCK_SKEW_MS;
+  const ceilingMs = input.nowMs ?? serverNowMs() ?? Date.now();
   let from = input.lower;
   let span = input.windowMs ?? HISTORY_WINDOW_MS;
   for (;;) {

@@ -9,6 +9,7 @@ import {
 } from '@/lib/inbox/inbox-reads';
 import { toastFromEnriched, type InboxRow } from '@/lib/inbox/inbox-live';
 import { resetMentionNames } from '@/lib/chat/mentions';
+import { noteServerDate, resetServerClock } from '@/lib/chat/bounded-window';
 
 beforeEach(() => resetMentionNames());
 
@@ -542,6 +543,12 @@ describe('merged counts: the Notifications badge and the Mentions chip count eve
 });
 
 describe('fix 28: fetchNewestInboxAt seeds the live mark from the server clock', () => {
+  // The partition bounds' now: a Supabase response's Date header.
+  beforeEach(() => {
+    resetServerClock();
+    noteServerDate(new Date().toUTCString());
+  });
+
   function recording(result: QueryResult) {
     const calls: { method: string; args: unknown[] }[] = [];
     const tables: string[] = [];
@@ -588,7 +595,7 @@ describe('fix 28: fetchNewestInboxAt seeds the live mark from the server clock',
       { method: 'select', args: ['created_at'] },
       { method: 'eq', args: ['workspace_id', 'w1'] },
       { method: 'eq', args: ['user_id', 'u1'] },
-      // Both partition-key bounds: the last 30 days up to now plus the skew margin.
+      // Both partition-key bounds: the last 30 days up to the server's now plus a minute.
       { method: 'gte', args: ['created_at', expect.any(String)] },
       { method: 'lt', args: ['created_at', expect.any(String)] },
       { method: 'order', args: ['created_at', { ascending: false }] },

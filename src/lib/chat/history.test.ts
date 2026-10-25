@@ -7,6 +7,7 @@ import {
   type ChatMessageRow,
 } from '@/lib/chat/thread';
 import { newWindowState, trackWindow, windowed } from '@/lib/chat/__tests__/partition-fake';
+import { noteServerDate, resetServerClock } from '@/lib/chat/bounded-window';
 import {
   aggregateReactions,
   CATCH_UP_LIMIT,
@@ -97,6 +98,9 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'));
   clearMessagePrefetch();
+  // The server's clock, as a Supabase response's Date header reports it.
+  resetServerClock();
+  noteServerDate('Thu, 01 Oct 2026 12:00:00 GMT');
 });
 
 afterEach(() => {
@@ -147,9 +151,9 @@ describe('loadLatestMessages', () => {
     ]);
     expect(argsOf(calls, 'limit')).toEqual([[HISTORY_PAGE_SIZE]]);
     expect(methods(calls)).not.toContain('or');
-    // Both partition-key bounds: 30 days back from now plus the skew margin.
-    expect(argsOf(calls, 'gte')).toEqual([['created_at', '2026-09-02T12:00:00.000Z']]);
-    expect(argsOf(calls, 'lt')).toEqual([['created_at', '2026-10-02T12:00:00.000Z']]);
+    // Both partition-key bounds: the server's now plus a minute, 30 days back.
+    expect(argsOf(calls, 'gte')).toEqual([['created_at', '2026-09-01T12:01:00.000Z']]);
+    expect(argsOf(calls, 'lt')).toEqual([['created_at', '2026-10-01T12:01:00.000Z']]);
     expect(page.ok && page.data.rows.map((r) => r.id)).toEqual(['a', 'b']);
     expect(page.ok && page.data.hasMore).toBe(false);
   });
@@ -189,7 +193,7 @@ describe('loadNewerMessages', () => {
     const result = await loadNewerMessages(client, CHANNEL, CURSOR);
     expect(argsOf(calls, 'or')).toEqual([[newerThanFilter(CURSOR)]]);
     expect(argsOf(calls, 'gte')).toEqual([['created_at', CURSOR.createdAt]]);
-    expect(argsOf(calls, 'lt')).toEqual([['created_at', '2026-10-02T12:00:00.000Z']]);
+    expect(argsOf(calls, 'lt')).toEqual([['created_at', '2026-10-01T12:01:00.000Z']]);
     expect(argsOf(calls, 'order')).toEqual([
       ['created_at', { ascending: true }],
       ['id', { ascending: true }],

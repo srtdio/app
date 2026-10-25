@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Result } from '@srtdio/rpc';
 import {
-  CLOCK_SKEW_MS,
+  noteServerDate,
+  resetServerClock,
+  SERVER_NOW_MARGIN_MS,
+  serverNowMs,
   HISTORY_WINDOW_MS,
   readBoundedForward,
   readBoundedPage,
@@ -65,6 +68,9 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(NOW));
   clearMessagePrefetch();
+  // The server's clock, as the Date header of a Supabase response reports it.
+  resetServerClock();
+  noteServerDate(new Date(NOW).toUTCString());
 });
 
 afterEach(() => {
@@ -87,8 +93,10 @@ describe('bounded chat history reads', () => {
     expect(read?.filters).toContain('lt:created_at');
     const lower = read?.range.find(([op]) => op === 'gte')?.[1];
     const upper = read?.range.find(([op]) => op === 'lt')?.[1];
-    expect(lower).toBe(new Date(Date.parse(NOW) + CLOCK_SKEW_MS - HISTORY_WINDOW_MS).toISOString());
-    expect(upper).toBe(new Date(Date.parse(NOW) + CLOCK_SKEW_MS).toISOString());
+    expect(lower).toBe(
+      new Date(Date.parse(NOW) + SERVER_NOW_MARGIN_MS - HISTORY_WINDOW_MS).toISOString(),
+    );
+    expect(upper).toBe(new Date(Date.parse(NOW) + SERVER_NOW_MARGIN_MS).toISOString());
     expect(read !== undefined && monthsTouched(read)).toBeLessThanOrEqual(2);
     // A busy channel never needs the floor probe.
     expect(queries.filter((q) => q.table === 'chat_messages')).toHaveLength(1);
@@ -196,7 +204,7 @@ describe('bounded chat history reads', () => {
     }
   });
 
-  it('catch-up is bounded from the cursor up to now plus the skew margin', async () => {
+  it('catch-up is bounded from the cursor up to the server's now plus a minute', async () => {
     const rows = spreadRows(10, '2026-10-24T00:00:00Z', '2026-10-25T11:00:00Z', () => ({
       channel_id: CH,
     }));
@@ -207,6 +215,67 @@ describe('bounded chat history reads', () => {
     expect(queries[0]?.filters).toEqual(
       expect.arrayContaining(['gte:created_at', 'lt:created_at', 'or']),
     );
+  });
+});
+
+describe('partition bounds come from the server clock, never the device clock', () => {
+  const DAY_MS = 86_400_000;
+  // The server's newest message, half a minute before its now.
+  const rows = (): FakeRow[] => [
+    { id: 'older', created_at: '2026-10-20T08:00:00.000Z', channel_id: CH },
+    { id: 'newest', created_at: '2026-10-25T11:59:30.000Z', channel_id: CH },
+  ];
+  const cases: Array<[string, number]> = [
+    ['3 days slow', -3 * DAY_MS],
+    ['3 days fast', 3 * DAY_MS],
+  ];
+  for (const [label, skewMs] of cases) {
+    it(`a device clock ${label} still opens on the newest message`, async () => {
+      vi.setSystemTime(new Date(Date.parse(NOW) + skewMs));
+      resetServerClock();
+      // A Supabase response arrives: its Date header is the server's now.
+      noteServerDate(new Date(NOW).toUTCString());
+      const { client, queries } = partitionFake({ chat_messages: rows() });
+      const page = await loadLatestMessages(client, CH);
+      expect(page.ok && page.data.rows.map((r) => r.id).at(-1)).toBe('newest');
+      const [read] = historyReads(queries);
+      const serverUpper = new Date(Date.parse(NOW) + SERVER_NOW_MARGIN_MS).toISOString();
+      expect(read?.range).toEqual([
+        ['gte', new Date(Date.parse(serverUpper) - HISTORY_WINDOW_MS).toISOString()],
+        ['lt', serverUpper],
+      ]);
+    });
+  }
+
+  it('before the first response the newest page has no upper bound, and still finds the newest', async () => {
+    vi.setSystemTime(new Date(Date.parse(NOW) - 3 * DAY_MS));
+    resetServerClock();
+    const { client, queries } = partitionFake({ chat_messages: rows() });
+    const page = await loadLatestMessages(client, CH);
+    expect(page.ok && page.data.rows.map((r) => r.id)).toEqual(['older', 'newest']);
+    const [first] = historyReads(queries);
+    expect(first?.filters).toContain('gte:created_at');
+    expect(first?.filters.some((f) => f === 'lt:created_at' || f === 'lte:created_at')).toBe(false);
+    // Catch-up before the first response: bounded below only.
+    const cursor = { createdAt: '2026-10-20T08:00:00.000Z', id: 'older' };
+    const newer = await loadNewerMessages(client, CH, cursor);
+    expect(newer.ok && newer.data.map((r) => r.id)).toEqual(['newest']);
+    expect(queries.at(-1)?.filters).not.toContain('lt:created_at');
+  });
+
+  it('the offset follows the latest response; a missing or bad header keeps it', () => {
+    resetServerClock();
+    expect(serverNowMs()).toBeNull();
+    noteServerDate('Sun, 25 Oct 2026 12:00:00 GMT');
+    expect(serverNowMs()).toBe(Date.parse(NOW));
+    noteServerDate('Sun, 25 Oct 2026 12:05:00 GMT');
+    expect(serverNowMs()).toBe(Date.parse(NOW) + 5 * 60_000);
+    noteServerDate(null);
+    noteServerDate('not a date');
+    expect(serverNowMs()).toBe(Date.parse(NOW) + 5 * 60_000);
+    // Time passing on the device moves the server's now with it.
+    vi.setSystemTime(new Date(Date.parse(NOW) + 1_000));
+    expect(serverNowMs()).toBe(Date.parse(NOW) + 5 * 60_000 + 1_000);
   });
 });
 

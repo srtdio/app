@@ -35,9 +35,10 @@ import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable, withLinkedSignal, withReadTimeout } from '@/lib/chat-reads';
 import {
-  CLOCK_SKEW_MS,
   OldestCache,
   readBoundedPage,
+  SERVER_NOW_MARGIN_MS,
+  serverNowMs,
   upperFromNow,
   type TimeBounds,
 } from '@/lib/chat/bounded-window';
@@ -131,7 +132,7 @@ export function readChannelOldest(
 /**
  * One newest-first history page of a channel (optionally one thread), read
  * through partition-bounded windows. `before` continues from the oldest
- * loaded row; without it the page starts at now (plus the skew margin).
+ * loaded row; without it the page starts at the server's now (upperFromNow).
  */
 async function readHistoryPage(
   client: Client,
@@ -287,8 +288,9 @@ export function loadOlderMessages(
 
 /**
  * Everything recorded after `cursor` (the newest loaded row), oldest-first.
- * Bounded from the cursor up to now (or the cursor, if later) plus the skew
- * margin, so only the months since the cursor are opened.
+ * Bounded from the cursor up to the server's now (or the cursor, if later)
+ * plus a minute, so only the months since the cursor are opened; before the
+ * server clock is known, bounded below only.
  */
 export function loadNewerMessages(
   client: Client,
@@ -297,12 +299,13 @@ export function loadNewerMessages(
   signal?: AbortSignal,
 ): Promise<Result<ChatMessageRow[]>> {
   return withReadTimeout(async (deadline) => {
-    const query = client
+    const ceiling = catchUpCeiling(cursor);
+    const base = client
       .from('chat_messages')
       .select(MESSAGE_COLUMNS)
       .eq('channel_id', channelId)
-      .gte('created_at', cursor.createdAt)
-      .lt('created_at', catchUpCeiling(cursor))
+      .gte('created_at', cursor.createdAt);
+    const query = (ceiling !== null ? base.lt('created_at', ceiling) : base)
       .or(newerThanFilter(cursor))
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
@@ -313,10 +316,16 @@ export function loadNewerMessages(
   });
 }
 
-/** The catch-up read's upper bound: now or the cursor, whichever is later, plus the skew margin. */
-export function catchUpCeiling(cursor: MessageCursor, nowMs: number = Date.now()): string {
+/**
+ * The catch-up read's upper bound: the server's now or the cursor, whichever
+ * is later, plus SERVER_NOW_MARGIN_MS; null (no upper bound) before the server
+ * clock is known. Never the device clock.
+ */
+export function catchUpCeiling(cursor: MessageCursor): string | null {
+  const now = serverNowMs();
+  if (now === null) return null;
   const at = Date.parse(cursor.createdAt);
-  return new Date(Math.max(nowMs, Number.isNaN(at) ? nowMs : at) + CLOCK_SKEW_MS).toISOString();
+  return new Date(Math.max(now, Number.isNaN(at) ? now : at) + SERVER_NOW_MARGIN_MS).toISOString();
 }
 
 /** One row looked up by id: found, or absent (never recorded, deleted, or not visible under RLS). */

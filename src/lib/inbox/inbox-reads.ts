@@ -140,17 +140,19 @@ export async function fetchInboxSince(
   client: Client,
   params: { workspaceId: string; userId: string; sinceIso: string; limit?: number },
 ): Promise<Result<InboxSince>> {
-  // Both partition-key bounds: since the mark, up to now plus the skew margin.
+  // Both partition-key bounds: since the mark, up to the server's now plus a
+  // minute (bounded below only until the server clock is known).
   const sinceCeiling = upperFromNow();
-  const base = () =>
-    client
+  const base = () => {
+    const since = client
       .from('inbox_entries')
       .select(SELECT_COLS, { count: 'exact' })
       .eq('workspace_id', params.workspaceId)
       .eq('user_id', params.userId)
       .is('deleted_at', null)
-      .gt('created_at', params.sinceIso)
-      .lt('created_at', sinceCeiling);
+      .gt('created_at', params.sinceIso);
+    return sinceCeiling !== null ? since.lt('created_at', sinceCeiling) : since;
+  };
   const [activityRes, mentionRes] = await Promise.all([
     withoutBellEntries(base())
       .order('created_at', { ascending: false })

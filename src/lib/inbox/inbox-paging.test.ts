@@ -11,6 +11,7 @@ import {
   type ActivityCursor,
 } from '@/components/pages/activity/data';
 import { fetchInboxSince, fetchNewestInboxAt } from '@/lib/inbox/inbox-reads';
+import { noteServerDate, resetServerClock } from '@/lib/chat/bounded-window';
 import {
   monthsTouched,
   partitionFake,
@@ -82,6 +83,8 @@ async function pageAll(
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(NOW));
+  resetServerClock();
+  noteServerDate(new Date(NOW).toUTCString());
 });
 
 afterEach(() => {
