@@ -5023,6 +5023,52 @@ export type Database = {
           },
         ]
       }
+      chat_unread_counters: {
+        Row: {
+          channel_id: string
+          unread: number
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          unread?: number
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          unread?: number
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_unread_counters_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["channel_id"]
+          },
+          {
+            foreignKeyName: "chat_unread_counters_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_unread_counters_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cockpit_access_log: {
         Row: {
           accessed_at: string
@@ -9571,55 +9617,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      chat_task_create: {
-        Args: {
-          p_channel_id: string
-          p_due_at: string
-          p_note: string
-          p_priority: number
-          p_side: string
-          p_title: string
-          p_trace_id: string
-        }
-        Returns: string
-      }
-      chat_task_create_many: {
-        Args: { p_channel_id: string; p_tasks: Json; p_trace_id: string }
-        Returns: string[]
-      }
-      chat_task_delete: {
-        Args: { p_task_id: string; p_trace_id: string }
-        Returns: undefined
-      }
-      chat_task_event_write: {
-        Args: {
-          p_actor: string
-          p_kind: string
-          p_new: string
-          p_old: string
-          p_task: Database["public"]["Tables"]["chat_tasks"]["Row"]
-          p_tier: string
-        }
-        Returns: undefined
-      }
-      chat_task_save: {
-        Args: { p_changes: Json; p_task_id: string; p_trace_id: string }
-        Returns: undefined
-      }
       chat_task_save_batch: {
         Args: { p_batch: Json; p_channel_id: string; p_trace_id: string }
         Returns: Json
       }
-      chat_task_set: {
-        Args: {
-          p_field: string
-          p_task_id: string
-          p_trace_id: string
-          p_value: string
-        }
-        Returns: undefined
-      }
-      chat_tasks_fire_due: { Args: { p_limit?: number }; Returns: number }
       chat_thread_reply_counts: {
         Args: { p_channel_id: string; p_root_ids: string[]; p_trace_id: string }
         Returns: {
@@ -9627,6 +9628,16 @@ export type Database = {
           reply_count: number
           root_id: string
         }[]
+      }
+      chat_unread_bump: {
+        Args: {
+          p_channel_id: string
+          p_created_at?: string
+          p_message_id: string
+          p_sender_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
       }
       chat_unread_counts: {
         Args: { p_workspace_id: string }
@@ -9636,17 +9647,19 @@ export type Database = {
           unread: number
         }[]
       }
+      chat_unread_decrement: {
+        Args: {
+          p_channel_id: string
+          p_created_at?: string
+          p_message_id: string
+          p_sender_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       checkpoint_accept: {
         Args: { p_accepted: boolean; p_comment_id: string; p_trace_id: string }
         Returns: undefined
-      }
-      checkpoint_ask: {
-        Args: { p_body: string; p_comment_id: string; p_trace_id: string }
-        Returns: string
-      }
-      checkpoint_send_back: {
-        Args: { p_body: string; p_comment_id: string; p_trace_id: string }
-        Returns: string
       }
       comment_batch_create: {
         Args: {
@@ -9699,7 +9712,6 @@ export type Database = {
         }
         Returns: string
       }
-      domain_brand_word: { Args: { p_domain: string }; Returns: string }
       ensure_future_partitions: {
         Args: { p_months?: number }
         Returns: undefined
@@ -9741,7 +9753,6 @@ export type Database = {
         Args: { p_group_id: string; p_name: string; p_trace_id: string }
         Returns: undefined
       }
-      has_capability: { Args: { p_capability: string }; Returns: boolean }
       inbox_entry_create: {
         Args: {
           p_actor_user_id?: string
@@ -9766,14 +9777,6 @@ export type Database = {
         Args: {
           p_created_at: string
           p_entry_id: string
-          p_trace_id: string
-          p_workspace_id: string
-        }
-        Returns: undefined
-      }
-      inbox_mark_read_events: {
-        Args: {
-          p_event_types: string[]
           p_trace_id: string
           p_workspace_id: string
         }
@@ -9959,26 +9962,16 @@ export type Database = {
         }
         Returns: string
       }
-      plan_item_move:
-        | {
-            Args: {
-              p_item_id: string
-              p_item_ids: string[]
-              p_keep_reviews: boolean
-              p_target_date: string
-              p_trace_id: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_item_id: string
-              p_item_ids: string[]
-              p_target_date: string
-              p_trace_id: string
-            }
-            Returns: undefined
-          }
+      plan_item_move: {
+        Args: {
+          p_item_id: string
+          p_item_ids: string[]
+          p_keep_reviews: boolean
+          p_target_date: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
       plan_item_remove: {
         Args: { p_item_id: string; p_trace_id: string }
         Returns: undefined
@@ -10133,7 +10126,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      workspace_id: { Args: never; Returns: string }
       workspace_purge_done: {
         Args: { p_workspace_id: string }
         Returns: undefined

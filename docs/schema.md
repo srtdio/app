@@ -7,6 +7,8 @@ Sorted MVP is a social-media approval tool: client writes a brief, agency drafts
 
 All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` unless noted. Timestamps are `timestamptz`. `*_by` FK columns are SET NULL on delete except `workspaces.owner_user_id` (RESTRICT) and `asset_attachments` (NO ACTION).
 
+Grant hardening: TRUNCATE, TRIGGER, REFERENCES and MAINTAIN are revoked from anon and authenticated on every table in schema public, and the default privileges for role postgres in schema public no longer grant them to anon or authenticated, so new tables start without them.
+
 ## Index
 
 1. Identity and access: users, user_private, brand_agency_requests, workspaces, workspace_members, workspace_client_domains, workspace_role_permissions, workspace_settings, workspace_onboarding, session_devices, platform_operators
@@ -15,7 +17,7 @@ All tables are in schema `public`, all have RLS enabled. `id` uses `uuidv7()` un
 4. Briefs: briefs
 5. Assets: assets, asset_versions, asset_attachments, folders
 6. People grouping: groups, group_members
-7. Chat (Postgres record): chat_channels, chat_messages, chat_message_marks, chat_message_stars, chat_reactions, chat_read_cursors, chat_sync_events
+7. Chat (Postgres record): chat_channels, chat_messages, chat_message_marks, chat_message_stars, chat_reactions, chat_read_cursors, chat_unread_counters, chat_sync_events
 8. Inbox and delivery: inbox_entries, email_threads, delivery_attempts, webhook_events, webhook_processing_attempts
 9. Platform ops (Cockpit): audit_log, feature_flags, cockpit_access_log, cockpit_procedure_allowlist, intent_ledger, pending_flows
 10. Enumerations reference
@@ -138,6 +140,8 @@ One workspace = one end-client = one platform.
 | join_default_group | boolean | not null, default true; on member_accept the invitee joins the workspace's default chat group. Set off with member_join_group_set(p_member_id, p_join, p_trace_id) (manage_members capability, pending invites only) |
 
 Unique: one active membership per (workspace_id, user_id).
+
+RLS: one merged permissive SELECT policy, workspace_members_select (authenticated): is_active_workspace_member(workspace_id) OR user_id = auth.uid().
 
 workspace_create also creates the workspace's default chat group (groups.is_default) named "<client> - <Platform label>" (for example "Kite and Co - LinkedIn"), owner as the only member. Group names allow letters, digits, spaces and hyphens only, so "&" becomes "and" and other characters are dropped (40 chars max including the label, client fallback "Team").
 
@@ -324,6 +328,8 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 
 Indexes: (workspace_id, status, created_at desc), target_date partial, created_by, FTS on title+objective.
 
+RLS: one merged permissive SELECT policy, briefs_select (authenticated): not deleted and the caller is an active owner/admin/agency member, or not deleted and the caller is an active client member.
+
 brief_create(p_workspace_id, p_payload, p_trace_id) SECURITY DEFINER: client-only create gated on an active member with the brief.create capability. The payload also accepts an optional field attachment_asset_version_ids (an ordered array of asset_version ids, any kind: image / video / pdf / Office-doc / link). Because briefs are read-only after creation, creation is the only attach point: each id is written as an asset_attachments row with entity_type='brief', entity_id = the new brief id, and position = array order. A non-array value, a non-uuid element, or an id whose asset_version is missing or in another workspace raises invalid_payload and writes no brief and no attachments. It writes one brief_created inbox entry (scope briefs, tier active) for every active owner, admin and agency member except the actor.
 
 ## 4a. plans / plan_items / plan_item_reviews
@@ -442,8 +448,7 @@ page_count: pdf only, 1-10000, set by asset-upload from the client count; null f
 
 RLS (20260930160000_assets_origin_chat_private.sql):
 
-- assets_select_member (SELECT to authenticated): deleted_at IS NULL AND origin = 'library' AND an active workspace_members row for (assets.workspace_id, auth.uid()).
-- assets_select_deleted_member (SELECT to authenticated, 20261017120000_workspace_rules_storage_delete.sql): deleted_at IS NOT NULL AND origin = 'library' AND purge_requested_at IS NULL AND is_active_workspace_member(workspace_id).
+- assets_select (SELECT to authenticated, one merged permissive policy replacing assets_select_member and assets_select_deleted_member): (deleted_at IS NULL AND origin = 'library' AND an active workspace_members row for (assets.workspace_id, auth.uid())) OR (deleted_at IS NOT NULL AND origin = 'library' AND purge_requested_at IS NULL AND is_active_workspace_member(workspace_id)).
 - asset_versions_select_member (SELECT to authenticated): an active workspace_members row for (asset_versions.workspace_id, auth.uid()) AND the parent asset has origin = 'library'.
 
 Chat-origin assets and their versions are therefore invisible to authenticated reads; chat file reads go through the service role and chat_attachment_readable (section 7).
@@ -603,6 +608,24 @@ PK (channel_id, user_id). Fields: channel_id FK chat_channels ON DELETE CASCADE,
 
 RLS: chat_read_cursors_select_channel_member (SELECT to authenticated) USING chat_channel_member(channel_id, auth.uid()). No direct write policies. chat_read_cursor_set(p_channel_id, p_message_id, p_trace_id) RETURNS void, SECURITY DEFINER (search_path='', EXECUTE to authenticated only): member-gated, the message must exist in that channel else 'message not found'; upserts the caller's cursor to (p_message_id, that message's created_at) and only moves forward (the ON CONFLICT update applies when the new last_read_at is later than the stored one).
 
+### chat_unread_counters
+
+Per channel, per user unread count.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| workspace_id | uuid | FK workspaces.id ON DELETE CASCADE |
+| channel_id | text | PK part, FK chat_channels.channel_id ON DELETE CASCADE |
+| user_id | uuid | PK part, FK users.id ON DELETE CASCADE |
+| unread | integer | not null, default 0, CHECK unread >= 0 (chat_unread_counters_unread_check) |
+| updated_at | timestamptz | not null, default now() |
+
+PK (channel_id, user_id). Index chat_unread_counters_user_workspace_idx (user_id, workspace_id).
+
+Maintained by trigger chat_messages_unread_counters (AFTER INSERT OR UPDATE OF deleted_at ON chat_messages, FOR EACH ROW, _chat_unread_on_message() SECURITY DEFINER, search_path=''), which calls chat_unread_bump(p_message_id text, p_channel_id text, p_workspace_id uuid, p_sender_id uuid, p_created_at timestamptz) on a new message and chat_unread_decrement(same args) on a delete. Reset by chat_read_cursor_set and chat_channel_clear. All three functions are SECURITY DEFINER (search_path=''), with no EXECUTE for anon or authenticated.
+
+RLS: chat_unread_counters_select_own (SELECT to authenticated) USING user_id = auth.uid(): own rows only. No write policies. Table grants: authenticated SELECT only; anon none. Writes only via the SECURITY DEFINER functions above.
+
 ### chat_sync_events
 
 Outbox for membership and rename changes that must reach Agora; drained by the chat-agora-sync worker as service_role. PK id uuidv7. Fields: workspace_id FK workspaces ON DELETE CASCADE, event_type (member_add / member_remove / group_rename), channel_id text (group__{workspace_id}__{group_id}), user_id uuid nullable (the member for member_* events), payload jsonb default {} ({name} for group_rename), created_at, processed_at nullable, attempts int default 0, last_error nullable. Partial index chat_sync_events_pending_idx (created_at) where processed_at is null.
@@ -674,7 +697,6 @@ RLS: chat_tasks_select_channel_member and chat_task_events_select_channel_member
 - chat_task_delete(p_task_id uuid, p_trace_id uuid) RETURNS void (EXECUTE to authenticated only). Same auth, membership and not-found checks (a deleted task is not found). Soft delete: sets deleted_at = now(), deleted_by = caller, updated_at = now(). Any chat member may delete. Writes one 'deleted' event (old and new null).
 - chat_task_event_write(p_task chat_tasks, p_kind text, p_old text, p_new text, p_actor uuid, p_tier text) RETURNS void (no grants; internal): inserts the chat_task_events row and fans out one inbox_entries row per chat member except the actor.
 - chat_channel_member_ids(p_channel_id text) RETURNS SETOF uuid, SQL STABLE (no grants; internal): active members of the chat by the same rules as chat_channel_member (dm pair, group_members, notes owner).
-- chat_tasks_fire_due(p_limit integer default 500) RETURNS integer (no grants; cron only). Locks up to p_limit (clamped 1..2000) tasks with due_at <= now(), due_passed_at null, deleted_at null and status todo / waiting (FOR UPDATE SKIP LOCKED), sets due_passed_at, and writes a 'due_passed' event (actor null, old = due_at). Returns the number fired. Run by pg_cron job chat-tasks-fire-due every minute (`select public.chat_tasks_fire_due(500)`).
 
 Bell: inbox_entries.event_type adds task_changed (tier active, every event except due_passed) and task_due (tier urgent, due_passed). Entity chat_channel, entity_id and scope_key channel_id, scope groups for a group channel else people, actor_user_id the actor (null for task_due). Payload {task_id, number, title, kind, old, new}.
 
@@ -729,6 +751,8 @@ PK id. Fields: workspace_id FK, root_type (brief / post), root_id, message_id ^<
 
 PK id. Fields: workspace_id nullable FK, user_id nullable FK, channel (email / push), template_key 1 to 100, provider (resend / fcm / apns / web_push), provider_message_id nullable, status (queued / sent / delivered / bounced / complained / failed, default queued), error/sent_at/delivered_at/bounced_at nullable, created_at, email_thread_id nullable FK.
 
+RLS: one merged permissive SELECT policy, delivery_attempts_select (authenticated): workspace_id not null and the caller is an active member of that workspace, or the caller is a platform operator (platform_operators row, revoked_at null).
+
 ### webhook_events
 
 Feeds the Agora chat mirror and other sources. PK id. Fields: source (stripe / resend / linkedin), source_event_id 1 to 200, event_type 1 to 100, workspace_id nullable FK, signature_verified boolean, raw_payload jsonb up to 1MB, received_at. Unique (source, source_event_id). (See section 12: source enum has no agora value yet.)
@@ -746,6 +770,8 @@ PK (id, created_at). Fields: workspace_id nullable, actor_user_id nullable FK au
 ### feature_flags
 
 PK id. Fields: workspace_id nullable FK, flag_name ^[a-z][a-z0-9_]{0,99}$, category (killswitch / rollout / experiment / tier_gated), enabled default false, rollout_percentage in {0,10,25,50,100}, tier_min nullable, reason nullable, updated_by nullable FK, updated_at. Unique on (COALESCE(workspace_id,'GLOBAL'), flag_name).
+
+RLS: one merged permissive SELECT policy, feature_flags_select (authenticated): global flags (workspace_id null), flags of a workspace the caller is an active member of, or any flag for a platform operator (revoked_at null).
 
 ### cockpit_access_log
 

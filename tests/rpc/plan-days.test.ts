@@ -121,6 +121,7 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
       p_item_id: itemId,
       p_target_date: day as string,
       p_item_ids: order,
+      p_keep_reviews: false,
     });
   }
 
