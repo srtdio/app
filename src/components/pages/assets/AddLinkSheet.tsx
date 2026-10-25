@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconLink } from '@/components/ui/icons';
 import { isValidLinkUrl, type LinkOutcome } from '@/lib/asset-upload';
+import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
 
 /** The Sheet's discard confirm for a typed link. */
 export const ADD_LINK_DISCARD = {
@@ -21,8 +22,8 @@ interface AddLinkSheetProps {
   onClose: () => void;
   /** Commit: POST {url, name} to the worker's /links route, reporting the outcome. */
   onSubmit: (url: string, name: string) => Promise<LinkOutcome>;
-  /** Toast sink (the page toast queue). */
-  onToast: (message: string) => void;
+  /** Toast sink (ui/toast): failures pass 'error' (the bad tone); successes stay neutral. */
+  onToast: AssetToast;
   /** Called once after a link is added, to refresh the grid. */
   onAdded: () => void;
 }
@@ -77,7 +78,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
       onAdded();
       onClose();
     } else {
-      onToast(outcome.message);
+      onToast(outcome.message, 'error');
     }
   }
 

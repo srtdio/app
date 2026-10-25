@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { cn } from '@/lib/cn';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { useLongPress } from '@/components/pages/assets/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { ICON_SIZE, IconCheck, IconMore } from '@/components/ui/icons';
@@ -23,8 +25,8 @@ interface AssetCardProps {
   cache: PresignCache;
   /** Tap: open the lightbox (files) or the external link (links). */
   onOpen: () => void;
-  /** Long-press or the visible ⋯ button: open the bottom action sheet. */
-  onLongPress: () => void;
+  /** The rows of this card's ⋯ menu (ui/ActionMenu), opened by the ⋯ or a long press. */
+  menuItems?: readonly ActionMenuItem[];
   /** When true, a tap toggles selection instead of opening, and a tick is shown. */
   selectMode?: boolean;
   /** Whether this card is currently selected (only meaningful in select mode). */
@@ -49,16 +51,18 @@ export function AssetCard({
   presignEnabled,
   cache,
   onOpen,
-  onLongPress,
+  menuItems = [],
   selectMode = false,
   selected = false,
   onToggleSelect,
   onStartSelect,
 }: AssetCardProps) {
   const name = displayLabel(item);
+  // The ⋯ menu's open state: the ⋯ toggles it, a long press opens it.
+  const [menuOpen, setMenuOpen] = useState(false);
   // Called unconditionally to satisfy the rules of hooks; its handlers are only
   // spread onto the button when select mode is off.
-  const longPress = useLongPress(onLongPress, onOpen);
+  const longPress = useLongPress(() => setMenuOpen(true), onOpen);
 
   // In select mode the card is a plain toggle: a tap selects/deselects and the
   // long-press + lightbox/link wiring is bypassed (you pick files, not open them).
@@ -110,32 +114,38 @@ export function AssetCard({
           <AssetMedia item={item} name={name} cache={cache} presignEnabled={presignEnabled} />
         )}
       </PressableRow>
-      {selectMode ? null : <CardMenuButton name={name} onPress={onLongPress} />}
+      {selectMode ? null : (
+        // The ⋯ sits in the card's bottom-right corner, on the size line; the
+        // hit area reaches 2px past the card edge so the card's own spacing
+        // stays even. The laptop popover anchors under it.
+        <div className="absolute -bottom-0.5 -right-0.5 z-10">
+          <ActionMenu
+            title={name}
+            items={menuItems}
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+            // The visible ⋯: a 44px hit area, a sibling of the card button
+            // (buttons never nest); the bare dots line up with the kind label
+            // above and sit centred on the size line. ActionMenu toggles it.
+            trigger={
+              <IconButton
+                type="button"
+                label={`More actions for ${name}`}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                data-card-menu=""
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <IconMore size={ICON_SIZE.control} />
+              </IconButton>
+            }
+          />
+        </div>
+      )}
       {selectMode || onStartSelect === undefined ? null : (
         <CardSelectBox name={name} onPress={onStartSelect} />
       )}
     </div>
-  );
-}
-
-/**
- * The visible ⋯ on a card: a 44px hit area in the card's bottom-right corner,
- * on the size line, a sibling of the card button (buttons never nest). The bare
- * dots line up with the right edge of the kind label above and sit centred on
- * the size line; the hit area reaches 2px past the card edge so the card's own
- * spacing stays even. Opens the same menu as a long-press.
- */
-export function CardMenuButton({ name, onPress }: { name: string; onPress: () => void }) {
-  return (
-    <IconButton
-      type="button"
-      label={`More actions for ${name}`}
-      data-card-menu=""
-      onClick={onPress}
-      className="absolute -bottom-0.5 -right-0.5 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <IconMore size={ICON_SIZE.control} />
-    </IconButton>
   );
 }
 

@@ -1,4 +1,4 @@
-// The approve confirm block outside chat: Back and the green "Approve" pair,
+// The approve confirm block: Cancel (ghost, left) and the green "Approve" pair,
 // above which sits either one quiet summary line ("3 slides · due 20 Jul",
 // the post screen, whose sheet title asks "Approve this post?") or the chat
 // sheet's question and consequence line (the pipeline's move and drop
@@ -15,8 +15,8 @@ import { formatDueDate } from '@/lib/time';
 /** The post screen's approve sheet title: the question, never the post's format or title. */
 export const APPROVE_CONFIRM_TITLE = 'Approve this post?';
 
-/** The confirm's buttons. */
-export const APPROVE_BACK_LABEL = 'Back';
+/** The confirm's buttons: Cancel dismisses (ghost, left of the primary). */
+export const APPROVE_BACK_LABEL = 'Cancel';
 export const APPROVE_LABEL = 'Approve';
 
 /**
@@ -68,7 +68,7 @@ export interface ApproveConfirmProps {
   induction?: string;
 }
 
-/** The summary line or the chat question, an optional error, then Back and Approve. */
+/** The summary line or the chat question, an optional error, then Cancel and Approve. */
 export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
   let lines: ReactElement | null;
   if (props.mode === 'summary') {
@@ -103,7 +103,7 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
       <div className="flex gap-2">
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
           data-approve-back=""
           disabled={props.busy}
           onClick={props.onBack}

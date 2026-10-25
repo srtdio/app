@@ -6,6 +6,8 @@ interface ChipProps extends Omit<
   'className' | 'onClick' | 'children'
 > {
   label: string;
+  /** A filter's count, shown after the label only when above 0. */
+  count?: number;
   selected?: boolean;
   variant?: 'default' | 'add';
   /**
@@ -31,6 +33,7 @@ const sizes: Record<NonNullable<ChipProps['size']>, string> = {
 
 export function Chip({
   label,
+  count,
   selected = false,
   variant = 'default',
   size = 'sm',
@@ -55,6 +58,12 @@ export function Chip({
       )}
     >
       {label}
+      {count !== undefined && count > 0 ? (
+        <>
+          {' '}
+          <span className="tabular-nums">{count}</span>
+        </>
+      ) : null}
     </button>
   );
 }

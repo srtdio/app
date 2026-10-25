@@ -1,6 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react';
-import { Button } from '@/components/ui/Button';
-import { cn } from '@/lib/cn';
+import { Chip } from '@/components/ui/Chip';
 import { ASSET_TABS, TAB_LABELS, type AssetTab } from '@/lib/assets';
 
 /** The id of the region the tabs filter; AssetsPage puts it on the results. */
@@ -31,8 +30,9 @@ interface AssetTabsProps {
 
 /**
  * All, Media, PDF, Docs, Sheets, Links: a real tablist (roving tabindex, arrow
- * keys select), every tab always shown with its count, 44px tall. The row
- * scrolls sideways inside SectionHeader on a narrow phone.
+ * keys select) of ui/Chip with the shared selected style, every tab always
+ * shown, its count only when above 0, 44px tall. The row scrolls sideways
+ * inside SectionHeader on a narrow phone.
  */
 export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
   const refs = useRef(new Map<AssetTab, HTMLButtonElement>());
@@ -52,14 +52,16 @@ export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
       {ASSET_TABS.map((tab) => {
         const selected = tab === value;
         return (
-          <Button
-            variant="ghost"
+          <Chip
             key={tab}
+            label={TAB_LABELS[tab]}
+            count={counts[tab]}
+            selected={selected}
+            size="tap"
             buttonRef={(el) => {
               if (el === null) refs.current.delete(tab);
               else refs.current.set(tab, el);
             }}
-            type="button"
             role="tab"
             id={assetTabId(tab)}
             aria-selected={selected}
@@ -67,16 +69,8 @@ export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
             tabIndex={selected ? 0 : -1}
             data-asset-tab={tab}
             onClick={() => onChange(tab)}
-            className={cn(
-              'shrink-0 border',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-              selected
-                ? 'border-accent-line bg-accent-soft text-accent hover:text-accent'
-                : 'border-border',
-            )}
-          >
-            {TAB_LABELS[tab]} <span className="tabular-nums">{counts[tab]}</span>
-          </Button>
+            className="shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+          />
         );
       })}
     </div>

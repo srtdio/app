@@ -217,7 +217,8 @@ describe('Assets header "New asset" menu', () => {
     expect(trigger?.getAttribute('aria-haspopup')).toBe('menu');
     expect(trigger?.getAttribute('aria-expanded')).toBe('false');
     expect(trigger?.hasAttribute('aria-label')).toBe(false);
-    expect(trigger?.querySelector('svg')).toBeNull();
+    // IconPlus before the label, like every New button.
+    expect(trigger?.querySelector('svg')).not.toBeNull();
     expect(document.querySelector('[aria-label="Add asset"]')).toBeNull();
 
     await act(async () => trigger?.click());

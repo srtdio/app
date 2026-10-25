@@ -3,7 +3,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
@@ -167,7 +167,7 @@ export function Sheet({
                   }
                 : {})}
             >
-              <IconX />
+              <IconX size={ICON_SIZE.control} />
             </IconButton>
           </span>
         </div>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { ICON_SIZE, IconLink, IconUpload } from '@/components/ui/icons';
+import { ICON_SIZE, IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 /** A menu row: the shared pressable row, full width, text from the left. */
@@ -17,7 +17,7 @@ interface AssetAddMenuProps {
 }
 
 /**
- * The Assets toolbar add control: a 44px-tall "New asset" accent trigger that
+ * The Assets toolbar add control: a 44px-tall "New asset" primary trigger (IconPlus before the label) that
  * opens a small menu anchored beneath it. "Upload files" opens the upload sheet;
  * "Add link" opens the link sheet. Selecting starts from the round box on each
  * file card. Outside tap and Esc dismiss
@@ -38,6 +38,7 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
         onClick={() => setOpen((prev) => !prev)}
         className="whitespace-nowrap"
       >
+        <IconPlus size={ICON_SIZE.inline} />
         New asset
       </Button>
 

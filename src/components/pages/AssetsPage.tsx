@@ -6,12 +6,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { ICON_SIZE, IconAssets, IconUpload } from '@/components/ui/icons';
+import { ICON_SIZE, IconAssets } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
-import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
+import { assetMenuItems, type AssetToast } from '@/components/pages/assets/AssetActionSheet';
 import { AssetInUseSheet, type AssetInUseState } from '@/components/pages/assets/AssetInUseSheet';
 import { AssetAddMenu } from '@/components/pages/assets/AssetAddMenu';
 import { AssetUploadSheet } from '@/components/pages/assets/AssetUploadSheet';
@@ -106,7 +106,6 @@ export function AssetsPage() {
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   // A search jump's words: the viewer's file name keeps them coloured until this page unmounts.
   const searchJump = useSearchJump();
-  const [actionItem, setActionItem] = useState<AssetListItem | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
@@ -120,11 +119,12 @@ export function AssetsPage() {
   const navigate = useNavigate();
   const { value: sort, setValue: setSort } = useSort<AssetSort>('assets', ASSET_SORT_DEFAULT);
   // The shell's ui/toast. show is the provider's stable function (the wrapper
-  // object is new each render), so callbacks built on it stay stable.
+  // object is new each render), so callbacks built on it stay stable. A
+  // failure passes 'error' (the bad tone); a success stays neutral.
   const showToast = useOptionalToast()?.show;
-  const push = useCallback(
-    (message: string): void => {
-      showToast?.({ title: message });
+  const push = useCallback<AssetToast>(
+    (message, tone) => {
+      showToast?.({ title: message, ...(tone !== undefined ? { tone } : {}) });
     },
     [showToast],
   );
@@ -201,7 +201,6 @@ export function AssetsPage() {
   // Reset overlays when the active workspace changes.
   useEffect(() => {
     setViewer(null);
-    setActionItem(null);
     setUploadOpen(false);
     setAddLinkOpen(false);
     setSelectMode(false);
@@ -431,12 +430,12 @@ export function AssetsPage() {
           if (!result.ok) {
             unhide(ids);
             if (isAssetInUseError(result.error)) await showInUse(targets, itemsRef.current);
-            else push(deleteFailedLabel(ids.length));
+            else push(deleteFailedLabel(ids.length), 'error');
             return;
           }
           setItems((prev) => removeAssetsById(prev, targets));
           unhide(ids);
-          if (kept.length > 0) push(inUseKeptLabel(kept.length));
+          if (kept.length > 0) push(inUseKeptLabel(kept.length), 'error');
         },
       });
     },
@@ -552,6 +551,22 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace],
   );
 
+  // A card's ⋯ menu (ui/ActionMenu): Open {domain} or Copy link first, Delete
+  // last, which hides the file at once and offers Undo (no dialog).
+  const menuItemsFor = useCallback(
+    (item: AssetListItem) =>
+      assetMenuItems(item, {
+        presignEnabled,
+        requestDownloadUrl,
+        canRename,
+        onInfo: (target) => openAsset(target, true),
+        onRename: setRenameItem,
+        onDelete: (target) => deleteItems([target.id]),
+        onToast: push,
+      }),
+    [presignEnabled, requestDownloadUrl, canRename, openAsset, deleteItems, push],
+  );
+
   const listLoading = workspaceId === null || (loading && items.length === 0);
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
 
@@ -648,16 +663,8 @@ export function AssetsPage() {
             ))}
           </div>
         ) : tab === 'all' && liveItems.length === 0 ? (
-          <EmptyState
-            icon={<IconAssets size={ICON_SIZE.status} />}
-            title="Files show up here."
-            action={
-              <Button variant="primary" onClick={() => setUploadOpen(true)}>
-                <IconUpload size={ICON_SIZE.inline} />
-                Upload
-              </Button>
-            }
-          />
+          // One line; the header's New asset is the only create button.
+          <EmptyState icon={<IconAssets size={ICON_SIZE.status} />} title="Files show up here." />
         ) : visible.length === 0 ? (
           searching ? (
             <NoResults
@@ -680,7 +687,7 @@ export function AssetsPage() {
               presignEnabled={presignEnabled}
               cache={cache}
               onOpen={(item) => openAsset(item)}
-              onLongPress={setActionItem}
+              menuItemsFor={menuItemsFor}
               selectMode={selectMode}
               selectedIds={selected}
               onToggleSelect={toggleSelect}
@@ -752,29 +759,6 @@ export function AssetsPage() {
         </SearchWordsContext.Provider>
       ) : null}
 
-      {actionItem !== null ? (
-        <AssetActionSheet
-          item={actionItem}
-          presignEnabled={presignEnabled}
-          requestDownloadUrl={requestDownloadUrl}
-          canRename={canRename}
-          onClose={() => setActionItem(null)}
-          onInfo={(item) => {
-            setActionItem(null);
-            openAsset(item, true);
-          }}
-          onRename={(item) => {
-            setActionItem(null);
-            setRenameItem(item);
-          }}
-          onDelete={(item) => {
-            setActionItem(null);
-            deleteItems([item.id]);
-          }}
-          onToast={push}
-        />
-      ) : null}
-
       <AssetRenameSheet
         open={renameItem !== null}
         initialName={renameItem !== null ? displayLabel(renameItem) : ''}
@@ -792,9 +776,10 @@ export function AssetsPage() {
         onToast={push}
         onSummary={(summary) => {
           // A failure stays until dismissed; a success times out as usual.
+          // Any failure makes the summary sticky, so sticky is also the bad tone.
           showToast?.({
             title: summary.title,
-            ...(summary.sticky ? { durationMs: null } : {}),
+            ...(summary.sticky ? { durationMs: null, tone: 'error' as const } : {}),
           });
           void loadAssets();
         }}

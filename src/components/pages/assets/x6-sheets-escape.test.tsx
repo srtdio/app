@@ -4,7 +4,8 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AssetActionSheet } from '@/components/pages/assets/AssetActionSheet';
+import { ActionMenu } from '@/components/ui/ActionMenu';
+import { assetMenuItems, type AssetMenuDeps } from '@/components/pages/assets/AssetActionSheet';
 import { AssetRenameSheet } from '@/components/pages/assets/AssetRenameSheet';
 import { AddLinkSheet, addLinkDirty } from '@/components/pages/assets/AddLinkSheet';
 import {
@@ -18,6 +19,9 @@ import { BACK_GUARD_STEP_KEY } from '@/lib/back-guard';
 import { resetHistorySteps, stepMarkerOf } from '@/lib/chat/use-history-step';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// Phone: the ⋯ menu is a Sheet (Escape goes through the escape stack).
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
 
 vi.mock('@/components/ui/FileViewer', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -134,59 +138,69 @@ const cache = new PresignCache({
   fetcher: async () => new Response(null, { status: 500 }),
 });
 
+const baseDeps: AssetMenuDeps = {
+  presignEnabled: true,
+  requestDownloadUrl: async () => 'https://signed/d',
+  onInfo: () => {},
+  onToast: () => {},
+};
+
+/** A card's ⋯ menu, open, as AssetCard renders it (ui/ActionMenu). */
+function fileMenu(
+  item: AssetListItem,
+  deps: Partial<AssetMenuDeps> = {},
+  onOpenChange: (open: boolean) => void = () => {},
+) {
+  return (
+    <ActionMenu
+      title="photo.png"
+      items={assetMenuItems(item, { ...baseDeps, ...deps })}
+      trigger={null}
+      open
+      onOpenChange={onOpenChange}
+    />
+  );
+}
+
 describe('X6 Escape on the action sheets', () => {
   it('the file menu closes on Escape', async () => {
-    const onClose = vi.fn();
-    await mount(
-      <AssetActionSheet
-        item={asset()}
-        presignEnabled={false}
-        requestDownloadUrl={async () => 'https://signed/d'}
-        onClose={onClose}
-        onInfo={() => {}}
-        onToast={() => {}}
-      />,
-    );
+    const onOpenChange = vi.fn();
+    await mount(fileMenu(asset(), {}, onOpenChange));
     await escape();
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
 
 describe('file menu has no Move to folder', () => {
-  it('renders Download, Copy link, Rename, Info and Delete only', async () => {
-    await mount(
-      <AssetActionSheet
-        item={asset()}
-        presignEnabled={false}
-        requestDownloadUrl={async () => 'https://signed/d'}
-        canRename
-        onClose={() => {}}
-        onInfo={() => {}}
-        onRename={() => {}}
-        onDelete={() => {}}
-        onToast={() => {}}
-      />,
+  it('renders Copy link, Download, Rename, Info and Delete only, Delete last in the bad tone', async () => {
+    await mount(fileMenu(asset(), { canRename: true, onRename: () => {}, onDelete: () => {} }));
+    const rows = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((b) =>
+      b.textContent?.trim(),
     );
-    for (const label of ['Download', 'Copy link', 'Rename', 'Info', 'Delete']) {
-      expect(button(label), label).toBeDefined();
-    }
+    expect(rows).toEqual(['Copy link', 'Download', 'Rename', 'Info', 'Delete']);
+    expect(button('Delete')?.className).toContain('text-bad');
     expect(button('Move to folder')).toBeUndefined();
     expect(document.body.textContent).not.toContain('Move to folder');
   });
 
-  it('a link menu has no Move to folder either', async () => {
-    await mount(
-      <AssetActionSheet
-        item={asset({ kind: 'link', externalUrl: 'https://example.com/deck', mimeType: null })}
-        presignEnabled={false}
-        requestDownloadUrl={async () => 'https://signed/d'}
-        onClose={() => {}}
-        onInfo={() => {}}
-        onDelete={() => {}}
-        onToast={() => {}}
-      />,
-    );
+  it('hides Download when the file cannot be downloaded (never disabled)', async () => {
+    await mount(fileMenu(asset(), { presignEnabled: false, onDelete: () => {} }));
+    expect(button('Download')).toBeUndefined();
     expect(button('Copy link')).toBeDefined();
+  });
+
+  it('a link menu opens the link first and has no Move to folder either', async () => {
+    await mount(
+      fileMenu(asset({ kind: 'link', externalUrl: 'https://example.com/deck', mimeType: null }), {
+        onDelete: () => {},
+      }),
+    );
+    const rows = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(rows[0]).toMatch(/^Open /);
+    expect(rows[1]).toBe('Copy link');
+    expect(rows[rows.length - 1]).toBe('Delete');
     expect(document.body.textContent).not.toContain('Move to folder');
   });
 });
@@ -260,18 +274,11 @@ describe('X6 lightbox', () => {
     await mount(
       <>
         {lightbox(onCloseLightbox)}
-        <AssetActionSheet
-          item={asset()}
-          presignEnabled={false}
-          requestDownloadUrl={async () => 'https://signed/d'}
-          onClose={onCloseMenu}
-          onInfo={() => {}}
-          onToast={() => {}}
-        />
+        {fileMenu(asset(), {}, onCloseMenu)}
       </>,
     );
     await escape();
-    expect(onCloseMenu).toHaveBeenCalledTimes(1);
+    expect(onCloseMenu).toHaveBeenCalledWith(false);
     expect(onCloseLightbox).not.toHaveBeenCalled();
   });
 

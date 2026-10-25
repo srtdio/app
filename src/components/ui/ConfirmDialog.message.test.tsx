@@ -36,6 +36,18 @@ async function mount(message?: string): Promise<HTMLElement> {
   return dialog;
 }
 
+describe('ConfirmDialog actions', () => {
+  it('Cancel is a ghost Button, left of the primary', async () => {
+    const dialog = await mount('Body');
+    const [cancel, confirm] = [...dialog.querySelectorAll<HTMLButtonElement>('button')];
+    expect(cancel?.textContent).toBe('Cancel');
+    expect(cancel?.className).toContain('text-fg-2 hover:bg-panel-2');
+    expect(cancel?.className).not.toContain('border-border');
+    expect(confirm?.textContent).toBe('Send anyway');
+    expect(confirm?.className).toContain('bg-accent');
+  });
+});
+
 describe('ConfirmDialog optional message', () => {
   it('renders no body element (and no gap) when message is absent', async () => {
     const dialog = await mount();

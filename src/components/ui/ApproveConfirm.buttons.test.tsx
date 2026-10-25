@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ApproveConfirm, type ApproveConfirmProps } from '@/components/ui/ApproveConfirm';
 
-// The button system: Approve is the green success button and Back the
-// secondary one, both 44 tall with an 8px radius, in both confirm modes.
+// The button system: Approve is the green success button and Cancel the
+// ghost one left of it, both 44 tall with an 8px radius, in both confirm modes.
 
 function base(over: Partial<ApproveConfirmProps> = {}): ApproveConfirmProps {
   return {
@@ -35,11 +35,10 @@ describe.each(['question', 'summary'] as const)('ApproveConfirm buttons (%s)', (
     for (const stale of STALE) expect(classes).not.toContain(stale);
   });
 
-  it('Back is secondary: bg-panel with a border, h-11, rounded-lg', () => {
+  it('Cancel is ghost: no fill, no border, h-11, rounded-lg', () => {
     const classes = classesOf(base({ mode }), '[data-approve-back]');
-    expect(classes).toEqual(
-      expect.arrayContaining(['bg-panel', 'border', 'border-border', 'h-11', 'rounded-lg']),
-    );
+    expect(classes).toEqual(expect.arrayContaining(['h-11', 'rounded-lg']));
+    expect(classes).not.toContain('border-border');
     expect(classes).not.toContain('bg-good-solid');
     for (const stale of STALE) expect(classes).not.toContain(stale);
   });

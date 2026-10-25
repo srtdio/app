@@ -11,7 +11,7 @@ import { AssetTabs, nextTab } from './AssetTabs';
 const ZERO: Record<AssetTab, number> = { all: 0, media: 0, pdf: 0, docs: 0, sheets: 0, links: 0 };
 
 describe('AssetTabs', () => {
-  it('a real tablist: all six tabs, in order, always shown with counts (zero too)', () => {
+  it('a real tablist: all six tabs, in order, always shown, counts only above 0', () => {
     const html = renderToStaticMarkup(
       <AssetTabs value="all" counts={{ ...ZERO, all: 3, media: 3 }} onChange={() => {}} />,
     );
@@ -20,11 +20,17 @@ describe('AssetTabs', () => {
       ...ASSET_TABS,
     ]);
     expect(html.match(/role="tab"/g)).toHaveLength(6);
-    for (const label of ['All', 'Media', 'PDF', 'Docs', 'Sheets', 'Links']) {
-      expect(html).toContain(`>${label} <span`);
+    expect(html).toContain('>All <span class="tabular-nums">3</span>');
+    expect(html).toContain('>Media <span class="tabular-nums">3</span>');
+    for (const label of ['PDF', 'Docs', 'Sheets', 'Links']) {
+      expect(html).toContain(`>${label}</button>`);
     }
-    expect(html).toContain('<span class="tabular-nums">0</span>');
-    expect(html).toContain('min-h-[44px] min-w-[44px]');
+    expect(html).not.toContain('<span class="tabular-nums">0</span>');
+    expect(html).toContain('min-h-[44px]');
+    // The shared Chip selected style on the selected tab.
+    expect(html).toMatch(
+      /aria-selected="true"[^>]*class="[^"]*bg-accent-soft text-accent border-accent-line/,
+    );
     // Tokens only, no hex, no dark: literals: light and dark are the same markup.
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b|dark:/);
   });

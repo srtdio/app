@@ -100,8 +100,9 @@ export function ConfirmDialog({
             {message}
           </p>
         ) : null}
+        {/* Cancel is ghost, left of the primary. */}
         <div className="mt-5 flex justify-end gap-2">
-          <Button disabled={busy} onClick={requestClose}>
+          <Button variant="ghost" disabled={busy} onClick={requestClose}>
             {cancelLabel}
           </Button>
           <Button disabled={busy} onClick={onConfirm} variant={destructive ? 'danger' : 'primary'}>

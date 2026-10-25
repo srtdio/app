@@ -15,4 +15,11 @@ describe('AssetAddMenu buttons', () => {
     expect(tag).toContain('bg-accent');
     expect(tag).not.toMatch(/\b(rounded-md|h-9|h-12|font-semibold)\b/);
   });
+
+  it('puts IconPlus at the inline size before the unchanged label', () => {
+    const html = renderToStaticMarkup(
+      <AssetAddMenu onUploadFiles={() => {}} onAddLink={() => {}} />,
+    );
+    expect(html).toMatch(/<button\b[^>]*><svg[^>]*width="16"[^]*?<\/svg>New asset<\/button>/);
+  });
 });

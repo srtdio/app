@@ -34,13 +34,13 @@ afterEach(() => {
 });
 
 describe('UnsafeLinkSheet', () => {
-  it('shows the copy, focuses "Don\'t open" and has no X button', async () => {
+  it('shows the copy, focuses "Don\'t open" and has the header close X', async () => {
     const { dialog } = await open();
     expect(dialog.textContent).toContain('Check before opening');
     expect(dialog.querySelector('[data-unsafe-url]')?.className).toContain('font-mono');
     expect(document.activeElement?.textContent).toBe("Don't open");
-    expect(dialog.querySelector('[aria-label="Close"]')).toBeNull();
-    const buttons = [...dialog.querySelectorAll('button, a')];
+    expect(dialog.querySelector('[aria-label="Close"]')).not.toBeNull();
+    const buttons = [...dialog.querySelectorAll('button:not([aria-label="Close"]), a')];
     for (const b of buttons) {
       const cls = b.getAttribute('class') ?? '';
       expect(cls).toContain('h-11');
@@ -74,7 +74,8 @@ describe('UnsafeLinkSheet', () => {
     await act(async () => {
       anyway?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     });
-    expect(document.activeElement?.hasAttribute('data-unsafe-dont-open')).toBe(true);
+    // Wraps to the first control: the header's close X.
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Close');
   });
 
   it('a downward swipe past the threshold closes; motion is translateY only', async () => {

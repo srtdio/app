@@ -49,7 +49,7 @@ describe('ApproveConfirm', () => {
     expect(texts(base())).toEqual([
       'Approve Launch teaser, all 4 slides, for Oct 2?',
       'This is logged as your approval and the creators are notified.',
-      'Back',
+      'Cancel',
       'Approve',
     ]);
     const chat = confirmCopy('approve', {
@@ -84,7 +84,7 @@ describe('ApproveConfirm', () => {
       'Approve Launch teaser, all 4 slides, for Oct 2?',
       'This is logged as your approval and the creators are notified.',
       'Could not approve.',
-      'Back',
+      'Cancel',
       'Approve',
     ]);
     const alert = elements(base({ error: 'x' })).find(
@@ -94,7 +94,7 @@ describe('ApproveConfirm', () => {
     expect(texts(base({ error: null }))).toHaveLength(4);
   });
 
-  it('wires Back and Confirm, both disabled while busy', () => {
+  it('wires Cancel and Confirm, both disabled while busy', () => {
     const props = base();
     const buttons = elements(props).filter((el) => el.type === Button);
     expect(buttons).toHaveLength(2);
@@ -106,12 +106,12 @@ describe('ApproveConfirm', () => {
     expect(busy.every((el) => (el.props as { disabled: boolean }).disabled)).toBe(true);
   });
 
-  it('Back is secondary, Approve the success variant, no size, tokens only', () => {
+  it('Cancel is ghost (left of the primary), Approve the success variant, no size, tokens only', () => {
     const buttons = elements(base()).filter((el) => el.type === Button);
     const [back, approve] = buttons.map(
       (el) => el.props as { variant?: string; size?: string; className: string },
     );
-    expect(back?.variant).toBe('secondary');
+    expect(back?.variant).toBe('ghost');
     expect(back?.size).toBeUndefined();
     expect(approve?.variant).toBe('success');
     expect(approve?.size).toBeUndefined();
@@ -134,8 +134,8 @@ describe('ApproveConfirm summary mode (post screen)', () => {
     expect(APPROVE_CONFIRM_TITLE).toBe('Approve this post?');
   });
 
-  it('one body line "{n} slides · due {date}", then Back and Approve; never the post title', () => {
-    expect(texts(summary())).toEqual(['4 slides · due 20 Jul', 'Back', 'Approve']);
+  it('one body line "{n} slides · due {date}", then Cancel and Approve; never the post title', () => {
+    expect(texts(summary())).toEqual(['4 slides · due 20 Jul', 'Cancel', 'Approve']);
     for (const text of texts(summary())) expect(text).not.toContain('Launch teaser');
   });
 
@@ -143,7 +143,7 @@ describe('ApproveConfirm summary mode (post screen)', () => {
     expect(texts(summary({ mediaCount: 1 }))[0]).toBe('1 slide · due 20 Jul');
     expect(texts(summary({ mediaCount: null }))[0]).toBe('due 20 Jul');
     expect(texts(summary({ targetDate: '' }))[0]).toBe('4 slides');
-    expect(texts(summary({ mediaCount: null, targetDate: '' }))).toEqual(['Back', 'Approve']);
+    expect(texts(summary({ mediaCount: null, targetDate: '' }))).toEqual(['Cancel', 'Approve']);
     expect(
       elements(summary({ mediaCount: null, targetDate: '' })).some(
         (el) => 'data-approve-summary' in (el.props as object),
@@ -161,7 +161,7 @@ describe('ApproveConfirm summary mode (post screen)', () => {
     expect(texts(summary({ error: 'Could not approve.' }))).toEqual([
       '4 slides · due 20 Jul',
       'Could not approve.',
-      'Back',
+      'Cancel',
       'Approve',
     ]);
   });

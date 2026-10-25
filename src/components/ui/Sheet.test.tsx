@@ -59,6 +59,17 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+describe('Sheet header', () => {
+  it('title left, close X right at the control size, no Cancel in the header', async () => {
+    const { sheet, x } = await mount();
+    const header = x.closest('.border-b');
+    expect(header?.firstElementChild?.tagName).toBe('H2');
+    expect(x.querySelector('svg')?.getAttribute('width')).toBe('20');
+    expect(header?.textContent).not.toContain('Cancel');
+    expect(sheet.querySelectorAll('[aria-label="Close"]')).toHaveLength(1);
+  });
+});
+
 describe('Sheet (clean)', () => {
   it('X, backdrop and Escape close straight away', async () => {
     const { x, backdrop, onClose } = await mount();

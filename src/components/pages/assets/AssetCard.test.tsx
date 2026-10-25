@@ -4,6 +4,9 @@ import { AssetCard } from '@/components/pages/assets/AssetCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 
+// Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+
 // SSR to static markup: useState initializers run (a warm cache.peek hit shows the
 // image) while effects do not. The presign gate is asserted via the cache spies.
 // Assets must look identical after the shared-module refactor, so these assert the
@@ -48,13 +51,7 @@ function makeCache(peekUrl: string | null) {
 
 function render(item: AssetListItem, cache: PresignCache, presignEnabled: boolean): string {
   return renderToStaticMarkup(
-    <AssetCard
-      item={item}
-      cache={cache}
-      presignEnabled={presignEnabled}
-      onOpen={() => {}}
-      onLongPress={() => {}}
-    />,
+    <AssetCard item={item} cache={cache} presignEnabled={presignEnabled} onOpen={() => {}} />,
   );
 }
 
@@ -143,7 +140,6 @@ describe('AssetCard select mode', () => {
         cache={cache}
         presignEnabled={false}
         onOpen={vi.fn()}
-        onLongPress={vi.fn()}
         selectMode
         selected={selected}
         onToggleSelect={vi.fn()}
@@ -178,7 +174,6 @@ describe('AssetCard select mode', () => {
         cache={cache}
         presignEnabled={false}
         onOpen={vi.fn()}
-        onLongPress={vi.fn()}
       />,
     );
     expect(out).toContain('aria-label="View report.pdf"');
@@ -198,7 +193,6 @@ describe('AssetCard select box', () => {
         cache={cache}
         presignEnabled={false}
         onOpen={vi.fn()}
-        onLongPress={vi.fn()}
         selectMode={selectMode}
         onToggleSelect={vi.fn()}
         onStartSelect={withStart ? vi.fn() : undefined}
@@ -231,12 +225,12 @@ describe('AssetCard ⋯ at the bottom, smaller select box', () => {
         cache={cache}
         presignEnabled={false}
         onOpen={vi.fn()}
-        onLongPress={vi.fn()}
       />,
     );
-    expect(out).toMatch(
-      /class="[^"]*h-11 w-11[^"]*rounded-lg[^"]*-bottom-0\.5 -right-0\.5[^"]*"[^>]*data-card-menu=""/,
-    );
+    // The ⋯ is ActionMenu's trigger; its corner box holds the position.
+    expect(out).toMatch(/class="absolute -bottom-0\.5 -right-0\.5 z-10"[^]*?data-card-menu=""/);
+    expect(out).toMatch(/class="[^"]*h-11 w-11[^"]*rounded-lg[^"]*"[^>]*data-card-menu=""/);
+    expect(out).toContain('aria-haspopup="menu"');
     expect(out).not.toMatch(/class="[^"]*top-0[^"]*"[^>]*data-card-menu=""/);
     // The size line keeps room on the right so text never runs under the ⋯.
     expect(out).toContain('flex h-5 items-center pr-8');
@@ -250,7 +244,6 @@ describe('AssetCard ⋯ at the bottom, smaller select box', () => {
         cache={cache}
         presignEnabled={false}
         onOpen={vi.fn()}
-        onLongPress={vi.fn()}
         onStartSelect={vi.fn()}
       />,
     );

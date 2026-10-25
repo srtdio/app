@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 import { AssetCard } from '@/components/pages/assets/AssetCard';
@@ -13,7 +14,8 @@ interface AssetGridProps {
   presignEnabled: boolean;
   cache: PresignCache;
   onOpen: (item: AssetListItem) => void;
-  onLongPress: (item: AssetListItem) => void;
+  /** The rows of an item's ⋯ menu (its ⋯ or a long press opens it). */
+  menuItemsFor?: (item: AssetListItem) => readonly ActionMenuItem[];
   /** When true, cards become selection toggles instead of openers. */
   selectMode?: boolean;
   /** The currently selected asset ids (select mode only). */
@@ -64,7 +66,7 @@ export function AssetGrid({
   presignEnabled,
   cache,
   onOpen,
-  onLongPress,
+  menuItemsFor,
   selectMode = false,
   selectedIds,
   onToggleSelect,
@@ -82,7 +84,7 @@ export function AssetGrid({
             presignEnabled={presignEnabled}
             cache={cache}
             onOpen={() => onOpen(item)}
-            onLongPress={() => onLongPress(item)}
+            menuItems={menuItemsFor?.(item) ?? []}
             selectMode={selectMode}
             selected={selectedIds?.has(item.id) ?? false}
             onToggleSelect={() => onToggleSelect?.(item)}

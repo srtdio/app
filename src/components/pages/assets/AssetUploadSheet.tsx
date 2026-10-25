@@ -18,6 +18,7 @@ import {
 import { useBackGuard } from '@/lib/back-guard';
 import { dispatchInductionRefresh } from '@/lib/induction';
 import { ROOT_LABEL } from '@/components/pages/assets/assets-nav';
+import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
 
 /** One queued file with an optional image preview. Names are derived per mode. */
 export interface PendingUpload {
@@ -243,8 +244,8 @@ interface AssetUploadSheetProps {
         signal?: AbortSignal,
       ) => Promise<UploadOutcome>)
     | undefined;
-  /** Toast sink (the page toast queue). */
-  onToast?: ((message: string) => void) | undefined;
+  /** Toast sink (ui/toast): failures pass 'error' (the bad tone); successes stay neutral. */
+  onToast?: AssetToast | undefined;
   /**
    * One summary toast per run (the Assets page). When set, the per-file toasts
    * are not shown; the summary is sticky when any file failed.
@@ -377,7 +378,7 @@ export function AssetUploadSheet({
       });
     }
     const summary = precheckSummary(rejected);
-    if (summary !== null) onToast?.(summary);
+    if (summary !== null) onToast?.(summary, 'error');
     if (accepted.length === 0) return;
     // Seed the name field the first time the queue fills (the caller's default, or
     // the first file's name), so a root upload starts with a sensible name. A name
@@ -452,7 +453,7 @@ export function AssetUploadSheet({
             }
           } else {
             setStatus(id, { state: 'error', message: outcome.message });
-            if (onSummary === undefined) onToast?.(outcome.message);
+            if (onSummary === undefined) onToast?.(outcome.message, 'error');
           }
         },
       });

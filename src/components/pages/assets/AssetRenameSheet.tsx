@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import type { RenameOutcome } from '@/lib/asset-upload';
+import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
 
 /** display_name ceiling (mirrors the worker's validName). */
 const MAX_ASSET_NAME = 500;
@@ -25,7 +26,8 @@ interface AssetRenameSheetProps {
   onClose: () => void;
   /** Commit the trimmed name to the worker's /rename route. */
   onSubmit: (name: string) => Promise<RenameOutcome>;
-  onToast: (message: string) => void;
+  /** Failures pass 'error' (the bad tone); successes stay neutral. */
+  onToast: AssetToast;
 }
 
 /**
@@ -67,7 +69,7 @@ export function AssetRenameSheet({
       onToast('Renamed');
       onClose();
     } else {
-      onToast(outcome.message);
+      onToast(outcome.message, 'error');
     }
   }
 
