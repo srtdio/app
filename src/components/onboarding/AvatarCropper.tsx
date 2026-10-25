@@ -11,6 +11,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { ICON_SIZE, IconMinus, IconPlus } from '@/components/ui/icons';
 import { CROPPER_HINT } from '@/lib/onboarding';
 
 const FRAME = 260;
@@ -315,14 +316,14 @@ function AvatarCropperImpl(
           className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent-line"
         />
         {!hasPhoto ? (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-sm text-fg-3">
+          <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-base text-fg">
             Choose a photo to position it inside the circle
           </div>
         ) : null}
       </div>
 
       {!hidePicker ? (
-        <Button type="button" variant="default" onClick={() => fileInputRef.current?.click()}>
+        <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
           Choose photo
         </Button>
       ) : null}
@@ -335,9 +336,9 @@ function AvatarCropperImpl(
             label="Zoom out"
             onClick={() => stepZoom(-0.25)}
             disabled={!hasPhoto}
-            className="shrink-0 border border-border bg-panel disabled:pointer-events-none disabled:opacity-50"
+            className="shrink-0 disabled:pointer-events-none disabled:opacity-50"
           >
-            <span className="text-lg leading-none text-fg">-</span>
+            <IconMinus size={ICON_SIZE.control} />
           </IconButton>
           <input
             type="range"
@@ -361,14 +362,14 @@ function AvatarCropperImpl(
             label="Zoom in"
             onClick={() => stepZoom(0.25)}
             disabled={!hasPhoto}
-            className="shrink-0 border border-border bg-panel disabled:pointer-events-none disabled:opacity-50"
+            className="shrink-0 disabled:pointer-events-none disabled:opacity-50"
           >
-            <span className="text-lg leading-none text-fg">+</span>
+            <IconPlus size={ICON_SIZE.control} />
           </IconButton>
         </div>
       </div>
 
-      {hasPhoto ? <p className="text-sm text-fg-3">{CROPPER_HINT}</p> : null}
+      {hasPhoto ? <p className="text-base text-fg">{CROPPER_HINT}</p> : null}
     </div>
   );
 }

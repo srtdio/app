@@ -312,3 +312,15 @@ export const FULL_EXTENSIONS = ['.css'];
  * every PR, never through e2e-select.ts or the root playwright.config.ts.
  */
 export const VISUAL_SPECS = ['e2e/visual/screens.spec.ts'];
+
+/**
+ * Onboarding follows the app: the tour finds controls by data-induction. Any
+ * changed file that sets one (data-induction=, or the 'data-induction' prop or
+ * attribute name) also runs the three tour walks, whatever its area.
+ */
+export const INDUCTION_ANCHOR_MARK = /data-induction=|['"]data-induction['"]/;
+export const INDUCTION_ANCHOR_SPECS = [
+  t('onboarding-creator'),
+  t('onboarding-invited'),
+  t('onboarding-approver'),
+];

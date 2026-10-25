@@ -1,0 +1,125 @@
+{
+  "pr": "Onboarding parity: the pre-app steps, setup and tour follow the design rules",
+  "browser": "chromium (harness)",
+  "unchanged": ["onboarding-sign-up", "onboarding-sign-in", "onboarding-invite-accept"],
+  "screens": {
+    "onboarding-welcome": {
+      "file": "onboarding-welcome.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["step card shadow-2xl", "preview cards 12, no shadow"]
+    },
+    "onboarding-side": {
+      "file": "onboarding-side.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["step card shadow-2xl", "preview cards 12, no shadow"]
+    },
+    "onboarding-name": {
+      "file": "onboarding-name.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": [
+        "username field is ui/Input",
+        "photo hint body style",
+        "step card shadow-2xl",
+        "preview cards 12, no shadow"
+      ]
+    },
+    "onboarding-photo-crop": {
+      "file": "onboarding-photo-crop.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["zoom IconMinus/IconPlus, no overrides", "cropper hints body style"]
+    },
+    "onboarding-role": {
+      "file": "onboarding-role.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["step card shadow-2xl", "preview cards 12, no shadow"]
+    },
+    "onboarding-brand": {
+      "file": "onboarding-brand.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["step card shadow-2xl", "preview cards 12, no shadow"]
+    },
+    "onboarding-waiting": {
+      "file": "onboarding-waiting.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["step card shadow-2xl", "preview cards 12, no shadow"]
+    },
+    "onboarding-workspace-slot": {
+      "file": "onboarding-workspace-slot.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["guide hand is IconHand, no drop shadow", "guide bar meta sm"]
+    },
+    "onboarding-workspace-name": {
+      "file": "onboarding-workspace-name.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["guide hand is IconHand, no drop shadow", "guide bar meta sm"]
+    },
+    "onboarding-workspace-confirm": {
+      "file": "onboarding-workspace-confirm.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["guide hand is IconHand, no drop shadow", "guide bar meta sm"]
+    },
+    "onboarding-first-post": {
+      "file": "onboarding-first-post.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": [
+        "preview measured, never stuck on Measuring",
+        "media hint body style",
+        "guide hand IconHand"
+      ]
+    },
+    "onboarding-invite-approver": {
+      "file": "onboarding-invite-approver.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["guide hand is IconHand", "guide bar meta sm", "Skip tour ghost"]
+    },
+    "onboarding-done": {
+      "file": "onboarding-done.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["closing card title base/500", "eyebrow sm"]
+    },
+    "onboarding-tour-intro": {
+      "file": "onboarding-tour-intro.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": [
+        "intro card on the panel: border, radius 16, shadow-2xl",
+        "Start primary",
+        "Skip tour ghost (fg-2, 4.5:1 on panel)",
+        "card title base/500",
+        "eyebrow sm",
+        "pills bg-panel-2"
+      ]
+    },
+    "onboarding-tour-1": {
+      "file": "onboarding-tour-1.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["Next primary", "chapter row sm", "Skip tour ghost", "guide hand IconHand"]
+    },
+    "onboarding-tour-2": {
+      "file": "onboarding-tour-2.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["Next primary", "chapter row sm", "Skip tour ghost", "guide hand IconHand"]
+    },
+    "onboarding-tour-3": {
+      "file": "onboarding-tour-3.jpg",
+      "rows": ["light", "dark"],
+      "columns": ["phone before", "phone after", "laptop before", "laptop after"],
+      "changes": ["Next primary", "chapter row sm", "Skip tour ghost", "guide hand IconHand"]
+    }
+  }
+}

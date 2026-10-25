@@ -639,6 +639,31 @@ SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: n
 
 // ---------------------------------------------------------------------------
 
+/**
+ * No hover, no focus ring, no transition mid-flight. The pointer parks at the
+ * page corner (a step's last click leaves it on whatever renders there next:
+ * plan-item's "Remove from plan" took its hover fill on some runs), the active
+ * element blurs, then every finite animation and transition must end. Infinite
+ * ones (the guide hand's press loop) never end; animations: 'disabled' holds
+ * those still in the shot.
+ */
+async function stabilise(page: Page): Promise<void> {
+  await page.mouse.move(0, 0);
+  await page.evaluate(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+  });
+  await page.waitForFunction(
+    () =>
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .every((a) => !a.pending && a.playState !== 'running'),
+    undefined,
+    { timeout: 5_000 },
+  );
+}
+
 /** Fonts loaded, images decoded, two frames painted. */
 async function settle(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
@@ -683,6 +708,7 @@ for (const screen of SCREENS) {
     await installDeletedRoutes(page, network);
     await page.goto(screen.url);
     await screen.steps(page);
+    await stabilise(page);
     await settle(page);
     await expect(page).toHaveScreenshot(`${screen.name}.png`, {
       maxDiffPixelRatio: 0.002,

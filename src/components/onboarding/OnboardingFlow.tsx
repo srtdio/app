@@ -526,7 +526,7 @@ export function OnboardingFlow({
       if (saved.error.message.includes('username_taken')) {
         setNameCheck('taken');
         setIndex(steps.indexOf('name'));
-        setError('That username was just taken. Pick another.');
+        setError("Couldn't save that username. Someone just took it, so pick another.");
         return;
       }
       logger.error('onboarding save failed', { error: saved.error.message });
@@ -724,7 +724,7 @@ export function OnboardingFlow({
             <Button onClick={() => photoInputRef.current?.click()}>
               {photoPreview !== null ? ONBOARDING_COPY.changePhoto : ONBOARDING_COPY.addPhoto}
             </Button>
-            <p className="text-sm text-fg-3">{ONBOARDING_COPY.photoHint}</p>
+            <p className="text-base text-fg">{ONBOARDING_COPY.photoHint}</p>
           </div>
           <input
             ref={photoInputRef}
@@ -756,9 +756,11 @@ export function OnboardingFlow({
           <label htmlFor="ob-username" className="mb-1.5 block text-base font-medium">
             Username
           </label>
-          <div className="flex h-11 items-center rounded-lg border border-border bg-panel-2 pl-3 focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft">
-            <span className="text-base text-fg-3">@</span>
-            <input
+          <div className="flex items-center gap-2">
+            <span aria-hidden="true" className="text-base text-fg-2">
+              @
+            </span>
+            <Input
               id="ob-username"
               autoCapitalize="off"
               autoComplete="off"
@@ -769,7 +771,6 @@ export function OnboardingFlow({
                 setUsernameEdited(true);
                 setUsername(normalizeUsernameInput(event.target.value));
               }}
-              className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-input md:text-base text-fg outline-none placeholder:text-fg-3"
             />
           </div>
           <p className={cn('mt-1.5 text-sm', hintTone)} aria-live="polite">
@@ -940,7 +941,7 @@ export function OnboardingFlow({
             <StepLabel.Provider
               value={progressAt >= 0 ? setupCounter(progressAt + 1, progress.length) : null}
             >
-              <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-[var(--shadow-card)]">
+              <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-2xl">
                 {body}
                 {photoNotice !== null && (step === 'brand' || readyForShell) ? (
                   <p role="status" className="text-base text-fg-2 [text-wrap:pretty]">
@@ -1035,7 +1036,7 @@ function Labeled({
         {label}
       </label>
       {children}
-      {hint !== undefined ? <p className="mt-1.5 text-sm text-fg-3">{hint}</p> : null}
+      {hint !== undefined ? <p className="mt-1.5 text-base text-fg">{hint}</p> : null}
     </div>
   );
 }
@@ -1168,7 +1169,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
 
 function PreviewCard({ label, children }: { label: string; children: ReactNode }): ReactElement {
   return (
-    <div className="w-full max-w-[340px] rounded-2xl border border-border bg-panel p-3.5 shadow-[var(--shadow-card)]">
+    <div className="w-full max-w-[340px] rounded-xl border border-border bg-panel p-3.5">
       <p className="mb-2 text-sm text-fg-3">{label}</p>
       {children}
     </div>
