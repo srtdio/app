@@ -36,7 +36,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/toast';
-import { ICON_SIZE, IconLock, IconMore, IconSend, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { ActionMenu, ActionMenuTrigger } from '@/components/ui/ActionMenu';
@@ -862,7 +862,7 @@ export function PlanItemScreen(props: {
                   disabled={(text.trim() === '' && !askingChanges) || sending || busy}
                   className="shrink-0"
                 >
-                  <IconSend size={ICON_SIZE.control} />
+                  <IconArrowUp size={ICON_SIZE.control} />
                 </Button>
               </div>
             </form>

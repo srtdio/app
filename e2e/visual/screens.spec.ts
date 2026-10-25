@@ -26,7 +26,8 @@ import { AUDIT_BRIEF_ID, seedAudit, type AuditSeedOptions } from '../fixtures/au
 // Deterministic by construction: the fixture world is built at a fixed instant
 // and the page clock is pinned to it, so relative stamps ("2m") and "today"
 // never move; zone and locale are fixed in the config; fonts are local
-// (@fontsource) and awaited; animations are disabled and the caret hidden.
+// (@fontsource) and awaited; images are decoded; animations are disabled and
+// the caret hidden; the Vite HMR socket is stubbed (no reload mid-capture).
 // Selectors are roles, labels, visible text and data- hooks only.
 
 /** The fixed instant: a Wednesday morning (UTC, the fixture workspace's zone). */
@@ -452,8 +453,20 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await openDm(page);
       const bubble = page.locator('[data-bubble]', { hasText: 'Done, it reads well now.' }).last();
-      await openMenuGesture(page, bubble);
-      await waitFor([page.getByRole('menu'), page.getByRole('dialog')], 'message menu');
+      const menu = page.getByRole('menu').or(page.getByRole('dialog'));
+      // A synthetic hold can be cut short by a scroll settling under it: try again.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await openMenuGesture(page, bubble);
+        if (
+          await menu
+            .first()
+            .isVisible()
+            .catch(() => false)
+        ) {
+          break;
+        }
+      }
+      await waitFor([menu], 'message menu');
     },
   },
   {
@@ -551,7 +564,7 @@ const SCREENS: Screen[] = [
     seed: creator,
     url: '/settings?panel=workspace',
     steps: async (page) =>
-      waitFor([page.getByRole('tab', { name: 'Workspace', selected: true })], 'settings'),
+      waitFor([page.getByText('Brand name', { exact: true })], 'settings workspace'),
   },
   { name: 'chat-post-sheet', seed: creator, url: '/chat', steps: openChatPostSheet },
   { name: 'chat-post-sheet-approver', seed: approver, url: '/chat', steps: openChatPostSheet },
@@ -643,6 +656,12 @@ for (const screen of SCREENS) {
   test(screen.name, async ({ page }) => {
     // The page's clock is pinned (Date only; timers keep running).
     await page.clock.setFixedTime(NOW);
+    // Vite's HMR socket answers nothing, so a file saved mid-run never
+    // reloads or patches the page under a screenshot.
+    await page.routeWebSocket(
+      (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+      () => undefined,
+    );
     const network = await installHarnessNetwork(page);
     // Rebuild the world at the fixed instant (the handlers read world.tables per request).
     Object.assign(network.world, buildWorld(NOW));

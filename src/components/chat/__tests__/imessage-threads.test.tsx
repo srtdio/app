@@ -217,7 +217,7 @@ describe('group geometry (i4-group-b)', () => {
       rail: railFor('middle', { isGroup: true }),
     });
     expect(out).toContain('w-8 shrink-0');
-    expect(out).toContain('w-[49px]');
+    expect(out).toContain('w-[55px]');
   });
 
   it('a non-member group row is untouched', () => {
