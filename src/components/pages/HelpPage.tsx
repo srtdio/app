@@ -209,10 +209,12 @@ export function HelpPage() {
                 key={item}
                 type="button"
                 label={item}
+                count={filterHelpArticles(ARTICLES, item, query).length}
                 selected={category === item}
                 aria-pressed={category === item}
+                size="tap"
                 onClick={() => setCategory(item)}
-                className="shrink-0"
+                className="flex-none whitespace-nowrap"
               />
             ))}
           </div>

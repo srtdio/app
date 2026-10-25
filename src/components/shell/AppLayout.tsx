@@ -37,8 +37,20 @@ export function isThreadRoute(pathname: string, search: URLSearchParams): boolea
   return pathname === '/chat' && channel !== null && channel !== '';
 }
 
+// Post detail (/posts/:id, /p/:ref) and Brief detail (/briefs/:id, /b/:ref).
+const DETAIL_ROUTE = /^\/(posts|p|briefs|b)\/[^/]+\/?$/;
+
 /**
- * Shell chrome classes for a render. Inside a chat thread, below md, the Topbar
+ * True on a Post detail or Brief detail route; mobile then drops the shell
+ * chrome as a chat thread does (the page carries its own back arrow).
+ */
+export function isDetailRoute(pathname: string): boolean {
+  return DETAIL_ROUTE.test(pathname);
+}
+
+/**
+ * Shell chrome classes for a render. Inside a chat thread or on a Post or
+ * Brief detail page, below md, the Topbar
  * is hidden, BottomTabs are not rendered and main drops its tab-bar padding;
  * md and up is unchanged (BottomTabs are md:hidden anyway). Derived from the URL
  * in the same render, so the first paint is already correct.
@@ -93,7 +105,7 @@ function AppLayoutBody() {
   const { pathname, search } = useLocation();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
-  const chrome = shellChrome(isThreadRoute(pathname, searchParams));
+  const chrome = shellChrome(isThreadRoute(pathname, searchParams) || isDetailRoute(pathname));
   const [paletteOpen, setPaletteOpen] = useState(false);
   const paletteOpenRef = useRef(false);
   paletteOpenRef.current = paletteOpen;

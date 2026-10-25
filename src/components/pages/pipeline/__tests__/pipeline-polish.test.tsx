@@ -6,6 +6,8 @@ import { act, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Sheet } from '@/components/ui/Sheet';
 import { StageEmpty } from '@/components/pages/pipeline/stage-meta';

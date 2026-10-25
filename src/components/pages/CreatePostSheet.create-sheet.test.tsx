@@ -201,13 +201,13 @@ describe('New post sheet: Title', () => {
 });
 
 describe('New post sheet: header', () => {
-  it('no footer; the header holds X, "New post", Save draft and Send for review in that order', async () => {
+  it('no footer; the header holds "New post", Save draft, Send for review and X in that order', async () => {
     await renderSheet();
     const head = header();
     const order = [...head.querySelectorAll('button, h2')].map(
       (el) => el.getAttribute('aria-label') ?? (el.textContent ?? '').trim(),
     );
-    expect(order).toEqual(['Close', 'New post', 'Save draft', 'Send for review']);
+    expect(order).toEqual(['New post', 'Save draft', 'Send for review', 'Close']);
     expect(draftButton().className).toContain('h-11');
     expect(reviewButton().className).toContain('bg-accent');
     expect(buttonByText('Cancel')).toBeUndefined();

@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { IconButton } from '@/components/ui/IconButton';
 import type { ReactElement, ReactNode } from 'react';
 import { readFileSync } from 'node:fs';

@@ -1,6 +1,9 @@
-// X5 fix 5 (FT21): an empty pipeline has a headline and, for post.create, a
-// "Create your first post" button; empty board columns use emptyStageMessage, not "Empty".
+// X5 fix 5 (FT21): an empty pipeline has a headline and no create button of its
+// own (the header's New post is the only one); empty board columns use
+// emptyStageMessage, not "Empty".
 import { describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { emptyPipeline } from '@/components/pages/PipelinePage';
 import { PipelineBoardView } from '@/components/pages/pipeline/PipelineBoard';
@@ -13,18 +16,12 @@ const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 const cache = { peek: vi.fn(() => null), resolve: vi.fn() } as unknown as PresignCache;
 
 describe('X5 empty pipeline', () => {
-  it('people with post.create get a headline and a create button', () => {
-    const out = renderToStaticMarkup(emptyPipeline(true));
-    expect(out).toContain('Posts show up here.');
-    expect(out).toContain('Create your first post');
-    // The header owns the exact "New post" name; no second control shares it.
-    expect(out.toLowerCase()).not.toContain('new post');
-  });
-
-  it('people without post.create get the headline only', () => {
-    const out = renderToStaticMarkup(emptyPipeline(false));
+  it('an empty pipeline is the headline only: the header owns the create button', () => {
+    const out = renderToStaticMarkup(emptyPipeline());
     expect(out).toContain('Posts show up here.');
     expect(out).not.toContain('Create your first post');
+    expect(out).not.toContain('<button');
+    expect(out.toLowerCase()).not.toContain('new post');
   });
 
   it('every empty board column names its stage instead of "Empty"', () => {

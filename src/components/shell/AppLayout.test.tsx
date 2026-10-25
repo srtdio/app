@@ -8,7 +8,7 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
-import { isThreadRoute, shellChrome } from '@/components/shell/AppLayout';
+import { isDetailRoute, isThreadRoute, shellChrome } from '@/components/shell/AppLayout';
 
 // AppLayout pulls in router + workspace + profile + chat/inbox/toast providers and
 // renders under a DOM-less vitest node environment, so mounting it cleanly is
@@ -68,5 +68,30 @@ describe('AppLayout chat thread chrome', () => {
   it('renders the Topbar wrapper and BottomTabs from the chrome, no effect or state', () => {
     expect(source).toContain('<div className={chrome.topbarClassName}>');
     expect(source).toContain('{chrome.showBottomTabs ? <BottomTabs /> : null}');
+  });
+});
+
+// Post detail and Brief detail drop the phone chrome exactly as a chat thread does.
+describe('AppLayout detail route chrome', () => {
+  it('Post and Brief detail routes hide the Topbar and BottomTabs at mobile width', () => {
+    for (const path of ['/posts/abc', '/p/ACME-12', '/briefs/abc', '/b/ACME-3']) {
+      expect(isDetailRoute(path)).toBe(true);
+      const chrome = shellChrome(isDetailRoute(path));
+      expect(chrome.topbarClassName.split(' ')).toContain('hidden');
+      expect(chrome.topbarClassName.split(' ')).toContain('md:contents');
+      expect(chrome.showBottomTabs).toBe(false);
+    }
+  });
+
+  it('list routes keep the chrome', () => {
+    for (const path of ['/pipeline', '/briefs', '/posts', '/plan', '/plan/abc', '/assets']) {
+      expect(isDetailRoute(path)).toBe(false);
+    }
+  });
+
+  it('the shell derives the chrome from both the thread and the detail route', () => {
+    expect(source).toContain(
+      'shellChrome(isThreadRoute(pathname, searchParams) || isDetailRoute(pathname))',
+    );
   });
 });

@@ -12,8 +12,8 @@ import {
 } from '@/components/pages/pipeline/PipelineSortControl';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 
-// Button system: the Sort / Due date triggers and the stage chips are the
-// shared 44px / 8px-radius Button.
+// Button system: the Sort / Due date triggers are the shared 44px /
+// 8px-radius Button; the stage chips are the shared ui/Chip.
 
 function buttonTags(html: string): string[] {
   return html.match(/<button[^>]*>/g) ?? [];
@@ -58,21 +58,28 @@ describe('Pipeline controls buttons', () => {
     expect(classOf(due)).toContain('border-accent-line');
   });
 
-  it('stage chips are shared 44px buttons with an 8px radius', () => {
+  it('stage chips are the shared ui/Chip: 44px, 8px radius, count only above 0', () => {
     const html = renderToStaticMarkup(
       <StageChips
         items={[
           { key: 'all', label: 'All', count: 3 },
           { key: 'review', label: 'Review', count: 1, stage: 'review' },
+          { key: 'parked', label: 'Parked', count: 0, stage: 'parked' },
         ]}
         active="review"
         onChange={() => {}}
       />,
     );
     const tags = buttonTags(html);
-    expect(tags).toHaveLength(2);
-    for (const tag of tags) expectShared(tag);
+    expect(tags).toHaveLength(3);
+    for (const tag of tags) {
+      expect(classOf(tag)).toContain('min-h-[44px]');
+      expect(classOf(tag)).toContain('rounded-lg');
+    }
     const active = tags.find((tag) => tag.includes('aria-current="true"'));
     expect(classOf(active ?? '')).toContain('bg-accent-soft');
+    expect(html).toContain('<span class="tabular-nums">3</span>');
+    expect(html).toContain('<span class="tabular-nums">1</span>');
+    expect(html).not.toContain('<span class="tabular-nums">0</span>');
   });
 });

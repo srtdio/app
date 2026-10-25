@@ -128,7 +128,7 @@ export function StageMoveConfirmView(props: StageMoveConfirmViewProps): ReactEle
       title={copy.title}
       footer={
         <div className="flex w-full gap-2">
-          <Button variant="default" className="flex-1" onClick={props.onCancel}>
+          <Button variant="ghost" className="flex-1" onClick={props.onCancel}>
             Cancel
           </Button>
           <Button variant={copy.variant} className="flex-1" data-stage-confirm="" onClick={confirm}>

@@ -3,7 +3,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
@@ -33,9 +33,10 @@ const EXIT_MS = DUR_BASE_MS;
 
 /**
  * The full New post sheet's frame: the shared Sheet's panel, motion, focus,
- * Escape and Back handling, with its own header (X left, the title, then the
- * save buttons top right) and no footer. The shared Sheet's header holds only
- * a title and its X on the right, so this frame lives here.
+ * Escape and Back handling, with its own header (the title left, then the
+ * save buttons, then the close X far right, as every sheet header) and no
+ * footer. The shared Sheet's header holds only a title and its X, so this
+ * frame lives here.
  */
 export function ComposerSheet({
   open,
@@ -134,8 +135,10 @@ export function ComposerSheet({
       >
         <div
           data-composer-header=""
-          className="flex min-w-0 items-center gap-1.5 border-b border-border py-2 pl-1.5 pr-3 sm:gap-2.5 sm:pl-2.5 sm:pr-[18px]"
+          className="flex min-w-0 items-center gap-1.5 border-b border-border py-2 pl-[18px] pr-1.5 sm:gap-2.5 sm:pr-2.5"
         >
+          <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">{title}</h2>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">{actions}</div>
           <IconButton
             label="Close"
             onClick={requestClose}
@@ -146,10 +149,8 @@ export function ComposerSheet({
             )}
             {...(busy ? { 'aria-disabled': 'true' as const } : {})}
           >
-            <IconX />
+            <IconX size={ICON_SIZE.control} />
           </IconButton>
-          <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">{title}</h2>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">{actions}</div>
         </div>
         <div className="overflow-y-auto px-[18px] py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
           {children}

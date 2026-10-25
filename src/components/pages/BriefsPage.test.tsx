@@ -17,7 +17,7 @@ import { dispatchSorted } from '@/lib/events';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { Chip } from '@/components/ui/Chip';
-import { IconPlus } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlus } from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { BriefFilter } from '@/lib/brief-list';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
@@ -54,7 +54,8 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
 }
 
 function isNewBrief(el: ReactElement): boolean {
-  return (el.props as { children?: ReactNode }).children === 'New brief';
+  const children = (el.props as { children?: ReactNode }).children;
+  return Array.isArray(children) ? children.includes('New brief') : children === 'New brief';
 }
 
 function header(
@@ -114,7 +115,10 @@ describe('briefsHeader', () => {
     const props = button[0]!.props as { 'aria-label'?: string; 'data-induction'?: string };
     expect(props['aria-label']).toBeUndefined();
     expect(props['data-induction']).toBe('briefs-new');
-    expect(findAll(tree, (el) => el.type === IconPlus)).toHaveLength(0);
+    // The New button leads with IconPlus at the inline size.
+    const plus = findAll(tree, (el) => el.type === IconPlus);
+    expect(plus).toHaveLength(1);
+    expect((plus[0]!.props as { size?: number }).size).toBe(ICON_SIZE.inline);
     expect(
       findAll(
         tree,
@@ -141,6 +145,21 @@ describe('briefsHeader', () => {
     expect(labels).toEqual(['All', 'Open', 'Closed']);
     (chips[1]!.props as { onClick: () => void }).onClick();
     expect(onFilterChange).toHaveBeenCalledWith('open');
+  });
+
+  it('hands each chip its count (ui/Chip shows it only above 0)', () => {
+    const tree = briefsHeader({
+      search: '',
+      onSearchChange: () => {},
+      filter: 'all',
+      onFilterChange: () => {},
+      canCreate: true,
+      counts: { all: 3, open: 3, closed: 0 },
+    });
+    const counts = findAll(tree, (el) => el.type === Chip).map(
+      (c) => (c.props as { count?: number }).count,
+    );
+    expect(counts).toEqual([3, 3, 0]);
   });
 });
 

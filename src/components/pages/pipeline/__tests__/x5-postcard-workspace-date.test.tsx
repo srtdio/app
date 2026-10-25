@@ -1,6 +1,8 @@
 // X5 fix 2 (FB8): target_date is timestamptz and a due date; the card shows its
 // day in the WORKSPACE zone, never the browser zone (src/lib/time.ts).
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { dueLabel } from '@/components/pages/PostCard';
 
 const NOW = new Date('2026-06-01T00:00:00Z');

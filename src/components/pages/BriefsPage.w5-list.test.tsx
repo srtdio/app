@@ -193,7 +193,7 @@ describe('Briefs list filter and search', () => {
     expect(text()).not.toContain('Launch reel');
   });
 
-  it('client with no briefs: "Open briefs show up here." with New brief (same label as the header)', async () => {
+  it('client with no briefs: "Open briefs show up here." and only the header New brief', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [] });
     await mount();
     expect(text()).toContain('Open briefs show up here.');
@@ -201,7 +201,7 @@ describe('Briefs list filter and search', () => {
     const newBriefs = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
       (b) => b.textContent?.trim() === 'New brief',
     );
-    expect(newBriefs).toHaveLength(2);
+    expect(newBriefs).toHaveLength(1);
     expect(clearText()).toBeUndefined();
   });
 

@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PostCard, cardDue } from '@/components/pages/PostCard';
@@ -231,9 +233,9 @@ describe('W4 PostCard fixes', () => {
     );
   }
 
-  it('fix 1: a card with onMove carries a 44x44 move button (the ⋯) above the open overlay', () => {
+  it('fix 1: a card with onMove carries a 44x44 ⋯ (the ActionMenu trigger) above the open overlay', () => {
     const out = renderWith({ post: makePost({}), onMove: () => {} });
-    expect(out).toContain('aria-label="Move post Post title"');
+    expect(out).toContain('aria-label="More actions for Post title"');
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(button).toContain('h-11');
     expect(button).toContain('w-11');
@@ -315,7 +317,8 @@ describe('E: Pipeline card polish', () => {
     // The ⋯ comes after the due text, pushed to the row's right end.
     expect(moveAt).toBeGreaterThan(dueAt);
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(button).toContain('ml-auto');
+    const menu = /<div[^>]*data-post-card-menu=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(menu).toContain('ml-auto');
     expect(button).toContain('h-11 w-11');
     expect(button).toContain('-my-3');
     expect(button).toContain('text-fg-3');

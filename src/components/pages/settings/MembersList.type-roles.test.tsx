@@ -6,6 +6,8 @@
 import type { ComponentProps } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 
 vi.mock('@/lib/supabase', () => ({ supabase: { functions: { invoke: vi.fn() } } }));
 vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceId: 'ws-1' }) }));
@@ -55,7 +57,8 @@ function listProps(
     delivery: new Map(),
     pendingEmails: new Map(),
     roleOptions: getInviteRoleOptions(false),
-    onOpenActions: vi.fn(),
+    onChangeRole: vi.fn(),
+    onRemove: vi.fn(),
     onCancelInvite: vi.fn(),
     onEditInvite: vi.fn<PendingEditHandler>(async () => null),
     ...overrides,

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
+import { useOptionalToast } from '@/components/ui/toast';
 import { PageHead } from '@/components/shell/PageHead';
-import { Toasts } from '@/components/pages/assets/Toasts';
-import { useToasts } from '@/components/pages/assets/useToasts';
 import { supabase } from '@/lib/supabase';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
@@ -26,6 +27,9 @@ import {
 const RESTORE_FAILED = "Couldn't restore the file. Try again.";
 const DELETE_ONE_FAILED = "Couldn't delete the file. Try again.";
 const EMPTY_FAILED = "Couldn't empty Recently deleted. Try again.";
+
+/** The zero state: one positive line. */
+export const RECENTLY_DELETED_EMPTY = 'Deleted posts and files show up here.';
 
 /**
  * What a member who is not the owner reads under the list. It matches
@@ -55,7 +59,8 @@ interface RecentlyDeletedViewProps {
 /**
  * The page body, hook-free so it renders to static markup in tests: the hint,
  * one two-line row per file (full name, then size and days left) with its
- * actions underneath, then the owner's Empty now or the member's note.
+ * actions underneath, then the owner's Empty now or the member's note. With
+ * nothing here: the shared EmptyState's one line.
  */
 export function RecentlyDeletedView({
   items,
@@ -138,7 +143,9 @@ export function RecentlyDeletedView({
             )}
           </div>
         </>
-      ) : null}
+      ) : (
+        <EmptyState icon={<IconTrash size={ICON_SIZE.tray} />} title={RECENTLY_DELETED_EMPTY} />
+      )}
     </div>
   );
 }
@@ -147,7 +154,14 @@ export function RecentlyDeletedPage() {
   const { workspaceId, workspaces } = useWorkspace();
   const { session } = useSession();
   const newTrace = useNewTrace();
-  const { toasts, push, dismiss } = useToasts();
+  // The shared toast: a failure in its error tone, a success neutral.
+  const toast = useOptionalToast();
+  const push = useCallback(
+    (message: string, failure = false): void => {
+      toast?.show({ title: message, ...(failure ? { tone: 'error' as const } : {}) });
+    },
+    [toast],
+  );
   // Owner: the same check the workspace settings panel runs.
   const row = workspaces.find((w) => w.id === workspaceId) ?? null;
   const isOwner = row !== null && session !== null && row.owner_user_id === session.user.id;
@@ -187,7 +201,7 @@ export function RecentlyDeletedPage() {
       try {
         const result = await restoreAsset(supabase, item.id, newTrace());
         if (!result.ok) {
-          push(RESTORE_FAILED);
+          push(RESTORE_FAILED, true);
           return;
         }
         setItems((prev) => prev.filter((candidate) => candidate.id !== item.id));
@@ -226,7 +240,7 @@ export function RecentlyDeletedPage() {
     try {
       const ok = await purge(confirm.kind === 'one' ? [confirm.item.id] : undefined);
       if (!ok) {
-        push(confirm.kind === 'one' ? DELETE_ONE_FAILED : EMPTY_FAILED);
+        push(confirm.kind === 'one' ? DELETE_ONE_FAILED : EMPTY_FAILED, true);
         return;
       }
       push(confirm.kind === 'one' ? 'Deleted for good' : 'Emptied. Space freed.');
@@ -235,7 +249,7 @@ export function RecentlyDeletedPage() {
       logger.warn('recently deleted: purge failed', {
         error: cause instanceof Error ? cause.message : String(cause),
       });
-      push(confirm.kind === 'one' ? DELETE_ONE_FAILED : EMPTY_FAILED);
+      push(confirm.kind === 'one' ? DELETE_ONE_FAILED : EMPTY_FAILED, true);
     } finally {
       setConfirmBusy(false);
       setConfirm(null);
@@ -275,8 +289,6 @@ export function RecentlyDeletedPage() {
           onCancel={() => setConfirm(null)}
         />
       ) : null}
-
-      <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

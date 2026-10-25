@@ -23,6 +23,7 @@ import {
   readInviteOutcome,
   sendInvite,
 } from './MembersInviteForm';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -164,12 +165,19 @@ describe('W12 invite sent status', () => {
   it('copies the accept_url from the not-sent notice', async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    mount(<InviteNotSent email="a@b.com" acceptUrl="https://app.test/invite/accept/inv-9" />);
+    mount(
+      <ToastProvider>
+        <InviteNotSent email="a@b.com" acceptUrl="https://app.test/invite/accept/inv-9" />
+        <ToastViewport />
+      </ToastProvider>,
+    );
     await act(async () => {
       buttonNamed('Copy link')!.click();
     });
     expect(writeText).toHaveBeenCalledWith('https://app.test/invite/accept/inv-9');
-    expect(document.body.textContent).toContain('Link copied');
+    // The shared toast confirms it; the notice carries no inline label.
+    const toastText = document.querySelector('[role="status"][aria-live="polite"]')?.textContent;
+    expect(toastText).toContain('Link copied');
   });
 
   it('reads the outcome and classifies it', () => {

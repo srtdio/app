@@ -107,7 +107,13 @@ function DeleteWorkspaceSheet({
       title={deleteWorkspaceTitle(name)}
       footer={
         <>
-          <Button type="button" className="ml-auto" onClick={close} disabled={deleting}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="ml-auto"
+            onClick={close}
+            disabled={deleting}
+          >
             Cancel
           </Button>
           <Button

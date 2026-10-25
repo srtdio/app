@@ -17,6 +17,7 @@ import {
 import { DatePicker } from '@/components/ui/DatePicker';
 import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { COMPOSER_DISCARD_TITLE, ComposerSheet } from '@/components/pages/create/ComposerSheet';
+import { UNDO_MS } from '@/lib/undo';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import {
   AttachmentsField,
@@ -152,8 +153,8 @@ export const TITLE_PLACEHOLDER = 'e.g. Monsoon drop, part one';
 export const SAVE_DRAFT_LABEL = 'Save draft';
 export const SEND_FOR_REVIEW_LABEL = 'Send for review';
 
-/** How long the "Saved as draft" strip offers Undo. */
-export const DRAFT_UNDO_MS = 4000;
+/** How long the "Saved as draft" strip offers Undo: the one undo window. */
+export const DRAFT_UNDO_MS = UNDO_MS;
 
 /** The Brief helper inside More options. */
 export const BRIEF_HELPER = 'Open briefs in this workspace.';
@@ -1266,7 +1267,7 @@ export function CreatePostSheet({
 
   const presetFooter = (
     <>
-      <Button onClick={onClose} disabled={submitting}>
+      <Button variant="ghost" onClick={onClose} disabled={submitting}>
         Cancel
       </Button>
       <span className="ml-auto flex flex-col items-end gap-1">

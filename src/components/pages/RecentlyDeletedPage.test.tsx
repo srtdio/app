@@ -96,9 +96,10 @@ describe('RecentlyDeletedView', () => {
     expect(out).toContain('h-11');
   });
 
-  it('shows only the hint when nothing is here', () => {
+  it('shows the hint and the one-line zero state when nothing is here', () => {
     const out = render(true, []);
     expect(out).not.toContain('Empty now');
     expect(out).not.toContain('Restore');
+    expect(out).toContain('Deleted posts and files show up here.');
   });
 });

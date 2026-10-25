@@ -5,6 +5,8 @@
 // render to static markup, hookless views are walked as element trees, and
 // only the stage_transition proc is mocked.
 import { afterEach, describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -20,7 +22,13 @@ vi.mock('@/components/pages/pipeline/PipelineDateRangeCalendar', () => ({
   PipelineDateRangeCalendar: () => null,
 }));
 
-import { PostCard, cardCoverKind, cardRatio, dueLabel } from '@/components/pages/PostCard';
+import {
+  PostCard,
+  cardCoverKind,
+  cardMenuItems,
+  cardRatio,
+  dueLabel,
+} from '@/components/pages/PostCard';
 import type { PostCardProps } from '@/components/pages/PostCard';
 import {
   hasAllowedMove,
@@ -206,11 +214,11 @@ describe('post flow C: Pipeline card', () => {
     expect(card({ post: x5Post({ stage: 'review' }) })).not.toContain('data-post-card-status');
   });
 
-  it('fix 3: the ⋯ ends the due row, off the picture, and hides when the viewer has no move', () => {
+  it('fix 3: the ⋯ ends the due row, off the picture; Move hides when the viewer has no move', () => {
     const out = card({ post: x5Post({ stage: 'review' }), onMove: () => {} });
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(button).toContain('aria-label="Move post Post title"');
-    expect(button).toContain('ml-auto');
+    expect(button).toContain('aria-label="More actions for Post title"');
+    expect(/<div[^>]*data-post-card-menu=""[^>]*>/.exec(out)?.[0] ?? '').toContain('ml-auto');
     expect(button).not.toContain('absolute');
     const metaAt = out.indexOf('data-post-card-meta');
     expect(metaAt).toBeGreaterThan(out.indexOf('data-post-card-body'));
@@ -226,12 +234,19 @@ describe('post flow C: Pipeline card', () => {
     const title = /<div[^>]*data-post-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(title).toContain('line-clamp-2');
 
-    // An approver can do nothing with a Draft, Parked or Rejected post: no ⋯.
+    // An approver can do nothing with a Draft, Parked or Rejected post: the ⋯
+    // keeps Open and Copy link, and its Move row is hidden (never disabled).
     for (const stage of ['draft', 'parked', 'rejected'] as const) {
       expect(hasAllowedMove('client', stage)).toBe(false);
-      const hidden = card({ post: x5Post({ stage }), onMove: () => {}, viewer: viewer('client') });
-      expect(hidden).not.toContain('data-post-card-move');
     }
+    const noop = (): void => {};
+    expect(cardMenuItems({ onOpen: noop, onCopyLink: noop }).map((i) => i.label)).toEqual([
+      'Open',
+      'Copy link',
+    ]);
+    expect(
+      cardMenuItems({ onOpen: noop, onCopyLink: noop, onMove: noop }).map((i) => i.label),
+    ).toEqual(['Open', 'Copy link', 'Move']);
     expect(hasAllowedMove('client', 'review')).toBe(true);
     expect(hasAllowedMove('client', 'approved')).toBe(true);
     for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected'] as const) {
@@ -441,11 +456,10 @@ describe('post flow C: header, count and filters', () => {
   });
 
   it('empty copy: one positive line, "Posts show up here."', () => {
-    const out = renderToStaticMarkup(emptyPipeline(false));
+    const out = renderToStaticMarkup(emptyPipeline());
     expect(out).toContain('Posts show up here.');
     expect(out).not.toContain('agency');
     expect(out).not.toContain('No posts yet');
-    expect(renderToStaticMarkup(emptyPipeline(true))).toContain('Posts show up here.');
   });
 });
 

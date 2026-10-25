@@ -2,6 +2,8 @@
 // glyph at the right end of the due row (a 44px tap area that never grows the
 // row), off the picture.
 import { describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PostCard } from '@/components/pages/PostCard';
@@ -67,12 +69,12 @@ describe('X5 PostCard move button placement (the ⋯ at the right end of the due
     expect(button).toContain('w-11');
     // Negative margins: the 44px target overflows a 20px row without growing it.
     expect(button).toContain('-my-3');
-    expect(button).toContain('ml-auto');
+    expect(/<div[^>]*data-post-card-menu=""[^>]*>/.exec(out)?.[0] ?? '').toContain('ml-auto');
     expect(button).toContain('z-10');
     expect(button).toContain('text-fg-3');
     // No resting fill (the shared IconButton only tints on hover).
     expect(button).not.toMatch(/[\s"]bg-/);
-    expect(button).toContain('aria-label="Move post Post title"');
+    expect(button).toContain('aria-label="More actions for Post title"');
     const meta = /<div[^>]*data-post-card-meta=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(meta).toContain('h-5');
     const glyph = /<button[^>]*data-post-card-move=""[^>]*>(<svg[^>]*>)/.exec(out)?.[1] ?? '';

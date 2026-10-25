@@ -72,7 +72,7 @@ test('Pipeline: "Search posts" fits at 360px', async ({ page }) => {
 test('Briefs: "Search briefs" fits at 360px', async ({ page }) => {
   await installHarnessNetwork(page);
   await page.goto('/briefs');
-  await expect(page.getByRole('button', { name: 'Closed', exact: true }).first()).toBeVisible({
+  await expect(page.getByRole('button', { name: /^Closed(\s\d+)?$/ }).first()).toBeVisible({
     timeout: 15_000,
   });
   await expectPlaceholderFits(page, 'Search briefs');

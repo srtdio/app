@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { Button } from '@/components/ui/Button';
+import { ICON_SIZE, IconPlus } from '@/components/ui/icons';
 
 type Value = 'recent' | 'name';
 
@@ -93,6 +94,13 @@ describe('SectionHeader', () => {
     expect(ariaLabel(buttons[0]!)).toBe('Add');
     (buttons[0]!.props as { onClick: () => void }).onClick();
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('the declarative New button leads with IconPlus at the inline size', () => {
+    const tree = SectionHeader({ primaryAction: { label: 'New post', onClick: vi.fn() } });
+    const plus = findAll(tree, (el) => el.type === IconPlus);
+    expect(plus).toHaveLength(1);
+    expect((plus[0]!.props as { size?: number }).size).toBe(ICON_SIZE.inline);
   });
 
   it('renders a custom primary action node when one is provided', () => {
