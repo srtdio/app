@@ -636,6 +636,9 @@ const SCREENS: Screen[] = [
   },
 ];
 
+// The onboarding screens (onboarding-steps.ts), on the fixture world as built.
+SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
+
 // ---------------------------------------------------------------------------
 
 /** Fonts loaded, images decoded, two frames painted. */
