@@ -24,7 +24,7 @@ import { supabase } from '@/lib/supabase';
 import { BUCKET_NAME_MAX, listBuckets, type BucketOption } from '@/lib/buckets';
 import type { MemberOption } from '@/components/chat/member-picker';
 import { targetDateFromInput, targetDateInputValue } from '@/components/pages/pcs/post-date';
-import { formatDate } from '@/lib/time';
+import { formatDueDate } from '@/lib/time';
 
 interface PostDetailsSheetProps {
   open: boolean;
@@ -67,10 +67,10 @@ interface PostDetailsSheetProps {
   lockedFields?: boolean;
 }
 
-/** The stored date as a day on the viewer's clock, for read display. */
-function targetDayText(value: string | null): string {
+/** The stored date as its calendar day on the workspace zone, for read display. */
+function targetDayText(value: string | null, timeZone: string): string {
   if (value === null) return 'No date';
-  return formatDate(value);
+  return formatDueDate(value, timeZone);
 }
 
 /** The picker's last row, opening the inline new bucket form (as the create sheet does). */
@@ -309,7 +309,7 @@ export function PostDetailsSheet({
           ) : (
             <DetailRow
               label="Due date"
-              value={<span className="tabular-nums">{targetDayText(targetDate)}</span>}
+              value={<span className="tabular-nums">{targetDayText(targetDate, timeZone)}</span>}
             />
           )}
 

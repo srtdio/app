@@ -14,7 +14,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function mount(): Promise<void> {
+async function mount(value = ''): Promise<void> {
   const host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -22,7 +22,7 @@ async function mount(): Promise<void> {
     root?.render(
       <SectionHeader
         title="Briefs"
-        search={{ value: '', onChange: () => {}, placeholder: 'Search briefs' }}
+        search={{ value, onChange: () => {}, placeholder: 'Search briefs' }}
       />,
     );
   });
@@ -44,5 +44,36 @@ describe('SectionHeader type roles', () => {
     expect(classes).toContain('text-input');
     expect(classes).toContain('md:text-base');
     expect(classes).not.toContain('text-base');
+  });
+
+  // Audit A1-01: the placeholder must fit a 360px phone row beside sort and New,
+  // so the insets stay tight and the Clear button's 44px is reserved only while
+  // it shows.
+  it('search field uses tight insets while empty', async () => {
+    await mount();
+    const input = document.querySelector<HTMLInputElement>('input[type="search"]');
+    const classes = (input?.className ?? '').split(/\s+/);
+    expect(classes).toContain('pl-7');
+    expect(classes).toContain('pr-2');
+    expect(classes).not.toContain('pr-11');
+    expect(classes).not.toContain('pl-9');
+    const icon = input?.parentElement?.querySelector('span.pointer-events-none');
+    expect((icon?.className ?? '').split(/\s+/)).toContain('left-2');
+  });
+
+  it('search field reserves the Clear button inset only while it has a value', async () => {
+    await mount('diwali');
+    const input = document.querySelector<HTMLInputElement>('input[type="search"]');
+    const classes = (input?.className ?? '').split(/\s+/);
+    expect(classes).toContain('pr-11');
+    expect(classes).not.toContain('pr-2');
+  });
+
+  it('search box takes the remaining row width', async () => {
+    await mount();
+    const box = document.querySelector<HTMLInputElement>('input[type="search"]')?.parentElement;
+    const classes = (box?.className ?? '').split(/\s+/);
+    expect(classes).toContain('flex-1');
+    expect(classes).toContain('min-w-0');
   });
 });

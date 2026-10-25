@@ -1820,8 +1820,9 @@ export function PostDetailPage({
     dispatchInductionRefresh();
   }
 
-  // The workspace civil clock the details sheet's date input round-trips on.
-  // Visible dates read the viewer's device clock (src/lib/time.ts).
+  // The workspace zone: target_date is a due date, a calendar day on the
+  // workspace zone (the details sheet's date input round-trips on it too).
+  // Moments (status line, comments) read the viewer's device clock.
   const approveTimeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
   // Spec A1: one meta line under the title. Owner · "Due 20 Jul" · "From
@@ -1834,7 +1835,7 @@ export function PostDetailPage({
   const canEditContent = agencySide && !readOnly && !approvedLocked;
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
-  const dueLabel = post.target_date !== null ? formatDue(post.target_date) : null;
+  const dueLabel = post.target_date !== null ? formatDue(post.target_date, approveTimeZone) : null;
   const detailsEditable = canEditContent;
   const metaDot = (
     <span aria-hidden className="shrink-0 text-fg-3">
@@ -2635,7 +2636,7 @@ export function PostDetailPage({
         gate={approveGate}
         gateState={approveState}
         mediaCount={gallery.length > 0 ? gallery.length : null}
-        targetDate={approveTargetDate(post.target_date)}
+        targetDate={approveTargetDate(post.target_date, approveTimeZone)}
         busy={transitioning}
         error={approveError}
       />

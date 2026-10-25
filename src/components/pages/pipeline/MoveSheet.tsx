@@ -79,8 +79,10 @@ export interface MoveSheetProps {
  */
 export function MoveSheet(props: MoveSheetProps): ReactElement | null {
   const { onMove, busy = false } = props;
-  const { workspaceId, workspaceName } = useWorkspace();
+  const { workspaces, workspaceId, workspaceName } = useWorkspace();
   const approvers = useWorkspaceApprovers(workspaceId);
+  // Due dates are calendar days on the workspace zone (src/lib/time.ts).
+  const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
   const { gate, state } = useApproveGate(onMove);
   const postId = props.post?.id ?? null;
   // A closed or re-targeted sheet forgets its confirm.
@@ -97,7 +99,7 @@ export function MoveSheet(props: MoveSheetProps): ReactElement | null {
       {...props}
       gate={gate}
       gateState={state}
-      targetDate={props.post !== null ? approveTargetDate(props.post.target_date) : ''}
+      targetDate={props.post !== null ? approveTargetDate(props.post.target_date, timeZone) : ''}
       brand={workspaceName}
       approvers={approvers}
     />

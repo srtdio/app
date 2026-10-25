@@ -56,8 +56,8 @@ export interface PipelineBoardProps {
   onOpenMove?: (post: PipelinePost) => void;
   /** A drop onto a column the post cannot move to: the page toasts the reason. */
   onBlockedMove?: (reason: string) => void;
-  /** For tests: the zone each card reads its target day in (the app passes none: device zone). */
-  timeZone?: string | undefined;
+  /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
+  timeZone?: string | null | undefined;
   /** The viewer's role and approvers: each card's status line and its ⋯. */
   viewer?: CardViewer;
   /** Each post's first photo or video, so its card takes the platform frame. */
@@ -144,8 +144,10 @@ function onColumnDrop(
  */
 export function PipelineBoard(props: PipelineBoardProps): ReactElement {
   const { gate, state } = useApproveGate(props.onMovePost);
-  const { workspaceId, workspaceName } = useWorkspace();
+  const { workspaces, workspaceId, workspaceName } = useWorkspace();
   const approvers = useWorkspaceApprovers(workspaceId);
+  // Due dates are calendar days on the workspace zone (src/lib/time.ts).
+  const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
   const pending = pendingPost(props.grouped, state.pendingId);
   // The last confirmed-or-cancelled post stays rendered so the sheet plays its
   // exit instead of vanishing.
@@ -156,7 +158,7 @@ export function PipelineBoard(props: PipelineBoardProps): ReactElement {
   const open = state.pendingId !== null && !state.sent;
   return (
     <>
-      <PipelineBoardView {...props} onMovePost={gate.request} />
+      <PipelineBoardView {...props} timeZone={timeZone} onMovePost={gate.request} />
       {isAgencySide(props.role) ? (
         <OnBehalfApproveSheet
           open={open}
@@ -167,7 +169,12 @@ export function PipelineBoard(props: PipelineBoardProps): ReactElement {
           onConfirm={(onBehalfOf) => gate.confirm(onBehalfOf)}
         />
       ) : (
-        <BoardApproveConfirm post={pending ?? shown} gate={gate} gateState={state} />
+        <BoardApproveConfirm
+          post={pending ?? shown}
+          gate={gate}
+          gateState={state}
+          timeZone={timeZone}
+        />
       )}
     </>
   );
@@ -199,8 +206,8 @@ export function BoardApproveConfirm(props: {
   post: PipelinePost | null;
   gate: ApproveGate;
   gateState: GateState;
-  /** For tests: the zone the target date reads in. */
-  timeZone?: string | undefined;
+  /** The workspace zone the target (due) date reads in. */
+  timeZone: string | null | undefined;
 }): ReactElement | null {
   const { post, gate, gateState } = props;
   if (post === null) return null;
@@ -370,7 +377,7 @@ function SingleStageGrid({
   cache: PresignCache;
   presignEnabled: boolean;
   workspaceKey: string | null;
-  timeZone?: string | undefined;
+  timeZone?: string | null | undefined;
   onOpenMove?: (post: PipelinePost) => void;
   viewer?: CardViewer;
   covers?: CoverLookup;

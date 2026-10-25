@@ -128,7 +128,10 @@ export function SectionHeader<S extends string = string>({
               stackSearchMd && 'md:order-last md:basis-full',
             )}
           >
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
+            {/* Tight insets so the placeholder fits a 360px phone row beside
+                sort and New: icon 8px in, text 4px after it, and the 44px
+                right inset is reserved only while the Clear button shows. */}
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-3">
               <IconSearch size={ICON_SIZE.inline} />
             </span>
             <input
@@ -137,7 +140,10 @@ export function SectionHeader<S extends string = string>({
               onChange={(e) => search.onChange(e.target.value)}
               placeholder={search.placeholder}
               {...(search.label !== undefined ? { 'aria-label': search.label } : {})}
-              className="h-11 w-full rounded-lg border border-border bg-panel-2 pl-9 pr-11 text-input md:text-base text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none"
+              className={cn(
+                'h-11 w-full min-w-0 rounded-lg border border-border bg-panel-2 pl-7 text-input md:text-base text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none',
+                searching ? 'pr-11' : 'pr-2',
+              )}
             />
             {searching ? (
               <IconButton

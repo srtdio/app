@@ -51,21 +51,25 @@ export interface PostCardProps {
    */
   inColumn?: boolean;
   /**
-   * For tests: the zone the target day reads in. The app passes none: the day
-   * reads on the viewer's device clock (src/lib/time.ts).
+   * The workspace's IANA zone: target_date is a due date, a calendar day on the
+   * workspace zone (src/lib/time.ts). Absent or null: the device zone.
    */
-  timeZone?: string | undefined;
+  timeZone?: string | null | undefined;
 }
 
 /**
  * The card's due line via the app formatter: "Due 15 Mar" ("Due 4 Jan 2027"
- * outside now's year), the day read on the viewer's clock (`timeZone` is for
- * tests). An unparseable value shows as stored.
+ * outside now's year), the day read on the workspace zone. An unparseable value
+ * shows as stored.
  */
-export function dueLabel(value: string, timeZone?: string, now: Date = new Date()): string {
+export function dueLabel(
+  value: string,
+  workspaceZone: string | null | undefined,
+  now: Date = new Date(),
+): string {
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return `Due ${value}`;
-  return formatDue(value, now, timeZone);
+  return formatDue(value, workspaceZone, now);
 }
 
 /** The card's due reading: the due line, or the overdue line in the bad tone. */
@@ -76,23 +80,24 @@ export interface CardDue {
 
 /**
  * "Due 15 Mar" while the day is today or ahead; once the civil day (on the
- * viewer's clock; `timeZone` is for tests) has passed, "Overdue · 12 Oct" /
- * "Overdue 5 months" via the shared formatter. An approved post is done, so it
- * never reads overdue. An unparseable value shows as stored.
+ * workspace zone) has passed, "Overdue · 12 Oct" / "Overdue 5 months" via the
+ * shared formatter. An approved post is done, so it never reads overdue. An
+ * unparseable value shows as stored.
  */
 export function cardDue(
   value: string,
   stage: Stage,
-  timeZone?: string,
+  workspaceZone: string | null | undefined,
   now: Date = new Date(),
 ): CardDue {
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return { text: `Due ${value}`, overdue: false };
-  const civil = civilDay(value, timeZone);
-  if (stage !== 'approved' && civil < civilDay(now, timeZone)) {
-    return { text: formatOverdue(civil, now, timeZone).text, overdue: true };
+  const zone = workspaceZone ?? undefined;
+  const civil = civilDay(value, zone);
+  if (stage !== 'approved' && civil < civilDay(now, zone)) {
+    return { text: formatOverdue(civil, workspaceZone, now).text, overdue: true };
   }
-  return { text: dueLabel(value, timeZone, now), overdue: false };
+  return { text: dueLabel(value, workspaceZone, now), overdue: false };
 }
 
 /**

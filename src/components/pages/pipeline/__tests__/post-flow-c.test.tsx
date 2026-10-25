@@ -255,7 +255,7 @@ describe('post flow C: Pipeline card', () => {
     expect(dueLabel('2026-03-15T02:00:00Z', 'Not/AZone', now)).toBe(
       dueLabel('2026-03-15T02:00:00Z', undefined, now),
     );
-    expect(dueLabel('soon')).toBe('Due soon');
+    expect(dueLabel('soon', 'UTC')).toBe('Due soon');
     const out = card({
       post: x5Post({ target_date: '2026-03-15T02:00:00Z' }),
       timeZone: 'UTC',

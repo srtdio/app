@@ -29,8 +29,8 @@ export interface PipelineFeedProps {
    * Back to the same filters restores the same depth. Absent: not remembered.
    */
   shownKey?: string;
-  /** For tests: the zone each card reads its target day in (the app passes none: device zone). */
-  timeZone?: string;
+  /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
+  timeZone?: string | null;
   /** The viewer's role and approvers: each card's status line and its ⋯. */
   viewer?: CardViewer;
   /** Each post's first photo or video, so its card takes the platform frame. */
@@ -86,7 +86,7 @@ function cardGrid(
   onLongPressPost: (post: PipelinePost) => void,
   workspaceKey: string | null,
   showStage: boolean,
-  timeZone: string | undefined,
+  timeZone: string | null | undefined,
   viewer: CardViewer | undefined,
   covers: CoverLookup | undefined,
 ): ReactElement {
