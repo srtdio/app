@@ -53,6 +53,7 @@ vi.mock('@/components/pages/pcs/use-post-members', () => ({
     error: null,
   }),
 }));
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
 vi.mock('@/components/comments/Comments', () => ({ Comments: () => <div>comments</div> }));
 vi.mock('@/components/pages/pcs/PostGallery', () => ({ PostGallery: () => <div>gallery</div> }));
 

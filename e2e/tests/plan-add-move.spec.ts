@@ -343,9 +343,8 @@ test('agency: Move to another day from the item overflow; Remove from plan is th
   const more = item.locator('[data-plan-item-more]');
   expectMinTouchTarget(await more.boundingBox());
   await more.click();
-  const actions = page.locator('[data-plan-item-actions]');
-  await expect(actions.getByRole('button', { name: /Edit concept/ })).toBeVisible();
-  await actions.getByRole('button', { name: /Move to another day/ }).click();
+  await expect(page.getByRole('menuitem', { name: /Edit concept/ })).toBeVisible();
+  await page.getByRole('menuitem', { name: /Move to another day/ }).click();
   const days = page.locator('[data-plan-move-sheet]');
   await expect(days.locator('[data-plan-move-day="2026-10-16"]')).toHaveAttribute(
     'aria-current',
@@ -362,9 +361,8 @@ test('agency: Move to another day from the item overflow; Remove from plan is th
 
   // The overflow has no Remove row; the screen's red button does it.
   await more.click();
-  await expect(
-    page.locator('[data-plan-item-actions]').getByRole('button', { name: /Remove from plan/ }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: /Edit concept/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Remove from plan/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   const remove = item.locator('[data-plan-remove]');
   await remove.scrollIntoViewIfNeeded();
@@ -381,8 +379,8 @@ test('agency: Move to another day from the item overflow; Remove from plan is th
   await plan.locator(`[data-plan-row="${dated('Thank you note').id}"]`).click();
   await item.locator('[data-plan-more]').click();
   const postSheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
-  await expect(postSheet.getByRole('button', { name: /Move to another day/ })).toBeVisible();
-  await expect(postSheet.getByRole('button', { name: /Remove from plan/ })).toHaveCount(0);
+  await expect(postSheet.getByRole('menuitem', { name: /Move to another day/ })).toBeVisible();
+  await expect(postSheet.getByRole('menuitem', { name: /Remove from plan/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(item.locator('[data-plan-remove]')).toHaveText(/Remove from plan/);
   expectClean(network);

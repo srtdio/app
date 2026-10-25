@@ -1,26 +1,28 @@
 // The post sheet a shared post card opens in chat: every slide of the post, the
-// title and its key facts, and the one action the viewer is waited on for.
-// Approvers in review approve or reject (each after a confirm step) or leave
-// checkpoint points through the same SlotComposer the post page uses; an
-// approved post can still be rejected. A reject's optional reason posts as a
-// comment through the post page's comment write. Agency in review may approve
-// on the client's behalf (same confirm, plus one on-behalf line); agency in draft
-// sends for review (also confirmed). The post itself is never refetched: the card's PR 2
-// row carries every value shown. Only the gallery is read, once per open, and
-// the strip paints a same-height skeleton until it lands, so the sheet never
-// shortens after first paint. A successful stage change announces
-// sorted:post-changed so every live card refetches, then closes and toasts.
-// Colours are design tokens only, so light and dark match.
+// title and its key facts, and the post's decisions. The decisions are Post
+// detail's own (pcs/use-post-decisions, the one hook both call): approvers in
+// review get Reject and Approve, an approved post can still be rejected;
+// creators get "Send for review" or "Send for review again" (open comments ask
+// "Send anyway?", never block), and their other moves (Approve on their behalf
+// with the approver picker, Reject, Park) sit in the ⋯ menu. Placement is Post
+// detail's too: phone, the row is the sheet's bottom bar (its footer); laptop,
+// it sits at the right of the title row beside the ⋯. Approvers in review may
+// also leave checkpoint points through the same SlotComposer the post page uses.
+// The post itself is never refetched: the card's PR 2 row carries every value
+// shown. Only the gallery is read, once per open, and the strip paints a
+// same-height skeleton until it lands, so the sheet never shortens after first
+// paint. A landed move announces sorted:post-changed so every live card
+// refetches. Colours are design tokens only, so light and dark match.
 
 import { useCallback, useEffect, useState } from 'react';
-import type { ReactElement, UIEvent } from 'react';
+import type { ReactElement, ReactNode, UIEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Button, type ButtonVariant } from '@/components/ui/Button';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Tag, isTagDot } from '@/components/ui/Tag';
-import { Textarea } from '@/components/ui/Textarea';
-import { ICON_SIZE, IconPlay } from '@/components/ui/icons';
+import { ICON_SIZE, IconArrowUpRight, IconLink, IconPlay } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import {
@@ -36,48 +38,42 @@ import { runCreateCommentBatch } from '@/components/comments/Comments';
 import { PostLightbox, slideFromScroll } from '@/components/pages/pcs/PostLightbox';
 import { postHref, type SharedPostView } from '@/components/chat/post-card';
 import {
-  actionLabel,
-  approvedPillLabel,
+  agencyWaitingHint,
   commentToast,
-  confirmCopy,
   detailRows,
+  dispatchPostChanged,
   friendlyCommentError,
   isVideoItem,
   postSubject,
-  REJECT_REASON_HELPER,
-  REJECT_REASON_LABEL,
   reelLabel,
-  runStageChange,
-  sheetActions,
   sheetTitle,
   stageTagLabel,
   stripCounter,
-  type ConfirmKind,
-  type SheetAction,
-  type SheetActionSet,
 } from '@/components/chat/post-sheet';
-import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
+import {
+  hasDecisionContent,
+  PostDecisionBar,
+  PostDecisionRow,
+} from '@/components/pages/pcs/PostDecisionBar';
+import { usePostDecisions } from '@/components/pages/pcs/use-post-decisions';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
+import { buildPostLink } from '@/lib/post-share';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatDueDate } from '@/lib/time';
-import { actsOnBehalfOfClient, type ViewerSide } from '@/lib/chat/viewer-role';
+import type { ViewerSide } from '@/lib/chat/viewer-role';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { getPostGallery, type GalleryItem } from '../../../packages/posts/src/reads';
-import { stageTransition } from '../../../packages/posts/src/stage-machine';
+import { STAGE_TRANSITIONS, type Stage } from '../../../packages/posts/src/stage-machine';
 
 type PostView = Extract<SharedPostView, { kind: 'post' }>;
 
 /** The gallery for one open: loading until the single read settles. */
 export type SheetGallery = { status: 'loading' } | { status: 'ready'; items: GalleryItem[] };
-
-/** What the action area shows: the actions, a confirm block, or the composer. */
-export type SheetMode =
-  | { kind: 'actions' }
-  | { kind: 'confirm'; confirm: ConfirmKind }
-  | { kind: 'comment' };
 
 /**
  * The strip: a 4:5 rail bled to the sheet's edges (the negative margins undo the
@@ -119,24 +115,6 @@ const STRIP_PILL =
 /** The sheet's talk-about label. */
 export function talkAboutLabel(): string {
   return 'Talk about this post';
-}
-
-/**
- * The emphasis each action takes: Approve is the success fill, Reject the
- * secondary with bad ink, the first other action is filled, the rest quieter.
- * Pure.
- */
-export function actionButton(
-  action: SheetAction,
-  first: boolean,
-): { variant: ButtonVariant; className: string } {
-  if (action === 'approve') return { variant: 'success', className: 'w-full' };
-  if (action === 'reject') return { variant: 'secondary', className: 'w-full text-bad' };
-  if (action === 'open_post') return { variant: 'link', className: 'w-full' };
-  if (first) return { variant: 'primary', className: 'w-full' };
-  return action === 'comment'
-    ? { variant: 'secondary', className: 'w-full' }
-    : { variant: 'link', className: 'w-full' };
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +343,10 @@ export function PostSheetMedia(props: {
 // ---------------------------------------------------------------------------
 // Body
 
-/** The full title, the Stage tag, then the key/value rows. Presentational. */
+/**
+ * The full title (with `aside` at its right: the laptop decision row and the
+ * ⋯ menu), the Stage tag, then the key/value rows. Presentational.
+ */
 export function PostSheetDetails(props: {
   view: PostView;
   /** For tests: the zone moments render in. The app passes none (the viewer's device zone). */
@@ -374,8 +355,13 @@ export function PostSheetDetails(props: {
   workspaceZone: string | null | undefined;
   /** The workspace's brand name for "on behalf of <Brand>"; null falls back. */
   brand?: string | null;
+  /** The stage to show (a pending move's), in place of the card row's. */
+  stage?: string;
+  /** Beside the title, at the right: the decision row (laptop) and the ⋯ menu. */
+  aside?: ReactNode;
 }): ReactElement {
   const { post, approverName, approverRole } = props.view;
+  const stage = props.stage ?? post.stage;
   const rows = detailRows(
     post,
     approverName,
@@ -386,17 +372,21 @@ export function PostSheetDetails(props: {
   );
   return (
     <div className="flex flex-col gap-3">
-      <h3 data-sheet-title="" className="text-lg font-semibold text-fg">
-        {post.title}
-      </h3>
+      <div className="flex items-start gap-3">
+        <h3 data-sheet-title="" className="min-w-0 flex-1 py-2.5 text-lg font-semibold text-fg">
+          {post.title}
+        </h3>
+        {props.aside !== undefined ? (
+          <div data-sheet-title-aside="" className="flex shrink-0 items-center gap-2">
+            {props.aside}
+          </div>
+        ) : null}
+      </div>
       <dl className="flex flex-col text-base">
         <div className="flex min-h-[36px] items-center justify-between gap-3 border-b border-border">
           <dt className="text-fg-3">Stage</dt>
           <dd>
-            <Tag
-              label={stageTagLabel(post.stage)}
-              {...(isTagDot(post.stage) ? { dot: post.stage } : {})}
-            />
+            <Tag label={stageTagLabel(stage)} {...(isTagDot(stage) ? { dot: stage } : {})} />
           </dd>
         </div>
         {rows.map((row) => (
@@ -415,199 +405,99 @@ export function PostSheetDetails(props: {
 }
 
 // ---------------------------------------------------------------------------
-// Actions
+// Extras
 
-export interface PostSheetActionsProps {
-  set: SheetActionSet;
-  mode: SheetMode;
-  /** How the confirm names the post (postSubject of its title). */
-  subject: string;
-  approverName: string | null;
-  /** The approver's role: an agency-side approver's pill adds "on behalf of client". */
-  approverRole?: string | null;
-  /** Agency side: the approve confirm adds the on-behalf-of-client line. */
-  onBehalf?: boolean;
-  /** The workspace's brand name; null falls back to "the approvers". */
-  brand?: string | null;
-  mediaCount: number;
-  targetDate: string;
-  /** The creator's name for the reject confirm; null or absent reads "The creator". */
-  creatorName?: string | null;
-  /** The reject confirm's typed reason. */
-  reason?: string;
-  onReasonChange?: (reason: string) => void;
-  busy: boolean;
-  error: string | null;
-  onAction: (action: SheetAction) => void;
-  onConfirm: () => void;
-  onBack: () => void;
+/** The sheet's non-decision buttons and lines under the details. */
+export interface PostSheetExtrasProps {
+  /** An approver in review may leave checkpoint points; absent hides the button. */
+  onComment?: (() => void) | undefined;
   /** Bring the post into the chat's conversation; absent hides the button. */
   onTalkAbout?: (() => void) | undefined;
+  /** A quiet meta line (the agency's "Waiting on approvers since ..."), or null. */
+  hint: string | null;
 }
 
 /**
- * The bottom action area. Actions mode lists the set's buttons, the approved
- * pill and the hint; confirm mode swaps them for the question, its consequence,
- * Back and the confirm button; comment mode leaves only Back (the composer owns
- * its own send). Presentational; safe-area padding keeps it above the home bar.
+ * Comment on this post, Talk about this post and the waiting line. None of
+ * them moves the post (the decisions are the row's and the ⋯ menu's), so they
+ * read the same on phone and laptop. Presentational.
  */
-export function PostSheetActions(props: PostSheetActionsProps): ReactElement {
-  const { set, mode } = props;
-  const brand = props.brand ?? null;
-  const error =
-    props.error !== null ? (
-      <p role="alert" data-sheet-error="" className="text-base text-bad">
-        {props.error}
-      </p>
-    ) : null;
-  let content: ReactElement;
-  if (mode.kind === 'confirm' && mode.confirm === 'reject') {
-    const copy = confirmCopy('reject', {
-      subject: props.subject,
-      mediaCount: props.mediaCount,
-      targetDate: props.targetDate,
-      creatorName: props.creatorName ?? null,
-    });
-    content = (
-      <div data-sheet-confirm="reject" className="flex flex-col gap-2">
-        <p className="text-base font-medium text-fg">{copy.question}</p>
-        <p className="text-base text-fg-2">{copy.detail}</p>
-        <label className="mt-1 flex flex-col gap-1.5">
-          <span className="text-base text-fg-2">{REJECT_REASON_LABEL}</span>
-          <Textarea
-            data-sheet-reason=""
-            aria-describedby="post-sheet-reason-helper"
-            value={props.reason ?? ''}
-            disabled={props.busy}
-            onChange={(event) => props.onReasonChange?.(event.target.value)}
-          />
-        </label>
-        <p id="post-sheet-reason-helper" className="text-sm text-fg-3">
-          {REJECT_REASON_HELPER}
-        </p>
-        {error}
-        <div className="mt-1 flex gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={props.busy}
-            onClick={props.onBack}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            data-sheet-reject-confirm=""
-            disabled={props.busy}
-            onClick={props.onConfirm}
-            className="flex-1 text-bad"
-          >
-            {copy.confirmLabel}
-          </Button>
-        </div>
-      </div>
-    );
-  } else if (mode.kind === 'confirm') {
-    const copy = confirmCopy(mode.confirm, {
-      subject: props.subject,
-      mediaCount: props.mediaCount,
-      targetDate: props.targetDate,
-    });
-    content = (
-      <div data-sheet-confirm={mode.confirm} className="flex flex-col gap-2">
-        <p className="text-base font-medium text-fg">{copy.question}</p>
-        <p className="text-base text-fg-2">{copy.detail}</p>
-        {mode.confirm === 'approve' && props.onBehalf === true ? (
-          <p data-sheet-on-behalf="" className="text-base text-fg-2">
-            {onBehalfConfirmLine(brand)}
-          </p>
-        ) : null}
-        {error}
-        <div className="mt-1 flex gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={props.busy}
-            onClick={props.onBack}
-            className="flex-1"
-          >
-            Back
-          </Button>
-          <Button
-            type="button"
-            variant={mode.confirm === 'approve' ? 'success' : 'primary'}
-            disabled={props.busy}
-            onClick={props.onConfirm}
-            className="flex-1"
-          >
-            {copy.confirmLabel}
-          </Button>
-        </div>
-      </div>
-    );
-  } else if (mode.kind === 'comment') {
-    content = (
-      <Button type="button" variant="secondary" onClick={props.onBack} className="w-full">
-        Back
-      </Button>
-    );
-  } else {
-    content = (
-      <div className="flex flex-col gap-2">
-        {error}
-        {set.approvedPill ? (
-          <Button
-            type="button"
-            variant="ghost"
-            disabled
-            data-approved-pill=""
-            className="w-full cursor-default bg-good-soft text-good disabled:opacity-100"
-          >
-            {approvedPillLabel(props.approverName, props.approverRole ?? null, brand)}
-          </Button>
-        ) : null}
-        {set.actions.map((action, index) => {
-          const look = actionButton(action, index === 0);
-          return (
-            <Button
-              key={action}
-              type="button"
-              variant={look.variant}
-              data-sheet-action={action}
-              disabled={props.busy}
-              onClick={() => props.onAction(action)}
-              className={look.className}
-            >
-              {actionLabel(action)}
-            </Button>
-          );
-        })}
-        {props.onTalkAbout !== undefined ? (
-          <Button
-            type="button"
-            variant="link"
-            data-sheet-talk-about=""
-            onClick={props.onTalkAbout}
-            className="w-full bg-accent-soft"
-          >
-            {talkAboutLabel()}
-          </Button>
-        ) : null}
-        {set.hint !== null ? (
-          <p data-sheet-hint="" className="text-center text-sm text-fg-3">
-            {set.hint}
-          </p>
-        ) : null}
-      </div>
-    );
+export function PostSheetExtras(props: PostSheetExtrasProps): ReactElement | null {
+  if (props.onComment === undefined && props.onTalkAbout === undefined && props.hint === null) {
+    return null;
   }
   return (
-    <div data-sheet-actions="" className="w-full pb-[env(safe-area-inset-bottom)]">
-      {content}
+    <div data-sheet-extras="" className="flex flex-col gap-2">
+      {props.onComment !== undefined ? (
+        <Button
+          type="button"
+          variant="secondary"
+          data-sheet-comment=""
+          onClick={props.onComment}
+          className="w-full"
+        >
+          Comment on this post
+        </Button>
+      ) : null}
+      {props.onTalkAbout !== undefined ? (
+        <Button
+          type="button"
+          variant="link"
+          data-sheet-talk-about=""
+          onClick={props.onTalkAbout}
+          className="w-full bg-accent-soft"
+        >
+          {talkAboutLabel()}
+        </Button>
+      ) : null}
+      {props.hint !== null ? (
+        <p data-sheet-hint="" className="text-center text-sm text-fg-3">
+          {props.hint}
+        </p>
+      ) : null}
     </div>
   );
+}
+
+/** The ⋯ menu's rows: Open post, Copy link, then the creator's moves. Pure. */
+export function postSheetMenuItems(args: {
+  onOpenPost: () => void;
+  onCopyLink: () => void;
+  moves: readonly {
+    key: string;
+    icon: ActionMenuItem['icon'];
+    label: string;
+    sub?: string;
+    danger?: boolean;
+    onPick: () => void;
+  }[];
+}): ActionMenuItem[] {
+  return [
+    { id: 'open-post', label: 'Open post', icon: IconArrowUpRight, onSelect: args.onOpenPost },
+    { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: args.onCopyLink },
+    ...args.moves.map(
+      (row): ActionMenuItem => ({
+        id: `move-${row.key}`,
+        label: row.label,
+        icon: row.icon,
+        ...(row.sub !== undefined ? { description: row.sub } : {}),
+        ...(row.danger === true ? { tone: 'danger' as const } : {}),
+        onSelect: row.onPick,
+      }),
+    ),
+  ];
+}
+
+/** A card row stage the stage machine knows, or null (nothing is offered). Pure. */
+export function knownStage(stage: string): Stage | null {
+  return Object.prototype.hasOwnProperty.call(STAGE_TRANSITIONS, stage) ? (stage as Stage) : null;
+}
+
+/** The viewer's side as the role the decision rules read (any agency role acts alike). */
+export function sideRole(side: ViewerSide): string | null {
+  if (side === 'client') return 'client';
+  if (side === 'agency') return 'agency';
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -657,34 +547,49 @@ export function PostSheet(props: PostSheetProps): ReactElement {
   const navigate = useNavigate();
   const newTrace = useNewTrace();
   const toast = useToast();
+  const isLaptop = useIsLaptop();
   const { workspaces, workspaceId, workspaceName, workspaceKey } = useWorkspace();
   const brand = workspaceName ?? null;
   // Due dates are calendar days on the workspace zone (src/lib/time.ts).
   const workspaceZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
   const gallery = useSheetGallery(open, view.postId);
-  const [mode, setMode] = useState<SheetMode>({ kind: 'actions' });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [reason, setReason] = useState('');
+  const [commenting, setCommenting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [viewer, setViewer] = useState<number | null>(null);
 
-  // A closed sheet forgets its confirm, error, strip position and viewer.
+  // A closed sheet forgets its composer, menu, strip position and viewer.
   useEffect(() => {
     if (open) return;
-    setMode({ kind: 'actions' });
-    setBusy(false);
-    setError(null);
-    setReason('');
+    setCommenting(false);
+    setMenuOpen(false);
     setActive(0);
     setViewer(null);
   }, [open]);
 
   const subject = postSubject(post.title);
-  const set = sheetActions(side, post, timeZone);
   const targetDate =
     post.target_date !== null ? formatDueDate(post.target_date, workspaceZone) : '';
   const items = gallery.status === 'ready' ? gallery.items : [];
+
+  // Post detail's decisions, the same hook: a landed move tells every live
+  // card to refetch, and the card's new row replaces the pending stage.
+  const decisions = usePostDecisions({
+    postId: view.postId,
+    stage: knownStage(post.stage),
+    role: sideRole(side),
+    enabled: open,
+    workspaceId,
+    brand,
+    postTitle: post.title,
+    creatorName: view.creatorName ?? null,
+    mediaCount: post.mediaCount > 0 ? post.mediaCount : null,
+    approveDay: targetDate,
+    // No live comment list here: the hook reads the open count on the tap.
+    openCount: null,
+    reload: () => dispatchPostChanged(window, view.postId),
+  });
+  const stage = decisions.stage ?? post.stage;
 
   // Escape belongs to the viewer while it is open (it closes itself on Escape).
   const closeSheet = useCallback(() => {
@@ -696,54 +601,15 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     navigate(postHref(view.postId, post.number, workspaceKey));
   };
 
-  const onAction = (action: SheetAction): void => {
-    setError(null);
-    switch (action) {
-      case 'approve':
-        setMode({ kind: 'confirm', confirm: 'approve' });
-        return;
-      case 'reject':
-        setReason('');
-        setMode({ kind: 'confirm', confirm: 'reject' });
-        return;
-      case 'send_review':
-        setMode({ kind: 'confirm', confirm: 'send_review' });
-        return;
-      case 'comment':
-        setMode({ kind: 'comment' });
-        return;
-      case 'open_post':
-      case 'open_pipeline':
-        openPost();
-        return;
-    }
-  };
-
-  const onConfirm = (): void => {
-    if (mode.kind !== 'confirm' || busy) return;
-    setBusy(true);
-    setError(null);
-    void runStageChange(
-      {
-        transition: (input) => stageTransition(supabase, input),
-        target: window,
-        toast: (title) => toast.show({ title }),
-        close: onClose,
-        postReason: async (body) => {
-          if (workspaceId === null) return { ok: false };
-          const result = await runCreateCommentBatch(supabase, {
-            workspaceId,
-            postId: view.postId,
-            points: [{ body }],
-            traceId: newTrace(),
-          });
-          return { ok: result.ok };
-        },
-      },
-      { kind: mode.confirm, postId: view.postId, traceId: newTrace(), reason },
-    ).then((message) => {
-      setBusy(false);
-      if (message !== null) setError(message);
+  const copyLink = (): void => {
+    // The same in-app link Post detail's Copy link builds (/p/<key>-<n>).
+    const link = buildPostLink(
+      window.location.origin,
+      postHref(view.postId, post.number, workspaceKey),
+    );
+    void copyText(link).then((ok) => {
+      if (ok) toast.show({ title: 'Link copied' });
+      else toast.show({ title: COPY_FAILED, tone: 'error' });
     });
   };
 
@@ -768,46 +634,63 @@ export function PostSheet(props: PostSheetProps): ReactElement {
     setActive(slideFromScroll(el.scrollLeft, el.clientWidth, items.length));
   };
 
-  const commenting = mode.kind === 'comment';
+  const menu = (
+    <ActionMenu
+      title="Post actions"
+      open={menuOpen}
+      onOpenChange={setMenuOpen}
+      items={postSheetMenuItems({
+        onOpenPost: openPost,
+        onCopyLink: copyLink,
+        moves: decisions.moveRows,
+      })}
+    />
+  );
+  // Laptop: the row at the right of the title, beside the ⋯; the approver's
+  // note and a failed tap's error under the details. Phone: the row is the
+  // sheet's bottom bar (its footer), with the note inline.
+  const aside = (
+    <>
+      {isLaptop ? (
+        <div data-header-decision="">
+          <PostDecisionRow model={decisions.model} busy={decisions.busy} error={null} />
+        </div>
+      ) : null}
+      {menu}
+    </>
+  );
+  const phoneBar =
+    !isLaptop && hasDecisionContent(decisions.model, decisions.error) ? (
+      <PostDecisionBar
+        placement="footer"
+        model={decisions.model}
+        busy={decisions.busy}
+        error={decisions.error}
+      />
+    ) : null;
+  const footer = commenting ? (
+    <div data-sheet-actions="" className="w-full">
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => setCommenting(false)}
+        className="w-full"
+      >
+        Back
+      </Button>
+    </div>
+  ) : (
+    phoneBar
+  );
+  const canComment = side === 'client' && stage === 'review';
+
   return (
     <>
       <Sheet
         open={open}
         onClose={closeSheet}
         title={sheetTitle(post.format)}
-        footer={
-          <PostSheetActions
-            set={set}
-            brand={brand}
-            mode={mode}
-            subject={subject}
-            approverName={view.approverName}
-            approverRole={view.approverRole ?? null}
-            onBehalf={actsOnBehalfOfClient(side)}
-            mediaCount={post.mediaCount}
-            targetDate={targetDate}
-            creatorName={view.creatorName ?? null}
-            reason={reason}
-            onReasonChange={setReason}
-            busy={busy}
-            error={error}
-            onAction={onAction}
-            onConfirm={onConfirm}
-            onTalkAbout={
-              props.onTalkAbout !== undefined
-                ? () => {
-                    props.onTalkAbout?.();
-                    onClose();
-                  }
-                : undefined
-            }
-            onBack={() => {
-              setError(null);
-              setReason('');
-              setMode({ kind: 'actions' });
-            }}
-          />
-        }
+        {...(footer !== null ? { footer } : {})}
       >
         <div data-post-sheet={view.postId} className="flex flex-col gap-4">
           {commenting ? (
@@ -833,11 +716,36 @@ export function PostSheet(props: PostSheetProps): ReactElement {
                 timeZone={timeZone}
                 workspaceZone={workspaceZone}
                 brand={brand}
+                stage={stage}
+                aside={aside}
+              />
+              {isLaptop ? (
+                <PostDecisionRow
+                  model={null}
+                  busy={decisions.busy}
+                  error={decisions.error}
+                  note={decisions.note}
+                />
+              ) : decisions.note !== null ? (
+                <p className="text-base text-fg-2">{decisions.note}</p>
+              ) : null}
+              <PostSheetExtras
+                onComment={canComment ? () => setCommenting(true) : undefined}
+                onTalkAbout={
+                  props.onTalkAbout !== undefined
+                    ? () => {
+                        props.onTalkAbout?.();
+                        onClose();
+                      }
+                    : undefined
+                }
+                hint={agencyWaitingHint(side, post, timeZone)}
               />
             </>
           )}
         </div>
       </Sheet>
+      {decisions.confirms}
       {open && viewer !== null && items.length > 0
         ? createPortal(
             <div

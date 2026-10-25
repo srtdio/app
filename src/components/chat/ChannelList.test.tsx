@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import type { ReactElement, ReactNode } from 'react';
 
 // ChannelList now consumes the chat store, whose provider import graph pulls the
@@ -85,8 +86,13 @@ function ariaLabel(el: ReactElement): string | undefined {
   return (el.props as { 'aria-label'?: string })['aria-label'];
 }
 
+function isSelectButton(el: ReactElement): boolean {
+  return el.type === IconButton && (el.props as { label?: string }).label === 'Select';
+}
+
 function isNewChat(el: ReactElement): boolean {
-  return (el.props as { children?: ReactNode }).children === 'New chat';
+  const children = (el.props as { children?: ReactNode }).children;
+  return Array.isArray(children) && children.includes('New chat');
 }
 
 function content(over: {
@@ -108,7 +114,7 @@ function content(over: {
 }
 
 describe('channelListView', () => {
-  it('renders the zero-state with a New chat action when no conversations exist', () => {
+  it('renders the zero-state with no create button of its own (the header has New chat)', () => {
     const view = channelListView({
       channels: [],
       hasChannels: false,
@@ -119,7 +125,7 @@ describe('channelListView', () => {
     expect(view.type).toBe(EmptyState);
     const props = view.props as { title: string; action?: unknown };
     expect(props.title).toBe('Chats with your team show up here.');
-    expect(props.action).toBeDefined();
+    expect(props.action).toBeUndefined();
   });
 
   it('renders NoResults, not the zero-state, when search hides all', () => {
@@ -191,12 +197,14 @@ describe('channelListContent', () => {
     expect(onNewChat).toHaveBeenCalledTimes(1);
   });
 
-  it('shows New chat as visible text, not an icon-only button', () => {
+  it('shows New chat as visible text with IconPlus before it, not an icon-only button', () => {
     const tree = content({ channels });
     const button = findAll(tree, isNewChat)[0]!;
     expect(ariaLabel(button)).toBeUndefined();
     expect(findAll(tree, (el) => ariaLabel(el) === 'New chat')).toHaveLength(0);
-    expect(findAll(tree, (el) => el.type === IconPlus)).toHaveLength(0);
+    const children = (button.props as { children: ReactNode[] }).children;
+    expect((children[0] as ReactElement).type).toBe(IconPlus);
+    expect(children[1]).toBe('New chat');
   });
 
   it('renders exactly one header and no "Chat" title text', () => {
@@ -289,10 +297,7 @@ describe('select mode', () => {
 
   it('offers Select next to search and new chat, which starts select mode', () => {
     const mode = select({});
-    const buttons = findAll(tree(mode), (el) => texts(el).includes('Select'));
-    const selectButton = buttons.find(
-      (el) => (el.props as { children?: unknown }).children === 'Select',
-    );
+    const selectButton = findAll(tree(mode), isSelectButton)[0];
     expect(selectButton).toBeDefined();
     (selectButton!.props as { onClick: () => void }).onClick();
     expect(mode.onStart).toHaveBeenCalledTimes(1);
@@ -379,7 +384,7 @@ describe('load status', () => {
     expect(skeletons.length).toBeGreaterThan(0);
     expect(findAll(tree, (el) => el.type === EmptyState)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === ChannelCard)).toHaveLength(0);
-    expect(texts(tree)).not.toContain('Select');
+    expect(findAll(tree, isSelectButton)).toHaveLength(0);
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
@@ -418,7 +423,7 @@ describe('load status', () => {
     const onRetry = vi.fn();
     const tree = withStatus('error', onRetry);
     expect(findAll(tree, (el) => el.type === ChannelCard)).toHaveLength(0);
-    expect(texts(tree)).not.toContain('Select');
+    expect(findAll(tree, isSelectButton)).toHaveLength(0);
     const empty = findAll(tree, (el) => el.type === EmptyState)[0]!;
     const retry = (empty.props as { action: ReactElement }).action;
     // A Button: 44 tall by the design system.

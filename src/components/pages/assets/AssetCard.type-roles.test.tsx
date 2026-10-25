@@ -8,6 +8,9 @@ import { AssetCard } from '@/components/pages/assets/AssetCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import { humanizeSize, mimeBadge, type AssetListItem } from '@/lib/assets';
 
+// Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+
 function makeAsset(overrides: Partial<AssetListItem>): AssetListItem {
   return {
     id: 'a1',
@@ -41,13 +44,7 @@ const cache = {
 
 function mount(item: AssetListItem): void {
   document.body.innerHTML = renderToStaticMarkup(
-    <AssetCard
-      item={item}
-      cache={cache}
-      presignEnabled={false}
-      onOpen={() => {}}
-      onLongPress={() => {}}
-    />,
+    <AssetCard item={item} cache={cache} presignEnabled={false} onOpen={() => {}} />,
   );
 }
 

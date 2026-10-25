@@ -37,6 +37,7 @@ import {
 import { applyServerClock, initialState } from '@/lib/chat/chat-store';
 import type { ChatMark } from '@/lib/chat/marks';
 import type { ThreadMessage } from '@/lib/chat/thread';
+import { ICON_SIZE, IconChevronRight } from '@/components/ui/icons';
 
 type ItemProps = Parameters<typeof messageMenuItems>[0];
 
@@ -287,6 +288,16 @@ describe('messageMenuItems: row set per case', () => {
     const item = messageMenuItems(itemProps()).find((i) => i.key === 'more');
     expect(item?.kind === 'action' && item.submenu).toBe(true);
     expect(menu({ canSelectText: false, markOptions: [] })).not.toContain('More');
+  });
+
+  it('More leads with the chevron, never the ⋯ glyph; the size flows to every icon', () => {
+    const item = messageMenuItems(itemProps()).find((i) => i.key === 'more');
+    const icon = item?.kind === 'action' ? (item.icon as ReactElement) : null;
+    expect(icon?.type).toBe(IconChevronRight);
+    for (const row of messageMenuItems(itemProps(), ICON_SIZE.inline)) {
+      if (row.kind !== 'action') continue;
+      expect((row.icon as ReactElement).props).toMatchObject({ size: ICON_SIZE.inline });
+    }
   });
 
   it('the More submenu is Back, then the rows under More', () => {

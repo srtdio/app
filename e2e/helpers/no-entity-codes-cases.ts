@@ -74,7 +74,7 @@ export function noEntityCodesCases(): void {
       expect(await visibleText(page)).not.toMatch(CODE);
       await expect(page.getByText('HS-7', { exact: false })).toHaveCount(0);
 
-      await page.getByRole('button', { name: 'Brief actions' }).click();
+      await page.getByRole('button', { name: 'More actions', exact: true }).first().click();
       const menu = page.getByRole('menu', { name: 'Brief actions' });
       await expect(menu.getByRole('menuitem')).toHaveText([
         'Copy link',
@@ -91,7 +91,7 @@ export function noEntityCodesCases(): void {
       await page.goto(`/posts/${POST_IDS[0]}`);
 
       // Flow B 31: the agency-side viewer approves from the ⋯ sheet.
-      const more = page.getByRole('button', { name: 'Post actions' });
+      const more = page.getByRole('button', { name: 'More actions', exact: true }).first();
       await more.waitFor({ state: 'visible', timeout: 15_000 });
       await expect(page.getByText('Monday carousel', { exact: true }).first()).toBeVisible();
       expect(await visibleText(page)).not.toMatch(CODE);
@@ -100,7 +100,7 @@ export function noEntityCodesCases(): void {
       await more.click();
       await page
         .getByRole('dialog', { name: 'Post actions', exact: true })
-        .getByRole('button', { name: /Approve on their behalf/ })
+        .getByRole('menuitem', { name: /Approve on their behalf/ })
         .click();
       await expect(page.locator('[data-on-behalf-approve]')).toHaveText('Approve');
       expect(await visibleText(page)).not.toMatch(CODE);

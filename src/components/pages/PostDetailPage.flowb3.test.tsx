@@ -70,8 +70,11 @@ vi.mock('@/lib/session-context', () => ({
 }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
   useMediaQuery: (query: string) => (query === '(min-width: 1024px)' ? h.wide : h.desktop),
 }));
+// The phone / laptop split (header decision row, ⋯ popover) reads its own hook.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => h.desktop }));
 vi.mock('@/lib/search/jump', () => ({ useSearchJump: () => ({ words: [] }) }));
 vi.mock('@/components/pages/pcs/use-post-members', () => ({
   usePostMembers: () => ({
@@ -325,18 +328,18 @@ afterEach(() => {
 });
 
 describe('30 / C5. approver row: Reject and Approve only', () => {
-  it('laptop: the row sits inline in the decision slot (above the caption), and no phone bar', async () => {
+  it('laptop: the row sits at the right of the header, and no phone bar', async () => {
     h.role = 'client';
     await render();
-    const row = document.querySelector('[data-decision-row]');
-    expect(row).not.toBeNull();
+    const header = document.querySelector('[data-header-decision]');
+    expect(header).not.toBeNull();
     expect(document.querySelector('[data-decision-bar]')).toBeNull();
-    expect(buttonsIn('[data-decision-row]').map((b) => b.textContent?.trim())).toEqual([
+    expect(buttonsIn('[data-header-decision]').map((b) => b.textContent?.trim())).toEqual([
       'Reject',
       'Approve',
     ]);
     const caption = document.querySelector('[data-caption-block]');
-    expect(row!.compareDocumentPosition(caption!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(header!.compareDocumentPosition(caption!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('phone: the same row in the sticky bar only, with no Comment (the composer is on the page)', async () => {
@@ -357,8 +360,9 @@ describe('30 / C5. approver row: Reject and Approve only', () => {
     h.role = 'client';
     await render();
     expect(CLIENT_REVIEW_NOTE).toBe('Review and approve one post at a time.');
-    const row = document.querySelector('[data-decision-row]');
-    expect(row?.textContent).toContain('Review and approve one post at a time.');
+    // Laptop: the buttons sit in the header; the note stays in the content row.
+    const rows = [...document.querySelectorAll('[data-decision-row]')];
+    expect(rows.some((row) => row.textContent?.includes(CLIENT_REVIEW_NOTE))).toBe(true);
     expect(text()).not.toContain('Approval is deliberate');
     // Once on the page.
     expect(count(text(), CLIENT_REVIEW_NOTE)).toBe(1);
@@ -562,23 +566,25 @@ describe('A3. the title is the edit target', () => {
   });
 });
 
-describe('D2. laptop: the stage action sits in the header bar', () => {
-  it('at lg the main button is beside the ⋮, not in the content', async () => {
-    h.wide = true;
+describe('D2 / PR B. laptop: the stage action sits in the header bar', () => {
+  it('on laptop (useIsLaptop) the main button is beside the ⋯, not in the content', async () => {
     await render();
     const header = document.querySelector('[data-header-decision]');
     expect(header?.querySelector('[data-decision-main]')?.textContent?.trim()).toBe(
       'Send for review again',
     );
     expect(document.querySelectorAll('[data-decision-main]').length).toBe(1);
-    const more = document.querySelector('[aria-label="Post actions"]');
+    const more = document.querySelector('[data-header-more]');
     expect(header?.nextElementSibling).toBe(more);
   });
 
-  it('below lg it stays in the content row', async () => {
+  it('on phone it sits in the bottom bar, never the header', async () => {
+    h.desktop = false;
     await render();
     expect(document.querySelector('[data-header-decision]')).toBeNull();
-    expect(document.querySelector('[data-decision-main]')).not.toBeNull();
+    expect(
+      document.querySelector('[data-decision-bar] [data-decision-main]')?.textContent?.trim(),
+    ).toBe('Send for review again');
   });
 });
 

@@ -229,7 +229,8 @@ export function MembersPanel() {
           delivery={delivery}
           pendingEmails={pendingEmails}
           roleOptions={getInviteRoleOptions(false)}
-          onOpenActions={(member) => setActionsFor(member)}
+          onChangeRole={(member) => setActionsFor(member)}
+          onRemove={(member) => setConfirmFor(member)}
           onCancelInvite={performCancel}
           onEditInvite={performEditInvite}
         />
@@ -240,10 +241,6 @@ export function MembersPanel() {
         open={actionsFor !== null}
         canManage={canManage}
         onClose={() => setActionsFor(null)}
-        onRemove={(member) => {
-          setActionsFor(null);
-          setConfirmFor(member);
-        }}
         onChangeRole={performRoleChange}
       />
 

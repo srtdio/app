@@ -2,6 +2,8 @@
 // its caption in fg-3 with no "Caption:" prefix (FN14, post flow C fix 5);
 // loading is card skeletons (N12).
 import { describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { chipRowMask } from '@/components/pages/pipeline/StageChips';

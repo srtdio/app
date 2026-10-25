@@ -211,10 +211,10 @@ test('client: week list, OK with Undo, counts, slot header, overflow, reopen the
   expectMinTouchTarget(await more.boundingBox());
   await more.click();
   const sheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
-  await expect(sheet.getByRole('button', { name: /Open in pipeline/ })).toBeVisible();
-  await expect(sheet.getByRole('button', { name: /Send to chat/ })).toBeVisible();
-  await expect(sheet.getByRole('button', { name: /Copy link/ })).toBeVisible();
-  await expect(sheet.getByRole('button', { name: /Delete post/ })).toHaveCount(0);
+  await expect(sheet.getByRole('menuitem', { name: /Open in pipeline/ })).toBeVisible();
+  await expect(sheet.getByRole('menuitem', { name: /Send to chat/ })).toBeVisible();
+  await expect(sheet.getByRole('menuitem', { name: /Copy link/ })).toBeVisible();
+  await expect(sheet.getByRole('menuitem', { name: /Delete post/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
@@ -334,11 +334,11 @@ test('agency on an Open plan: read-only client PLAN text, header subtitle, long 
   await item.locator('[data-plan-more]').click();
   const sheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
   for (const name of [/Open in pipeline/, /Send to chat/, /Copy link/, /Delete post/]) {
-    await expect(sheet.getByRole('button', { name })).toBeVisible();
+    await expect(sheet.getByRole('menuitem', { name })).toBeVisible();
   }
   // Spec B7: Delete post asks nothing; the post deletes behind the Undo strip,
   // and Undo sends nothing.
-  await sheet.getByRole('button', { name: /Delete post/ }).click();
+  await sheet.getByRole('menuitem', { name: /Delete post/ }).click();
   await expect(page.getByRole('dialog', { name: 'Delete post', exact: true })).toHaveCount(0);
   const strip = undoStrip(page, 'Post deleted');
   await expect(strip).toBeVisible();

@@ -4,6 +4,9 @@ import { ASSET_GRID_PAGE, AssetGrid } from '@/components/pages/assets/AssetGrid'
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 
+// Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+
 // SSR to static markup (the node test env has no DOM), mirroring AssetCard.test:
 // the grid's select pass-through is asserted through the rendered card
 // affordances. A warm cache is never needed here (no image assets), so peek/
@@ -49,7 +52,6 @@ describe('AssetGrid select mode', () => {
         presignEnabled={false}
         cache={cache}
         onOpen={vi.fn()}
-        onLongPress={vi.fn()}
         selectMode
         selectedIds={new Set(['a1'])}
         onToggleSelect={onToggleSelect}
@@ -65,13 +67,7 @@ describe('AssetGrid select mode', () => {
 
   it('renders plain open targets when the select props are absent', () => {
     const out = renderToStaticMarkup(
-      <AssetGrid
-        items={items}
-        presignEnabled={false}
-        cache={cache}
-        onOpen={vi.fn()}
-        onLongPress={vi.fn()}
-      />,
+      <AssetGrid items={items} presignEnabled={false} cache={cache} onOpen={vi.fn()} />,
     );
     expect(out).toContain('aria-label="View one.pdf"');
     expect(out).not.toContain('aria-pressed');
@@ -85,13 +81,7 @@ describe('AssetGrid first screenful', () => {
       makeAsset(`m${i}`, `file-${i}.pdf`),
     );
     const out = renderToStaticMarkup(
-      <AssetGrid
-        items={many}
-        presignEnabled={false}
-        cache={cache}
-        onOpen={vi.fn()}
-        onLongPress={vi.fn()}
-      />,
+      <AssetGrid items={many} presignEnabled={false} cache={cache} onOpen={vi.fn()} />,
     );
     expect(out).toContain(`file-${ASSET_GRID_PAGE - 1}.pdf`);
     expect(out).not.toContain(`file-${ASSET_GRID_PAGE}.pdf`);
@@ -100,13 +90,7 @@ describe('AssetGrid first screenful', () => {
 
   it('draws every card and no marker when they fit in one page', () => {
     const out = renderToStaticMarkup(
-      <AssetGrid
-        items={items}
-        presignEnabled={false}
-        cache={cache}
-        onOpen={vi.fn()}
-        onLongPress={vi.fn()}
-      />,
+      <AssetGrid items={items} presignEnabled={false} cache={cache} onOpen={vi.fn()} />,
     );
     expect(out).toContain('one.pdf');
     expect(out).toContain('two.pdf');

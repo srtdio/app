@@ -19,6 +19,7 @@ import type { RenameOutcome } from '@/lib/asset-upload';
 import { displayLabel, humanizeSize, type AssetListItem } from '@/lib/assets';
 import { isInlineRenderable, mediaKind, typeLabel } from '@/components/pages/assets/media';
 import { assetLink } from '@/components/pages/assets/assets-nav';
+import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
 import { downloadFile } from '@/components/pages/assets/openExternal';
 import { Highlight } from '@/components/ui/SearchHighlight';
 import {
@@ -135,7 +136,8 @@ interface AssetLightboxProps {
   canRename: boolean;
   /** Commit a rename to the worker; resolves the mapped outcome for the toast. */
   onRename: (item: AssetListItem, name: string) => Promise<RenameOutcome>;
-  onToast: (message: string) => void;
+  /** Failures pass 'error' (the bad tone); successes stay neutral. */
+  onToast: AssetToast;
 }
 
 /**
@@ -289,7 +291,7 @@ export function AssetLightbox({
       .catch(() => {
         if (!live) return;
         setMediaFailed(true);
-        onToast(SIGN_FAIL);
+        onToast(SIGN_FAIL, 'error');
       });
     return () => {
       live = false;
@@ -384,7 +386,7 @@ export function AssetLightbox({
     setBusy(true);
     void downloadFile(() => requestDownloadUrl(asset))
       .then(() => onToast('Download started'))
-      .catch(() => onToast(SIGN_FAIL))
+      .catch(() => onToast(SIGN_FAIL, 'error'))
       .finally(() => setBusy(false));
   };
 
@@ -400,7 +402,7 @@ export function AssetLightbox({
   // and never expires, unlike a presigned storage URL.
   const handleCopy = (): void => {
     void copyText(assetLink(window.location.origin, asset.id)).then((ok) =>
-      onToast(ok ? 'Link copied' : COPY_FAILED),
+      ok ? onToast('Link copied') : onToast(COPY_FAILED, 'error'),
     );
   };
 
@@ -465,7 +467,7 @@ export function AssetLightbox({
       setEditingName(false);
       onToast('Renamed');
     } else {
-      onToast(outcome.message);
+      onToast(outcome.message, 'error');
     }
   }
 
@@ -615,7 +617,7 @@ export function AssetLightbox({
           >
             <div className="flex items-center gap-2">
               <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{name}</h2>
-              <IconButton label="Close details" onClick={() => setInfoOpen(false)}>
+              <IconButton label="Close" onClick={() => setInfoOpen(false)}>
                 <IconX size={ICON_SIZE.control} />
               </IconButton>
             </div>
@@ -636,6 +638,7 @@ export function AssetLightbox({
                     />
                     <div className="flex gap-2">
                       <Button
+                        variant="ghost"
                         className="flex-1"
                         onClick={() => setEditingName(false)}
                         disabled={savingName}

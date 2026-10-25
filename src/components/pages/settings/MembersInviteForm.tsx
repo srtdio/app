@@ -7,6 +7,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconChevronDown, IconX } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import type { SelectOption } from '@/components/ui/Select';
+import { useOptionalToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { logger } from '@/lib/logger';
@@ -222,9 +223,13 @@ export function inviteStatus(outcome: InviteOutcome): 'sent' | 'test' | 'not-sen
   return 'not-sent';
 }
 
-/** The not-sent notice: the plain line plus Copy link for the invite's accept_url. */
+/**
+ * The not-sent notice: the plain line plus Copy link for the invite's
+ * accept_url. Copy link confirms through the shared toast ("Link copied"), a
+ * failure in its error tone; no inline label.
+ */
 export function InviteNotSent(props: { email: string; acceptUrl: string | null }) {
-  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const toast = useOptionalToast();
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-warn bg-warn-soft p-3">
       <p role="status" className="text-base text-fg">
@@ -239,13 +244,13 @@ export function InviteNotSent(props: { email: string; acceptUrl: string | null }
             onClick={() => {
               const url = props.acceptUrl;
               if (url === null) return;
-              void copyText(url).then((ok) => setCopied(ok ? 'copied' : 'failed'));
+              void copyText(url).then((ok) =>
+                toast?.show(ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' }),
+              );
             }}
           >
             Copy link
           </Button>
-          {copied === 'copied' ? <span className="text-base text-good">Link copied</span> : null}
-          {copied === 'failed' ? <span className="text-base text-bad">{COPY_FAILED}</span> : null}
         </div>
       ) : null}
     </div>

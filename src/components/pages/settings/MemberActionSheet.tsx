@@ -1,8 +1,8 @@
-// The per-member action surface, built on the existing Sheet primitive (no new
-// overlay). Shows the member's avatar / name / email / role, the role picker +
-// Save (managers only, never on the owner's or the viewer's own row), and the
-// danger action that starts the remove-confirm flow. The panel owns open/close,
-// the member_role_set call and the confirm dialog.
+// The member's role sheet, opened from the row's ⋯ (ui/ActionMenu: Change
+// role, Remove from workspace). Built on the existing Sheet primitive: the
+// member's avatar / name / email / role, then the role picker + Save (managers
+// only, never on the owner's or the viewer's own row). The panel owns
+// open/close, the member_role_set call and the remove confirm dialog.
 
 import { useState } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
@@ -29,7 +29,6 @@ interface MemberActionSheetProps {
   open: boolean;
   canManage: boolean;
   onClose: () => void;
-  onRemove: (member: MemberEntry) => void;
   onChangeRole: MemberRoleChangeHandler;
 }
 
@@ -90,7 +89,6 @@ export function MemberActionSheet({
   open,
   canManage,
   onClose,
-  onRemove,
   onChangeRole,
 }: MemberActionSheetProps) {
   return (
@@ -115,9 +113,6 @@ export function MemberActionSheet({
             // Keyed by member so a reopened sheet starts from that member's role.
             <RoleChange key={member.id} member={member} onChangeRole={onChangeRole} />
           ) : null}
-          <Button variant="danger" className="w-full" onClick={() => onRemove(member)}>
-            Remove from workspace
-          </Button>
         </div>
       ) : null}
     </Sheet>

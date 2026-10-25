@@ -131,6 +131,8 @@ describe('PlanTabPage', () => {
     expect(html).toContain('data-plan-tab-addable');
     expect(html).toContain('Month');
     expect(html).toContain('Plan item, in its plan&#x27;s colour');
+    // No page title: the tab's top bar is the shared SectionHeader.
+    expect(html).not.toContain('<h1');
   });
 
   it('approvers on a phone: shared plans only, no New plan', () => {
@@ -141,13 +143,15 @@ describe('PlanTabPage', () => {
     expect(html).not.toContain('data-plan-tab-new');
   });
 
-  it('the zero state: line 2 until onboarding is done; Create plan for creators only', () => {
+  it('the zero state: line 2 until onboarding is done; no create button of its own', () => {
     const none: PlanTabData = { ...DATA, bundles: [], anyPlan: false };
     Object.assign(env, { desktop: true, side: 'agency', data: none, guide: 'step' });
     let html = render();
     expect(html).toContain('No plans yet');
     expect(html).toContain('Plan the content together, week by week');
-    expect(html).toContain('Create plan');
+    // The top bar's New plan is the only create control on an empty page.
+    expect(html).not.toContain('Create plan');
+    expect(html).toContain('data-plan-tab-new');
     Object.assign(env, { side: 'client', guide: 'off' });
     html = render();
     expect(html).toContain('No plans shared yet');

@@ -3,8 +3,8 @@
 // "Don't open" (focused by default) and a secondary "Open anyway" that opens the
 // link in a new tab with noopener noreferrer.
 //
-// Closes on Esc, a tap on the scrim, "Don't open", or a downward swipe on the
-// sheet. Motion is translateY only (no X button, no rotate); focus is trapped
+// Closes on Esc, a tap on the scrim, the header's close X, "Don't open", or a
+// downward swipe on the sheet. Motion is translateY only (no rotate); focus is trapped
 // inside while open and handed back to the card on close. Colours are tokens
 // only, so light and dark parity comes from the theme.
 
@@ -12,7 +12,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { buttonClass } from '@/components/ui/Button';
-import { IconAlertTriangle, ICON_SIZE } from '@/components/ui/icons';
+import { IconButton } from '@/components/ui/IconButton';
+import { IconAlertTriangle, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
@@ -114,8 +115,9 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             : 'translate-y-full duration-base ease-exit',
         )}
       >
-        {/* The swipe-down handle: grabber + title. The rest of the sheet
-            scrolls normally when it is taller than the screen. */}
+        {/* The swipe-down handle: grabber, then the title left and the close X
+            right (every sheet header). The rest of the sheet scrolls normally
+            when it is taller than the screen. */}
         <div
           data-sheet-drag=""
           className="flex touch-none flex-col gap-3"
@@ -125,13 +127,18 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
           onPointerCancel={onPointerEnd}
         >
           <div aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 rounded-sm bg-border-strong" />
-          <h2
-            id="unsafe-link-title"
-            className="flex items-center gap-2 text-lg font-semibold text-[color:var(--warn-ink)]"
-          >
-            <IconAlertTriangle size={ICON_SIZE.tray} />
-            Check before opening
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2
+              id="unsafe-link-title"
+              className="flex min-w-0 flex-1 items-center gap-2 text-lg font-semibold text-[color:var(--warn-ink)]"
+            >
+              <IconAlertTriangle size={ICON_SIZE.tray} />
+              Check before opening
+            </h2>
+            <IconButton label="Close" onClick={onClose} className="-mr-2 shrink-0">
+              <IconX size={ICON_SIZE.control} />
+            </IconButton>
+          </div>
         </div>
         <p
           data-unsafe-url=""

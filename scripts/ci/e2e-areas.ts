@@ -79,6 +79,8 @@ const CHAT_SPECS = [
   'notifications',
   // Delete a message with a file (purge-chat), then Settings > Delete workspace.
   'workspace-delete-chat-purge',
+  // The chat PostSheet's decisions (Reject from the bar, Park from its ⋯ menu).
+  'chat-post-sheet-decisions',
 ];
 
 export const AREAS: Area[] = [
@@ -125,6 +127,7 @@ export const AREAS: Area[] = [
       'assets-type-tabs',
       'chat-back-navigation',
       'chat-status-ticker',
+      'detail-frame',
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
@@ -139,14 +142,18 @@ export const AREAS: Area[] = [
     routed: true,
     specs: [
       'agency-actions',
+      'action-menu-container',
       'chat-plan',
+      'chat-post-sheet-decisions',
       'chat-status-ticker',
+      'detail-frame',
       'files-open-in-viewer',
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
       'link-previews',
       'pdf-opens-instantly',
+      'post-delete-undo',
     ].map(t),
   },
   {
@@ -161,6 +168,7 @@ export const AREAS: Area[] = [
       'search-placeholder-fit',
       'chat-stars',
       'chat-status-ticker',
+      'detail-frame',
       'files-open-in-viewer',
       'onboarding-creator',
       'onboarding-invited',

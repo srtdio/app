@@ -4,7 +4,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { AssetCard } from '@/components/pages/assets/AssetCard';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
-import { assetMenuRows, copyLinkTarget } from '@/components/pages/assets/AssetActionSheet';
+import { orderActionItems } from '@/components/ui/ActionMenu';
+import {
+  assetMenuItems,
+  assetMenuRows,
+  copyLinkTarget,
+} from '@/components/pages/assets/AssetActionSheet';
 import { uploadBusyLabel, uploadSummary } from '@/components/pages/assets/AssetUploadSheet';
 import {
   ROOT_LABEL,
@@ -15,6 +20,9 @@ import {
 } from '@/components/pages/assets/assets-nav';
 import { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
+
+// Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
 
 // W6 Assets regressions, one block per fix. Node environment (no DOM): pure
 // helpers are driven directly and components are rendered to static markup.
@@ -96,13 +104,7 @@ describe('3. Copy link copies a lasting in-app link', () => {
 describe('4. every card shows a visible 44px ⋯ button', () => {
   it('on asset cards, hidden in select mode', () => {
     const card = renderToStaticMarkup(
-      <AssetCard
-        item={asset()}
-        cache={cache}
-        presignEnabled={false}
-        onOpen={() => {}}
-        onLongPress={() => {}}
-      />,
+      <AssetCard item={asset()} cache={cache} presignEnabled={false} onOpen={() => {}} />,
     );
     expect(card).toContain('aria-label="More actions for photo.png"');
     expect(card).toMatch(/class="[^"]*h-11 w-11[^"]*"[^>]*data-card-menu=""/);
@@ -112,7 +114,6 @@ describe('4. every card shows a visible 44px ⋯ button', () => {
         cache={cache}
         presignEnabled={false}
         onOpen={() => {}}
-        onLongPress={() => {}}
         selectMode
       />,
     );
@@ -120,17 +121,53 @@ describe('4. every card shows a visible 44px ⋯ button', () => {
   });
 });
 
-describe('5. menu rows in order, Delete last', () => {
+describe('5. menu rows in order: Open, Copy link, the rest, Delete last', () => {
   it('file and link menus, with no Move to folder row', () => {
-    expect(assetMenuRows(false, true)).toEqual(['primary', 'copy', 'rename', 'info', 'delete']);
-    expect(assetMenuRows(false, false)).toEqual(['primary', 'copy', 'info', 'delete']);
+    expect(assetMenuRows(false, true)).toEqual(['copy', 'primary', 'rename', 'info', 'delete']);
+    expect(assetMenuRows(false, false)).toEqual(['copy', 'primary', 'info', 'delete']);
     expect(assetMenuRows(true, true)).toEqual(['primary', 'copy', 'rename', 'delete']);
     expect(assetMenuRows(true, false)).toEqual(['primary', 'copy', 'delete']);
+    // A row the member cannot use is hidden, never disabled.
+    expect(assetMenuRows(false, false, false)).toEqual(['copy', 'info', 'delete']);
+    expect(assetMenuRows(true, false, false, false)).toEqual(['delete']);
     for (const isLink of [false, true]) {
       for (const canRename of [false, true]) {
         expect(assetMenuRows(isLink, canRename)).not.toContain('move');
       }
     }
+  });
+});
+
+describe('5b. the card menu is ui/ActionMenu rows', () => {
+  const deps = {
+    presignEnabled: true,
+    requestDownloadUrl: async () => 'https://signed/d',
+    canRename: true,
+    onInfo: () => {},
+    onRename: () => {},
+    onDelete: () => {},
+    onToast: () => {},
+  };
+
+  it('already in the one ⋯ order, Delete last in the danger tone', () => {
+    for (const item of [asset(), asset({ kind: 'link', externalUrl: 'https://x.io/a' })]) {
+      const items = assetMenuItems(item, deps);
+      expect(orderActionItems(items).map((row) => row.id)).toEqual(items.map((row) => row.id));
+      expect(items[items.length - 1]).toMatchObject({ id: 'delete', tone: 'danger' });
+      expect(items.filter((row) => row.tone === 'danger')).toHaveLength(1);
+    }
+    expect(
+      assetMenuItems(asset({ kind: 'link', externalUrl: 'https://x.io/a' }), deps)[0]?.id,
+    ).toBe('open-link');
+  });
+
+  it('Delete runs the page delete at once (Undo strip, no dialog)', () => {
+    const onDelete = vi.fn();
+    const item = asset();
+    assetMenuItems(item, { ...deps, onDelete })
+      .find((row) => row.id === 'delete')
+      ?.onSelect();
+    expect(onDelete).toHaveBeenCalledWith(item);
   });
 });
 
@@ -216,13 +253,7 @@ describe('9. small fixes', () => {
     expect(ROOT_LABEL).toBe('All files');
     expect(read('src/components/pages/assets/AssetUploadSheet.tsx')).toContain('{ROOT_LABEL}');
     const card = renderToStaticMarkup(
-      <AssetCard
-        item={asset()}
-        cache={cache}
-        presignEnabled={false}
-        onOpen={() => {}}
-        onLongPress={() => {}}
-      />,
+      <AssetCard item={asset()} cache={cache} presignEnabled={false} onOpen={() => {}} />,
     );
     expect(card).toContain('line-clamp-2');
   });

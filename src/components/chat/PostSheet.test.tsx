@@ -1,18 +1,27 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PostCardRow, GalleryItem } from '../../../packages/posts/src/reads';
 import {
-  PostSheetActions,
   PostSheetDetails,
+  PostSheetExtras,
   PostSheetMedia,
   STRIP_BOX,
+  knownStage,
+  postSheetMenuItems,
+  sideRole,
   talkAboutLabel,
-  type PostSheetActionsProps,
+  type PostSheetExtrasProps,
   type SheetGallery,
 } from '@/components/chat/PostSheet';
-import { sheetActions } from '@/components/chat/post-sheet';
+import { agencyWaitingHint } from '@/components/chat/post-sheet';
+import { postDecisionLabels } from '@/components/pages/pcs/use-post-decisions';
+import { orderActionItems } from '@/components/ui/ActionMenu';
+import { IconPause } from '@/components/ui/icons';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { PresignCache } from '@/lib/asset-presign';
+import type { Stage } from '@srtdio/posts';
 
 function row(over: Partial<PostCardRow> = {}): PostCardRow {
   return {
@@ -34,216 +43,124 @@ function row(over: Partial<PostCardRow> = {}): PostCardRow {
   };
 }
 
-function actions(
-  side: ViewerSide,
-  post: PostCardRow,
-  over: Partial<PostSheetActionsProps> = {},
-): string {
-  return renderToStaticMarkup(
-    <PostSheetActions
-      set={sheetActions(side, post, 'UTC')}
-      mode={{ kind: 'actions' }}
-      subject="Diwali launch"
-      approverName={null}
-      mediaCount={post.mediaCount}
-      targetDate="Oct 2"
-      busy={false}
-      error={null}
-      onAction={vi.fn()}
-      onConfirm={vi.fn()}
-      onBack={vi.fn()}
-      {...over}
-    />,
-  );
+function read(rel: string): string {
+  return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 }
 
-/** The action ids in render order. */
-function actionIds(html: string): string[] {
-  return [...html.matchAll(/data-sheet-action="([a-z_]+)"/g)].map((m) => m[1] ?? '');
-}
+const STAGES: Stage[] = ['draft', 'review', 'approved', 'parked', 'rejected'];
 
-describe('PostSheetActions by side and stage', () => {
-  it('client in review: approve, reject (bad), comment, open full post, and the hint', () => {
-    const html = actions('client', row({ stage: 'review' }));
-    expect(actionIds(html)).toEqual(['approve', 'reject', 'comment', 'open_post']);
-    expect(html).toContain('>Approve<');
-    expect(html).toContain('>Reject<');
-    // Reject: the secondary button with bad ink (never the red fill here).
-    const reject = /<button[^>]*data-sheet-action="reject"[^>]*>/.exec(html)?.[0] ?? '';
-    expect(reject).toContain('text-bad');
-    expect(reject).toContain('border-border');
-    expect(reject).toContain('h-11');
-    expect(reject).not.toContain('bg-bad-solid');
-    expect(html).toContain('Comment on this post');
-    expect(html).toContain('Open full post');
-    expect(html).toContain('One post at a time. Comments keep it in review.');
-    // Approve: the success variant.
-    const approve = /<button[^>]*data-sheet-action="approve"[^>]*>/.exec(html)?.[0] ?? '';
-    expect(approve).toContain('bg-good-solid');
-    expect(approve).toContain('h-11');
-  });
+// PR B: the chat sheet's decisions are Post detail's. One table, read for both
+// sides on every stage: the row (bottom bar on phone, header right on laptop)
+// and the creator's ⋯ menu moves.
+const PARITY: Record<'client' | 'agency', Record<Stage, { row: string[]; menu: string[] }>> = {
+  client: {
+    draft: { row: [], menu: [] },
+    review: { row: ['Reject', 'Approve'], menu: [] },
+    approved: { row: ['Reject'], menu: [] },
+    parked: { row: [], menu: [] },
+    rejected: { row: [], menu: [] },
+  },
+  agency: {
+    draft: { row: ['Send for review'], menu: ['Park'] },
+    review: {
+      row: ['Send for review again'],
+      menu: ['Approve on their behalf', 'Reject', 'Park'],
+    },
+    approved: { row: [], menu: ['Park', 'Reject'] },
+    parked: { row: ['Send for review'], menu: [] },
+    rejected: { row: ['Send for review'], menu: [] },
+  },
+};
 
-  it('client on an approved post: reject and open, plus the disabled approved pill', () => {
-    const html = actions('client', row({ stage: 'approved' }), { approverName: 'Asha' });
-    expect(actionIds(html)).toEqual(['reject', 'open_post']);
-    expect(html).toContain('Approved by Asha');
-    expect(html).toMatch(/data-approved-pill=""[^>]*disabled|disabled=""[^>]*data-approved-pill/);
-  });
-
-  it('client on a parked post: open only, no pill', () => {
-    const html = actions('client', row({ stage: 'parked' }));
-    expect(actionIds(html)).toEqual(['open_post']);
-    expect(html).not.toContain('data-approved-pill');
-  });
-
-  it('agency in draft: send for review (primary) then open post', () => {
-    const html = actions('agency', row({ stage: 'draft' }));
-    expect(actionIds(html)).toEqual(['send_review', 'open_pipeline']);
-    expect(html).toContain('bg-accent');
-    expect(html).toMatch(/data-sheet-action="open_pipeline"[^>]*>Open post</);
-    expect(html).not.toContain('Open in pipeline');
-  });
-
-  it('agency in review: approve (good), open post and the waiting hint', () => {
-    const html = actions('agency', row({ stage: 'review' }));
-    expect(actionIds(html)).toEqual(['approve', 'open_pipeline']);
-    expect(html).toContain('>Approve<');
-    expect(html).toContain('Waiting on approvers since 20 Sep');
-    expect(html).toContain('bg-good-solid');
-  });
-
-  it('agency gets no Approve outside review, and never Reject; nobody gets Park', () => {
-    for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected']) {
-      const html = actions('agency', row({ stage }));
-      if (stage !== 'review') expect(actionIds(html)).not.toContain('approve');
-      expect(html).not.toContain('Reject');
+describe('PostSheet decisions match PostDetailPage (PR B parity)', () => {
+  for (const side of ['client', 'agency'] as const) {
+    for (const stage of STAGES) {
+      it(`${side === 'client' ? 'approver' : 'creator'} on ${stage}`, () => {
+        // The sheet reads the viewer's side; the page reads the member role.
+        // Both go through the same rules.
+        expect(postDecisionLabels(stage, sideRole(side))).toEqual(PARITY[side][stage]);
+        for (const role of side === 'client' ? ['client'] : ['owner', 'admin', 'agency']) {
+          expect(postDecisionLabels(stage, role)).toEqual(PARITY[side][stage]);
+        }
+      });
     }
-    for (const side of ['agency', 'client'] as const) {
-      const html = actions(side, row({ stage: 'review' }));
-      expect(html).not.toContain('Park');
+  }
+
+  it('an unresolved side is offered nothing', () => {
+    for (const stage of STAGES) {
+      expect(postDecisionLabels(stage, sideRole('unknown'))).toEqual({ row: [], menu: [] });
     }
   });
 
-  it('agency approve confirm names slides and date, plus the on-behalf line', () => {
-    const html = actions('agency', row({ stage: 'review', mediaCount: 5 }), {
-      mode: { kind: 'confirm', confirm: 'approve' },
-      mediaCount: 5,
-      onBehalf: true,
-    });
-    expect(html).toContain('Approve Diwali launch, all 5 slides, for Oct 2?');
-    expect(html).toContain('You are approving on behalf of the approvers.');
-  });
-
-  it('client approve confirm has no on-behalf line', () => {
-    const html = actions('client', row({ stage: 'review' }), {
-      mode: { kind: 'confirm', confirm: 'approve' },
-      onBehalf: false,
-    });
-    expect(html).not.toContain('on behalf of the approvers');
-  });
-
-  it('approved pill suffixes an agency-side approver, not a client or unknown one', () => {
-    const agency = actions('client', row({ stage: 'approved' }), {
-      approverName: 'Chitra',
-      approverRole: 'agency',
-    });
-    expect(agency).toContain('Approved by Chitra on behalf of the approvers');
-    const client = actions('client', row({ stage: 'approved' }), {
-      approverName: 'Asha',
-      approverRole: 'client',
-    });
-    expect(client).toContain('Approved by Asha<');
-    const old = actions('client', row({ stage: 'approved' }), { approverName: 'Asha' });
-    expect(old).not.toContain('on behalf of the approvers');
-  });
-
-  it('every action button is 44px tall, 8px radius, and the area pads for the safe area', () => {
-    const html = actions('client', row({ stage: 'review' }));
-    const buttons = html.match(/<button[^>]*>/g) ?? [];
-    expect(buttons.length).toBe(4);
-    for (const b of buttons) {
-      expect(b).toContain('h-11');
-      expect(b).toContain('rounded-lg');
-      expect(b).not.toContain('h-12');
-      expect(b).not.toContain('rounded-md');
+  it('both surfaces build their decisions from the one hook and render the pcs decision bar', () => {
+    const sheet = read('./PostSheet.tsx');
+    const page = read('../pages/PostDetailPage.tsx');
+    for (const src of [sheet, page]) {
+      expect(src).toContain('usePostDecisions({');
+      expect(src).toContain('<PostDecisionBar');
+      expect(src).toContain('<PostDecisionRow');
+      expect(src).toContain('{decisions.confirms}');
+      expect(src).toContain('useIsLaptop()');
     }
-    expect(html).toContain('pb-[env(safe-area-inset-bottom)]');
+    // The sheet maps the viewer's side to a role the same table reads; the page
+    // passes the member role straight through.
+    expect(sheet).toContain('role: sideRole(side),');
+    expect(sheet).toContain('moves: decisions.moveRows,');
+    expect(page).toContain('moveRows={decisions.moveRows}');
+    // The sheet owns no stage write of its own.
+    expect(sheet).not.toContain('stageTransition(');
+    expect(sheet).not.toContain('runStageChange');
+  });
+
+  it('a card stage outside the stage machine offers nothing', () => {
+    expect(knownStage('review')).toBe('review');
+    expect(knownStage('archived')).toBeNull();
+    expect(knownStage('toString')).toBeNull();
   });
 });
 
-describe('PostSheetActions confirm and error', () => {
-  it('approve confirm swaps the actions for the question, Back and the confirm button', () => {
-    const html = actions('client', row({ stage: 'review', mediaCount: 5 }), {
-      mode: { kind: 'confirm', confirm: 'approve' },
-      mediaCount: 5,
+describe('the sheet ⋯ menu', () => {
+  it('Open post first, Copy link second, then the creator moves', () => {
+    const items = postSheetMenuItems({
+      onOpenPost: vi.fn(),
+      onCopyLink: vi.fn(),
+      moves: [{ key: 'parked', icon: IconPause, label: 'Park', onPick: vi.fn() }],
     });
-    expect(html).toContain('data-sheet-confirm="approve"');
-    expect(html).toContain('Approve Diwali launch, all 5 slides, for Oct 2?');
-    expect(html).toContain('This is logged as your approval and the creators are notified.');
-    expect(html).toContain('>Back<');
-    expect(html).toContain('>Approve<');
-    expect(actionIds(html)).toEqual([]);
-    expect(html).not.toContain('Comment on this post');
+    expect(orderActionItems(items).map((i) => i.label)).toEqual(['Open post', 'Copy link', 'Park']);
+  });
+});
+
+describe('PostSheetExtras', () => {
+  function extras(
+    side: ViewerSide,
+    post: PostCardRow,
+    over: Partial<PostSheetExtrasProps> = {},
+  ): string {
+    return renderToStaticMarkup(
+      <PostSheetExtras hint={agencyWaitingHint(side, post, 'UTC')} {...over} />,
+    );
+  }
+
+  it('the approver in review may comment; nothing moves the post here', () => {
+    const html = extras('client', row(), { onComment: vi.fn() });
+    expect(html).toContain('Comment on this post');
+    expect(html).not.toContain('>Approve<');
+    expect(html).not.toContain('>Reject<');
   });
 
-  it('reject confirm: the question, the creator line, the reason field, Cancel and Reject', () => {
-    const html = actions('client', row({ stage: 'review' }), {
-      mode: { kind: 'confirm', confirm: 'reject' },
-      creatorName: 'Priya Shah',
-      reason: 'Wrong logo',
-    });
-    expect(html).toContain('data-sheet-confirm="reject"');
-    expect(html).toContain('Reject this post?');
-    expect(html).toContain('Priya gets it back to rework. You can send a reason.');
-    expect(html).toContain('Reason (optional)');
-    expect(html).toContain('Goes to the comments.');
-    expect(html).toMatch(/<textarea[^>]*data-sheet-reason=""/);
-    expect(html).toContain('Wrong logo');
-    expect(html).toContain('>Cancel<');
-    expect(html).toMatch(/data-sheet-reject-confirm=""[^>]*>Reject</);
-    expect(html).toMatch(/<button[^>]*text-bad[^>]*data-sheet-reject-confirm=""/);
-    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/client|agency/i);
-    expect(actionIds(html)).toEqual([]);
+  it("the agency's waiting line in review", () => {
+    expect(extras('agency', row())).toContain('Waiting on approvers since 20 Sep');
+    expect(extras('agency', row({ stage: 'draft' }))).toBe('');
   });
 
-  it('reject confirm without a creator name reads "The creator"', () => {
-    const html = actions('client', row({ stage: 'approved' }), {
-      mode: { kind: 'confirm', confirm: 'reject' },
-    });
-    expect(html).toContain('The creator gets it back to rework. You can send a reason.');
-  });
-
-  it('send-for-review confirm has its own copy', () => {
-    const html = actions('agency', row({ stage: 'draft' }), {
-      mode: { kind: 'confirm', confirm: 'send_review' },
-    });
-    expect(html).toContain('data-sheet-confirm="send_review"');
-    expect(html).toContain('Send Diwali launch to the approvers for review?');
-  });
-
-  it('shows the mapped error copy in the confirm block', () => {
-    const html = actions('client', row(), {
-      mode: { kind: 'confirm', confirm: 'approve' },
-      error: 'You do not have permission to make this change.',
-    });
-    expect(html).toContain('role="alert"');
-    expect(html).toContain('You do not have permission to make this change.');
-  });
-
-  it('busy disables both confirm buttons', () => {
-    const html = actions('client', row(), {
-      mode: { kind: 'confirm', confirm: 'approve' },
-      busy: true,
-    });
+  it('every button is 44px tall with an 8px radius', () => {
+    const html = extras('client', row(), { onComment: vi.fn(), onTalkAbout: vi.fn() });
     const buttons = html.match(/<button[^>]*>/g) ?? [];
-    expect(buttons.length).toBe(2);
-    for (const b of buttons) expect(b).toContain('disabled');
-  });
-
-  it('comment mode leaves only Back (the composer owns send)', () => {
-    const html = actions('client', row(), { mode: { kind: 'comment' } });
-    expect(actionIds(html)).toEqual([]);
-    expect(html).toContain('>Back<');
+    expect(buttons).toHaveLength(2);
+    for (const b of buttons) {
+      expect(b).toContain('h-11');
+      expect(b).toContain('rounded-lg');
+    }
   });
 });
 
@@ -404,25 +321,23 @@ describe('no KEY-N codes in the sheet', () => {
     expect(talkAboutLabel()).toBe('Talk about this post');
   });
 
-  it('actions, confirms and the approved pill render no KEY-N code', () => {
+  it('extras and decision labels render no KEY-N code', () => {
     const htmls = [
-      actions('client', row({ stage: 'review' })),
-      actions('agency', row({ stage: 'review' }), { onTalkAbout: vi.fn() }),
-      actions('agency', row({ stage: 'draft' })),
-      actions('client', row({ stage: 'approved' }), { approverName: 'Asha' }),
-      actions('client', row({ stage: 'review', mediaCount: 3 }), {
-        mode: { kind: 'confirm', confirm: 'approve' },
-        mediaCount: 3,
-      }),
-      actions('agency', row({ stage: 'draft' }), {
-        mode: { kind: 'confirm', confirm: 'send_review' },
-      }),
+      renderToStaticMarkup(
+        <PostSheetExtras hint={agencyWaitingHint('agency', row(), 'UTC')} onTalkAbout={vi.fn()} />,
+      ),
+      ...STAGES.flatMap((stage) =>
+        (['client', 'agency'] as const).flatMap((side) => {
+          const labels = postDecisionLabels(stage, side);
+          return [...labels.row, ...labels.menu];
+        }),
+      ),
     ];
     for (const html of htmls) expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(CODE);
   });
 
   it('the talk-about button reads "Talk about this post"', () => {
-    const html = actions('agency', row({ stage: 'review' }), { onTalkAbout: vi.fn() });
+    const html = renderToStaticMarkup(<PostSheetExtras hint={null} onTalkAbout={vi.fn()} />);
     expect(html).toContain('Talk about this post');
   });
 });

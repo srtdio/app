@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PostCard, cardDue } from '@/components/pages/PostCard';
@@ -160,9 +162,10 @@ describe('PostCard thumbnail frame', () => {
     expect(out).not.toContain('aria-label="instagram"');
     // The format shows once, on the picture: the meta row holds no glyph.
     expect(meta?.[1] ?? '').not.toContain('<svg');
-    // The card root can shrink to its track and clips any residual overflow.
+    // The card root can shrink to its track. It does not clip (the laptop ⋯
+    // popover opens past its edge); the picture clips to the top corners itself.
     expect(out).toContain('min-w-0');
-    expect(out).toContain('overflow-hidden');
+    expect(out).toContain('class="relative flex h-full min-w-0 flex-col rounded-xl');
   });
 
   it('renders the target date on the meta line when present', () => {
@@ -202,7 +205,9 @@ describe('PostCard thumbnail frame', () => {
     });
     // The relative tile sits inside a pointer-events-none wrapper, after the
     // full-bleed absolute button, so the button still takes the tap.
-    expect(out).toContain('<div data-post-card-thumb="" class="pointer-events-none"><div');
+    expect(out).toContain(
+      '<div data-post-card-thumb="" class="pointer-events-none overflow-hidden rounded-t-xl"><div',
+    );
     expect(out.indexOf('aria-label="Open post Post title"')).toBeLessThan(
       out.indexOf('data-post-card-thumb'),
     );
@@ -231,9 +236,9 @@ describe('W4 PostCard fixes', () => {
     );
   }
 
-  it('fix 1: a card with onMove carries a 44x44 move button (the ⋯) above the open overlay', () => {
+  it('fix 1: a card with onMove carries a 44x44 ⋯ (the ActionMenu trigger) above the open overlay', () => {
     const out = renderWith({ post: makePost({}), onMove: () => {} });
-    expect(out).toContain('aria-label="Move post Post title"');
+    expect(out).toContain('aria-label="More actions for Post title"');
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(button).toContain('h-11');
     expect(button).toContain('w-11');
@@ -315,7 +320,8 @@ describe('E: Pipeline card polish', () => {
     // The ⋯ comes after the due text, pushed to the row's right end.
     expect(moveAt).toBeGreaterThan(dueAt);
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(button).toContain('ml-auto');
+    const menu = /<div[^>]*data-post-card-menu=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(menu).toContain('ml-auto');
     expect(button).toContain('h-11 w-11');
     expect(button).toContain('-my-3');
     expect(button).toContain('text-fg-3');

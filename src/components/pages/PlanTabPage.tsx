@@ -1,12 +1,13 @@
-// The Plan tab (/plan). Laptop (md and up): the page head "Plan" with Month |
-// Week and, for creators, New plan; then the calendar (PlanCalendar) over the
-// visible range. Phone: the head with a soft New plan (creators) and the plans
-// as cards in sections (PlanTabList). Opening a plan or an item goes to
+// The Plan tab (/plan). Laptop (md and up): the shared top bar (no page title)
+// with Month | Week and, for creators, New plan; then the calendar
+// (PlanCalendar) over the visible range. Phone: the top bar with New plan
+// (creators) and the plans as cards in sections (PlanTabList). Opening a plan or an item goes to
 // /plan/:planId(?item=), which PlanBesideLayout docks beside this page on a
-// laptop (the page stays mounted) and shows alone on a phone. New plan, Create
-// plan and the empty-day menu's "+ New plan" open the existing New plan
-// screen (plan_create_with_items: a Draft); nothing is ever posted to a chat.
-// No plan at all shows the zero state (line 2 only until onboarding is done).
+// laptop (the page stays mounted) and shows alone on a phone. New plan and the
+// empty-day menu's "+ New plan" open the existing New plan screen
+// (plan_create_with_items: a Draft); nothing is ever posted to a chat. No plan
+// at all shows the zero state (line 2 only until onboarding is done), with no
+// create button of its own: the top bar's New plan is the one.
 // Approvers see shared plans only, and never Create, drag or the day menu.
 
 import { useMemo, useState } from 'react';
@@ -16,20 +17,18 @@ import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
 import { ScreenFailed } from '@/components/chat/PlanScreen';
 import { postRoute } from '@/components/chat/post-card';
 import { useInduction } from '@/components/induction/InductionProvider';
-import { PageHead } from '@/components/shell/PageHead';
+import { SectionHeader } from '@/components/shell/SectionHeader';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlan, IconPlus } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ComposeRange } from '@/lib/chat/plans';
 import { safeTimeZone } from '@/lib/time';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import {
-  CREATE_PLAN_BUTTON,
   MONTH_LABEL,
   NEW_PLAN_LABEL,
-  PLAN_TAB_TITLE,
   WEEK_LABEL,
   canCreatePlans,
   onboardingFinished,
@@ -87,30 +86,39 @@ export function PlanTabPage(): ReactElement {
   const zero = data !== null && !data.anyPlan;
   const openCompose = (range?: ComposeRange): void => setCompose({ range });
 
+  // No page title (as Pipeline and Briefs): the shared top bar carries the
+  // laptop Month | Week switch, then New plan for creators, right-aligned.
   const head = (
-    <PageHead
-      title={PLAN_TAB_TITLE}
-      actions={
-        <>
-          {desktop ? <ViewSwitch view={view} onView={setView} /> : null}
-          {creator && desktop ? (
-            <Button variant="primary" data-plan-tab-new="" onClick={() => openCompose()}>
-              {NEW_PLAN_LABEL}
-            </Button>
-          ) : null}
-          {creator && !desktop ? (
-            <Button
-              variant="primary"
-              type="button"
-              data-plan-tab-new=""
-              onClick={() => openCompose()}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              {NEW_PLAN_LABEL}
-            </Button>
-          ) : null}
-        </>
-      }
+    <SectionHeader
+      {...(desktop
+        ? {
+            sort: {
+              node: (
+                <div className="ml-auto">
+                  <ViewSwitch view={view} onView={setView} />
+                </div>
+              ),
+            },
+          }
+        : {})}
+      {...(creator
+        ? {
+            primaryAction: {
+              node: (
+                <Button
+                  variant="primary"
+                  type="button"
+                  data-plan-tab-new=""
+                  onClick={() => openCompose()}
+                  className={cn('shrink-0 whitespace-nowrap', !desktop && 'ml-auto')}
+                >
+                  <IconPlus size={ICON_SIZE.inline} />
+                  {NEW_PLAN_LABEL}
+                </Button>
+              ),
+            },
+          }
+        : {})}
     />
   );
 
@@ -125,15 +133,6 @@ export function PlanTabPage(): ReactElement {
           icon={<IconPlan size={ICON_SIZE.tray} />}
           title={copy.title}
           {...(copy.line2 !== null ? { description: copy.line2 } : {})}
-          {...(copy.create
-            ? {
-                action: (
-                  <Button variant="primary" onClick={() => openCompose()}>
-                    {CREATE_PLAN_BUTTON}
-                  </Button>
-                ),
-              }
-            : {})}
         />
       </div>
     );
@@ -172,7 +171,7 @@ export function PlanTabPage(): ReactElement {
 
   return (
     <>
-      {head}
+      {desktop || creator ? head : null}
       {body}
       {creator && workspaceId !== null ? (
         <>

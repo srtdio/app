@@ -1,6 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
-import { ICON_SIZE, IconCarousel, IconMore, IconPlay } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconArrowUpRight,
+  IconCarousel,
+  IconLink,
+  IconMore,
+  IconPlay,
+  IconSwitch,
+} from '@/components/ui/icons';
 import { type FormatGlyphToken } from '@/components/ui/format-icon';
 import { postFormatLabel } from '@/lib/post-format';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -16,8 +24,12 @@ import {
 import { civilDay, formatDue, formatOverdue } from '@/lib/time';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { useOptionalToast } from '@/components/ui/toast';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import { buildPostLink } from '@/lib/post-share';
 import type { CardFirstMedia } from '../../../packages/posts/src/reads';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
@@ -28,12 +40,15 @@ export interface PostCardProps {
   /** The active workspace's key, used to build the pretty /p/KEY-N link. When
    *  absent the card falls back to the classic /posts/:id route. */
   workspaceKey?: string | null;
-  /** Opens the move sheet for this post; renders the ⋯ at the right end of the due row. */
+  /**
+   * Opens the move sheet for this post; renders the ⋯ (ui/ActionMenu: Open,
+   * Copy link, Move) at the right end of the due row.
+   */
   onMove?: (post: PipelinePost) => void;
   /**
    * The viewer's role and the workspace approvers: drives the review status line
-   * and hides the ⋯ when this viewer has no allowed move. Absent: no status
-   * line, and the ⋯ shows whenever onMove is passed.
+   * and hides the ⋯ menu's Move row when this viewer has no allowed move.
+   * Absent: no status line, and Move shows whenever onMove is passed.
    */
   viewer?: CardViewer;
   /**
@@ -198,6 +213,25 @@ function PlayBadge() {
   );
 }
 
+/** What the card's ⋯ menu runs. */
+export interface CardMenuActions {
+  onOpen: () => void;
+  onCopyLink: () => void;
+  /** Absent: this viewer has no allowed move, so the Move row is hidden. */
+  onMove?: () => void;
+}
+
+/** The card's ⋯ rows: Open, Copy link, then Move when allowed. Pure. */
+export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
+  return [
+    { id: 'open', label: 'Open', icon: IconArrowUpRight, onSelect: actions.onOpen },
+    { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: actions.onCopyLink },
+    ...(actions.onMove !== undefined
+      ? [{ id: 'move', label: 'Move', icon: IconSwitch, onSelect: actions.onMove }]
+      : []),
+  ];
+}
+
 /**
  * A pipeline board card: a full-bleed picture in the workspace platform's one
  * fixed cover box (4:5 for Instagram, object-cover), a play glyph in that box
@@ -209,9 +243,10 @@ function PlayBadge() {
  * play badge on the picture, never a glyph on the meta line. The card fills
  * its grid cell (h-full) and the title holds two lines, so every card in a row
  * ends on the same line. The whole card navigates to the post detail (PCS)
- * view; when the board passes onMove and the viewer has an allowed move, a
- * plain ⋯ glyph at the right end of the meta line (44x44 tap area, negative
- * margins so the row keeps its height) opens the move sheet. Navigation is a
+ * view; when the board passes onMove, a plain ⋯ at the right end of the meta
+ * line (44x44 tap area, negative margins so the row keeps its height) opens
+ * the shared ActionMenu: Open, Copy link (toast "Link copied") and, when the
+ * viewer has an allowed move, Move (the move sheet). Navigation is a
  * full-bleed overlay button laid behind the card content.
  */
 export function PostCard({
@@ -228,6 +263,7 @@ export function PostCard({
   timeZone,
 }: PostCardProps) {
   const navigate = useNavigate();
+  const toast = useOptionalToast();
   const hasPoster = post.thumbnailAssetVersionId !== null;
   // Prefer the pretty link (/p/KEY-N); the classic /posts/:id route remains a
   // working fallback when the key has not resolved yet.
@@ -243,13 +279,18 @@ export function PostCard({
   const reserveStatus = status === null && reservesStatusLine(stage, viewer);
   const canMove =
     onMove !== undefined && (viewer === undefined || hasAllowedMove(viewer.role, stage));
+  const copyLink = (): void => {
+    void copyText(buildPostLink(window.location.origin, href)).then((ok) =>
+      toast?.show(ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' }),
+    );
+  };
   const due = post.target_date !== null ? cardDue(post.target_date, stage, timeZone, clock) : null;
 
   return (
     <div
       data-induction={INDUCTION_KEYS.pipelinePostRow}
       data-induction-post={post.id}
-      className="relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-panel transition-colors hover:bg-panel-2"
+      className="relative flex h-full min-w-0 flex-col rounded-xl border border-border bg-panel transition-colors hover:bg-panel-2"
     >
       <PressableRow
         type="button"
@@ -258,9 +299,11 @@ export function PostCard({
         className="absolute inset-0"
       />
       {/* The tile is relative, so it would paint over the absolute Open post button;
-          pointer-events-none lets a tap on the thumbnail reach the button. */}
+          pointer-events-none lets a tap on the thumbnail reach the button. The
+          picture clips to the card's top corners itself: the card root does not
+          clip, so the laptop ⋯ popover can open past the card's edge. */}
       {coverKind === 'image' ? (
-        <div data-post-card-thumb="" className="pointer-events-none">
+        <div data-post-card-thumb="" className="pointer-events-none overflow-hidden rounded-t-xl">
           <Thumbnail
             assetVersionId={post.thumbnailAssetVersionId}
             cache={cache}
@@ -278,7 +321,7 @@ export function PostCard({
           </Thumbnail>
         </div>
       ) : coverKind === 'video' ? (
-        <div data-post-card-thumb="" className="pointer-events-none">
+        <div data-post-card-thumb="" className="pointer-events-none overflow-hidden rounded-t-xl">
           <div
             data-post-card-play=""
             className={cn(
@@ -354,21 +397,37 @@ export function PostCard({
               {due.text}
             </span>
           ) : null}
-          {canMove && onMove !== undefined ? (
-            // Above the Open post overlay (z-10) so a tap moves, not opens.
-            // Pointer down stops here so the feed's long-press never arms under
-            // it. The negative margins keep the 44px target from growing the row.
-            <IconButton
-              type="button"
-              label={`Move post ${post.title}`}
-              data-post-card-move=""
-              draggable={false}
+          {onMove !== undefined ? (
+            // Above the Open post overlay (z-10) so a tap opens the menu, not
+            // the post. Pointer down stops here (the menu rows included, through
+            // the React tree) so the feed's long-press never arms under it. The
+            // negative margins keep the 44px target from growing the row.
+            <div
+              data-post-card-menu=""
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => onMove(post)}
-              className="relative z-10 -my-3 -mr-3 ml-auto shrink-0 text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="ml-auto flex shrink-0"
             >
-              <IconMore size={ICON_SIZE.control} />
-            </IconButton>
+              <ActionMenu
+                title={post.title}
+                items={cardMenuItems({
+                  onOpen: () => navigate(href),
+                  onCopyLink: copyLink,
+                  ...(canMove ? { onMove: () => onMove(post) } : {}),
+                })}
+                trigger={
+                  <IconButton
+                    type="button"
+                    label={`More actions for ${post.title}`}
+                    aria-haspopup="menu"
+                    data-post-card-move=""
+                    draggable={false}
+                    className="relative z-10 -my-3 -mr-3 text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <IconMore size={ICON_SIZE.control} />
+                  </IconButton>
+                }
+              />
+            </div>
           ) : null}
         </div>
       </div>

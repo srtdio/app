@@ -969,7 +969,9 @@ export function OnboardingFlow({
         title="Position your photo"
         footer={
           <>
-            <Button onClick={() => setCropOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setCropOpen(false)}>
+              Cancel
+            </Button>
             <span className="ml-auto">
               <Button variant="primary" disabled={!cropReady} onClick={() => void applyPhoto()}>
                 Use this photo

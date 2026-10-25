@@ -11,8 +11,8 @@ import { MemoryRouter } from 'react-router-dom';
 import type { Client } from '@srtdio/rpc';
 import type { CardFirstMedia, PostCardRow } from '../../../packages/posts/src/reads';
 import { createLongPressController } from '@/components/ui/useLongPress';
-import { PostSheetActions, talkAboutLabel } from '@/components/chat/PostSheet';
-import { sheetActions } from '@/components/chat/post-sheet';
+import { PostSheetExtras, talkAboutLabel } from '@/components/chat/PostSheet';
+import { agencyWaitingHint } from '@/components/chat/post-sheet';
 import {
   CARD_HOLD,
   CARD_SKELETON,
@@ -410,20 +410,7 @@ describe('post sheet: Talk about', () => {
   function actions(onTalkAbout?: () => void): string {
     const post = cardRow('p1');
     return renderToStaticMarkup(
-      <PostSheetActions
-        set={sheetActions('agency', post, 'UTC')}
-        mode={{ kind: 'actions' }}
-        subject="Post p1"
-        approverName={null}
-        mediaCount={0}
-        targetDate=""
-        busy={false}
-        error={null}
-        onAction={vi.fn()}
-        onConfirm={vi.fn()}
-        onBack={vi.fn()}
-        onTalkAbout={onTalkAbout}
-      />,
+      <PostSheetExtras hint={agencyWaitingHint('agency', post, 'UTC')} onTalkAbout={onTalkAbout} />,
     );
   }
 

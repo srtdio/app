@@ -215,7 +215,11 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(deletePlanErrorCopy('boom')).toBe("Couldn't delete. Try again.");
     const src = read('PlanScreen.tsx');
     expect(src).toContain('planDelete(supabase, { p_plan_id: planId, p_trace_id: traceId })');
-    expect(src).toContain('toast.show({ title: PLAN_DELETED_TOAST })');
+    // At once, no confirm: the Undo strip for UNDO_MS, the write on its expiry.
+    expect(src).toMatch(
+      /title: PLAN_DELETED_TOAST,[\s\S]*?durationMs: UNDO_MS,[\s\S]*?kind: 'undo',[\s\S]*?onExpire: \(\) => void commitDelete\(\),/,
+    );
+    expect(src).not.toContain('DELETE_PLAN_TITLE');
   });
 
   it('a client gets a plain title (no menu button)', () => {
@@ -589,7 +593,7 @@ describe('item 10: Remove from plan', () => {
     expect(html).toContain('min-h-[44px]');
     const sheet = read('PlanMoveSheet.tsx');
     const concept = sheet.slice(
-      sheet.indexOf('export function PlanConceptActionsSheet'),
+      sheet.indexOf('export function planConceptMenuItems'),
       sheet.indexOf('export function PlanMoveSheet'),
     );
     expect(concept).not.toContain('REMOVE_ROW_LABEL');

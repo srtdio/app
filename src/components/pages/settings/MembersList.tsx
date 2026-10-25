@@ -8,8 +8,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconLock, IconMore } from '@/components/ui/icons';
+import { ICON_SIZE, IconLock, IconMore, IconTrash, IconUser } from '@/components/ui/icons';
 import type { SelectOption } from '@/components/ui/Select';
 import { cn } from '@/lib/cn';
 import {
@@ -20,6 +21,7 @@ import {
   isValidInviteEmail,
 } from './MembersInviteForm';
 import type { InviteRole, RoleChoice } from './MembersInviteForm';
+import { canChangeMemberRole } from './MemberActionSheet';
 import { formatJoined, isUndelivered, roleLabel } from './members-data';
 import type { DerivedMembers, InviteDeliveryStatus, MemberEntry } from './members-data';
 
@@ -41,13 +43,47 @@ function SelfChip() {
   );
 }
 
-interface RowProps {
-  member: MemberEntry;
-  canManage: boolean;
-  onOpenActions: (member: MemberEntry) => void;
+/** A member row's ⋯ actions. */
+export interface MemberActions {
+  /** Opens the role sheet; offered only where the role can change. */
+  onChangeRole: (member: MemberEntry) => void;
+  /** Starts the remove confirm (irreversible: ConfirmDialog). */
+  onRemove: (member: MemberEntry) => void;
 }
 
-function MemberRowItem({ member, canManage, onOpenActions }: RowProps) {
+/** The row's ⋯ items: Change role (where allowed), then Remove from workspace last. Pure. */
+export function memberActionItems(
+  member: MemberEntry,
+  canManage: boolean,
+  actions: MemberActions,
+): ActionMenuItem[] {
+  return [
+    ...(canChangeMemberRole(member, canManage)
+      ? [
+          {
+            id: 'change-role',
+            label: 'Change role',
+            icon: IconUser,
+            onSelect: () => actions.onChangeRole(member),
+          },
+        ]
+      : []),
+    {
+      id: 'delete-member',
+      label: 'Remove from workspace',
+      icon: IconTrash,
+      tone: 'danger' as const,
+      onSelect: () => actions.onRemove(member),
+    },
+  ];
+}
+
+interface RowProps extends MemberActions {
+  member: MemberEntry;
+  canManage: boolean;
+}
+
+function MemberRowItem({ member, canManage, onChangeRole, onRemove }: RowProps) {
   const joined = formatJoined(member.acceptedAt);
   return (
     <div className="flex items-center gap-3 px-4 py-3">
@@ -76,12 +112,15 @@ function MemberRowItem({ member, canManage, onOpenActions }: RowProps) {
           <IconLock size={ICON_SIZE.control} />
         </span>
       ) : canManage ? (
-        <IconButton
-          label={`Actions for ${member.displayName}`}
-          onClick={() => onOpenActions(member)}
-        >
-          <IconMore />
-        </IconButton>
+        <ActionMenu
+          title={member.displayName}
+          items={memberActionItems(member, canManage, { onChangeRole, onRemove })}
+          trigger={
+            <IconButton label={`Actions for ${member.displayName}`} aria-haspopup="menu">
+              <IconMore size={ICON_SIZE.control} />
+            </IconButton>
+          }
+        />
       ) : null}
     </div>
   );
@@ -326,7 +365,10 @@ interface MembersListProps {
   /** Pending member_id -> the address this session invited. */
   pendingEmails: ReadonlyMap<string, string>;
   roleOptions: readonly SelectOption[];
-  onOpenActions: (member: MemberEntry) => void;
+  /** The member row ⋯: Change role (opens the role sheet). */
+  onChangeRole: (member: MemberEntry) => void;
+  /** The member row ⋯: Remove from workspace (opens the confirm). */
+  onRemove: (member: MemberEntry) => void;
   onCancelInvite: (member: MemberEntry) => void;
   onEditInvite: PendingEditHandler;
 }
@@ -344,7 +386,8 @@ export function MembersList({
   delivery,
   pendingEmails,
   roleOptions,
-  onOpenActions,
+  onChangeRole,
+  onRemove,
   onCancelInvite,
   onEditInvite,
 }: MembersListProps) {
@@ -355,7 +398,8 @@ export function MembersList({
       key={member.id}
       member={member}
       canManage={canManage}
-      onOpenActions={onOpenActions}
+      onChangeRole={onChangeRole}
+      onRemove={onRemove}
     />
   );
 

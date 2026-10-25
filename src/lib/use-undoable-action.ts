@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastApi, ToastOptions } from '@/components/ui/toast/types';
 import { logger } from '@/lib/logger';
+import { UNDO_MS } from '@/lib/undo';
 
-/** How long an Undo toast stays up before the action commits. The single source. */
-export const UNDO_WINDOW_MS = 4000;
+/** How long an Undo toast stays up before the action commits: UNDO_MS from src/lib/undo.ts. */
+export const UNDO_WINDOW_MS = UNDO_MS;
 
 export interface UndoableAction {
   /** Toast title, e.g. "Post deleted". Also forms the default failure copy. */

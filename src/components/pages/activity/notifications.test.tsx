@@ -6,6 +6,8 @@
 // table, never per row).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 
 vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
 vi.mock('@/lib/workspace-context', async (importOriginal) => ({
@@ -252,6 +254,22 @@ describe('Mark all read', () => {
     );
     expect(count(page, 'markAllEntriesRead(supabase, workspaceId, traceId)')).toBe(1);
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
+  });
+
+  it('Mark all read is a right-aligned link above the list, not in the toolbar', () => {
+    const page = readFileSync(
+      fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    // Shown only with something unread, right-aligned; no count text (the Unread chip has it).
+    expect(page).toMatch(
+      /\{chipUnread > 0 \? \(\s*<div data-activity-mark-all="" className="[^"]*justify-end/,
+    );
+    expect(page).not.toContain('{chipUnread} unread');
+    expect(page).toMatch(/<Button variant="link" onClick=\{handleMarkAll\}>\s*Mark all read/);
+    // The toolbar keeps one IconButton (Sort): no ⋯ menu, no text button there.
+    expect(page).not.toContain('ActionMenu');
+    expect(count(page, 'onClick={handleMarkAll}')).toBe(1);
   });
 
   it('Upcoming has no inbox rows: nothing to mark, nothing counted', () => {

@@ -365,6 +365,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       footer={
         <>
           <Button
+            variant="ghost"
             onClick={() => {
               if (!submitting) onClose();
             }}

@@ -17,19 +17,17 @@ const STATE_CHIPS: { key: ActivityState; label: string }[] = [
 ];
 
 /**
- * The chip label, with the live count appended for the two counted chips exactly
- * as the Unread chip has always done it (count folded into the label text, hidden
- * when zero, no clamp). The Mentions chip mirrors that markup so both read the
- * same in light and dark.
+ * The chip's count: the live unread or mention count for the two counted chips
+ * (ui/Chip shows it only when above 0); the other chips carry none.
  */
-function chipLabel(
-  item: { key: ActivityState; label: string },
+function chipCount(
+  item: { key: ActivityState },
   totalUnread: number,
   mentionCount: number,
-): string {
-  if (item.key === 'unread' && totalUnread > 0) return `Unread ${totalUnread}`;
-  if (item.key === 'mentions' && mentionCount > 0) return `Mentions ${mentionCount}`;
-  return item.label;
+): { count?: number } {
+  if (item.key === 'unread') return { count: totalUnread };
+  if (item.key === 'mentions') return { count: mentionCount };
+  return {};
 }
 
 // Edge-cut fade shown only while more chips remain to the right; alpha-based so
@@ -90,7 +88,8 @@ export function ActivityFilterBar({
       {STATE_CHIPS.map((item) => (
         <Chip
           key={item.key}
-          label={chipLabel(item, totalUnread, mentionCount)}
+          label={item.label}
+          {...chipCount(item, totalUnread, mentionCount)}
           selected={state === item.key}
           size="tap"
           className="flex-none whitespace-nowrap"

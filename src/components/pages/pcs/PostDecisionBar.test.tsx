@@ -93,6 +93,18 @@ describe('30. approver row: Reject, Approve, same on phone and laptop', () => {
     expect(DECISION_BAR_SPACE_PX).toBeGreaterThanOrEqual(68);
   });
 
+  it('in a sheet the same bar fills the host footer, which already pins and pads it', () => {
+    const bar = PostDecisionBar({
+      model: approver('client'),
+      busy: false,
+      error: null,
+      placement: 'footer',
+    }) as ReactElement<{ className: string; 'data-decision-bar': string }>;
+    expect(bar.props['data-decision-bar']).toBe('');
+    expect(bar.props.className).toBe('w-full');
+    expect(buttons(bar).map(label)).toEqual(['Reject', 'Approve']);
+  });
+
   it('decisionBarOrder: Reject first, Approve last, others between', () => {
     const ordered = decisionBarOrder(visibleStageActions('review', 'agency'));
     expect(ordered.map((a) => a.to)).toEqual(['rejected', 'parked', 'approved']);

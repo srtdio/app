@@ -1,8 +1,5 @@
-import { useState } from 'react';
-import { PressableRow } from '@/components/ui/PressableRow';
-import { Backdrop } from '@/components/ui/Backdrop';
+import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import {
-  ICON_SIZE,
   IconCopy,
   IconDownload,
   IconEdit,
@@ -10,24 +7,36 @@ import {
   IconLink,
   IconTrash,
 } from '@/components/ui/icons';
-import { displayLabel, linkDomain, type AssetListItem } from '@/lib/assets';
+import { linkDomain, type AssetListItem } from '@/lib/assets';
 import { downloadFile, openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { assetLink } from '@/components/pages/assets/assets-nav';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { useEscapeLayer } from '@/lib/escape-stack';
 
 const SIGN_FAIL = "Couldn't get a link for this file. Try again.";
+
+/** Toast sink for Assets: a failure passes 'error' (the bad tone); a success passes nothing (neutral). */
+export type AssetToast = (message: string, tone?: 'error') => void;
 
 /** One row of the file menu, in display order. */
 export type AssetMenuRow = 'primary' | 'copy' | 'rename' | 'info' | 'delete';
 
 /**
- * The file menu's rows in order: Download (Open {domain} for a link), Copy
- * link, Rename (owner/admin/agency only), Info (files only,
- * links never open in the viewer), Delete last. Pure.
+ * The file menu's rows in the one ⋯ order: Open {domain} first for a link,
+ * Copy link, then Download (files), Rename (owner/admin/agency only), Info
+ * (files only, links never open in the viewer), Delete last. A row the
+ * member cannot use (no download URL, nothing to copy) is left out, never
+ * shown disabled. Pure.
  */
-export function assetMenuRows(isLink: boolean, canRename: boolean): AssetMenuRow[] {
-  const rows: AssetMenuRow[] = ['primary', 'copy'];
+export function assetMenuRows(
+  isLink: boolean,
+  canRename: boolean,
+  canDownload = true,
+  canCopy = true,
+): AssetMenuRow[] {
+  const rows: AssetMenuRow[] = [];
+  if (isLink && canDownload) rows.push('primary');
+  if (canCopy) rows.push('copy');
+  if (!isLink && canDownload) rows.push('primary');
   if (canRename) rows.push('rename');
   if (!isLink) rows.push('info');
   rows.push('delete');
@@ -44,177 +53,86 @@ export function copyLinkTarget(item: AssetListItem, origin: string): string | nu
   return assetLink(origin, item.id);
 }
 
-interface AssetActionSheetProps {
-  item: AssetListItem;
+export interface AssetMenuDeps {
   presignEnabled: boolean;
   /** Mint an attachment-disposition URL so a download saves in place, never navigating. */
   requestDownloadUrl: (item: AssetListItem) => Promise<string>;
   /** True when the current member may rename (owner/admin/agency). */
   canRename?: boolean;
-  onClose: () => void;
   /** Open the lightbox for this asset with its Info sheet shown (non-links only). */
   onInfo: (item: AssetListItem) => void;
   /** Open the rename sheet for this asset. */
   onRename?: ((item: AssetListItem) => void) | undefined;
   /** Hide the asset now and offer Undo; the page commits after the window. */
   onDelete?: ((item: AssetListItem) => void) | undefined;
-  onToast: (message: string) => void;
-}
-
-function Row({
-  icon,
-  label,
-  onClick,
-  disabled,
-  destructive,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  destructive?: boolean;
-}) {
-  return (
-    <PressableRow
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex items-center gap-3 px-4 text-base font-medium transition-colors duration-fast${
-        destructive ? ' text-bad' : ' text-fg-2 hover:text-fg'
-      }`}
-    >
-      <span className={destructive ? 'text-bad' : 'text-fg-2'}>{icon}</span>
-      {label}
-    </PressableRow>
-  );
+  onToast: AssetToast;
 }
 
 /**
- * Bottom action sheet opened by a card's ⋯ or a long-press. Rows follow
- * assetMenuRows: Download (or Open {domain}), Copy link, Rename, Info, and a
- * destructive Delete last. Theme tokens only; rows are 48px.
+ * The rows of one card's ⋯ menu (ui/ActionMenu), opened by its ⋯ or a long
+ * press. Rows follow assetMenuRows; Delete is last in the danger tone and
+ * deletes at once (the page offers Undo). The menu closes before a row runs,
+ * so a download reports by toast: neutral on success, bad tone on failure.
  */
-export function AssetActionSheet({
-  item,
-  presignEnabled,
-  requestDownloadUrl,
-  canRename = false,
-  onClose,
-  onInfo,
-  onRename,
-  onDelete,
-  onToast,
-}: AssetActionSheetProps) {
-  const [busy, setBusy] = useState(false);
-  // Escape closes the menu while it is the top layer.
-  useEscapeLayer(true, onClose);
+export function assetMenuItems(item: AssetListItem, deps: AssetMenuDeps): ActionMenuItem[] {
   const isLink = item.kind === 'link';
-  const name = displayLabel(item);
   const canDownload = isLink
     ? item.externalUrl !== null
-    : presignEnabled && item.currentVersionId !== null;
+    : deps.presignEnabled && item.currentVersionId !== null;
+  const canCopy = !isLink || item.externalUrl !== null;
+  const { onRename, onDelete } = deps;
+  const rows = assetMenuRows(
+    isLink,
+    deps.canRename === true && onRename !== undefined,
+    canDownload,
+    canCopy,
+  ).filter((row) => row !== 'delete' || onDelete !== undefined);
 
-  const handlePrimary = (): void => {
-    // Link: open a new tab synchronously (keeps the user gesture) and close.
+  const primary = (): void => {
+    // Link: open a new tab synchronously (keeps the user gesture).
     if (isLink) {
       if (item.externalUrl !== null) openLinkInNewTab(item.externalUrl);
-      onClose();
       return;
     }
-    // File: save in place via a content-disposition: attachment URL. On success
-    // toast and close; on failure surface SIGN_FAIL and leave the sheet open.
-    setBusy(true);
-    void downloadFile(() => requestDownloadUrl(item))
-      .then(() => {
-        onToast('Download started');
-        onClose();
-      })
-      .catch(() => onToast(SIGN_FAIL))
-      .finally(() => setBusy(false));
+    // File: save in place via a content-disposition: attachment URL.
+    void downloadFile(() => deps.requestDownloadUrl(item))
+      .then(() => deps.onToast('Download started'))
+      .catch(() => deps.onToast(SIGN_FAIL, 'error'));
   };
 
-  const canCopy = !isLink || item.externalUrl !== null;
-  const handleCopy = (): void => {
+  const copy = (): void => {
     const target = copyLinkTarget(item, window.location.origin);
     if (target === null) return;
-    void copyText(target).then((ok) => {
-      onToast(ok ? 'Link copied' : COPY_FAILED);
-      onClose();
-    });
+    void copyText(target).then((ok) =>
+      ok ? deps.onToast('Link copied') : deps.onToast(COPY_FAILED, 'error'),
+    );
   };
 
-  const rows = assetMenuRows(isLink, canRename && onRename !== undefined).filter(
-    (row) => row !== 'delete' || onDelete !== undefined,
-  );
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-end">
-      <Backdrop aria-label="Close actions" onClick={onClose} position="absolute" />
-      <div
-        role="dialog"
-        aria-label={`Actions for ${name}`}
-        className="relative w-full rounded-t-2xl border-t border-border bg-panel p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:mx-auto md:mb-4 md:max-w-sm md:rounded-2xl md:border"
-      >
-        <div className="truncate px-3 py-2 text-lg font-semibold text-fg">{name}</div>
-        {rows.map((row) => {
-          switch (row) {
-            case 'primary':
-              return (
-                <Row
-                  key={row}
-                  icon={
-                    isLink ? (
-                      <IconLink size={ICON_SIZE.nav} />
-                    ) : (
-                      <IconDownload size={ICON_SIZE.nav} />
-                    )
-                  }
-                  label={isLink ? `Open ${linkDomain(item.externalUrl)}` : 'Download'}
-                  onClick={handlePrimary}
-                  disabled={!canDownload || busy}
-                />
-              );
-            case 'copy':
-              return (
-                <Row
-                  key={row}
-                  icon={<IconCopy size={ICON_SIZE.nav} />}
-                  label="Copy link"
-                  onClick={handleCopy}
-                  disabled={!canCopy || busy}
-                />
-              );
-            case 'rename':
-              return (
-                <Row
-                  key={row}
-                  icon={<IconEdit size={ICON_SIZE.nav} />}
-                  label="Rename"
-                  onClick={() => onRename?.(item)}
-                />
-              );
-            case 'info':
-              return (
-                <Row
-                  key={row}
-                  icon={<IconInfo size={ICON_SIZE.nav} />}
-                  label="Info"
-                  onClick={() => onInfo(item)}
-                />
-              );
-            case 'delete':
-              return (
-                <Row
-                  key={row}
-                  icon={<IconTrash size={ICON_SIZE.nav} />}
-                  label="Delete"
-                  onClick={() => onDelete?.(item)}
-                  destructive
-                />
-              );
-          }
-        })}
-      </div>
-    </div>
-  );
+  return rows.map((row): ActionMenuItem => {
+    switch (row) {
+      case 'primary':
+        return isLink
+          ? {
+              id: 'open-link',
+              label: `Open ${linkDomain(item.externalUrl)}`,
+              icon: IconLink,
+              onSelect: primary,
+            }
+          : { id: 'download', label: 'Download', icon: IconDownload, onSelect: primary };
+      case 'copy':
+        return { id: 'copy-link', label: 'Copy link', icon: IconCopy, onSelect: copy };
+      case 'rename':
+        return { id: 'rename', label: 'Rename', icon: IconEdit, onSelect: () => onRename?.(item) };
+      case 'info':
+        return { id: 'info', label: 'Info', icon: IconInfo, onSelect: () => deps.onInfo(item) };
+      case 'delete':
+        return {
+          id: 'delete',
+          label: 'Delete',
+          icon: IconTrash,
+          tone: 'danger',
+          onSelect: () => onDelete?.(item),
+        };
+    }
+  });
 }

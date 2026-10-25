@@ -2,8 +2,8 @@
 // W5 Brief detail: a load failure shows LoadError ("Couldn't load this brief.")
 // with Retry and never the server's text, and Retry re-reads; not-found is its
 // own state; the header ⋯ menu is on every brief: Copy link always, Close
-// brief (open, gated on brief.close or brief.close_own for the creator; it
-// confirms and commits brief_close only after the Undo window) or Reopen brief
+// brief (open, gated on brief.close or brief.close_own for the creator; no
+// confirm, it commits brief_close only after the Undo window) or Reopen brief
 // (closed, any member; optimistic, commits brief_reopen after the Undo window);
 // no KEY-N code anywhere; Copy brief in the menu (no copy icons on section
 // labels); Created by skeleton; no helper text; Back pops in-app history or goes
@@ -26,6 +26,7 @@ import {
   reopenErrorCopy,
 } from '@/components/pages/BriefDetailPage';
 import { WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
+import { DUR_BASE_MS } from '@/lib/motion';
 import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,6 +40,7 @@ const h = vi.hoisted(() => ({
   caps: {} as Record<string, boolean>,
   members: { loading: false },
   viewer: 'u1',
+  laptop: false,
 }));
 
 vi.mock('@srtdio/briefs', () => ({
@@ -75,6 +77,7 @@ vi.mock('@/components/pages/pcs/use-post-members', () => ({
     error: null,
   }),
 }));
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => h.laptop }));
 vi.mock('@/components/comments/Comments', () => ({ Comments: () => <div>comments</div> }));
 vi.mock('@/components/pages/pcs/PostGallery', () => ({ PostGallery: () => <div>gallery</div> }));
 
@@ -142,15 +145,27 @@ const button = (label: string) =>
 
 /** Open the header ⋯ menu. */
 async function openMenu(): Promise<void> {
-  await act(async () => byLabel('Brief actions')?.click());
+  await act(async () => byLabel('More actions')?.click());
 }
-/** The open menu's rows as [data-testid, label], in order. */
+/** The ui/ActionMenu rows, keyed by the ids these specs have always used. */
+const ROW_IDS: Record<string, string> = {
+  'Copy link': 'brief-menu-copy-link',
+  'Copy brief': 'brief-menu-copy-brief',
+  'Close brief': 'brief-menu-close',
+  'Reopen brief': 'brief-menu-reopen',
+};
+/** The open menu's rows as [id, label], in order. */
 const menuRows = (): [string, string][] =>
   [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].map(
-    (el): [string, string] => [el.dataset.testid ?? '', el.textContent?.trim() ?? ''],
+    (el): [string, string] => {
+      const label = el.textContent?.trim() ?? '';
+      return [ROW_IDS[label] ?? '', label];
+    },
   );
-const menuRow = (testId: string) =>
-  document.querySelector<HTMLButtonElement>(`[role="menuitem"][data-testid="${testId}"]`);
+const menuRow = (id: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (el) => ROW_IDS[el.textContent?.trim() ?? ''] === id,
+  ) ?? null;
 /** The status pill labels on the page (phone and desktop Details), deduplicated. */
 const statusLabels = (): string[] => [
   ...new Set(
@@ -176,6 +191,7 @@ beforeEach(() => {
   h.caps = {};
   h.members.loading = false;
   h.viewer = 'u1';
+  h.laptop = false;
 });
 
 afterEach(() => {
@@ -214,7 +230,7 @@ describe('Brief detail close', () => {
   it('without a close capability the ⋯ menu offers Copy link only, no Close anywhere', async () => {
     h.getBrief.mockResolvedValue(detail());
     await mount();
-    expect(byLabel('Brief actions')).not.toBeNull();
+    expect(byLabel('More actions')).not.toBeNull();
     expect(button('Close brief')).toBeUndefined();
     await openMenu();
     expect(menuRows()).toEqual([
@@ -225,42 +241,29 @@ describe('Brief detail close', () => {
     expect(button('Reopen brief')).toBeUndefined();
   });
 
-  it('brief.close: Close is in the ⋯ menu, confirms, then closes behind Undo', async () => {
+  it('brief.close: Close is in the ⋯ menu and closes at once behind Undo, no confirm', async () => {
     h.caps = { 'brief.close': true };
     h.getBrief.mockResolvedValue(detail());
     await mount();
     expect(button('Close brief')).toBeUndefined();
-    await act(async () => byLabel('Brief actions')?.click());
-    await act(async () => button('Close brief')?.click());
-    const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain('Close this brief?');
-    expect(dialog?.textContent).toContain('Closed briefs stay readable and open to comments.');
-    await act(async () =>
-      [...(dialog?.querySelectorAll('button') ?? [])]
-        .find((b) => b.textContent?.trim() === 'Close brief')
-        ?.click(),
-    );
+    await act(async () => byLabel('More actions')?.click());
+    await act(async () => menuRow('brief-menu-close')?.click());
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(text()).toContain('Brief closed');
     expect(text()).toContain('Closed');
     // The write waits for the Undo window.
     expect(h.briefClose).not.toHaveBeenCalled();
     await act(async () => button('Undo')?.click());
     expect(h.briefClose).not.toHaveBeenCalled();
-    expect(byLabel('Brief actions')).not.toBeNull();
+    expect(byLabel('More actions')).not.toBeNull();
   });
 
   it('commits brief_close once the window is cut short (leaving the page)', async () => {
     h.caps = { 'brief.close': true };
     h.getBrief.mockResolvedValue(detail());
     await mount();
-    await act(async () => byLabel('Brief actions')?.click());
-    await act(async () => button('Close brief')?.click());
-    const dialog = document.querySelector('[role="alertdialog"]');
-    await act(async () =>
-      [...(dialog?.querySelectorAll('button') ?? [])]
-        .find((b) => b.textContent?.trim() === 'Close brief')
-        ?.click(),
-    );
+    await act(async () => byLabel('More actions')?.click());
+    await act(async () => menuRow('brief-menu-close')?.click());
     act(() => root?.unmount());
     root = null;
     expect(h.briefClose).toHaveBeenCalledTimes(1);
@@ -281,7 +284,7 @@ describe('Brief detail close', () => {
     document.body.innerHTML = '';
     h.viewer = 'u2';
     await mount();
-    expect(byLabel('Brief actions')).not.toBeNull();
+    expect(byLabel('More actions')).not.toBeNull();
     await openMenu();
     expect(menuRows().map(([id]) => id)).toEqual(['brief-menu-copy-link', 'brief-menu-copy-brief']);
   });
@@ -354,6 +357,10 @@ describe('Brief detail ⋯ menu rows', () => {
       expect(el.className).toContain('min-h-[44px]');
     }
     await act(async () => menuRow('brief-menu-copy-link')?.click());
+    // The phone Sheet stays mounted through its exit transition, then unmounts.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, DUR_BASE_MS + 50));
+    });
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 });
@@ -655,26 +662,35 @@ describe('Brief detail New post from this brief', () => {
     );
   });
 
-  it('phone: the action sits in a fixed bar above the tab bar; desktop: in the top bar', async () => {
+  it('phone: the action sits in a bar fixed to the bottom (no tab bar here), with IconPlus', async () => {
     h.caps = { 'post.create': true, 'brief.create': false };
     h.getBrief.mockResolvedValue(detail());
     await mount();
     const bar = document.querySelector<HTMLElement>('[data-brief-action-bar]');
     expect(bar?.className).toContain('fixed');
-    expect(bar?.className).toContain('md:hidden');
-    expect(bar?.className).toContain('bottom-[calc(56px+env(safe-area-inset-bottom))]');
-    expect(bar?.querySelector('[data-new-post-from-brief="bar"]')?.textContent).toBe(
-      'New post from this brief',
-    );
-    const top = document.querySelector<HTMLElement>('[data-new-post-from-brief="top"]');
-    expect(top?.className).toContain('hidden');
-    expect(top?.className).toContain('md:inline-flex');
-    expect(top?.parentElement?.querySelector('button[aria-label="Brief actions"]')).not.toBeNull();
+    expect(bar?.className).toContain('bottom-0');
+    expect(bar?.className).toContain('pb-[max(12px,env(safe-area-inset-bottom))]');
+    const start = bar?.querySelector('[data-new-post-from-brief="bar"]');
+    expect(start?.textContent).toBe('New post from this brief');
+    expect(start?.querySelector('svg')).not.toBeNull();
+    expect(document.querySelector('[data-new-post-from-brief="top"]')).toBeNull();
     // The old full-width block under the title is gone.
-    expect(document.querySelectorAll('[data-new-post-from-brief]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-new-post-from-brief]')).toHaveLength(1);
     expect(
       document.querySelector('h1')?.parentElement?.querySelector('[data-new-post-from-brief]'),
     ).toBeNull();
+  });
+
+  it('laptop: the action sits at the right of the header, beside the ⋯; no bottom bar', async () => {
+    h.laptop = true;
+    h.caps = { 'post.create': true, 'brief.create': false };
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    expect(document.querySelector('[data-brief-action-bar]')).toBeNull();
+    const top = document.querySelector<HTMLElement>('[data-new-post-from-brief="top"]');
+    expect(top?.textContent).toBe('New post from this brief');
+    const more = top?.nextElementSibling;
+    expect(more?.querySelector('button[aria-label="More actions"]')).not.toBeNull();
   });
 
   it('fix 23: hidden for approvers', async () => {

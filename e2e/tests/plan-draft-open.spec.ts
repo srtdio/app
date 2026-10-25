@@ -181,18 +181,16 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
   });
   expect(typeof update?.args.p_trace_id).toBe('string');
 
-  // Delete: the confirm, Open plan copy, then the card reads "Plan deleted".
+  // Delete: at once, no confirm; the Undo strip, then the card reads "Plan deleted".
   await title.click();
   await plan.locator('[data-plan-menu-delete]').click();
-  const confirm = page.getByRole('dialog', { name: 'Delete this plan?' });
-  await expect(confirm).toBeVisible();
-  await expect(confirm).toContainText(
-    'Cards already in chat will show Plan deleted. Approvers get a notification. This cannot be undone.',
-  );
-  await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeVisible();
-  await confirm.locator('[data-plan-confirm]').click();
-  await expect(page.getByText('Plan deleted', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Delete this plan?' })).toHaveCount(0);
   await expect(plan).toBeHidden();
+  await expect(page.getByText('Plan deleted', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+  await expect
+    .poll(() => network.rpcCalls.some((c) => c.name === 'plan_delete'), { timeout: 10_000 })
+    .toBe(true);
   const card = page.locator('[data-plan-card="unavailable"]');
   await card.scrollIntoViewIfNeeded();
   await expect(card).toHaveText('Plan deleted');

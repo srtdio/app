@@ -15,8 +15,6 @@ import {
   IconCalendarClock,
   IconPlan,
 } from '@/components/ui/icons';
-import { Toasts } from '@/components/pages/assets/Toasts';
-import { useToasts } from '@/components/pages/assets/useToasts';
 import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
@@ -211,8 +209,13 @@ export function NotificationsPage() {
   const [error, setError] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [mentionCount, setMentionCount] = useState(0);
-  const { toasts, push, dismiss } = useToasts();
   const toast = useOptionalToast();
+  // A failure line rides the shared toast in its error tone.
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+  const push = useCallback((message: string): void => {
+    toastRef.current?.show({ title: message, tone: 'error' });
+  }, []);
 
   // One presign cache for the whole feed: it bounds concurrency and caches URLs
   // so every card thumbnail shares a single cap, mirroring PipelinePage. Cards
@@ -819,19 +822,12 @@ export function NotificationsPage() {
       <PageHead
         title={ACTIVITY_TITLE}
         actions={
-          <>
-            {chipUnread > 0 ? (
-              <Button variant="ghost" onClick={handleMarkAll}>
-                Mark all read
-              </Button>
-            ) : null}
-            <SortMenu<ActivityDirection>
-              options={SORT_OPTIONS}
-              value={sort}
-              onChange={setSort}
-              label="Sort activity"
-            />
-          </>
+          <SortMenu<ActivityDirection>
+            options={SORT_OPTIONS}
+            value={sort}
+            onChange={setSort}
+            label="Sort activity"
+          />
         }
       />
 
@@ -841,6 +837,16 @@ export function NotificationsPage() {
         totalUnread={totalUnread}
         mentionCount={mentionCount}
       />
+
+      {/* The toolbar keeps one IconButton (Sort): Mark all read sits right-aligned above the
+          list. The Unread chip already shows the count. */}
+      {chipUnread > 0 ? (
+        <div data-activity-mark-all="" className="mt-2 flex justify-end px-4 md:px-6">
+          <Button variant="link" onClick={handleMarkAll}>
+            Mark all read
+          </Button>
+        </div>
+      ) : null}
 
       {state === 'upcoming' ? (
         upcomingError ? (
@@ -968,7 +974,7 @@ export function NotificationsPage() {
         title={cancelShown?.kind === 'scheduled' ? CANCEL_CONFIRM_TITLE : CANCEL_REMINDER_TITLE}
         footer={
           <div className="flex w-full justify-end gap-2">
-            <Button type="button" onClick={() => setCancelTarget(null)}>
+            <Button type="button" variant="ghost" onClick={() => setCancelTarget(null)}>
               Keep
             </Button>
             <Button
@@ -984,8 +990,6 @@ export function NotificationsPage() {
       >
         <p className="truncate text-base text-fg-2">{cancelShown?.preview ?? ''}</p>
       </Sheet>
-
-      <Toasts toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

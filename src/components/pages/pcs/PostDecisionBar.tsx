@@ -1,13 +1,13 @@
-// The post decision row (T12 / FN8, flow B 30 / 33). One model, two places:
-// PostDecisionBar pins it above the safe area below md (phone), and
-// PostDecisionRow renders the same row inline in the page's decision slot on md
-// and up (laptop: the right column, above the caption). The page renders
-// exactly one of them per breakpoint.
+// The post decision row (T12 / FN8, flow B 30 / 33). One model, two places,
+// the same on Post detail and the chat post sheet (usePostDecisions builds the
+// model for both): PostDecisionBar pins it to the bottom on phone, and
+// PostDecisionRow renders the same row at the right of the detail header on
+// laptop (useIsLaptop). The host renders exactly one of them per breakpoint.
 //
 // Approvers in review: Reject (secondary, bad ink) then Approve (success green),
 // in that order everywhere; no Comment button (the composer is on the page). Creators: one main button ("Send for
 // review", or "Send for review again"); their other moves (Approve on their
-// behalf, Park, Reject) live in the post's ⋯ sheet. A failed tap
+// behalf, Park, Reject) live in the post's ⋯ menu. A failed tap
 // shows its plain-words error here, once. Hookless, so the tree is unit tested
 // by walking it. The page reserves room under its content so the bar never
 // covers the comment composer.
@@ -141,23 +141,37 @@ function decisionContent(
   );
 }
 
-/** Whether there is anything to show: a model with a button, or an error. */
-function hasContent(model: DecisionModel | null, error: string | null): boolean {
+/** Whether there is anything to show: a model with a button, or an error. Pure. */
+export function hasDecisionContent(model: DecisionModel | null, error: string | null): boolean {
   if (error !== null) return true;
   if (model === null) return false;
   return model.kind === 'creator' || model.actions.length > 0;
 }
 
-/** The phone bar: fixed above the safe area, below md only. */
+/**
+ * The phone bar. 'fixed' (a page): pinned above the safe area, below md only.
+ * 'footer' (a sheet): the same row filling the host Sheet's footer, which is
+ * already pinned to the bottom and pads for the safe area. Either way the phone
+ * Undo strip floats above it (the bar, or the Sheet footer, is an undo anchor).
+ */
 export function PostDecisionBar(props: {
   model: DecisionModel | null;
   busy: boolean;
   error: string | null;
+  placement?: 'fixed' | 'footer';
 }): ReactElement | null {
-  if (!hasContent(props.model, props.error)) return null;
+  if (!hasDecisionContent(props.model, props.error)) return null;
+  if (props.placement === 'footer') {
+    return (
+      <div data-decision-bar="" className="w-full">
+        {decisionContent(props.model, props.busy, props.error)}
+      </div>
+    );
+  }
   return (
     <div
       data-decision-bar=""
+      data-undo-anchor=""
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
     >
       {decisionContent(props.model, props.busy, props.error)}
@@ -165,7 +179,7 @@ export function PostDecisionBar(props: {
   );
 }
 
-/** The same row inline (md and up, and embedded), in the page's decision slot. */
+/** The same row inline: the laptop header's right side, or the embedded page's decision slot. */
 export function PostDecisionRow(props: {
   model: DecisionModel | null;
   busy: boolean;
@@ -174,7 +188,7 @@ export function PostDecisionRow(props: {
   note?: string | null;
 }): ReactElement | null {
   const note = props.note ?? null;
-  if (!hasContent(props.model, props.error) && note === null) return null;
+  if (!hasDecisionContent(props.model, props.error) && note === null) return null;
   return (
     <div data-decision-row="" className="flex flex-col">
       {note !== null ? <p className="mb-3 text-base text-fg-2">{note}</p> : null}

@@ -48,7 +48,6 @@ function mount(member: MemberEntry, canManage: boolean, onChangeRole: MemberRole
         open
         canManage={canManage}
         onClose={vi.fn()}
-        onRemove={vi.fn()}
         onChangeRole={onChangeRole}
       />,
     ),
@@ -77,7 +76,7 @@ describe('canChangeMemberRole', () => {
 });
 
 describe('MemberActionSheet role change', () => {
-  it('shows the role picker and Save above Remove for a manager', () => {
+  it('shows the role picker and Save for a manager; Remove lives in the row ⋯ menu', () => {
     mount(
       entry(),
       true,
@@ -88,8 +87,8 @@ describe('MemberActionSheet role change', () => {
     expect(select!.value).toBe('agency');
     const options = Array.from(select!.options).map((o) => o.value);
     expect(options).not.toContain('owner');
-    const text = document.body.textContent ?? '';
-    expect(text.indexOf('Save')).toBeLessThan(text.indexOf('Remove from workspace'));
+    expect(saveButton()).toBeDefined();
+    expect(document.body.textContent).not.toContain('Remove from workspace');
   });
 
   it.each([
@@ -104,7 +103,6 @@ describe('MemberActionSheet role change', () => {
     );
     expect(roleSelect()).toBeNull();
     expect(saveButton()).toBeUndefined();
-    expect(document.body.textContent).toContain('Remove from workspace');
   });
 
   it('Save calls the role change with the picked role and shows a refusal inline', async () => {

@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { cn } from '@/lib/cn';
-import { Button } from '@/components/ui/Button';
-import { StageDot } from '@/components/pages/pipeline/stage-meta';
+import { Chip } from '@/components/ui/Chip';
 import type { Stage } from '@srtdio/posts';
+import { StageDot } from '@/components/pages/pipeline/stage-meta';
 
 export interface StageChipItem {
   /** The chip's filter key: a Stage, or the UI-only 'all'. */
   key: string;
   label: string;
-  /** Trailing count badge; omitted entirely for a chip that carries no count. */
+  /** The chip's count, shown after the label only when above 0. */
   count?: number;
-  /** The stage whose dot this chip shows; omitted for the non-stage chips. */
+  /** The stage this chip filters to; omitted for the non-stage chips. */
   stage?: Stage;
 }
 
@@ -36,12 +35,11 @@ export function chipRowMask(fadeStart: boolean, fadeEnd: boolean): string {
 
 /**
  * The Pipeline stage switcher: one horizontally scrollable, non-wrapping row of
- * chip-pill buttons (the stages plus the UI-only All) mirroring the
- * Activity filter row. A chip shows its dot only when it carries a stage and its
- * count only when one is supplied, so a non-stage chip renders label-only.
- * Runs full-bleed to the right edge with an edge-cut fade applied only when the
- * row overflows. Each chip is a 44px touch target; the active chip carries the
- * accent treatment and aria-current.
+ * the shared ui/Chip (the stages, each with its stage dot, plus the UI-only All), the same chip and
+ * selected style as Briefs, Activity and Help. A chip shows its count only when
+ * above 0. Runs full-bleed to the right edge with an edge-cut fade applied only
+ * when the row overflows. Each chip is a 44px touch target; the active chip is
+ * selected and carries aria-current.
  */
 export function StageChips({ items, active, onChange }: StageChipsProps): ReactElement {
   const rowRef = useRef<HTMLDivElement>(null);
@@ -80,27 +78,17 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
       {items.map((item) => {
         const isActive = item.key === active;
         return (
-          <Button
+          <Chip
             key={item.key}
-            type="button"
-            variant="ghost"
+            label={item.label}
+            {...(item.stage !== undefined ? { dot: <StageDot stage={item.stage} /> } : {})}
+            {...(item.count !== undefined ? { count: item.count } : {})}
+            selected={isActive}
+            size="tap"
             aria-current={isActive ? 'true' : undefined}
             onClick={() => onChange(item.key)}
-            className={cn(
-              'flex-none whitespace-nowrap border',
-              isActive
-                ? 'border-accent-line bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent'
-                : 'border-border',
-            )}
-          >
-            {item.stage !== undefined ? <StageDot stage={item.stage} /> : null}
-            {item.label}
-            {item.count !== undefined ? (
-              <span className={cn('text-sm tabular-nums', isActive ? 'text-accent' : 'text-fg-3')}>
-                {item.count}
-              </span>
-            ) : null}
-          </Button>
+            className="flex-none whitespace-nowrap"
+          />
         );
       })}
     </div>

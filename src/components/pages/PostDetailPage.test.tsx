@@ -17,7 +17,10 @@ vi.mock('@/lib/workspace-context', () => ({
 }));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't1' }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
+vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
+  useMediaQuery: () => false,
+}));
 
 import { PcsApproveConfirm, PostDetailPage } from '@/components/pages/PostDetailPage';
 import { PostDecisionRow } from '@/components/pages/pcs/PostDecisionBar';

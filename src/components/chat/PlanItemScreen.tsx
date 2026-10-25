@@ -39,13 +39,14 @@ import { useToast } from '@/components/ui/toast';
 import { ICON_SIZE, IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
+import { ActionMenu, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import {
-  PlanConceptActionsSheet,
   PlanKeepApprovalSheet,
   PlanMoveSheet,
   PlanRemoveSheet,
   PostSheetPlanRowsContext,
   RemoveFromPlanButton,
+  planConceptMenuItems,
 } from '@/components/chat/PlanMoveSheet';
 import { flattenOrder, hasTicks, moveToEnd } from '@/lib/chat/plan-drag';
 import { dayMoveToast } from '@/lib/chat/plan-keyboard-move';
@@ -736,30 +737,41 @@ export function PlanItemScreen(props: {
         {...(item.kind === 'concept' && planActions
           ? {
               action: (
-                <IconButton
-                  type="button"
-                  label="Item actions"
-                  data-plan-item-more=""
-                  onClick={() => setConceptMenuOpen(true)}
-                  className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  <IconMore size={ICON_SIZE.control} />
-                </IconButton>
+                <ActionMenu
+                  title={title}
+                  items={planConceptMenuItems({
+                    onMove: () => setMoveOpen(true),
+                    onEdit: openEdit,
+                  })}
+                  open={props.open && conceptMenuOpen}
+                  onOpenChange={setConceptMenuOpen}
+                  trigger={
+                    <IconButton
+                      type="button"
+                      label="Item actions"
+                      data-plan-item-more=""
+                      aria-haspopup="menu"
+                      aria-expanded={conceptMenuOpen}
+                      className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      <IconMore size={ICON_SIZE.control} />
+                    </IconButton>
+                  }
+                />
               ),
             }
           : {})}
         {...(item.kind === 'post' && item.post_id !== null
           ? {
               action: (
-                <IconButton
+                // Opens the embedded Post detail's ⋯ menu (its trigger is null).
+                <ActionMenuTrigger
                   type="button"
-                  label="More actions"
                   data-plan-more=""
+                  aria-expanded={moreOpen}
                   onClick={() => setMoreOpen(true)}
                   className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                  <IconMore size={ICON_SIZE.control} />
-                </IconButton>
+                />
               ),
             }
           : {})}
@@ -1028,19 +1040,6 @@ export function PlanItemScreen(props: {
       />
       {planActions ? (
         <>
-          <PlanConceptActionsSheet
-            open={props.open && conceptMenuOpen && item.kind === 'concept'}
-            title={title}
-            onMove={() => {
-              setConceptMenuOpen(false);
-              setMoveOpen(true);
-            }}
-            onEdit={() => {
-              setConceptMenuOpen(false);
-              openEdit();
-            }}
-            onClose={() => setConceptMenuOpen(false)}
-          />
           <PlanMoveSheet
             open={props.open && moveOpen}
             days={planMoveDays(bundle.plan)}

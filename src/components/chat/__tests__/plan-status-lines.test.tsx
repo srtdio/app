@@ -1,7 +1,7 @@
 // The Plan row's PLAN and POST lines: the pure helpers behind them (which
 // control a row gets, its state and copy, the POST stage line, the header's
 // two counts), the OK | Not OK switch and the decided pill, and the 4s plan
-// Undo window on both plan screens (the shared UNDO_WINDOW_MS).
+// Undo window on both plan screens (the shared UNDO_MS).
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +28,7 @@ import {
   planHeaderCounts,
   postLine,
 } from '@/components/chat/plan-card';
-import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
+import { UNDO_MS } from '@/lib/undo';
 import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
 
 const dir = fileURLToPath(new URL('..', import.meta.url));
@@ -304,8 +304,8 @@ describe('the PLAN switch and the decided pill', () => {
 });
 
 describe('the plan Undo window (4s, the shared default)', () => {
-  it('UNDO_WINDOW_MS is 4000; plan-card no longer has its own window', async () => {
-    expect(UNDO_WINDOW_MS).toBe(4000);
+  it('UNDO_MS is 4000; plan-card no longer has its own window', async () => {
+    expect(UNDO_MS).toBe(4000);
     expect(Object.keys(await import('@/components/chat/plan-card'))).not.toContain('PLAN_UNDO_MS');
     expect(read('plan-card.ts')).not.toContain('PLAN_UNDO_MS');
   });

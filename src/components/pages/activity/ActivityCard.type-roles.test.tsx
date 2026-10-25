@@ -5,6 +5,8 @@
 // chip. Fixtures and mocks mirror ActivityCard.test.tsx.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import type { ActivityItem } from '@/components/pages/activity/data';
 import type { PresignCache } from '@/lib/asset-presign';

@@ -3,6 +3,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
 import { renderToStaticMarkup } from 'react-dom/server';
 
 // The list imports the form's role picker; stub the form's in-shell deps.
@@ -11,7 +13,7 @@ vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceId: 
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't-1' }));
 
 import { getInviteRoleOptions } from './MembersInviteForm';
-import { MembersList } from './MembersList';
+import { MembersList, memberActionItems } from './MembersList';
 import type { PendingEditHandler } from './MembersList';
 import type { DerivedMembers, MemberEntry } from './members-data';
 
@@ -53,7 +55,8 @@ function listProps(
     delivery: new Map(),
     pendingEmails: new Map(),
     roleOptions: getInviteRoleOptions(false),
-    onOpenActions: vi.fn(),
+    onChangeRole: vi.fn(),
+    onRemove: vi.fn(),
     onCancelInvite: vi.fn(),
     onEditInvite: vi.fn<PendingEditHandler>(async () => null),
     ...overrides,
@@ -61,6 +64,20 @@ function listProps(
 }
 
 const OWNER_LOCK_TITLE = 'Transfer ownership before the owner can be removed';
+
+describe('memberActionItems', () => {
+  it('Change role where allowed, then Remove from workspace last in the danger tone', () => {
+    const actions = { onChangeRole: vi.fn(), onRemove: vi.fn() };
+    const items = memberActionItems(entry({ id: 'm-a' }), true, actions);
+    expect(items.map((i) => i.label)).toEqual(['Change role', 'Remove from workspace']);
+    expect(items[1]!.tone).toBe('danger');
+    items[1]!.onSelect();
+    expect(actions.onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: 'm-a' }));
+    // The viewer's own row cannot change role: the row is hidden, not disabled.
+    const self = memberActionItems(entry({ isSelf: true }), true, actions);
+    expect(self.map((i) => i.label)).toEqual(['Remove from workspace']);
+  });
+});
 
 describe('MembersList', () => {
   it('shows the owner lock and no action kebabs for a read-only (client) viewer', () => {

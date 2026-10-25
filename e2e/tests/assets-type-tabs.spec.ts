@@ -63,7 +63,9 @@ function seedAssets(network: HarnessNetwork): void {
   });
 }
 
-const tab = (page: Page, name: string) => page.getByRole('tab', { name: new RegExp(`^${name} `) });
+// A tab reads "{Label} {count}", or just "{Label}" when its count is 0.
+const tab = (page: Page, name: string) =>
+  page.getByRole('tab', { name: new RegExp(`^${name}(\\s\\d+)?$`) });
 const cards = (page: Page) =>
   page
     .locator('#assets-tabpanel')
@@ -92,7 +94,7 @@ test('six tabs filter the loaded list, with counts, empty states and ?type= @the
     'Media 2',
     'PDF 1',
     'Docs 2',
-    'Sheets 0',
+    'Sheets',
     'Links 1',
   ]);
   for (const t of await tablist.getByRole('tab').all()) expectMinTouchTarget(await t.boundingBox());

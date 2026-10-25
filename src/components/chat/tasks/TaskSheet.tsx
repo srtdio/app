@@ -32,7 +32,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { LoadError } from '@/components/ui/LoadError';
 import { glowTarget } from '@/components/ui/SearchHighlight';
 import { ForwardPicker } from '@/components/chat/ForwardPicker';
-import { IconForward, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconForward, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { PriorityChip, TaskRow, type RowNotice } from '@/components/chat/tasks/TaskRow';
 import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
@@ -551,14 +551,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
             : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',
         )}
       >
-        <div className="flex items-center gap-1 border-b border-border py-1.5 pl-1.5 pr-3">
-          <IconButton
-            label="Close"
-            onClick={requestClose}
-            {...(saving ? { 'aria-disabled': 'true' as const } : {})}
-          >
-            <IconX />
-          </IconButton>
+        <div className="flex items-center gap-1 border-b border-border py-1.5 pl-4 pr-1.5">
           <div className="flex min-w-0 flex-1 flex-col">
             <h2 className="text-lg font-semibold text-fg">{TASK_SHEET_TITLE}</h2>
             {editingLine !== null ? (
@@ -589,6 +582,13 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           >
             {saving ? SAVING_LABEL : saveFailed ? 'Retry' : 'Save'}
           </Button>
+          <IconButton
+            label="Close"
+            onClick={requestClose}
+            {...(saving ? { 'aria-disabled': 'true' as const } : {})}
+          >
+            <IconX size={ICON_SIZE.control} />
+          </IconButton>
         </div>
         <div
           ref={bodyRef}

@@ -182,7 +182,7 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                     className={NEW_POST_CLASS}
                     onClick={() => dispatchSorted('sorted:create-post')}
                   >
-                    <IconPlus size={ICON_SIZE.nav} />
+                    <IconPlus size={ICON_SIZE.inline} />
                     New post
                   </Button>
                 ),
@@ -200,7 +200,7 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
                       data-create-placeholder=""
                       className={cn('invisible', NEW_POST_CLASS)}
                     >
-                      <IconPlus size={ICON_SIZE.nav} />
+                      <IconPlus size={ICON_SIZE.inline} />
                       New post
                     </Button>
                   ),
@@ -443,27 +443,14 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
 }
 
 /**
- * The pipeline with no posts at all (not a filter): a headline, and for people
- * with post.create a button that opens the create sheet. Its name is "Create
- * your first post", not "Create post": the header's "+" (the induction's
- * pipeline-create anchor) keeps that exact name, so each control has one.
+ * The pipeline with no posts at all (not a filter): one positive line. An
+ * empty page has no create button of its own; the header's New post (the
+ * induction's pipeline-create anchor) is the only one.
  */
-export function emptyPipeline(canCreate: boolean): ReactElement {
+export function emptyPipeline(): ReactElement {
   return (
     <div data-pipeline-empty="" className="px-4 md:px-6">
-      <EmptyState
-        icon={<IconPipeline size={ICON_SIZE.tray} />}
-        title="Posts show up here."
-        {...(canCreate
-          ? {
-              action: (
-                <Button variant="primary" onClick={() => dispatchSorted('sorted:create-post')}>
-                  Create your first post
-                </Button>
-              ),
-            }
-          : {})}
-      />
+      <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="Posts show up here." />
     </div>
   );
 }
@@ -1131,7 +1118,7 @@ export function PipelinePage() {
               columns: boardStages(stage, role).length,
             })
           : pipelineEmpty
-            ? emptyPipeline(canCreate)
+            ? emptyPipeline()
             : showFilteredEmpty
               ? filteredEmpty(query.search, dateFilterActive(query), clearFilters)
               : pipelineSurface({

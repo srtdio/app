@@ -14,7 +14,10 @@ vi.mock('agora-chat', () => ({
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: 'w1', workspaceKey: 'w1', workspaces: [] }),
 }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => false }));
+vi.mock('@/lib/use-media-query', () => ({
+  LAPTOP_QUERY: '(min-width: 768px)',
+  useMediaQuery: () => false,
+}));
 vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'me' } }, loading: false }),
 }));
@@ -27,7 +30,7 @@ import {
   deleteHasUndo,
   withUndoTombstones,
 } from '@/components/chat/MessageThread';
-import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
+import { UNDO_MS } from '@/lib/undo';
 import type { ThreadMessage } from '@/lib/chat/thread';
 
 const NOW = Date.parse('2026-10-19T10:00:00.000Z');
@@ -64,7 +67,7 @@ describe('X7 FT39: delete a text message, then Undo', () => {
         msg({ attachments: [{ assetId: 'a1', name: 'photo.jpg', mime: 'image/jpeg' }] }),
       ),
     ).toBe(false);
-    expect(UNDO_WINDOW_MS).toBe(4000);
+    expect(UNDO_MS).toBe(4000);
     expect(MESSAGE_DELETED_UNDO).toBe('Message deleted');
   });
 

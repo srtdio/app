@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import { IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconPlus, IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
 
 interface SectionHeaderSearch {
   value: string;
@@ -22,7 +22,9 @@ interface SectionHeaderSort<S extends string> {
 }
 
 /**
- * The primary "+"/create control. Either a declarative accent button (the
+ * The primary "+"/create control: the list page's New button, last on the row
+ * after search and sort/filter. Either a declarative accent button (IconPlus
+ * at ICON_SIZE.inline before the label unless `icon` is given; the
  * common create action, e.g. Pipeline/Briefs) or a custom control for pages
  * whose primary action needs more than a single onClick (e.g. the Assets add
  * menu). Command/query: the button form owns no logic, it only calls onClick.
@@ -68,7 +70,7 @@ function renderPrimaryAction(action: SectionHeaderPrimaryAction): ReactNode {
   if ('node' in action) return action.node;
   return (
     <Button variant="primary" aria-label={action.label} onClick={action.onClick}>
-      {action.icon}
+      {action.icon ?? <IconPlus size={ICON_SIZE.inline} />}
       {action.label}
     </Button>
   );

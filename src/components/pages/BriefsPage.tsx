@@ -11,7 +11,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastOptions } from '@/components/ui/toast/types';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs, IconPlus } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
 import { CreateBriefSheet, type BriefCreated } from '@/components/pages/CreateBriefSheet';
 import { dispatchSorted } from '@/lib/events';
@@ -62,6 +62,8 @@ interface BriefsHeaderProps {
   onSearchChange: (value: string) => void;
   filter: BriefFilter;
   onFilterChange: (filter: BriefFilter) => void;
+  /** Per-chip brief counts (after the search); a chip shows its count only above 0. */
+  counts?: Partial<Record<BriefFilter, number>>;
   /** Whether the viewer holds brief.create; the "+" shows only then (same gate as Topbar). */
   canCreate: boolean;
   /**
@@ -105,6 +107,7 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
                   className="shrink-0 whitespace-nowrap"
                   onClick={() => dispatchSorted('sorted:create-brief')}
                 >
+                  <IconPlus size={ICON_SIZE.inline} />
                   New brief
                 </Button>
               ),
@@ -116,8 +119,10 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
         <Chip
           key={item.key}
           label={item.label}
+          {...(props.counts?.[item.key] !== undefined ? { count: props.counts[item.key] } : {})}
           selected={props.filter === item.key}
           size="tap"
+          className="flex-none whitespace-nowrap"
           onClick={() => props.onFilterChange(item.key)}
         />
       ))}
@@ -159,7 +164,7 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
 export type BriefsEmpty =
   /** A typed search matched nothing: NoResults + Clear search (clears the search only). */
   | { kind: 'no-results'; query: string }
-  /** A client with no open briefs: one line and New brief. */
+  /** A client with no open briefs: one line (the header's New brief is the only create). */
   | { kind: 'client-empty' }
   /** The agency side with no briefs at all: one line, no heading. */
   | { kind: 'agency-empty' }
@@ -170,7 +175,7 @@ export type BriefsEmpty =
  * Pick the empty state. A typed search always wins and is the only state with
  * Clear. Then a workspace with no briefs at all (client or agency copy), then
  * the chip: Closed has its own heading; a client on Open (nothing open) gets the
- * "Open briefs show up here." state with New brief. Pure.
+ * "Open briefs show up here." state. Pure.
  */
 export function briefsEmptyState(
   filter: BriefFilter,
@@ -355,41 +360,20 @@ export function createdToast(created: BriefCreated, navigate: (to: string) => vo
 }
 
 /**
- * Render a {@link BriefsEmpty}. Clear only on a typed search and it clears the
- * search only (the chip stays). The agency's empty line has no heading, so it is
- * drawn here in EmptyState's shape rather than through EmptyState's required
- * title. Pure (no hooks).
+ * Render a {@link BriefsEmpty}: the shared EmptyState with its one line, or
+ * NoResults for a typed search. Clear only on a typed search and it clears the
+ * search only (the chip stays). An empty page has no create button of its own;
+ * the header's New brief is the only one. Pure (no hooks).
  */
-export function briefsEmptyView(
-  state: BriefsEmpty,
-  onClearSearch: () => void,
-  onNewBrief: () => void,
-): ReactElement {
+export function briefsEmptyView(state: BriefsEmpty, onClearSearch: () => void): ReactElement {
   const icon = <IconBriefs size={ICON_SIZE.status} />;
   switch (state.kind) {
     case 'no-results':
       return <NoResults query={state.query} filtersActive={false} onClear={onClearSearch} />;
     case 'client-empty':
-      return (
-        <EmptyState
-          icon={icon}
-          title="Open briefs show up here."
-          action={
-            <Button variant="primary" onClick={onNewBrief}>
-              New brief
-            </Button>
-          }
-        />
-      );
+      return <EmptyState icon={icon} title="Open briefs show up here." />;
     case 'agency-empty':
-      return (
-        <div className="flex flex-col items-center justify-center text-center px-6 py-14 gap-1.5 min-h-[320px]">
-          <div className="w-[54px] h-[54px] rounded-xl bg-panel-2 border border-border flex items-center justify-center text-fg-3 mb-1.5">
-            {icon}
-          </div>
-          <p className="text-fg-2 text-base max-w-[300px]">Briefs from the client show up here.</p>
-        </div>
-      );
+      return <EmptyState icon={icon} title="Briefs from the client show up here." />;
     case 'filtered':
       return <EmptyState icon={icon} title={state.title} />;
   }
@@ -494,6 +478,15 @@ export function BriefsPage() {
     [showSort, workspaceBriefs, filter, search, sort],
   );
 
+  // The chip counts: each filter's briefs after the search.
+  const chipCounts = useMemo(() => {
+    const out: Partial<Record<BriefFilter, number>> = {};
+    for (const item of FILTERS) {
+      out[item.key] = filterByTitle(filterBriefsByStatus(workspaceBriefs, item.key), search).length;
+    }
+    return out;
+  }, [workspaceBriefs, search]);
+
   const shownCount = showSort
     ? sortedBriefs.length
     : groups.reduce((sum, group) => sum + group.items.length, 0);
@@ -539,6 +532,7 @@ export function BriefsPage() {
         onSearchChange: (value) => setListState(filter, value),
         filter,
         onFilterChange: (value) => setListState(value, search),
+        counts: chipCounts,
         canCreate: canCreateBrief,
         ...(showSort ? { sort: { value: sort, onChange: setSort } } : {}),
       })}
@@ -553,7 +547,6 @@ export function BriefsPage() {
         briefsEmptyView(
           briefsEmptyState(filter, search, workspaceBriefs.length, canCreateBrief),
           () => setListState(filter, ''),
-          () => setCreateOpen(true),
         )
       ) : showSort ? (
         <div ref={listRef} className={LIST_CLASS}>
