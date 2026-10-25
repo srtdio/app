@@ -204,7 +204,7 @@ describe('bounded chat history reads', () => {
     }
   });
 
-  it('catch-up is bounded from the cursor up to the server's now plus a minute', async () => {
+  it('catch-up is bounded from the cursor up to the server clock plus a minute', async () => {
     const rows = spreadRows(10, '2026-10-24T00:00:00Z', '2026-10-25T11:00:00Z', () => ({
       channel_id: CH,
     }));
