@@ -226,6 +226,17 @@ describe('briefCardList presign wiring', () => {
     expect(first!.href).toBe('/briefs/a');
     expect(second!.href).toBe('/briefs/b');
   });
+
+  it('threads the workspace zone each card reads its due date on', () => {
+    const cards = briefCardList({
+      briefs: [makeBrief('a')],
+      cache,
+      presignEnabled: true,
+      hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
+      timeZone: 'Asia/Kolkata',
+    });
+    expect((cards[0]!.props as { timeZone?: string }).timeZone).toBe('Asia/Kolkata');
+  });
 });
 
 // The workspace calendar the page reads its sections on: Mumbai, Monday weeks.

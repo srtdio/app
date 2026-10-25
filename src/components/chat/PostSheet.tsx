@@ -58,7 +58,7 @@ import {
 } from '@/components/chat/post-sheet';
 import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
-import { formatDate } from '@/lib/time';
+import { formatDueDate } from '@/lib/time';
 import { actsOnBehalfOfClient, type ViewerSide } from '@/lib/chat/viewer-role';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
@@ -368,13 +368,22 @@ export function PostSheetMedia(props: {
 /** The full title, the Stage tag, then the key/value rows. Presentational. */
 export function PostSheetDetails(props: {
   view: PostView;
-  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  /** For tests: the zone moments render in. The app passes none (the viewer's device zone). */
   timeZone?: string | undefined;
+  /** The workspace's zone: the target (due) date reads its calendar day on it. */
+  workspaceZone: string | null | undefined;
   /** The workspace's brand name for "on behalf of <Brand>"; null falls back. */
   brand?: string | null;
 }): ReactElement {
   const { post, approverName, approverRole } = props.view;
-  const rows = detailRows(post, approverName, props.timeZone, approverRole ?? null, props.brand);
+  const rows = detailRows(
+    post,
+    approverName,
+    props.timeZone,
+    props.workspaceZone,
+    approverRole ?? null,
+    props.brand,
+  );
   return (
     <div className="flex flex-col gap-3">
       <h3 data-sheet-title="" className="text-lg font-semibold text-fg">
@@ -648,8 +657,10 @@ export function PostSheet(props: PostSheetProps): ReactElement {
   const navigate = useNavigate();
   const newTrace = useNewTrace();
   const toast = useToast();
-  const { workspaceId, workspaceName, workspaceKey } = useWorkspace();
+  const { workspaces, workspaceId, workspaceName, workspaceKey } = useWorkspace();
   const brand = workspaceName ?? null;
+  // Due dates are calendar days on the workspace zone (src/lib/time.ts).
+  const workspaceZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
   const gallery = useSheetGallery(open, view.postId);
   const [mode, setMode] = useState<SheetMode>({ kind: 'actions' });
   const [busy, setBusy] = useState(false);
@@ -672,7 +683,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
   const subject = postSubject(post.title);
   const set = sheetActions(side, post, timeZone);
   const targetDate =
-    post.target_date !== null ? formatDate(post.target_date, undefined, timeZone) : '';
+    post.target_date !== null ? formatDueDate(post.target_date, workspaceZone) : '';
   const items = gallery.status === 'ready' ? gallery.items : [];
 
   // Escape belongs to the viewer while it is open (it closes itself on Escape).
@@ -817,7 +828,12 @@ export function PostSheet(props: PostSheetProps): ReactElement {
                 onScroll={onStripScroll}
                 onOpen={setViewer}
               />
-              <PostSheetDetails view={view} timeZone={timeZone} brand={brand} />
+              <PostSheetDetails
+                view={view}
+                timeZone={timeZone}
+                workspaceZone={workspaceZone}
+                brand={brand}
+              />
             </>
           )}
         </div>

@@ -37,7 +37,7 @@ import { readPostsByIds } from '@srtdio/posts';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { readBriefsByIds } from '@/lib/chat/briefs';
 import { readPlanTitles } from '@/lib/chat/plans';
-import { formatChatTime, formatDate } from '@/lib/time';
+import { formatChatTime, formatDueDate } from '@/lib/time';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { WriteResult } from '@/lib/chat/record';
 import type { ThreadMessage } from '@/lib/chat/thread';
@@ -97,15 +97,15 @@ export const IN_THIS_CHAT = 'in this chat';
 export const NOT_SHARED_HERE = 'not shared here yet';
 
 /**
- * The two text lines of an open post row; target_date shows on the viewer's
- * clock (`timeZone` is for tests). Pure.
+ * The two text lines of an open post row; target_date is a due date and shows
+ * its calendar day on the workspace zone. Pure.
  */
 export function openPostLines(
   post: OpenPostRow,
   shared: boolean,
-  timeZone?: string,
+  workspaceZone: string | null | undefined,
 ): { title: string; meta: string } {
-  const date = post.target_date !== null ? formatDate(post.target_date, undefined, timeZone) : '';
+  const date = post.target_date !== null ? formatDueDate(post.target_date, workspaceZone) : '';
   return {
     title: post.title,
     meta: [formatLabel(post.format), date, shared ? IN_THIS_CHAT : NOT_SHARED_HERE]
@@ -118,8 +118,8 @@ export function openPostLines(
 export function OpenPostSheetRow(props: {
   post: OpenPostRow;
   shared: boolean;
-  /** For tests: the zone the target date renders in (the app passes none: device zone). */
-  timeZone?: string | undefined;
+  /** The workspace zone the target (due) date renders on. */
+  timeZone?: string | null | undefined;
   onJump: () => void;
   onShare: () => void;
 }): ReactElement {
@@ -155,12 +155,12 @@ export interface OpenPostsSection {
   sharedIds: ReadonlySet<string>;
   onJump: (postId: string) => void;
   onShare: (postId: string) => void;
+  /** The workspace zone the target (due) dates render on. */
+  timeZone?: string | null | undefined;
 }
 
 /** The posts section above the Open marks; nothing when no post is waiting. */
-export function OpenPostsList(
-  props: OpenPostsSection & { timeZone?: string | undefined },
-): ReactElement | null {
+export function OpenPostsList(props: OpenPostsSection): ReactElement | null {
   if (props.posts === null || props.posts.length === 0) return null;
   return (
     <section data-open-posts="" className="flex flex-col gap-1">
@@ -457,7 +457,7 @@ export function MarksList(props: MarksListProps): ReactElement {
         ))}
       </div>
       {tab === 'open' && props.openPosts !== undefined ? (
-        <OpenPostsList {...props.openPosts} timeZone={props.timeZone} />
+        <OpenPostsList {...props.openPosts} />
       ) : null}
       {body === 'no-open-marks' ? (
         <p data-no-open-marks="" className="px-2 text-sm text-fg-3">

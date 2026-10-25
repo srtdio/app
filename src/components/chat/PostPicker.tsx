@@ -76,7 +76,7 @@ import {
   type BriefFilter,
   type BriefPickerRow,
 } from '@/lib/chat/briefs';
-import { formatDate } from '@/lib/time';
+import { formatDate, formatDueDate } from '@/lib/time';
 import {
   PICKER_PAGE_SIZE,
   buildPickerSections,
@@ -416,7 +416,9 @@ export async function warmPostPicker(params: {
 }
 
 export function PostPicker(props: PostPickerProps): ReactElement {
-  const { workspaceId, workspaceKey } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
+  // Due dates are calendar days on the workspace zone (src/lib/time.ts).
+  const workspaceZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
   const sheetMode = props.mode ?? 'posts';
   const mode: PickerMode = props.inline === true ? 'inline' : sheetMode;
   const reads = pickerReads(mode);
@@ -593,6 +595,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   const rowProps: PostRowContext = {
     selected: props.selected,
     onToggle: props.onToggle,
+    timeZone: workspaceZone,
     sharedPostIds: props.sharedPostIds,
     excludePostIds: props.excludePostIds,
   };
@@ -719,6 +722,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
               error={briefError}
               selected={props.selectedBriefs}
               onToggle={props.onToggleBrief}
+              workspaceZone={workspaceZone}
               query={trimmed}
               filtersActive={briefFilter !== DEFAULT_BRIEF_FILTER}
               onClear={() => {
@@ -758,8 +762,8 @@ export function InlinePickerPanel(props: {
 export interface PostRowContext {
   selected: readonly PostCardFields[];
   onToggle: (post: PostCardFields) => void;
-  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
-  timeZone?: string | undefined;
+  /** The workspace zone each row's target (due) date renders on. Absent: the device zone. */
+  timeZone?: string | null | undefined;
   sharedPostIds?: ReadonlySet<string> | undefined;
   /** Post ids whose rows are not rendered (already in the plan being added to). */
   excludePostIds?: ReadonlySet<string> | undefined;
@@ -909,7 +913,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
   const inChat = props.sharedPostIds?.has(post.id) === true;
   const meta = [
     formatLabel(post.format),
-    post.target_date !== null ? formatDate(post.target_date, undefined, props.timeZone) : '',
+    post.target_date !== null ? formatDueDate(post.target_date, props.timeZone) : '',
   ]
     .filter((part) => part !== '')
     .join(' · ');
@@ -953,8 +957,10 @@ export function BriefPickerList(props: {
   error: string | null;
   selected: readonly BriefCardFields[];
   onToggle: (brief: BriefCardFields) => void;
-  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  /** For tests: the zone moments render in. The app passes none (the viewer's device zone). */
   timeZone?: string | undefined;
+  /** The workspace zone each brief's due date renders on. Absent: the device zone. */
+  workspaceZone?: string | null | undefined;
   /** The live search text; a search or a non-default filter turns zero rows into NoResults. */
   query?: string;
   filtersActive?: boolean;
@@ -990,7 +996,8 @@ export function BriefPickerList(props: {
     <ul className={LIST_CLASS}>
       {props.briefs.map((brief) => {
         const active = isBriefSelected(props.selected, brief.id);
-        const target = brief.targetDate !== null ? formatDate(brief.targetDate) : '';
+        const target =
+          brief.targetDate !== null ? formatDueDate(brief.targetDate, props.workspaceZone) : '';
         return (
           <li key={brief.id}>
             <PressableRow

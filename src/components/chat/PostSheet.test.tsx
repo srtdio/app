@@ -370,7 +370,7 @@ describe('PostSheetDetails', () => {
 
   it('the full title, the stage tag and the rows', () => {
     const html = renderToStaticMarkup(
-      <PostSheetDetails view={view({ mediaCount: 4 })} timeZone="UTC" />,
+      <PostSheetDetails view={view({ mediaCount: 4 })} timeZone="UTC" workspaceZone="UTC" />,
     );
     expect(html).toContain('Diwali carousel with a long full title that the card would clamp');
     expect(html).not.toContain('line-clamp');
@@ -389,6 +389,7 @@ describe('PostSheetDetails', () => {
           'Asha',
         )}
         timeZone="UTC"
+        workspaceZone="UTC"
       />,
     );
     expect(html).toContain('data-sheet-row="approved"');

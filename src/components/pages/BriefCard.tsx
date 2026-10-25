@@ -59,10 +59,15 @@ export function briefCardLink(brief: BriefWithThumbnail): ExternalLink | null {
 
 /**
  * The card's due line: "Due 8 Oct" ("Due 4 Jan 2027" outside now's year), read
- * off the date-only string itself so no zone can shift the day.
+ * off the date-only string itself so no zone can shift the day; the workspace
+ * zone (due dates are workspace calendar days) only decides now's year.
  */
-export function briefDueLabel(targetDate: string, now: Date = new Date()): string {
-  return formatDue(targetDate, now);
+export function briefDueLabel(
+  targetDate: string,
+  workspaceZone: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  return formatDue(targetDate, workspaceZone, now);
 }
 
 interface BriefCardProps {
@@ -73,6 +78,8 @@ interface BriefCardProps {
   presignEnabled: boolean;
   /** Where the title link goes (the pretty /b/KEY-N path, or /briefs/:id). */
   href: string;
+  /** The workspace zone the due date reads on. Absent: the device zone. */
+  timeZone?: string | null | undefined;
 }
 
 /**
@@ -83,7 +90,7 @@ interface BriefCardProps {
  * inside a link. The optional reference link sits above it. Closing a brief
  * lives in the detail page's menu, never on the card.
  */
-export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps) {
+export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: BriefCardProps) {
   const closed = isBriefClosed(brief);
   const link = briefCardLink(brief);
 
@@ -147,7 +154,7 @@ export function BriefCard({ brief, cache, presignEnabled, href }: BriefCardProps
 
         {brief.target_date !== null ? (
           <div className="text-sm text-fg-3">
-            <span className="tabular-nums">{briefDueLabel(brief.target_date)}</span>
+            <span className="tabular-nums">{briefDueLabel(brief.target_date, timeZone)}</span>
           </div>
         ) : null}
       </div>

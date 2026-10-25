@@ -132,6 +132,8 @@ interface BriefCardListDeps {
   presignEnabled: boolean;
   /** The detail path for a brief (pretty /b/KEY-N when known). */
   hrefFor: (brief: BriefWithThumbnail) => string;
+  /** The workspace zone each card's due date reads on. Absent: the device zone. */
+  timeZone?: string;
 }
 
 /**
@@ -148,6 +150,7 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
       cache={deps.cache}
       presignEnabled={deps.presignEnabled}
       href={deps.hrefFor(brief)}
+      timeZone={deps.timeZone}
     />
   ));
 }
@@ -321,7 +324,7 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
           {day.label}
         </div>,
         <div key={day.key} className={GRID_CLASS}>
-          {briefCardList({ ...cardDeps, briefs: day.items })}
+          {briefCardList({ ...cardDeps, timeZone, briefs: day.items })}
         </div>,
       ])}
     </section>

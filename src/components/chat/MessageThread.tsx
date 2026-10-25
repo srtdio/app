@@ -6186,6 +6186,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                 ? drawerKeys(statusBarState.items)
                 : [],
             side: viewerSide.side,
+            workspaceZone: props.timeZone,
             plans: statusOpenPlans,
             posts: {
               heading: openPostsHeading(viewerSide.side),
@@ -6352,6 +6353,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             heading: openPostsHeading(viewerSide.side),
             posts: openPosts.posts,
             sharedIds: sharedInChat,
+            timeZone: props.timeZone,
             onJump: (postId) => {
               setMarksOpen(false);
               const card = newestCardFor(props.messages, postId);

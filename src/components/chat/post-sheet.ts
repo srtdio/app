@@ -7,7 +7,7 @@
 import type { DomainError, Result } from '@srtdio/rpc';
 import type { PostCardRow } from '../../../packages/posts/src/reads';
 import type { StageTransitionInput } from '../../../packages/posts/src/stage-machine';
-import { formatDate, formatDateTime } from '@/lib/time';
+import { formatDate, formatDateTime, formatDueDate } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { errorText } from '@/lib/error-copy';
@@ -277,7 +277,9 @@ export interface DetailRow {
  * The rows after Stage: target date, format (with "· N slides" past one item),
  * and the approval. With an approver on record the value is "Name · 2 Oct, 2:05 PM"
  * ("Name on behalf of client · ..." for an agency-side approver); an approved
- * post with no approver reads the date it entered approved.
+ * post with no approver reads the date it entered approved. The target date is
+ * a due date: its calendar day on the workspace zone; the approval reads the
+ * viewer's device zone.
  */
 export function detailRows(
   post: Pick<
@@ -293,11 +295,13 @@ export function detailRows(
   approverName: string | null,
   /** For tests; the app passes undefined (the viewer's device zone). */
   timeZone: string | undefined,
+  /** The workspace's zone, the target (due) day reads on it. */
+  workspaceZone: string | null | undefined,
   approverRole: string | null = null,
   brand: string | null = null,
 ): DetailRow[] {
   const rows: DetailRow[] = [];
-  const target = post.target_date !== null ? formatDate(post.target_date, undefined, timeZone) : '';
+  const target = post.target_date !== null ? formatDueDate(post.target_date, workspaceZone) : '';
   if (target !== '') rows.push({ key: 'target', label: 'Target date', value: target });
   const format = formatLabel(post.format);
   rows.push({

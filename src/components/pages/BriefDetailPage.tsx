@@ -30,7 +30,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
-import { civilDay, formatDate, formatDue, formatOverdue } from '@/lib/time';
+import { civilDay, formatDate, formatDue, formatDueDate, formatOverdue } from '@/lib/time';
 import { postFormatLabel } from '@/lib/post-format';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
@@ -107,12 +107,19 @@ export function BriefDetailSkeleton(): ReactElement {
 }
 
 /**
- * briefs.target_date is a date-only column: "2026-10-08" reads "8 Oct" ("8 Oct
- * 2027" outside now's year) on every machine, whatever the browser zone (the
- * string's own parts, never new Date(value)).
+ * briefs.target_date is a due date in a date-only column: "2026-10-08" reads
+ * "8 Oct" ("8 Oct 2027" outside now's year) on every machine, whatever the
+ * browser zone (the string's own parts, never new Date(value)); the workspace
+ * zone only decides now's year.
  */
-export function briefDueDateLabel(targetDate: string | null, now: Date = new Date()): string {
-  return targetDate !== null ? formatDate(targetDate, now) || targetDate : 'Not set';
+export function briefDueDateLabel(
+  targetDate: string | null,
+  workspaceZone: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  return targetDate !== null
+    ? formatDueDate(targetDate, workspaceZone, now) || targetDate
+    : 'Not set';
 }
 
 export interface BriefStatusLine {
@@ -125,23 +132,26 @@ export interface BriefStatusLine {
 
 /**
  * The top bar's status line: "Open · Due 14 Aug", "Open · Overdue 2 months"
- * once the due day has passed on the viewer's clock, plain "Open" with no due
+ * once the due day has passed in the workspace zone, plain "Open" with no due
  * date, and plain "Closed" for a closed brief. The date-only target_date is read
- * as written; the zone (the device's; `timeZone` is for tests) only decides
- * which day is today. Pure.
+ * as written; the workspace zone only decides which day is today. Pure.
  */
 export function briefStatusLine(
   status: string,
   targetDate: string | null,
-  timeZone?: string,
+  workspaceZone: string | null | undefined,
   now: Date = new Date(),
 ): BriefStatusLine {
   if (status === BRIEF_STATUS.closed) return { status: 'Closed', due: null, overdue: false };
   if (targetDate === null) return { status: 'Open', due: null, overdue: false };
-  if (targetDate < civilDay(now, timeZone)) {
-    return { status: 'Open', due: formatOverdue(targetDate, now, timeZone).text, overdue: true };
+  if (targetDate < civilDay(now, workspaceZone ?? undefined)) {
+    return {
+      status: 'Open',
+      due: formatOverdue(targetDate, workspaceZone, now).text,
+      overdue: true,
+    };
   }
-  const due = formatDue(targetDate, now, timeZone);
+  const due = formatDue(targetDate, workspaceZone, now);
   return { status: 'Open', due: due === '' ? null : due, overdue: false };
 }
 
@@ -384,7 +394,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const briefId = briefIdProp ?? params.briefId;
   const navigate = useNavigate();
   const newTrace = useNewTrace();
-  const { workspaceId, workspaceKey } = useWorkspace();
+  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const { toasts, push, dismiss } = useToasts();
   const toast = useOptionalToast();
   const { run: runUndoable } = useUndoableAction();
@@ -396,6 +406,11 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const isApprover = useWorkspaceCapability('brief.create') === true;
   // Creators (they make posts, not briefs) start a post from an open brief.
   const canCreatePost = useWorkspaceCapability('post.create') === true;
+
+  // The active workspace's zone: the due date is a calendar day on it, so the
+  // overdue flip happens at the workspace's midnight. Raised (a moment) reads
+  // the viewer's device clock.
+  const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
 
   // Resolve created_by to a current member's display name, never a raw uuid.
   // Reuses the post detail page's member hook unchanged; the map is the resolver
@@ -690,7 +705,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const canClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
   const hasBrand = brief.brand_requirements !== null && brief.brand_requirements.trim() !== '';
   const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
-  const statusLine = briefStatusLine(brief.status, brief.target_date);
+  const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone);
   const showNewPost = canCreatePost && !isApprover && !closed && briefId !== undefined;
   const startPost = (): void => navigate(`/pipeline?new=1&brief=${encodeURIComponent(brief.id)}`);
   const authorLabel = briefAuthorLabel(

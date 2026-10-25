@@ -115,8 +115,10 @@ export interface StatusDrawerData {
   /** The sections to show, in the bar's order (its non-zero items). */
   keys: readonly StatusKey[];
   side: ViewerSide;
-  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  /** For tests: the zone moments render in. The app passes none (the viewer's device zone). */
   timeZone?: string | undefined;
+  /** The workspace zone the posts' target (due) dates render on. Absent: the device zone. */
+  workspaceZone?: string | null | undefined;
   /** The workspace's current shared plans, ending soonest first (the bar's set). */
   plans: readonly PlanBundle[];
   posts: { heading: string; rows: readonly OpenPostRow[]; count: number };
@@ -572,7 +574,7 @@ export function StatusDrawerList(
             String(props.posts.count),
             <>
               {shown.map((post) => {
-                const lines = openPostLines(post, false);
+                const lines = openPostLines(post, false, props.workspaceZone);
                 const busy = props.busyPostId === post.id;
                 return (
                   <PressableRow
@@ -584,7 +586,9 @@ export function StatusDrawerList(
                     // Waiting on its read: pressed tint and a pulsing chevron, same box.
                     className={cn(ROW, busy && 'bg-panel-2')}
                   >
-                    <span className={DATE_COL}>{drawerDay(post.target_date)}</span>
+                    <span className={DATE_COL}>
+                      {drawerDay(post.target_date, props.workspaceZone)}
+                    </span>
                     <PostCover cover={covers(post.id)} />
                     <span className="min-w-0 flex-1">
                       <span className={ROW_TITLE}>{lines.title}</span>
