@@ -212,10 +212,21 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
   const mediaList: PreviewMedia = kind === 'video' ? 'video' : 'image';
   const listSizes = sizesFor(platform, mediaList);
 
+  const url = useMediaUrl(
+    firstMedia,
+    kind,
+    props.cache,
+    props.presignEnabled === true,
+    props.localUrl ?? null,
+  );
+  // The measure belongs to the file on screen, so it resets when the media URL
+  // changes. Keyed on the version id it was lost when an upload finished: the
+  // id lands but the local blob URL stays, so the image never loads again and
+  // the panel stuck on "Measuring the original."
   const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {
     setMeasured(null);
-  }, [firstMedia?.assetVersionId]);
+  }, [url]);
   const stored =
     firstMedia !== null &&
     firstMedia.width !== null &&
@@ -238,16 +249,11 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
     setLabel(fallback?.label ?? null);
   }, [fallback?.label]);
   const size = sizes.find((s) => s.label === label) ?? fallback;
-  const url = useMediaUrl(
-    firstMedia,
-    kind,
-    props.cache,
-    props.presignEnabled === true,
-    props.localUrl ?? null,
-  );
 
   function measure(w: number, h: number): void {
-    if (stored === null && w > 0 && h > 0) setMeasured({ w, h });
+    if (stored === null && w > 0 && h > 0) {
+      setMeasured((prev) => (prev?.w === w && prev.h === h ? prev : { w, h }));
+    }
   }
 
   if (kind === 'document') {
@@ -289,6 +295,11 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
       <img
         src={url}
         alt=""
+        // An image already decoded (cached, or loaded before a reset) fires no
+        // load event: measure it as it mounts.
+        ref={(el) => {
+          if (el !== null && el.complete) measure(el.naturalWidth, el.naturalHeight);
+        }}
         onLoad={(event) =>
           measure(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
         }
