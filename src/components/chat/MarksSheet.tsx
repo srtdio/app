@@ -96,7 +96,10 @@ function OpenPostThumb(props: { assetVersionId: string | null }) {
 export const IN_THIS_CHAT = 'in this chat';
 export const NOT_SHARED_HERE = 'not shared here yet';
 
-/** The two text lines of an open post row; target_date shows on the viewer's clock (`timeZone` is for tests). Pure. */
+/**
+ * The two text lines of an open post row; target_date shows on the viewer's
+ * clock (`timeZone` is for tests). Pure.
+ */
 export function openPostLines(
   post: OpenPostRow,
   shared: boolean,
@@ -115,7 +118,7 @@ export function openPostLines(
 export function OpenPostSheetRow(props: {
   post: OpenPostRow;
   shared: boolean;
-  /** For tests: the zone the target date renders in. The app passes none (the viewer's device zone). */
+  /** For tests: the zone the target date renders in (the app passes none: device zone). */
   timeZone?: string | undefined;
   onJump: () => void;
   onShare: () => void;
@@ -155,7 +158,9 @@ export interface OpenPostsSection {
 }
 
 /** The posts section above the Open marks; nothing when no post is waiting. */
-export function OpenPostsList(props: OpenPostsSection & { timeZone?: string | undefined }): ReactElement | null {
+export function OpenPostsList(
+  props: OpenPostsSection & { timeZone?: string | undefined },
+): ReactElement | null {
   if (props.posts === null || props.posts.length === 0) return null;
   return (
     <section data-open-posts="" className="flex flex-col gap-1">

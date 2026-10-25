@@ -56,7 +56,7 @@ export interface PipelineBoardProps {
   onOpenMove?: (post: PipelinePost) => void;
   /** A drop onto a column the post cannot move to: the page toasts the reason. */
   onBlockedMove?: (reason: string) => void;
-  /** For tests: the zone each card reads its target day in. The app passes none (the viewer's device zone). */
+  /** For tests: the zone each card reads its target day in (the app passes none: device zone). */
   timeZone?: string | undefined;
   /** The viewer's role and approvers: each card's status line and its ⋯. */
   viewer?: CardViewer;

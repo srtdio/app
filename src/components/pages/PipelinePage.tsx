@@ -496,7 +496,7 @@ export interface PipelineSurfaceProps {
   onBlockedMove: (reason: string) => void;
   /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
   shownKey: string;
-  /** For tests: the zone each card reads its target day in. The app passes none (the viewer's device zone). */
+  /** For tests: the zone each card reads its target day in (the app passes none: device zone). */
   timeZone?: string;
   /** The viewer's role and approvers: each card's status line and its ⋯. */
   viewer?: CardViewer;

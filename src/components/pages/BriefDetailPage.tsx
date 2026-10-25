@@ -213,9 +213,9 @@ export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
 
 /**
  * The day this brief was raised, read on the viewer's clock (`timeZone` is for
- * tests) with the app day format: "22 Sep", or "22 Sep 2025" outside now's year (the same formatter as
- * the list's day headings, so the two can never disagree). An unparseable
- * created_at is returned unchanged, and an unknown zone never throws.
+ * tests) with the app day format: "22 Sep", or "22 Sep 2025" outside now's
+ * year. An unparseable created_at is returned unchanged, and an unknown zone
+ * never throws.
  */
 export function briefRaisedLabel(
   createdAt: string,

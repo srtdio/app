@@ -242,8 +242,9 @@ test('agency: no upcoming plans shows the empty line and New plan', async ({ pag
   const network = await installHarnessNetwork(page);
   await openChat(page, PEER_NAME);
   const picker = await openPicker(page);
-  await expect(picker.locator('[data-plan-picker-empty]')).toContainText('No upcoming plans');
-  await expect(picker.getByText("Plans that have ended don't show here.")).toBeVisible();
+  await expect(picker.locator('[data-plan-picker-empty]')).toContainText(
+    'Upcoming plans show up here.',
+  );
   await expect(picker.locator('[data-plan-pick]')).toHaveCount(0);
   await picker.locator('[data-plan-pick-new]').click();
   await expect(page.locator('[data-plan-page="compose"]')).toBeVisible();

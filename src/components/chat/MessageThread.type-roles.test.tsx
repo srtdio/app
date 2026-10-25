@@ -23,7 +23,7 @@ import {
   HEADER_NAME_TYPE,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { formatClockTime } from '@/lib/chat/time-format';
+import { formatTime } from '@/lib/time';
 
 /** Render into the document and return the first element matching `selector` with `text`. */
 function paint(node: ReactElement, selector: string, text: string): HTMLElement {
@@ -81,7 +81,7 @@ describe('chat thread type roles', () => {
 
   it('Seen line meta: muted bubble meta size; the time is sans tabular, never mono', () => {
     const at = '2026-10-02T10:05:00Z';
-    const time = formatClockTime(at, 'UTC');
+    const time = formatTime(at, 'UTC');
     const span = paint(<SeenLine readAt={at} timeZone="UTC" />, 'span', time);
     expect(classes(span)).toEqual(expect.arrayContaining(['font-sans', 'tabular-nums']));
     expect(classes(span)).not.toContain('font-mono');

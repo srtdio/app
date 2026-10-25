@@ -211,7 +211,7 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
       'Cards already in chat will show Plan deleted. Approvers get a notification. This cannot be undone.',
     );
     expect(deletePlanErrorCopy('P0001: forbidden_role')).toBe(DELETE_FORBIDDEN);
-    expect(DELETE_FORBIDDEN).toBe("Only the plan's creator or a workspace admin can delete it.");
+    expect(DELETE_FORBIDDEN).toBe("Couldn't delete the plan. You don't have access to do this.");
     expect(deletePlanErrorCopy('boom')).toBe("Couldn't delete. Try again.");
     const src = read('PlanScreen.tsx');
     expect(src).toContain('planDelete(supabase, { p_plan_id: planId, p_trace_id: traceId })');

@@ -377,7 +377,10 @@ interface MessageThreadProps {
   onLoadOlder?: () => void;
   /** The newest message is on screen; the thread advances the read cursor. */
   onNewestVisible?: () => void;
-  /** The workspace IANA zone every timestamp renders in. */
+  /**
+   * The workspace IANA zone the plan logic reads "today" on (the status
+   * ticker's current plans). Visible times read the viewer's device clock.
+   */
   timeZone: string;
   /** False when sending is impossible (no channel selected). */
   canSend: boolean;
@@ -2017,7 +2020,7 @@ export function MessageBubble(props: {
   tail: boolean;
   /** Directly under a DayPill, which carries the gap: no top padding. */
   afterLabel?: boolean;
-  /** For tests: the zone the meta time renders in. The app passes none (the viewer's device zone). */
+  /** For tests: the zone the meta time renders in (the app passes none: device zone). */
   timeZone?: string | undefined;
   /** The size table (touch or laptop) the bubble is drawn with. */
   layout: ChatLayout;
@@ -3951,8 +3954,7 @@ function ThreadBody(
         ) : (
           <EmptyState
             icon={<IconChat size={ICON_SIZE.tray} />}
-            title="No messages yet"
-            description="Say hello."
+            title="Messages show up here."
           />
         )}
       </div>

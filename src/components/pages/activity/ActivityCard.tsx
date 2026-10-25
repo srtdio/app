@@ -710,7 +710,9 @@ export function ActivityCard({
                     {/* The author line above already names who: the text never repeats it. */}
                     {cardBodyLine(entry, { name: entry.actorName === null })}
                   </p>
-                  <p className="mt-0.5 text-sm text-fg-3">{formatRelative(entry.createdAt, new Date(nowMs))}</p>
+                  <p className="mt-0.5 text-sm text-fg-3">
+                    {formatRelative(entry.createdAt, new Date(nowMs))}
+                  </p>
                 </div>
                 {entry.readAt === null ? (
                   <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" />

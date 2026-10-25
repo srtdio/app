@@ -416,6 +416,8 @@ describe('one row template for checkpoints and comments', () => {
 
   it('reads "Checkpoints show up here." on an empty post', async () => {
     await mount(false);
-    expect(host?.querySelector('[data-comments-empty]')?.textContent).toBe('Checkpoints show up here.');
+    expect(host?.querySelector('[data-comments-empty]')?.textContent).toBe(
+      'Checkpoints show up here.',
+    );
   });
 });

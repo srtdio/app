@@ -170,7 +170,7 @@ export interface SearchResultsProps {
   onOpenChat: (channel: ChannelSummary) => void;
   onOpenHit: (channel: ChannelSummary, hit: SearchHit, query: string) => void;
   onRetry: () => void;
-  /** Clears the search box and the chip (the no-results state's button); absent shows the line alone. */
+  /** Clears the search box and the chip (NoResults' button); absent shows the line alone. */
   onClear?: () => void;
   /** The end-of-list marker the next-page observer watches. */
   sentinelRef?: RefObject<HTMLLIElement>;

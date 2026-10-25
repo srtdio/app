@@ -541,7 +541,9 @@ describe('F14: composer toasts never show raw error text', () => {
     expect(attachRejectCopy("This file type isn't supported")).toBe(
       "This file type isn't supported",
     );
-    expect(attachRejectCopy('TypeError: x is undefined')).toBe("Couldn't add that file. Try again.");
+    expect(attachRejectCopy('TypeError: x is undefined')).toBe(
+      "Couldn't add that file. Try again.",
+    );
   });
 
   it('an edit failure maps through editFailureCopy (idempotent on its own copy)', () => {

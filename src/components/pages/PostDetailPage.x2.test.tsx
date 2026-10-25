@@ -234,7 +234,7 @@ describe('13 / 14. skeleton and load error', () => {
 });
 
 describe('15. FB8 date reads', () => {
-  it('the details row reads the viewer clock; the details sheet input keeps the workspace zone', () => {
+  it('the details row reads the viewer clock; the sheet input keeps the workspace zone', () => {
     expect(PAGE).toContain('formatDue(post.target_date)');
     expect(PAGE).not.toContain('toLocaleDateString');
     expect(PAGE).toContain('timeZone={approveTimeZone}');

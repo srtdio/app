@@ -126,7 +126,7 @@ import {
   sized,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { formatClockTime } from '@/lib/chat/time-format';
+import { formatTime } from '@/lib/time';
 import { Link } from 'react-router-dom';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { UploadRing } from '@/components/chat/UploadRing';
@@ -171,8 +171,8 @@ const CREATED_AT = '2026-09-22T18:45:00.123456+00:00';
 
 // The clock time follows the device locale's hour cycle, so expectations read
 // the same formatter the bubble does.
-const T_UTC = formatClockTime(CREATED_AT, 'UTC');
-const T_KOLKATA = formatClockTime(CREATED_AT, 'Asia/Kolkata');
+const T_UTC = formatTime(CREATED_AT, 'UTC');
+const T_KOLKATA = formatTime(CREATED_AT, 'Asia/Kolkata');
 
 /** A string as a literal regex source. */
 function escapeRe(text: string): string {
@@ -326,7 +326,7 @@ function failedLine(root: ReactElement): string {
 }
 
 describe('MessageBubble time and state', () => {
-  it('shows the time inside the bubble, h:mm am/pm on the workspace clock', () => {
+  it('shows the time inside the bubble, h:mm AM/PM on the given clock', () => {
     const message = makeMessage({});
     const root = renderBubble(message, { timeZone: 'Asia/Kolkata' });
     expect(metaOf(root)?.meta.time).toBe(T_KOLKATA);
@@ -704,21 +704,21 @@ describe('threadRows', () => {
     for (const row of withTicks) {
       if (row.kind !== 'message') continue;
       expect(row.meta).toEqual({
-        time: formatClockTime(row.message.createdAt, 'UTC'),
+        time: formatTime(row.message.createdAt, 'UTC'),
         edited: false,
         status: row.message.mine ? 'delivered' : null,
       });
     }
   });
 
-  it('meta times read the workspace clock', () => {
+  it('meta times read the given clock (the app passes none: the device zone)', () => {
     const kolkata = threadRows(
       msgs.slice(0, 1),
       Date.parse('2026-09-22T12:00:00Z'),
       'Asia/Kolkata',
     );
     expect(kolkata.find((r) => r.kind === 'message')).toMatchObject({
-      meta: { time: formatClockTime(msgs[0]?.createdAt ?? '', 'Asia/Kolkata') },
+      meta: { time: formatTime(msgs[0]?.createdAt ?? '', 'Asia/Kolkata') },
     });
   });
 });
@@ -1424,7 +1424,7 @@ describe('image album and viewer', () => {
     ]);
     expect(details).toEqual({
       sender: 'Alice',
-      time: formatClockTime(albumMessage.createdAt, 'Asia/Kolkata'),
+      time: formatTime(albumMessage.createdAt, 'Asia/Kolkata'),
     });
   });
 

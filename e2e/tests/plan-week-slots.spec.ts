@@ -115,7 +115,9 @@ test('client: week list, OK with Undo, counts, slot header, overflow, reopen the
   await expect(firstDay).toHaveAttribute('data-plan-day', '2026-10-12');
   await expect(firstDay.locator('[data-plan-day-weekday]')).toHaveText(/^mon$/i);
   await expect(firstDay.locator('[data-plan-day-number]')).toHaveText('12');
-  await expect(plan.locator('[data-plan-day-empty]').first()).toHaveText('Planned posts show up here.');
+  await expect(plan.locator('[data-plan-day-empty]').first()).toHaveText(
+    'Planned posts show up here.',
+  );
   expect(await plan.locator('[data-plan-day-empty]').count()).toBeGreaterThan(0);
   await expect(plan.locator('[data-plan-week-header]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-row]')).toHaveCount(2);

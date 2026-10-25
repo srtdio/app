@@ -107,7 +107,9 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
       props.onSent();
       return;
     }
-    if (result.failed !== null) toast.show({ title: forwardFailedMessage(chatDisplayName(result.failed)) });
+    if (result.failed !== null) {
+      toast.show({ title: forwardFailedMessage(chatDisplayName(result.failed)) });
+    }
   }
 
   return (

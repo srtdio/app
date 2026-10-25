@@ -7,7 +7,7 @@ process.env.TZ = 'America/Los_Angeles';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { formatDay } from '@/lib/display-date';
+import { formatDate } from '@/lib/time';
 import { BriefCard, briefDueLabel } from '@/components/pages/BriefCard';
 import { briefDueDateLabel } from '@/components/pages/BriefDetailPage';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -48,8 +48,8 @@ describe('brief target dates in America/Los_Angeles', () => {
   });
 
   it('formats "2026-10-08" as 8 Oct, the year only outside now', () => {
-    expect(formatDay('2026-10-08', 'America/Los_Angeles', NOW)).toBe('8 Oct');
-    expect(formatDay('2026-10-08', 'America/Los_Angeles', new Date('2027-03-01T12:00:00Z'))).toBe(
+    expect(formatDate('2026-10-08', NOW)).toBe('8 Oct');
+    expect(formatDate('2026-10-08', new Date('2027-03-01T12:00:00Z'))).toBe(
       '8 Oct 2026',
     );
   });

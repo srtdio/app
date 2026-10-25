@@ -306,7 +306,8 @@ export function detailRows(
     value: post.mediaCount > 1 ? `${format} · ${post.mediaCount} slides` : format,
   });
   if (post.approved_by !== null) {
-    const at = post.approved_at !== null ? formatDateTime(post.approved_at, undefined, timeZone) : '';
+    const at =
+      post.approved_at !== null ? formatDateTime(post.approved_at, undefined, timeZone) : '';
     const who =
       approverName !== null ? `${approverName}${onBehalfSuffix(approverRole, brand)}` : '';
     const value = [who, at].filter((part) => part !== '').join(' · ');
