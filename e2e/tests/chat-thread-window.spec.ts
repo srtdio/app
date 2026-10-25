@@ -54,7 +54,12 @@ async function mounted(page: Page): Promise<number> {
 
 interface Anchor {
   id: string;
-  /** The row's top, from the list's top edge. */
+  /**
+   * The row's bottom edge, from the list's top edge. The bottom, not the top:
+   * when older rows of the same sender or day land above, the anchor row hands
+   * its day pill or sender line to the new first row, so its top moves while
+   * its bubble (and everything below it) must stay exactly where it was.
+   */
   top: number;
 }
 
@@ -72,7 +77,7 @@ async function scrollToTop(page: Page): Promise<Anchor | null> {
     const listTop = list.getBoundingClientRect().top;
     for (const row of Array.from(list.querySelectorAll<HTMLElement>('[data-msg-id]'))) {
       const r = row.getBoundingClientRect();
-      if (r.bottom > listTop) return { id: row.dataset.msgId ?? '', top: r.top - listTop };
+      if (r.bottom > listTop) return { id: row.dataset.msgId ?? '', top: r.bottom - listTop };
     }
     return null;
   });
@@ -83,7 +88,7 @@ async function rowTop(page: Page, id: string): Promise<number | null> {
     const row = document.querySelector<HTMLElement>(`[data-msg-id="${target}"]`);
     const list = row?.closest('ul');
     if (!row || !list) return null;
-    return row.getBoundingClientRect().top - list.getBoundingClientRect().top;
+    return row.getBoundingClientRect().bottom - list.getBoundingClientRect().top;
   }, id);
 }
 
