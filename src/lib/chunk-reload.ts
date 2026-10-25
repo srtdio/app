@@ -1,14 +1,20 @@
 // The app's one chunk-error handler: main.tsx (boot imports), every lazy route
-// and the agora SDK load all reload through reloadOnce() and its one guard.
+// and the agora SDK load all reload through reloadIfStale() and its one guard.
 // Route chunks are loaded with dynamic import(). A tab opened before a deploy
-// asks for hashed chunks that no longer exist; the import rejects. Reload the
-// page once so the fresh index.html and chunk names load. A sessionStorage
-// flag bounds it to one reload per tab session: a second failure (or storage
-// that throws) surfaces the error instead, so it can never loop.
+// asks for hashed chunks that no longer exist; the import rejects. The page
+// reloads only when that is proven: the failed module's URL is read from the
+// error and a HEAD request for it answers 404 or 410. Anything else (no URL,
+// another status, a network error, a timeout, the page being left) rethrows.
+// A sessionStorage flag bounds it to one reload per tab session: a second
+// failure (or storage that throws) surfaces the error instead, so it can never
+// loop.
 
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 
 export const CHUNK_RELOAD_KEY = 'sorted:chunk-reload';
+
+/** How long the stale check waits for the HEAD response before giving up. */
+export const STALE_PROBE_TIMEOUT_MS = 3000;
 
 export interface ChunkReloadDeps {
   /** A getter because touching window.sessionStorage itself can throw. */
@@ -16,40 +22,111 @@ export interface ChunkReloadDeps {
   reload: () => void;
   /** True while the page is being left; imports in flight then fail by design. */
   isLeaving?: () => boolean;
+  /** HEAD the URL; resolves the HTTP status, or null on a network error or timeout. */
+  probe?: (url: string) => Promise<number | null>;
+  /** The page URL module URLs resolve against; only same-origin URLs are probed. */
+  baseUrl?: () => string;
 }
 
 // Leaving the page (a link, a typed URL, a test's page.goto) aborts every
-// import still in flight, and the abort rejects like a missing chunk. Reloading
-// then would hijack the navigation back to this page, so a page being left
-// never reloads. pagehide (never cancelled, unlike beforeunload) marks it; a
-// page restored from the back/forward cache clears it.
+// import still in flight, and the abort rejects like a missing chunk. In WebKit
+// it can reject before pagehide fires, so the stale check also watches
+// beforeunload and a hidden page. Reloading then would hijack the navigation
+// back to this page, so a page being left never reloads. A page restored from
+// the back/forward cache clears the flag.
 let leaving = false;
+// Errors Vite reported through vite:preloadError (its preload helper's failures).
+const preloadErrors = new WeakSet<object>();
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => {
     leaving = true;
   });
+  window.addEventListener('beforeunload', () => {
+    leaving = true;
+  });
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) leaving = false;
+  });
+  window.addEventListener('vite:preloadError', (event) => {
+    const payload: unknown = (event as Event & { payload?: unknown }).payload;
+    if (typeof payload === 'object' && payload !== null) preloadErrors.add(payload);
+  });
+}
+
+function pageIsLeaving(): boolean {
+  return leaving || (typeof document !== 'undefined' && document.visibilityState === 'hidden');
+}
+
+/**
+ * HEAD a same-origin static file, bypassing the cache. XMLHttpRequest, not
+ * fetchWithTrace: this runs in the boot path before the logger loads, and on a
+ * stale deploy a dynamic import of the wrapper could itself be the missing chunk.
+ * It reads a static asset, not an API, so it carries no trace id.
+ */
+function headStatus(url: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('HEAD', url);
+      xhr.timeout = STALE_PROBE_TIMEOUT_MS;
+      xhr.setRequestHeader('Cache-Control', 'no-store');
+      xhr.onload = () => resolve(xhr.status === 0 ? null : xhr.status);
+      xhr.onerror = () => resolve(null);
+      xhr.ontimeout = () => resolve(null);
+      xhr.onabort = () => resolve(null);
+      xhr.send();
+    } catch {
+      resolve(null);
+    }
   });
 }
 
 const browserDeps: ChunkReloadDeps = {
   storage: () => window.sessionStorage,
   reload: () => window.location.reload(),
-  isLeaving: () => leaving,
+  isLeaving: pageIsLeaving,
+  probe: headStatus,
+  baseUrl: () => window.location.href,
 };
 
+// The messages a failed module load rejects with, per engine: Chromium
+// ("Failed to fetch dynamically imported module: URL"), Firefox ("error loading
+// dynamically imported module: URL"), WebKit ("Importing a module script
+// failed.") and Vite's preload helper ("Unable to preload CSS for URL").
+const CHUNK_MESSAGES = [
+  /Failed to fetch dynamically imported module/i,
+  /error loading dynamically imported module/i,
+  /Importing a module script failed/i,
+  /^Unable to preload CSS/,
+];
+
+// The module URL inside a Chromium, Firefox or Vite preload message.
+const MODULE_URL = /(?:dynamically imported module|Unable to preload CSS for):?\s+(\S+)/i;
+
 /**
- * A failed dynamic import is a TypeError in every browser ("Failed to fetch
- * dynamically imported module", "Importing a module script failed", "error
- * loading dynamically imported module"); Vite's preload helper rejects with
- * "Unable to preload CSS" when a chunk's stylesheet is gone.
+ * A failed module load: one of the known engine messages, or an error Vite
+ * reported through vite:preloadError. A plain TypeError (an aborted fetch,
+ * "Load failed") no longer qualifies.
  */
 export function isChunkLoadError(err: unknown): boolean {
-  return (
-    err instanceof TypeError ||
-    (err instanceof Error && err.message.startsWith('Unable to preload CSS'))
-  );
+  if (!(err instanceof Error)) return false;
+  if (preloadErrors.has(err)) return true;
+  return CHUNK_MESSAGES.some((pattern) => pattern.test(err.message));
+}
+
+/** The failed module's absolute same-origin URL, or null when the error names none. */
+export function chunkUrlFromError(err: unknown, base: string): string | null {
+  if (!(err instanceof Error)) return null;
+  const match = MODULE_URL.exec(err.message);
+  const raw = match?.[1];
+  if (raw === undefined) return null;
+  try {
+    const url = new URL(raw, base);
+    if (url.origin !== new URL(base).origin) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
 }
 
 /** Reload once per session. Returns true when a reload was issued. */
@@ -68,7 +145,33 @@ export function reloadOnce(deps: ChunkReloadDeps = browserDeps): boolean {
 }
 
 /**
- * Wrap a dynamic import: on a chunk load error, reload once and keep the
+ * Reload once only when the error proves a stale build: it is a chunk load
+ * error, it names the module's URL, and a HEAD for that URL answers 404 or
+ * 410 while the page is not being left. Resolves true when a reload was issued.
+ */
+export async function reloadIfStale(
+  err: unknown,
+  deps: ChunkReloadDeps = browserDeps,
+): Promise<boolean> {
+  if (!isChunkLoadError(err) || deps.probe === undefined) return false;
+  if (deps.isLeaving?.() === true) return false;
+  const base = deps.baseUrl?.() ?? (typeof window !== 'undefined' ? window.location.href : '');
+  const url = chunkUrlFromError(err, base);
+  if (url === null) return false;
+  let status: number | null;
+  try {
+    status = await deps.probe(url);
+  } catch {
+    return false;
+  }
+  // Leaving while the check ran: the abort was the cause, not a stale build.
+  if (deps.isLeaving?.() === true) return false;
+  if (status !== 404 && status !== 410) return false;
+  return reloadOnce(deps);
+}
+
+/**
+ * Wrap a dynamic import: on a proven stale chunk, reload once and keep the
  * Suspense fallback up until the page goes; otherwise rethrow untouched.
  */
 export function withChunkReload<T>(
@@ -76,11 +179,11 @@ export function withChunkReload<T>(
   deps: ChunkReloadDeps = browserDeps,
 ): () => Promise<T> {
   return () =>
-    load().catch((err: unknown) => {
+    load().catch(async (err: unknown) => {
       if (isChunkLoadError(err)) {
         // Leaving: the import was aborted, the page is going; keep the fallback up.
         if (deps.isLeaving?.() === true) return new Promise<T>(() => {});
-        if (reloadOnce(deps)) return new Promise<T>(() => {});
+        if (await reloadIfStale(err, deps)) return new Promise<T>(() => {});
       }
       throw err;
     });
