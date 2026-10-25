@@ -1,13 +1,18 @@
+import { useState, type ComponentType, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import {
   ICON_SIZE,
   IconArrowUpRight,
   IconCarousel,
+  IconCheck,
   IconLink,
   IconMore,
+  IconPause,
   IconPlay,
   IconSwitch,
+  IconX,
+  type IconProps,
 } from '@/components/ui/icons';
 import { type FormatGlyphToken } from '@/components/ui/format-icon';
 import { postFormatLabel } from '@/lib/post-format';
@@ -15,6 +20,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath } from '@/lib/entityRef';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { moveActions } from '@/components/pages/pipeline/MoveSheet';
 import {
   hasAllowedMove,
   reservesStatusLine,
@@ -27,6 +33,7 @@ import { cn } from '@/lib/cn';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { useMenuGesture } from '@/components/ui/useLongPress';
 import { useOptionalToast } from '@/components/ui/toast';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { buildPostLink } from '@/lib/post-share';
@@ -41,10 +48,12 @@ export interface PostCardProps {
    *  absent the card falls back to the classic /posts/:id route. */
   workspaceKey?: string | null;
   /**
-   * Opens the move sheet for this post; renders the ⋯ (ui/ActionMenu: Open,
-   * Copy link, Move) at the right end of the due row.
+   * Renders the ⋯ (ui/ActionMenu) at the right end of the due row. With a
+   * known role the menu lists each move this viewer can make (Send for review,
+   * Approve, Park, Reject) and calls this with its target; without one it has a
+   * single Move row that calls it with no target (the move sheet).
    */
-  onMove?: (post: PipelinePost) => void;
+  onMove?: (post: PipelinePost, to?: Stage) => void;
   /**
    * The viewer's role and the workspace approvers: drives the review status line
    * and hides the ⋯ menu's Move row when this viewer has no allowed move.
@@ -213,22 +222,54 @@ function PlayBadge() {
   );
 }
 
+/** One move row in the card's ⋯ menu (the move sheet's actions, moveActions). */
+export interface CardMoveRow {
+  to: Stage;
+  label: string;
+  tone: 'default' | 'bad';
+  onSelect: () => void;
+}
+
 /** What the card's ⋯ menu runs. */
 export interface CardMenuActions {
   onOpen: () => void;
   onCopyLink: () => void;
+  /** The viewer's moves, each its own row; when present, no Move row. */
+  moves?: readonly CardMoveRow[];
   /** Absent: this viewer has no allowed move, so the Move row is hidden. */
   onMove?: () => void;
 }
 
-/** The card's ⋯ rows: Open, Copy link, then Move when allowed. Pure. */
+/** One icon per move: Send for review arrow, Approve check, Park pause, Reject X. */
+const MOVE_ICON: Record<Stage, ComponentType<IconProps>> = {
+  draft: IconSwitch,
+  review: IconArrowUpRight,
+  approved: IconCheck,
+  parked: IconPause,
+  rejected: IconX,
+};
+
+/**
+ * The card's ⋯ rows: Open, Copy link, then every move this viewer can make
+ * (the same moves the move sheet lists), else Move when allowed. Pure.
+ */
 export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
+  const moves: ActionMenuItem[] =
+    actions.moves !== undefined && actions.moves.length > 0
+      ? actions.moves.map((move) => ({
+          id: `move-${move.to}`,
+          label: move.label,
+          icon: MOVE_ICON[move.to],
+          ...(move.tone === 'bad' ? { tone: 'danger' as const } : {}),
+          onSelect: move.onSelect,
+        }))
+      : actions.onMove !== undefined
+        ? [{ id: 'move', label: 'Move', icon: IconSwitch, onSelect: actions.onMove }]
+        : [];
   return [
     { id: 'open', label: 'Open', icon: IconArrowUpRight, onSelect: actions.onOpen },
     { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: actions.onCopyLink },
-    ...(actions.onMove !== undefined
-      ? [{ id: 'move', label: 'Move', icon: IconSwitch, onSelect: actions.onMove }]
-      : []),
+    ...moves,
   ];
 }
 
@@ -246,8 +287,9 @@ export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
  * view; when the board passes onMove, a plain ⋯ at the right end of the meta
  * line (44x44 tap area, negative margins so the row keeps its height) opens
  * the shared ActionMenu: Open, Copy link (toast "Link copied") and, when the
- * viewer has an allowed move, Move (the move sheet). Navigation is a
- * full-bleed overlay button laid behind the card content.
+ * viewer has an allowed move, Move (the move sheet). A long-press on touch or
+ * a right-click on laptop opens the same menu (useMenuGesture). Navigation is
+ * a full-bleed overlay button laid behind the card content.
  */
 export function PostCard({
   post,
@@ -285,11 +327,29 @@ export function PostCard({
     );
   };
   const due = post.target_date !== null ? cardDue(post.target_date, stage, timeZone, clock) : null;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const gesture = useMenuGesture(() => setMenuOpen(true));
+  const hasMenu = onMove !== undefined;
+  // A known role lists its moves in the menu; while it loads, the Move row.
+  const directMoves =
+    viewer !== undefined && viewer.pending !== true ? moveActions(viewer.role, stage) : [];
 
   return (
     <div
       data-induction={INDUCTION_KEYS.pipelinePostRow}
       data-induction-post={post.id}
+      {...(hasMenu
+        ? {
+            ...gesture.handlers,
+            // The click that trails a long-press never reaches Open post.
+            onClickCapture: (event: MouseEvent) => {
+              if (gesture.consumeClickSuppression()) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            },
+          }
+        : {})}
       className="relative flex h-full min-w-0 flex-col rounded-xl border border-border bg-panel transition-colors hover:bg-panel-2"
     >
       <PressableRow
@@ -399,20 +459,33 @@ export function PostCard({
           ) : null}
           {onMove !== undefined ? (
             // Above the Open post overlay (z-10) so a tap opens the menu, not
-            // the post. Pointer down stops here (the menu rows included, through
-            // the React tree) so the feed's long-press never arms under it. The
-            // negative margins keep the 44px target from growing the row.
+            // the post. Pointer down and right-click stop here (the menu rows
+            // included, through the React tree) so the card's own menu gesture
+            // never arms under it. The negative margins keep the 44px target
+            // from growing the row.
             <div
               data-post-card-menu=""
               onPointerDown={(event) => event.stopPropagation()}
+              onContextMenu={(event) => event.stopPropagation()}
               className="ml-auto flex shrink-0"
             >
               <ActionMenu
                 title={post.title}
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
                 items={cardMenuItems({
                   onOpen: () => navigate(href),
                   onCopyLink: copyLink,
-                  ...(canMove ? { onMove: () => onMove(post) } : {}),
+                  ...(canMove && directMoves.length > 0
+                    ? {
+                        moves: directMoves.map((move) => ({
+                          ...move,
+                          onSelect: () => onMove(post, move.to),
+                        })),
+                      }
+                    : canMove
+                      ? { onMove: () => onMove(post) }
+                      : {}),
                 })}
                 trigger={
                   <IconButton

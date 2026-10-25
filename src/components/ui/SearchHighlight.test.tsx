@@ -15,6 +15,13 @@ import {
 } from '@/components/ui/SearchHighlight';
 import { DUR_SLOW_MS } from '@/lib/motion';
 
+// The person's reduced-motion setting, flipped per case.
+const motion = vi.hoisted(() => ({ reduced: false }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  prefersReducedMotion: () => motion.reduced,
+}));
+
 const html = (nodes: ReturnType<typeof highlightNodes>): string =>
   renderToStaticMarkup(<>{nodes}</>);
 
@@ -57,13 +64,9 @@ describe('highlightNodes (the one matching rule)', () => {
 });
 
 describe('glowTarget (arrival tint)', () => {
-  let reduced = false;
   beforeEach(() => {
     vi.useFakeTimers();
-    reduced = false;
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: reduced && query.includes('reduce'),
-    }));
+    motion.reduced = false;
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -97,7 +100,7 @@ describe('glowTarget (arrival tint)', () => {
   });
 
   it('reduced motion: no smooth scroll, no fade; the tint just clears at 2s', () => {
-    reduced = true;
+    motion.reduced = true;
     const el = row();
     glowTarget(el);
     expect(el.scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'center' });

@@ -378,11 +378,11 @@ export interface RowGeometry {
 /** The 16px row padding plus the rail shift. */
 const PAD_LEFT: Record<RowShift, string> = { 0: 'pl-4', 14: 'pl-[30px]', 29: 'pl-[45px]' };
 
-/** From the rail (x=15) to an incoming target at x = 16 + shift, or 34px further past a photo column. */
+/** From the rail (x=15) to an incoming target at x = 16 + shift, or 40px further past a photo column. */
 const REACH: Record<RowShift, { first: string; pastPhoto: string }> = {
   0: { first: '', pastPhoto: '' },
-  14: { first: 'w-[15px]', pastPhoto: 'w-[49px]' },
-  29: { first: 'w-[30px]', pastPhoto: 'w-[64px]' },
+  14: { first: 'w-[15px]', pastPhoto: 'w-[55px]' },
+  29: { first: 'w-[30px]', pastPhoto: 'w-[70px]' },
 };
 
 /** From the rail to a right-aligned bubble: the row's content width less the bubble's. */

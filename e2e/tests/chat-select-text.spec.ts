@@ -124,8 +124,8 @@ async function expectMenuStyle(page: Page): Promise<void> {
     probe.remove();
     return out;
   });
-  // ICON_SIZE.tray in the phone sheet, ICON_SIZE.inline in the laptop popover.
-  const iconWidth = (page.viewportSize()?.width ?? 0) >= 768 ? '16' : '22';
+  // Menu row icons are ICON_SIZE.tray in the phone sheet and the laptop popover.
+  const iconWidth = '22';
   expect(style.icons.length).toBeGreaterThan(3);
   for (const icon of style.icons) {
     expect(icon.icon).toBe(icon.row);

@@ -15,6 +15,8 @@ import { supabase } from '@/lib/supabase';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { Avatar } from '@/components/ui/Avatar';
+import { CountBadge } from '@/components/ui/CountBadge';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconArrowUp, IconChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -139,14 +141,7 @@ export function LatestButton(props: {
         )}
       >
         <IconChevronDown size={ICON_SIZE.control} />
-        {props.count > 0 ? (
-          <span
-            data-latest-count=""
-            className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1 font-mono text-xs leading-none tabular-nums text-accent-fg"
-          >
-            {props.count}
-          </span>
-        ) : null}
+        <CountBadge count={props.count} className="absolute -right-1 -top-1" />
       </IconButton>
     </span>
   );
@@ -235,31 +230,19 @@ function readByWithMono(label: string): ReactElement {
   );
 }
 
-/** A 36px avatar: the photo, else initials on panel-3. */
+/** A list row's avatar (the shared Avatar, row role): the photo, else initials. */
 export function SheetAvatar(props: {
   name: string;
   src: string | null;
   dimmed?: boolean;
 }): ReactElement {
-  const initials = props.name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('');
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        'flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-panel-3 text-sm font-medium text-fg-2',
-        props.dimmed === true && 'opacity-50',
-      )}
-    >
-      {props.src !== null && props.src !== '' ? (
-        <img src={props.src} alt="" className="h-full w-full object-cover" />
-      ) : (
-        initials
-      )}
+    <span aria-hidden="true" className={cn('flex shrink-0', props.dimmed === true && 'opacity-50')}>
+      <Avatar
+        role="row"
+        name={props.name}
+        {...(props.src !== null && props.src !== '' ? { src: props.src } : {})}
+      />
     </span>
   );
 }

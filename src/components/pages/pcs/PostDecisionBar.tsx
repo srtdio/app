@@ -7,15 +7,16 @@
 // Approvers in review: Reject (secondary, bad ink) then Approve (success green),
 // in that order everywhere; no Comment button (the composer is on the page). Creators: one main button ("Send for
 // review", or "Send for review again"); their other moves (Approve on their
-// behalf, Park, Reject) live in the post's ⋯ menu. A failed tap
+// behalf, Park, Reject) live in the post's ⋯ menu. The buttons are words
+// only, never icons (the ⋯ menu rows keep theirs). A failed tap
 // shows its plain-words error here, once. Hookless, so the tree is unit tested
 // by walking it. The page reserves room under its content so the bar never
 // covers the comment composer.
 
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { ICON_SIZE, IconSend } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { bottomAnchorProps } from '@/lib/bottom-inset';
 import type { StageAction } from '@/components/pages/pcs/stage-actions';
 import type { Stage } from '@srtdio/posts';
 
@@ -103,7 +104,6 @@ function creatorButton(
         onClick={model.onPress}
         className="w-full"
       >
-        <IconSend size={ICON_SIZE.inline} />
         {model.label}
       </Button>
       {model.helper !== null ? (
@@ -171,7 +171,7 @@ export function PostDecisionBar(props: {
   return (
     <div
       data-decision-bar=""
-      data-undo-anchor=""
+      {...bottomAnchorProps}
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
     >
       {decisionContent(props.model, props.busy, props.error)}

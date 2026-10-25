@@ -27,7 +27,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { MenuPopover } from '@/components/shell/MenuPopover';
-import { useIsLaptop } from '@/lib/use-is-laptop';
+import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
 import { MARK_TONE } from '@/components/chat/MarkBits';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
 import { useReminderOptional } from '@/components/chat/ReminderContext';
@@ -311,7 +311,7 @@ export function runMenuItem(
   menu.close();
 }
 
-/** The phone sheet's glyph size (ICON_SIZE.tray); the laptop popover uses ICON_SIZE.inline. */
+/** Every menu row's glyph size, phone sheet and laptop popover alike (ICON_SIZE.tray). */
 export const MENU_ICON_SIZE = ICON_SIZE.tray;
 
 /** The row that selects part of one message's text in place. */
@@ -1024,10 +1024,7 @@ export function EmojiPickerShell(props: {
   } as const;
 
   if (layout === 'laptop') {
-    const position =
-      props.anchor !== null
-        ? popoverPosition(props.anchor, { width: window.innerWidth, height: window.innerHeight })
-        : null;
+    const position = props.anchor !== null ? popoverPosition(props.anchor, viewportSize()) : null;
     return createPortal(
       <>
         <div data-emoji-dismiss="" className="fixed inset-0 z-[60]" onClick={onClose} />
@@ -1213,7 +1210,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
 
   const active = open && anchor !== null;
   const reactionsOnly = props.reactionsOnly === true;
-  const size = isLaptop ? ICON_SIZE.inline : MENU_ICON_SIZE;
+  const size = MENU_ICON_SIZE;
   const items = !active
     ? []
     : reactionsOnly

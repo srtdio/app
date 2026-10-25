@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { viewportSize } from '@/lib/use-is-laptop';
 import { IconCheck, IconChevronDown, ICON_SIZE } from '@/components/ui/icons';
 
 export interface SelectOption {
@@ -207,7 +208,7 @@ export function Select({
     }
     if (!open && buttonRef.current !== null && typeof window !== 'undefined') {
       const rect = buttonRef.current.getBoundingClientRect();
-      setPlacement(computeMenuPlacement(rect.bottom, window.innerHeight));
+      setPlacement(computeMenuPlacement(rect.bottom, viewportSize().height));
     }
     setOpen((prev) => !prev);
   }

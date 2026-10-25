@@ -9,7 +9,10 @@ import type { PresignCache } from '@/lib/asset-presign';
 import { humanizeSize, mimeBadge, type AssetListItem } from '@/lib/assets';
 
 // Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => false,
+}));
 
 function makeAsset(overrides: Partial<AssetListItem>): AssetListItem {
   return {

@@ -12,6 +12,12 @@ describe('CountBadge', () => {
     expect(renderToStaticMarkup(<CountBadge count={250} />)).toContain('>99+<');
   });
 
+  it('renders nothing at zero or below', () => {
+    expect(renderToStaticMarkup(<CountBadge count={0} />)).toBe('');
+    expect(renderToStaticMarkup(<CountBadge count={-2} />)).toBe('');
+    expect(renderToStaticMarkup(<CountBadge count={1} />)).toContain('data-count-badge');
+  });
+
   it('uses the accent pill and appends caller classes', () => {
     const html = renderToStaticMarkup(<CountBadge count={3} className="border-2 border-panel" />);
     for (const token of [

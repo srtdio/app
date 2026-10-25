@@ -3,9 +3,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => false,
+  useHoverPointer: () => false,
 }));
 
 import { SlotComposer } from '@/components/comments/SlotComposer';

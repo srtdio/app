@@ -12,6 +12,9 @@ interface ActivityRowMenuProps {
   unread: boolean;
   onSnooze: (kind: SnoozeKind) => void;
   onMarkRead: () => void;
+  /** Controlled open state (the card's long-press / right-click opens it); omit to self-manage. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Stop a click from bubbling to the card (navigate / mark-read) underneath. */
@@ -58,9 +61,16 @@ export function activityRowItems(props: ActivityRowMenuProps): ActionMenuItem[] 
  * Offers snooze (and Un-snooze when snoozed) plus Mark as read for an unread row.
  */
 export function ActivityRowMenu(props: ActivityRowMenuProps) {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = props.open ?? ownOpen;
+  const setOpen = props.onOpenChange ?? setOwnOpen;
+  // Pointer down and right-click stop here so the card's menu gesture never arms under the ⋯.
   return (
-    <div onClick={isolate}>
+    <div
+      onClick={isolate}
+      onPointerDown={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.stopPropagation()}
+    >
       <ActionMenu
         title="Activity options"
         items={activityRowItems(props)}

@@ -353,7 +353,7 @@ export function LeaveGroupRow(props: { disabled: boolean; onClick: () => void })
 }
 
 /**
- * The 112px group photo, name and subtitle. An editor gets the camera badge
+ * The group photo (the shared Avatar, profile role, group kind), name and subtitle. An editor gets the camera badge
  * (its ring is the page background it sits on); a plain member gets none. The
  * photo paints from the list read's URL on the first frame. Hook-free.
  */
@@ -369,15 +369,15 @@ export function GroupHero(props: {
     <Avatar
       key={props.photoUrl ?? 'none'}
       name={props.name}
-      size="hero"
-      shape="rounded"
+      role="profile"
+      kind="group"
       {...(props.photoUrl !== null ? { src: props.photoUrl } : {})}
     />
   );
   return (
     <div className="flex flex-col items-center gap-1 text-center">
       {props.canEdit ? (
-        <div className="h-[112px] w-[112px]">
+        <div className="h-[72px] w-[72px]">
           <PressableRow
             type="button"
             data-group-photo=""
@@ -815,7 +815,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
                 <Avatar
                   name={member.displayName}
                   {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-                  size="md"
+                  role="row"
                 />
                 <span className="min-w-0 flex-1 truncate text-base text-fg">
                   {member.displayName}

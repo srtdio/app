@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { useMenuGesture } from '@/components/ui/useLongPress';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconLock, IconMore, IconTrash, IconUser } from '@/components/ui/icons';
 import type { SelectOption } from '@/components/ui/Select';
@@ -85,12 +86,20 @@ interface RowProps extends MemberActions {
 
 function MemberRowItem({ member, canManage, onChangeRole, onRemove }: RowProps) {
   const joined = formatJoined(member.acceptedAt);
+  const hasMenu = canManage && !member.isOwner;
+  // Long-press on touch and right-click on laptop open the row's ⋯ menu.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const gesture = useMenuGesture(() => setMenuOpen(true));
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
+    <div
+      data-member-row={member.userId}
+      {...(hasMenu ? gesture.handlers : {})}
+      className="flex items-center gap-3 px-4 py-3"
+    >
       <Avatar
         name={member.displayName}
         {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-        size="lg"
+        role="row"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -114,6 +123,8 @@ function MemberRowItem({ member, canManage, onChangeRole, onRemove }: RowProps) 
       ) : canManage ? (
         <ActionMenu
           title={member.displayName}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
           items={memberActionItems(member, canManage, { onChangeRole, onRemove })}
           trigger={
             <IconButton label={`Actions for ${member.displayName}`} aria-haspopup="menu">
@@ -156,7 +167,7 @@ function PendingRowItem({
 
   return (
     <div className="flex items-start gap-3 px-4 py-3">
-      <Avatar name={info.email} size="lg" />
+      <Avatar name={info.email} role="row" />
       {editing ? (
         <PendingEditFields
           member={member}

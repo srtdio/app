@@ -21,7 +21,10 @@ import { resetHistorySteps, stepMarkerOf } from '@/lib/chat/use-history-step';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Phone: the ⋯ menu is a Sheet (Escape goes through the escape stack).
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => false,
+}));
 
 vi.mock('@/components/ui/FileViewer', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();

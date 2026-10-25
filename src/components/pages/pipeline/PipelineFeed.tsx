@@ -3,7 +3,6 @@ import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
-import { useLongPress } from '@/components/ui/useLongPress';
 import { PostCard } from '@/components/pages/PostCard';
 import { BOARD_CAP, StageEmpty } from '@/components/pages/pipeline/stage-meta';
 import { readShown, writeShown } from '@/components/pages/pipeline/pipeline-query';
@@ -22,8 +21,8 @@ export interface PipelineFeedProps {
   presignEnabled: boolean;
   /** The active workspace key, threaded into every card for its pretty /p link. */
   workspaceKey?: string | null;
-  /** A long-press or the card's Move button asks the page to open the move sheet. */
-  onLongPressPost: (post: PipelinePost) => void;
+  /** The card's ⋯ Move row (also reached by long-press or right-click) opens the move sheet. */
+  onLongPressPost: (post: PipelinePost, to?: Stage) => void;
   /**
    * sessionStorage key for the Show more depth, built from the filter query, so
    * Back to the same filters restores the same depth. Absent: not remembered.
@@ -38,37 +37,15 @@ export interface PipelineFeedProps {
 }
 
 /**
- * One mobile card: a long-press (press-and-hold) target that asks the page to
- * open the move sheet, while a short tap still falls through to PostCard's own
- * navigation. PostCard is received as children so the board structure tests can
- * still find it by walking the element tree. The click that trails a long-press
- * is swallowed in the capture phase, before it reaches PostCard's nav button.
+ * One mobile card's cell. PostCard owns the gesture: a long-press (touch) or a
+ * right-click (laptop) opens the card's ⋯ menu (Open, Copy link, Move), the
+ * same menu on every surface, while a short tap falls through to its
+ * navigation. PostCard is received as children so the board structure tests
+ * can still find it by walking the element tree.
  */
-function FeedCard({
-  post,
-  onLongPressPost,
-  children,
-}: {
-  post: PipelinePost;
-  onLongPressPost: (post: PipelinePost) => void;
-  children: ReactNode;
-}): ReactElement {
-  const { handlers, consumeClickSuppression } = useLongPress(() => onLongPressPost(post));
+function FeedCard({ post, children }: { post: PipelinePost; children: ReactNode }): ReactElement {
   return (
-    <div
-      data-post-id={post.id}
-      className="h-full min-w-0 rounded-lg"
-      onPointerDown={(event) => handlers.onPointerDown(event)}
-      onPointerMove={(event) => handlers.onPointerMove(event)}
-      onPointerUp={() => handlers.onPointerUp()}
-      onPointerCancel={() => handlers.onPointerCancel()}
-      onClickCapture={(event) => {
-        if (consumeClickSuppression()) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      }}
-    >
+    <div data-post-id={post.id} className="h-full min-w-0 rounded-lg">
       {children}
     </div>
   );
@@ -77,13 +54,13 @@ function FeedCard({
 /**
  * A 2-column card grid. A plain helper (not a component) so each card's PostCard
  * is inlined into the feed tree (via FeedCard's children) and walkable by the
- * structure tests. Each card carries the long-press -> move gesture.
+ * structure tests. Each card's long-press / right-click opens its ⋯ menu.
  */
 function cardGrid(
   posts: PipelinePost[],
   cache: PresignCache,
   presignEnabled: boolean,
-  onLongPressPost: (post: PipelinePost) => void,
+  onLongPressPost: (post: PipelinePost, to?: Stage) => void,
   workspaceKey: string | null,
   showStage: boolean,
   timeZone: string | null | undefined,
@@ -93,7 +70,7 @@ function cardGrid(
   return (
     <div className="grid grid-cols-2 gap-2">
       {posts.map((post) => (
-        <FeedCard key={post.id} post={post} onLongPressPost={onLongPressPost}>
+        <FeedCard key={post.id} post={post}>
           <PostCard
             post={post}
             cache={cache}

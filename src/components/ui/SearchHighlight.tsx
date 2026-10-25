@@ -7,6 +7,7 @@
 import { createContext, useContext, type ReactElement, type ReactNode } from 'react';
 import { matchRuns } from '@/lib/chat/search';
 import { DUR_SLOW_MS } from '@/lib/motion';
+import { prefersReducedMotion } from '@/lib/use-is-laptop';
 
 /** A searched word: the search-mark fill and its dark ink, readable on every surface in both themes. */
 export const SEARCH_MARK_CLASS = 'rounded-sm bg-search-mark [color:var(--search-mark-fg)]';
@@ -39,14 +40,6 @@ export const JUMP_SETTLE_MS = 700;
 
 /** How long an arrived-at target keeps its tint before it fades. */
 export const GLOW_MS = 2000;
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
 
 /**
  * Scroll a jump target to the centre of its scroller and tint it for 2s, then

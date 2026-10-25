@@ -24,7 +24,8 @@ import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { STATUS_LABEL, TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import { Highlight } from '@/components/ui/SearchHighlight';
 import { cn } from '@/lib/cn';
-import { useEscapeLayer } from '@/lib/escape-stack';
+import { useDismissLayer } from '@/lib/modal-focus';
+import { viewportSize } from '@/lib/use-is-laptop';
 import {
   PRIORITY_LABEL,
   TASK_PRIORITIES,
@@ -137,13 +138,15 @@ function PriorityMenu(props: {
     const el = anchor.current;
     if (el === null) return;
     const r = el.getBoundingClientRect();
-    setPos(placeMenu(r, window.innerWidth, window.innerHeight));
+    const viewport = viewportSize();
+    setPos(placeMenu(r, viewport.width, viewport.height));
   }, [anchor]);
   useEffect(() => {
     const raf = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(raf);
   }, []);
-  useEscapeLayer(true, onClose);
+  // Escape closes it (top layer only) and focus goes back to the chip that opened it.
+  useDismissLayer(true, onClose, menuRef);
   // A scroll anywhere under the sheet (the list) or a resize closes it; a tap outside too.
   useEffect(() => {
     const onScroll = (e: Event): void => {

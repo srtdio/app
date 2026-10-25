@@ -333,7 +333,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                       isActive ? 'bg-accent-soft text-accent' : 'text-fg-2',
                     )}
                   >
-                    <Avatar name={ws.name} size="lg" />
+                    <Avatar name={ws.name} role="row" kind="group" />
                     <span className="flex-1 truncate text-base font-medium text-fg">
                       {workspaceDisplayName(ws)}
                     </span>

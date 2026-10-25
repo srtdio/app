@@ -52,7 +52,7 @@ export function WorkspaceFullSheet() {
           <p className="text-base leading-relaxed text-fg-2">{workspaceFullCopy(shownBytes)}</p>
           <div className="-mx-3 flex flex-col">
             <ActionRow
-              icon={<IconTrash size={ICON_SIZE.nav} />}
+              icon={<IconTrash size={ICON_SIZE.tray} />}
               label="Recently deleted"
               sub="Free up space now"
               onClick={() => {

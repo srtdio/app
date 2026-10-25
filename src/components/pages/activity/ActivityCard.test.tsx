@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -30,11 +33,12 @@ vi.mock('react', async (importOriginal) => {
     },
     // Effects never run in SSR; a no-op keeps the plain-function call below hook-safe.
     useEffect: () => undefined,
+    // The card's menu gesture (useMenuGesture) keeps its controller in a ref.
+    useRef: <T,>(initial: T): { current: T } => ({ current: initial }),
   };
 });
 
 // The card's ⋯ menu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
 
 // The card reads the workspace key (for KEY-N) from the workspace context.
 vi.mock('@/lib/workspace-context', async (importOriginal) => ({
@@ -328,6 +332,12 @@ describe('AvatarStack', () => {
   it('overlaps up to three and shows a +N indicator beyond that', () => {
     const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
     expect(html).toContain('+2');
+  });
+
+  it('draws its avatars at the inline role by default, the +N pill at the same height', () => {
+    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
+    expect(count(html, 'data-avatar-role="inline"')).toBe(3);
+    expect(html).toContain('height:20px');
   });
 
   it('fix 2: rings in ring-bg and overlaps by 4px, the +N pill too', () => {

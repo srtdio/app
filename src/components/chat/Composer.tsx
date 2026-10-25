@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { useLongPress } from '@/components/ui/useLongPress';
+import { isCoarsePointer } from '@/lib/use-is-laptop';
+import { bottomAnchorProps } from '@/lib/bottom-inset';
 import { useChatSchedule, type ScheduleOutcome } from '@/components/chat/ScheduleContext';
 import { ScheduleMenu, ScheduleSheet, schedulePreview } from '@/components/chat/ScheduleSheet';
 import { ScheduledStrip, ScheduleModeStrip } from '@/components/chat/ScheduledStrip';
@@ -726,16 +728,6 @@ export async function withLinkCards(
     segment.kind === 'url' ? resolved.has(segment.url) : segment.text.trim() === '',
   );
   return { text: onlyLinks ? '' : draft.text, sharedPostIds, sharedBriefIds };
-}
-
-/**
- * True when `window.matchMedia('(pointer: coarse)')` matches, i.e. the primary
- * pointer is coarse (touch). Guarded so it returns false when `window` or
- * `window.matchMedia` is unavailable (SSR / non-DOM test environments).
- */
-function isCoarsePointer(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-  return window.matchMedia('(pointer: coarse)').matches;
 }
 
 /**
@@ -1966,7 +1958,7 @@ export function Composer(props: ComposerProps): ReactElement {
       <form
         ref={formRef}
         onSubmit={submit}
-        data-undo-anchor=""
+        {...bottomAnchorProps}
         className="relative flex flex-col gap-2 border-t border-border bg-panel px-3 py-2.5"
       >
         {mentionRows.length > 0 ? (

@@ -202,7 +202,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
         <Avatar
           {...(spec.actorName !== null ? { name: spec.actorName } : {})}
           {...(spec.actorAvatarUrl !== null ? { src: spec.actorAvatarUrl } : {})}
-          size="sm"
+          role="inline"
         />
       ),
       onPress: () => navigate(href),
@@ -259,7 +259,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
         <Avatar
           {...(actor !== undefined ? { name: actor.name } : {})}
           {...(actor?.avatar != null ? { src: actor.avatar } : {})}
-          size="sm"
+          role="inline"
         />
       ),
       onPress: () => navigate(spec.href),

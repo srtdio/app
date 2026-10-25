@@ -121,10 +121,10 @@ describe('StarredRowView', () => {
     onOpen: () => undefined,
   };
 
-  it('a 16px panel card: 28px avatar, Sender › Chat, mono date, chevron, peer bubble on panel-2', () => {
+  it('a 16px panel card: 20px inline avatar, Sender › Chat, mono date, chevron, peer bubble on panel-2', () => {
     const out = html(<ul>{StarredRowView(base)}</ul>);
     expect(out).toContain('rounded-2xl border border-border bg-panel');
-    expect(out).toContain('h-7 w-7');
+    expect(out).toContain('data-avatar-role="inline"');
     expect(out).toContain('Chitra');
     expect(out).toContain('›  Diwali shoot');
     expect(out).toContain('font-mono text-sm tabular-nums text-fg-3');
@@ -179,22 +179,20 @@ describe('StarredRowView', () => {
     expect(themed(out)).toMatchInlineSnapshot(`
       {
         "dark": {
+          "avatar-4": "rgb(194, 57, 43)",
           "border": "rgb(35, 38, 44)",
           "fg": "rgb(244, 245, 246)",
-          "fg-2": "rgb(154, 160, 168)",
           "fg-3": "rgb(132, 138, 146)",
           "panel": "rgb(20, 21, 25)",
           "panel-2": "rgb(26, 28, 33)",
-          "panel-3": "rgb(33, 35, 41)",
         },
         "light": {
+          "avatar-4": "rgb(194, 57, 43)",
           "border": "rgb(230, 232, 235)",
           "fg": "rgb(27, 28, 32)",
-          "fg-2": "rgb(98, 102, 109)",
           "fg-3": "rgb(107, 111, 118)",
           "panel": "rgb(255, 255, 255)",
           "panel-2": "rgb(242, 243, 245)",
-          "panel-3": "rgb(236, 237, 240)",
         },
       }
     `);

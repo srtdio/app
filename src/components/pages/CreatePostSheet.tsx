@@ -19,6 +19,7 @@ import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { COMPOSER_DISCARD_TITLE, ComposerSheet } from '@/components/pages/create/ComposerSheet';
 import { UNDO_MS } from '@/lib/undo';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { isCoarsePointer, viewportSize } from '@/lib/use-is-laptop';
 import {
   AttachmentsField,
   attachmentVersionIds,
@@ -408,11 +409,7 @@ export async function undoSavedDraft(deps: UndoSavedDraftDeps): Promise<boolean>
 
 /** Whether this device is touch first (Cmd/Ctrl+Enter is a laptop shortcut). */
 function isTouchDevice(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(pointer: coarse)').matches
-  );
+  return isCoarsePointer();
 }
 
 export interface CreateFormState {
@@ -1679,7 +1676,10 @@ export function FormatRow({
   function toggle(): void {
     if (!open && buttonRef.current !== null) {
       setPlacement(
-        computeMenuPlacement(buttonRef.current.getBoundingClientRect().bottom, window.innerHeight),
+        computeMenuPlacement(
+          buttonRef.current.getBoundingClientRect().bottom,
+          viewportSize().height,
+        ),
       );
     }
     setOpen((prev) => !prev);

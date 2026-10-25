@@ -298,6 +298,11 @@ describe('messageMenuItems: row set per case', () => {
       if (row.kind !== 'action') continue;
       expect((row.icon as ReactElement).props).toMatchObject({ size: ICON_SIZE.inline });
     }
+    // By default every row (phone sheet and laptop popover) is at the tray size.
+    for (const row of messageMenuItems(itemProps())) {
+      if (row.kind !== 'action') continue;
+      expect((row.icon as ReactElement).props).toMatchObject({ size: ICON_SIZE.tray });
+    }
   });
 
   it('the More submenu is Back, then the rows under More', () => {

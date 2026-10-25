@@ -12,6 +12,7 @@ import { GuideBox, GuideHand, GuideStyle } from './GuideParts';
 import { findVisible, isUnavailable, LAYER_ATTR, radiusOf, rectOf } from './guide-dom';
 import { useTypingNow } from './guide-hooks';
 import { useLiveTick } from './useLiveTick';
+import { viewportSize } from '@/lib/use-is-laptop';
 
 export function EntryHand({ target }: { target: InductionKey | null }): ReactElement | null {
   const found = target !== null ? findVisible([target]) : undefined;
@@ -22,7 +23,7 @@ export function EntryHand({ target }: { target: InductionKey | null }): ReactEle
   if (target === null || el === undefined || moving) return null;
   if (typing || isUnavailable(el)) return null;
   const control = rectOf(el);
-  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  const viewport = viewportSize();
   return createPortal(
     <div {...{ [LAYER_ATTR]: '' }} data-induction-entry={target}>
       <GuideStyle />

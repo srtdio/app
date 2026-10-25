@@ -19,10 +19,6 @@ vi.mock('@/components/chat/PostPicker', () => ({ PostPicker: () => null }));
 vi.mock('@/lib/chat/use-chat-attachments', () => ({
   useCommentAttachments: () => ({ canAttach: false, uploadFile: undefined }),
 }));
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
-}));
 
 import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
 import { ToastProvider } from '@/components/ui/toast';

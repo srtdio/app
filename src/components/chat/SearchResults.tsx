@@ -4,6 +4,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { cn } from '@/lib/cn';
+import { prefersReducedMotion } from '@/lib/use-is-laptop';
 import { supabase } from '@/lib/supabase';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { chatDisplayName } from '@/lib/chat/chat-name';
@@ -69,9 +70,6 @@ export function useMessageSearch(params: {
   return { state, runner };
 }
 
-/** Users who asked for less motion get no fade. */
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-
 /**
  * Fade an element in on mount: opacity only (no movement, no scale). Runs
  * before paint, so the first frame is already the final layout.
@@ -80,9 +78,8 @@ export function useFadeIn(ref: RefObject<HTMLElement>): void {
   useLayoutEffect(() => {
     const el = ref.current;
     if (el === null || typeof el.animate !== 'function') return;
-    if (typeof window.matchMedia === 'function' && window.matchMedia(REDUCED_MOTION).matches) {
-      return;
-    }
+    // Users who asked for less motion get no fade.
+    if (prefersReducedMotion()) return;
     const animation = el.animate([{ opacity: 0 }, { opacity: 1 }], {
       duration: 150,
       easing: 'ease-out',
@@ -100,18 +97,18 @@ const RESULT_ROW = cn(
   NO_TOUCH_SELECT,
 );
 
-/** The 48px result avatar: a group's rounded square, a person's circle, the notes notebook. */
+/** The result avatar (row role): a group's rounded square, a person's circle, the notes notebook. */
 function resultAvatar(channel: ChannelSummary): ReactElement {
   if (channel.channelType === 'notes') {
-    return <NotesAvatar size="small" src={channel.avatarUrl} surface="bg" hoverSurface="panel-2" />;
+    return <NotesAvatar role="row" src={channel.avatarUrl} surface="bg" hoverSurface="panel-2" />;
   }
   return (
-    <span className={cn('flex shrink-0', channel.channelType === 'group' && '[&>*]:!rounded-xl')}>
+    <span className="flex shrink-0">
       <Avatar
         name={chatDisplayName(channel)}
         {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-        size="row"
-        shape={channel.channelType === 'group' ? 'rounded' : 'circle'}
+        role="row"
+        kind={channel.channelType === 'group' ? 'group' : 'person'}
       />
     </span>
   );

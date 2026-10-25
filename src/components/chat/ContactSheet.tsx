@@ -6,8 +6,7 @@
 import { createPortal } from 'react-dom';
 import type { ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
-import { avatarFillFor } from '@/components/ui/Avatar';
-import { cn } from '@/lib/cn';
+import { Avatar } from '@/components/ui/Avatar';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 import {
   ChatInfoTabs,
@@ -37,31 +36,18 @@ import { ModalPanel } from '@/components/chat/ModalPanel';
 /** The page title when no `heading` is given. */
 export const CONTACT_HEADING = 'Contact info';
 
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const first = parts[0]?.charAt(0) ?? '';
-  const last = parts.length > 1 ? (parts[parts.length - 1]?.charAt(0) ?? '') : '';
-  return (first + last).toUpperCase();
-}
-
 /**
- * The 72px contact photo. With no photo: initials on the same avatar fill the
- * list and the chat header give this person, so they read as one person.
+ * The contact photo: the shared Avatar at its profile role (72px circle). With
+ * no photo it shows initials on the same avatar fill the list and the chat
+ * header give this person, so they read as one person.
  */
 function ContactPhoto(props: { name: string; avatarUrl: string | null }): ReactElement {
   return (
-    <span
-      className={cn(
-        'flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full text-2xl font-semibold',
-        props.avatarUrl !== null ? 'bg-panel-3' : cn(avatarFillFor(props.name), 'text-white'),
-      )}
-    >
-      {props.avatarUrl !== null ? (
-        <img src={props.avatarUrl} alt="" className="h-full w-full object-cover" />
-      ) : (
-        initialsOf(props.name)
-      )}
-    </span>
+    <Avatar
+      role="profile"
+      name={props.name}
+      {...(props.avatarUrl !== null ? { src: props.avatarUrl } : {})}
+    />
   );
 }
 

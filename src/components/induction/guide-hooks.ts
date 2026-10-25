@@ -6,6 +6,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ABSENT_SKIP_MS } from '@/lib/induction';
+import { viewportSize } from '@/lib/use-is-laptop';
 
 /** How long the first step after a load waits for its control before going back to an earlier one on screen. */
 export const RESUME_BACK_MS = 700;
@@ -299,7 +300,7 @@ export const PHOTOS_WAIT_CAP_MS = 5000;
  */
 function pagePending(): boolean {
   if (document.documentElement.hasAttribute('data-guide-seeding')) return true;
-  const height = window.innerHeight;
+  const { height } = viewportSize();
   return Array.from(document.querySelectorAll('[data-thumb-loading], [data-guide-wait]')).some(
     (el) => {
       const r = el.getBoundingClientRect();

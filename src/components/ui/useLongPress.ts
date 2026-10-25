@@ -218,3 +218,38 @@ export function useLongPress(
     clearClickSuppression: controller.clearClickSuppression,
   };
 }
+
+export interface MenuGestureHandlers extends LongPressHandlers {
+  onContextMenu: (event: { preventDefault: () => void }) => void;
+}
+
+export interface UseMenuGestureResult {
+  /** Spread onto the row, card, tile or bubble. */
+  handlers: MenuGestureHandlers;
+  /** Call first in the target's onClick; true means swallow the click that trailed a long-press. */
+  consumeClickSuppression: () => boolean;
+}
+
+/**
+ * The one way to open an item's ActionMenu by gesture: long-press on touch
+ * (LONG_PRESS_MS) and right-click on laptop open the same menu. Mouse presses
+ * never start the hold timer; a right-click cancels any pending hold so the
+ * menu opens once.
+ */
+export function useMenuGesture(onOpen: () => void): UseMenuGestureResult {
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
+  const press = useLongPress(() => onOpenRef.current(), { ignoreMouse: true });
+  return {
+    handlers: {
+      ...press.handlers,
+      onContextMenu(event) {
+        event.preventDefault();
+        press.cancel();
+        press.clearClickSuppression();
+        onOpenRef.current();
+      },
+    },
+    consumeClickSuppression: press.consumeClickSuppression,
+  };
+}

@@ -11,6 +11,7 @@ import type { AttachmentItem } from '@/components/pages/create/AttachmentsField'
 import { RemoveButton } from '@/components/pages/create/RemoveButton';
 import { clampDrag, dropIndex, shiftFor } from '@/components/pages/create/reorder';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { LONG_PRESS_MS } from '@/components/ui/useLongPress';
 import { cn } from '@/lib/cn';
 
 /** A tile for a file still uploading (or failed): its own local picture. */
@@ -26,8 +27,6 @@ export interface PendingTile {
 
 /** Tile size (h-16) plus the row gap (gap-2): one slot in the reorder math. */
 export const TILE_SLOT = 64 + 8;
-/** Phone: how long a finger rests on a tile before it lifts for dragging. */
-export const HOLD_MS = 350;
 /** A mouse drag starts after this many pixels; a finger moving this far first scrolls instead. */
 const MOUSE_SLOP = 4;
 const TOUCH_SLOP = 8;
@@ -137,7 +136,8 @@ export function FileTiles({
       timer: null,
       el: event.currentTarget,
     };
-    if (touch) g.timer = window.setTimeout(() => lift(g), HOLD_MS);
+    // Phone: a finger rests the one long-press duration before the tile lifts.
+    if (touch) g.timer = window.setTimeout(() => lift(g), LONG_PRESS_MS);
     gesture.current = g;
   }
 

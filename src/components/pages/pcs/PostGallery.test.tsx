@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import {
-  PIN_ARM_PRESS_MS,
   galleryFileKind,
   galleryView,
   galleryFrame,
@@ -25,7 +24,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { DropZone } from '@/components/ui/DropZone';
 import type { Frame } from '@/lib/platform-specs';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
-import { createLongPressController } from '@/components/ui/useLongPress';
+import { LONG_PRESS_MS, createLongPressController } from '@/components/ui/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { rememberThumbnail } from '@/lib/chat/attachments';
@@ -359,7 +358,7 @@ describe('pin placement on the inline slide (relocated F5 flow)', () => {
     const onPlacePin = vi.fn();
     const onRequestPin = vi.fn();
     // The component wires the shared long-press controller to arm the pressed
-    // slide at ~500ms; replicate that wiring exactly.
+    // slide at the one LONG_PRESS_MS; replicate that wiring exactly.
     let armed: number | null = null;
     const pressedIndex = 1;
     const controller = createLongPressController({
@@ -367,11 +366,10 @@ describe('pin placement on the inline slide (relocated F5 flow)', () => {
         armed = pressedIndex;
         onRequestPin(pressedIndex);
       },
-      thresholdMs: PIN_ARM_PRESS_MS,
     });
 
     controller.handlers.onPointerDown({ clientX: 40, clientY: 40 });
-    vi.advanceTimersByTime(PIN_ARM_PRESS_MS);
+    vi.advanceTimersByTime(LONG_PRESS_MS);
     controller.handlers.onPointerUp();
     expect(armed).toBe(pressedIndex);
     expect(onRequestPin).toHaveBeenCalledWith(pressedIndex);

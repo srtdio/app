@@ -53,7 +53,7 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
           className={MENU_ITEM}
         >
           <span className="shrink-0 text-fg-3">
-            <IconUpload size={ICON_SIZE.inline} />
+            <IconUpload size={ICON_SIZE.tray} />
           </span>
           <span>Upload files</span>
         </PressableRow>
@@ -68,7 +68,7 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
           className={MENU_ITEM}
         >
           <span className="shrink-0 text-fg-3">
-            <IconLink size={ICON_SIZE.inline} />
+            <IconLink size={ICON_SIZE.tray} />
           </span>
           <span>Add link</span>
         </PressableRow>

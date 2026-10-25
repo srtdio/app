@@ -23,7 +23,7 @@ import { flashNode } from '@/components/comments/flash-node';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
 import { cn } from '@/lib/cn';
-import { useIsLaptop } from '@/lib/use-is-laptop';
+import { prefersReducedMotion, useIsLaptop } from '@/lib/use-is-laptop';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   ICON_SIZE,
@@ -193,12 +193,7 @@ export function openCommentsLabel(count: number): string {
 export function scrollToCommentsSection(doc: Document = document): void {
   const node = doc.getElementById(COMMENTS_SECTION_ID);
   if (node === null) return;
-  const view = doc.defaultView;
-  const reduce =
-    view !== null &&
-    typeof view.matchMedia === 'function' &&
-    view.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  node.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  node.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
 }
 
 /**
@@ -1476,7 +1471,7 @@ export function PostDetailPage({
       <span key="owner" data-detail="owner" className="inline-flex min-w-0 items-center gap-1.5">
         <Avatar
           name={ownerInfo.name}
-          size="sm"
+          role="inline"
           {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
         />
         <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
@@ -1906,7 +1901,7 @@ export function PostDetailPage({
               className="rounded-xl border border-border bg-panel-2 p-4"
             >
               <div className="flex items-center gap-3">
-                <Avatar name={workspaceName ?? ''} size="md" />
+                <Avatar name={workspaceName ?? ''} role="header" kind="group" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-base font-medium text-fg">
                     {workspaceName ?? ''}

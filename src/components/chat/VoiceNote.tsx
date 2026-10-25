@@ -1259,12 +1259,12 @@ export function VoiceNote({
         </PressableRow>
       ) : sender !== undefined ? (
         <span className="relative flex" data-voice-played={played ? '' : undefined}>
-          {/* The 40px header photo drawn at 34px (its box is sized inline). */}
-          <span className="flex [&>*]:!h-[34px] [&>*]:!w-[34px]">
+          {/* The sender photo at the shared header role (32px). */}
+          <span className="flex">
             <Avatar
               name={sender.name}
               {...(sender.src !== undefined ? { src: sender.src } : {})}
-              size="header"
+              role="header"
             />
           </span>
           <span

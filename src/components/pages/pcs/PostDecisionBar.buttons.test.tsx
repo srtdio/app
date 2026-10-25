@@ -66,4 +66,25 @@ describe('PostDecisionBar buttons', () => {
     expect(classOf(main)).toContain('h-11');
     expect(classOf(main)).toContain('rounded-lg');
   });
+
+  it('the bar carries no icons: words only, and it is a bottom anchor', () => {
+    for (const model of [
+      {
+        kind: 'creator' as const,
+        label: 'Send for review',
+        disabled: false,
+        helper: null,
+        onPress: vi.fn(),
+      },
+      {
+        kind: 'approver' as const,
+        actions: visibleStageActions('review', 'client'),
+        onPick: vi.fn(),
+      },
+    ]) {
+      const html = renderToStaticMarkup(PostDecisionBar({ model, busy: false, error: null }));
+      expect(html).not.toContain('<svg');
+      expect(html).toContain('data-undo-anchor=""');
+    }
+  });
 });

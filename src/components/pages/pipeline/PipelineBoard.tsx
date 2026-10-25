@@ -53,7 +53,7 @@ export interface PipelineBoardProps {
    */
   roleReady?: boolean;
   /** A card's Move button asks the page to open the move sheet for that post. */
-  onOpenMove?: (post: PipelinePost) => void;
+  onOpenMove?: (post: PipelinePost, to?: Stage) => void;
   /** A drop onto a column the post cannot move to: the page toasts the reason. */
   onBlockedMove?: (reason: string) => void;
   /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
@@ -378,7 +378,7 @@ function SingleStageGrid({
   presignEnabled: boolean;
   workspaceKey: string | null;
   timeZone?: string | null | undefined;
-  onOpenMove?: (post: PipelinePost) => void;
+  onOpenMove?: (post: PipelinePost, to?: Stage) => void;
   viewer?: CardViewer;
   covers?: CoverLookup;
 }): ReactElement {

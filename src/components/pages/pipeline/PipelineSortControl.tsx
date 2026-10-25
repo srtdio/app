@@ -7,7 +7,7 @@
 // 44px on every screen. The date filter's "Custom" row opens the floating range
 // calendar, which paints ON TOP and never pushes page content down.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Sheet } from '@/components/ui/Sheet';
@@ -22,7 +22,8 @@ import {
   IconFilterLines,
   IconSort,
 } from '@/components/ui/icons';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { useIsLaptop } from '@/lib/use-is-laptop';
+import { useDismissLayer } from '@/lib/modal-focus';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import {
   DATE_WINDOW_OPTIONS,
@@ -179,7 +180,11 @@ export function dateButtonLabel(dateWindow: DateWindow, customRange: DateRange |
 // Layout for the shared secondary Button used as a menu trigger.
 const TRIGGER = 'min-w-11 shrink-0';
 
-/** The responsive shell: a popover on desktop, the shared bottom Sheet on mobile. */
+/**
+ * The responsive shell: a popover on desktop, the shared bottom Sheet on mobile.
+ * The popover closes on Escape (top layer only) and hands focus back to its
+ * trigger (useDismissLayer); the Sheet does the same on its own.
+ */
 function MenuShell(props: {
   isDesktop: boolean;
   open: boolean;
@@ -189,6 +194,8 @@ function MenuShell(props: {
   body: ReactElement;
   extra?: ReactNode;
 }): ReactElement {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDismissLayer(props.isDesktop && props.open, props.onClose, panelRef);
   if (props.isDesktop) {
     return (
       <div className="relative">
@@ -196,7 +203,10 @@ function MenuShell(props: {
         {props.open ? (
           <>
             <div className="fixed inset-0 z-40" aria-hidden="true" onClick={props.onClose} />
-            <div className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl">
+            <div
+              ref={panelRef}
+              className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl"
+            >
               {props.body}
             </div>
           </>
@@ -221,7 +231,7 @@ export function PipelineSortControl({
   onOrderChange,
 }: PipelineSortControlProps): ReactElement {
   const [open, setOpen] = useState(false);
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isDesktop = useIsLaptop();
   const activeOrder = PIPELINE_SORT_OPTIONS.find((option) => option.value === order);
   const trigger = (
     <Button
@@ -269,7 +279,7 @@ export function PipelineDateControl({
 }: PipelineDateControlProps): ReactElement {
   const [open, setOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isDesktop = useIsLaptop();
   const active = dateFilterActive(dateWindow, customRange);
   const label = dateButtonLabel(dateWindow, customRange);
   const trigger = (
@@ -390,7 +400,7 @@ export function PipelineFilterControl({
 }: PipelineFilterControlProps): ReactElement {
   const [open, setOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isDesktop = useIsLaptop();
   const active = dateFilterActive(dateWindow, customRange) || order !== POST_SORT_DEFAULT;
   const trigger = (
     <IconButton

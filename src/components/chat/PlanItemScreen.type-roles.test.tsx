@@ -35,10 +35,6 @@ vi.mock('@/components/chat/PlanCardsProvider', () => ({ usePlanCards: () => null
 vi.mock('@/lib/chat/use-chat-attachments', () => ({
   useCommentAttachments: () => ({ canAttach: false, uploadFile: undefined }),
 }));
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
-}));
 vi.mock('@/lib/chat/plans', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chat/plans')>()),
   readItemScreen: async () => ({

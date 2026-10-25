@@ -1,6 +1,6 @@
-// The composer's plus button and its tray (replaces the paperclip). The button
-// is a 44x44 circle on the panel; while the tray is open it turns accent and
-// its plus rotates 45deg into an X (rotate only). The tray sits above the
+// The composer's attach button and its tray. The button is a 44x44 circle on
+// the panel showing the paperclip (attach is the paperclip everywhere); while
+// the tray is open it turns accent and shows an X. The tray sits above the
 // composer: a 4-column grid of tiles (Photos, File, Assets, Brief, Post, Draft,
 // Plan, Schedule on touch and laptop alike) that slides on translateY and fades,
 // 180ms, no X and no scale. A tap outside, Escape, or picking a tile closes it.
@@ -20,10 +20,11 @@ import {
   IconCalendarClock,
   IconDraft,
   IconFile,
-  IconImage,
+  IconPaperclip,
+  IconPhoto,
   IconPipeline,
   IconPlan,
-  IconPlus,
+  IconX,
 } from '@/components/ui/icons';
 import { isClient } from '@/components/pages/pcs/roles';
 import { cn } from '@/lib/cn';
@@ -100,7 +101,7 @@ export function trayTiles(
 ): TrayTile[] {
   void layout;
   const tiles: TrayTile[] = [
-    { id: 'photos', label: 'Photos', Icon: IconImage },
+    { id: 'photos', label: 'Photos', Icon: IconPhoto },
     { id: 'file', label: 'File', Icon: IconFile },
     { id: 'assets', label: 'Assets', Icon: IconAssets },
     { id: 'brief', label: 'Brief', Icon: IconBriefs },
@@ -201,15 +202,8 @@ export function ComposerTray(props: {
         // focus on Escape.
         className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <span
-          aria-hidden="true"
-          data-plus-icon=""
-          className={cn(
-            'flex transition-transform duration-[180ms] ease-out motion-reduce:transition-none',
-            open && 'rotate-45',
-          )}
-        >
-          <IconPlus size={ICON_SIZE.control} />
+        <span aria-hidden="true" data-plus-icon="" className="flex">
+          {open ? <IconX size={ICON_SIZE.control} /> : <IconPaperclip size={ICON_SIZE.control} />}
         </span>
       </Button>
       {rendered ? (

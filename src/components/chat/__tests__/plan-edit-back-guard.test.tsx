@@ -36,10 +36,6 @@ vi.mock('@/components/chat/PlanCardsProvider', () => ({ usePlanCards: () => null
 vi.mock('@/lib/chat/use-chat-attachments', () => ({
   useCommentAttachments: () => ({ canAttach: false, uploadFile: undefined }),
 }));
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
-}));
 
 // The stubbed read's plan (hoisted: the mock factory runs before this module's body).
 const { BUNDLE } = vi.hoisted(() => {

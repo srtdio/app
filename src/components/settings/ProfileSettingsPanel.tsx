@@ -492,10 +492,10 @@ export function ProfileSettingsPanel(): React.ReactElement {
   return (
     <div className="max-w-[520px] flex flex-col gap-4">
       <div className="flex flex-col items-start gap-3">
-        <div className="relative h-[112px] w-[112px]">
+        <div className="relative h-[72px] w-[72px]">
           <Avatar
             key={photoSrc ?? 'none'}
-            size="hero"
+            role="profile"
             name={trimmedName.length > 0 ? trimmedName : profile.display_name}
             {...(photoSrc !== null ? { src: photoSrc } : {})}
           />

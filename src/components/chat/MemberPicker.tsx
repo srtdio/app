@@ -57,7 +57,7 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
               <Avatar
                 name={option.displayName}
                 {...(option.avatarUrl !== null ? { src: option.avatarUrl } : {})}
-                size="md"
+                role="row"
               />
               <span className="min-w-0 flex-1 truncate text-base font-medium">
                 {option.displayName}

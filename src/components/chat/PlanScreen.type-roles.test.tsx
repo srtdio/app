@@ -34,10 +34,6 @@ vi.mock('@/components/chat/PlanCardsProvider', () => ({ usePlanCards: () => null
 vi.mock('@/lib/chat/use-chat-attachments', () => ({
   useCommentAttachments: () => ({ canAttach: false, uploadFile: undefined }),
 }));
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
-}));
 
 const { BUNDLE } = vi.hoisted(() => {
   const item = (id: string, description: string | null, position: number): PlanItemRow => ({

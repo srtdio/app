@@ -1877,7 +1877,7 @@ export function Comments({
         <span className="flex shrink-0">
           <Avatar
             name={authorName}
-            size={opts.reply ? 'sm' : 'md'}
+            role={opts.reply ? 'inline' : 'header'}
             {...(authorAvatarUrl !== null && authorAvatarUrl !== undefined
               ? { src: authorAvatarUrl }
               : {})}
@@ -1891,7 +1891,7 @@ export function Comments({
                 <div className="flex flex-wrap items-center gap-x-1.5">{meta}</div>
               </div>
             ) : (
-              <div className="flex min-h-[26px] min-w-0 flex-1 flex-wrap items-center gap-x-1.5">
+              <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-1.5">
                 {name}
                 {meta}
               </div>

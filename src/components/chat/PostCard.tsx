@@ -39,6 +39,7 @@ import { createPortal } from 'react-dom';
 import { Tag, isTagDot } from '@/components/ui/Tag';
 import { ICON_SIZE, IconCheck, IconPlay } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui';
+import { LONG_PRESS_MS, MOVE_CANCEL_PX } from '@/components/ui/useLongPress';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
 import {
@@ -642,8 +643,8 @@ export function cardTapHandlers(
   };
 }
 
-/** A card's hold: 450 ms still within 10 px, the bubble's long-press defaults. */
-export const CARD_HOLD = { thresholdMs: 450, moveTolerancePx: 10 } as const;
+/** A card's hold: LONG_PRESS_MS still within MOVE_CANCEL_PX, the bubble's long-press defaults. */
+export const CARD_HOLD = { thresholdMs: LONG_PRESS_MS, moveTolerancePx: MOVE_CANCEL_PX } as const;
 
 /** A card hold's Talk about, remembered until the finger lifts. */
 export interface TalkAboutHold {

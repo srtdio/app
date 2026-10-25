@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AssetCard } from '@/components/pages/assets/AssetCard';
@@ -5,7 +7,10 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 
 // Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => false,
+}));
 
 // SSR to static markup: useState initializers run (a warm cache.peek hit shows the
 // image) while effects do not. The presign gate is asserted via the cache spies.
@@ -248,5 +253,14 @@ describe('AssetCard ⋯ at the bottom, smaller select box', () => {
       />,
     );
     expect(out).toMatch(/data-card-select=""[^]*h-4 w-4 rounded border-\[1\.5px\]/);
+  });
+});
+
+describe('menu gesture', () => {
+  it('a long-press (touch) or a right-click (laptop) opens the same ⋯ ActionMenu', () => {
+    const src = readFileSync(fileURLToPath(new URL('./AssetCard.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('useMenuGesture(() => setMenuOpen(true))');
+    expect(src).toContain('...gesture.handlers');
+    expect(src).not.toContain('assets/useLongPress');
   });
 });

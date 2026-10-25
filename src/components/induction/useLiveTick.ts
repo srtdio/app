@@ -11,6 +11,7 @@
 // so the guide shows only its bar while a sheet slides in.
 
 import { useEffect, useRef, useState } from 'react';
+import { viewportSize } from '@/lib/use-is-laptop';
 import { inLayer, topDialog } from './guide-dom';
 
 export const SETTLE_MS = 120;
@@ -26,7 +27,8 @@ function signature(el: HTMLElement | undefined): string {
     const d = dialog.el.getBoundingClientRect();
     parts.push(d.top, d.left, d.width, d.height);
   }
-  parts.push(window.innerWidth, window.innerHeight);
+  const viewport = viewportSize();
+  parts.push(viewport.width, viewport.height);
   // 0.1px: a sheet's easing tail moves well under half a pixel per frame, and a
   // coarser reading would call it still while it creeps the last pixels in.
   return parts.map((n) => Math.round(n * 10) / 10).join(',');

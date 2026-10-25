@@ -43,17 +43,19 @@ describe('composer focus on open', () => {
   });
 });
 
-describe('F7: composer input size by input, never under 16px on touch', () => {
-  it('coarse pointer at 1024px (iPad) is 17px; fine pointer at 1280px is 15px', () => {
-    const ipad = sized(COMPOSER_INPUT_TYPE, chatLayout({ finePointer: false, widthPx: 1024 }));
-    expect(ipad).toContain('!text-[17px] !leading-[22px]');
-    const laptop = sized(COMPOSER_INPUT_TYPE, chatLayout({ finePointer: true, widthPx: 1280 }));
+describe('F7: composer input size by width, never under 16px on a phone', () => {
+  it('390px (phone) is 17px; 1024px (iPad, laptop table) and 1280px are 15px', () => {
+    const phone = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 390 }));
+    expect(phone).toContain('!text-[17px] !leading-[22px]');
+    const ipad = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 1024 }));
+    expect(ipad).toContain('!text-[15px] !leading-[20px]');
+    const laptop = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 1280 }));
     expect(laptop).toContain('!text-[15px] !leading-[20px]');
   });
 
-  it('every touch width stays at 16px or more, with no width breakpoint', () => {
-    for (const widthPx of [320, 390, 768, 1024, 1366]) {
-      const cls = sized(COMPOSER_INPUT_TYPE, chatLayout({ finePointer: false, widthPx }));
+  it('every phone width stays at 16px or more, with no width breakpoint', () => {
+    for (const widthPx of [320, 360, 390, 430, 767]) {
+      const cls = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx }));
       const px = Number(/!text-\[(\d+)px\]/.exec(cls)?.[1]);
       expect(px).toBeGreaterThanOrEqual(16);
       expect(cls).not.toContain('md:');

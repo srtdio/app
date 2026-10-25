@@ -5,11 +5,13 @@
 // or a click outside closes it and focus goes back to the cell; it opens with
 // focus on its first row. Tokens only.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { planRangeLabel } from '@/components/chat/plan-card';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { cn } from '@/lib/cn';
+import { useEscapeLayer } from '@/lib/escape-stack';
+import { viewportSize } from '@/lib/use-is-laptop';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
@@ -60,13 +62,7 @@ export function PlanDayMenu(props: {
     const el = ref.current;
     if (el === null) return;
     const cell = anchor.getBoundingClientRect();
-    setPos(
-      menuPosition(
-        cell,
-        { width: el.offsetWidth, height: el.offsetHeight },
-        { width: window.innerWidth, height: window.innerHeight },
-      ),
-    );
+    setPos(menuPosition(cell, { width: el.offsetWidth, height: el.offsetHeight }, viewportSize()));
     el.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
   }, [anchor]);
 
@@ -74,17 +70,8 @@ export function PlanDayMenu(props: {
     onClose();
     anchor.focus({ preventScroll: true });
   };
-  const closeRef = useRef(close);
-  closeRef.current = close;
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      closeRef.current();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  // Escape closes it when it is the top layer (the shared escape stack).
+  useEscapeLayer(true, close);
 
   return (
     <>

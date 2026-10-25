@@ -12,7 +12,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
-import { useEscapeLayer } from '@/lib/escape-stack';
+import { useDismissLayer } from '@/lib/modal-focus';
+import { viewportSize } from '@/lib/use-is-laptop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconCalendar, IconChevronLeft, IconChevronRight, ICON_SIZE } from '@/components/ui/icons';
@@ -167,8 +168,10 @@ export function DatePicker({
     if (parsed !== null) setView({ year: parsed.year, monthIndex: parsed.monthIndex });
   }, [open, value]);
 
-  // Escape closes only this popover while it is the top layer, never the sheet under it.
-  useEscapeLayer(open, () => setOpen(false));
+  // Escape closes only this popover while it is the top layer, never the sheet
+  // under it; every close hands focus back to the trigger.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDismissLayer(open, () => setOpen(false), panelRef);
 
   function pick(iso: string): void {
     onChange(iso);
@@ -220,13 +223,11 @@ export function DatePicker({
                 onClick={() => setOpen(false)}
               />
               <div
+                ref={panelRef}
                 role="dialog"
                 aria-label="Choose a date"
                 className="fixed z-[57] rounded-xl border border-border-strong bg-panel p-2 shadow-2xl"
-                style={popoverPlacement(triggerRef.current.getBoundingClientRect(), {
-                  width: window.innerWidth,
-                  height: window.innerHeight,
-                })}
+                style={popoverPlacement(triggerRef.current.getBoundingClientRect(), viewportSize())}
               >
                 <div className="mb-1 flex items-center justify-between">
                   <IconButton

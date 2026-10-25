@@ -244,7 +244,7 @@ export function PostDetailsSheet({
     <>
       <Avatar
         name={ownerName}
-        size="sm"
+        role="inline"
         {...(ownerAvatarUrl !== null ? { src: ownerAvatarUrl } : {})}
       />
       <span className="truncate">{ownerName}</span>
@@ -432,7 +432,7 @@ export function PostDetailsSheet({
               >
                 <Avatar
                   name={member.displayName}
-                  size="sm"
+                  role="row"
                   {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
                 />
                 <span className="truncate">{member.displayName}</span>

@@ -9,17 +9,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { useMediaQuery } from '@/lib/use-media-query';
-import { COARSE_POINTER_QUERY, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { useCoarsePointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
+import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useModalFocus } from '@/lib/modal-focus';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
 
 /** The view's fade, in and out (opacity only). */
 const THREAD_VIEW_FADE_MS = 150;
-
-/** Users who asked for less motion: the view appears and goes at once. */
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
 /**
  * Whether a keydown in the view closes it: Escape, not already handled, while
@@ -45,8 +42,9 @@ export function ThreadViewFrame(props: {
   /** The thread's list, then its composer (or the selection bar). */
   children: ReactNode;
 }): ReactElement {
-  const reduced = useMediaQuery(REDUCED_MOTION);
-  const coarse = useMediaQuery(COARSE_POINTER_QUERY);
+  // Users who asked for less motion: the view appears and goes at once.
+  const reduced = usePrefersReducedMotion();
+  const coarse = useCoarsePointer();
   const [shown, setShown] = useState(reduced);
   const [closing, setClosing] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);

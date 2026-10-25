@@ -105,6 +105,15 @@ describe('post actions (W9)', () => {
     expect(src).not.toContain('IconMore');
     expect(src).not.toContain('ActionRow');
   });
+
+  it('Send to chat forwards (IconForward); IconSend stays on the composers only', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./PostActionSheet.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toMatch(/label: 'Send to chat',\s*icon: IconForward,/);
+    expect(src).not.toContain('IconSend');
+  });
 });
 
 describe('Delete post and Remove image have no confirm (spec B7, PR B delete rule)', () => {

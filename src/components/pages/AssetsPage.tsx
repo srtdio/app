@@ -43,6 +43,8 @@ import { useSession } from '@/lib/session-context';
 import { useSort } from '@/lib/use-sort';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { logger } from '@/lib/logger';
+import { bottomAnchorProps, useBottomInset } from '@/lib/bottom-inset';
+import { cn } from '@/lib/cn';
 import {
   addAssetLink,
   canRenameAssets,
@@ -109,6 +111,10 @@ export function AssetsPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
+  // The phone selection bar sits on top of the tab bar (and any other bottom
+  // bar), never over it: its bottom is the shared bottom inset.
+  const selectBarRef = useRef<HTMLDivElement>(null);
+  const selectBarInset = useBottomInset(selectBarRef);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [renameItem, setRenameItem] = useState<AssetListItem | null>(null);
   // Deleted but still inside the Undo window: hidden from every list until the
@@ -713,13 +719,22 @@ export function AssetsPage() {
       ) : null}
 
       {/* Phones: Delete pinned at the bottom while selecting, in thumb
-          reach above the tab bar; the spacer keeps the last row uncovered. */}
+          reach right above the tab bar (useBottomInset; the tab bar carries
+          the safe area, so the bar only pads it when nothing sits under it).
+          It is a bottom bar itself, so the Undo strip stacks above it. The
+          spacer keeps the last row uncovered. */}
       {selectMode ? (
         <>
           <div aria-hidden="true" className="h-[76px] md:hidden" />
           <div
+            ref={selectBarRef}
             data-select-actions=""
-            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
+            {...bottomAnchorProps}
+            style={{ bottom: selectBarInset }}
+            className={cn(
+              'fixed inset-x-0 z-40 border-t border-border bg-panel px-4 pt-3 md:hidden',
+              selectBarInset > 0 ? 'pb-3' : 'pb-[max(12px,env(safe-area-inset-bottom))]',
+            )}
           >
             <div className="flex items-center gap-2">
               <Button

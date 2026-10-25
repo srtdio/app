@@ -1,15 +1,24 @@
-import type { ReactNode } from 'react';
+import { cloneElement, isValidElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { IconChevronRight } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronRight } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
 
 interface ActionRowProps {
+  /** An icon from ui/icons.tsx; the row renders it at ICON_SIZE.tray, whatever size it carries. */
   icon: ReactNode;
   label: string;
   sub?: string;
   onClick: () => void;
   danger?: boolean;
   chevron?: boolean;
+}
+
+/** A menu row's icon at the one menu-row size (ICON_SIZE.tray). */
+export function trayIcon(icon: ReactNode): ReactNode {
+  return isValidElement(icon)
+    ? cloneElement(icon as ReactElement<{ size?: number }>, { size: ICON_SIZE.tray })
+    : icon;
 }
 
 /**
@@ -41,7 +50,7 @@ export function ActionRow({
           danger ? 'text-bad' : 'text-fg-2',
         )}
       >
-        {icon}
+        {trayIcon(icon)}
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-base font-medium leading-snug">{label}</span>

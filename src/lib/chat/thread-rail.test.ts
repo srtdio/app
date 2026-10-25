@@ -344,14 +344,14 @@ describe('rowGeometry', () => {
       padLeft: 'pl-[30px]',
       shift: 14,
       target: 'bubble',
-      reach: 'w-[49px]',
+      reach: 'w-[55px]',
     });
   });
 
   it('a group root card elbows into the card past its photo; the view root shifts 29px', () => {
     expect(
       rowGeometry({ role: 'root', mine: false, isGroup: true, photo: true, selecting: false }),
-    ).toEqual({ padLeft: 'pl-[30px]', shift: 14, target: 'bubble', reach: 'w-[49px]' });
+    ).toEqual({ padLeft: 'pl-[30px]', shift: 14, target: 'bubble', reach: 'w-[55px]' });
     expect(
       rowGeometry({
         role: 'root',
@@ -361,7 +361,7 @@ describe('rowGeometry', () => {
         selecting: false,
         viewRoot: true,
       }),
-    ).toEqual({ padLeft: 'pl-[45px]', shift: 29, target: 'bubble', reach: 'w-[64px]' });
+    ).toEqual({ padLeft: 'pl-[45px]', shift: 29, target: 'bubble', reach: 'w-[70px]' });
   });
 
   it('outgoing rows keep their place and reach across the row in CSS', () => {

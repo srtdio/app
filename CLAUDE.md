@@ -111,6 +111,12 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Delete = UndoStrip for UNDO_MS (src/lib/undo.ts). ConfirmDialog only when the action cannot be undone.
 - Toasts come from ui/toast only. Phone vs laptop comes from useIsLaptop only.
 - List toolbars: search, at most one IconButton, then the New button. No text buttons or dropdown chevrons in the toolbar.
+- Avatars: ui/Avatar roles only (inline 20, header 32, row 40, profile 72). People circle, groups and notes rounded square.
+- Counts and unread badges: ui/CountBadge only. Filter chip counts are plain text.
+- Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; attach = paper clip. Decision bar buttons have no icons.
+- Long-press on touch and right-click on laptop open the same ActionMenu. Esc closes every overlay and returns focus to its trigger.
+- Exception: plan edit rows open their menu on right-click only; long-press there is drag.
+- Every UI change updates the visual baselines in the same PR and lists the changed screens. Never update baselines to hide an unplanned change.
 
 ## Canonical living docs
 

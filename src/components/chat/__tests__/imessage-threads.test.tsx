@@ -209,15 +209,15 @@ describe('group geometry (i4-group-b)', () => {
     expect(out).toContain('w-[15px]');
   });
 
-  it('a tucked row reaches across the 26px gutter to its bubble', () => {
+  it('a tucked row reaches across the 32px gutter (the header avatar role) to its bubble', () => {
     const out = bubble(memberRow, {
       member: true,
       isGroup: true,
       head: false,
       rail: railFor('middle', { isGroup: true }),
     });
-    expect(out).toContain('w-[26px]');
-    expect(out).toContain('w-[49px]');
+    expect(out).toContain('w-8 shrink-0');
+    expect(out).toContain('w-[55px]');
   });
 
   it('a non-member group row is untouched', () => {

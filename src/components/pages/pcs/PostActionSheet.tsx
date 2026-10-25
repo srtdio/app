@@ -25,9 +25,9 @@ import { Sheet } from '@/components/ui/Sheet';
 import {
   IconCalendar,
   IconDownload,
+  IconForward,
   IconLink,
   IconPipeline,
-  IconSend,
   IconTrash,
   type IconProps,
 } from '@/components/ui/icons';
@@ -183,7 +183,7 @@ export function postActionItems(input: PostActionItemsInput): ActionMenuItem[] {
   items.push({
     id: 'send-to-chat',
     label: 'Send to chat',
-    icon: IconSend,
+    icon: IconForward,
     description: 'Share this post in a conversation',
     onSelect: input.onSendToChat,
   });

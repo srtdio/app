@@ -1,7 +1,7 @@
 // The laptop emoji button for every comment input: a 44x44 smile that opens
 // chat's full searchable picker (EmojiPickerShell, laptop popover, opacity
-// only) anchored to the button. Rendered only when LAPTOP_LAYOUT_QUERY matches
-// (a fine hover pointer at 768px and up); touch devices have an emoji keyboard
+// only) anchored to the button. Rendered only on laptop (useIsLaptop) with a
+// fine hover pointer (input, not layout); touch devices have an emoji keyboard
 // and never see it, so no layout shifts there. The picker body stays a lazy
 // chunk: hover or focus on the button starts loadEmojiPicker() so the grid is
 // usually ready by the click. Tokens only, so light and dark stay at parity.
@@ -11,9 +11,8 @@ import type { ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconSmile, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { useHoverPointer, useIsLaptop } from '@/lib/use-is-laptop';
 import { insertAtCaret } from '@/lib/chat/emoji-list';
-import { LAPTOP_LAYOUT_QUERY } from '@/components/chat/chat-type';
 import { EmojiPickerShell, loadEmojiPicker } from '@/components/chat/MessageActionMenu';
 
 /** Warm the picker chunk; a failure is retried (and shown) when the picker opens. */
@@ -61,7 +60,9 @@ export function CommentEmojiButton(props: {
   disabled?: boolean;
   className?: string;
 }): ReactElement | null {
-  const laptop = useMediaQuery(LAPTOP_LAYOUT_QUERY);
+  const isLaptop = useIsLaptop();
+  const hover = useHoverPointer();
+  const laptop = isLaptop && hover;
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);

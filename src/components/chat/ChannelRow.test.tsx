@@ -172,10 +172,10 @@ describe('chat home sections', () => {
   it('unread 0 -> no pill, unread 3 -> pill "3"', () => {
     expect(unreadPillText(0)).toBeNull();
     expect(unreadPillText(3)).toBe('3');
-    expect(tile(dm, read).html).not.toContain('data-unread-pill');
-    expect(tile(dm, { ...read, unread: 3 }).html).toMatch(/data-unread-pill="[^"]*"[^>]*>3</);
-    expect(tile(group, read).html).not.toContain('data-unread-pill');
-    expect(tile(group, { ...read, unread: 3 }).html).toMatch(/data-unread-pill="[^"]*"[^>]*>3</);
+    expect(tile(dm, read).html).not.toContain('data-count-badge');
+    expect(tile(dm, { ...read, unread: 3 }).html).toMatch(/data-count-badge="[^"]*"[^>]*>3</);
+    expect(tile(group, read).html).not.toContain('data-count-badge');
+    expect(tile(group, { ...read, unread: 3 }).html).toMatch(/data-count-badge="[^"]*"[^>]*>3</);
   });
 });
 
@@ -190,18 +190,21 @@ describe('chat home tile', () => {
     expect(t.cls.split(' ')).toEqual(expect.arrayContaining(['border', 'border-border']));
     expect(t.cls).toContain('rounded-xl');
     expect(t.html).toContain(`data-person-photo="" class="${esc(PERSON_TILE_PHOTO)}"`);
-    expect(PERSON_TILE_PHOTO).toContain('[&>*]:!h-[72px] [&>*]:!w-[72px]');
+    // The shared Avatar at its profile role: 72px circle, never resized with "!".
+    expect(t.html).toContain('data-avatar-role="profile"');
+    expect(t.html).toContain('width:72px;height:72px');
+    expect(PERSON_TILE_PHOTO).not.toContain('!');
     expect(PERSON_TILE_PHOTO).not.toContain('rounded');
     expect(t.html).toContain(`min-w-0 max-w-full truncate ${PERSON_PREVIEW_TYPE}`);
     expect(t.html).not.toContain('line-clamp');
     expect(t.html).toContain('mt-auto');
-    expect(t.html).toMatch(/absolute right-3 top-3 flex"><span data-unread-pill/);
+    expect(t.html).toMatch(/absolute right-3 top-3 flex"><span data-count-badge/);
     expect(t.html).toContain('>99+<');
     tokenOnly(t.cls + t.html);
     expect({ tile: t.cls, classes: t.classes }).toMatchSnapshot();
   });
 
-  it('Groups wide: 100 tall row, 76px rounded-square photo, 2-line preview, pill far right', () => {
+  it('Groups wide: 100 tall row, 72px rounded-square photo, 2-line preview, pill far right', () => {
     const t = tile(group, { ...read, unread: 3 });
     expect(t.cls).toContain('h-[100px]');
     expect(t.cls).not.toContain('flex-col');
@@ -209,10 +212,14 @@ describe('chat home tile', () => {
       expect.arrayContaining(['w-full', 'rounded-xl', 'py-3', 'pl-3', 'pr-4', 'items-center']),
     );
     expect(t.html).toContain(`data-group-photo="" class="${esc(GROUP_TILE_PHOTO)}"`);
-    expect(GROUP_TILE_PHOTO).toContain('[&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-xl');
+    // The shared Avatar at its profile role, group kind: a 72px rounded square.
+    expect(t.html).toContain('data-avatar-role="profile"');
+    expect(t.html).toContain('width:72px;height:72px');
+    expect(t.html).toContain('rounded-xl inline-flex');
+    expect(GROUP_TILE_PHOTO).not.toContain('!');
     expect(t.html).toContain(`break-words line-clamp-2 ${GROUP_PREVIEW_TYPE}`);
     // The pill is the last thing in the row, after the text column.
-    expect(t.html.indexOf('data-unread-pill')).toBeGreaterThan(t.html.indexOf('See you then'));
+    expect(t.html.indexOf('data-count-badge')).toBeGreaterThan(t.html.indexOf('See you then'));
     tokenOnly(t.cls + t.html);
     expect({ tile: t.cls, classes: t.classes }).toMatchSnapshot();
   });
@@ -317,7 +324,8 @@ describe('G1: one layout listener per ChannelList, not one per tile', () => {
       source.indexOf('interface ChannelListContentProps'),
     );
     expect(card).not.toContain('useChatLayout(');
-    expect(card).not.toContain('useMediaQuery(');
+    expect(card).not.toContain('useHoverPointer(');
+    expect(card).not.toContain('useCoarsePointer(');
     expect(card).toContain('aria-label={channelTileLabel({');
     // The list reads them once.
     const list = source.slice(source.indexOf('export function ChannelList('));

@@ -716,9 +716,9 @@ export function OnboardingFlow({
         />
         <div className="flex items-center gap-4">
           {photoPreview !== null ? (
-            <Avatar name={name || 'You'} src={photoPreview} size="xl" />
+            <Avatar name={name || 'You'} src={photoPreview} role="profile" />
           ) : (
-            <Avatar size="xl" />
+            <Avatar role="profile" />
           )}
           <div className="flex min-w-0 flex-col gap-1">
             <Button onClick={() => photoInputRef.current?.click()}>
@@ -1196,9 +1196,9 @@ function PersonPreview({
   const where = workspace || 'your workspace';
   const avatar =
     photo !== null ? (
-      <Avatar name={shown} src={photo} size="md" />
+      <Avatar name={shown} src={photo} role="header" />
     ) : (
-      <Avatar name={shown} size="md" />
+      <Avatar name={shown} role="header" />
     );
   return (
     <>

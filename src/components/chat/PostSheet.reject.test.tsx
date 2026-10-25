@@ -46,7 +46,10 @@ vi.mock('@/lib/workspace-context', () => ({
   }),
 }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => mocks.laptop }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => mocks.laptop,
+}));
 vi.mock('@/components/ui/toast', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/ui/toast')>()),
   useToast: () => ({ show: mocks.toastShow, dismiss: vi.fn() }),

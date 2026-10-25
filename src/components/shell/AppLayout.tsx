@@ -328,7 +328,7 @@ function AppLayoutBody() {
               ? { onInductionStep: induction.setStep }
               : {})}
           />
-          <InductionGuide tabsShown={false} />
+          <InductionGuide />
         </div>
       </InductionProvider>
     );
@@ -376,7 +376,7 @@ function AppLayoutBody() {
             <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
             <WorkspaceSwitcher />
             <WorkspaceFullSheet />
-            <InductionGuide tabsShown={chrome.showBottomTabs} />
+            <InductionGuide />
           </div>
         </InboxStoreProvider>
       </ChatStoreProvider>

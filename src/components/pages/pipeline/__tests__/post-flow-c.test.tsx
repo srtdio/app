@@ -6,7 +6,10 @@
 // only the stage_transition proc is mocked.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -17,7 +20,6 @@ vi.mock('@srtdio/posts', async () => {
 });
 // No DOM here: the header buttons read a fixed laptop breakpoint, and the range
 // calendar (closed in every test) is stubbed out.
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
 vi.mock('@/components/pages/pipeline/PipelineDateRangeCalendar', () => ({
   PipelineDateRangeCalendar: () => null,
 }));

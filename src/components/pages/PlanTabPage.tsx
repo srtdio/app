@@ -39,7 +39,7 @@ import {
   type PlanTabView,
 } from '@/lib/plan-tab';
 import { civilToday } from '@/lib/plan-week';
-import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace } from '@/lib/workspace-context';
 import { PlanCalendar } from './plan-tab/PlanCalendar';
 import { PlanTabAdd, type AddTarget } from './plan-tab/PlanTabAdd';
@@ -54,7 +54,7 @@ export function entryRoute(entry: CalendarEntry): string {
 }
 
 export function PlanTabPage(): ReactElement {
-  const desktop = useMediaQuery(LAPTOP_QUERY);
+  const desktop = useIsLaptop();
   const navigate = useNavigate();
   const { workspaceId, workspaces } = useWorkspace();
   const timeZone = safeTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);

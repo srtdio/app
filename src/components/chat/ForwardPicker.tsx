@@ -58,7 +58,7 @@ export function forwardRowAvatar(channel: ChannelSummary, selected: boolean): Re
   if (channel.channelType === 'notes') {
     return (
       <NotesAvatar
-        size="small"
+        role="row"
         src={channel.avatarUrl}
         surface={selected ? 'accent-soft' : 'panel'}
         {...(!selected ? { hoverSurface: 'panel-2' as const } : {})}
@@ -69,7 +69,8 @@ export function forwardRowAvatar(channel: ChannelSummary, selected: boolean): Re
     <Avatar
       name={chatDisplayName(channel)}
       {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-      size="md"
+      role="row"
+      kind={channel.channelType === 'group' ? 'group' : 'person'}
     />
   );
 }

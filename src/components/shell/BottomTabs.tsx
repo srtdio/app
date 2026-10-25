@@ -6,13 +6,14 @@ import { CountBadge } from '@/components/ui/CountBadge';
 import { cn } from '@/lib/cn';
 import { ICON_SIZE } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { bottomAnchorProps } from '@/lib/bottom-inset';
 
 export function BottomTabs() {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
   return (
     <nav
-      data-undo-anchor=""
+      {...bottomAnchorProps}
       className="md:hidden fixed bottom-0 inset-x-0 z-30 flex border-t border-border bg-panel pb-[env(safe-area-inset-bottom)]"
     >
       {PRIMARY_NAV.map((item) => (

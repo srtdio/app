@@ -15,6 +15,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { MOVE_TO_HEADING, REMOVE_LABEL } from '@/lib/chat/plan-keyboard-move';
 import { cn } from '@/lib/cn';
+import { viewportSize } from '@/lib/use-is-laptop';
 
 /** Where the popover opens, as placed: under a button (right-aligned to it) or at a point. */
 export type PopoverPlace =
@@ -117,7 +118,7 @@ export function PlanDayPopover(props: {
         placePopover(
           placeOf(anchor),
           { width: el.offsetWidth, height: el.scrollHeight },
-          { width: window.innerWidth, height: window.innerHeight },
+          viewportSize(),
         ),
       );
     };
@@ -138,6 +139,7 @@ export function PlanDayPopover(props: {
     (current ?? el?.querySelector<HTMLElement>('[role="menuitem"]'))?.focus({
       preventScroll: true,
     });
+    // On the document (capture), so Escape closes it wherever focus sits.
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
@@ -151,10 +153,10 @@ export function PlanDayPopover(props: {
       if (target instanceof Element && target.closest('[data-plan-row-day-chip]') !== null) return;
       onClose.current();
     };
-    el?.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onDown, true);
     return () => {
-      el?.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onDown, true);
     };
   }, []);
@@ -223,7 +225,7 @@ export function PlanDayPopover(props: {
             onClick={props.onRemove}
             className={cn(item, 'justify-start gap-2.5 font-medium text-bad hover:bg-bad-soft')}
           >
-            <IconTrash size={ICON_SIZE.inline} />
+            <IconTrash size={ICON_SIZE.tray} />
             {REMOVE_LABEL}
           </PressableRow>
         </>

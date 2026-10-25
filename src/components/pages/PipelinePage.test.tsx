@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 import { IconButton } from '@/components/ui/IconButton';
 import type { ReactElement, ReactNode } from 'react';
 import { readFileSync } from 'node:fs';
@@ -16,11 +19,10 @@ vi.mock('@srtdio/posts', async () => {
 
 // The unit env is `node` with no DOM. PipelineSortControl is the only component
 // here invoked as a plain function (every other surface is a pure helper or an
-// unexpanded element node), so we mock the two hooks it touches: useMediaQuery is
+// unexpanded element node), so we mock the two hooks it touches: useIsLaptop is
 // stubbed to a fixed breakpoint, and useState is a pure shim that records its
 // setters per call index (0 = sheet/popover open, 1 = calendar open) so a test
 // can force initial state and observe a setter firing without a renderer.
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
 
 const hookState = vi.hoisted(() => ({
   index: 0,

@@ -79,7 +79,7 @@ export function attachmentMenuRows(
     return (
       <div key={item.id} role="menuitem">
         <ActionRow
-          icon={<Icon size={ICON_SIZE.nav} />}
+          icon={<Icon size={ICON_SIZE.tray} />}
           label={item.label}
           onClick={() => {
             item.onSelect();

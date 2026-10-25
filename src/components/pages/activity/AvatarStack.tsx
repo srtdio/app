@@ -1,10 +1,10 @@
-import { Avatar } from '@/components/ui/Avatar';
+import { AVATAR_PX, Avatar, type AvatarRole } from '@/components/ui/Avatar';
 
 interface AvatarStackProps {
   /** Distinct display names, in order. */
   names: string[];
-  /** Avatar size; defaults to the 24px small avatar. */
-  size?: 'sm' | 'md' | 'lg';
+  /** Avatar role (it alone decides the size); defaults to the 20px inline avatar. */
+  role?: AvatarRole;
 }
 
 const MAX = 3;
@@ -19,7 +19,7 @@ export const STACK_OVERLAP_PX = 4;
  * page background, so the separating ring is ring-bg (light and dark), and each
  * avatar overlaps the last by only 4px so every initial reads.
  */
-export function AvatarStack({ names, size = 'sm' }: AvatarStackProps) {
+export function AvatarStack({ names, role = 'inline' }: AvatarStackProps) {
   if (names.length === 0) return null;
   const shown = names.slice(0, MAX);
   const extra = names.length - shown.length;
@@ -31,12 +31,13 @@ export function AvatarStack({ names, size = 'sm' }: AvatarStackProps) {
           className="rounded-full ring-2 ring-bg"
           style={{ marginLeft: i === 0 ? 0 : -STACK_OVERLAP_PX }}
         >
-          <Avatar name={name} size={size} />
+          <Avatar name={name} role={role} />
         </span>
       ))}
       {extra > 0 ? (
         <span
-          className="ml-[-4px] inline-flex h-6 items-center rounded-full bg-panel-2 px-1.5 text-xs font-medium text-fg-3 ring-2 ring-bg"
+          className="ml-[-4px] inline-flex items-center rounded-full bg-panel-2 px-1.5 text-xs font-medium text-fg-3 ring-2 ring-bg"
+          style={{ height: AVATAR_PX[role] }}
           aria-label={`${extra} more`}
         >
           +{extra}

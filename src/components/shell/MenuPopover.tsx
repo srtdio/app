@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { useDismissLayer } from '@/lib/modal-focus';
 import { DUR_FAST_MS } from '@/lib/motion';
 
 interface MenuPopoverProps {
@@ -17,7 +18,8 @@ const EXIT_MS = DUR_FAST_MS;
 
 /**
  * A lightweight anchored dropdown. Render it inside a `relative` wrapper next to
- * its trigger. Closes on outside click (transparent backdrop) and Escape. Enter
+ * its trigger. Closes on outside click (transparent backdrop) and Escape (the
+ * top layer only), and hands focus back to its trigger on close. Enter
  * and exit fade and scale from the trigger corner (transform-origin); no
  * translation.
  */
@@ -38,20 +40,8 @@ export function MenuPopover({ open, onClose, align = 'right', children }: MenuPo
     return () => clearTimeout(timer);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, onClose]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDismissLayer(open, onClose, panelRef);
 
   if (!rendered) {
     return null;
@@ -61,6 +51,7 @@ export function MenuPopover({ open, onClose, align = 'right', children }: MenuPo
     <>
       <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} />
       <div
+        ref={panelRef}
         role="menu"
         className={cn(
           // Axis: scale only, anchored to the trigger corner. No translation.

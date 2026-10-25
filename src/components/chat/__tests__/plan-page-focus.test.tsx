@@ -11,10 +11,6 @@ import { useState, type ReactElement } from 'react';
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
-}));
 
 import { PlanPage } from '@/components/chat/PlanScreen';
 import { modalLayerCount } from '@/lib/modal-focus';

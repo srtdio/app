@@ -332,6 +332,11 @@ export function IconImage(props: IconProps) {
   return <Hero icon={PhotoIcon} {...props} />;
 }
 
+/** Photos (chat info, the composer tray, Assets Media). */
+export function IconPhoto(props: IconProps) {
+  return <Hero icon={PhotoIcon} {...props} />;
+}
+
 /** A carousel badge: stacked cards. Hand-drawn: Square2StackIcon reads as copy at badge size. */
 export function IconCarousel(props: IconProps) {
   return (

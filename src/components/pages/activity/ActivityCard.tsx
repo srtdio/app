@@ -16,10 +16,11 @@ import {
   IconClock,
   IconFile,
   IconPlan,
-  IconSend,
   IconTaskSquare,
+  IconTickSingle,
 } from '@/components/ui/icons';
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
+import { useMenuGesture } from '@/components/ui/useLongPress';
 import {
   ACTOR_ROW_EVENTS,
   MENTION_EVENT_TYPE,
@@ -243,7 +244,7 @@ function EntryAuthor({ entry }: { entry: ActivityItem }) {
       <Avatar
         name={entry.actorName}
         {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
-        size="sm"
+        role="inline"
       />
       <span className="truncate text-sm font-medium text-fg-3">{entry.actorName}</span>
     </div>
@@ -265,7 +266,7 @@ function AlertIcon({ item, alert }: { item: ActivityItem; alert: AlertInfo }): R
     alert.kind === 'reminder' || item.eventType === 'task_due' ? (
       <IconAlarmClock size={ICON_SIZE.status} />
     ) : alert.kind === 'sent' ? (
-      <IconSend size={ICON_SIZE.status} />
+      <IconTickSingle size={ICON_SIZE.status} />
     ) : alert.kind === 'failed' ? (
       <IconCalendarClock size={ICON_SIZE.status} />
     ) : alert.kind === 'plan' ? (
@@ -456,6 +457,9 @@ export function ActivityCard({
     const frame = window.requestAnimationFrame(() => setSettled(true));
     return () => window.cancelAnimationFrame(frame);
   }, [settled]);
+  // Long-press on touch and right-click on laptop open the row's ⋯ menu.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const gesture = useMenuGesture(() => setMenuOpen(true));
 
   const lead = group[0];
   if (lead === undefined) return null;
@@ -504,6 +508,13 @@ export function ActivityCard({
       data-activity-event={lead.eventType}
       data-activity-id={lead.id}
       {...(entering ? { 'data-activity-entering': '' } : {})}
+      {...gesture.handlers}
+      onClickCapture={(event) => {
+        // The click that trails a long-press never also opens the row.
+        if (!gesture.consumeClickSuppression()) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
       className={cn(
         'flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-200',
         unread ? 'border-accent-line' : 'border-border',
@@ -537,7 +548,7 @@ export function ActivityCard({
                 <Avatar
                   name={actorName}
                   {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
-                  size="sm"
+                  role="inline"
                 />
               ) : null}
               <span className="truncate text-sm font-medium text-fg-3">
@@ -665,6 +676,8 @@ export function ActivityCard({
           ) : null}
           <div data-activity-menu="" className={cn('-mr-2', rest.length === 0 && 'ml-auto')}>
             <ActivityRowMenu
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
               snoozed={snoozed}
               unread={unread}
               onSnooze={(kind) => {
