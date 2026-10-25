@@ -57,10 +57,14 @@ test('Escape: the Due date DatePicker closes alone and focus returns to its fiel
   await installHarnessNetwork(page);
   await page.goto('/pipeline');
   await page.getByRole('button', { name: 'New post', exact: true }).first().click();
-  const sheet = page.getByRole('dialog').first();
-  await expect(sheet).toBeVisible({ timeout: 15_000 });
-  const trigger = sheet.getByRole('button', { name: 'Due date', exact: true }).first();
+  // The visible Due date field (the DatePicker trigger carries aria-label "Due date").
+  const trigger = page
+    .getByRole('button', { name: 'Due date', exact: true })
+    .filter({ visible: true })
+    .first();
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
   await trigger.scrollIntoViewIfNeeded();
+  const sheet = page.getByRole('dialog').filter({ has: trigger });
   await escReturnsFocus(page, trigger, page.getByRole('dialog', { name: 'Choose a date' }));
   // Escape closed only the top layer: the sheet under it stays open.
   await expect(sheet).toBeVisible();

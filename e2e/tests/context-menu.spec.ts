@@ -19,7 +19,10 @@ test.beforeEach(({ page }) => {
 
 /** The open ActionMenu (role menu) with at least one row. */
 const openMenu = (page: Page): Locator =>
-  page.getByRole('menu').filter({ has: page.getByRole('menuitem') });
+  page
+    .getByRole('menu')
+    .filter({ has: page.getByRole('menuitem') })
+    .first();
 
 async function rightClickOpensMenu(page: Page, target: Locator): Promise<void> {
   await expect(target).toBeVisible({ timeout: 15_000 });
