@@ -7,7 +7,7 @@
 // reuses the shared helpers (src/lib/list-sort.ts, src/lib/plan-week.ts); nothing
 // here does zone maths of its own.
 
-import { formatDate } from '@/lib/time';
+import { formatDate, isValidTimeZone } from '@/lib/time';
 import { addCivilDays, civilDate } from '@/lib/list-sort';
 import { weekBounds } from '@/lib/plan-week';
 
@@ -45,12 +45,7 @@ const MONTH_NAMES = [
 
 /** Probe a zone once; a blank or non-IANA value degrades to UTC, never throws. */
 function safeZone(timeZone: string): string {
-  try {
-    new Intl.DateTimeFormat('en-CA', { timeZone });
-    return timeZone;
-  } catch {
-    return 'UTC';
-  }
+  return isValidTimeZone(timeZone) ? timeZone : 'UTC';
 }
 
 /**

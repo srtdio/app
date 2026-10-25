@@ -286,3 +286,67 @@ export function formatSpokenDate(value: DateInput, timeZone?: string): string {
   const month = LONG_MONTHS[civil.month - 1] ?? '';
   return `${LONG_WEEKDAYS[weekday] ?? ''}, ${civil.day} ${month} ${civil.year}`;
 }
+
+/** True when Intl accepts the value as an IANA zone. */
+export function isValidTimeZone(timeZone: string): boolean {
+  if (timeZone.trim() === '') return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Wall-clock parts of an instant in a zone (24-hour; weekday 0=Sun..6=Sat), for calendar math. */
+export interface ZonedParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  weekday: number;
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** Wall-clock parts of an instant in a zone; an invalid zone reads as the device zone. */
+export function zonedParts(instant: Date, timeZone?: string | null): ZonedParts {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: safeTimeZone(timeZone),
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    weekday: 'short',
+    hourCycle: 'h23',
+  }).formatToParts(instant);
+  const text = (type: string): string => parts.find((part) => part.type === type)?.value ?? '';
+  const num = (type: string): number => Number(text(type));
+  const weekday = WEEKDAYS.indexOf(text('weekday') as (typeof WEEKDAYS)[number]);
+  return {
+    year: num('year'),
+    month: num('month'),
+    day: num('day'),
+    // Some engines report midnight as 24 even with h23.
+    hour: num('hour') % 24,
+    minute: num('minute'),
+    second: num('second'),
+    weekday: weekday === -1 ? 0 : weekday,
+  };
+}
+
+/** The device's short zone name ("IST", "GMT+5:30"); '' if Intl cannot say. */
+export function shortZoneName(now: Date, locale?: string): string {
+  try {
+    const part = new Intl.DateTimeFormat(locale, { timeZoneName: 'short' })
+      .formatToParts(now)
+      .find((p) => p.type === 'timeZoneName');
+    return part?.value ?? '';
+  } catch {
+    return '';
+  }
+}

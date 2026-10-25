@@ -152,17 +152,7 @@ export function fromInputs(date: string, time: string): Date | null {
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
-/** The device's short zone name from Intl ("IST", "GMT+5:30"); never hardcoded. */
-export function shortZoneName(now: Date, locale?: string): string {
-  try {
-    const part = new Intl.DateTimeFormat(locale, { timeZoneName: 'short' })
-      .formatToParts(now)
-      .find((p) => p.type === 'timeZoneName');
-    return part?.value ?? '';
-  } catch {
-    return '';
-  }
-}
+export { shortZoneName } from '@/lib/time';
 
 export const SCHEDULE_RANGE_COPY = 'Pick a time at least 1 minute from now';
 export const SCHEDULE_LIMIT_COPY = 'You already have 100 scheduled messages';

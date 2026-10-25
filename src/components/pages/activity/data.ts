@@ -78,7 +78,7 @@ import { readPendingReminders, type ReminderRow } from '@/lib/chat/reminders';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
-import { civilDay } from '@/lib/time';
+import { civilDay, zonedParts as readZonedParts, type ZonedParts } from '@/lib/time';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -1228,27 +1228,8 @@ export interface DigestClock {
 }
 
 /** Calendar parts of an instant in a timezone; an unknown zone falls back to the device's. */
-function zonedParts(ms: number, tz: string | null): Record<string, number> {
-  const options: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  };
-  let format: Intl.DateTimeFormat;
-  try {
-    format = new Intl.DateTimeFormat('en-CA', tz !== null ? { ...options, timeZone: tz } : options);
-  } catch {
-    format = new Intl.DateTimeFormat('en-CA', options);
-  }
-  const parts: Record<string, number> = {};
-  for (const part of format.formatToParts(new Date(ms))) {
-    if (part.type !== 'literal') parts[part.type] = Number(part.value);
-  }
-  return parts;
+function zonedParts(ms: number, tz: string | null): ZonedParts {
+  return readZonedParts(new Date(ms), tz);
 }
 
 /** The calendar day of an instant in a timezone, as a sortable "YYYY-MM-DD". Pure. */
@@ -1268,7 +1249,7 @@ function previousDayKey(key: string): string {
 /** Milliseconds from `nowMs` to the next midnight in the timezone (at least one second). Pure. */
 export function msUntilZonedMidnight(nowMs: number, tz: string | null): number {
   const p = zonedParts(nowMs, tz);
-  const elapsed = ((p.hour ?? 0) * 3600 + (p.minute ?? 0) * 60 + (p.second ?? 0)) * 1000;
+  const elapsed = (p.hour * 3600 + p.minute * 60 + p.second) * 1000;
   return Math.max(1000, 86_400_000 - elapsed - (nowMs % 1000));
 }
 
