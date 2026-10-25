@@ -5,7 +5,10 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 
 // Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => false,
+}));
 
 // SSR to static markup (the node test env has no DOM), mirroring AssetCard.test:
 // the grid's select pass-through is asserted through the rendered card

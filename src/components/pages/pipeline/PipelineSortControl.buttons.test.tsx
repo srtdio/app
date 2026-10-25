@@ -95,6 +95,8 @@ describe('Pipeline controls buttons', () => {
     );
     expect(src).not.toMatch(/useMediaQuery|use-media-query|matchMedia/);
     expect(src.match(/useIsLaptop\(\)/g)).toHaveLength(3);
-    expect(src).toContain('useDismissLayer(props.isDesktop && props.open, props.onClose, panelRef);');
+    expect(src).toContain(
+      'useDismissLayer(props.isDesktop && props.open, props.onClose, panelRef);',
+    );
   });
 });

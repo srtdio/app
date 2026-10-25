@@ -14,7 +14,10 @@ vi.mock('agora-chat', () => ({
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 vi.mock('@/components/pages/pcs/ConversationPicker', () => ({ ConversationPicker: () => null }));
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => false,
+}));
 
 import { IconCheck, IconPause, IconX } from '@/components/ui/icons';
 import {

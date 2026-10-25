@@ -108,7 +108,8 @@ describe('detail rules: one count pill', () => {
   // {x > 99 ? ...}, or a variable assigned from countBadgeText/unreadPillText.
   // Filter chip counts are plain text, not rounded-full elements of their own.
   const COUNT_BADGE_FILE = 'ui/CountBadge.tsx'; // the one place the pill is drawn
-  const COUNT_TEXT = /\{\s*(?:countBadgeText\(|[\w.]*(?:unread|count|pending)\w*\s*(?:\}|>\s*99|\?))/i;
+  const COUNT_TEXT =
+    /\{\s*(?:countBadgeText\(|[\w.]*(?:unread|count|pending)\w*\s*(?:\}|>\s*99|\?))/i;
   const ROUNDED = /\brounded-full\b/;
 
   it(`no rounded-full element renders a count outside ${COUNT_BADGE_FILE}`, () => {

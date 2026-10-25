@@ -245,6 +245,8 @@ export function ScheduleMenu(props: {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
       onClose();
+      // Focus goes back to the chevron that opened it.
+      anchorRef?.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
     }
     function onPointer(event: Event): void {
       const target = event.target as Node;

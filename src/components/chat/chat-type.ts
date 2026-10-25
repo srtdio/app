@@ -17,15 +17,6 @@ export interface ChatSize {
   laptop: string;
 }
 
-/** A mouse or trackpad: hover-capable with a fine primary pointer (input, never layout). */
-export const HOVER_POINTER_QUERY = '(hover: hover) and (pointer: fine)';
-
-/**
- * The laptop layout's query: the app's one breakpoint, width only. Kept for
- * callers outside chat that still read it; new code reads useIsLaptop().
- */
-export const LAPTOP_LAYOUT_QUERY = `(min-width: ${LAPTOP_MIN_WIDTH_PX}px)`;
-
 /** The laptop table's minimum width (the app's one breakpoint). */
 export { LAPTOP_MIN_WIDTH_PX };
 
@@ -196,9 +187,6 @@ export const EMOJI_GROUP_TYPE = 'text-sm font-medium';
 
 /** The reason line under a disabled selection Delete: 13/18, 400 on both. */
 export const SELECTION_REASON_TYPE = 'text-[13px] leading-[18px] font-normal';
-
-/** A touch-first primary pointer (input, never layout): long-press owns the menu, contextmenu is suppressed. */
-export const COARSE_POINTER_QUERY = '(pointer: coarse)';
 
 /**
  * Never native text selection or the iOS callout on a long-press: the thread

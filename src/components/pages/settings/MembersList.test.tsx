@@ -4,7 +4,10 @@ import { createRoot } from 'react-dom/client';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 import { renderToStaticMarkup } from 'react-dom/server';
 
 // The list imports the form's role picker; stub the form's in-shell deps.

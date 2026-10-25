@@ -21,10 +21,6 @@ vi.mock('@/lib/trace-context', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   useNewTrace: () => () => 'trace',
 }));
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
-}));
 vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'me' } }, loading: false }),
 }));

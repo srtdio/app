@@ -9,8 +9,7 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
 import * as chatType from '@/components/chat/chat-type';
 import {
   chatLayout,
-  HOVER_POINTER_QUERY,
-  LAPTOP_LAYOUT_QUERY,
+  LAPTOP_MIN_WIDTH_PX,
   readChatLayout,
   type ChatSize,
 } from '@/components/chat/chat-type';
@@ -24,10 +23,8 @@ describe('F12: the size table follows the width (the one breakpoint), never the 
     expect(chatLayout({ widthPx: 767 })).toBe('touch');
   });
 
-  it('the laptop query is width only: 768px, no pointer clause', () => {
-    expect(LAPTOP_LAYOUT_QUERY).toBe('(min-width: 768px)');
-    expect(LAPTOP_LAYOUT_QUERY).not.toContain('pointer');
-    expect(HOVER_POINTER_QUERY).toBe('(hover: hover) and (pointer: fine)');
+  it('the laptop table starts at the one breakpoint, 768px', () => {
+    expect(LAPTOP_MIN_WIDTH_PX).toBe(768);
   });
 
   it('every paired chat size has a touch and a laptop value and no width breakpoint', () => {

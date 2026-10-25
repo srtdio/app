@@ -13,10 +13,6 @@ vi.mock('agora-chat', () => ({
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: 'w1', workspaceKey: 'w1', workspaces: [] }),
 }));
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
-}));
 vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'me' } }, loading: false }),
 }));

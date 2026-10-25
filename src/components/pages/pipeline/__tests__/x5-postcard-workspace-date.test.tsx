@@ -2,7 +2,10 @@
 // day in the WORKSPACE zone, never the browser zone (src/lib/time.ts).
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 import { dueLabel } from '@/components/pages/PostCard';
 
 const NOW = new Date('2026-06-01T00:00:00Z');

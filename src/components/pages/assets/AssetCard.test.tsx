@@ -7,7 +7,10 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 
 // Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => false }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => false,
+}));
 
 // SSR to static markup: useState initializers run (a warm cache.peek hit shows the
 // image) while effects do not. The presign gate is asserted via the cache spies.
