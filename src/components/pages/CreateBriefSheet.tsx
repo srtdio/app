@@ -54,7 +54,10 @@ export function briefFormatOptions(platform: PostPlatform | null): SelectOption[
   return [
     { value: FORMAT_ANY, label: 'Any' },
     ...(platform !== null
-      ? briefFormatsFor(platform).map((value) => ({ value, label: postFormatLabel(value, platform) }))
+      ? briefFormatsFor(platform).map((value) => ({
+          value,
+          label: postFormatLabel(value, platform),
+        }))
       : []),
   ];
 }

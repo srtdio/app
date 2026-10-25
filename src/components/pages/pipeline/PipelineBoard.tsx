@@ -167,11 +167,7 @@ export function PipelineBoard(props: PipelineBoardProps): ReactElement {
           onConfirm={(onBehalfOf) => gate.confirm(onBehalfOf)}
         />
       ) : (
-        <BoardApproveConfirm
-          post={pending ?? shown}
-          gate={gate}
-          gateState={state}
-        />
+        <BoardApproveConfirm post={pending ?? shown} gate={gate} gateState={state} />
       )}
     </>
   );

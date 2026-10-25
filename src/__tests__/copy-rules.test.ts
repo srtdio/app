@@ -26,7 +26,9 @@ const FILES = tsxFiles(ROOT)
 function visibleText(source: string): string[] {
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
   const out: string[] = [];
-  for (const m of code.matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g)) {
+  for (const m of code.matchAll(
+    /'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g,
+  )) {
     out.push(m[1] ?? m[2] ?? m[3] ?? '');
   }
   for (const m of code.matchAll(/>([^<>{}]+)</g)) out.push(m[1] ?? '');
@@ -54,9 +56,9 @@ describe('copy rules', () => {
 
   it('the surface is Activity, never Notifications', () => {
     // Identifiers (NotificationsButton, NotificationsPage) are not visible text.
-    expect(offenders(/\bNotifications\b/, (text) => /^[A-Za-z_$][\w$]*$/.test(text.trim()))).toEqual(
-      [],
-    );
+    expect(
+      offenders(/\bNotifications\b/, (text) => /^[A-Za-z_$][\w$]*$/.test(text.trim())),
+    ).toEqual([]);
   });
 
   it('the date is Due date, never Pipeline date', () => {

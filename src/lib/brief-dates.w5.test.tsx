@@ -49,9 +49,7 @@ describe('brief target dates in America/Los_Angeles', () => {
 
   it('formats "2026-10-08" as 8 Oct, the year only outside now', () => {
     expect(formatDate('2026-10-08', NOW)).toBe('8 Oct');
-    expect(formatDate('2026-10-08', new Date('2027-03-01T12:00:00Z'))).toBe(
-      '8 Oct 2026',
-    );
+    expect(formatDate('2026-10-08', new Date('2027-03-01T12:00:00Z'))).toBe('8 Oct 2026');
   });
 
   it('the card reads "Due 8 Oct"', () => {

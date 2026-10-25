@@ -336,7 +336,10 @@ export function ProfileSettingsPanel(): React.ReactElement {
     return (async () => {
       const endpoint = env.VITE_AVATAR_UPLOAD_URL;
       if (endpoint === undefined) {
-        return { ok: false, error: { code: 'unknown', message: "Couldn't upload the photo. Try again." } };
+        return {
+          ok: false,
+          error: { code: 'unknown', message: "Couldn't upload the photo. Try again." },
+        };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       return uploadAvatarFile(file, {

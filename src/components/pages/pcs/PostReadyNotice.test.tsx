@@ -77,9 +77,7 @@ describe('notify copy and gating', () => {
       "Couldn't notify the approvers. Someone else changed it. Refresh to see the latest.",
     );
     expect(notifyErrorMessage('boom')).toBe("Couldn't notify the approvers. Try again.");
-    expect(notifyErrorMessage('Failed to fetch')).toBe(
-      "Couldn't notify the approvers. Try again.",
-    );
+    expect(notifyErrorMessage('Failed to fetch')).toBe("Couldn't notify the approvers. Try again.");
   });
 
   it('states the open count as the disabled reason, pluralised, and null when clear', () => {

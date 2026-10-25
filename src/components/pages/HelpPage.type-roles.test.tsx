@@ -88,7 +88,10 @@ describe('Help page type roles', () => {
   it('no match reads as an empty state', async () => {
     await mount();
     await typeSearch('zzzz-no-such-article');
-    expectRole(byText('Try another word for "zzzz-no-such-article".'), ['text-lg', 'font-semibold']);
+    expectRole(byText('Try another word for "zzzz-no-such-article".'), [
+      'text-lg',
+      'font-semibold',
+    ]);
     expect(byText('Clear search')).toBeTruthy();
   });
 });

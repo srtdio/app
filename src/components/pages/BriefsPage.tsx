@@ -180,7 +180,8 @@ export function briefsEmptyState(
     return { kind: 'no-results', query };
   }
   if (total === 0) return canCreate ? { kind: 'client-empty' } : { kind: 'agency-empty' };
-  if (filter === BRIEF_STATUS.closed) return { kind: 'filtered', title: 'Closed briefs show up here.' };
+  if (filter === BRIEF_STATUS.closed)
+    return { kind: 'filtered', title: 'Closed briefs show up here.' };
   if (canCreate) return { kind: 'client-empty' };
   return { kind: 'filtered', title: 'Open briefs show up here.' };
 }

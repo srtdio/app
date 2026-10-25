@@ -87,9 +87,7 @@ describe('notes and summary', () => {
     expect(composeSummary([out, concept('k', null)])).toBe('2 items need a day');
     const moved: ComposeItem = { ...out, day: '2026-10-13', chosen: true };
     expect(composeSummary([moved])).toBe('1 due date will move to match');
-    expect(composeSummary([moved, { ...moved, key: 'z' }])).toBe(
-      '2 due dates will move to match',
-    );
+    expect(composeSummary([moved, { ...moved, key: 'z' }])).toBe('2 due dates will move to match');
     expect(composeSummary([concept('k', 'none')])).toBe('Ready');
     expect(composeMoves([{ ...out, day: 'none' }])).toBe(0);
     expect(composePipelineUpdates([{ ...out, day: 'none' }, moved])).toBe(2);

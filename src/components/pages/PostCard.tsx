@@ -160,7 +160,13 @@ function postFallback(post: PipelinePost): ThumbnailFallback {
   const hasCaption = post.caption !== null && post.caption.trim() !== '';
   const body = captionPreview(post) !== null ? null : hasCaption ? post.caption : post.title;
   const layout = token === 'video' || token === 'link' ? 'media' : 'text';
-  return { kind: 'post', glyph: token, label: postFormatLabel(post.format, post.platform), body, layout };
+  return {
+    kind: 'post',
+    glyph: token,
+    label: postFormatLabel(post.format, post.platform),
+    body,
+    layout,
+  };
 }
 
 /** A small "multiple images" badge (stacked squares) shown on carousel posts. */

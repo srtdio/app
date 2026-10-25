@@ -717,8 +717,7 @@ export function PostCardItem(
     approver,
     timeZone,
   );
-  const target =
-    post.target_date !== null ? formatDate(post.target_date, undefined, timeZone) : '';
+  const target = post.target_date !== null ? formatDate(post.target_date, undefined, timeZone) : '';
   const frame = cardFrame(post);
   // The card shows media only when it has a first photo or video AND a frame.
   const media = frame !== null ? post.firstMedia : null;

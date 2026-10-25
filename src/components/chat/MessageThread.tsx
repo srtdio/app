@@ -3952,10 +3952,7 @@ function ThreadBody(
             description={NOTES_EMPTY_LINE}
           />
         ) : (
-          <EmptyState
-            icon={<IconChat size={ICON_SIZE.tray} />}
-            title="Messages show up here."
-          />
+          <EmptyState icon={<IconChat size={ICON_SIZE.tray} />} title="Messages show up here." />
         )}
       </div>
     );
@@ -3977,9 +3974,7 @@ function ThreadBody(
   const viewerMessage =
     viewer !== null ? props.messages.find((m) => m.id === viewer.messageId) : undefined;
   const viewerData =
-    viewerMessage !== undefined
-      ? threadLightbox(viewerMessage, props.profiles)
-      : null;
+    viewerMessage !== undefined ? threadLightbox(viewerMessage, props.profiles) : null;
   // Card threads: decided per row at first paint; the rail, its chips and
   // "N replies" are hidden while selecting (rows then keep today's place).
   const memberOf = props.threads?.memberOf;
@@ -4189,10 +4184,7 @@ function ThreadBody(
                     <RepliesSeparatorRow label={replies} through={plan.continues} />
                   ) : null}
                   {props.reading?.seen?.messageId === row.message.id ? (
-                    <SeenLine
-                      readAt={props.reading.seen.readAt}
-                      rail={plan.continues}
-                    />
+                    <SeenLine readAt={props.reading.seen.readAt} rail={plan.continues} />
                   ) : null}
                   {props.reading?.readBy?.messageId === row.message.id ? (
                     <ReadByLine

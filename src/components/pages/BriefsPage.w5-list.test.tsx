@@ -276,7 +276,11 @@ describe('Briefs zero-result headings', () => {
         data: [brief('b1', { status: 'closed' })],
         heading: 'Open briefs show up here.',
       },
-      { path: '/briefs?status=closed', data: [brief('b1')], heading: 'Closed briefs show up here.' },
+      {
+        path: '/briefs?status=closed',
+        data: [brief('b1')],
+        heading: 'Closed briefs show up here.',
+      },
       {
         path: '/briefs?q=diwali',
         data: [brief('b1')],

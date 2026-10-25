@@ -209,7 +209,9 @@ export function conversationPickerBody(
     return (
       <div className={BODY_BOX}>
         <p className="flex h-full items-center justify-center px-3 text-center text-base text-fg-3">
-          {load.status === 'error' ? errorText('load conversations', null) : 'Conversations show up here.'}
+          {load.status === 'error'
+            ? errorText('load conversations', null)
+            : 'Conversations show up here.'}
         </p>
       </div>
     );

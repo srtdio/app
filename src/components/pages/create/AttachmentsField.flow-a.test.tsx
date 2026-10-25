@@ -184,7 +184,7 @@ describe('AttachmentsField flow A (framed)', () => {
     // The document row still names the file, but the failure is said once (the bar).
     const text = document.body.textContent ?? '';
     expect(text).toContain('brief.pdf');
-    expect(text.split("didn't upload").length - 1).toBe(1);
+    expect(text.split("Couldn't upload").length - 1).toBe(1);
     expect(text).not.toContain("Couldn't upload. Try again.");
     expect(document.querySelector('button[aria-label="Retry brief.pdf"]')).toBeNull();
     expect(document.querySelector('button[aria-label="Dismiss brief.pdf"]')).toBeNull();

@@ -1834,8 +1834,7 @@ export function PostDetailPage({
   const canEditContent = agencySide && !readOnly && !approvedLocked;
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
-  const dueLabel =
-    post.target_date !== null ? formatDue(post.target_date) : null;
+  const dueLabel = post.target_date !== null ? formatDue(post.target_date) : null;
   const detailsEditable = canEditContent;
   const metaDot = (
     <span aria-hidden className="shrink-0 text-fg-3">
@@ -2075,12 +2074,7 @@ export function PostDetailPage({
               className={`h-[7px] w-[7px] shrink-0 rounded-full ${STAGE_DOT[currentStage]}`}
             />
             <span className="truncate text-lg font-semibold">
-              {postStatusLine(
-                currentStage,
-                post.updated_at,
-                post.stage_entered_at,
-                new Date(),
-              )}
+              {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date())}
             </span>
           </div>
           {headerStageAction}
@@ -2605,7 +2599,10 @@ export function PostDetailPage({
           if (workspaceId === null) {
             return Promise.resolve({
               ok: false as const,
-              error: { code: 'unknown' as const, message: "Couldn't create the bucket. Try again." },
+              error: {
+                code: 'unknown' as const,
+                message: "Couldn't create the bucket. Try again.",
+              },
             });
           }
           return createBucket(supabase, workspaceId, name, newTrace()).then((result) => {

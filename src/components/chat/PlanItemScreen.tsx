@@ -999,11 +999,7 @@ export function PlanItemScreen(props: {
                       rowRef={highlightRef}
                     />
                   ) : (
-                    <CommentRow
-                      key={c.id}
-                      comment={c}
-                      workspaceId={workspaceId}
-                    />
+                    <CommentRow key={c.id} comment={c} workspaceId={workspaceId} />
                   ),
                 )
               )}

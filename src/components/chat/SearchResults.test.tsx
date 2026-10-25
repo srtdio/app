@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { boldMatches, highlightName, searchResultsView } from '@/components/chat/SearchResults';
 import type { ChannelSummary } from '@/lib/chat-reads';
-import {
-  IDLE_SEARCH,
-  SEARCH_FAILED_COPY,
-  type SearchState,
-} from '@/lib/chat/search';
+import { IDLE_SEARCH, SEARCH_FAILED_COPY, type SearchState } from '@/lib/chat/search';
 
 function channel(over: Partial<ChannelSummary>): ChannelSummary {
   return {
