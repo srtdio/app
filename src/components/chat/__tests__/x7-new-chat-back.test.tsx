@@ -15,7 +15,8 @@ vi.mock('@/components/chat/chat-actions', () => ({
   createGroupChannel: vi.fn(async () => null),
   startDmChannel: vi.fn(async () => null),
 }));
-vi.mock('@/components/chat/use-workspace-members', () => ({
+vi.mock('@/lib/workspace-members', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspace-members')>()),
   useWorkspaceMembers: () => ({
     options: [
       { userId: 'me', displayName: 'Me', avatarUrl: null },

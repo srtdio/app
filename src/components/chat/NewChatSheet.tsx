@@ -13,7 +13,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { createGroupChannel, startDmChannel } from '@/components/chat/chat-actions';
 import { MemberPicker } from '@/components/chat/MemberPicker';
 import { excludeMembers } from '@/components/chat/member-picker';
-import { useWorkspaceMembers } from '@/components/chat/use-workspace-members';
+import { useWorkspaceMembers, withMembersLoadCopy } from '@/lib/workspace-members';
 
 interface NewChatSheetProps {
   open: boolean;
@@ -82,7 +82,7 @@ export function newChatFailureCopy(kind: 'dm' | 'group', failure: DomainError): 
  */
 export function NewChatSheet(props: NewChatSheetProps): ReactElement {
   const newTrace = useNewTrace();
-  const members = useWorkspaceMembers(props.workspaceId);
+  const members = withMembersLoadCopy(useWorkspaceMembers(props.workspaceId));
 
   const [mode, setMode] = useState<Mode>('choose');
   const [peerId, setPeerId] = useState<string | null>(null);

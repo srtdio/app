@@ -62,7 +62,7 @@ import {
   parseSnapshot,
   toVersionViews,
 } from '@/lib/post-versions';
-import { usePostMembers } from '@/components/pages/pcs/use-post-members';
+import { useWorkspaceMembers } from '@/lib/workspace-members';
 import { canDeletePost, isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import { PostActionSheet } from '@/components/pages/pcs/PostActionSheet';
 import { postActionErrorCopy, usePostDecisions } from '@/components/pages/pcs/use-post-decisions';
@@ -91,11 +91,11 @@ import {
 import { hasInAppHistory } from '@/components/pages/pcs/post-nav';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
-import { createBucket, listBuckets, type BucketOption } from '@/lib/buckets';
+import { createBucket } from '@/lib/buckets';
 import { fetchWithTrace } from '@/lib/fetch';
 import { env } from '@/lib/env';
 import type { PresignDeps } from '@/lib/asset-presign';
-import { displayLabel, fetchMemberRole, listAssets } from '@/lib/assets';
+import { fetchMemberRole, listRootAssetLabels } from '@/lib/assets';
 import { uploadAssetFile, type UploadOutcome } from '@/lib/asset-upload';
 import { useNewTrace } from '@/lib/trace-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
@@ -417,11 +417,13 @@ export function PostDetailPage({
   const [role, setRole] = useState<string | null>(null);
   // Flow B 25: the role gates which buttons show, so it is part of the first paint.
   const [roleLoaded, setRoleLoaded] = useState(false);
+  // The members read (owner name, version authors, the owner picker) starts on
+  // this same first render, alongside the post, gallery and role reads.
   const {
     options: memberOptions,
     loading: membersLoading,
     error: membersError,
-  } = usePostMembers(workspaceId);
+  } = useWorkspaceMembers(workspaceId);
   // Only a list that loaded proves someone is not a current member: until then a
   // person not in it renders nothing extra, never "Former member".
   const membersLoaded = !membersLoading && membersError === null;
@@ -430,11 +432,9 @@ export function PostDetailPage({
   // Spec A4: the slide on show, so the header ⋮ can remove it (the ⋮ circle
   // on the picture is gone).
   const [galleryIndex, setGalleryIndex] = useState(0);
-  // Workspace buckets, fetched once per workspace (mirrors PostDetailsSheet);
-  // the bucket shows in the details sheet, not on the meta line. A failure
-  // leaves the list empty, no spinner, no flash.
-  const [, setBuckets] = useState<BucketOption[]>([]);
-  const [bucketsLoaded, setBucketsLoaded] = useState(false);
+  // No bucket read here: the bucket shows only in the details sheet, which
+  // reads the buckets itself each time it opens. (The page used to read them
+  // too, never used the list, and held the first paint for it.)
   // The post's brief name for the details row; briefLoaded settles once the
   // read for the current brief_id lands (or there is no brief). A failure
   // simply omits the brief from the row.
@@ -483,14 +483,12 @@ export function PostDetailPage({
       return;
     }
     let active = true;
-    void listAssets(supabase, workspaceId).then((result) => {
+    void listRootAssetLabels(supabase, workspaceId).then((result) => {
       if (!active) return;
       if (!result.ok) {
         logger.warn('post page: root asset labels read failed', { error: result.error.message });
       }
-      setRootLabels(
-        result.ok ? result.data.filter((item) => item.folderId === null).map(displayLabel) : [],
-      );
+      setRootLabels(result.ok ? result.data : []);
     });
     return () => {
       active = false;
@@ -506,8 +504,13 @@ export function PostDetailPage({
   const [compareIds, setCompareIds] = useState<{ fromId: string; toId: string } | null>(null);
 
   // Switching posts leaves read-only / compare mode and closes the sheet so a
-  // stale version never bleeds across navigations.
+  // stale version never bleeds across navigations. Only an actual switch: on
+  // mount everything already starts clean, and the comments section (mounted
+  // on the first render) may lift its counts before this parent effect runs.
+  const resetForPost = useRef(postId);
   useEffect(() => {
+    if (resetForPost.current === postId) return;
+    resetForPost.current = postId;
     setHistoryOpen(false);
     setViewingVersionId(null);
     setCompareIds(null);
@@ -544,26 +547,6 @@ export function PostDetailPage({
       cancelled = true;
     };
   }, [workspaceId, userId]);
-
-  useEffect(() => {
-    if (workspaceId === null) {
-      setBuckets([]);
-      setBucketsLoaded(true);
-      return;
-    }
-    let cancelled = false;
-    setBucketsLoaded(false);
-    void listBuckets(supabase, workspaceId)
-      .catch(() => ({ ok: false as const }))
-      .then((result) => {
-        if (cancelled) return;
-        if (result.ok) setBuckets(result.data);
-        setBucketsLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId]);
 
   const agencySide = isAgencySide(role);
   const clientRole = isClient(role);
@@ -700,7 +683,9 @@ export function PostDetailPage({
   }, [postId]);
 
   // The brief name for the details row, read once per brief_id. No brief (or
-  // no post yet) settles at once; a failed read just omits the brief.
+  // no post yet) settles at once; a failed read just omits the brief. This is
+  // the page's one serial read, on purpose: the brief id is only known once
+  // getPost lands (posts.brief_id), so it cannot start any earlier.
   const briefId = detail?.post.brief_id ?? null;
   useEffect(() => {
     if (briefId === null) {
@@ -772,15 +757,19 @@ export function PostDetailPage({
   // mount (loading, not found, an old version) closes again at once, so the
   // sheet never pops open later on its own.
   // Flow B 25: one correct first paint. The skeleton stays until the post, the
-  // gallery, the viewer's role, the members (owner name) and the buckets (and
-  // the brief name, when the post has one) have all settled; then the page
-  // paints once. Silent refreshes after that never flip back to the skeleton.
+  // gallery, the viewer's role and the members (owner name) (and the brief
+  // name, when the post has one) have all settled; then the page paints once.
+  // Silent refreshes after that never flip back to the skeleton. Every one of
+  // those reads starts on the first render (independent effects), except the
+  // brief, which needs the post's brief_id. The comments and checkpoint reads
+  // are not part of this gate: their section mounts (hidden) on the first
+  // render too, so they run alongside, and fill in under their own skeleton.
   const firstPaintPending =
     loading ||
     (!loadError &&
       !notFound &&
       detail !== null &&
-      !(galleryLoaded && roleLoaded && !membersLoading && bucketsLoaded && briefLoaded));
+      !(galleryLoaded && roleLoaded && !membersLoading && briefLoaded));
   const sheetMountable =
     !firstPaintPending && !notFound && !loadError && detail !== null && !readOnly;
   useEffect(() => {
@@ -1352,9 +1341,76 @@ export function PostDetailPage({
   // when the content paints.
   const grid = postPageGrid(embedded);
 
-  if (firstPaintPending) {
+  // The checkpoints column (spec D1: its own column at lg, sticky and scrolling
+  // within the viewport; below lg it follows the caption). Comments own their
+  // header row ("Checkpoints", Open / All); the checkpoint strip sits under it,
+  // only when there are checkpoints (it renders nothing otherwise).
+  //
+  // It is the SAME element in the skeleton and the loaded page (same place in
+  // the tree), so Comments and the strip mount on the first render and their
+  // reads run alongside the post, gallery, role and members reads instead of
+  // after the first paint. While the skeleton shows, the section is `hidden`
+  // (display none: nothing seen, nothing focusable, no tour anchor, no
+  // deep-link flash) behind the skeleton's own placeholder; at the first paint
+  // it is revealed, already loaded or under Comments' own loading skeleton.
+  function sidePanel(pending: boolean): React.ReactElement {
     return (
-      <>
+      <div
+        {...(pending ? { 'aria-hidden': true } : { 'data-post-side': '' })}
+        className={grid.side}
+      >
+        {pending ? <div className="h-24 animate-pulse rounded-xl bg-panel-2" /> : null}
+        <section
+          id={COMMENTS_SECTION_ID}
+          hidden={pending}
+          className="scroll-mt-16 rounded-xl border border-border bg-panel-2 p-4"
+        >
+          {workspaceId !== null && postId !== undefined ? (
+            <div data-induction={INDUCTION_KEYS.postCommentComposer}>
+              <Comments
+                workspaceId={workspaceId}
+                entityType="post"
+                entityId={postId}
+                annotationsByCommentId={annotationsByCommentId}
+                onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
+                refreshSignal={commentsRefresh}
+                // A deep-linked comment flashes only once it can be seen.
+                focusCommentId={
+                  pending ? null : embedded ? (focusCommentIdProp ?? null) : focusCommentId
+                }
+                viewerIsClient={clientRole}
+                guideReplyCommentId={firstHighlightCommentId(
+                  detail?.post.caption ?? '',
+                  highlights,
+                )}
+                showHeader
+                onCountsChange={handleCommentCounts}
+                belowHeader={
+                  <CheckpointStrip
+                    workspaceId={workspaceId}
+                    postId={postId}
+                    viewerIsClient={clientRole}
+                    refreshSignal={commentsRefresh}
+                  />
+                }
+              />
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center text-base text-fg-2">
+              Select a workspace to view comments.
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
+
+  if (firstPaintPending) {
+    // The same root, header slot and grid element as the loaded page below
+    // (Provider > header, read-only title slot, grid > head, media, body,
+    // side), so the side panel keeps its mounted Comments across the paint.
+    return (
+      <SearchWordsContext.Provider value={searchJump.words}>
         {embedded ? null : (
           <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
             {backButton}
@@ -1364,11 +1420,12 @@ export function PostDetailPage({
             <div aria-hidden className="h-11 w-11 shrink-0" />
           </div>
         )}
+        {/* The loaded page's read-only title slot: always empty here. */}
+        {null}
         {/* N12: a skeleton of the page's own shapes (title, details row, media,
             caption, comments) from the existing tokens, with a screen-reader
             label. Flow B 25: it stays until every first-paint read settles. */}
         <div aria-busy="true" data-post-skeleton="" className={grid.page}>
-          <span className="sr-only">Loading post</span>
           <div aria-hidden className={cn(grid.head, 'flex flex-col gap-3')}>
             <div className="h-8 w-3/4 animate-pulse rounded bg-panel-3" />
             <div className="flex min-h-[44px] items-center gap-2">
@@ -1388,11 +1445,11 @@ export function PostDetailPage({
               <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
             </div>
           </div>
-          <div aria-hidden className={grid.side}>
-            <div className="h-24 animate-pulse rounded-xl bg-panel-2" />
-          </div>
+          {sidePanel(true)}
+          {/* Last, so the four slots above line up with the loaded grid's. */}
+          <span className="sr-only">Loading post</span>
         </div>
-      </>
+      </SearchWordsContext.Provider>
     );
   }
 
@@ -2022,47 +2079,9 @@ export function PostDetailPage({
             {phoneLayout ? phoneStageNotes : null}
           </div>
 
-          {/* Spec D1: the checkpoints are their own column at lg (sticky,
-            scrolling within the viewport); below lg they follow the caption.
-            Comments own their header row ("Checkpoints", Open / All); the
-            checkpoint strip sits under it, only when there are checkpoints
-            (it renders nothing otherwise). */}
-          <div data-post-side="" className={grid.side}>
-            <section
-              id={COMMENTS_SECTION_ID}
-              className="scroll-mt-16 rounded-xl border border-border bg-panel-2 p-4"
-            >
-              {workspaceId !== null && postId !== undefined ? (
-                <div data-induction={INDUCTION_KEYS.postCommentComposer}>
-                  <Comments
-                    workspaceId={workspaceId}
-                    entityType="post"
-                    entityId={postId}
-                    annotationsByCommentId={annotationsByCommentId}
-                    onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
-                    refreshSignal={commentsRefresh}
-                    focusCommentId={embedded ? (focusCommentIdProp ?? null) : focusCommentId}
-                    viewerIsClient={clientRole}
-                    guideReplyCommentId={firstHighlightCommentId(post.caption ?? '', highlights)}
-                    showHeader
-                    onCountsChange={handleCommentCounts}
-                    belowHeader={
-                      <CheckpointStrip
-                        workspaceId={workspaceId}
-                        postId={postId}
-                        viewerIsClient={clientRole}
-                        refreshSignal={commentsRefresh}
-                      />
-                    }
-                  />
-                </div>
-              ) : (
-                <div className="px-4 py-8 text-center text-base text-fg-2">
-                  Select a workspace to view comments.
-                </div>
-              )}
-            </section>
-          </div>
+          {/* Spec D1: the checkpoints column, the same element the skeleton
+            mounted (see sidePanel). */}
+          {sidePanel(false)}
         </div>
       )}
 
@@ -2167,15 +2186,7 @@ export function PostDetailPage({
               },
             });
           }
-          return createBucket(supabase, workspaceId, name, newTrace()).then((result) => {
-            if (result.ok) {
-              const created = result.data;
-              setBuckets((prev) =>
-                prev.some((b) => b.id === created.id) ? prev : [...prev, created],
-              );
-            }
-            return result;
-          });
+          return createBucket(supabase, workspaceId, name, newTrace());
         }}
         lockedFields={approvedLocked}
         platformFormat={`${platformLabel(post.platform)} · ${postFormatLabel(post.format, post.platform)}`}

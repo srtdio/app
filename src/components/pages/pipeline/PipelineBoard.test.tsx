@@ -499,7 +499,11 @@ describe('PipelineBoard approve confirm (drop)', () => {
       'utf8',
     );
     expect(src).toMatch(/<OnBehalfApproveSheet/);
-    expect(src).toMatch(/useWorkspaceApprovers\(workspaceId\)/);
+    // The page hands its shared approvers down; the board only reads its own
+    // when none were passed.
+    expect(src).toMatch(
+      /useWorkspaceApprovers\(props\.approvers === undefined \? workspaceId : null\)/,
+    );
     expect(src).not.toMatch(/onBehalfConfirmLine/);
   });
 });

@@ -34,6 +34,15 @@ vi.mock('@/lib/assets', async (importOriginal) => {
   return {
     ...actual,
     listAssets: (...args: unknown[]) => listAssets(...args),
+    // The page reads keyset pages; a mocked plain list is one (last) page, and a
+    // mocked { items, next } page passes through as is.
+    listAssetsPage: async (...args: unknown[]) => {
+      const result = (await listAssets(...args)) as
+        | { ok: true; data: unknown }
+        | { ok: false; error: unknown };
+      if (!result.ok || !Array.isArray(result.data)) return result;
+      return { ok: true, data: { items: result.data, next: { done: true } } };
+    },
     fetchMemberRole: async () => 'owner',
     findAssetsInUse: vi.fn(),
   };

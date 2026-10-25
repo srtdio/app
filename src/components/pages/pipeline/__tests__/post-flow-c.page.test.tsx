@@ -44,7 +44,7 @@ vi.mock('@/lib/chat/post-covers', () => ({
   requestPostCovers: async () => {},
 }));
 vi.mock('@/components/pages/pipeline/use-workspace-people', () => ({
-  useWorkspacePeople: () => ({ approverFirstNames: [], names: new Map() }),
+  useWorkspacePeople: () => ({ approverFirstNames: [], names: new Map(), approvers: [] }),
 }));
 vi.mock('@/components/induction/InductionProvider', () => ({
   useInductionPostPreset: () => undefined,

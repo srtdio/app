@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
+import type { MentionCandidate } from '@/lib/workspace-members';
 import {
   activeMentionQuery,
   buildInitialContent,

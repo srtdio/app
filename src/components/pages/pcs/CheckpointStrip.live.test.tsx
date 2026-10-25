@@ -79,7 +79,8 @@ vi.mock('@/lib/chat/use-chat-attachments', () => ({
     uploadFile: async () => ({ ok: false, message: 'off' }),
   }),
 }));
-vi.mock('@/components/comments/useMentionCandidates', () => ({
+vi.mock('@/lib/workspace-members', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspace-members')>()),
   useMentionCandidates: () => ({ candidates: [] }),
 }));
 

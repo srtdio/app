@@ -62,8 +62,8 @@ import { CommentComposer } from '@/components/comments/CommentComposer';
 import { SlotComposer } from '@/components/comments/SlotComposer';
 import type { CheckpointPoint } from '@/components/comments/SlotComposer';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
-import { useMentionCandidates } from '@/components/comments/useMentionCandidates';
-import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
+import { useMentionCandidates } from '@/lib/workspace-members';
+import type { MentionCandidate } from '@/lib/workspace-members';
 import {
   resolveMentionHandle,
   resolveName,

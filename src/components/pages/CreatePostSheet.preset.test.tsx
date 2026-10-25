@@ -33,8 +33,9 @@ vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 vi.mock('@/lib/buckets', () => ({ listBuckets: async () => ({ ok: true, data: [] }) }));
 vi.mock('@srtdio/briefs', () => ({ listBriefs: async () => ({ ok: true, data: [] }) }));
-vi.mock('@/components/pages/pcs/use-post-members', () => ({
-  usePostMembers: () => ({ options: [] }),
+vi.mock('@/lib/workspace-members', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspace-members')>()),
+  useWorkspaceMembers: () => ({ options: [] }),
 }));
 vi.mock('@/components/pages/create/AttachmentsField', () => ({
   AttachmentsField: (props: { frame: { platform: string; format: string } | null }) => (

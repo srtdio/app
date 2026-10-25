@@ -1,6 +1,9 @@
-// induction_state for the shell: read on mount, on every route change, on the
-// 'sorted:induction-refresh' event (the success sites dispatch it) and on a 4 s
-// poll only while a gated step is active. Writes are optimistic: Next moves the
+// induction_state for the shell: read on mount (and per workspace), on the
+// 'sorted:induction-refresh' event (the success sites dispatch it), on a 4 s
+// poll only while a gated step is active, and on a route change only while the
+// guide is live (the tour is running, or the last read failed and needs to
+// heal). A person who finished the tour reads it once per shell mount, never
+// per navigation. Writes are optimistic: Next moves the
 // card at once and the stored step follows. Restart tour runs the guide again
 // after it was done: induction_done_at stays stamped (first finish wins), so a
 // tab-scoped replay mark reads the state as not done until the next finish.
@@ -9,10 +12,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   FAIL_OPEN_STATE,
+  approverStageOf,
   INDUCTION_POLL_MS,
   INDUCTION_REFRESH_EVENT,
   type InductionState,
 } from '@/lib/induction';
+import { routeFor } from '@/lib/induction-routes';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { logger } from '@/lib/logger';
@@ -30,6 +35,25 @@ export interface InductionData {
   restart: (introId: string) => void;
   /** Poll every 4 s while true (a gated step is up). */
   setPolling: (on: boolean) => void;
+}
+
+/**
+ * Whether a route change should read induction_state again: only while the
+ * guide (or the onboarding it gates) can still move. Not read yet: the mount
+ * read is out, a second would only race it. The fail-open state (a failed or
+ * malformed read, by identity): a route change heals it, as before. Done (and
+ * not replaying), or a role with no route: the guide never shows, so the route
+ * change reads nothing.
+ */
+export function readsOnRouteChange(
+  state: InductionState | null,
+  hasWorkspace: boolean,
+): boolean {
+  if (state === null) return false;
+  if (state === FAIL_OPEN_STATE) return true;
+  if (state.done) return false;
+  if (approverStageOf(state) !== 'none') return true;
+  return routeFor({ role: state.role, hasWorkspace }) !== 'none';
 }
 
 const REPLAY_KEY = 'srtdio.induction.replay';
@@ -78,10 +102,20 @@ export function useInductionData(workspaceId: string | null): InductionData {
     });
   }, [workspaceId, newTrace]);
 
-  // Route changes (and the workspace itself) refetch.
+  // Mount and the workspace itself read.
   useEffect(() => {
     refresh();
-  }, [refresh, location.pathname, location.search]);
+  }, [refresh]);
+
+  // A route change reads again only while the guide is live (see readsOnRouteChange).
+  const routeKey = `${location.pathname}${location.search}`;
+  const lastRoute = useRef(routeKey);
+  const liveRef = useRef(false);
+  useEffect(() => {
+    if (lastRoute.current === routeKey) return;
+    lastRoute.current = routeKey;
+    if (liveRef.current) refresh();
+  }, [routeKey, refresh]);
 
   useEffect(() => {
     window.addEventListener(INDUCTION_REFRESH_EVENT, refresh);
@@ -155,6 +189,11 @@ export function useInductionData(workspaceId: string | null): InductionData {
 
   const current = read !== null && read.workspaceId === workspaceId ? read.state : null;
   const state = current !== null && replay ? { ...current, done: false } : current;
+  // The fail-open check reads the stored read itself (a replay copies it).
+  liveRef.current = readsOnRouteChange(
+    current === FAIL_OPEN_STATE ? current : state,
+    workspaceId !== null,
+  );
   return {
     status: state === null ? 'loading' : 'ready',
     state: state ?? FAIL_OPEN_STATE,

@@ -8,6 +8,7 @@ import { dispatchSorted } from '@/lib/events';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
+import { navPrefetchProps } from '@/lib/route-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 interface SidebarProps {
@@ -50,6 +51,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
           <NavLink
             key={item.to}
             to={item.to}
+            {...navPrefetchProps(item.to)}
             {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
             className={({ isActive }) =>
               cn(

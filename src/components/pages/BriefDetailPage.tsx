@@ -22,7 +22,7 @@ import {
   IconPlus,
 } from '@/components/ui/icons';
 import { PostGallery } from '@/components/pages/pcs/PostGallery';
-import { usePostMembers } from '@/components/pages/pcs/use-post-members';
+import { useWorkspaceMembers } from '@/lib/workspace-members';
 import { BRIEF_STATUS, isBriefClosed } from '@/components/pages/BriefCard';
 import { BriefLink } from '@/components/pages/BriefLink';
 import { BRIEF_NOTE_PARAM } from '@/lib/brief-list';
@@ -376,13 +376,13 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
 
   // Resolve created_by to a current member's display name, never a raw uuid.
-  // Reuses the post detail page's member hook unchanged; the map is the resolver
-  // behind briefAuthorLabel below.
+  // Reuses the shared workspace members read; the map is the resolver behind
+  // briefAuthorLabel below.
   const {
     options: memberOptions,
     loading: membersLoading,
     error: membersError,
-  } = usePostMembers(workspaceId);
+  } = useWorkspaceMembers(workspaceId);
   // Only a list that loaded proves someone is not a current member.
   const membersLoaded = !membersLoading && membersError === null;
   const memberById = useMemo(

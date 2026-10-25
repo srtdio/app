@@ -3,10 +3,11 @@
 // Reads are plain RLS-scoped SELECTs through the supabase client (policies
 // assets_select_member / asset_versions_select_member / asset_attachments_select_member),
 // mirroring @srtdio/briefs: no proc, no service role, tenant isolation is
-// Postgres' job. listAssets does two round-trips (assets + their current version
-// embedded, then a single attachments read for the per-asset live count) so
-// there is no N+1. All shaping below is pure and unit-tested; kinds, labels and
-// counts are derived from the fetched rows, never hardcoded.
+// Postgres' job. listAssetsPage reads one keyset page in two round-trips (assets
+// + their current version embedded, then one IN read of attachments over that
+// page's ids for the live count) so there is no N+1. All shaping below is pure
+// and unit-tested; kinds, labels and counts are derived from the fetched rows,
+// never hardcoded.
 
 import { assetRestore, type Client, type Result } from '@srtdio/rpc';
 import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-purge-contracts';
@@ -190,39 +191,190 @@ export function countAttachments(rows: { asset_id: string }[]): Map<string, numb
   return counts;
 }
 
+/** Rows per library page. */
+export const ASSETS_PAGE_SIZE = 100;
+
 /**
- * List the active assets of one workspace, newest first, each flattened with its
- * current version and live attachment count. A transport/PostgREST failure
- * surfaces as { ok: false } rather than a throw, matching the @srtdio wrappers.
+ * Where the next library page starts: the last loaded row's (uploaded_at, id).
+ * The library is ordered uploaded_at desc, id desc (assets has no created_at;
+ * uploaded_at is the column the (workspace_id, uploaded_at desc) index covers).
+ */
+export interface AssetCursor {
+  uploadedAt: string;
+  id: string;
+}
+
+/** Whether another page follows, and where it starts. Never null. */
+export type AssetPageNext = { done: true } | { done: false; cursor: AssetCursor };
+
+/** One page of the library, newest first. */
+export interface AssetPage {
+  items: AssetListItem[];
+  next: AssetPageNext;
+}
+
+/**
+ * The PostgREST `or` filter for "strictly after the cursor" in
+ * (uploaded_at desc, id desc) order: an older upload, or the same instant with
+ * a smaller id. Values are double-quoted so the timestamp's punctuation is
+ * never read as filter syntax. Pure.
+ */
+export function assetKeysetFilter(cursor: AssetCursor): string {
+  const at = `"${cursor.uploadedAt}"`;
+  const id = `"${cursor.id}"`;
+  return `uploaded_at.lt.${at},and(uploaded_at.eq.${at},id.lt.${id})`;
+}
+
+/**
+ * Append `incoming` to `existing`, skipping any id already present (a row
+ * uploaded between two page reads, or one opened by deep link, can arrive
+ * twice). Keeps the existing order; pure and non-mutating.
+ */
+export function mergeAssetPages(
+  existing: readonly AssetListItem[],
+  incoming: readonly AssetListItem[],
+): AssetListItem[] {
+  const seen = new Set(existing.map((item) => item.id));
+  const out = [...existing];
+  for (const item of incoming) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+
+/**
+ * Live attachment counts for exactly these assets: ONE IN read per page (never
+ * one per asset), workspace-scoped as before. No ids, no round trip.
+ */
+async function attachmentCountsFor(
+  client: Client,
+  workspaceId: string,
+  assetIds: string[],
+): Promise<Result<Map<string, number>>> {
+  if (assetIds.length === 0) return { ok: true, data: new Map() };
+  const result = await client
+    .from('asset_attachments')
+    .select('asset_id')
+    .eq('workspace_id', workspaceId)
+    .in('asset_id', assetIds)
+    .is('deleted_at', null);
+  if (result.error) {
+    return { ok: false, error: { code: 'unknown', message: result.error.message } };
+  }
+  return { ok: true, data: countAttachments((result.data ?? []) as { asset_id: string }[]) };
+}
+
+/**
+ * One page of a workspace's active assets, newest first (uploaded_at desc, id
+ * desc), each flattened with its current version (embedded, so no extra read)
+ * and live attachment count (one IN read over the page's ids). Keyset paged:
+ * pass the previous page's `next.cursor` for the following page. Reads one row
+ * past the page size to learn whether another page exists without an extra
+ * request. Two requests per page, never N+1. A transport/PostgREST failure
+ * surfaces as { ok: false } rather than a throw.
+ */
+export async function listAssetsPage(
+  client: Client,
+  workspaceId: string,
+  cursor?: AssetCursor,
+): Promise<Result<AssetPage>> {
+  let query = client
+    .from('assets')
+    .select(ASSET_SELECT)
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null);
+  if (cursor !== undefined) query = query.or(assetKeysetFilter(cursor));
+  const assetsResult = await query
+    .order('uploaded_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(ASSETS_PAGE_SIZE + 1);
+  if (assetsResult.error) {
+    return { ok: false, error: { code: 'unknown', message: assetsResult.error.message } };
+  }
+
+  const fetched = (assetsResult.data ?? []) as unknown as RawAssetRow[];
+  const rows = fetched.slice(0, ASSETS_PAGE_SIZE);
+  const counts = await attachmentCountsFor(client, workspaceId, rows.map((row) => row.id));
+  if (!counts.ok) return counts;
+
+  const last = rows[rows.length - 1];
+  const next: AssetPageNext =
+    fetched.length > ASSETS_PAGE_SIZE && last !== undefined
+      ? { done: false, cursor: { uploadedAt: last.uploaded_at, id: last.id } }
+      : { done: true };
+  return { ok: true, data: { items: shapeAssets(rows, counts.data), next } };
+}
+
+/**
+ * The first library page (the newest ASSETS_PAGE_SIZE assets). Kept for callers
+ * that need only a list (PostDetailPage's upload naming); the Assets page pages
+ * with {@link listAssetsPage}.
  */
 export async function listAssets(
   client: Client,
   workspaceId: string,
 ): Promise<Result<AssetListItem[]>> {
-  // The two reads are independent: run them together (one round trip of wait).
-  const [assetsResult, attachmentsResult] = await Promise.all([
-    client
-      .from('assets')
-      .select(ASSET_SELECT)
-      .eq('workspace_id', workspaceId)
-      .is('deleted_at', null)
-      .order('uploaded_at', { ascending: false }),
-    client
-      .from('asset_attachments')
-      .select('asset_id')
-      .eq('workspace_id', workspaceId)
-      .is('deleted_at', null),
-  ]);
-  if (assetsResult.error) {
-    return { ok: false, error: { code: 'unknown', message: assetsResult.error.message } };
-  }
-  if (attachmentsResult.error) {
-    return { ok: false, error: { code: 'unknown', message: attachmentsResult.error.message } };
-  }
+  const page = await listAssetsPage(client, workspaceId);
+  if (!page.ok) return page;
+  return { ok: true, data: page.data.items };
+}
 
-  const rows = (assetsResult.data ?? []) as unknown as RawAssetRow[];
-  const counts = countAttachments((attachmentsResult.data ?? []) as { asset_id: string }[]);
-  return { ok: true, data: shapeAssets(rows, counts) };
+/**
+ * Every active root-folder file's label (display name, else filename), for the
+ * post page's upload naming: it must see the whole library, not one page, or an
+ * auto-name could repeat. One request, two columns, same table, filters and RLS
+ * as {@link listAssetsPage}; no version or attachment reads.
+ */
+export async function listRootAssetLabels(
+  client: Client,
+  workspaceId: string,
+): Promise<Result<string[]>> {
+  const result = await client
+    .from('assets')
+    .select('filename, display_name')
+    .eq('workspace_id', workspaceId)
+    .is('deleted_at', null)
+    .is('folder_id', null);
+  if (result.error) {
+    return { ok: false, error: { code: 'unknown', message: result.error.message } };
+  }
+  const rows = (result.data ?? []) as unknown as Array<{
+    filename: string;
+    display_name: string | null;
+  }>;
+  return {
+    ok: true,
+    data: rows.map((row) => displayLabel({ displayName: row.display_name, filename: row.filename })),
+  };
+}
+
+/**
+ * One active asset of the workspace by id, shaped like a list row: the same
+ * select, filters and RLS as {@link listAssetsPage}, narrowed to one id. For a
+ * ?asset= deep link to a file beyond the loaded pages. Returns [] when it is not
+ * there (deleted, other workspace, hidden by RLS), never null.
+ */
+export async function getAssetItem(
+  client: Client,
+  workspaceId: string,
+  assetId: string,
+): Promise<Result<AssetListItem[]>> {
+  const result = await client
+    .from('assets')
+    .select(ASSET_SELECT)
+    .eq('workspace_id', workspaceId)
+    .eq('id', assetId)
+    .is('deleted_at', null)
+    .limit(1);
+  if (result.error) {
+    return { ok: false, error: { code: 'unknown', message: result.error.message } };
+  }
+  const rows = (result.data ?? []) as unknown as RawAssetRow[];
+  const counts = await attachmentCountsFor(client, workspaceId, rows.map((row) => row.id));
+  if (!counts.ok) return counts;
+  return { ok: true, data: shapeAssets(rows, counts.data) };
 }
 
 /**
@@ -385,8 +537,9 @@ function compareName(a: AssetListItem, b: AssetListItem): number {
 /**
  * Order the list by the chosen sort. Recent = uploaded_at desc; Name = label
  * caseless; Size = size_bytes desc; Type = tab order then name. Pure and
- * non-mutating; the whole library is in memory (listAssets is unpaginated), so a
- * client sort is correct here.
+ * non-mutating. It orders the pages loaded so far (listAssetsPage is keyset
+ * paged); Recent matches the server order, and the stable sort keeps the
+ * server's id desc tie-break for equal upload times.
  */
 export function sortAssets(items: AssetListItem[], sort: AssetSort): AssetListItem[] {
   const copy = [...items];

@@ -71,18 +71,24 @@ import {
   inUseTitle,
   isAssetInUseError,
   splitFreeAssets,
-  listAssets,
+  getAssetItem,
+  listAssetsPage,
+  mergeAssetPages,
   parseAssetTab,
   removeAssetsById,
   renameAssetInList,
   sortAssets,
   TAB_EMPTY,
   type AssetListItem,
+  type AssetPageNext,
   type AssetSort,
   type AssetTab,
 } from '@/lib/assets';
 
 const SKELETON_COUNT = 12;
+
+/** The Load more failure toast: "Couldn't {action}. {reason}". */
+export const LOAD_MORE_FAILED = "Couldn't load more files. Try again.";
 
 /** A viewer target: the index into the navigable list, plus whether Info opens. */
 interface ViewerState {
@@ -103,6 +109,12 @@ export function AssetsPage() {
   const [assetsFailed, setAssetsFailed] = useState(false);
   const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // Keyset paging: where the next page starts, or done. Load more appends it.
+  const [next, setNext] = useState<AssetPageNext>({ done: true });
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Bumped by every first-page load, so a Load more that resolves after a
+  // reload (or a workspace switch) never appends onto the fresh list.
+  const loadGeneration = useRef(0);
 
   const [search, setSearch] = useState('');
   const [viewer, setViewer] = useState<ViewerState | null>(null);
@@ -137,6 +149,11 @@ export function AssetsPage() {
   const { run: runUndoable } = useUndoableAction();
   const [searchParams, setSearchParams] = useSearchParams();
   const openedAssetParam = useRef<string | null>(null);
+  // A ?asset= id beyond the loaded pages is looked up once on its own (one
+  // row, same read and RLS as the list); the tick re-runs the deep-link effect.
+  const lookedUpAssetParam = useRef<string | null>(null);
+  const pendingAssetLookup = useRef<string | null>(null);
+  const [assetLookupTick, setAssetLookupTick] = useState(0);
 
   // The tab lives in ?type= (default All, unknown is All), so it survives Back
   // and refresh. Switching only filters the loaded list: no read, instant.
@@ -162,20 +179,45 @@ export function AssetsPage() {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
 
+  // The first page. Every reload (upload, link, data change, Retry) starts over
+  // from the newest page, so the list never mixes a stale tail with fresh rows.
   const loadAssets = useCallback(async () => {
     if (workspaceId === null) return;
+    loadGeneration.current += 1;
+    const generation = loadGeneration.current;
     setLoading(true);
-    const result = await listAssets(supabase, workspaceId);
+    const result = await listAssetsPage(supabase, workspaceId);
+    if (generation !== loadGeneration.current) return;
     setLoading(false);
+    setLoadingMore(false);
     if (!result.ok) {
       logger.warn('assets: list read failed', { error: result.error.message });
       setAssetsFailed(true);
       return;
     }
     setAssetsFailed(false);
-    setItems(result.data);
+    setItems(result.data.items);
+    setNext(result.data.next);
     setAssetsLoaded(true);
   }, [workspaceId]);
+
+  // The next page, appended with duplicates (by id) dropped. A failure keeps
+  // what is loaded and says so in a toast; the button stays for another try.
+  const loadMore = useCallback(async () => {
+    if (workspaceId === null || next.done || loadingMore) return;
+    const generation = loadGeneration.current;
+    setLoadingMore(true);
+    const result = await listAssetsPage(supabase, workspaceId, next.cursor);
+    if (generation !== loadGeneration.current) return;
+    setLoadingMore(false);
+    if (!result.ok) {
+      logger.warn('assets: next page read failed', { error: result.error.message });
+      showToast?.({ title: LOAD_MORE_FAILED, tone: 'error' });
+      return;
+    }
+    setItems((prev) => mergeAssetPages(prev, result.data.items));
+    setNext(result.data.next);
+  }, [workspaceId, next, loadingMore, showToast]);
 
   const retryLoad = useCallback(async () => {
     setRetrying(true);
@@ -243,7 +285,7 @@ export function AssetsPage() {
     [items, pendingDelete],
   );
 
-  // Tab counts reflect the whole library. Same loaded list, no extra read.
+  // Tab counts reflect the loaded pages. Same loaded list, no extra read.
   const counts = useMemo(() => buildTabCounts(liveItems), [liveItems]);
 
   const visible = useMemo(
@@ -308,10 +350,29 @@ export function AssetsPage() {
     if (asset === null || asset === '') return;
     if (openedAssetParam.current === asset) return;
     const item = items.find((candidate) => candidate.id === asset);
+    if (
+      item === undefined &&
+      !next.done &&
+      workspaceId !== null &&
+      lookedUpAssetParam.current !== asset
+    ) {
+      lookedUpAssetParam.current = asset;
+      pendingAssetLookup.current = asset;
+      void getAssetItem(supabase, workspaceId, asset).then((found) => {
+        if (found.ok && found.data.length > 0) {
+          setItems((prev) => mergeAssetPages(prev, found.data));
+        }
+        pendingAssetLookup.current = null;
+        setAssetLookupTick((tick) => tick + 1);
+      });
+      return;
+    }
+    // The one-row lookup is still in flight: the tick re-runs this.
+    if (item === undefined && pendingAssetLookup.current === asset) return;
     if (item !== undefined && item.kind !== 'link' && !searching && tab !== ASSET_TAB_DEFAULT) {
-      const next = new URLSearchParams(searchParams);
-      next.delete('type');
-      setSearchParams(next, { replace: true });
+      const params = new URLSearchParams(searchParams);
+      params.delete('type');
+      setSearchParams(params, { replace: true });
       return;
     }
     openedAssetParam.current = asset;
@@ -322,9 +383,9 @@ export function AssetsPage() {
         action: { label: RECENTLY_DELETED_LABEL, onPress: () => navigate(RECENTLY_DELETED_PATH) },
       });
     }
-    const next = new URLSearchParams(searchParams);
-    next.delete(ASSET_PARAM);
-    setSearchParams(next, { replace: true });
+    const params = new URLSearchParams(searchParams);
+    params.delete(ASSET_PARAM);
+    setSearchParams(params, { replace: true });
   }, [
     items,
     assetsLoaded,
@@ -335,6 +396,9 @@ export function AssetsPage() {
     openAsset,
     tab,
     searching,
+    next.done,
+    workspaceId,
+    assetLookupTick,
   ]);
 
   // Mint an attachment-disposition presigned URL for a stored asset version, so
@@ -701,6 +765,22 @@ export function AssetsPage() {
             />
           </div>
         )}
+        {/* Older files load a page at a time; search, tabs and sort work over
+            what is loaded. Shown only while another page exists. */}
+        {!assetsFailed && !listLoading && !next.done ? (
+          <div className="px-4 md:px-6 pb-4 flex justify-center">
+            <Button
+              variant="secondary"
+              type="button"
+              data-assets-load-more=""
+              disabled={loadingMore}
+              aria-busy={loadingMore}
+              onClick={() => void loadMore()}
+            >
+              Load more
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {/* Deleted files wait 31 days in Recently deleted; the way there from Assets. */}

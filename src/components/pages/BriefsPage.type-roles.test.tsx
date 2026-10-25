@@ -27,10 +27,21 @@ if (typeof window.matchMedia !== 'function') {
 
 const { listBriefs } = vi.hoisted(() => ({ listBriefs: vi.fn() }));
 
-vi.mock('@srtdio/briefs', () => ({
-  BRIEFS_PAGE_SIZE: 50,
-  listBriefs: (...args: unknown[]) => listBriefs(...args),
-}));
+vi.mock('@/lib/brief-list', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    // The page reads keyset pages; a mocked plain list is one (last) page, and a
+    // mocked { items, next } page passes through as is.
+    listBriefsPage: async (...args: unknown[]) => {
+      const result = (await listBriefs(...args)) as
+        | { ok: true; data: unknown }
+        | { ok: false; error: unknown };
+      if (!result.ok || !Array.isArray(result.data)) return result;
+      return { ok: true, data: { items: result.data, next: { done: true } } };
+    },
+  };
+});
 vi.mock('@/lib/supabase', () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
 }));

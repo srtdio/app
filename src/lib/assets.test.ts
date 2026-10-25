@@ -18,6 +18,11 @@ import {
   KIND_TAB,
   linkDomain,
   listAssets,
+  listAssetsPage,
+  ASSETS_PAGE_SIZE,
+  assetKeysetFilter,
+  getAssetItem,
+  mergeAssetPages,
   mimeBadge,
   parseAssetTab,
   removeAssetsById,
@@ -33,7 +38,7 @@ import {
 // builder that listAssets touches.
 function builder(result: { data: unknown; error: { message: string } | null }) {
   const b: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'is', 'order']) {
+  for (const method of ['select', 'eq', 'is', 'order', 'in', 'or', 'limit']) {
     b[method] = () => b;
   }
   b.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve);
@@ -143,32 +148,6 @@ describe('listAssets states', () => {
     if (result.ok) expect(result.data).toEqual([]);
   });
 
-  it('starts the attachment read without waiting for the assets read', async () => {
-    const started: string[] = [];
-    let releaseAssets: () => void = () => undefined;
-    const assetsGate = new Promise<void>((done) => {
-      releaseAssets = done;
-    });
-    const client = {
-      from: (table: string) => {
-        started.push(table);
-        const b: Record<string, unknown> = {};
-        for (const method of ['select', 'eq', 'is', 'order']) b[method] = () => b;
-        b.then = (resolve: (v: unknown) => unknown) =>
-          (table === 'assets' ? assetsGate : Promise.resolve())
-            .then(() => ({ data: [], error: null }))
-            .then(resolve);
-        return b;
-      },
-    } as unknown as Client;
-    const pending = listAssets(client, 'ws-1');
-    await Promise.resolve();
-    expect(started).toEqual(['assets', 'asset_attachments']);
-    releaseAssets();
-    const result = await pending;
-    expect(result.ok).toBe(true);
-  });
-
   it('shapes rows with kind and live attachment counts', async () => {
     const client = makeClient({
       assets: {
@@ -191,6 +170,189 @@ describe('listAssets states', () => {
     expect(pick('a').attachmentCount).toBe(2);
     expect(pick('b').attachmentCount).toBe(0);
     expect(pick('c').attachmentCount).toBe(1);
+  });
+});
+
+// A recording client: every builder call is logged per table, and each awaited
+// read of a table takes the next queued result for it.
+type Call = { table: string; method: string; args: unknown[] };
+function recordingClient(
+  queue: Record<string, { data: unknown; error: { message: string } | null }[]>,
+) {
+  const calls: Call[] = [];
+  const reads: string[] = [];
+  const client = {
+    from: (table: string) => {
+      const b: Record<string, unknown> = {};
+      for (const method of ['select', 'eq', 'is', 'order', 'in', 'or', 'limit']) {
+        b[method] = (...args: unknown[]) => {
+          calls.push({ table, method, args });
+          return b;
+        };
+      }
+      b.then = (resolve: (v: unknown) => unknown) => {
+        reads.push(table);
+        const next = queue[table]?.shift() ?? { data: [], error: null };
+        return Promise.resolve(next).then(resolve);
+      };
+      return b;
+    },
+  } as unknown as Client;
+  return { client, calls, reads };
+}
+
+/** `count` asset rows, newest first, with distinct ids and upload times. */
+function rowsFrom(start: number, count: number) {
+  return Array.from({ length: count }, (_, i) => {
+    const n = start + i;
+    return assetRow(`a${String(10000 - n).padStart(5, '0')}`, 'image', {
+      uploaded_at: new Date(Date.UTC(2026, 9, 1) - n * 1000).toISOString(),
+    });
+  });
+}
+
+describe('listAssetsPage keyset paging', () => {
+  it('reads one row past the page, orders uploaded_at desc then id desc, and hands back a cursor', async () => {
+    const rows = rowsFrom(0, ASSETS_PAGE_SIZE + 1);
+    const { client, calls, reads } = recordingClient({
+      assets: [{ data: rows, error: null }],
+      asset_attachments: [{ data: [], error: null }],
+    });
+    const result = await listAssetsPage(client, 'ws-1');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.items).toHaveLength(ASSETS_PAGE_SIZE);
+    const last = rows[ASSETS_PAGE_SIZE - 1];
+    expect(result.data.next).toEqual({
+      done: false,
+      cursor: { uploadedAt: last?.uploaded_at, id: last?.id },
+    });
+    const assetCalls = calls.filter((c) => c.table === 'assets');
+    expect(assetCalls.filter((c) => c.method === 'order').map((c) => c.args)).toEqual([
+      ['uploaded_at', { ascending: false }],
+      ['id', { ascending: false }],
+    ]);
+    expect(assetCalls.find((c) => c.method === 'limit')?.args).toEqual([ASSETS_PAGE_SIZE + 1]);
+    // First page: no keyset filter.
+    expect(assetCalls.some((c) => c.method === 'or')).toBe(false);
+    // Two requests per page: the assets read, then ONE attachments IN read.
+    expect(reads).toEqual(['assets', 'asset_attachments']);
+  });
+
+  it('the second page filters strictly after the last row (uploaded_at, id) with .or', async () => {
+    const cursor = { uploadedAt: '2026-09-30T23:58:20.123456+00:00', id: 'a09900' };
+    const { client, calls } = recordingClient({
+      assets: [{ data: rowsFrom(200, 3), error: null }],
+      asset_attachments: [{ data: [], error: null }],
+    });
+    const result = await listAssetsPage(client, 'ws-1', cursor);
+    expect(result.ok).toBe(true);
+    const or = calls.find((c) => c.table === 'assets' && c.method === 'or');
+    expect(or?.args).toEqual([
+      'uploaded_at.lt."2026-09-30T23:58:20.123456+00:00",' +
+        'and(uploaded_at.eq."2026-09-30T23:58:20.123456+00:00",id.lt."a09900")',
+    ]);
+    expect(or?.args[0]).toBe(assetKeysetFilter(cursor));
+    // A short page is the last page.
+    if (result.ok) expect(result.data.next).toEqual({ done: true });
+  });
+
+  it('reads attachment counts for exactly the page ids with one IN read', async () => {
+    const rows = [assetRow('a', 'image'), assetRow('b', 'pdf')];
+    const { client, calls, reads } = recordingClient({
+      assets: [{ data: rows, error: null }],
+      asset_attachments: [{ data: [{ asset_id: 'a' }, { asset_id: 'a' }], error: null }],
+    });
+    const result = await listAssetsPage(client, 'ws-1');
+    const inCalls = calls.filter((c) => c.table === 'asset_attachments' && c.method === 'in');
+    expect(inCalls).toEqual([
+      { table: 'asset_attachments', method: 'in', args: ['asset_id', ['a', 'b']] },
+    ]);
+    expect(reads.filter((t) => t === 'asset_attachments')).toHaveLength(1);
+    expect(result.ok && result.data.items.map((i) => i.attachmentCount)).toEqual([2, 0]);
+  });
+
+  it('skips the attachments read for an empty page', async () => {
+    const { client, reads } = recordingClient({ assets: [{ data: [], error: null }] });
+    const result = await listAssetsPage(client, 'ws-1');
+    expect(reads).toEqual(['assets']);
+    expect(result).toEqual({ ok: true, data: { items: [], next: { done: true } } });
+  });
+
+  it('page one then page two merge with no duplicates', async () => {
+    const first = rowsFrom(0, ASSETS_PAGE_SIZE + 1);
+    // A file uploaded between the reads can surface twice: repeat page one's last row.
+    const repeated = first[ASSETS_PAGE_SIZE - 1];
+    const second = [
+      ...(repeated !== undefined ? [repeated] : []),
+      ...rowsFrom(ASSETS_PAGE_SIZE, 5),
+    ];
+    const { client } = recordingClient({
+      assets: [
+        { data: first, error: null },
+        { data: second, error: null },
+      ],
+      asset_attachments: [
+        { data: [], error: null },
+        { data: [], error: null },
+      ],
+    });
+    const one = await listAssetsPage(client, 'ws-1');
+    if (!one.ok || one.data.next.done) throw new Error('expected another page');
+    const two = await listAssetsPage(client, 'ws-1', one.data.next.cursor);
+    if (!two.ok) throw new Error('page two failed');
+    const merged = mergeAssetPages(one.data.items, two.data.items);
+    const ids = merged.map((i) => i.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(merged).toHaveLength(ASSETS_PAGE_SIZE + 5);
+    expect(merged.slice(0, ASSETS_PAGE_SIZE)).toEqual(one.data.items);
+  });
+
+  it('listAssets returns the first page only, as a plain list', async () => {
+    const { client } = recordingClient({
+      assets: [{ data: rowsFrom(0, ASSETS_PAGE_SIZE + 1), error: null }],
+      asset_attachments: [{ data: [], error: null }],
+    });
+    const result = await listAssets(client, 'ws-1');
+    expect(result.ok && result.data).toHaveLength(ASSETS_PAGE_SIZE);
+  });
+
+  it('a failed attachments read fails the page', async () => {
+    const { client } = recordingClient({
+      assets: [{ data: [assetRow('a', 'image')], error: null }],
+      asset_attachments: [{ data: null, error: { message: 'boom' } }],
+    });
+    const result = await listAssetsPage(client, 'ws-1');
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('mergeAssetPages', () => {
+  it('appends new ids, keeps existing order and drops repeats', () => {
+    const a = shapeAssets([assetRow('a', 'image'), assetRow('b', 'pdf')], new Map());
+    const b = shapeAssets([assetRow('b', 'pdf'), assetRow('c', 'link')], new Map());
+    expect(mergeAssetPages(a, b).map((i) => i.id)).toEqual(['a', 'b', 'c']);
+    expect(mergeAssetPages(a, [])).toEqual(a);
+  });
+});
+
+describe('getAssetItem', () => {
+  it('reads one asset by id in the workspace, returning [] when it is not there', async () => {
+    const found = recordingClient({
+      assets: [{ data: [assetRow('x', 'image')], error: null }],
+      asset_attachments: [{ data: [{ asset_id: 'x' }], error: null }],
+    });
+    const hit = await getAssetItem(found.client, 'ws-1', 'x');
+    expect(hit.ok && hit.data.map((i) => [i.id, i.attachmentCount])).toEqual([['x', 1]]);
+    const eqs = found.calls.filter((c) => c.table === 'assets' && c.method === 'eq');
+    expect(eqs.map((c) => c.args)).toEqual([
+      ['workspace_id', 'ws-1'],
+      ['id', 'x'],
+    ]);
+
+    const missing = recordingClient({ assets: [{ data: [], error: null }] });
+    expect(await getAssetItem(missing.client, 'ws-1', 'gone')).toEqual({ ok: true, data: [] });
+    expect(missing.reads).toEqual(['assets']);
   });
 });
 

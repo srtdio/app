@@ -1,6 +1,6 @@
 // The workspace's approvers for the on-behalf approve sheet: active client-role
 // members with their display names. One membership read plus one batched
-// profile read, the same reads use-post-members makes. A failed read leaves the
+// profile read, the same reads the shared useWorkspaceMembers (src/lib/workspace-members) makes. A failed read leaves the
 // list empty (the sheet still approves, without a named approver).
 
 import { useEffect, useState } from 'react';

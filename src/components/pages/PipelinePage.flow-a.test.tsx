@@ -61,7 +61,7 @@ vi.mock('@/components/pages/pipeline/PipelineSortControl', () => ({
   customRangeLabel: () => '',
 }));
 vi.mock('@/components/pages/pipeline/use-workspace-people', () => ({
-  useWorkspacePeople: () => ({ approverFirstNames: [], names: new Map() }),
+  useWorkspacePeople: () => ({ approverFirstNames: [], names: new Map(), approvers: [] }),
 }));
 vi.mock('@/components/pages/CreatePostSheet', () => ({
   CreatePostSheet: (props: SheetProps) => {

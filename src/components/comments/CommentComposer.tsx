@@ -16,7 +16,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { MentionInput } from '@/components/comments/MentionInput';
 import type { MentionInputHandle } from '@/components/comments/MentionInput';
 import { CommentEmojiButton } from '@/components/comments/CommentEmojiButton';
-import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
+import type { MentionCandidate } from '@/lib/workspace-members';
 import { IconFile, IconPaperclip, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { fileExtension } from '@/lib/assets';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';

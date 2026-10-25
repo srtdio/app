@@ -29,6 +29,7 @@ import {
   type CardViewer,
 } from '@/components/pages/pipeline/card-status';
 import { useWorkspacePeople } from '@/components/pages/pipeline/use-workspace-people';
+import type { ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
 import { postStageReason } from '@/components/pages/pipeline/stage-reason';
 import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 import { isClient } from '@/components/pages/pcs/roles';
@@ -335,6 +336,11 @@ const NO_IDS: string[] = [];
 /** Post ids per cover read, so the asset_attachments query stays a short URL. */
 const COVER_BATCH = 100;
 
+/** The cover read's key: the distinct post ids, sorted, comma-joined. Pure. */
+export function coverIdsKey(posts: readonly Pick<PipelinePost, 'id'>[]): string {
+  return [...new Set(posts.map((post) => post.id))].sort().join(',');
+}
+
 /** Skeleton cards: one board page's worth. */
 const SKELETON_CARDS = BOARD_CAP;
 /** Kanban skeleton: one column per stage, two cards each. */
@@ -486,6 +492,8 @@ export interface PipelineSurfaceProps {
   viewer?: CardViewer;
   /** Each post's first photo or video, so its card takes the platform frame. */
   covers?: CoverLookup;
+  /** The page's one shared approvers read, for the board's on-behalf sheet. */
+  approvers?: readonly ApproverOption[];
 }
 
 /** Clients never see Draft: no Draft chip, and no Draft column on the board. Pure. */
@@ -522,6 +530,7 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
         roleReady={props.roleReady !== false}
         {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
         {...(props.covers !== undefined ? { covers: props.covers } : {})}
+        {...(props.approvers !== undefined ? { approvers: props.approvers } : {})}
       />
     );
   }
@@ -870,8 +879,10 @@ export function PipelinePage() {
   const live = workspaceId !== null && loadedFor === workspaceId;
   const shownPosts = live ? posts : NO_POSTS;
 
-  // The approvers' names (card status, Send for review helper) and every
-  // member's name (the creator in the reject confirm).
+  // The approvers' names (card status, Send for review helper), every
+  // member's name (the creator in the reject confirm) and the on-behalf
+  // approvers: ONE membership + profile read for the whole page, handed to the
+  // board and the move sheet so neither runs its own.
   const people = useWorkspacePeople(workspaceId);
 
   useEffect(() => {
@@ -982,8 +993,11 @@ export function PipelinePage() {
 
   // Card covers (first photo or video with its stored size) for the platform
   // frame, read in batches through the chat cover store; cached on the device.
+  // The key is the id SET (sorted), not the display order, so a re-sort or an
+  // optimistic stage move never re-runs the request loop; only a different set
+  // of posts (a load, a search) asks again, and the store skips ids it holds.
   const covers = usePostCovers(NO_IDS);
-  const coverKey = sorted.map((post) => post.id).join(',');
+  const coverKey = useMemo(() => coverIdsKey(sorted), [sorted]);
   useEffect(() => {
     if (workspaceId === null || coverKey === '') return;
     const ids = coverKey.split(',');
@@ -1147,6 +1161,7 @@ export function PipelinePage() {
                   timeZone,
                   viewer,
                   covers,
+                  approvers: people.approvers,
                 })}
 
       <MoveSheet
@@ -1161,6 +1176,7 @@ export function PipelinePage() {
         role={role}
         roleStatus={roleStatus}
         onRetryRole={retryRole}
+        approvers={people.approvers}
       />
 
       <StageMoveConfirm

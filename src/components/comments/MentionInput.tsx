@@ -14,7 +14,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import type { KeyboardEvent } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
-import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
+import type { MentionCandidate } from '@/lib/workspace-members';
 import { useEscapeLayer } from '@/lib/escape-stack';
 
 const TEXT_NODE = 3;

@@ -32,8 +32,16 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   useIsLaptop: () => false,
 }));
 vi.mock('@/lib/search/jump', () => ({ useSearchJump: () => ({ words: [] }) }));
-vi.mock('@/components/pages/pcs/use-post-members', () => ({
-  usePostMembers: () => ({ options: [], loading: false, error: null }),
+vi.mock('@/lib/workspace-members', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspace-members')>()),
+  useWorkspaceMembers: () => ({
+    options: [],
+    loading: false,
+    error: null,
+    rows: [],
+    profiles: new Map(),
+    refetch: () => {},
+  }),
 }));
 vi.mock('@/lib/buckets', () => ({
   listBuckets: async () => ({ ok: true, data: [] }),
@@ -44,6 +52,7 @@ vi.mock('@/lib/assets', async (importOriginal) => {
     ...actual,
     fetchMemberRole: async () => null,
     listAssets: async () => ({ ok: true, data: [] }),
+    listRootAssetLabels: async () => ({ ok: true, data: [] }),
   };
 });
 vi.mock('@/lib/supabase', () => ({

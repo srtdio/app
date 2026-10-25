@@ -4,6 +4,7 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { cn } from '@/lib/cn';
+import { navPrefetchProps } from '@/lib/route-prefetch';
 import { ICON_SIZE } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
@@ -20,6 +21,7 @@ export function BottomTabs() {
         <NavLink
           key={item.to}
           to={item.to}
+          {...navPrefetchProps(item.to)}
           className={({ isActive }) =>
             cn(
               'flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] text-xs font-medium transition-colors',

@@ -34,9 +34,11 @@ import {
   BRIEF_NOTE_PARAM,
   briefListParams,
   filterBriefsByStatus,
-  listWorkspaceBriefs,
+  listBriefsPage,
+  mergeBriefPages,
   parseBriefFilter,
   type BriefFilter,
+  type BriefPageNext,
 } from '@/lib/brief-list';
 import {
   groupBriefsByDay,
@@ -45,7 +47,6 @@ import {
   type BriefGroup,
 } from '@/lib/brief-groups';
 import { cn } from '@/lib/cn';
-import { BRIEFS_PAGE_SIZE, listBriefs } from '@srtdio/briefs';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
@@ -217,6 +218,36 @@ export function deriveSortedBriefs(
 const LIST_CLASS = 'px-4 md:px-6 py-4 flex flex-col gap-6';
 const GRID_CLASS = 'pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3';
 
+/** The Load more failure toast: "Couldn't {action}. {reason}". */
+export const BRIEFS_LOAD_MORE_FAILED = "Couldn't load more briefs. Try again.";
+
+/**
+ * The Load more control under the list: the shared secondary Button (44 tall,
+ * token classes only, so light and dark match), shown only while another page
+ * exists. Pure (no hooks) so the show/hide rule is unit-tested directly.
+ */
+export function briefsLoadMore(
+  next: BriefPageNext,
+  loadingMore: boolean,
+  onLoadMore: () => void,
+): ReactElement[] {
+  if (next.done) return [];
+  return [
+    <div key="load-more" className="px-4 md:px-6 pb-6 flex justify-center">
+      <Button
+        variant="secondary"
+        type="button"
+        data-briefs-load-more=""
+        disabled={loadingMore}
+        aria-busy={loadingMore}
+        onClick={onLoadMore}
+      >
+        Load more
+      </Button>
+    </div>,
+  ];
+}
+
 /**
  * The loading state: a static skeleton in the real list's shape (a section
  * header bar, a day label, then card-shaped blocks with the 64px tile, title,
@@ -382,6 +413,8 @@ export function briefsEmptyView(state: BriefsEmpty, onClearSearch: () => void): 
 export function BriefsPage() {
   const navigate = useNavigate();
   const toast = useOptionalToast();
+  // The provider's stable show (the wrapper object is new each render).
+  const showToast = toast?.show;
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   // New brief is an approver action: the "+" shows only where the role holds brief.create.
   const canCreateBrief = useWorkspaceCapability('brief.create') === true;
@@ -413,6 +446,12 @@ export function BriefsPage() {
   const [briefs, setBriefs] = useState<BriefWithThumbnail[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  // Keyset paging: where the next page starts, or done. Load more appends it.
+  const [next, setNext] = useState<BriefPageNext>({ done: true });
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Bumped by every first-page load, so a Load more that resolves after a
+  // reload (or a workspace switch) never appends onto the fresh list.
+  const loadGeneration = useRef(0);
   const [createOpen, setCreateOpen] = useState(false);
 
   // One presign cache + presignEnabled for the WHOLE list (the wiring fix: the page
@@ -422,23 +461,44 @@ export function BriefsPage() {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
 
-  // The active workspace's briefs, read on the server by workspace_id page by
-  // page, then grouped and filtered in memory. A failure shows LoadError (never
-  // the server's text); Retry runs this same read again.
+  // The active workspace's newest briefs, one keyset page read on the server by
+  // workspace_id, then grouped and filtered in memory over what is loaded. A
+  // failure shows LoadError (never the server's text); Retry runs this same
+  // read again. Every reload starts over from the newest page.
   const loadBriefs = useCallback(async () => {
     if (workspaceId === null) return;
+    loadGeneration.current += 1;
+    const generation = loadGeneration.current;
     setLoading(true);
     setLoadFailed(false);
-    const result = await listWorkspaceBriefs(workspaceId, BRIEFS_PAGE_SIZE, (filters) =>
-      listBriefs(supabase, filters),
-    );
+    const result = await listBriefsPage(supabase, workspaceId);
+    if (generation !== loadGeneration.current) return;
     setLoading(false);
+    setLoadingMore(false);
     if (!result.ok) {
       setLoadFailed(true);
       return;
     }
-    setBriefs(result.data);
+    setBriefs(result.data.items);
+    setNext(result.data.next);
   }, [workspaceId]);
+
+  // The next page, appended with duplicates (by id) dropped. A failure keeps
+  // what is loaded and says so in a toast; the button stays for another try.
+  const loadMore = useCallback(async () => {
+    if (workspaceId === null || next.done || loadingMore) return;
+    const generation = loadGeneration.current;
+    setLoadingMore(true);
+    const result = await listBriefsPage(supabase, workspaceId, next.cursor);
+    if (generation !== loadGeneration.current) return;
+    setLoadingMore(false);
+    if (!result.ok) {
+      showToast?.({ title: BRIEFS_LOAD_MORE_FAILED, tone: 'error' });
+      return;
+    }
+    setBriefs((prev) => mergeBriefPages(prev, result.data.items));
+    setNext(result.data.next);
+  }, [workspaceId, next, loadingMore, showToast]);
 
   useEffect(() => {
     void loadBriefs();
@@ -559,6 +619,12 @@ export function BriefsPage() {
           {briefSections({ groups, timeZone, cache, presignEnabled, hrefFor })}
         </div>
       )}
+
+      {/* Older briefs load a page at a time; chips, search and sort work over
+          what is loaded. */}
+      {!loadFailed && !listLoading
+        ? briefsLoadMore(next, loadingMore, () => void loadMore())
+        : null}
 
       <CreateBriefSheet
         open={createOpen}

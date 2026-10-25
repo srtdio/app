@@ -4,7 +4,15 @@ import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereSt
 import { RequireAuth, RequireGuest, SessionLoading } from '@/components/auth/RouteGuards';
 import { HomeGate } from '@/components/home/HomeGate';
 import { SessionProvider } from '@/lib/session-context';
-import { lazyRoute, loadPipeline, loadShell, whenIdle } from '@/lib/chunk-reload';
+import { lazyRoute, loadShell, whenIdle } from '@/lib/chunk-reload';
+import {
+  loadAssets,
+  loadBriefs,
+  loadChat,
+  loadPipeline,
+  loadPlan,
+  loadPlanTab,
+} from '@/lib/route-prefetch';
 import { warmMonoFont } from '@/lib/fonts';
 
 // Chat times and dates are mono: load the face at boot, before any thread paints.
@@ -12,9 +20,9 @@ warmMonoFont();
 
 // Every page is its own chunk (React.lazy), so sign in, sign up and invite
 // never download the shell, chat, pipeline, posts, plan, assets or briefs.
-// Each loader is a named function so the idle prefetch below warms the exact
-// chunk the route later asks for.
-const loadChat = () => import('@/components/pages/ChatPage');
+// Each loader is a named function so the idle prefetch below and the nav
+// prefetch (src/lib/route-prefetch.ts) warm the exact chunk the route later
+// asks for.
 
 const PipelinePage = lazyRoute(loadPipeline, (m) => m.PipelinePage);
 const ChatPage = lazyRoute(loadChat, (m) => m.ChatPage);
@@ -22,18 +30,12 @@ const PostDetailPage = lazyRoute(
   () => import('@/components/pages/PostDetailPage'),
   (m) => m.PostDetailPage,
 );
-const BriefsPage = lazyRoute(
-  () => import('@/components/pages/BriefsPage'),
-  (m) => m.BriefsPage,
-);
+const BriefsPage = lazyRoute(loadBriefs, (m) => m.BriefsPage);
 const BriefDetailPage = lazyRoute(
   () => import('@/components/pages/BriefDetailPage'),
   (m) => m.BriefDetailPage,
 );
-const AssetsPage = lazyRoute(
-  () => import('@/components/pages/AssetsPage'),
-  (m) => m.AssetsPage,
-);
+const AssetsPage = lazyRoute(loadAssets, (m) => m.AssetsPage);
 const RecentlyDeletedPage = lazyRoute(
   () => import('@/components/pages/RecentlyDeletedPage'),
   (m) => m.RecentlyDeletedPage,
@@ -50,18 +52,9 @@ const NotificationsPage = lazyRoute(
   () => import('@/components/pages/NotificationsPage'),
   (m) => m.NotificationsPage,
 );
-const PlanTabPage = lazyRoute(
-  () => import('@/components/pages/PlanTabPage'),
-  (m) => m.PlanTabPage,
-);
-const PlanBesideLayout = lazyRoute(
-  () => import('@/components/pages/PlanPage'),
-  (m) => m.PlanBesideLayout,
-);
-const PlanPage = lazyRoute(
-  () => import('@/components/pages/PlanPage'),
-  (m) => m.PlanPage,
-);
+const PlanTabPage = lazyRoute(loadPlanTab, (m) => m.PlanTabPage);
+const PlanBesideLayout = lazyRoute(loadPlan, (m) => m.PlanBesideLayout);
+const PlanPage = lazyRoute(loadPlan, (m) => m.PlanPage);
 const ActivityRedirect = lazyRoute(
   () => import('@/components/shell/ActivityRedirect'),
   (m) => m.ActivityRedirect,
