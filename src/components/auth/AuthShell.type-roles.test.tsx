@@ -57,6 +57,16 @@ describe('AuthShell type roles', () => {
     expect(footer).toContain('text-fg-2');
   });
 
+  it('title and subtitle balance their lines so no word is left alone on phone', async () => {
+    await render(
+      <AuthShell title="Create your free account" subtitle="Welcome to Sorted." footer="f">
+        <p>form</p>
+      </AuthShell>,
+    );
+    expect(classesOf('Create your free account')).toContain('[text-wrap:balance]');
+    expect(classesOf('Welcome to Sorted.')).toContain('[text-wrap:balance]');
+  });
+
   it('card uses the shared card shadow token and the 16px radius', async () => {
     await render(
       <AuthShell title="Sign up" subtitle="s" footer="f">
