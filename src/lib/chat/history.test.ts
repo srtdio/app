@@ -6,8 +6,13 @@ import {
   rowToThreadMessage,
   type ChatMessageRow,
 } from '@/lib/chat/thread';
-import { newWindowState, trackWindow, windowed } from '@/lib/chat/__tests__/partition-fake';
-import { noteServerDate, resetServerClock } from '@/lib/chat/bounded-window';
+import {
+  newWindowState,
+  noteServerNow,
+  trackWindow,
+  windowed,
+} from '@/lib/chat/__tests__/partition-fake';
+import { resetServerClock } from '@/lib/chat/bounded-window';
 import {
   aggregateReactions,
   CATCH_UP_LIMIT,
@@ -24,6 +29,7 @@ import {
   loadPeerReadCursor,
   loadReactions,
   loadThreadPage,
+  earliestCreatedAt,
   loadThreadReplyCounts,
   loadUnreadCounts,
   newerThanFilter,
@@ -98,9 +104,9 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'));
   clearMessagePrefetch();
-  // The server's clock, as a Supabase response's Date header reports it.
+  // The server's clock, as a fresh access token's iat reports it.
   resetServerClock();
-  noteServerDate('Thu, 01 Oct 2026 12:00:00 GMT');
+  noteServerNow(Date.parse('2026-10-01T12:00:00Z'));
 });
 
 afterEach(() => {
@@ -358,7 +364,9 @@ describe('thread reads', () => {
       error: null,
     });
     const roots = Array.from({ length: 230 }, (_, i) => `r${i}`);
-    const result = await loadThreadReplyCounts(client, CHANNEL, roots, 'trace-1');
+    const at = (id: string): string =>
+      new Date(Date.parse('2026-09-01T00:00:00Z') + Number(id.slice(1)) * 60_000).toISOString();
+    const result = await loadThreadReplyCounts(client, CHANNEL, roots, 'trace-1', at);
     const rpc = argsOf(calls, 'rpc');
     expect(rpc).toHaveLength(1);
     expect(rpc[0]?.[0]).toBe('chat_thread_reply_counts');
@@ -366,12 +374,44 @@ describe('thread reads', () => {
       p_trace_id: 'trace-1',
       p_channel_id: CHANNEL,
       p_root_ids: roots.slice(0, 200),
+      p_since: '2026-09-01T00:00:00.000Z',
     });
     expect(result.ok && result.data.get('r1')).toEqual({ count: 4 });
     // Nothing to count: no call at all.
     const none = makeClient({ data: [], error: null });
-    await loadThreadReplyCounts(none.client, CHANNEL, [], 'trace-2');
+    await loadThreadReplyCounts(none.client, CHANNEL, [], 'trace-2', at);
     expect(argsOf(none.calls, 'rpc')).toEqual([]);
+  });
+
+  it('p_since is the earliest created_at among the roots of that request', async () => {
+    const { client, calls } = makeClient({ data: [], error: null });
+    const times = new Map([
+      ['r-mid', '2026-09-15T08:00:00.000Z'],
+      ['r-old', '2026-08-02T23:59:59.000Z'],
+      ['r-new', '2026-10-01T09:00:00.000Z'],
+    ]);
+    await loadThreadReplyCounts(client, CHANNEL, ['r-mid', 'r-new', 'r-old'], 't', (id) =>
+      times.get(id),
+    );
+    const sent = argsOf(calls, 'rpc')[0]?.[1] as { p_since: string };
+    expect(sent.p_since).toBe('2026-08-02T23:59:59.000Z');
+  });
+
+  it('p_since compares instants, not strings (offset timestamps)', () => {
+    const times = new Map([
+      ['a', '2026-09-01T10:00:00+05:30'],
+      ['b', '2026-09-01T05:00:00Z'],
+    ]);
+    expect(earliestCreatedAt(['b', 'a'], (id) => times.get(id))).toBe('2026-09-01T10:00:00+05:30');
+  });
+
+  it("p_since is '-infinity' only when a root of the request has no known created_at", async () => {
+    const { client, calls } = makeClient({ data: [], error: null });
+    await loadThreadReplyCounts(client, CHANNEL, ['known', 'unknown'], 't', (id) =>
+      id === 'known' ? '2026-09-01T00:00:00Z' : undefined,
+    );
+    const sent = argsOf(calls, 'rpc')[0]?.[1] as { p_since: string };
+    expect(sent.p_since).toBe('-infinity');
   });
 });
 

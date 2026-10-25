@@ -64,6 +64,11 @@ export const PREVIEW_SCAN_LIMIT = 200;
 type ChatReactionRow = Database['public']['Tables']['chat_reactions']['Row'];
 type ChatReadCursorRow = Database['public']['Tables']['chat_read_cursors']['Row'];
 type UnreadCountRow = Database['public']['Functions']['chat_unread_counts']['Returns'][number];
+/** The 4-arg (p_since) chat_thread_reply_counts; the 3-arg one is pending removal. */
+type ThreadReplyCountsArgs = Extract<
+  Database['public']['Functions']['chat_thread_reply_counts'],
+  { Args: { p_since: string } }
+>['Args'];
 type ThreadReplyCountRow =
   Database['public']['Functions']['chat_thread_reply_counts']['Returns'][number];
 
@@ -407,20 +412,27 @@ export interface ThreadReplyCount {
  * counted). Only the first 200 ids are sent. `traceId` is minted with
  * uuid_v7 at the user action (the page load) and passed as p_trace_id. A
  * root with no live reply is absent from the result. 5s timeout.
+ *
+ * p_since bounds the read below (chat_messages is partitioned by month on
+ * created_at): a reply is never older than its root, so the earliest
+ * created_at among the sent roots (`createdAtOf`) loses nothing. Only when a
+ * sent root's created_at is unknown is it '-infinity' (unbounded below).
  */
 export function loadThreadReplyCounts(
   client: Client,
   channelId: string,
   rootIds: readonly string[],
   traceId: string,
+  createdAtOf: (rootId: string) => string | undefined,
 ): Promise<Result<Map<string, ThreadReplyCount>>> {
   const ids = [...new Set(rootIds)].slice(0, THREAD_COUNT_ROOT_LIMIT);
   if (ids.length === 0) return Promise.resolve({ ok: true, data: new Map() });
   return withReadTimeout(async (signal) => {
-    const args: Database['public']['Functions']['chat_thread_reply_counts']['Args'] = {
+    const args: ThreadReplyCountsArgs = {
       p_trace_id: traceId,
       p_channel_id: channelId,
       p_root_ids: ids,
+      p_since: earliestCreatedAt(ids, createdAtOf) ?? '-infinity',
     };
     const { data, error } = await abortable(client.rpc('chat_thread_reply_counts', args), signal);
     if (error) return fail(`loadThreadReplyCounts: ${error.message}`);
@@ -430,6 +442,21 @@ export function loadThreadReplyCounts(
       data: new Map(rows.map((row) => [row.root_id, { count: Number(row.reply_count) }])),
     };
   });
+}
+
+/** The earliest created_at of the roots; null when any root's created_at is unknown. */
+export function earliestCreatedAt(
+  rootIds: readonly string[],
+  createdAtOf: (rootId: string) => string | undefined,
+): string | null {
+  let earliest: { at: string; ms: number } | null = null;
+  for (const id of rootIds) {
+    const at = createdAtOf(id);
+    const ms = at === undefined ? Number.NaN : Date.parse(at);
+    if (at === undefined || Number.isNaN(ms)) return null;
+    if (earliest === null || ms < earliest.ms) earliest = { at, ms };
+  }
+  return earliest?.at ?? null;
 }
 
 /** Aggregate reaction rows per message: one entry per emoji with count + mine. */

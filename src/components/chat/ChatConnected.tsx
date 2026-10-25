@@ -1991,6 +1991,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       key={selected.channelId}
                       title={chatDisplayName(shown ?? selected)}
                       channelId={selected.channelId}
+                      rootCreatedAt={thread.rootCreatedAt}
                       avatarUrl={(shown ?? selected).avatarUrl}
                       {...(!isGroup && !notesOpen && workspaceLabel !== undefined
                         ? { subtitle: workspaceLabel }

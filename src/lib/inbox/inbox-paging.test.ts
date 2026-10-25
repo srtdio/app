@@ -11,9 +11,10 @@ import {
   type ActivityCursor,
 } from '@/components/pages/activity/data';
 import { fetchInboxSince, fetchNewestInboxAt } from '@/lib/inbox/inbox-reads';
-import { noteServerDate, resetServerClock } from '@/lib/chat/bounded-window';
+import { resetServerClock } from '@/lib/chat/bounded-window';
 import {
   monthsTouched,
+  noteServerNow,
   partitionFake,
   spreadRows,
   type FakeQuery,
@@ -84,7 +85,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(NOW));
   resetServerClock();
-  noteServerDate(new Date(NOW).toUTCString());
+  noteServerNow(Date.parse(NOW));
 });
 
 afterEach(() => {

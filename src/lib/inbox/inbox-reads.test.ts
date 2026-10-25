@@ -9,7 +9,8 @@ import {
 } from '@/lib/inbox/inbox-reads';
 import { toastFromEnriched, type InboxRow } from '@/lib/inbox/inbox-live';
 import { resetMentionNames } from '@/lib/chat/mentions';
-import { noteServerDate, resetServerClock } from '@/lib/chat/bounded-window';
+import { resetServerClock } from '@/lib/chat/bounded-window';
+import { noteServerNow } from '@/lib/chat/__tests__/partition-fake';
 
 beforeEach(() => resetMentionNames());
 
@@ -543,10 +544,10 @@ describe('merged counts: the Notifications badge and the Mentions chip count eve
 });
 
 describe('fix 28: fetchNewestInboxAt seeds the live mark from the server clock', () => {
-  // The partition bounds' now: a Supabase response's Date header.
+  // The partition bounds' now: a fresh access token's iat.
   beforeEach(() => {
     resetServerClock();
-    noteServerDate(new Date().toUTCString());
+    noteServerNow(Date.now());
   });
 
   function recording(result: QueryResult) {

@@ -6,6 +6,19 @@
 // AND an upper created_at bound. Test-only; imported by *.test.ts files.
 
 import type { Client } from '@srtdio/rpc';
+import { noteAuthToken } from '@/lib/chat/bounded-window';
+
+/** A JWT-shaped access token (unsigned) whose iat is `issuedAtMs`, truncated to seconds. */
+export function tokenIssuedAt(issuedAtMs: number): string {
+  const b64url = (value: object): string =>
+    btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${b64url({ alg: 'HS256', typ: 'JWT' })}.${b64url({ iat: Math.floor(issuedAtMs / 1000), sub: 'u1' })}.sig`;
+}
+
+/** The server's clock as a freshly refreshed access token reports it, received now. */
+export function noteServerNow(serverMs: number): void {
+  noteAuthToken('TOKEN_REFRESHED', tokenIssuedAt(serverMs));
+}
 
 export interface FakeRow {
   id: string;

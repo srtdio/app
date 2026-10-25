@@ -80,6 +80,7 @@ import {
   clientFor,
   countWhere,
   createAdminClient,
+  createAnonClient,
   generateTraceId,
   insertRow,
   loadRlsEnv,
@@ -116,7 +117,10 @@ type DeleteArgs = Database['public']['Functions']['chat_message_delete']['Args']
 type EditArgs = Database['public']['Functions']['chat_message_edit']['Args'];
 type ClearArgs = Database['public']['Functions']['chat_channel_clear']['Args'];
 type ResolveArgs = Database['public']['Functions']['chat_mentions_resolve']['Args'];
-type ThreadCountArgs = Database['public']['Functions']['chat_thread_reply_counts']['Args'];
+// The 3-arg version (the live app's until its cleanup) and the 4-arg p_since one.
+type ThreadCountFns = Database['public']['Functions']['chat_thread_reply_counts'];
+type ThreadCountArgs = Exclude<ThreadCountFns, { Args: { p_since: string } }>['Args'];
+type ThreadCountSinceArgs = Extract<ThreadCountFns, { Args: { p_since: string } }>['Args'];
 
 // Proc arguments are built here (not inline at the .rpc() call) so each call
 // carries a fresh trace id the way the app's callRpc() wrapper does.
@@ -2099,6 +2103,59 @@ describe.runIf(RLS_SUITE)('chat record: channel-membership RLS and procs', () =>
       expect(await replyCounts(owner.id, [...filler, top])).toEqual([]);
       const inside = await replyCounts(owner.id, [...filler.slice(0, 199), top]);
       expect(inside.map((r) => [r.root_id, r.reply_count])).toEqual([[top, 2]]);
+    });
+
+    it('T7 chat_thread_reply_counts with p_since: anon refused, authenticated counts from p_since, other workspace zero rows', async () => {
+      const top = await send('top since');
+      await send('since r1', top);
+      await send('since r2', top);
+      const topRow = await adminGeneric.from('chat_messages').select('created_at').eq('id', top);
+      const topCreatedAt = (topRow.data as { created_at: string }[] | null)?.[0]?.created_at ?? '';
+      expect(topCreatedAt).not.toBe('');
+      const sinceArgs = (rootIds: string[], since: string): ThreadCountSinceArgs => ({
+        p_trace_id: generateTraceId(),
+        p_channel_id: ctx.channelId,
+        p_root_ids: rootIds,
+        p_since: since,
+      });
+
+      // anon has no EXECUTE on the 4-arg function.
+      const anon = createAnonClient(loadRlsEnv());
+      const refused = await anon.rpc('chat_thread_reply_counts', sinceArgs([top], topCreatedAt));
+      expect(refused.error).not.toBeNull();
+      expect(refused.data ?? []).toEqual([]);
+
+      // authenticated member: p_since = the root's created_at loses no reply.
+      const member = await clientFor(owner.id).rpc(
+        'chat_thread_reply_counts',
+        sinceArgs([top], topCreatedAt),
+      );
+      expect(member.error).toBeNull();
+      expect((member.data ?? []).map((r) => [r.root_id, Number(r.reply_count)])).toEqual([
+        [top, 2],
+      ]);
+      // '-infinity' reads unbounded below: the same answer.
+      const unbounded = await clientFor(owner.id).rpc(
+        'chat_thread_reply_counts',
+        sinceArgs([top], '-infinity'),
+      );
+      expect((unbounded.data ?? []).map((r) => Number(r.reply_count))).toEqual([2]);
+      // A p_since after every reply counts none.
+      const later = new Date(Date.parse(topCreatedAt) + 86_400_000).toISOString();
+      const after = await clientFor(owner.id).rpc(
+        'chat_thread_reply_counts',
+        sinceArgs([top], later),
+      );
+      expect(after.error).toBeNull();
+      expect(after.data ?? []).toEqual([]);
+
+      // A caller from another workspace: zero rows (chat_messages RLS applies).
+      const cross = await clientFor(outsider.id).rpc(
+        'chat_thread_reply_counts',
+        sinceArgs([top], topCreatedAt),
+      );
+      expect(cross.error).toBeNull();
+      expect(cross.data ?? []).toEqual([]);
     });
 
     it('T6 a client cannot set the root through chat_message_send; a cross-channel reply_to is still refused', async () => {

@@ -322,6 +322,12 @@ export interface UseChatThread {
    * record; receivers catch up from Postgres).
    */
   addSentRow: (row: ChatMessageRow, traceId: string) => Promise<void>;
+  /**
+   * A message's created_at when this thread has read it: a thread root read
+   * by reply hydration (not loaded), else a loaded row. The reply counts read
+   * takes its lower bound from it.
+   */
+  rootCreatedAt: (rootId: string) => string | undefined;
 }
 
 /** In-flight guard key for a forward run (message ids are uuids, never this). */
@@ -803,6 +809,14 @@ export function useChatThread(params: {
 
   // Live values the stable callbacks read.
   const messagesRef = useRef<ThreadMessage[]>([]);
+  // created_at of the quoted and root rows reply hydration read (they are not loaded).
+  const readTimesRef = useRef(new Map<string, string>());
+  const rootCreatedAt = useCallback<UseChatThread['rootCreatedAt']>(
+    (rootId) =>
+      readTimesRef.current.get(rootId) ??
+      messagesRef.current.find((m) => m.id === rootId)?.createdAt,
+    [],
+  );
   messagesRef.current = messages;
   const clientRef = useRef(client);
   clientRef.current = client;
@@ -989,6 +1003,7 @@ export function useChatThread(params: {
         return;
       }
       const quoted = result.data.map((row) => rowToThreadMessage(row, currentUserId));
+      for (const m of quoted) readTimesRef.current.set(m.id, m.createdAt);
       setMessages((prev) => hydrateRoots(hydrateReplies(prev, quoted, true), quoted, batch));
     },
     [db, currentUserId],
@@ -2089,5 +2104,6 @@ export function useChatThread(params: {
     readState,
     markNewestVisible,
     addSentRow,
+    rootCreatedAt,
   };
 }

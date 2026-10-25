@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Result } from '@srtdio/rpc';
 import {
-  noteServerDate,
+  noteAuthToken,
   resetServerClock,
   SERVER_NOW_MARGIN_MS,
   serverNowMs,
@@ -23,8 +23,10 @@ import {
 import type { MessageCursor } from '@/lib/chat/thread';
 import {
   monthsTouched,
+  noteServerNow,
   partitionFake,
   spreadRows,
+  tokenIssuedAt,
   type FakeQuery,
   type FakeRow,
 } from '@/lib/chat/__tests__/partition-fake';
@@ -68,9 +70,9 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(NOW));
   clearMessagePrefetch();
-  // The server's clock, as the Date header of a Supabase response reports it.
+  // The server's clock, as the iat of a freshly refreshed access token reports it.
   resetServerClock();
-  noteServerDate(new Date(NOW).toUTCString());
+  noteServerNow(Date.parse(NOW));
 });
 
 afterEach(() => {
@@ -233,8 +235,8 @@ describe('partition bounds come from the server clock, never the device clock', 
     it(`a device clock ${label} still opens on the newest message`, async () => {
       vi.setSystemTime(new Date(Date.parse(NOW) + skewMs));
       resetServerClock();
-      // A Supabase response arrives: its Date header is the server's now.
-      noteServerDate(new Date(NOW).toUTCString());
+      // A fresh access token arrives: its iat is the server's now.
+      noteServerNow(Date.parse(NOW));
       const { client, queries } = partitionFake({ chat_messages: rows() });
       const page = await loadLatestMessages(client, CH);
       expect(page.ok && page.data.rows.map((r) => r.id).at(-1)).toBe('newest');
@@ -247,7 +249,7 @@ describe('partition bounds come from the server clock, never the device clock', 
     });
   }
 
-  it('before the first response the newest page has no upper bound, and still finds the newest', async () => {
+  it('before the first fresh token the newest page has no upper bound, and still finds the newest', async () => {
     vi.setSystemTime(new Date(Date.parse(NOW) - 3 * DAY_MS));
     resetServerClock();
     const { client, queries } = partitionFake({ chat_messages: rows() });
@@ -256,27 +258,79 @@ describe('partition bounds come from the server clock, never the device clock', 
     const [first] = historyReads(queries);
     expect(first?.filters).toContain('gte:created_at');
     expect(first?.filters.some((f) => f === 'lt:created_at' || f === 'lte:created_at')).toBe(false);
-    // Catch-up before the first response: bounded below only.
+    // Catch-up before the first fresh token: bounded below only.
     const cursor = { createdAt: '2026-10-20T08:00:00.000Z', id: 'older' };
     const newer = await loadNewerMessages(client, CH, cursor);
     expect(newer.ok && newer.data.map((r) => r.id)).toEqual(['newest']);
     expect(queries.at(-1)?.filters).not.toContain('lt:created_at');
   });
 
-  it('the offset follows the latest response; a missing or bad header keeps it', () => {
+  it('the offset follows the latest fresh token; an unreadable token keeps it', () => {
     resetServerClock();
     expect(serverNowMs()).toBeNull();
-    noteServerDate('Sun, 25 Oct 2026 12:00:00 GMT');
+    noteAuthToken('SIGNED_IN', tokenIssuedAt(Date.parse(NOW)));
     expect(serverNowMs()).toBe(Date.parse(NOW));
-    noteServerDate('Sun, 25 Oct 2026 12:05:00 GMT');
+    noteAuthToken('TOKEN_REFRESHED', tokenIssuedAt(Date.parse(NOW) + 5 * 60_000));
     expect(serverNowMs()).toBe(Date.parse(NOW) + 5 * 60_000);
-    noteServerDate(null);
-    noteServerDate('not a date');
+    noteAuthToken('TOKEN_REFRESHED', null);
+    noteAuthToken('TOKEN_REFRESHED', 'not.a-token');
+    noteAuthToken('TOKEN_REFRESHED', 'no-dots');
     expect(serverNowMs()).toBe(Date.parse(NOW) + 5 * 60_000);
     // Time passing on the device moves the server's now with it.
     vi.setSystemTime(new Date(Date.parse(NOW) + 1_000));
     expect(serverNowMs()).toBe(Date.parse(NOW) + 5 * 60_000 + 1_000);
   });
+});
+
+describe('server clock from the access token iat', () => {
+  const HOUR_MS = 3_600_000;
+  const DAY_MS = 24 * HOUR_MS;
+
+  it('INITIAL_SESSION never sets the offset (a stored token can be an hour old)', () => {
+    resetServerClock();
+    noteAuthToken('INITIAL_SESSION', tokenIssuedAt(Date.parse(NOW) - 59 * 60_000));
+    expect(serverNowMs()).toBeNull();
+  });
+
+  it('a stored token replayed under SIGNED_IN after INITIAL_SESSION is ignored', () => {
+    resetServerClock();
+    const stored = tokenIssuedAt(Date.parse(NOW) - 50 * 60_000);
+    noteAuthToken('INITIAL_SESSION', stored);
+    noteAuthToken('SIGNED_IN', stored);
+    expect(serverNowMs()).toBeNull();
+    // The next refresh is fresh: it sets the offset.
+    noteAuthToken('TOKEN_REFRESHED', tokenIssuedAt(Date.parse(NOW)));
+    expect(serverNowMs()).toBe(Date.parse(NOW));
+  });
+
+  it('an older token never moves the offset back', () => {
+    resetServerClock();
+    noteAuthToken('TOKEN_REFRESHED', tokenIssuedAt(Date.parse(NOW)));
+    noteAuthToken('SIGNED_IN', tokenIssuedAt(Date.parse(NOW) - HOUR_MS));
+    expect(serverNowMs()).toBe(Date.parse(NOW));
+  });
+
+  it('other events never set the offset', () => {
+    resetServerClock();
+    noteAuthToken('USER_UPDATED', tokenIssuedAt(Date.parse(NOW)));
+    noteAuthToken('SIGNED_OUT', tokenIssuedAt(Date.parse(NOW)));
+    expect(serverNowMs()).toBeNull();
+  });
+
+  const skews: Array<[string, number]> = [
+    ['3 days slow', -3 * DAY_MS],
+    ['3 days fast', 3 * DAY_MS],
+  ];
+  for (const [label, skewMs] of skews) {
+    for (const event of ['SIGNED_IN', 'TOKEN_REFRESHED'] as const) {
+      it(`${event} on a device ${label}: offset = iat*1000 - Date.now()`, () => {
+        vi.setSystemTime(new Date(Date.parse(NOW) + skewMs));
+        resetServerClock();
+        noteAuthToken(event, tokenIssuedAt(Date.parse(NOW)));
+        expect(serverNowMs()).toBe(Date.parse(NOW));
+      });
+    }
+  }
 });
 
 describe('readBoundedPage / readBoundedForward', () => {

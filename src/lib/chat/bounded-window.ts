@@ -17,11 +17,14 @@
 //      back always reaches the first message or inbox entry.
 //
 // "Now" is never the device clock: it is the server's clock, learned from the
-// Date header of Supabase responses the app already makes (noteServerDate
-// stores offset = serverDate - Date.now() on each response; the latest wins).
-// Until the first response lands, a newest page has no upper bound (its lower
-// bound is then only a starting point: a short window still widens back to
-// the oldest row, so nothing is hidden whatever the device clock says).
+// iat claim of each freshly issued access token (noteAuthToken, called from the
+// one auth subscription on SIGNED_IN and TOKEN_REFRESHED, stores offset =
+// iat*1000 - Date.now() at receipt; the latest wins). A token read back from
+// storage (INITIAL_SESSION, or a SIGNED_IN replaying it) is never used: its iat
+// can be up to an hour old. Until the first fresh token lands, a newest page
+// has no upper bound (its lower bound is then only a starting point: a short
+// window still widens back to the oldest row, so nothing is hidden whatever
+// the device clock says).
 //
 // Pure apart from the injected reads and the server clock, so it is
 // unit-tested with fakes.
@@ -34,38 +37,62 @@ const DAY_MS = 86_400_000;
 export const HISTORY_WINDOW_MS = 30 * DAY_MS;
 
 /**
- * Upper-bound margin over the server's now: a Date header has one-second
- * resolution (truncated) and is read a network trip after it was stamped, so
- * the server's real now can be a little ahead of the estimate.
+ * Upper-bound margin over the server's now: iat has one-second resolution
+ * (truncated) and the token is read a network trip after it was issued, so the
+ * server's real now can be a little ahead of the estimate.
  */
 export const SERVER_NOW_MARGIN_MS = 60_000;
 
-/** offset = server time - device time, from the latest Supabase response; null before the first. */
+/** offset = server time - device time, from the latest fresh access token; null before the first. */
 let serverOffsetMs: number | null = null;
+/** The newest iat seen on any token, fresh or stored: a token at or below it is not fresh. */
+let newestIat: number | null = null;
 
-/**
- * Record the server's clock from one response's Date header (an HTTP-date).
- * `receivedAtMs` is the device time it arrived. A missing or unparsable header
- * leaves the offset as it was. Called on every Supabase response.
- */
-export function noteServerDate(
-  dateHeader: string | null | undefined,
-  receivedAtMs: number = Date.now(),
-): void {
-  if (dateHeader === null || dateHeader === undefined || dateHeader === '') return;
-  const serverMs = Date.parse(dateHeader);
-  if (Number.isNaN(serverMs)) return;
-  serverOffsetMs = serverMs - receivedAtMs;
+/** Auth events that carry a token the server has just issued. */
+const FRESH_TOKEN_EVENTS: ReadonlySet<string> = new Set(['SIGNED_IN', 'TOKEN_REFRESHED']);
+
+/** The iat claim (seconds) of a JWT, or null when the token is missing or unreadable. */
+export function tokenIat(accessToken: string | null | undefined): number | null {
+  const payload = accessToken?.split('.')[1];
+  if (payload === undefined || payload === '') return null;
+  try {
+    const claims: unknown = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    if (typeof claims !== 'object' || claims === null || !('iat' in claims)) return null;
+    const iat = claims.iat;
+    return typeof iat === 'number' && Number.isFinite(iat) ? iat : null;
+  } catch {
+    return null;
+  }
 }
 
-/** The server's now (device now + the latest offset), or null before any response. */
+/**
+ * Record the server's clock from one auth event's access token. Only a
+ * freshly issued token (SIGNED_IN, TOKEN_REFRESHED, newer than any token seen
+ * before) sets the offset; INITIAL_SESSION and a stored token replayed under
+ * SIGNED_IN only mark their iat as seen. `receivedAtMs` is the device time
+ * the event arrived.
+ */
+export function noteAuthToken(
+  event: string,
+  accessToken: string | null | undefined,
+  receivedAtMs: number = Date.now(),
+): void {
+  const iat = tokenIat(accessToken);
+  if (iat === null) return;
+  const fresh = FRESH_TOKEN_EVENTS.has(event) && (newestIat === null || iat > newestIat);
+  if (newestIat === null || iat > newestIat) newestIat = iat;
+  if (fresh) serverOffsetMs = iat * 1000 - receivedAtMs;
+}
+
+/** The server's now (device now + the latest offset), or null before the first fresh token. */
 export function serverNowMs(): number | null {
   return serverOffsetMs === null ? null : Date.now() + serverOffsetMs;
 }
 
-/** Forget the server clock (tests; a fresh session learns it again on its first response). */
+/** Forget the server clock (tests; a fresh session learns it again from its first fresh token). */
 export function resetServerClock(): void {
   serverOffsetMs = null;
+  newestIat = null;
 }
 
 /** Widening steps before the next window jumps straight to the oldest row. */

@@ -405,6 +405,8 @@ interface MessageThreadProps {
   /** Sender display info keyed by Sorted user id; batched read, never per-row. */
   profiles: Map<string, ChatProfile>;
   messages: ThreadMessage[];
+  /** A thread root's created_at when read (the reply counts read's lower bound); absent: unbounded. */
+  rootCreatedAt?: (rootId: string) => string | undefined;
   loading: boolean;
   /** The latest page failed or timed out: "Couldn't load messages" + Retry, never the empty state. */
   loadFailed?: boolean;
@@ -5332,9 +5334,13 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // Reply counts of root cards that are not loaded: one read per history page.
   const [countsVersion, setCountsVersion] = useState(0);
   const countsRef = useRef<ThreadCounts | null>(null);
+  const rootCreatedAtRef = useRef(props.rootCreatedAt);
+  rootCreatedAtRef.current = props.rootCreatedAt;
   countsRef.current ??= createThreadCounts((rootIds) =>
     channelId !== undefined
-      ? loadThreadReplyCounts(supabase, channelId, rootIds, generateTraceId())
+      ? loadThreadReplyCounts(supabase, channelId, rootIds, generateTraceId(), (id) =>
+          rootCreatedAtRef.current?.(id),
+        )
       : Promise.resolve({ ok: true, data: new Map() }),
   );
   const counts = countsRef.current;
