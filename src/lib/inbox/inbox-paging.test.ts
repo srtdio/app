@@ -138,7 +138,9 @@ describe('partition-bounded inbox reads', () => {
     const { client, queries } = partitionFake({ inbox_entries: rows });
     const newest = await fetchNewestInboxAt(client, { workspaceId: 'w1', userId: 'u1' });
     expect(newest).toEqual({ ok: true, data: rows[4]?.created_at });
-    expect(queries[0]?.filters).toEqual(expect.arrayContaining(['gte:created_at', 'lt:created_at']));
+    expect(queries[0]?.filters).toEqual(
+      expect.arrayContaining(['gte:created_at', 'lt:created_at']),
+    );
     const since = await fetchInboxSince(client, {
       workspaceId: 'w1',
       userId: 'u1',

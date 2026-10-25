@@ -147,7 +147,10 @@ export async function readBoundedForward<Row>(
   const rows: Row[] = [];
   let fromMs = Date.parse(input.lower);
   if (Number.isNaN(fromMs)) {
-    return { ok: false, error: { code: 'unknown', message: 'readBoundedForward: bad lower bound' } };
+    return {
+      ok: false,
+      error: { code: 'unknown', message: 'readBoundedForward: bad lower bound' },
+    };
   }
   const ceilingMs = (input.nowMs ?? Date.now()) + CLOCK_SKEW_MS;
   let from = input.lower;

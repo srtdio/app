@@ -652,7 +652,9 @@ describe('fetchActivityEntries enrichment', () => {
       or: () => self,
       then(onfulfilled, onrejected) {
         const answer =
-          windowRows && result.data !== null ? { ...result, data: windowed(result.data, w) } : result;
+          windowRows && result.data !== null
+            ? { ...result, data: windowed(result.data, w) }
+            : result;
         return Promise.resolve(answer).then(onfulfilled, onrejected);
       },
     };

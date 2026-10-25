@@ -136,16 +136,31 @@ describe('thread window: jumps and edges', () => {
   it('pages within a viewport of an edge that has loaded rows past it', () => {
     const base = { total: 500, viewport: 600, edgePx: 80 };
     expect(
-      windowEdge({ ...base, win: { start: 100, end: 400 }, scrollTop: 500, distanceFromBottom: 5000 }),
+      windowEdge({
+        ...base,
+        win: { start: 100, end: 400 },
+        scrollTop: 500,
+        distanceFromBottom: 5000,
+      }),
     ).toBe('up');
     expect(
       windowEdge({ ...base, win: { start: 0, end: 400 }, scrollTop: 0, distanceFromBottom: 5000 }),
     ).toBe('none');
     expect(
-      windowEdge({ ...base, win: { start: 100, end: 400 }, scrollTop: 3000, distanceFromBottom: 10 }),
+      windowEdge({
+        ...base,
+        win: { start: 100, end: 400 },
+        scrollTop: 3000,
+        distanceFromBottom: 10,
+      }),
     ).toBe('down');
     expect(
-      windowEdge({ ...base, win: { start: 100, end: 500 }, scrollTop: 3000, distanceFromBottom: 0 }),
+      windowEdge({
+        ...base,
+        win: { start: 100, end: 500 },
+        scrollTop: 3000,
+        distanceFromBottom: 0,
+      }),
     ).toBe('none');
     expect(
       windowEdge({

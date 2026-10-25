@@ -187,14 +187,19 @@ export function samePropValue(a: unknown, b: unknown): boolean {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
     return a.every((v, i) => samePropValue(v, b[i]));
   }
-  if (Object.getPrototypeOf(a) !== Object.prototype || Object.getPrototypeOf(b) !== Object.prototype)
+  if (
+    Object.getPrototypeOf(a) !== Object.prototype ||
+    Object.getPrototypeOf(b) !== Object.prototype
+  )
     return false;
   const ka = Object.keys(a);
   const kb = Object.keys(b);
   if (ka.length !== kb.length) return false;
   const ra = a as Record<string, unknown>;
   const rb = b as Record<string, unknown>;
-  return ka.every((k) => Object.prototype.hasOwnProperty.call(rb, k) && samePropValue(ra[k], rb[k]));
+  return ka.every(
+    (k) => Object.prototype.hasOwnProperty.call(rb, k) && samePropValue(ra[k], rb[k]),
+  );
 }
 
 /**

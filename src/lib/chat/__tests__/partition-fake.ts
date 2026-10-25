@@ -108,7 +108,9 @@ export function partitionFake(tables: Record<string, FakeRow[]>): {
       log.filters.push(`${op}:${column}`);
       if (column === 'created_at') log.range.push([op, String(value)]);
       if (op === 'is') {
-        predicates.push((row) => row[column] === value || (value === null && row[column] === undefined));
+        predicates.push(
+          (row) => row[column] === value || (value === null && row[column] === undefined),
+        );
       } else {
         predicates.push(opPredicate(column, op, String(value)));
       }
@@ -187,9 +189,7 @@ export function monthsTouched(query: FakeQuery): number {
   if (lower === undefined || upper === undefined) return Number.POSITIVE_INFINITY;
   const a = new Date(lower[1]);
   const b = new Date(upper[1]);
-  return (
-    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth()) + 1
-  );
+  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth()) + 1;
 }
 
 /** `count` rows spread evenly between `fromIso` and `toIso`, ids zero-padded in time order. */
@@ -225,11 +225,16 @@ export function newWindowState(): WindowState {
 }
 
 /** `rows` narrowed to a query's created_at range, sorted and limited as asked. Rows without created_at pass through. */
-export function windowed<R extends Record<string, unknown>>(rows: readonly R[], w: WindowState): R[] {
+export function windowed<R extends Record<string, unknown>>(
+  rows: readonly R[],
+  w: WindowState,
+): R[] {
   const inRange = rows.filter((row) => {
     const at = row.created_at;
     if (typeof at !== 'string') return true;
-    return w.range.every(([op, value]) => opPredicate('created_at', op, value)(row as unknown as FakeRow));
+    return w.range.every(([op, value]) =>
+      opPredicate('created_at', op, value)(row as unknown as FakeRow),
+    );
   });
   const byTime = w.order.find((o) => o.column === 'created_at');
   const sorted =

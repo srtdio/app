@@ -3977,7 +3977,13 @@ function ThreadBody(
     const anchor = firstVisibleRow(list);
     const at = anchor !== null ? idsRef.current.indexOf(anchor.id) : -1;
     const visible =
-      pendingJumpRef.current !== null ? w.start : at >= 0 ? at : stickRef.current ? w.end - 1 : w.start;
+      pendingJumpRef.current !== null
+        ? w.start
+        : at >= 0
+          ? at
+          : stickRef.current
+            ? w.end - 1
+            : w.start;
     const next = trimWindow(w, visible);
     if (next.start === w.start && next.end === w.end) return;
     trimAnchorRef.current = anchor;

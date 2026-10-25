@@ -119,9 +119,7 @@ describe('bounded chat history reads', () => {
     if (twin !== undefined) rows.push({ ...twin, id: `${twin.id}-b` });
     const { client, queries } = partitionFake({ chat_messages: rows });
     const { ids } = await pageAll((cursor) =>
-      cursor === undefined
-        ? loadLatestMessages(client, CH)
-        : loadOlderMessages(client, CH, cursor),
+      cursor === undefined ? loadLatestMessages(client, CH) : loadOlderMessages(client, CH, cursor),
     );
     const expected = [...rows]
       .sort((a, b) =>
@@ -176,9 +174,7 @@ describe('bounded chat history reads', () => {
     );
     const { client } = partitionFake({ chat_messages: [...mine, ...theirs] });
     const { ids } = await pageAll((cursor) =>
-      cursor === undefined
-        ? loadLatestMessages(client, CH)
-        : loadOlderMessages(client, CH, cursor),
+      cursor === undefined ? loadLatestMessages(client, CH) : loadOlderMessages(client, CH, cursor),
     );
     expect(ids).toEqual(mine.map((r) => r.id));
     const previews = await loadConversationPreviews(client, 'ws1');

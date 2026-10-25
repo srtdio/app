@@ -25,7 +25,10 @@ export async function readInboxOldest(
       .order('created_at', { ascending: true })
       .limit(1);
     if (res.error) {
-      return { ok: false, error: { code: 'unknown', message: `readInboxOldest: ${res.error.message}` } };
+      return {
+        ok: false,
+        error: { code: 'unknown', message: `readInboxOldest: ${res.error.message}` },
+      };
     }
     const first = (res.data ?? [])[0];
     return { ok: true, data: first !== undefined ? first.created_at : null };

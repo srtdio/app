@@ -487,7 +487,20 @@ describe('merged counts: the Notifications badge and the Mentions chip count eve
   } {
     const calls: { method: string; args: unknown[] }[] = [];
     const self: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'or', 'not', 'gt', 'gte', 'lt', 'lte', 'order', 'limit', 'in']) {
+    for (const method of [
+      'select',
+      'eq',
+      'is',
+      'or',
+      'not',
+      'gt',
+      'gte',
+      'lt',
+      'lte',
+      'order',
+      'limit',
+      'in',
+    ]) {
       self[method] = (...args: unknown[]) => {
         calls.push({ method, args });
         return self;
@@ -533,7 +546,20 @@ describe('fix 28: fetchNewestInboxAt seeds the live mark from the server clock',
     const calls: { method: string; args: unknown[] }[] = [];
     const tables: string[] = [];
     const self: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'or', 'not', 'gt', 'gte', 'lt', 'lte', 'order', 'limit', 'in']) {
+    for (const method of [
+      'select',
+      'eq',
+      'is',
+      'or',
+      'not',
+      'gt',
+      'gte',
+      'lt',
+      'lte',
+      'order',
+      'limit',
+      'in',
+    ]) {
       self[method] = (...args: unknown[]) => {
         calls.push({ method, args });
         return self;
