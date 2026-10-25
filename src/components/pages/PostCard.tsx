@@ -1,3 +1,4 @@
+import { useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import {
@@ -27,6 +28,7 @@ import { cn } from '@/lib/cn';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { useMenuGesture } from '@/components/ui/useLongPress';
 import { useOptionalToast } from '@/components/ui/toast';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { buildPostLink } from '@/lib/post-share';
@@ -246,8 +248,9 @@ export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
  * view; when the board passes onMove, a plain ⋯ at the right end of the meta
  * line (44x44 tap area, negative margins so the row keeps its height) opens
  * the shared ActionMenu: Open, Copy link (toast "Link copied") and, when the
- * viewer has an allowed move, Move (the move sheet). Navigation is a
- * full-bleed overlay button laid behind the card content.
+ * viewer has an allowed move, Move (the move sheet). A long-press on touch or
+ * a right-click on laptop opens the same menu (useMenuGesture). Navigation is
+ * a full-bleed overlay button laid behind the card content.
  */
 export function PostCard({
   post,
@@ -285,11 +288,26 @@ export function PostCard({
     );
   };
   const due = post.target_date !== null ? cardDue(post.target_date, stage, timeZone, clock) : null;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const gesture = useMenuGesture(() => setMenuOpen(true));
+  const hasMenu = onMove !== undefined;
 
   return (
     <div
       data-induction={INDUCTION_KEYS.pipelinePostRow}
       data-induction-post={post.id}
+      {...(hasMenu
+        ? {
+            ...gesture.handlers,
+            // The click that trails a long-press never reaches Open post.
+            onClickCapture: (event: MouseEvent) => {
+              if (gesture.consumeClickSuppression()) {
+                event.preventDefault();
+                event.stopPropagation();
+              }
+            },
+          }
+        : {})}
       className="relative flex h-full min-w-0 flex-col rounded-xl border border-border bg-panel transition-colors hover:bg-panel-2"
     >
       <PressableRow
@@ -399,16 +417,20 @@ export function PostCard({
           ) : null}
           {onMove !== undefined ? (
             // Above the Open post overlay (z-10) so a tap opens the menu, not
-            // the post. Pointer down stops here (the menu rows included, through
-            // the React tree) so the feed's long-press never arms under it. The
-            // negative margins keep the 44px target from growing the row.
+            // the post. Pointer down and right-click stop here (the menu rows
+            // included, through the React tree) so the card's own menu gesture
+            // never arms under it. The negative margins keep the 44px target
+            // from growing the row.
             <div
               data-post-card-menu=""
               onPointerDown={(event) => event.stopPropagation()}
+              onContextMenu={(event) => event.stopPropagation()}
               className="ml-auto flex shrink-0"
             >
               <ActionMenu
                 title={post.title}
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
                 items={cardMenuItems({
                   onOpen: () => navigate(href),
                   onCopyLink: copyLink,

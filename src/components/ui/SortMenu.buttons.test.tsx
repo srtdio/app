@@ -3,7 +3,10 @@ import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 // Desktop layout: the trigger renders inline (the menu stays closed).
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 
 import { SortMenu, sortOptionButtons, type SortOption } from '@/components/ui/SortMenu';
 import { Toast } from '@/components/ui/toast/Toast';

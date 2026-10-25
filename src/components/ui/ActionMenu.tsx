@@ -9,13 +9,13 @@ import { ICON_SIZE, IconMore } from '@/components/ui/icons';
 import type { IconProps } from '@/components/ui/icons';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
 import { cn } from '@/lib/cn';
-import { useIsLaptop } from '@/lib/use-is-laptop';
+import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
 
 /** One row of a ⋯ menu. */
 export interface ActionMenuItem {
   id: string;
   label: string;
-  /** An icon from ui/icons.tsx; the menu sets its size (tray on phone, inline on laptop). */
+  /** An icon from ui/icons.tsx; the menu sets its size (ICON_SIZE.tray, phone and laptop). */
   icon: ComponentType<IconProps>;
   /** One meta line under the label, phone only. */
   description?: string;
@@ -118,8 +118,9 @@ export function popoverAnchor(
 /**
  * The one ⋯ menu. Phone: a Sheet titled {title} of PressableRows (tray-size
  * icon, optional one-line description). Laptop (useIsLaptop): a MenuPopover
- * anchored to the trigger with the same rows, no descriptions. A row closes
- * the menu, then runs its onSelect.
+ * anchored to the trigger with the same rows (tray-size icon), no
+ * descriptions. Both close on Escape and hand focus back to the opener. A row
+ * closes the menu, then runs its onSelect.
  */
 export function ActionMenu({
   title,
@@ -153,14 +154,7 @@ export function ActionMenu({
     const el = wrapRef.current;
     if (el === null) return;
     const r = el.getBoundingClientRect();
-    setAnchor(
-      popoverAnchor(
-        r,
-        rows.length,
-        { width: window.innerWidth, height: window.innerHeight },
-        align,
-      ),
-    );
+    setAnchor(popoverAnchor(r, rows.length, viewportSize(), align));
     function close(): void {
       setOpen(false);
     }
@@ -219,7 +213,7 @@ export function ActionMenu({
                               item.tone === 'danger' ? 'text-bad' : 'text-fg-2',
                             )}
                           >
-                            <Icon size={ICON_SIZE.inline} />
+                            <Icon size={ICON_SIZE.tray} />
                           </span>
                           <span className="truncate">{item.label}</span>
                         </PressableRow>

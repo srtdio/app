@@ -260,7 +260,8 @@ import { safeTimeZone } from '@/lib/time';
 import { HISTORY_STEP_KEYS, useHistoryStep } from '@/lib/chat/use-history-step';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
-import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { prefersReducedMotion, useIsLaptop } from '@/lib/use-is-laptop';
+import { useLongPress } from '@/components/ui/useLongPress';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { logger } from '@/lib/logger';
 import { DUR_SLOW_MS } from '@/lib/motion';
@@ -369,7 +370,7 @@ export function PlanPage(props: {
 }): ReactElement | null {
   const [rendered, setRendered] = useState(props.open);
   const [entered, setEntered] = useState(false);
-  const desktop = useMediaQuery(LAPTOP_QUERY);
+  const desktop = useIsLaptop();
   const pageRef = useRef<HTMLDivElement>(null);
   const onEnteredRef = useRef(props.onEntered);
   onEnteredRef.current = props.onEntered;
@@ -1198,7 +1199,7 @@ export function PlanScreen(props: {
   const agency = side === 'agency' && bundle !== null;
   // Laptop (md and up): the docked panel; edit mode adds the right-click day
   // menu and the keyboard move (agency only).
-  const desktop = useMediaQuery(LAPTOP_QUERY);
+  const desktop = useIsLaptop();
   const deskAgency = desktop && agency;
   const editing = agency && editMode;
   const deskEditing = deskAgency && editMode;
@@ -2609,7 +2610,7 @@ export function PlanHeaderMenu(props: {
         flat
         className="flex items-center gap-3 px-3 text-lg text-fg"
       >
-        <IconEdit size={ICON_SIZE.nav} />
+        <IconEdit size={ICON_SIZE.tray} />
         {RENAME_LABEL}
       </PressableRow>
       {props.canDelete ? (
@@ -2621,7 +2622,7 @@ export function PlanHeaderMenu(props: {
           flat
           className="flex items-center gap-3 px-3 text-lg text-bad hover:bg-bad-soft"
         >
-          <IconTrash size={ICON_SIZE.nav} />
+          <IconTrash size={ICON_SIZE.tray} />
           {DELETE_PLAN_LABEL}
         </PressableRow>
       ) : null}
@@ -2775,12 +2776,6 @@ export interface DragState {
   overIndex: number;
   /** Set once dropped: the clone eases to this top before the move lands. */
   snapTop: number | null;
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
 }
 
 /**
@@ -3628,6 +3623,19 @@ function PlanRow(props: {
   const id = props.item.id;
   const wrapRef = useRef<HTMLDivElement>(null);
   const lastPointer = useRef('');
+  // Where the last touch press started: a hold opens the same day menu a
+  // right-click opens, at that point. Presses on the grip are drags, never holds.
+  const holdAt = useRef<{ x: number; y: number } | null>(null);
+  const hold = useLongPress(
+    () => {
+      const at = holdAt.current;
+      if (edit?.onMenu === undefined || edit.dragging || wrapRef.current === null || at === null) {
+        return;
+      }
+      edit.onMenu(id, wrapRef.current, at.x, at.y);
+    },
+    { ignoreMouse: true },
+  );
   const title = rowTitle(props.bundle, props.item);
   const date = itemDateLabel(props.bundle, props.item, zone);
   const alsoIn = alsoInLabel(props.alsoIn ?? []);
@@ -3745,11 +3753,29 @@ function PlanRow(props: {
         onPointerDownCapture={(event) => {
           lastPointer.current = event.pointerType;
         }}
+        onPointerDown={(event) => {
+          // A hold whose trailing click never came must not swallow this press's.
+          hold.clearClickSuppression();
+          const onGrip = (event.target as Element).closest('[data-plan-grip]') !== null;
+          holdAt.current = onGrip ? null : { x: event.clientX, y: event.clientY };
+          if (onGrip) hold.cancel();
+          else hold.handlers.onPointerDown(event);
+        }}
+        onPointerMove={hold.handlers.onPointerMove}
+        onPointerUp={hold.handlers.onPointerUp}
+        onPointerCancel={hold.handlers.onPointerCancel}
+        onClickCapture={(event) => {
+          // The click that trails a hold never also opens or toggles a control.
+          if (!hold.consumeClickSuppression()) return;
+          event.preventDefault();
+          event.stopPropagation();
+        }}
         onContextMenu={(event) => {
           event.preventDefault();
-          // A touch long-press never opens the menu (the grip drags).
+          // Touch: the hold (LONG_PRESS_MS) opens the menu instead, once.
           const native = event.nativeEvent as Partial<PointerEvent>;
           if (native.pointerType === 'touch' || lastPointer.current === 'touch') return;
+          hold.cancel();
           if (edit.onMenu === undefined || edit.dragging || wrapRef.current === null) return;
           edit.onMenu(id, wrapRef.current, event.clientX, event.clientY);
         }}

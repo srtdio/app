@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/cn';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
-import { useLongPress } from '@/components/pages/assets/useLongPress';
+import { useMenuGesture } from '@/components/ui/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { ICON_SIZE, IconCheck, IconMore } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
@@ -25,7 +25,7 @@ interface AssetCardProps {
   cache: PresignCache;
   /** Tap: open the lightbox (files) or the external link (links). */
   onOpen: () => void;
-  /** The rows of this card's ⋯ menu (ui/ActionMenu), opened by the ⋯ or a long press. */
+  /** The rows of this card's ⋯ menu (ui/ActionMenu), opened by the ⋯, a long press or a right-click. */
   menuItems?: readonly ActionMenuItem[];
   /** When true, a tap toggles selection instead of opening, and a tick is shown. */
   selectMode?: boolean;
@@ -58,17 +58,26 @@ export function AssetCard({
   onStartSelect,
 }: AssetCardProps) {
   const name = displayLabel(item);
-  // The ⋯ menu's open state: the ⋯ toggles it, a long press opens it.
+  // The ⋯ menu's open state: the ⋯ toggles it; a long press (touch) or a
+  // right-click (laptop) opens it (useMenuGesture, LONG_PRESS_MS).
   const [menuOpen, setMenuOpen] = useState(false);
   // Called unconditionally to satisfy the rules of hooks; its handlers are only
   // spread onto the button when select mode is off.
-  const longPress = useLongPress(() => setMenuOpen(true), onOpen);
+  const gesture = useMenuGesture(() => setMenuOpen(true));
 
   // In select mode the card is a plain toggle: a tap selects/deselects and the
-  // long-press + lightbox/link wiring is bypassed (you pick files, not open them).
+  // menu gesture + lightbox/link wiring is bypassed (you pick files, not open them).
   const interaction = selectMode
     ? { onClick: onToggleSelect, 'aria-pressed': selected, 'aria-label': `Select ${name}` }
-    : { ...longPress, 'aria-label': item.kind === 'link' ? `Open ${name}` : `View ${name}` };
+    : {
+        ...gesture.handlers,
+        // A tap opens; the click that trails a long-press does not.
+        onClick: () => {
+          if (gesture.consumeClickSuppression()) return;
+          onOpen();
+        },
+        'aria-label': item.kind === 'link' ? `Open ${name}` : `View ${name}`,
+      };
 
   return (
     <div className="relative">

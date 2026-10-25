@@ -53,7 +53,7 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 import { useInductionPostPreset } from '@/components/induction/InductionProvider';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useSort } from '@/lib/use-sort';
 import { useSession } from '@/lib/session-context';
 import {
@@ -88,9 +88,6 @@ const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 
 /** The UI-only chip key: not a workflow stage, the existing unfiltered board. */
 const ALL_KEY = 'all';
-
-// The app's md breakpoint: kanban at >=768px, the stacked tab feed below it.
-const DESKTOP_QUERY = '(min-width: 768px)';
 
 interface PipelineHeaderProps {
   search: string;
@@ -721,7 +718,8 @@ export interface MovePostDeps {
 
 export function PipelinePage() {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
-  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  // Kanban on laptop (useIsLaptop), the stacked tab feed on phone.
+  const isDesktop = useIsLaptop();
   // Stage, search, date window and custom range live in the URL query so Back
   // restores them. Opens on Review when the query names no stage (a stale
   // ?view=plan link included: only the pipeline's own keys are read).
@@ -1056,7 +1054,7 @@ export function PipelinePage() {
       movePost(postId, toStage, null, options),
     [movePost],
   );
-  // A long-press on a card this viewer cannot move does nothing.
+  // Move on a card this viewer cannot move does nothing.
   const openMove = useCallback(
     (post: PipelinePost): void => {
       if (roleStatus === 'ready' && !hasAllowedMove(role, post.stage as Stage)) return;

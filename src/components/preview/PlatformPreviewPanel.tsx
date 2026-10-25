@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { IconButton } from '@/components/ui/IconButton';
@@ -372,12 +373,7 @@ function LayoutMock({
   hasMedia: boolean;
 }): ReactElement {
   const ratio = frameRatio(size);
-  const initial = handle.trim().charAt(0).toUpperCase() || '?';
-  const avatar = (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg">
-      {initial}
-    </span>
-  );
+  const avatar = <Avatar name={handle.trim()} role="header" />;
   const placeholder = (
     <span className="flex h-full w-full items-center justify-center text-sm text-fg-3">
       {hasMedia ? 'Loading' : 'Photos and videos show up here.'}

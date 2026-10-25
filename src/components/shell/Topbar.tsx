@@ -90,7 +90,7 @@ export function Topbar({
 
         <IconButton type="button" label="Account menu" onClick={onOpenAvatar}>
           <Avatar
-            size="md"
+            role="header"
             {...(currentUserName !== undefined ? { name: currentUserName } : {})}
             {...(currentUserAvatarUrl ? { src: currentUserAvatarUrl } : {})}
           />

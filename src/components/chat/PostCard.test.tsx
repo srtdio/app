@@ -10,7 +10,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import type { Client } from '@srtdio/rpc';
 import type { CardFirstMedia, PostCardRow } from '../../../packages/posts/src/reads';
-import { createLongPressController } from '@/components/ui/useLongPress';
+import {
+  createLongPressController,
+  LONG_PRESS_MS,
+  MOVE_CANCEL_PX,
+} from '@/components/ui/useLongPress';
 import { PostSheetExtras, talkAboutLabel } from '@/components/chat/PostSheet';
 import { agencyWaitingHint } from '@/components/chat/post-sheet';
 import {
@@ -362,7 +366,7 @@ describe('card long-press: talk about the post', () => {
   }
 
   it('holds 450 ms within 10 px', () => {
-    expect(CARD_HOLD).toEqual({ thresholdMs: 450, moveTolerancePx: 10 });
+    expect(CARD_HOLD).toEqual({ thresholdMs: LONG_PRESS_MS, moveTolerancePx: MOVE_CANCEL_PX });
   });
 
   it('a hold calls onTalkAbout and the click that ends it does not open the sheet', () => {

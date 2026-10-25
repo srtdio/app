@@ -1,59 +1,50 @@
 // The one source for every chat type size (WhatsApp parity). The size table is
-// chosen by INPUT, not width: phones and tablets (any coarse pointer) take the
-// touch values, a mouse or trackpad at 768px and up takes the laptop values.
+// chosen by WIDTH, the app's one breakpoint (src/lib/use-is-laptop): under
+// 768px takes the touch values, 768px and up (iPad portrait and landscape
+// included) takes the laptop values. Pointer type never picks the table.
 // Paired constants hold both; a single string is the same on both. Chat
 // surfaces use only these; no other size literals. 12px / 16px is Tailwind's
 // text-sm.
 
-import { useEffect, useState } from 'react';
+import { isLaptopNow, LAPTOP_MIN_WIDTH_PX, useIsLaptop } from '@/lib/use-is-laptop';
 
 /** Which size table a chat surface renders with. */
 export type ChatLayout = 'touch' | 'laptop';
 
-/** A chat size with its touch (phone, tablet) and laptop (mouse, trackpad) values. */
+/** A chat size with its touch (phone) and laptop (768px and up, iPad included) values. */
 export interface ChatSize {
   touch: string;
   laptop: string;
 }
 
-/** A mouse or trackpad: hover-capable with a fine primary pointer. */
+/** A mouse or trackpad: hover-capable with a fine primary pointer (input, never layout). */
 export const HOVER_POINTER_QUERY = '(hover: hover) and (pointer: fine)';
 
-/** The laptop layout: a fine hover pointer AND at least 768px wide. */
-export const LAPTOP_LAYOUT_QUERY = `${HOVER_POINTER_QUERY} and (min-width: 768px)`;
-
-/** The laptop table's minimum width. */
-export const LAPTOP_MIN_WIDTH_PX = 768;
-
 /**
- * The size table for an input and width: laptop only for a fine hover pointer
- * at 768px and up; any coarse pointer (an iPad at any width) is touch. Pure.
+ * The laptop layout's query: the app's one breakpoint, width only. Kept for
+ * callers outside chat that still read it; new code reads useIsLaptop().
  */
-export function chatLayout(input: { finePointer: boolean; widthPx: number }): ChatLayout {
-  return input.finePointer && input.widthPx >= LAPTOP_MIN_WIDTH_PX ? 'laptop' : 'touch';
+export const LAPTOP_LAYOUT_QUERY = `(min-width: ${LAPTOP_MIN_WIDTH_PX}px)`;
+
+/** The laptop table's minimum width (the app's one breakpoint). */
+export { LAPTOP_MIN_WIDTH_PX };
+
+/** The size table for a width: laptop at 768px and up (an iPad too), touch below. Pure. */
+export function chatLayout(input: { widthPx: number }): ChatLayout {
+  return input.widthPx >= LAPTOP_MIN_WIDTH_PX ? 'laptop' : 'touch';
 }
 
-/** The layout right now, read synchronously; touch where matchMedia is unavailable. */
+/** The layout right now, read synchronously; touch where the width cannot be read. */
 export function readChatLayout(): ChatLayout {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'touch';
-  return window.matchMedia(LAPTOP_LAYOUT_QUERY).matches ? 'laptop' : 'touch';
+  return isLaptopNow() ? 'laptop' : 'touch';
 }
 
 /**
- * The chat layout, resolved on the first render (the initializer reads
- * matchMedia) so the first paint uses its final size table, then kept current.
+ * The chat layout, resolved on the first render (useIsLaptop reads the width
+ * synchronously) so the first paint uses its final size table, then kept current.
  */
 export function useChatLayout(): ChatLayout {
-  const [layout, setLayout] = useState<ChatLayout>(readChatLayout);
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    const list = window.matchMedia(LAPTOP_LAYOUT_QUERY);
-    const onChange = (): void => setLayout(list.matches ? 'laptop' : 'touch');
-    onChange();
-    list.addEventListener('change', onChange);
-    return () => list.removeEventListener('change', onChange);
-  }, []);
-  return layout;
+  return useIsLaptop() ? 'laptop' : 'touch';
 }
 
 /** The classes of a paired size for a layout. */
@@ -206,7 +197,7 @@ export const EMOJI_GROUP_TYPE = 'text-sm font-medium';
 /** The reason line under a disabled selection Delete: 13/18, 400 on both. */
 export const SELECTION_REASON_TYPE = 'text-[13px] leading-[18px] font-normal';
 
-/** A touch-first device (phone, tablet): long-press owns the menu, contextmenu is suppressed. */
+/** A touch-first primary pointer (input, never layout): long-press owns the menu, contextmenu is suppressed. */
 export const COARSE_POINTER_QUERY = '(pointer: coarse)';
 
 /**

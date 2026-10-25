@@ -17,8 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
-import { IconPaperclip } from '@/components/chat/AttachmentIcons';
-import { IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconPaperclip, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
 import {

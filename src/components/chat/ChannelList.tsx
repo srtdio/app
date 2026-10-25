@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { countBadgeText } from '@/components/ui/CountBadge';
+import { CountBadge, countBadgeText } from '@/components/ui/CountBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { SelectCheck } from '@/components/ui/SelectCheck';
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { useCoarsePointer, useHoverPointer } from '@/lib/use-is-laptop';
 import { filterChannelsByName } from '@/lib/channel-filter';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
@@ -57,7 +57,6 @@ import { NotesAvatar } from '@/components/chat/NotesBits';
 import { useSession } from '@/lib/session-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import {
-  COARSE_POINTER_QUERY,
   DRAFT_PREFIX_TYPE,
   NO_TOUCH_SELECT,
   useChatLayout,
@@ -201,11 +200,11 @@ export const DEFAULT_LIST_INPUT: ChannelListInput = {
   coarsePointer: false,
 };
 
-/** The list's input: one layout listener and two media queries for the whole list. */
+/** The list's input: one layout listener and two pointer reads for the whole list. */
 export function useChannelListInput(): ChannelListInput {
   const layout = useChatLayout();
-  const hoverMenu = useMediaQuery(HOVER_POINTER_QUERY);
-  const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY);
+  const hoverMenu = useHoverPointer();
+  const coarsePointer = useCoarsePointer();
   return useMemo(() => ({ layout, hoverMenu, coarsePointer }), [layout, hoverMenu, coarsePointer]);
 }
 
@@ -320,7 +319,7 @@ function skeletonLabel(first: boolean): ReactElement {
 
 /**
  * The loading body: the real sections' shapes (label, wide 100px tiles with a
- * 76px rounded-square photo, label, a 2-column grid of 168px square tiles with
+ * 72px rounded-square photo, label, a 2-column grid of 168px square tiles with
  * a 72px disc), so swapping in the list shifts nothing. Reuses the repo's
  * animate-pulse + bg-panel-2 skeleton pattern; no spinner.
  */
@@ -335,7 +334,7 @@ export function channelListSkeleton(): ReactElement {
               data-skeleton-row="wide"
               className={cn(tileBoxClass('wide'), 'border-border bg-panel animate-pulse')}
             >
-              <div className="h-[76px] w-[76px] shrink-0 rounded-xl bg-panel-2" />
+              <div className="h-[72px] w-[72px] shrink-0 rounded-xl bg-panel-2" />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <div className="h-4 w-1/2 rounded bg-panel-2" />
                 <div className="h-3 w-3/4 rounded bg-panel-2" />
@@ -410,9 +409,6 @@ export function channelTileLabel(props: {
   return parts.join(', ');
 }
 
-/** Devices that get the hover ⋯ control (a mouse or trackpad, not touch). */
-const HOVER_POINTER_QUERY = '(hover: hover) and (pointer: fine)';
-
 /** Shift+F10 or the ContextMenu key opens a focused row's menu (Enter still opens the chat). */
 export function rowMenuKey(event: { key: string; shiftKey: boolean }): boolean {
   return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10');
@@ -470,20 +466,13 @@ export const PERSON_PREVIEW_TYPE = 'text-md font-normal';
 export const TILE_TIME_TYPE = 'font-mono text-sm font-normal tabular-nums';
 
 /**
- * The wide tile's 76px rounded-square (radius 18) group photo: the shared
- * Avatar (photo or initials fallback, unchanged) resized in place, so the box
- * is final on first paint.
+ * The wide tile's group photo slot: the shared Avatar at its profile role
+ * (72px), group kind (rounded square), so the box is final on first paint.
  */
-export const GROUP_TILE_PHOTO =
-  'flex h-[76px] w-[76px] shrink-0 [&>*]:!h-[76px] [&>*]:!w-[76px] [&>*]:!rounded-xl [&>*]:!text-2xl';
+export const GROUP_TILE_PHOTO = 'flex shrink-0';
 
-/** The square tile's 72px circular photo: the shared Avatar resized in place. */
-export const PERSON_TILE_PHOTO =
-  'flex h-[72px] w-[72px] shrink-0 [&>*]:!h-[72px] [&>*]:!w-[72px] [&>*]:!text-2xl';
-
-/** The unread pill: 22px min, radius 11, accent fill, 12/600. */
-export const TILE_PILL =
-  'inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-sm font-semibold leading-none tabular-nums text-accent-fg';
+/** The square tile's photo slot: the shared Avatar at its profile role (72px circle). */
+export const PERSON_TILE_PHOTO = 'flex shrink-0';
 
 /**
  * A tile's box: hairline border, radius 18 and its fixed height. Wide: 100 tall
@@ -546,18 +535,13 @@ export const CHANNEL_ROW_BUTTON = cn(
   NO_TOUCH_SELECT,
 );
 
-/** The unread pill, or nothing when the count is 0. */
+/** The unread count (the shared CountBadge), or nothing when the count is 0. */
 function unreadPill(unread: number): ReactElement | null {
-  const text = unreadPillText(unread);
-  return text === null ? null : (
-    <span data-unread-pill="" className={TILE_PILL}>
-      {text}
-    </span>
-  );
+  return unreadPillText(unread) === null ? null : <CountBadge count={unread} />;
 }
 
 /**
- * The inside of one tile. Wide (group): 76px rounded-square photo, then name +
+ * The inside of one tile. Wide (group): 72px rounded-square photo, then name +
  * time over a 2-line preview, the pill at the far right. Square (person): 72px
  * disc, name, a 1-line preview, time pinned to the bottom, the pill in the top
  * right corner. The avatar URL is on the summary before the tile mounts (one
@@ -624,7 +608,8 @@ export function channelRowBody(props: {
       <Avatar
         name={chatDisplayName(channel)}
         {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-        size="row"
+        role="profile"
+        kind={wide ? 'group' : 'person'}
       />
     </span>
   );
@@ -871,7 +856,7 @@ export function notesTile(props: {
         )}
       >
         <NotesAvatar
-          size="tile"
+          role="profile"
           src={notes.avatarUrl}
           surface={props.selected && !props.selecting ? 'panel-2' : 'panel'}
           {...(!props.selected && !props.selecting ? { hoverSurface: 'panel-2' as const } : {})}

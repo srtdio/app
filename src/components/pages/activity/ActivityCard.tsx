@@ -16,8 +16,8 @@ import {
   IconClock,
   IconFile,
   IconPlan,
-  IconSend,
   IconTaskSquare,
+  IconTickSingle,
 } from '@/components/ui/icons';
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
 import {
@@ -243,7 +243,7 @@ function EntryAuthor({ entry }: { entry: ActivityItem }) {
       <Avatar
         name={entry.actorName}
         {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
-        size="sm"
+        role="inline"
       />
       <span className="truncate text-sm font-medium text-fg-3">{entry.actorName}</span>
     </div>
@@ -265,7 +265,7 @@ function AlertIcon({ item, alert }: { item: ActivityItem; alert: AlertInfo }): R
     alert.kind === 'reminder' || item.eventType === 'task_due' ? (
       <IconAlarmClock size={ICON_SIZE.status} />
     ) : alert.kind === 'sent' ? (
-      <IconSend size={ICON_SIZE.status} />
+      <IconTickSingle size={ICON_SIZE.status} />
     ) : alert.kind === 'failed' ? (
       <IconCalendarClock size={ICON_SIZE.status} />
     ) : alert.kind === 'plan' ? (
@@ -537,7 +537,7 @@ export function ActivityCard({
                 <Avatar
                   name={actorName}
                   {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
-                  size="sm"
+                  role="inline"
                 />
               ) : null}
               <span className="truncate text-sm font-medium text-fg-3">

@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ICON_SIZE, IconForward, IconStar, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
+import { bottomAnchorProps } from '@/lib/bottom-inset';
 import { DELETE_BLOCK_COPY, type DeleteBlock } from '@/lib/chat/forward';
 import { deleteNotesConfirmCopy, type DeleteConfirmCopy } from '@/lib/chat/delete-flow';
 import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
@@ -90,6 +91,8 @@ export function SelectionBarView(props: {
   return (
     <div
       data-selection-bar=""
+      // A bottom bar in place of the composer: the Undo strip stacks above it.
+      {...bottomAnchorProps}
       className="flex shrink-0 flex-col gap-1 border-t border-border bg-panel px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3"
     >
       <div className="flex items-center justify-between gap-2">

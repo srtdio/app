@@ -9,14 +9,14 @@ export function SupportRows(props: { onContact: () => void; onBook: () => void }
   return (
     <>
       <ActionRow
-        icon={<IconAt size={ICON_SIZE.nav} />}
+        icon={<IconAt size={ICON_SIZE.tray} />}
         label="Contact us"
         sub={SUPPORT_EMAIL}
         onClick={props.onContact}
         chevron
       />
       <ActionRow
-        icon={<IconCalendar size={ICON_SIZE.nav} />}
+        icon={<IconCalendar size={ICON_SIZE.tray} />}
         label="Book a call"
         sub="Pick a time, we send a Meet link"
         onClick={props.onBook}

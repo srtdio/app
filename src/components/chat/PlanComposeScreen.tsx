@@ -86,6 +86,7 @@ import {
 } from '@/lib/chat/plans';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { cn } from '@/lib/cn';
+import { prefersReducedMotion } from '@/lib/use-is-laptop';
 import { logger } from '@/lib/logger';
 import { civilDaysBetween, civilToday, formatCivilDayHeader } from '@/lib/plan-week';
 import { supabase } from '@/lib/supabase';
@@ -185,14 +186,6 @@ export function composeServerError(message: string): ComposeError {
   return at === -1
     ? { heading: copy, lines: [] }
     : { heading: copy.slice(0, at + 1), lines: [copy.slice(at + 2)] };
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
 }
 
 export function PlanComposeScreen(props: {

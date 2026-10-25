@@ -9,9 +9,9 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 // Laptop or phone, as the test sets it; Notifications is a marker (its reads stay out).
 const view = vi.hoisted(() => ({ desktop: false }));
 const Beside = () => <div>activity-beside</div>;
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => view.desktop,
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => view.desktop,
 }));
 vi.mock('@/components/chat/PlanScreen', () => ({
   PlanScreen: (props: {

@@ -13,9 +13,9 @@ const { media, facts } = vi.hoisted(() => ({
   facts: { current: undefined as unknown as GuideFactsRead, reads: 0 },
 }));
 
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => media.laptop,
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => media.laptop,
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 vi.mock('./induction-data', () => ({

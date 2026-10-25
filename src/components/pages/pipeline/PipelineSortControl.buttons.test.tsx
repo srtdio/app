@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 vi.mock('@/components/pages/pipeline/PipelineDateRangeCalendar', () => ({
   PipelineDateRangeCalendar: () => null,
 }));
@@ -81,5 +86,15 @@ describe('Pipeline controls buttons', () => {
     expect(html).toContain('<span class="tabular-nums">3</span>');
     expect(html).toContain('<span class="tabular-nums">1</span>');
     expect(html).not.toContain('<span class="tabular-nums">0</span>');
+  });
+
+  it('reads the one breakpoint, and its laptop popover closes on Escape and returns focus', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./PipelineSortControl.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).not.toMatch(/useMediaQuery|use-media-query|matchMedia/);
+    expect(src.match(/useIsLaptop\(\)/g)).toHaveLength(3);
+    expect(src).toContain('useDismissLayer(props.isDesktop && props.open, props.onClose, panelRef);');
   });
 });

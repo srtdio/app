@@ -90,7 +90,7 @@ function MemberRowItem({ member, canManage, onChangeRole, onRemove }: RowProps) 
       <Avatar
         name={member.displayName}
         {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-        size="lg"
+        role="row"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -156,7 +156,7 @@ function PendingRowItem({
 
   return (
     <div className="flex items-start gap-3 px-4 py-3">
-      <Avatar name={info.email} size="lg" />
+      <Avatar name={info.email} role="row" />
       {editing ? (
         <PendingEditFields
           member={member}

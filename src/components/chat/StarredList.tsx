@@ -18,6 +18,7 @@ import type { ReactElement, ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { NoResults } from '@/components/ui/NoResults';
@@ -250,25 +251,11 @@ function noCallout(event: { preventDefault: () => void }): void {
   event.preventDefault();
 }
 
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const first = parts[0]?.charAt(0) ?? '';
-  const last = parts.length > 1 ? (parts[parts.length - 1]?.charAt(0) ?? '') : '';
-  return (first + last).toUpperCase();
-}
-
-/** The 28px sender avatar: the photo when known, else initials on panel-3. */
+/** The sender avatar beside the name (the shared Avatar, inline role): the photo when known, else initials. */
 function RowAvatar(props: { name: string; src: string | null }): ReactElement {
   return (
-    <span
-      aria-hidden="true"
-      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-panel-3 text-xs font-semibold text-fg-2"
-    >
-      {props.src !== null ? (
-        <img src={props.src} alt="" draggable={false} className="h-full w-full object-cover" />
-      ) : (
-        initialsOf(props.name)
-      )}
+    <span aria-hidden="true" className="flex shrink-0">
+      <Avatar role="inline" name={props.name} {...(props.src !== null ? { src: props.src } : {})} />
     </span>
   );
 }
@@ -588,7 +575,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
           <li key={i} className="flex flex-col gap-2 rounded-2xl border border-border bg-panel p-3">
             <div className="flex items-center gap-2">
-              <div className="h-7 w-7 shrink-0 rounded-full bg-panel-2" />
+              <div className="h-5 w-5 shrink-0 rounded-full bg-panel-2" />
               <div className="h-3.5 w-1/3 rounded bg-panel-2" />
             </div>
             <div className={cn('h-8 w-2/3 bg-panel-2', BUBBLE_SHAPE.touch)} />

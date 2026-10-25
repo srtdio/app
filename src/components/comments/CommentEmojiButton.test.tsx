@@ -7,18 +7,19 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
+// Laptop width with a fine hover pointer, flipped per case.
+const layout = vi.hoisted(() => ({ laptop: false }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => layout.laptop,
+  useHoverPointer: () => layout.laptop,
+}));
+
 import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
 import type { CaretTextarea } from '@/components/comments/CommentEmojiButton';
-import { LAPTOP_LAYOUT_QUERY } from '@/components/chat/chat-type';
 
 function stubLayout(laptop: boolean): void {
-  vi.stubGlobal('window', {
-    matchMedia: (query: string) => ({
-      matches: laptop && query === LAPTOP_LAYOUT_QUERY,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    }),
-  });
+  layout.laptop = laptop;
 }
 
 afterEach(() => {
@@ -26,7 +27,7 @@ afterEach(() => {
 });
 
 describe('CommentEmojiButton: laptop only', () => {
-  it('renders a 44x44 Emoji dialog button when the laptop query matches', () => {
+  it('renders a 44x44 Emoji dialog button on laptop with a hover pointer', () => {
     stubLayout(true);
     const html = renderToStaticMarkup(<CommentEmojiButton onPick={() => {}} />);
     expect(html).toContain('aria-label="Emoji"');

@@ -12,6 +12,8 @@ import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { copyText } from '@/lib/clipboard';
+import { useBottomInset } from '@/lib/bottom-inset';
+import { viewportSize } from '@/lib/use-is-laptop';
 
 /** The URL parameter that turns the log on (1) or off (0). */
 export const PAINT_LOG_PARAM = 'paintlog';
@@ -221,6 +223,8 @@ function PaintLogPanel(): ReactElement {
   const [open, setOpen] = useState(true);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const listRef = useRef<HTMLOListElement | null>(null);
+  // Above every marked bottom bar (tab bar, composer), never over them.
+  const inset = useBottomInset();
   useFrameSampler();
   // The newest line stays in view while the panel is open.
   useEffect(() => {
@@ -231,7 +235,7 @@ function PaintLogPanel(): ReactElement {
     formatPaintLog(store.entries(), [
       `paint log, origin ${new Date(performance.timeOrigin).toISOString()}`,
       `ua ${navigator.userAgent}`,
-      `viewport ${window.innerWidth}x${window.innerHeight} dpr ${window.devicePixelRatio}`,
+      `viewport ${viewportSize().width}x${viewportSize().height} dpr ${window.devicePixelRatio}`,
       `path ${window.location.pathname}`,
     ]);
   const onCopy = (): void => {
@@ -240,7 +244,8 @@ function PaintLogPanel(): ReactElement {
   return (
     <div
       data-paint-log=""
-      className="fixed inset-x-2 bottom-2 z-[70] flex flex-col overflow-hidden rounded-xl border border-border bg-panel text-fg shadow-2xl"
+      style={{ bottom: inset + 8 }}
+      className="fixed inset-x-2 z-[70] flex flex-col overflow-hidden rounded-xl border border-border bg-panel text-fg shadow-2xl"
     >
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2">
         <span className="flex-1 truncate text-sm font-semibold text-fg-2">

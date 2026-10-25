@@ -42,7 +42,8 @@ import {
 } from '@/lib/induction';
 import { CLEAR_CARD_COPY, fillCopy, GUIDE_CHROME } from '@/lib/induction-copy';
 import type { RouteScript, Step } from '@/lib/induction-model';
-import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { useEscapeLayer } from '@/lib/escape-stack';
+import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
 import { useInduction, type InductionContextValue } from './InductionProvider';
 import {
   GuideBar,
@@ -97,7 +98,7 @@ function ActiveGuide({
   script: RouteScript;
   tabsShown: boolean;
 }): ReactElement | null {
-  const laptop = useMediaQuery(LAPTOP_QUERY);
+  const laptop = useIsLaptop();
   useStepNavigation(ctx);
   const safeTop = useRef<HTMLDivElement>(null);
   const safeBottom = useRef<HTMLDivElement>(null);
@@ -238,7 +239,11 @@ function CardLayer({
 }): ReactElement {
   const { card } = resolution;
   const fill = (text: string): string => fillCopy(text, ctx.copy);
-  if (card.kind === 'closing' && ctx.route === 'creator' && ctx.sample.seeded) {
+  const clearing = card.kind === 'closing' && ctx.route === 'creator' && ctx.sample.seeded;
+  // Escape dismisses a card the way its own control does: the intro skips, the
+  // closing card finishes. The clear card runs its own sequence and keeps it.
+  useEscapeLayer(!clearing, card.kind === 'intro' ? ctx.skip : ctx.finish);
+  if (clearing) {
     return <ClearCard ctx={ctx} steps={resolution.steps.length} dock={dock} />;
   }
   return (
@@ -439,10 +444,7 @@ function StepLayer({
   const radius = boxed !== undefined ? guideRadius(radiusOf(boxed)) : 0;
   useEffect(() => {
     if (control === undefined) return;
-    const box = clampToViewport(boxRect(control), {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    });
+    const box = clampToViewport(boxRect(control), viewportSize());
     marks.current.boxed = {
       id: step.id,
       rect: { ...box, top: box.top + window.scrollY, left: box.left + window.scrollX },
@@ -483,7 +485,7 @@ function StepLayer({
   };
   const dock: DockAt = {
     side: barSide(control !== undefined ? boxRect(control) : undefined, {
-      viewportHeight: window.innerHeight,
+      viewportHeight: viewportSize().height,
       insets: frame.insets,
       barHeight: bar.height,
     }),
@@ -540,7 +542,7 @@ function Spotlight({
 }): ReactElement {
   const [labelEl, setLabelEl] = useState<HTMLDivElement | null>(null);
   const size = useElementSize(labelEl, LABEL_FALLBACK);
-  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  const viewport = viewportSize();
   const box = boxRect(control);
   const { dock } = frame;
   const barRoom = dock.laptop ? 0 : frame.barHeight + DOCK_GAP;
@@ -593,7 +595,7 @@ function useBringIntoView(stepId: string, el: HTMLElement | undefined): void {
     if (since.current.key !== key) since.current = { key, at: performance.now() };
     if (performance.now() - since.current.at > BRING_WINDOW_MS) return;
     const r = el.getBoundingClientRect();
-    if (r.top >= 0 && r.bottom <= window.innerHeight && !coveredByPage(el, r)) return;
+    if (r.top >= 0 && r.bottom <= viewportSize().height && !coveredByPage(el, r)) return;
     el.scrollIntoView?.({ block: 'center' });
   });
 }

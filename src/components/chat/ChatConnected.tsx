@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
-import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import {
@@ -576,7 +576,7 @@ export function autoCloseAction(historyState: unknown): 'pop' | 'replace' {
 
 export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const { client, status, workspaceId, currentUserId } = props;
-  const isDesktop = useMediaQuery(LAPTOP_QUERY);
+  const isDesktop = useIsLaptop();
   const { workspaces } = useWorkspace();
   const workspace = workspaces.find((w) => w.id === workspaceId);
   // Every chat screen shows the workspace as "<Brand> - <Platform>"; stored group names stay as they are.

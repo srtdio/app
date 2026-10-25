@@ -77,7 +77,7 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(html).toContain(`src="${PHOTO}"`);
     // First paint is the photo: no initials fallback rendered alongside it.
     expect(html).not.toContain('>LA<');
-    // A group is a wide tile: a 76px rounded-square photo.
+    // A group is a wide tile: a 72px rounded-square photo (profile role, group kind).
     expect(html).toContain(
       `data-group-photo="" class="${GROUP_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
     );
@@ -103,6 +103,7 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
       `data-person-photo="" class="${PERSON_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
     );
     expect(html).toContain('rounded-full');
+    expect(html).toContain('data-avatar-role="profile"');
   });
 });
 

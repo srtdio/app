@@ -64,7 +64,7 @@ function PhotoOptionRow(props: {
         danger ? 'text-bad' : 'text-fg',
       )}
     >
-      <span className={cn('flex w-5 shrink-0 justify-center', danger ? 'text-bad' : 'text-fg-2')}>
+      <span className={cn('flex w-6 shrink-0 justify-center', danger ? 'text-bad' : 'text-fg-2')}>
         {props.icon}
       </span>
       {ROW_LABEL[props.option]}
@@ -73,9 +73,9 @@ function PhotoOptionRow(props: {
 }
 
 const ROW_ICON: Record<PhotoOption, ReactNode> = {
-  camera: <IconCamera size={ICON_SIZE.control} />,
-  library: <IconImage size={ICON_SIZE.control} />,
-  remove: <IconTrash size={ICON_SIZE.control} />,
+  camera: <IconCamera size={ICON_SIZE.tray} />,
+  library: <IconImage size={ICON_SIZE.tray} />,
+  remove: <IconTrash size={ICON_SIZE.tray} />,
 };
 
 /** The rows alone (no Sheet, no inputs); the body the sheet renders. */

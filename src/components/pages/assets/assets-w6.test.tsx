@@ -211,6 +211,9 @@ describe('7. select mode', () => {
     }
     expect(pageSource).not.toMatch(/>\s*Move\s*</);
     expect(pageSource).toContain('data-select-actions');
+    // The phone selection bar sits above the tab bar, never over it.
+    expect(pageSource).toContain('useBottomInset(selectBarRef)');
+    expect(pageSource).toContain('style={{ bottom: selectBarInset }}');
     expect(pageSource).not.toContain('Done\n');
   });
 });

@@ -10,30 +10,39 @@ import type { ThreadMessage } from '@/lib/chat/thread';
 import type { SavedFromLine } from '@/lib/chat/saved-from';
 import { ICON_SIZE, IconFile } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { avatarShapeClass, type AvatarRole } from '@/components/ui/Avatar';
 
-/** The notes photo slot: 76px tile (radius 18), 40px header and 44px picker/search (radius 12). */
-const NOTES_AVATAR_BOX = {
-  tile: 'h-[76px] w-[76px] rounded-xl',
-  header: 'h-10 w-10 rounded-xl',
-  small: 'h-11 w-11 rounded-xl',
-} as const;
+/**
+ * The notes photo slot at the shared avatar roles, note kind (a rounded
+ * square): profile 72 (the chat home tile), header 32 (the thread header) and
+ * row 40 (forward picker and search rows). Same sizes and shapes as Avatar.
+ */
+export type NotesAvatarRole = Extract<AvatarRole, 'profile' | 'header' | 'row'>;
 
-export type NotesAvatarSize = keyof typeof NOTES_AVATAR_BOX;
-
-const NOTES_GLYPH_SIZE: Record<NotesAvatarSize, number> = {
-  tile: ICON_SIZE.status,
-  header: ICON_SIZE.tray,
-  small: ICON_SIZE.tray,
+const NOTES_AVATAR_SIZE: Record<NotesAvatarRole, string> = {
+  profile: 'h-[72px] w-[72px]',
+  header: 'h-8 w-8',
+  row: 'h-10 w-10',
 };
 
-/** The badge: 30px, -5px, 3px ring on the tile; 20px, -4px, 2px ring on small sizes. */
-const NOTES_BADGE: Record<NotesAvatarSize, { box: string; glyph: number }> = {
-  tile: {
+function notesBox(role: NotesAvatarRole): string {
+  return cn(NOTES_AVATAR_SIZE[role], avatarShapeClass(role, 'note'));
+}
+
+const NOTES_GLYPH_SIZE: Record<NotesAvatarRole, number> = {
+  profile: ICON_SIZE.status,
+  header: ICON_SIZE.nav,
+  row: ICON_SIZE.tray,
+};
+
+/** The badge: 30px, -5px, 3px ring on the profile tile; 20px, -4px, 2px ring on the smaller roles. */
+const NOTES_BADGE: Record<NotesAvatarRole, { box: string; glyph: number }> = {
+  profile: {
     box: 'h-[30px] w-[30px] -bottom-[5px] -right-[5px] border-[3px]',
     glyph: ICON_SIZE.inline,
   },
   header: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
-  small: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
+  row: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
 };
 
 /** The surface behind the avatar: the badge ring takes it, so it cuts out cleanly. */
@@ -64,10 +73,10 @@ export const NOTES_AVATAR_LABEL = 'Personal notes';
  * photo is laid over the fallback in the same box and shows once loaded, so
  * nothing moves when it arrives; a failed photo stays on the fallback (never
  * a broken image, never initials). One component for the tile, the header,
- * the forward picker and search rows. No motion.
+ * the forward picker and search rows, at the shared avatar roles. No motion.
  */
 export function NotesAvatar(props: {
-  size: NotesAvatarSize;
+  role: NotesAvatarRole;
   /** The user's own users.avatar_url; null or absent shows the notebook. */
   src?: string | null;
   surface?: NotesAvatarSurface;
@@ -98,7 +107,7 @@ export function NotesAvatar(props: {
     else setFailed(src);
   }, [src]);
   return notesAvatarView({
-    size: props.size,
+    role: props.role,
     src,
     loaded: src !== null && loaded === src,
     failed: src !== null && failed === src,
@@ -118,7 +127,7 @@ export function NotesAvatar(props: {
  * in the same box and shows (with its badge) only once loaded.
  */
 export function notesAvatarView(input: {
-  size: NotesAvatarSize;
+  role: NotesAvatarRole;
   src: string | null;
   loaded: boolean;
   failed: boolean;
@@ -130,8 +139,8 @@ export function notesAvatarView(input: {
 }): ReactElement {
   const usable = input.src !== null && input.src !== '' && !input.failed;
   const shown = usable && input.loaded;
-  const box = NOTES_AVATAR_BOX[input.size];
-  const badge = NOTES_BADGE[input.size];
+  const box = notesBox(input.role);
+  const badge = NOTES_BADGE[input.role];
   return (
     <span
       role="img"
@@ -145,7 +154,7 @@ export function notesAvatarView(input: {
           box,
         )}
       >
-        {shown ? null : <IconFile size={NOTES_GLYPH_SIZE[input.size]} />}
+        {shown ? null : <IconFile size={NOTES_GLYPH_SIZE[input.role]} />}
         {usable && input.src !== null ? (
           <img
             ref={input.imgRef}

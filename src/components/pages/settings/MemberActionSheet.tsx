@@ -99,7 +99,7 @@ export function MemberActionSheet({
             <Avatar
               name={member.displayName}
               {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-              size="xl"
+              role="profile"
             />
             <div className="min-w-0">
               <div className="truncate text-base font-medium text-fg">{member.displayName}</div>

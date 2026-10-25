@@ -39,8 +39,8 @@ const EM_DASH = String.fromCharCode(0x2014);
 
 describe('T8 tray and emoji button by pointer', () => {
   it('the D1 tiles in order on touch and laptop, Schedule last', () => {
-    const laptop = chatLayout({ finePointer: true, widthPx: 1280 });
-    const touch = chatLayout({ finePointer: false, widthPx: 390 });
+    const laptop = chatLayout({ widthPx: 1280 });
+    const touch = chatLayout({ widthPx: 390 });
     const ids = ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan', 'schedule'];
     expect(trayTiles(laptop).map((t) => t.id)).toEqual(ids);
     expect(trayTiles(touch).map((t) => t.id)).toEqual(ids);
@@ -161,9 +161,10 @@ describe('T8 tray and emoji button by pointer', () => {
     expect(src).toContain('draft={draftEnabled}');
   });
 
-  it('the emoji button is hidden on a coarse pointer (touch, any width)', () => {
-    expect(showsEmojiButton(chatLayout({ finePointer: false, widthPx: 1024 }))).toBe(false);
-    expect(showsEmojiButton(chatLayout({ finePointer: true, widthPx: 1280 }))).toBe(true);
+  it('the emoji button follows the one breakpoint: hidden on a phone, shown at 768px and up', () => {
+    expect(showsEmojiButton(chatLayout({ widthPx: 390 }))).toBe(false);
+    expect(showsEmojiButton(chatLayout({ widthPx: 1024 }))).toBe(true);
+    expect(showsEmojiButton(chatLayout({ widthPx: 1280 }))).toBe(true);
   });
 
   it('the composer gates the emoji button on that rule', () => {
@@ -204,12 +205,12 @@ describe('reading layer elements', () => {
   it('latest button is 44px, solid panel, with a count badge', () => {
     const html = renderToStaticMarkup(<LatestButton visible count={3} onTap={() => undefined} />);
     expect(html).toContain('h-11 w-11');
-    expect(html).toContain('data-latest-count');
+    expect(html).toContain('data-count-badge');
     const none = renderToStaticMarkup(
       <LatestButton visible={false} count={0} onTap={() => undefined} />,
     );
     expect(none).toContain('opacity-0');
-    expect(none).not.toContain('data-latest-count');
+    expect(none).not.toContain('data-count-badge');
   });
 
   it('Seen line is 11/15 muted with a sans tabular time', () => {

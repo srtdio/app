@@ -93,8 +93,10 @@ describe('searchResultsView', () => {
     expect(html).toMatch(
       /data-search-snippet=""[^>]*><b data-search-match="" class="font-semibold text-fg">shoot<\/b>/,
     );
-    // Group: rounded square; person: circle.
-    expect(html).toContain('[&amp;&gt;*]:!rounded-xl');
+    // Group: rounded square (the shared Avatar's group kind); person: circle. No "!" overrides.
+    expect(html).toContain('rounded-lg inline-flex');
+    expect(html).toContain('rounded-full inline-flex');
+    expect(html).not.toContain(':!rounded');
     // Long-press: no selection, no callout.
     expect(html).toContain('[-webkit-touch-callout:none]');
   });

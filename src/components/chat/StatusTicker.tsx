@@ -36,6 +36,7 @@ import { useThreadCardCache } from '@/components/chat/PostCard';
 import { useToast } from '@/components/ui/toast';
 import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import { cn } from '@/lib/cn';
+import { prefersReducedMotion } from '@/lib/use-is-laptop';
 import {
   NOTHING_OPEN_LINE,
   SECTION_ROWS,
@@ -519,14 +520,6 @@ export function snapShut(input: { offset: number; height: number; velocity: numb
   return height - input.offset >= height * SNAP_SHARE;
 }
 
-function reducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
 interface Gesture {
   source: 'bar' | 'handle';
   pointerId: number;
@@ -593,7 +586,7 @@ export function ChatStatus(props: {
       closeTimer.current = null;
       scrollTo.current = { section, scrollTop: opts?.scrollTop ?? null };
       measureTop();
-      setAnimate(opts?.instant !== true && !reducedMotion());
+      setAnimate(opts?.instant !== true && !prefersReducedMotion());
       setDrag(null);
       setShown(true);
       setTarget('open');
@@ -603,7 +596,7 @@ export function ChatStatus(props: {
   );
 
   const close = useCallback((opts?: { instant?: boolean }) => {
-    const instant = opts?.instant === true || reducedMotion();
+    const instant = opts?.instant === true || prefersReducedMotion();
     setAnimate(!instant);
     setDrag(null);
     setTarget('closed');
@@ -818,7 +811,7 @@ export function ChatStatus(props: {
       ? !snapShut({ offset: g.offset, height, velocity: g.velocity })
       : snapOpen({ offset: g.offset, height, velocity: g.velocity });
     if (stayOpen) {
-      setAnimate(!reducedMotion());
+      setAnimate(!prefersReducedMotion());
       setDrag(null);
       setTarget('open');
       setEntered(true);
@@ -831,7 +824,7 @@ export function ChatStatus(props: {
     gesture.current = null;
     if (!g.moved) return;
     if (g.base > 0) {
-      setAnimate(!reducedMotion());
+      setAnimate(!prefersReducedMotion());
       setDrag(null);
       setTarget('open');
       setEntered(true);

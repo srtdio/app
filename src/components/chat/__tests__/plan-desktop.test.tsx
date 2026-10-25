@@ -205,8 +205,8 @@ describe('the docked panel', () => {
     expect(src).toContain('min-[1180px]:[box-shadow:none]');
     const css = readFileSync(fileURLToPath(new URL('../../../index.css', import.meta.url)), 'utf8');
     expect(css.match(/--shadow-panel-left:/g)).toHaveLength(2);
-    // One laptop query for every laptop layout.
-    expect(src).toContain('useMediaQuery(LAPTOP_QUERY)');
+    // One laptop switch for every laptop layout.
+    expect(src).toContain('useIsLaptop()');
     expect(src).not.toContain('usePlanDesktop');
     // The phone page is unchanged.
     expect(src).toContain(
@@ -218,7 +218,7 @@ describe('the docked panel', () => {
     const chat = read('ChatConnected.tsx');
     expect(chat).toContain("planPanelOpen && 'min-[1180px]:mr-[440px]'");
     expect(chat).toContain('max-[891px]:invisible max-[891px]:absolute');
-    expect(chat).toContain('useMediaQuery(LAPTOP_QUERY)');
+    expect(chat).toContain('useIsLaptop()');
   });
 
   it('Escape: inside the panel it stops at the panel; on the page only when nothing else owns it', () => {

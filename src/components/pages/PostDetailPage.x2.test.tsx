@@ -42,7 +42,7 @@ describe('1. caption block (mock P1)', () => {
   it('reads like the post: workspace row and a text Edit with pencil (flow B 27: no platform line, no vN)', () => {
     const start = PAGE.indexOf('data-caption-block=""');
     const block = PAGE.slice(start, PAGE.indexOf('data-caption-edit=""', start) + 600);
-    expect(block).toContain('<Avatar name={workspaceName ?? \'\'} size="md" />');
+    expect(block).toContain('<Avatar name={workspaceName ?? \'\'} role="header" />');
     expect(block).not.toContain('{formatLabel(post.format)}');
     // The old version pill is gone for good (its component was deleted).
     expect(PAGE).not.toContain('VersionPill');

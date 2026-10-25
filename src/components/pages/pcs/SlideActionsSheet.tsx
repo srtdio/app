@@ -83,12 +83,12 @@ export function SlideActionsSheet({
     <Sheet open={open} onClose={onClose} title={`Image ${index + 1} of ${count}`}>
       <div className="flex flex-col gap-1">
         <SlideRow
-          icon={<IconPlus size={ICON_SIZE.nav} />}
+          icon={<IconPlus size={ICON_SIZE.tray} />}
           label="Add image after this"
           onClick={() => run(onAddAfter)}
         />
         <SlideRow
-          icon={<IconTrash size={ICON_SIZE.nav} />}
+          icon={<IconTrash size={ICON_SIZE.tray} />}
           label="Remove image"
           danger
           disabled={saving}

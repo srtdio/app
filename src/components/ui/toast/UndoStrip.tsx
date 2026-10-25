@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
+import { BOTTOM_ANCHOR_ATTR, measureBottomInset } from '@/lib/bottom-inset';
+import { isLaptopNow } from '@/lib/use-is-laptop';
 
 /** Gap between the strip and the surface it sits on (tab bar or composer). */
 export const STRIP_ANCHOR_GAP_PX = 8;
 /** A swipe down past this share of the strip's height dismisses it (accept). */
 export const STRIP_SWIPE_ACCEPT_RATIO = 0.4;
-/** Marks a bottom surface the strip floats above on phone (BottomTabs, chat composer). */
-export const UNDO_ANCHOR_ATTR = 'data-undo-anchor';
+/** Marks a bottom surface the strip floats above on phone: the shared bottom-bar anchor. */
+export const UNDO_ANCHOR_ATTR = BOTTOM_ANCHOR_ATTR;
 
 /**
  * Strip keyframes. translateY only; the exit starts from the drag offset
@@ -40,21 +42,6 @@ export function swipeAccepts(dragPx: number, heightPx: number): boolean {
   return heightPx > 0 && dragPx >= heightPx * STRIP_SWIPE_ACCEPT_RATIO;
 }
 
-function measureAnchorTops(): number[] {
-  const tops: number[] = [];
-  for (const el of document.querySelectorAll(`[${UNDO_ANCHOR_ATTR}]`)) {
-    const rect = el.getBoundingClientRect();
-    if (rect.height > 0 && rect.width > 0) tops.push(rect.top);
-  }
-  return tops;
-}
-
-function isPhone(): boolean {
-  return (
-    typeof window.matchMedia !== 'function' || !window.matchMedia('(min-width: 768px)').matches
-  );
-}
-
 interface UndoStripProps {
   toast: ToastModel;
   /** True while the strip plays its exit before the provider unmounts it. */
@@ -81,7 +68,13 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
   const [bottom, setBottom] = useState<number | null>(null);
 
   const place = useCallback((): void => {
-    setBottom(isPhone() ? stripBottomPx(measureAnchorTops(), window.innerHeight) : null);
+    if (isLaptopNow()) {
+      setBottom(null);
+      return;
+    }
+    // The shared inset (top of the highest bottom bar); none leaves the CSS fallback.
+    const inset = measureBottomInset(ref.current);
+    setBottom(inset > 0 ? inset + STRIP_ANCHOR_GAP_PX : null);
   }, []);
 
   useLayoutEffect(() => {
@@ -93,7 +86,7 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
     window.visualViewport?.addEventListener('resize', place);
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
     if (observer !== null) {
-      for (const el of document.querySelectorAll(`[${UNDO_ANCHOR_ATTR}]`)) observer.observe(el);
+      for (const el of document.querySelectorAll(`[${BOTTOM_ANCHOR_ATTR}]`)) observer.observe(el);
     }
     return () => {
       window.removeEventListener('resize', place);

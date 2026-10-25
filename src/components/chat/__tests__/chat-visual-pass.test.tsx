@@ -88,7 +88,8 @@ describe('chat visual pass', () => {
 
   it('contact info uses the same avatar fill as the list and header', () => {
     const sheet = read('../ContactSheet.tsx');
-    expect(sheet).toContain('avatarFillFor(props.name)');
+    expect(sheet).toContain('<Avatar');
+    expect(sheet).toContain('role="profile"');
     expect(sheet).not.toContain('rounded-full bg-panel-3 text-2xl font-semibold text-fg-2');
   });
 

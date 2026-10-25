@@ -52,9 +52,10 @@ vi.mock('@/lib/people-names', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/people-names')>();
   return { ...actual, resolvePeople: async () => true };
 });
-vi.mock('@/lib/use-media-query', () => ({
-  LAPTOP_QUERY: '(min-width: 768px)',
-  useMediaQuery: () => false,
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => false,
+  useHoverPointer: () => false,
 }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@/lib/chat/use-chat-attachments', () => ({

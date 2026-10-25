@@ -13,7 +13,10 @@ vi.mock('@/components/induction/InductionProvider', () => ({
   useInduction: () => (state.restart === undefined ? null : { restart: state.restart }),
 }));
 vi.mock('@/lib/use-theme', () => ({ useTheme: () => ({ theme: 'light', toggle: vi.fn() }) }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 vi.mock('@/lib/events', () => ({ dispatchSorted: vi.fn() }));
 
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
@@ -88,5 +91,28 @@ describe('AvatarMenu rows', () => {
     );
     act(() => (settings as HTMLButtonElement).click());
     expect(navigate).toHaveBeenCalledWith('/settings');
+  });
+});
+
+describe('AvatarMenu dismiss (laptop popover)', () => {
+  it('closes on Escape and hands focus back to the account button', () => {
+    const opener = document.createElement('button');
+    opener.textContent = 'Account menu';
+    document.body.appendChild(opener);
+    opener.focus();
+    const onClose = vi.fn();
+    function Harness({ open }: { open: boolean }) {
+      return <AvatarMenu open={open} onClose={onClose} />;
+    }
+    root = createRoot(host!);
+    act(() => root!.render(<Harness open />));
+    const row = document.querySelector<HTMLButtonElement>('[role="menuitem"]');
+    act(() => row?.focus());
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    act(() => root!.render(<Harness open={false} />));
+    expect(document.activeElement).toBe(opener);
   });
 });

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
 vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
@@ -473,5 +475,15 @@ describe('Pipeline polish: one fixed cover box per platform', () => {
     expect(out).toContain('data-post-card-thumb');
     expect(out).not.toContain('data-post-card-play');
     expect(out).toContain('aria-label="Video"');
+  });
+});
+
+describe('menu gesture', () => {
+  it('a long-press (touch) or a right-click (laptop) opens the same ⋯ ActionMenu', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('useMenuGesture(() => setMenuOpen(true))');
+    expect(src).toContain('...gesture.handlers');
+    expect(src).toContain('open={menuOpen}');
+    expect(src).toContain('onOpenChange={setMenuOpen}');
   });
 });

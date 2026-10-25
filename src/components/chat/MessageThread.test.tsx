@@ -1634,7 +1634,7 @@ describe('header online dot', () => {
 
   it('the dot is a 10px good circle with a 2px panel ring at the bottom-right', () => {
     const dots: string[] = [];
-    walk(Avatar({ name: 'Alice', presence: 'online' }), (el) => {
+    walk(Avatar({ name: 'Alice', role: 'header', presence: 'online' }), (el) => {
       const props = el.props as Record<string, unknown>;
       if (props['data-presence'] === 'online') dots.push(String(props.className));
     });
@@ -1645,7 +1645,7 @@ describe('header online dot', () => {
     expect(dots[0]).toContain('bottom-0');
     expect(dots[0]).toContain('right-0');
     let none = 0;
-    walk(Avatar({ name: 'Alice' }), (el) => {
+    walk(Avatar({ name: 'Alice', role: 'header' }), (el) => {
       if ((el.props as Record<string, unknown>)['data-presence'] !== undefined) none += 1;
     });
     expect(none).toBe(0);

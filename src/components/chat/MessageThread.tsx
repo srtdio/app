@@ -104,7 +104,7 @@ import {
 import { useToast } from '@/components/ui/toast';
 import { deleteConfirmCopy } from '@/lib/chat/delete-flow';
 import { cn } from '@/lib/cn';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import type { ChannelSummary, ChatProfile } from '@/lib/chat-reads';
 import {
   breaksRun,
@@ -129,13 +129,11 @@ import {
   BUBBLE_PAD,
   BUBBLE_SHAPE,
   BUBBLE_TAIL,
-  COARSE_POINTER_QUERY,
   DATE_PILL_TYPE,
   GROUP_SENDER_TYPE,
   HEADER_LINE_TYPE,
   HEADER_NAME_TYPE,
   HEADER_PAD,
-  HOVER_POINTER_QUERY,
   NO_TOUCH_SELECT,
   REACTION_EMOJI_TYPE,
   sized,
@@ -541,9 +539,6 @@ interface MessageThreadProps {
   /** Menu "Save to notes" in any other chat; absent hides it. */
   onSaveToNotes?: (message: ThreadMessage) => void;
 }
-
-/** Users who asked for less motion: the swipe resets without a spring. */
-export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 /** Pointer handlers on a bubble: the long-press and swipe-to-reply controllers, composed. */
 export interface BubblePointerHandlers {
@@ -1082,8 +1077,9 @@ function TypingIndicator(props: {
 /**
  * The header's photo and name block. With `onOpenContact` it is one 44px-tall
  * button spanning both: a DM opens the Contact sheet, a group opens Group info.
- * Without the handler it is the plain block. The group photo is 40px in the
- * same slot as the DM photo, with the shared initials fallback. Hook-free.
+ * Without the handler it is the plain block. The photo is the shared Avatar at
+ * its header role (a group's rounded square, a person's circle), with the
+ * shared initials fallback. Hook-free.
  */
 export function ThreadHeaderIdentity(props: {
   isGroup: boolean;
@@ -1100,17 +1096,18 @@ export function ThreadHeaderIdentity(props: {
 }): ReactElement {
   const photo =
     props.notes === true ? (
-      <NotesAvatar size="header" src={props.avatarUrl} surface="panel" />
+      <NotesAvatar role="header" src={props.avatarUrl} surface="panel" />
     ) : props.isGroup ? (
       <Avatar
         name={props.title}
-        size="header"
+        role="header"
+        kind="group"
         {...(props.avatarUrl !== null ? { src: props.avatarUrl } : {})}
       />
     ) : (
       <Avatar
         name={props.title}
-        size="row"
+        role="header"
         {...(props.avatarUrl !== null ? { src: props.avatarUrl } : {})}
         presence={props.presence}
       />
@@ -2158,7 +2155,7 @@ export function MessageBubble(props: {
   );
   const photo = showMeta
     ? withRailPhoto(
-        <Avatar name={name} {...senderAvatarProps(message, profiles)} size="md" />,
+        <Avatar name={name} {...senderAvatarProps(message, profiles)} role="header" />,
         rail,
         railEdge,
       )
@@ -2179,7 +2176,7 @@ export function MessageBubble(props: {
       >
         {rail?.role === 'middle' ? <RailThrough /> : null}
         {photo}
-        {gutter ? <span className="w-[26px] shrink-0" aria-hidden="true" /> : null}
+        {gutter ? <span className="w-8 shrink-0" aria-hidden="true" /> : null}
         <div className={column}>
           {senderLine}
           {withRailBox(
@@ -2276,7 +2273,7 @@ export function MessageBubble(props: {
       ) : null}
       {rail?.role === 'middle' ? <RailThrough /> : null}
       {photo}
-      {gutter ? <span className="w-[26px] shrink-0" aria-hidden="true" /> : null}
+      {gutter ? <span className="w-8 shrink-0" aria-hidden="true" /> : null}
       <div className={cn('relative', column)}>
         {senderLine}
         {swipe !== undefined ? <SwipeReplyIcon iconRef={swipe.iconRef} /> : null}
@@ -3387,9 +3384,10 @@ function ThreadBody(
       onBoundary: () => setMenu((m) => (m !== null ? { ...m, openedAt: serverNow() } : m)),
     });
   }, [menuCreatedAt, menuOpenedAt, serverNow]);
-  const hoverMenu = useMediaQuery(HOVER_POINTER_QUERY);
-  const coarsePointer = useMediaQuery(COARSE_POINTER_QUERY);
-  const reducedMotion = useMediaQuery(REDUCED_MOTION_QUERY);
+  const hoverMenu = useHoverPointer();
+  const coarsePointer = useCoarsePointer();
+  // Users who asked for less motion: the swipe resets without a spring.
+  const reducedMotion = usePrefersReducedMotion();
   const toast = useToast();
   // The open menu's star reads the one star store.
   const menuStarred = useIsStarred(menu?.message.id ?? '');
@@ -4861,9 +4859,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     setReplyDraftState(next);
     if (channelId !== undefined) setDraft(channelId, { reply: next });
   };
-  // Laptop (fine pointer): the composer takes the cursor when the chat opens.
-  const finePointer = useMediaQuery(HOVER_POINTER_QUERY);
-  // The size table by input: touch (phones, tablets) or laptop (mouse, 768px+).
+  // A mouse or trackpad (input, not layout): the composer takes the cursor when the chat opens.
+  const finePointer = useHoverPointer();
+  // The size table by width: touch (phones) or laptop (768px and up, iPad included).
   const layout = useChatLayout();
   // The post the conversation is about: sends with no reply draft reply to its
   // card message. Independent of the reply draft; only its X clears it.

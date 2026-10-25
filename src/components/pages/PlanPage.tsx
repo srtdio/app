@@ -33,7 +33,7 @@ import { PLAN_NOT_AVAILABLE } from '@/components/chat/plan-card';
 import { PlanScreen, PlanPage as PlanFrame } from '@/components/chat/PlanScreen';
 import { hasPreviousEntry } from '@/lib/chat/use-history-step';
 import { cn } from '@/lib/cn';
-import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace } from '@/lib/workspace-context';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -82,7 +82,7 @@ export function replacesPlanEntry(input: {
  */
 export function PlanBesideLayout(props: { page: ReactElement; planPattern: string }): ReactElement {
   const plan = useMatch(props.planPattern) !== null;
-  const desktop = useMediaQuery(LAPTOP_QUERY);
+  const desktop = useIsLaptop();
   return (
     <>
       {!plan || desktop ? (
@@ -104,7 +104,7 @@ export function PlanPage(props: { fallback: string }): ReactElement {
   const navType = useNavigationType();
   const location = useLocation();
   const { workspaceId } = useWorkspace();
-  const desktop = useMediaQuery(LAPTOP_QUERY);
+  const desktop = useIsLaptop();
 
   // A plan opened over a plan: step back, then replace with the new one; the
   // new plan shows throughout (no flash of the one it replaces).

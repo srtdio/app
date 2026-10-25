@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
+import { bottomAnchorProps } from '@/lib/bottom-inset';
 
 interface SheetProps {
   open: boolean;
@@ -183,9 +184,9 @@ export function Sheet({
         </div>
         {footer !== undefined ? (
           // The footer's bottom padding clears the iPhone home bar. It is an
-          // undo anchor: the phone Undo strip floats above it, never over it.
+          // bottom anchor: the phone Undo strip floats above it, never over it.
           <div
-            data-undo-anchor=""
+            {...bottomAnchorProps}
             className="flex items-center gap-2.5 px-[18px] pt-3 pb-[max(12px,env(safe-area-inset-bottom))] border-t border-border"
           >
             {footer}

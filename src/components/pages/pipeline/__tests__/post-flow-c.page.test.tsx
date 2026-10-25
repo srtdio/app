@@ -7,7 +7,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => true }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => true,
+}));
 import type { PipelinePost, Result } from '@srtdio/posts';
 
 interface PendingRead {
@@ -32,7 +35,6 @@ vi.mock('@/lib/workspace-context', () => ({
 }));
 vi.mock('@/lib/session-context', () => ({ useSession: () => ({ session: null }) }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
-vi.mock('@/lib/use-media-query', () => ({ useMediaQuery: () => true }));
 vi.mock('@/lib/workspace-context-capability', () => ({ useWorkspaceCapability: () => true }));
 vi.mock('@/lib/use-sort', () => ({ useSort: () => ({ value: '', setValue: () => {} }) }));
 vi.mock('@/lib/use-workspace-data-changed', () => ({ useWorkspaceDataChanged: () => {} }));

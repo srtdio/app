@@ -388,7 +388,7 @@ describe('load status', () => {
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
-  it('skeleton tiles match the real tile boxes (wide 100 + 76px photo, square 168 + 72px disc)', () => {
+  it('skeleton tiles match the real tile boxes (wide 100 + 72px photo, square 168 + 72px disc)', () => {
     const tiles = findAll(
       withStatus('loading'),
       (el) => (el.props as Record<string, unknown>)['data-skeleton-row'] !== undefined,
@@ -409,7 +409,7 @@ describe('load status', () => {
           /rounded-(full|xl)/.test((el.props as { className?: string }).className ?? ''),
       );
       expect((photo!.props as { className: string }).className).toContain(
-        wide ? 'h-[76px] w-[76px]' : 'h-[72px] w-[72px]',
+        'h-[72px] w-[72px]',
       );
     }
     expect(

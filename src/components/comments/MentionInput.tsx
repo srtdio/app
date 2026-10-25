@@ -15,6 +15,7 @@ import type { KeyboardEvent } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { MentionCandidate } from '@/components/comments/useMentionCandidates';
+import { useEscapeLayer } from '@/lib/escape-stack';
 
 const TEXT_NODE = 3;
 const ELEMENT_NODE = 1;
@@ -386,11 +387,12 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     emit();
   }
 
+  // Escape ends the @ query (and so the picker) as the top layer, so Escape in a
+  // composer inside a Sheet closes the picker and leaves the Sheet open.
+  useEscapeLayer(query !== null, () => setQuery(null));
+
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    if (!open) {
-      if (event.key === 'Escape' && query !== null) setQuery(null);
-      return;
-    }
+    if (!open) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       setHighlight((h) => (h + 1) % matches.length);
@@ -401,9 +403,6 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
       event.preventDefault();
       const member = matches[highlight];
       if (member !== undefined) selectMember(member);
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      setQuery(null);
     }
   }
 
@@ -454,7 +453,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
               >
                 <Avatar
                   name={member.name}
-                  size="md"
+                  role="row"
                   {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
                 />
                 <span className="flex min-w-0 flex-1 flex-col">

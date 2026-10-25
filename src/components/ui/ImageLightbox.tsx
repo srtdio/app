@@ -28,6 +28,7 @@ import {
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
+import { viewportSize } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
 import { VIEWER_ERROR } from '@/components/ui/FileViewer';
 import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
@@ -247,7 +248,7 @@ export function createScrollLock(
 // over another (nested modals) never releases the page early.
 const bodyScrollLock = createScrollLock(
   () => document.body,
-  () => window.innerWidth,
+  () => viewportSize().width,
 );
 
 // Icon buttons on the viewer's own dark backdrop. 44x44 touch targets.

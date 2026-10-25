@@ -24,7 +24,7 @@ const PHOTO = 'https://cdn.test/me.png';
 const view = (over: Partial<Parameters<typeof notesAvatarView>[0]> = {}): string =>
   renderToStaticMarkup(
     notesAvatarView({
-      size: 'tile',
+      role: 'profile',
       src: PHOTO,
       loaded: true,
       failed: false,
@@ -55,9 +55,9 @@ describe('notes avatar', () => {
     expect(view()).not.toContain('group-hover/notes-row');
   });
 
-  it('small sizes: 44px radius 12, 20px badge, -4px out, 2px ring', () => {
-    const html = view({ size: 'small', surface: 'bg' });
-    expect(html).toContain('h-11 w-11 rounded-xl');
+  it('row role: 40px rounded-lg (the shared note shape), 20px badge, -4px out, 2px ring', () => {
+    const html = view({ role: 'row', surface: 'bg' });
+    expect(html).toContain('h-10 w-10 rounded-lg');
     expect(html).toContain('h-5 w-5 -bottom-1 -right-1 border-2');
     expect(html).toContain('border-bg');
   });
@@ -84,7 +84,7 @@ describe('notes avatar', () => {
     expect(html).toContain('opacity-0');
     expect(html).toContain('absolute inset-0');
     expect(html).not.toContain('data-notes-badge');
-    expect(html.match(/h-\[76px\] w-\[76px\]/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(html.match(/h-\[72px\] w-\[72px\]/g)?.length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -145,10 +145,11 @@ describe('the same notes avatar in all four places, no reads', () => {
       expect(html).toContain('data-notes-avatar');
       expect(html).toContain(`src="${PHOTO}"`);
     }
-    expect(tile).toContain('h-[76px] w-[76px] rounded-xl');
-    expect(header).toContain('h-10 w-10 rounded-xl');
-    expect(picker).toContain('h-11 w-11 rounded-xl');
-    expect(search).toContain('h-11 w-11 rounded-xl');
+    // The shared avatar roles, note kind: profile 72, header 32, row 40.
+    expect(tile).toContain('h-[72px] w-[72px] rounded-xl');
+    expect(header).toContain('h-8 w-8 rounded-lg');
+    expect(picker).toContain('h-10 w-10 rounded-lg');
+    expect(search).toContain('h-10 w-10 rounded-lg');
     expect(from).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });

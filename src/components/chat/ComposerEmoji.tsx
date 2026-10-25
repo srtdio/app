@@ -1,4 +1,4 @@
-// The laptop composer's emoji button (fine pointer only; never on touch) and
+// The laptop composer's emoji button (768px and up, iPad included; never on a phone) and
 // its popover: an 8-column grid of 36px cells from the curated static list
 // (emoji-list.ts), the 16 recents first. Glyphs are text, no images, no search.
 // A pick inserts at the caret; Escape or a click outside closes it. Tokens
@@ -13,7 +13,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { popoverClass } from '@/components/ui/popover-classes';
 import type { ChatLayout } from '@/components/chat/chat-type';
 
-/** The emoji button is a laptop (fine pointer) control only; never on touch. Pure. */
+/** The emoji button is a laptop (768px and up) control only; never on a phone. Pure. */
 export function showsEmojiButton(layout: ChatLayout): boolean {
   return layout === 'laptop';
 }

@@ -4,14 +4,17 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActionMenu, orderActionItems } from '@/components/ui/ActionMenu';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
-import { IconArrowUpRight, IconEdit, IconLink, IconTrash } from '@/components/ui/icons';
+import { ICON_SIZE, IconArrowUpRight, IconEdit, IconLink, IconTrash } from '@/components/ui/icons';
 import { DUR_BASE_MS } from '@/lib/motion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The phone/laptop split is the one hook; the test flips it per case.
 const laptop = vi.hoisted(() => ({ value: false }));
-vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => laptop.value }));
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
+  useIsLaptop: () => laptop.value,
+}));
 
 let root: Root | null = null;
 
@@ -144,6 +147,14 @@ describe('ActionMenu on phone', () => {
     expect(rows[0]?.className).toContain('text-fg');
   });
 
+  it('renders row icons at the tray size', async () => {
+    await mount();
+    await openMenu();
+    for (const row of menuRows()) {
+      expect(row.querySelector('svg')?.getAttribute('width')).toBe(String(ICON_SIZE.tray));
+    }
+  });
+
   it('closes and runs onSelect when a row is chosen', async () => {
     const onSelect = vi.fn();
     await mount([{ id: 'rename', label: 'Rename', icon: IconEdit, onSelect }]);
@@ -192,6 +203,30 @@ describe('ActionMenu on laptop', () => {
     const rows = menuRows();
     expect(rows[rows.length - 1]?.className).toContain('text-bad');
     expect(rows[0]?.className).not.toContain('text-bad');
+  });
+
+  it('renders row icons at the tray size', async () => {
+    await mount();
+    await openMenu();
+    for (const row of menuRows()) {
+      expect(row.querySelector('svg')?.getAttribute('width')).toBe(String(ICON_SIZE.tray));
+    }
+  });
+
+  it('closes on Escape and hands focus back to the trigger', async () => {
+    await mount();
+    const trigger = document.querySelector<HTMLButtonElement>('[aria-label="More actions"]');
+    trigger?.focus();
+    await openMenu();
+    await act(async () => {
+      menuRows()[0]?.focus();
+    });
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await wait(DUR_BASE_MS + 50);
+    });
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('marks the trigger expanded while open', async () => {

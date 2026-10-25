@@ -73,7 +73,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
                 <Avatar
                   name={member.displayName}
                   {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-                  size="md"
+                  role="row"
                 />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-base font-medium text-fg">

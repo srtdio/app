@@ -41,9 +41,6 @@ import {
 } from '@/components/pages/pcs/pin-annotations';
 import { isPostPlatform, type GalleryItem } from '@srtdio/posts';
 
-/** Hold this long on a slide to arm pin placement (the relocated F5 flow). */
-export const PIN_ARM_PRESS_MS = 500;
-
 /** The gesture handlers a tile spreads for long-press + right-click. */
 export interface TileGestures {
   onPointerDown: (event: ReactPointerEvent) => void;
@@ -1390,21 +1387,19 @@ export function PostGallery({
   const canPlacePins = columns === 4 && onPlacePin !== undefined;
 
   // One long-press controller for the whole gallery: the pressed tile records
-  // its index on pointer-down. In the carousel a fired long-press arms pin
-  // placement; in the grid (briefs) it keeps opening the slide actions.
+  // its index on pointer-down. In the carousel a fired long-press (the one
+  // LONG_PRESS_MS) arms pin placement; in the grid (briefs) it keeps opening
+  // the slide actions.
   const pressIndexRef = useRef(0);
   const pressPointerTypeRef = useRef('');
-  const { handlers, consumeClickSuppression } = useLongPress(
-    () => {
-      if (canPlacePins) {
-        setPinArmedIndex(pressIndexRef.current);
-        onRequestPin?.(pressIndexRef.current);
-        return;
-      }
-      if (onSlideActions !== undefined) onSlideActions(pressIndexRef.current);
-    },
-    { thresholdMs: PIN_ARM_PRESS_MS },
-  );
+  const { handlers, consumeClickSuppression } = useLongPress(() => {
+    if (canPlacePins) {
+      setPinArmedIndex(pressIndexRef.current);
+      onRequestPin?.(pressIndexRef.current);
+      return;
+    }
+    if (onSlideActions !== undefined) onSlideActions(pressIndexRef.current);
+  });
 
   const wantsGestures = canPlacePins || onSlideActions !== undefined;
   const slideGestures = wantsGestures

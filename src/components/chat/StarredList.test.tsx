@@ -121,10 +121,10 @@ describe('StarredRowView', () => {
     onOpen: () => undefined,
   };
 
-  it('a 16px panel card: 28px avatar, Sender › Chat, mono date, chevron, peer bubble on panel-2', () => {
+  it('a 16px panel card: 20px inline avatar, Sender › Chat, mono date, chevron, peer bubble on panel-2', () => {
     const out = html(<ul>{StarredRowView(base)}</ul>);
     expect(out).toContain('rounded-2xl border border-border bg-panel');
-    expect(out).toContain('h-7 w-7');
+    expect(out).toContain('data-avatar-role="inline"');
     expect(out).toContain('Chitra');
     expect(out).toContain('›  Diwali shoot');
     expect(out).toContain('font-mono text-sm tabular-nums text-fg-3');

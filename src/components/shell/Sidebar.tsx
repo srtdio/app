@@ -30,9 +30,9 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
           className="flex items-center gap-2.5 px-2 transition-colors"
         >
           {workspaceName !== null ? (
-            <Avatar name={clientName ?? workspaceName} size="lg" />
+            <Avatar name={clientName ?? workspaceName} role="header" />
           ) : (
-            <Avatar size="lg" />
+            <Avatar role="header" />
           )}
           {workspaceName === null ? (
             <span className="flex-1 h-4 rounded bg-panel-3 animate-pulse" aria-hidden />

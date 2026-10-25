@@ -43,6 +43,7 @@ import { useSession } from '@/lib/session-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { bottomAnchorProps } from '@/lib/bottom-inset';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import { getBrief, getBriefGallery, reopenBrief } from '@srtdio/briefs';
 import type { Brief, BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
@@ -895,7 +896,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
           <div aria-hidden="true" data-brief-action-space="" className="h-[76px]" />
           <div
             data-brief-action-bar=""
-            data-undo-anchor=""
+            {...bottomAnchorProps}""
             className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
           >
             <Button

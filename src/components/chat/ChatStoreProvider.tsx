@@ -1425,7 +1425,14 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       icon: (
         <Avatar
           name={summary.title}
-          size="sm"
+          role="inline"
+          kind={
+            summary.channelType === 'group'
+              ? 'group'
+              : summary.channelType === 'notes'
+                ? 'note'
+                : 'person'
+          }
           {...(summary.avatarUrl !== null ? { src: summary.avatarUrl } : {})}
         />
       ),
