@@ -1,6 +1,6 @@
 import { devices, expect, test } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
-import { PEER_NAME } from '../fixtures/chat-data';
+import { MENTION_PREVIEW, PEER_NAME } from '../fixtures/chat-data';
 
 // PR C: one breakpoint. iPad portrait (820x1180, touch, iPad UA) is the laptop
 // layout on every surface, Chat included: width alone decides (useIsLaptop,
@@ -42,10 +42,14 @@ test('iPad portrait: Chat renders the laptop split and laptop type', async ({ pa
   await expect(page.getByText('Select a conversation', { exact: true })).toBeVisible();
   await expect(page.locator('aside').getByRole('link', { name: /^Chat/ })).toBeVisible();
   await row.click();
+  await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
+  await page.waitForTimeout(400);
+  // The same message chat-thread.spec.ts measures at the touch 17px.
   const body = page
-    .locator('[data-bubble]', { hasText: 'Done, it reads well now.' })
-    .last()
-    .getByText('Done, it reads well now.', { exact: true });
+    .locator('[data-bubble]', { hasText: MENTION_PREVIEW })
+    .getByText(MENTION_PREVIEW)
+    .first();
+  await body.scrollIntoViewIfNeeded();
   await expect(body).toBeVisible();
   // The list stays beside the open thread.
   await expect(page.getByRole('searchbox', { name: 'Search chats' })).toBeVisible();

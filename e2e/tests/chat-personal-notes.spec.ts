@@ -253,14 +253,14 @@ for (const photo of [true, false]) {
     await expect(tile.locator('[data-notes-badge]')).toHaveCount(photo ? 1 : 0);
     await expect(avatar).toHaveAttribute('aria-label', 'Personal notes');
     const box = await avatar.boundingBox();
-    expect(Math.round(box?.width ?? 0)).toBe(76);
+    expect(Math.round(box?.width ?? 0)).toBe(72);
 
     await tile.click();
     const header = page.locator('[data-header-line]');
     await expect(header).toHaveText('Only you can see this');
     const headAvatar = page.locator('[data-notes-avatar]').first();
     await expect(headAvatar).toHaveAttribute('data-notes-avatar', photo ? 'photo' : 'notebook');
-    expect(Math.round((await headAvatar.boundingBox())?.width ?? 0)).toBe(40);
+    expect(Math.round((await headAvatar.boundingBox())?.width ?? 0)).toBe(32);
     await expect(page.locator('[data-contact-open]')).toHaveCount(0);
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   });

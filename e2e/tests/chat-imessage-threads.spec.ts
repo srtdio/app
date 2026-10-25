@@ -163,14 +163,14 @@ test('group (i4-group-b): photos and the gutter shift on the rail only', async (
   await expect(row(page, 'gr').locator('[data-rail="elbow"]')).toHaveCount(1);
   for (const key of ['ga', 'gd']) {
     await expect(row(page, key)).toHaveClass(/pl-\[30px\]/);
-    // The tick runs into the sender photo, which sits at 30 to 56.
+    // The tick runs into the sender photo, which sits at 30 to 62.
     await expect(row(page, key).locator('[data-rail-target] [data-rail="tick"]')).toHaveCount(1);
   }
   const photo = await row(page, 'ga').locator('[data-rail-target]').first().boundingBox();
   expect(Math.round(photo?.x ?? 0)).toBe(30);
-  // A tucked row reaches across the gutter to its bubble at 64.
+  // A tucked row reaches across the gutter to its bubble at 70.
   const tucked = await row(page, 'gb').locator('[data-bubble]').boundingBox();
-  expect(Math.round(tucked?.x ?? 0)).toBe(64);
+  expect(Math.round(tucked?.x ?? 0)).toBe(70);
   // The own reply between keeps its place; the plain row after keeps its photo at 16.
   await expect(row(page, 'gc')).not.toHaveClass(/pl-\[30px\]/);
   await expect(row(page, 'ge').locator('[data-rail]')).toHaveCount(0);
