@@ -7,13 +7,18 @@
 
 import { forwardRef, type ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { IconHand } from '@/components/ui/icons';
 import { DOCK_GAP, type Rect } from '@/lib/induction';
 import { CHROME_ATTR } from './guide-dom';
 
 /** Above page content and Sheet (z-50); below toasts (z-60/70) and the lightbox (z-80). */
 export const GUIDE_Z = 'z-[55]';
 
-/** The six guide tokens (src/index.css): amber fill and ink, the deep fill, the light tint, two triplets. */
+/**
+ * The guide tokens (src/index.css): amber fill and ink, the deep fill, the light
+ * tint, two triplets. They have no Tailwind colour names, so they read their CSS
+ * variable directly; LABEL_GLOW is the label pill's own guide shadow token.
+ */
 const AMBER_BG = 'bg-[var(--guide)]';
 const AMBER_INK = 'text-[var(--guide-ink)]';
 const AMBER_DEEP_BG = 'bg-[var(--guide-deep)]';
@@ -21,7 +26,11 @@ const AMBER_LIGHT_BG = 'bg-[var(--guide-light)]';
 const LABEL_EDGE = 'border border-[rgb(var(--guide-ink-rgb)/0.12)]';
 const LABEL_GLOW = 'shadow-[0_2px_8px_rgb(var(--guide-rgb)/0.35)]';
 
-/** Keyframes for the hand, its ripple and the nudge; reduced motion holds them still. */
+/**
+ * Keyframes for the hand, its ripple and the nudge; reduced motion holds them
+ * still. Timings come from the motion tokens: one press cycle is 6.5 slow beats
+ * (1.3s), the nudge 1.5 (300ms), eased with --ease-enter.
+ */
 const GUIDE_STYLE = `
 @keyframes sorted-guide-press {
   0%, 40%, 100% { transform: translate(0, 0) scale(1); }
@@ -39,9 +48,9 @@ const GUIDE_STYLE = `
   25% { translate: -5px 0; }
   75% { translate: 5px 0; }
 }
-[data-guide-hand-svg] { transform-origin: 17px 1px; animation: sorted-guide-press 1.3s ease-in-out infinite; }
-[data-guide-ripple] { animation: sorted-guide-ripple 1.3s ease-out infinite; }
-[data-guide-nudge="on"] { animation: sorted-guide-nudge 300ms ease-in-out; }
+[data-guide-hand-svg] { transform-origin: 17px 1px; animation: sorted-guide-press calc(var(--dur-slow) * 6.5) var(--ease-enter) infinite; }
+[data-guide-ripple] { animation: sorted-guide-ripple calc(var(--dur-slow) * 6.5) var(--ease-enter) infinite; }
+[data-guide-nudge="on"] { animation: sorted-guide-nudge calc(var(--dur-slow) * 1.5) var(--ease-enter); }
 @media (prefers-reduced-motion: reduce) {
   [data-guide-hand-svg] { animation: none; }
   [data-guide-ripple] { animation: none; transform: scale(0.8); opacity: 0.9; }
@@ -119,7 +128,7 @@ export function GuideHand({
     >
       <span
         data-guide-ripple=""
-        className="absolute rounded-full border-2 border-[var(--overlay-fg)]"
+        className="absolute rounded-full border-2 border-overlay-fg"
         style={{
           width: RIPPLE,
           height: RIPPLE,
@@ -127,21 +136,9 @@ export function GuideHand({
           left: HAND_TIP.x - RIPPLE / 2,
         }}
       />
-      <svg
-        data-guide-hand-svg=""
-        width={HAND_SIZE}
-        height={HAND_SIZE}
-        viewBox="0 0 40 40"
-        className="relative drop-shadow-md"
-      >
-        <path
-          d="M14 4a3 3 0 0 1 6 0v12a3 3 0 0 1 6 0v2a3 3 0 0 1 6 0v2a3 3 0 0 1 5 2v8c0 6-4 9-10 9h-4c-4 0-6-2-8-5l-6-8a3 3 0 0 1 5-4l0 0z"
-          fill="var(--panel)"
-          stroke="var(--fg)"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <span data-guide-hand-svg="" className="relative block text-fg">
+        <IconHand size={HAND_SIZE} />
+      </span>
     </div>
   );
 }
@@ -255,11 +252,11 @@ export const GuideBar = forwardRef<
 
 function PhaseRow({ copy }: { copy: BarCopy }): ReactElement {
   if (copy.phase !== '') {
-    return <p className="font-mono text-xs text-fg-3">{copy.phase}</p>;
+    return <p className="font-mono text-sm text-fg-3">{copy.phase}</p>;
   }
   const { names, current } = copy.chapters;
   return (
-    <p className="flex items-center gap-1.5 text-xs text-fg-3">
+    <p className="flex items-center gap-1.5 text-sm text-fg-3">
       {names.map((name, i) => (
         <span
           key={name}
@@ -279,19 +276,12 @@ function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): 
       {actions.onNext !== undefined ? (
         <Button
           type="button"
-          variant="ghost"
+          variant="primary"
           data-induction-next=""
           onClick={actions.onNext}
-          // The guide's amber, not a theme variant: the fill is a layer under the
-          // label (isolate keeps it above the button's own hover) and the ink rides
-          // on the label, so ghost's colours never need overriding.
-          className={`${GUIDE_ACTION} relative isolate hover:opacity-90`}
+          className={GUIDE_ACTION}
         >
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 -z-10 rounded-lg bg-[var(--guide)]"
-          />
-          <span className="text-[var(--guide-ink)]">{copy.next}</span>
+          {copy.next}
         </Button>
       ) : null}
       {actions.onLater !== undefined ? (
@@ -322,7 +312,7 @@ function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): 
           variant="ghost"
           data-induction-skip=""
           onClick={actions.onSkip}
-          className={`${GUIDE_ACTION} text-fg-3`}
+          className={GUIDE_ACTION}
         >
           {copy.skip}
         </Button>
@@ -370,9 +360,9 @@ export function GuideCard({
       style={placed.style}
     >
       {copy.eyebrow !== '' ? (
-        <p className={`font-mono text-xs ${hero ? 'opacity-80' : 'text-fg-3'}`}>{copy.eyebrow}</p>
+        <p className={`font-mono text-sm ${hero ? 'opacity-80' : 'text-fg-3'}`}>{copy.eyebrow}</p>
       ) : null}
-      <p className="mt-1 text-xl font-semibold leading-snug [text-wrap:balance]">{copy.title}</p>
+      <p className="mt-1 text-base font-medium [text-wrap:balance]">{copy.title}</p>
       <p
         className={`mt-1 text-base leading-snug [text-wrap:pretty] ${hero ? 'opacity-90' : 'text-fg-2'}`}
       >
@@ -393,7 +383,7 @@ export function GuideCard({
           {copy.pills.map((pill) => (
             <span
               key={pill}
-              className="rounded-full bg-[var(--overlay-surface)] px-2.5 py-1 text-sm font-semibold"
+              className="rounded-full bg-overlay-surface px-2.5 py-1 text-sm font-semibold"
             >
               {pill}
             </span>
@@ -412,11 +402,7 @@ export function GuideCard({
             {hero ? <span className="text-accent-fg">{copy.skip}</span> : copy.skip}
           </Button>
         ) : null}
-        <Button
-          variant={hero ? 'default' : 'primary'}
-          onClick={onPress}
-          className={hero ? 'border-transparent bg-panel text-fg hover:bg-panel-2' : ''}
-        >
+        <Button variant={hero ? 'secondary' : 'primary'} onClick={onPress}>
           {copy.button}
         </Button>
       </div>

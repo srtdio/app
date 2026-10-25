@@ -219,14 +219,14 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
     props.presignEnabled === true,
     props.localUrl ?? null,
   );
-  // The measure belongs to the file on screen, so it resets when the media URL
-  // changes. Keyed on the version id it was lost when an upload finished: the
-  // id lands but the local blob URL stays, so the image never loads again and
-  // the panel stuck on "Measuring the original."
-  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null);
-  useEffect(() => {
-    setMeasured(null);
-  }, [url]);
+  // The measure belongs to the file on screen: it carries the src it was read
+  // from and only counts while that src is shown. Keyed on the version id it was
+  // lost when an upload finished (the id lands, the blob URL stays, no new load).
+  // Cleared by an effect on the URL it raced the image: a photo already decoded
+  // (the composer's frame showed the same blob) measured in the ref callback,
+  // then the effect wiped it and no load event followed, so the panel stuck on
+  // "Measuring the original."
+  const [measured, setMeasured] = useState<{ src: string; w: number; h: number } | null>(null);
   const stored =
     firstMedia !== null &&
     firstMedia.width !== null &&
@@ -235,7 +235,8 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
     firstMedia.height > 0
       ? { w: firstMedia.width, h: firstMedia.height }
       : null;
-  const dims = stored ?? measured;
+  const shown = measured !== null && measured.src === url ? measured : null;
+  const dims = stored ?? (shown !== null ? { w: shown.w, h: shown.h } : null);
   // The panel opens on the frame the post page shows ("This post"), then the
   // platform's published sizes to compare.
   const thisPost = postSize(platform, format, mediaList, dims);
@@ -250,9 +251,12 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
   }, [fallback?.label]);
   const size = sizes.find((s) => s.label === label) ?? fallback;
 
-  function measure(w: number, h: number): void {
-    if (stored === null && w > 0 && h > 0) {
-      setMeasured((prev) => (prev?.w === w && prev.h === h ? prev : { w, h }));
+  /** src is the element's own src attribute, so a late load of a replaced file never counts. */
+  function measure(src: string | null, w: number, h: number): void {
+    if (stored === null && src !== null && w > 0 && h > 0) {
+      setMeasured((prev) =>
+        prev?.src === src && prev.w === w && prev.h === h ? prev : { src, w, h },
+      );
     }
   }
 
@@ -288,7 +292,11 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
         preload="metadata"
         aria-hidden
         onLoadedMetadata={(event) =>
-          measure(event.currentTarget.videoWidth, event.currentTarget.videoHeight)
+          measure(
+            event.currentTarget.getAttribute('src'),
+            event.currentTarget.videoWidth,
+            event.currentTarget.videoHeight,
+          )
         }
       />
     ) : (
@@ -298,10 +306,16 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
         // An image already decoded (cached, or loaded before a reset) fires no
         // load event: measure it as it mounts.
         ref={(el) => {
-          if (el !== null && el.complete) measure(el.naturalWidth, el.naturalHeight);
+          if (el !== null && el.complete) {
+            measure(el.getAttribute('src'), el.naturalWidth, el.naturalHeight);
+          }
         }}
         onLoad={(event) =>
-          measure(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
+          measure(
+            event.currentTarget.getAttribute('src'),
+            event.currentTarget.naturalWidth,
+            event.currentTarget.naturalHeight,
+          )
         }
       />
     );

@@ -44,6 +44,7 @@ import {
   LockClosedIcon,
   MagnifyingGlassIcon,
   MicrophoneIcon,
+  MinusIcon,
   MoonIcon,
   NoSymbolIcon,
   PaperAirplaneIcon,
@@ -523,4 +524,26 @@ export function IconBan(props: IconProps) {
 
 export function IconMenu(props: IconProps) {
   return <Hero icon={Bars3Icon} {...props} />;
+}
+
+export function IconMinus(props: IconProps) {
+  return <Hero icon={MinusIcon} {...props} />;
+}
+
+/**
+ * The induction guide's pointing hand. Hand-drawn: Heroicons has no pointing
+ * finger. The fingertip sits at (17, 1) of a 40 box; the path is drawn on 40
+ * and scaled into the 24 grid, so the stroke stays 1.7 at 40px. The palm
+ * fills with the panel token so it reads over any screen.
+ */
+export function IconHand(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path
+        transform="scale(0.6)"
+        className="fill-panel"
+        d="M14 4a3 3 0 0 1 6 0v12a3 3 0 0 1 6 0v2a3 3 0 0 1 6 0v2a3 3 0 0 1 5 2v8c0 6-4 9-10 9h-4c-4 0-6-2-8-5l-6-8a3 3 0 0 1 5-4l0 0z"
+      />
+    </Svg>
+  );
 }

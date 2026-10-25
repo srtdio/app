@@ -39,7 +39,7 @@ afterEach(() => {
   host.remove();
 });
 
-function render(versionId: string): void {
+function render(versionId: string, localUrl = 'blob:local-photo'): void {
   act(() => {
     root.render(
       <PreviewBody
@@ -48,7 +48,7 @@ function render(versionId: string): void {
         caption="Draft"
         handle="Kite"
         firstMedia={photo(versionId)}
-        localUrl="blob:local-photo"
+        localUrl={localUrl}
       />,
     );
   });
@@ -74,6 +74,44 @@ describe('PreviewBody measure', () => {
 
     // The upload finishes: a new version id, the same blob URL, no new load event.
     render('v-uploaded');
+    expect(host.textContent).not.toContain('Measuring the original.');
+  });
+
+  it('measures a photo already decoded when it mounts, with no load event after', () => {
+    // The composer's frame showed the same blob first, so the preview's image is
+    // complete as it mounts. The reset effect used to run after the ref callback
+    // and wipe the measure, and no load event came to measure it again.
+    const proto = HTMLImageElement.prototype;
+    const complete = Object.getOwnPropertyDescriptor(proto, 'complete');
+    const naturalWidth = Object.getOwnPropertyDescriptor(proto, 'naturalWidth');
+    const naturalHeight = Object.getOwnPropertyDescriptor(proto, 'naturalHeight');
+    Object.defineProperty(proto, 'complete', { configurable: true, get: () => true });
+    Object.defineProperty(proto, 'naturalWidth', { configurable: true, get: () => 1080 });
+    Object.defineProperty(proto, 'naturalHeight', { configurable: true, get: () => 1350 });
+    try {
+      render('v-uploaded');
+      expect(host.textContent).not.toContain('Measuring the original.');
+      expect(host.textContent).toContain('1080 x 1350');
+    } finally {
+      for (const [key, desc] of [
+        ['complete', complete],
+        ['naturalWidth', naturalWidth],
+        ['naturalHeight', naturalHeight],
+      ] as const) {
+        if (desc !== undefined) Object.defineProperty(proto, key, desc);
+        else delete (proto as unknown as Record<string, unknown>)[key];
+      }
+    }
+  });
+
+  it('measures again when a different file replaces the photo', () => {
+    render('local-1', 'blob:first');
+    loadImages();
+    expect(host.textContent).not.toContain('Measuring the original.');
+
+    render('local-2', 'blob:second');
+    expect(host.textContent).toContain('Measuring the original.');
+    loadImages();
     expect(host.textContent).not.toContain('Measuring the original.');
   });
 });

@@ -13,7 +13,6 @@ const ALLOWED = new Set([
   'chat/UploadRing.tsx',
   'chat/ThreadRail.tsx',
   'chat/tasks/TaskGlyph.tsx',
-  'induction/GuideParts.tsx',
 ]);
 const ALLOWED_DIRS = ['home/'];
 

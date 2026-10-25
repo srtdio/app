@@ -303,7 +303,7 @@ export function PresetMediaField({
       </div>
       <p
         aria-live="polite"
-        className={upload.phase === 'failed' ? 'text-sm text-bad' : 'text-sm text-fg-3'}
+        className={upload.phase === 'failed' ? 'text-base text-bad' : 'text-base text-fg'}
       >
         {upload.phase === 'sending'
           ? uploadLine(upload.percent, upload.retrying)
@@ -359,7 +359,7 @@ function UploadBar({ percent }: { percent: number }): ReactElement {
       className="h-2 w-full overflow-hidden rounded-full bg-panel-3"
     >
       <div
-        className="h-full rounded-full bg-accent transition-[width] duration-200 ease-out motion-reduce:transition-none"
+        className="h-full rounded-full bg-accent transition-[width] duration-slow ease-enter motion-reduce:transition-none"
         style={{ width: `${percent}%` }}
       />
     </div>
@@ -381,12 +381,12 @@ function MediaTile({
         <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
       ) : (
         <span className="flex h-full w-full items-center justify-center text-fg-3">
-          <IconVideo size={ICON_SIZE.tray} />
+          <IconVideo size={ICON_SIZE.status} />
         </span>
       )}
       <IconButton type="button" label={label} onClick={onRemove} className="absolute right-0 top-0">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg">
-          <IconX size={ICON_SIZE.inline} />
+          <IconX size={ICON_SIZE.control} />
         </span>
       </IconButton>
     </li>
