@@ -236,7 +236,11 @@ export interface RemovedOverlay {
 export const EMPTY_OVERLAY: RemovedOverlay = { pending: new Map(), rows: new Map() };
 
 /** True when the overlay hides this file (removed here, or gone from the re-read row). Pure. */
-export function isFileRemoved(overlay: RemovedOverlay, messageId: string, assetId: string): boolean {
+export function isFileRemoved(
+  overlay: RemovedOverlay,
+  messageId: string,
+  assetId: string,
+): boolean {
   if (overlay.pending.get(messageId)?.has(assetId) === true) return true;
   const row = overlay.rows.get(messageId);
   if (row === undefined) return false;

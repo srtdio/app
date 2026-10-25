@@ -46,6 +46,7 @@ const CHAT_SPECS = [
   'chat-plan-share',
   'chat-plan',
   'chat-remember-messages',
+  'chat-remove-files',
   'chat-reply-focus',
   'chat-scheduled',
   'chat-search',

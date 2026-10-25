@@ -4977,8 +4977,10 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
   }, [propDiscard, settle, channelId]);
   // Files removed in this chat (here behind the Undo, or live by a peer): every
   // bubble, the viewer and the counts read them at once.
-  const removedOverlay = useSyncExternalStore(removedFilesStore.subscribe, () =>
-    removedFilesStore.get(channelId ?? ''),
+  const removedOverlay = useSyncExternalStore(
+    removedFilesStore.subscribe,
+    () => removedFilesStore.get(channelId ?? ''),
+    () => removedFilesStore.get(channelId ?? ''),
   );
   const messages = useMemo(
     () =>
@@ -5084,8 +5086,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // rows win over the view's own copies, so live arrivals and own sends show).
   // The view's own rows (older than the chat's pages) take the removed-files
   // overlay too; the chat's rows already carry it.
-  const viewOverlay = useSyncExternalStore(removedFilesStore.subscribe, () =>
-    removedFilesStore.get(channelId ?? ''),
+  const viewOverlay = useSyncExternalStore(
+    removedFilesStore.subscribe,
+    () => removedFilesStore.get(channelId ?? ''),
+    () => removedFilesStore.get(channelId ?? ''),
   );
   const viewParts = useMemo(() => {
     if (view === null) return null;

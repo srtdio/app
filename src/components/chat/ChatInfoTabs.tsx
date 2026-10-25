@@ -945,8 +945,10 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
 
   // Files removed here (pending Undo) or by a live signal drop out at once;
   // Undo takes the overlay entry back and they show again.
-  const overlay = useSyncExternalStore(removedFilesStore.subscribe, () =>
-    removedFilesStore.get(channelId),
+  const overlay = useSyncExternalStore(
+    removedFilesStore.subscribe,
+    () => removedFilesStore.get(channelId),
+    () => removedFilesStore.get(channelId),
   );
   const attachmentsFeed = useMemo(() => {
     const feed = attachments.feed;

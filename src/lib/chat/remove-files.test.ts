@@ -280,7 +280,7 @@ describe('removeFilesRecord chunking', () => {
     assetId: `a${i}`,
   }));
 
-  it('calls the proc once per 100 asset ids, in order, naming each chunk\'s messages', async () => {
+  it("calls the proc once per 100 asset ids, in order, naming each chunk's messages", async () => {
     expect(REMOVE_FILES_CHUNK_SIZE).toBe(100);
     const { client, rpc } = rpcClient();
     const onChunkRemoved = vi.fn();

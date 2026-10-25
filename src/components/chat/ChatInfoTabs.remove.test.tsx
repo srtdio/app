@@ -292,7 +292,8 @@ async function mount(
   await act(async () => Promise.resolve());
 }
 
-const q = <T extends Element = HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
+const q = <T extends Element = HTMLElement>(sel: string): T | null =>
+  document.querySelector<T>(sel);
 const selectButton = () => q<HTMLButtonElement>('[data-testid="info-select"]');
 const removeButton = () => q<HTMLButtonElement>('[data-testid="info-remove"]');
 const tile = (name: string) => q<HTMLButtonElement>(`button[aria-label="${name}"]`);
