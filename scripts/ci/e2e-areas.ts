@@ -49,6 +49,7 @@ const CHAT_SPECS = [
   'chat-reply-focus',
   'chat-scheduled',
   'chat-search',
+  'search-placeholder-fit',
   'chat-select-text',
   'chat-stars',
   'chat-status-ticker',
@@ -120,6 +121,7 @@ export const AREAS: Area[] = [
     entries: ['src/components/pages/PipelinePage.tsx'],
     routed: true,
     specs: [
+      'search-placeholder-fit',
       'assets-type-tabs',
       'chat-back-navigation',
       'chat-status-ticker',
@@ -156,6 +158,7 @@ export const AREAS: Area[] = [
     ],
     routed: true,
     specs: [
+      'search-placeholder-fit',
       'chat-stars',
       'chat-status-ticker',
       'files-open-in-viewer',
@@ -172,6 +175,7 @@ export const AREAS: Area[] = [
     ],
     routed: true,
     specs: [
+      'search-placeholder-fit',
       'assets-type-tabs',
       'assets-recently-deleted',
       'assets-select-box',
