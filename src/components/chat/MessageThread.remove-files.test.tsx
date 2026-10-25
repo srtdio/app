@@ -11,6 +11,11 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
+// File bubbles render SharedPostCards, which reads the workspace.
+vi.mock('@/lib/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspace-context')>()),
+  useWorkspace: () => ({ workspaceId: 'w1' }),
+}));
 
 import { MessageBubble, removeFilesAction } from '@/components/chat/MessageThread';
 import { FilesRemovedLine } from '@/components/chat/MessageAttachments';
