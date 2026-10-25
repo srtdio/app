@@ -7,6 +7,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconMore } from '@/components/ui/icons';
 import type { IconProps } from '@/components/ui/icons';
+import { moveMenuFocus } from '@/lib/chat/menu-keys';
 import { cn } from '@/lib/cn';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
@@ -192,7 +193,13 @@ export function ActionMenu({
           ? createPortal(
               <div className="z-50" style={anchor.style}>
                 <MenuPopover open={open} onClose={() => setOpen(false)} align={anchor.align}>
-                  <div aria-label={title}>
+                  <div
+                    aria-label={title}
+                    onKeyDown={(event) => {
+                      // A popover menu (no aria-modal): arrow keys, Home and End move between rows.
+                      if (moveMenuFocus(event.currentTarget, event.key)) event.preventDefault();
+                    }}
+                  >
                     {header}
                     {rows.map((item) => {
                       const Icon = item.icon;

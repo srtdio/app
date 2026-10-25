@@ -73,6 +73,8 @@ vi.mock('@/lib/use-media-query', () => ({
   LAPTOP_QUERY: '(min-width: 768px)',
   useMediaQuery: (query: string) => (query === '(min-width: 1024px)' ? h.wide : h.desktop),
 }));
+// The phone / laptop split (header decision row, ⋯ popover) reads its own hook.
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => h.desktop }));
 vi.mock('@/lib/search/jump', () => ({ useSearchJump: () => ({ words: [] }) }));
 vi.mock('@/components/pages/pcs/use-post-members', () => ({
   usePostMembers: () => ({

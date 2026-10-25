@@ -214,6 +214,13 @@ async function openMenu(): Promise<string[]> {
   );
 }
 
+/** A ⋯ menu row by its label (a row's description is a second line, so match the label span). */
+function menuItemNamed(label: string): Element | undefined {
+  return [...(dialogTitled('Post actions')?.querySelectorAll('[role="menuitem"]') ?? [])].find(
+    (b) => b.querySelector('.font-medium')?.textContent === label,
+  );
+}
+
 function type(el: HTMLTextAreaElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
   act(() => {
@@ -331,7 +338,7 @@ describe('creator moves', () => {
     await render('agency', view(row({ stage: 'draft' })));
     expect(barLabels()).toEqual(['Send for review']);
     expect(await openMenu()).toEqual(['Open post', 'Copy link', 'Park']);
-    await press(buttonNamed('Park', dialogTitled('Post actions')));
+    await press(menuItemNamed('Park'));
     expect(dialogTitled('Park this post?')).toBeDefined();
     await press(q('[data-stage-confirm]'));
     expect(mocks.rpcStageTransition).toHaveBeenCalledWith(

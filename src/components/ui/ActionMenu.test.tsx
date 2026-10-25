@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActionMenu, orderActionItems } from '@/components/ui/ActionMenu';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import { IconArrowUpRight, IconEdit, IconLink, IconTrash } from '@/components/ui/icons';
+import { DUR_BASE_MS } from '@/lib/motion';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -149,9 +150,13 @@ describe('ActionMenu on phone', () => {
     await openMenu();
     await act(async () => {
       menuRows()[0]?.click();
-      await wait(400);
     });
     expect(onSelect).toHaveBeenCalledTimes(1);
+    // The close renders when the first act ends; the Sheet then stays mounted
+    // through its exit transition (DUR_BASE_MS) before it unmounts.
+    await act(async () => {
+      await wait(DUR_BASE_MS + 50);
+    });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

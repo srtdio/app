@@ -26,6 +26,7 @@ import {
   reopenErrorCopy,
 } from '@/components/pages/BriefDetailPage';
 import { WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
+import { DUR_BASE_MS } from '@/lib/motion';
 import { UNDO_WINDOW_MS } from '@/lib/use-undoable-action';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -356,6 +357,10 @@ describe('Brief detail ⋯ menu rows', () => {
       expect(el.className).toContain('min-h-[44px]');
     }
     await act(async () => menuRow('brief-menu-copy-link')?.click());
+    // The phone Sheet stays mounted through its exit transition, then unmounts.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, DUR_BASE_MS + 50));
+    });
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 });
