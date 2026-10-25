@@ -469,11 +469,11 @@ async function clientFlow(page: Page): Promise<void> {
 async function expectOverflowOpensPipeline(page: Page, item: Locator): Promise<void> {
   await item.locator('[data-plan-more]').click();
   const more = page.getByRole('dialog', { name: 'Post actions', exact: true });
-  await expect(more.getByRole('button', { name: /Open in pipeline/ })).toBeVisible();
-  await expect(more.getByRole('button', { name: /Send to chat/ })).toBeVisible();
-  await expect(more.getByRole('button', { name: /Copy link/ })).toBeVisible();
+  await expect(more.getByRole('menuitem', { name: /Open in pipeline/ })).toBeVisible();
+  await expect(more.getByRole('menuitem', { name: /Send to chat/ })).toBeVisible();
+  await expect(more.getByRole('menuitem', { name: /Copy link/ })).toBeVisible();
   // Open in pipeline is the first row (DOM order, not geometry mid-slide).
-  const labels = await more.getByRole('button').allInnerTexts();
+  const labels = await more.getByRole('menuitem').allInnerTexts();
   const at = (re: RegExp): number => labels.findIndex((t) => re.test(t));
   expect(at(/Open in pipeline/)).toBeGreaterThanOrEqual(0);
   expect(at(/Open in pipeline/)).toBeLessThan(at(/Send to chat/));

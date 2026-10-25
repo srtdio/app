@@ -855,7 +855,7 @@ describe('W2 gallery and download', () => {
     expect(strings(idle)).not.toContain('Saving…');
   });
 
-  it('the remove confirm copy is this viewer\'s; the slide actions sheet removes at once (Undo strip)', () => {
+  it("the remove confirm copy is this viewer's; the slide actions sheet removes at once (Undo strip)", () => {
     expect(removeImageConfirmCopy(1).title).toBe('Delete the only image?');
     expect(removeImageConfirmCopy(3)).toEqual({ title: 'Remove this image?', message: null });
     const sheet = readFileSync(

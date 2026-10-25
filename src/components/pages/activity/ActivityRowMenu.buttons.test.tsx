@@ -20,13 +20,15 @@ describe('ActivityRowMenu buttons', () => {
 
   it('is the shared ActionMenu: Mark as read, the snoozes, Un-snooze only when snoozed', () => {
     const base = { onSnooze: () => {}, onMarkRead: () => {} };
-    expect(activityRowItems({ ...base, snoozed: false, unread: true }).map((i) => i.label)).toEqual([
-      'Mark as read',
-      'Snooze 1 hour',
-      'Snooze 4 hours',
-      'Snooze tomorrow 9 AM',
-      'Snooze next week',
-    ]);
+    expect(activityRowItems({ ...base, snoozed: false, unread: true }).map((i) => i.label)).toEqual(
+      [
+        'Mark as read',
+        'Snooze 1 hour',
+        'Snooze 4 hours',
+        'Snooze tomorrow 9 AM',
+        'Snooze next week',
+      ],
+    );
     const read = activityRowItems({ ...base, snoozed: true, unread: false }).map((i) => i.label);
     expect(read).not.toContain('Mark as read');
     expect(read[read.length - 1]).toBe('Un-snooze');

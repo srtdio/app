@@ -379,8 +379,8 @@ test('agency: Move to another day from the item overflow; Remove from plan is th
   await plan.locator(`[data-plan-row="${dated('Thank you note').id}"]`).click();
   await item.locator('[data-plan-more]').click();
   const postSheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
-  await expect(postSheet.getByRole('button', { name: /Move to another day/ })).toBeVisible();
-  await expect(postSheet.getByRole('button', { name: /Remove from plan/ })).toHaveCount(0);
+  await expect(postSheet.getByRole('menuitem', { name: /Move to another day/ })).toBeVisible();
+  await expect(postSheet.getByRole('menuitem', { name: /Remove from plan/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(item.locator('[data-plan-remove]')).toHaveText(/Remove from plan/);
   expectClean(network);

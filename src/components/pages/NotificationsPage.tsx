@@ -987,7 +987,6 @@ export function NotificationsPage() {
       >
         <p className="truncate text-base text-fg-2">{cancelShown?.preview ?? ''}</p>
       </Sheet>
-
     </>
   );
 }

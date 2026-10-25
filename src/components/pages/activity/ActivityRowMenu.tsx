@@ -39,7 +39,14 @@ export function activityRowItems(props: ActivityRowMenuProps): ActionMenuItem[] 
       onSelect: () => props.onSnooze(option.kind),
     })),
     ...(props.snoozed
-      ? [{ id: 'clear', label: 'Un-snooze', icon: IconClock, onSelect: () => props.onSnooze('clear') }]
+      ? [
+          {
+            id: 'clear',
+            label: 'Un-snooze',
+            icon: IconClock,
+            onSelect: () => props.onSnooze('clear'),
+          },
+        ]
       : []),
   ];
 }

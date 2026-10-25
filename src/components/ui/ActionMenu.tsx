@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import type { ComponentType, ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ComponentType, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -39,6 +40,23 @@ interface ActionMenuProps {
   align?: 'left' | 'right';
 }
 
+/**
+ * The ⋯ opener: IconButton IconMore, label "More actions" by default. ActionMenu
+ * renders it as its default trigger; a host whose menu lives elsewhere in the
+ * tree (an embedded page's `trigger={null}` menu) renders it and opens that menu
+ * through `open`, so IconMore never appears outside ActionMenu.
+ */
+export function ActionMenuTrigger({
+  label = 'More actions',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }) {
+  return (
+    <IconButton label={label} aria-haspopup="menu" {...props}>
+      <IconMore size={ICON_SIZE.control} />
+    </IconButton>
+  );
+}
+
 // Rank of a row in the one order every ⋯ menu follows: Open first, Copy link
 // second, the rest in the caller's order, Delete last.
 function rank(item: ActionMenuItem): number {
@@ -56,6 +74,44 @@ export function orderActionItems(items: readonly ActionMenuItem[]): ActionMenuIt
     .map((item, index) => ({ item, index }))
     .sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index)
     .map(({ item }) => item);
+}
+
+// Laptop popover geometry: MenuPopover's row height, its p-1.5 padding plus
+// border, its mt-2 gap, its min width, and the margin kept from the viewport.
+const ROW_PX = 44;
+const PANEL_CHROME_PX = 14;
+const GAP_PX = 8;
+const MENU_MIN_W_PX = 220;
+const EDGE_PX = 8;
+
+interface Anchor {
+  style: CSSProperties;
+  align: 'left' | 'right';
+}
+
+/**
+ * Where the laptop popover goes: a zero-height fixed box spanning the trigger,
+ * under it when the rows fit below, else lifted so the menu ends above it; the
+ * edge flips when the preferred one would run off the viewport. Pure.
+ */
+export function popoverAnchor(
+  rect: { top: number; bottom: number; left: number; right: number },
+  rows: number,
+  viewport: { width: number; height: number },
+  preferred: 'left' | 'right',
+): Anchor {
+  const menuH = rows * ROW_PX + PANEL_CHROME_PX;
+  const below = rect.bottom + GAP_PX + menuH + EDGE_PX <= viewport.height;
+  const top = below ? rect.bottom : Math.max(EDGE_PX - GAP_PX, rect.top - menuH - 2 * GAP_PX);
+  let align = preferred;
+  if (align === 'right' && rect.right - MENU_MIN_W_PX < EDGE_PX) align = 'left';
+  else if (align === 'left' && rect.left + MENU_MIN_W_PX > viewport.width - EDGE_PX) {
+    align = 'right';
+  }
+  return {
+    align,
+    style: { position: 'fixed', top, left: rect.left, width: rect.right - rect.left, height: 0 },
+  };
 }
 
 /**
@@ -83,6 +139,38 @@ export function ActionMenu({
   }
 
   const rows = orderActionItems(items);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const [anchor, setAnchor] = useState<Anchor | null>(null);
+
+  // Laptop: measure the trigger on open and portal the popover to the body, so
+  // a scrolling or overflow-hidden parent (a board column, a list) never clips
+  // it. Scroll or resize closes it rather than leaving it behind.
+  useEffect(() => {
+    // Closing keeps the last anchor so MenuPopover plays its exit fade.
+    if (!isLaptop) setAnchor(null);
+    if (!isLaptop || !open) return;
+    const el = wrapRef.current;
+    if (el === null) return;
+    const r = el.getBoundingClientRect();
+    setAnchor(
+      popoverAnchor(
+        r,
+        rows.length,
+        { width: window.innerWidth, height: window.innerHeight },
+        align,
+      ),
+    );
+    function close(): void {
+      setOpen(false);
+    }
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-measure on open only
+  }, [isLaptop, open]);
 
   function select(item: ActionMenuItem): void {
     setOpen(false);
@@ -92,44 +180,50 @@ export function ActionMenu({
   const opener =
     trigger === null ? null : (
       <span className="inline-flex" onClick={() => setOpen(!open)}>
-        {trigger ?? (
-          <IconButton label="More actions" aria-haspopup="menu" aria-expanded={open}>
-            <IconMore size={ICON_SIZE.control} />
-          </IconButton>
-        )}
+        {trigger ?? <ActionMenuTrigger aria-expanded={open} />}
       </span>
     );
 
   if (isLaptop) {
     return (
-      <span className="relative inline-flex">
+      <span ref={wrapRef} className="inline-flex">
         {opener}
-        <MenuPopover open={open} onClose={() => setOpen(false)} align={align}>
-          <div aria-label={title}>
-            {header}
-            {rows.map((item) => {
-              const Icon = item.icon;
-              return (
-                <PressableRow
-                  key={item.id}
-                  role="menuitem"
-                  onClick={() => select(item)}
-                  className={cn(
-                    'flex items-center gap-3 px-3 text-base transition-colors',
-                    item.tone === 'danger' ? 'text-bad' : 'text-fg',
-                  )}
-                >
-                  <span
-                    className={cn('shrink-0', item.tone === 'danger' ? 'text-bad' : 'text-fg-2')}
-                  >
-                    <Icon size={ICON_SIZE.inline} />
-                  </span>
-                  <span className="truncate">{item.label}</span>
-                </PressableRow>
-              );
-            })}
-          </div>
-        </MenuPopover>
+        {anchor !== null
+          ? createPortal(
+              <div className="z-50" style={anchor.style}>
+                <MenuPopover open={open} onClose={() => setOpen(false)} align={anchor.align}>
+                  <div aria-label={title}>
+                    {header}
+                    {rows.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <PressableRow
+                          key={item.id}
+                          role="menuitem"
+                          onClick={() => select(item)}
+                          className={cn(
+                            'flex items-center gap-3 px-3 text-base transition-colors',
+                            item.tone === 'danger' ? 'text-bad' : 'text-fg',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'shrink-0',
+                              item.tone === 'danger' ? 'text-bad' : 'text-fg-2',
+                            )}
+                          >
+                            <Icon size={ICON_SIZE.inline} />
+                          </span>
+                          <span className="truncate">{item.label}</span>
+                        </PressableRow>
+                      );
+                    })}
+                  </div>
+                </MenuPopover>
+              </div>,
+              document.body,
+            )
+          : null}
       </span>
     );
   }

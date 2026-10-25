@@ -28,16 +28,16 @@ test('PCS: agency approves on their behalf through the on-behalf sheet', async (
   withKey(network);
   await page.goto(`/posts/${POST_IDS[0]}`);
 
-  const more = page.getByRole('button', { name: 'Post actions' });
+  const more = page.getByRole('button', { name: 'More actions', exact: true }).first();
   await more.waitFor({ state: 'visible', timeout: 15_000 });
   // Flow B 31: no primary Approve for the creator side.
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
   await more.click();
   const sheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
-  // Approve on their behalf, Reject and Park sit in the ⋯ sheet.
-  await expect(sheet.getByRole('button', { name: /Reject/ })).toBeVisible();
-  await expect(sheet.getByRole('button', { name: /Park/ })).toBeVisible();
-  await sheet.getByRole('button', { name: /Approve on their behalf/ }).click();
+  // Approve on their behalf, Reject and Park sit in the ⋯ sheet (ActionMenu rows).
+  await expect(sheet.getByRole('menuitem', { name: /Reject/ })).toBeVisible();
+  await expect(sheet.getByRole('menuitem', { name: /Park/ })).toBeVisible();
+  await sheet.getByRole('menuitem', { name: /Approve on their behalf/ }).click();
 
   // Spec D: the one on-behalf sheet, no post title and no code in it.
   const behalf = page.getByRole('dialog', { name: 'Approve on their behalf?', exact: true });
@@ -58,7 +58,8 @@ test('PCS: every button on the post page is 44 tall with an 8px radius or round'
   withKey(network);
   await page.goto(`/posts/${POST_IDS[0]}`);
   await page
-    .getByRole('button', { name: 'Post actions' })
+    .getByRole('button', { name: 'More actions', exact: true })
+    .first()
     .waitFor({ state: 'visible', timeout: 15_000 });
   await expectButtonsMeetSystem(page);
   expectNoBlocked(network);

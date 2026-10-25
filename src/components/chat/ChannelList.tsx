@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -1408,14 +1401,14 @@ export function ChannelList(props: ChannelListProps): ReactElement {
             }
           : {}),
       })}
-      {onDeleteChats !== undefined ? (
-        deleteChatsConfirm({
-          channels: confirm,
-          busy,
-          onCancel: () => setConfirm(null),
-          onConfirm: () => void runDelete(confirm ?? []),
-        })
-      ) : null}
+      {onDeleteChats !== undefined
+        ? deleteChatsConfirm({
+            channels: confirm,
+            busy,
+            onCancel: () => setConfirm(null),
+            onConfirm: () => void runDelete(confirm ?? []),
+          })
+        : null}
     </>
   );
 }

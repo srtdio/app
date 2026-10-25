@@ -102,6 +102,9 @@ describe('PostSheet decisions match PostDetailPage (PR B parity)', () => {
       expect(src).toContain('{decisions.confirms}');
       expect(src).toContain('useIsLaptop()');
     }
+    // The sheet maps the viewer's side to a role the same table reads; the page
+    // passes the member role straight through.
+    expect(sheet).toContain('role: sideRole(side),');
     expect(sheet).toContain('moves: decisions.moveRows,');
     expect(page).toContain('moveRows={decisions.moveRows}');
     // The sheet owns no stage write of its own.
@@ -123,11 +126,7 @@ describe('the sheet ⋯ menu', () => {
       onCopyLink: vi.fn(),
       moves: [{ key: 'parked', icon: IconPause, label: 'Park', onPick: vi.fn() }],
     });
-    expect(orderActionItems(items).map((i) => i.label)).toEqual([
-      'Open post',
-      'Copy link',
-      'Park',
-    ]);
+    expect(orderActionItems(items).map((i) => i.label)).toEqual(['Open post', 'Copy link', 'Park']);
   });
 });
 
@@ -325,10 +324,7 @@ describe('no KEY-N codes in the sheet', () => {
   it('extras and decision labels render no KEY-N code', () => {
     const htmls = [
       renderToStaticMarkup(
-        <PostSheetExtras
-          hint={agencyWaitingHint('agency', row(), 'UTC')}
-          onTalkAbout={vi.fn()}
-        />,
+        <PostSheetExtras hint={agencyWaitingHint('agency', row(), 'UTC')} onTalkAbout={vi.fn()} />,
       ),
       ...STAGES.flatMap((stage) =>
         (['client', 'agency'] as const).flatMap((side) => {

@@ -245,9 +245,7 @@ export function InviteNotSent(props: { email: string; acceptUrl: string | null }
               const url = props.acceptUrl;
               if (url === null) return;
               void copyText(url).then((ok) =>
-                toast?.show(
-                  ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' },
-                ),
+                toast?.show(ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' }),
               );
             }}
           >
