@@ -42,6 +42,7 @@ import {
   loadPeerReadCursor,
   loadReactions,
   loadReadPositions,
+  type PeerReadCursor,
   type ReadPositionsRead,
   type HistoryPage,
 } from '@/lib/chat/history';
@@ -321,6 +322,12 @@ export interface UseChatThread {
    * record; receivers catch up from Postgres).
    */
   addSentRow: (row: ChatMessageRow, traceId: string) => Promise<void>;
+  /**
+   * A message's created_at when this thread has read it: a thread root read
+   * by reply hydration (not loaded), else a loaded row. The reply counts read
+   * takes its lower bound from it.
+   */
+  rootCreatedAt: (rootId: string) => string | undefined;
 }
 
 /** In-flight guard key for a forward run (message ids are uuids, never this). */
@@ -651,6 +658,56 @@ export function sameReadPositions(a: ReadPositionsRead, b: ReadPositionsRead): b
   return true;
 }
 
+/**
+ * The DM peer's cursor as the channel's cursors read has it: the same
+ * chat_read_cursors row loadPeerReadCursor selects, so the seen ticks need no
+ * read of their own. Pure.
+ */
+export function peerCursorFrom(read: ReadPositionsRead, peerUserId: string): PeerReadCursor {
+  const row = read.rows.find((r) => r.userId === peerUserId);
+  return row === undefined
+    ? { found: false }
+    : { found: true, lastReadMessageId: row.lastReadMessageId, lastReadAt: row.lastReadAt };
+}
+
+/** Who takes an open's cursors read: the reading layer's first read, the DM seen ticks. */
+export type PositionsTaker = 'reads' | 'peer';
+
+/**
+ * One cursors read per open, shared by its two takers: the first take for a
+ * chat starts it, the other taker joins it. A taker asking again during the
+ * same open (a Retry, a reopen falling back to a fresh page) gets null and
+ * reads on its own, as it did before. `release` ends the open (the chat is
+ * left): the next take for any chat starts over.
+ */
+export function createPositionsShare(
+  load: (channelId: string) => Promise<Result<ReadPositionsRead>>,
+): {
+  take: (channelId: string, taker: PositionsTaker) => Promise<Result<ReadPositionsRead>> | null;
+  release: (channelId: string) => void;
+} {
+  let held: {
+    channelId: string;
+    promise: Promise<Result<ReadPositionsRead>>;
+    taken: Set<PositionsTaker>;
+  } | null = null;
+  return {
+    take: (channelId, taker) => {
+      if (held !== null && held.channelId === channelId) {
+        if (held.taken.has(taker)) return null;
+        held.taken.add(taker);
+        return held.promise;
+      }
+      const promise = load(channelId);
+      held = { channelId, promise, taken: new Set([taker]) };
+      return promise;
+    },
+    release: (channelId) => {
+      if (held !== null && held.channelId === channelId) held = null;
+    },
+  };
+}
+
 /** The Foundation client is the real connection; widen it to the messaging surface. */
 function asThreadConnection(client: ChatConnection): ThreadConnection {
   return client as ThreadConnection;
@@ -752,6 +809,14 @@ export function useChatThread(params: {
 
   // Live values the stable callbacks read.
   const messagesRef = useRef<ThreadMessage[]>([]);
+  // created_at of the quoted and root rows reply hydration read (they are not loaded).
+  const readTimesRef = useRef(new Map<string, string>());
+  const rootCreatedAt = useCallback<UseChatThread['rootCreatedAt']>(
+    (rootId) =>
+      readTimesRef.current.get(rootId) ??
+      messagesRef.current.find((m) => m.id === rootId)?.createdAt,
+    [],
+  );
   messagesRef.current = messages;
   const clientRef = useRef(client);
   clientRef.current = client;
@@ -871,22 +936,41 @@ export function useChatThread(params: {
     [db, currentUserId],
   );
 
-  /** Apply the DM peer's recorded read position to the seen ticks. */
+  // The open's cursors read, shared by the reading layer and the seen ticks.
+  const positionsShare = useMemo(
+    () => createPositionsShare((forChannel) => loadReadPositions(db, forChannel)),
+    [db],
+  );
+
+  /**
+   * Apply the DM peer's recorded read position to the seen ticks: from the
+   * open's cursors read (already running beside the page), else its own read.
+   */
   const attachPeerCursor = useCallback(
     async (forChannel: string, peer: string): Promise<void> => {
-      const result = await loadPeerReadCursor(db, forChannel, peer);
+      const shared = positionsShare.take(forChannel, 'peer');
+      const read = shared !== null ? await shared : null;
       if (channelRef.current !== forChannel) return;
-      if (!result.ok) {
-        logger.warn('chat: peer read cursor load failed', { error: result.error.message });
-        return;
+      let cursor: PeerReadCursor;
+      if (read !== null && read.ok) {
+        cursor = peerCursorFrom(read.data, peer);
+      } else {
+        const result = await loadPeerReadCursor(db, forChannel, peer);
+        if (!result.ok) {
+          if (channelRef.current === forChannel) {
+            logger.warn('chat: peer read cursor load failed', { error: result.error.message });
+          }
+          return;
+        }
+        cursor = result.data;
       }
-      const cursor = result.data;
+      if (channelRef.current !== forChannel) return;
       if (!cursor.found) return;
       const readAt = Date.parse(cursor.lastReadAt);
       if (Number.isNaN(readAt)) return;
       setMessages((prev) => markReadUpTo(prev, readAt));
     },
-    [db],
+    [db, positionsShare],
   );
 
   /**
@@ -919,6 +1003,7 @@ export function useChatThread(params: {
         return;
       }
       const quoted = result.data.map((row) => rowToThreadMessage(row, currentUserId));
+      for (const m of quoted) readTimesRef.current.set(m.id, m.createdAt);
       setMessages((prev) => hydrateRoots(hydrateReplies(prev, quoted, true), quoted, batch));
     },
     [db, currentUserId],
@@ -1014,6 +1099,8 @@ export function useChatThread(params: {
           });
           setLoadFailed(true);
           setLoading(false);
+          // A page that lands later (Retry) reads the peer's cursor as it is then.
+          positionsShare.release(channelId);
           return;
         }
         applyPage(outcome.page);
@@ -1155,11 +1242,13 @@ export function useChatThread(params: {
     memory,
     memoryKey,
     leaving,
+    positionsShare,
   ]);
 
   // The channel's cursors, read once on open (in parallel with the latest
-  // page) and again after a peer's live read signal or a catch-up. Only the
-  // first read sets the open cursor; a Retry re-reads positions only.
+  // page) and again after a peer's live read signal or a catch-up. The DM
+  // peer's seen ticks take their cursor from this same read (no read of their
+  // own). Only the first read sets the open cursor; a Retry re-reads positions only.
   // A reopen: the remembered cursors are the open cursor at once (the
   // viewer's own as this thread last wrote it), and the re-read only refreshes
   // the positions (Seen, Read by), never moving the unread divider.
@@ -1185,7 +1274,9 @@ export function useChatThread(params: {
     );
     if (channelId === null) return;
     let cancelled = false;
-    void loadReadPositions(db, channelId).then((result) => {
+    // The open's one cursors read (the DM seen ticks join it).
+    const read = positionsShare.take(channelId, 'reads') ?? loadReadPositions(db, channelId);
+    void read.then((result) => {
       if (cancelled) return;
       const gate = openReadRef.current;
       gate.settled = true;
@@ -1213,8 +1304,10 @@ export function useChatThread(params: {
     });
     return () => {
       cancelled = true;
+      // Leaving the chat ends its open: the next open reads its cursors afresh.
+      positionsShare.release(channelId);
     };
-  }, [db, channelId, currentUserId, memory, memoryKey]);
+  }, [db, channelId, currentUserId, memory, memoryKey, positionsShare]);
 
   /** Re-read every cursor (positions only; the open cursor stays as captured). */
   const rereadPositions = useCallback((): void => {
@@ -2011,5 +2104,6 @@ export function useChatThread(params: {
     readState,
     markNewestVisible,
     addSentRow,
+    rootCreatedAt,
   };
 }

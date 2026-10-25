@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import {
   DELETED_MESSAGE_LABEL,
@@ -7,8 +7,16 @@ import {
   type ChatMessageRow,
 } from '@/lib/chat/thread';
 import {
+  newWindowState,
+  noteServerNow,
+  trackWindow,
+  windowed,
+} from '@/lib/chat/__tests__/partition-fake';
+import { resetServerClock } from '@/lib/chat/bounded-window';
+import {
   aggregateReactions,
   CATCH_UP_LIMIT,
+  clearMessagePrefetch,
   HISTORY_PAGE_SIZE,
   latestPerChannel,
   loadConversationPreviews,
@@ -21,6 +29,7 @@ import {
   loadPeerReadCursor,
   loadReactions,
   loadThreadPage,
+  earliestCreatedAt,
   loadThreadReplyCounts,
   loadUnreadCounts,
   newerThanFilter,
@@ -38,26 +47,71 @@ interface Call {
 
 // A recording PostgREST-ish builder: every chained query method returns self and
 // logs its call; awaiting yields the configured result. Mirrors chat-reads.test.
+// History reads walk partition-bounded windows (bounded-window.ts), so each
+// query is answered with only the canned rows its created_at range holds, and
+// `calls` logs the FIRST query only (the page's first window); later queries
+// (wider windows, the paging floor probe) go to `later`.
 function makeClient(result: { data: unknown; error: { message: string } | null }) {
   const calls: Call[] = [];
+  const later: Call[] = [];
+  let queries = 0;
+  let w = newWindowState();
+  const log = (call: Call): void => {
+    (queries <= 1 ? calls : later).push(call);
+  };
   const b: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'is', 'in', 'or', 'order', 'limit', 'maybeSingle']) {
+  for (const method of [
+    'select',
+    'eq',
+    'is',
+    'in',
+    'or',
+    'gt',
+    'gte',
+    'lt',
+    'lte',
+    'order',
+    'limit',
+    'maybeSingle',
+  ]) {
     b[method] = (...args: unknown[]) => {
-      calls.push({ method, args });
+      log({ method, args });
+      trackWindow(w, method, args);
       return b;
     };
   }
-  b.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve);
+  b.then = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve(
+      Array.isArray(result.data)
+        ? { ...result, data: windowed(result.data as Record<string, unknown>[], w) }
+        : result,
+    ).then(resolve);
   const from = vi.fn((table: string) => {
-    calls.push({ method: 'from', args: [table] });
+    queries += 1;
+    w = newWindowState();
+    log({ method: 'from', args: [table] });
     return b;
   });
   const rpc = vi.fn((fn: string, args: unknown) => {
-    calls.push({ method: 'rpc', args: [fn, args] });
+    log({ method: 'rpc', args: [fn, args] });
     return Promise.resolve(result);
   });
-  return { client: { from, rpc } as unknown as Client, calls };
+  return { client: { from, rpc } as unknown as Client, calls, later };
 }
+
+beforeEach(() => {
+  // Pinned so the canned rows sit inside the first 30-day window.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'));
+  clearMessagePrefetch();
+  // The server's clock, as a fresh access token's iat reports it.
+  resetServerClock();
+  noteServerNow(Date.parse('2026-10-01T12:00:00Z'));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function methods(calls: Call[]): string[] {
   return calls.map((c) => c.method);
@@ -103,6 +157,9 @@ describe('loadLatestMessages', () => {
     ]);
     expect(argsOf(calls, 'limit')).toEqual([[HISTORY_PAGE_SIZE]]);
     expect(methods(calls)).not.toContain('or');
+    // Both partition-key bounds: the server's now plus a minute, 30 days back.
+    expect(argsOf(calls, 'gte')).toEqual([['created_at', '2026-09-01T12:01:00.000Z']]);
+    expect(argsOf(calls, 'lt')).toEqual([['created_at', '2026-10-01T12:01:00.000Z']]);
     expect(page.ok && page.data.rows.map((r) => r.id)).toEqual(['a', 'b']);
     expect(page.ok && page.data.hasMore).toBe(false);
   });
@@ -125,6 +182,9 @@ describe('loadOlderMessages', () => {
     const { client, calls } = makeClient({ data: [], error: null });
     await loadOlderMessages(client, CHANNEL, CURSOR);
     expect(argsOf(calls, 'or')).toEqual([[olderThanFilter(CURSOR)]]);
+    // Bounded on both sides: up to and including the cursor's time, 30 days back.
+    expect(argsOf(calls, 'lte')).toEqual([['created_at', CURSOR.createdAt]]);
+    expect(argsOf(calls, 'gte')).toEqual([['created_at', '2026-08-23T10:00:00.123Z']]);
     expect(argsOf(calls, 'order')).toEqual([
       ['created_at', { ascending: false }],
       ['id', { ascending: false }],
@@ -138,6 +198,8 @@ describe('loadNewerMessages', () => {
     const { client, calls } = makeClient({ data: [{ id: 'n1' }], error: null });
     const result = await loadNewerMessages(client, CHANNEL, CURSOR);
     expect(argsOf(calls, 'or')).toEqual([[newerThanFilter(CURSOR)]]);
+    expect(argsOf(calls, 'gte')).toEqual([['created_at', CURSOR.createdAt]]);
+    expect(argsOf(calls, 'lt')).toEqual([['created_at', '2026-10-01T12:01:00.000Z']]);
     expect(argsOf(calls, 'order')).toEqual([
       ['created_at', { ascending: true }],
       ['id', { ascending: true }],
@@ -302,7 +364,9 @@ describe('thread reads', () => {
       error: null,
     });
     const roots = Array.from({ length: 230 }, (_, i) => `r${i}`);
-    const result = await loadThreadReplyCounts(client, CHANNEL, roots, 'trace-1');
+    const at = (id: string): string =>
+      new Date(Date.parse('2026-09-01T00:00:00Z') + Number(id.slice(1)) * 60_000).toISOString();
+    const result = await loadThreadReplyCounts(client, CHANNEL, roots, 'trace-1', at);
     const rpc = argsOf(calls, 'rpc');
     expect(rpc).toHaveLength(1);
     expect(rpc[0]?.[0]).toBe('chat_thread_reply_counts');
@@ -310,12 +374,44 @@ describe('thread reads', () => {
       p_trace_id: 'trace-1',
       p_channel_id: CHANNEL,
       p_root_ids: roots.slice(0, 200),
+      p_since: '2026-09-01T00:00:00.000Z',
     });
     expect(result.ok && result.data.get('r1')).toEqual({ count: 4 });
     // Nothing to count: no call at all.
     const none = makeClient({ data: [], error: null });
-    await loadThreadReplyCounts(none.client, CHANNEL, [], 'trace-2');
+    await loadThreadReplyCounts(none.client, CHANNEL, [], 'trace-2', at);
     expect(argsOf(none.calls, 'rpc')).toEqual([]);
+  });
+
+  it('p_since is the earliest created_at among the roots of that request', async () => {
+    const { client, calls } = makeClient({ data: [], error: null });
+    const times = new Map([
+      ['r-mid', '2026-09-15T08:00:00.000Z'],
+      ['r-old', '2026-08-02T23:59:59.000Z'],
+      ['r-new', '2026-10-01T09:00:00.000Z'],
+    ]);
+    await loadThreadReplyCounts(client, CHANNEL, ['r-mid', 'r-new', 'r-old'], 't', (id) =>
+      times.get(id),
+    );
+    const sent = argsOf(calls, 'rpc')[0]?.[1] as { p_since: string };
+    expect(sent.p_since).toBe('2026-08-02T23:59:59.000Z');
+  });
+
+  it('p_since compares instants, not strings (offset timestamps)', () => {
+    const times = new Map([
+      ['a', '2026-09-01T10:00:00+05:30'],
+      ['b', '2026-09-01T05:00:00Z'],
+    ]);
+    expect(earliestCreatedAt(['b', 'a'], (id) => times.get(id))).toBe('2026-09-01T10:00:00+05:30');
+  });
+
+  it("p_since is '-infinity' only when a root of the request has no known created_at", async () => {
+    const { client, calls } = makeClient({ data: [], error: null });
+    await loadThreadReplyCounts(client, CHANNEL, ['known', 'unknown'], 't', (id) =>
+      id === 'known' ? '2026-09-01T00:00:00Z' : undefined,
+    );
+    const sent = argsOf(calls, 'rpc')[0]?.[1] as { p_since: string };
+    expect(sent.p_since).toBe('-infinity');
   });
 });
 

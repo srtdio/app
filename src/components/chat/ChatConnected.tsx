@@ -7,9 +7,8 @@ import { cn } from '@/lib/cn';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import { chatDisplayName } from '@/lib/chat/chat-name';
+import { readGroupMemberIdsShared, readMentionProfilesShared } from '@/lib/chat/open-members';
 import {
-  listGroupMemberIds,
-  readMentionProfiles,
   READ_TIMEOUT_MS,
   withReadTimeout,
   type ChannelSummary,
@@ -1165,9 +1164,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   useEffect(() => {
     if (selectedGroupId === null) return;
     let cancelled = false;
-    void withReadTimeout((signal) =>
-      listGroupMemberIds(supabase, { groupId: selectedGroupId, signal }),
-    ).then((result) => {
+    // Shared with the mention picker's read of the same group (one request).
+    void readGroupMemberIdsShared(supabase, { groupId: selectedGroupId }).then((result) => {
       if (cancelled) return;
       if (!result.ok) {
         logger.warn('chat: group member read failed', { error: result.error.message });
@@ -1357,7 +1355,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     // Each of the two reads has its own 5s budget (in parallel): a failed or
     // hung membership read still stores the profiles, with membership unknown.
     const forWorkspace = workspaceId;
-    void readMentionProfiles(supabase, {
+    // Answered from the shared workspace members cache when it is warm.
+    void readMentionProfilesShared(supabase, {
+      userId: currentUserId,
       workspaceId: forWorkspace,
       userIds: ids,
       timeoutMs: READ_TIMEOUT_MS,
@@ -1399,6 +1399,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     retryFailedFor,
     selectedChannelId,
     workspaceId,
+    currentUserId,
   ]);
   const firstPageSettled = firstPageIn && unsettled.length === 0;
   useEffect(() => {
@@ -1990,6 +1991,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       key={selected.channelId}
                       title={chatDisplayName(shown ?? selected)}
                       channelId={selected.channelId}
+                      rootCreatedAt={thread.rootCreatedAt}
                       avatarUrl={(shown ?? selected).avatarUrl}
                       {...(!isGroup && !notesOpen && workspaceLabel !== undefined
                         ? { subtitle: workspaceLabel }

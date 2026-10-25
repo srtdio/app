@@ -46,6 +46,7 @@ import { PLAN_DELETED_TOAST } from '@/lib/inbox/alerts';
 import { TASKS_SHEET_ONLY } from '@/lib/chat/tasks';
 import { resetMentionNames } from '@/lib/chat/mentions';
 import type { PresignCache } from '@/lib/asset-presign';
+import { newWindowState, windowed } from '@/lib/chat/__tests__/partition-fake';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -505,15 +506,29 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
           data: (tables.users?.data ?? []).map((u) => ({ user_id: u.id, role: 'agency' })),
           error: null,
         };
-        const result =
+        const canned =
           tables[table] ?? (table === 'workspace_members' ? members : { data: [], error: null });
+        // The inbox read walks partition-bounded windows: answer each with its rows only.
+        const w = newWindowState();
+        const range = (op: string, col: string, val: unknown): void => {
+          if (col === 'created_at') w.range.push([op, String(val)]);
+        };
         const self = {
           select: () => self,
           eq: () => self,
           is: () => self,
-          order: () => self,
-          limit: () => self,
-          lt: () => self,
+          order: (col: string, opts?: { ascending?: boolean }) => {
+            w.order.push({ column: col, ascending: opts?.ascending !== false });
+            return self;
+          },
+          limit: (n: number) => {
+            w.limit = n;
+            return self;
+          },
+          gt: (col: string, val: unknown) => (range('gt', col, val), self),
+          gte: (col: string, val: unknown) => (range('gte', col, val), self),
+          lt: (col: string, val: unknown) => (range('lt', col, val), self),
+          lte: (col: string, val: unknown) => (range('lte', col, val), self),
           like: () => self,
           or: () => self,
           in: (_col: string, vals: readonly unknown[]) => {
@@ -521,6 +536,10 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
             return self;
           },
           then(onfulfilled?: (value: QueryResult) => unknown) {
+            const result =
+              table === 'inbox_entries' && canned.data !== null
+                ? { ...canned, data: windowed(canned.data, w) }
+                : canned;
             return Promise.resolve(result).then(onfulfilled);
           },
         };

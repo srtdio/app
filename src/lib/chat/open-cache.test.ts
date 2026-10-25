@@ -25,6 +25,7 @@ import {
 } from '@/lib/chat/open-cache';
 import {
   clearMessagePrefetch,
+  HISTORY_PAGE_SIZE,
   prefetchLatestMessages,
   readLatestMessages,
 } from '@/lib/chat/history';
@@ -342,10 +343,14 @@ describe('the messages page started at the tap', () => {
   function pageClient(): { client: Client; selects: () => number } {
     let n = 0;
     const q: Record<string, unknown> = {};
-    for (const m of ['select', 'eq', 'order', 'limit', 'abortSignal']) q[m] = () => q;
+    for (const m of ['select', 'eq', 'gte', 'lt', 'lte', 'order', 'limit', 'abortSignal']) {
+      q[m] = () => q;
+    }
+    // A full page: the first partition-bounded window fills it (no floor probe).
+    const full = Array.from({ length: HISTORY_PAGE_SIZE }, (_, i) => ({ id: `m${i}` }));
     q.then = (resolve: (v: unknown) => unknown) => {
       n += 1;
-      return Promise.resolve({ data: [], error: null }).then(resolve);
+      return Promise.resolve({ data: full, error: null }).then(resolve);
     };
     return { client: { from: () => q } as unknown as Client, selects: () => n };
   }

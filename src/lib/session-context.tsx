@@ -4,6 +4,7 @@ import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabas
 import { supabase } from '@/lib/supabase';
 import { SIGNOUT_EVENT } from '@/lib/events';
 import { logger } from '@/lib/logger';
+import { noteAuthToken } from '@/lib/chat/bounded-window';
 
 /**
  * Decide the next session from an onAuthStateChange event. A null `nextSession`
@@ -70,6 +71,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      noteAuthToken(event, nextSession?.access_token);
       setSession((current) => resolveSession(event, nextSession, current));
       setLoading(false);
     });

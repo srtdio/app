@@ -1,7 +1,9 @@
 // The people the mention picker offers in one chat: a group's current members
 // or a DM's other person, never the viewer. Two reads at most, both batched: the
 // group's member ids (listGroupMemberIds, groups only) and one readChatMembers
-// (users IN + workspace_members IN, active only). Loaded once per chat open;
+// (users IN + workspace_members IN, active only), answered from the shared
+// workspace members cache when it is warm, and the group's ids shared with the
+// open's other read of them (open-members). Loaded once per chat open;
 // the names also go to the mention registry so the chat list's "Draft:" line
 // resolves a draft's tokens. Both reads share one 5s budget (withReadTimeout
 // with the time left): a hang is a failed read, so the composer's hold always
@@ -10,13 +12,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
-import {
-  listGroupMemberIds,
-  READ_TIMEOUT_MS,
-  readChatMembers,
-  withReadTimeout,
-  type ChatMember,
-} from '@/lib/chat-reads';
+import { READ_TIMEOUT_MS, withReadTimeout, type ChatMember } from '@/lib/chat-reads';
+import { readChatMembersShared, readGroupMemberIdsShared } from '@/lib/chat/open-members';
 import type { Result } from '@srtdio/rpc';
 import { isFormerMember, rememberMentionNames, type MentionMember } from '@/lib/chat/mentions';
 
@@ -143,16 +140,27 @@ export function mentionGone(
   return (userId) => userId !== selfId && (!ids.has(userId) || former(userId));
 }
 
-const READERS: ChannelMemberReaders = {
-  groupMemberIds: (groupId, signal) =>
-    listGroupMemberIds(supabase, { groupId, ...(signal !== undefined ? { signal } : {}) }),
-  members: (workspaceId, userIds, signal) =>
-    readChatMembers(supabase, {
-      workspaceId,
-      userIds,
-      ...(signal !== undefined ? { signal } : {}),
-    }),
-};
+/**
+ * The app's readers for one viewer: the group's ids join the open's other
+ * read of the same group, and the rows come from the shared workspace members
+ * cache when it is warm (open-members), else the same batched read.
+ */
+function readersFor(currentUserId: string | null): ChannelMemberReaders {
+  return {
+    groupMemberIds: (groupId, signal) =>
+      readGroupMemberIdsShared(supabase, {
+        groupId,
+        ...(signal !== undefined ? { signal } : {}),
+      }),
+    members: (workspaceId, userIds, signal) =>
+      readChatMembersShared(supabase, {
+        userId: currentUserId ?? '',
+        workspaceId,
+        userIds,
+        ...(signal !== undefined ? { signal } : {}),
+      }),
+  };
+}
 
 /**
  * The open chat's member list as loaded (ok or failed): null until the list
@@ -166,7 +174,10 @@ export function useChannelMembersState(input: ChannelMembersInput): ChannelMembe
   const key = [workspaceId, currentUserId, groupId, peerUserId].join('|');
   useEffect(() => {
     let cancelled = false;
-    void loadChannelMembersResult({ workspaceId, currentUserId, groupId, peerUserId }, READERS)
+    void loadChannelMembersResult(
+      { workspaceId, currentUserId, groupId, peerUserId },
+      readersFor(currentUserId),
+    )
       .catch((error: unknown): ChannelMembersLoad => {
         logger.warn('chat: mention members load threw', { error: String(error) });
         return { ok: false };

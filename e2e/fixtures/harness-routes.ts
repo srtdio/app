@@ -858,14 +858,17 @@ const RPC: Record<string, RpcHandler> = {
       })
       .slice(0, limit);
   },
-  // Live replies per thread root (deleted ones left out), the first 200 ids only.
+  // Live replies per thread root (deleted ones left out), the first 200 ids
+  // only, created at or after p_since (null: unbounded).
   chat_thread_reply_counts: (args, tables) => {
     const ids = Array.isArray(args.p_root_ids) ? args.p_root_ids.slice(0, 200).map(String) : [];
+    const sinceMs = typeof args.p_since === 'string' ? Date.parse(args.p_since) : Number.NaN;
     const replies = (tables.chat_messages ?? []).filter(
       (m) =>
         m.channel_id === args.p_channel_id &&
         m.deleted_at === null &&
-        ids.includes(String(m.thread_root_message_id)),
+        ids.includes(String(m.thread_root_message_id)) &&
+        (Number.isNaN(sinceMs) || Date.parse(String(m.created_at)) >= sinceMs),
     );
     return ids
       .map((root) => {

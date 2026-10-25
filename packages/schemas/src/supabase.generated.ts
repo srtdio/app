@@ -9621,14 +9621,32 @@ export type Database = {
         Args: { p_batch: Json; p_channel_id: string; p_trace_id: string }
         Returns: Json
       }
-      chat_thread_reply_counts: {
-        Args: { p_channel_id: string; p_root_ids: string[]; p_trace_id: string }
-        Returns: {
-          last_reply_at: string
-          reply_count: number
-          root_id: string
-        }[]
-      }
+      chat_thread_reply_counts:
+        | {
+            Args: {
+              p_channel_id: string
+              p_root_ids: string[]
+              p_trace_id: string
+            }
+            Returns: {
+              last_reply_at: string
+              reply_count: number
+              root_id: string
+            }[]
+          }
+        | {
+            Args: {
+              p_channel_id: string
+              p_root_ids: string[]
+              p_since: string
+              p_trace_id: string
+            }
+            Returns: {
+              last_reply_at: string
+              reply_count: number
+              root_id: string
+            }[]
+          }
       chat_unread_bump: {
         Args: {
           p_channel_id: string
