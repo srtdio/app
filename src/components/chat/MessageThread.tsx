@@ -1,5 +1,6 @@
 import {
   Fragment,
+  memo,
   useCallback,
   useContext,
   useEffect,
@@ -44,6 +45,24 @@ import {
 } from '@/lib/chat/mentions';
 import { logger } from '@/lib/logger';
 import { insertedInside } from '@/lib/chat/catch-up';
+import {
+  centreOn,
+  createIdCallbacks,
+  createStableCache,
+  cropToWindow,
+  extendDown,
+  extendUp,
+  isLive,
+  isMounted,
+  latestWindow,
+  MAX_MOUNTED,
+  STEP,
+  trimWindow,
+  useOptionalCallback,
+  useStableCallback,
+  useThreadWindow,
+  windowEdge,
+} from '@/lib/chat/thread-window';
 import {
   distanceFromBottom,
   anchorAfterOlderLoad,
@@ -2851,7 +2870,7 @@ export function threadListItems(
  * open so the floating action menu can anchor to it. Swipe frames are painted
  * straight onto the bubble and icon (translateX, scale, opacity), no re-render.
  */
-function MessageRow(props: {
+interface MessageRowProps {
   message: ThreadMessage;
   profiles: Map<string, ChatProfile>;
   cache: PresignCache;
@@ -2907,7 +2926,14 @@ function MessageRow(props: {
   onOpenReactions?: (message: ThreadMessage) => void;
   /** The menu's Select is active on this row's body (no hold, menu or swipe). */
   selectingText?: boolean;
-}): ReactElement {
+}
+
+/**
+ * Memoised: the list hands every row stable props (ids, the row's own cached
+ * objects and callbacks that take the message), so a list render that leaves
+ * a row's message alone never re-renders its bubble.
+ */
+const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLSpanElement>(null);
   const selecting = props.selection !== undefined;
@@ -3078,7 +3104,7 @@ function MessageRow(props: {
       }}
     />
   );
-}
+});
 
 /** One row's hold (long-press) and contextmenu decisions; see createRowHold. */
 export interface RowHold {
@@ -3429,6 +3455,22 @@ function ThreadBody(
     () => new Map(props.messages.map((m) => [m.id, m] as const)),
     [props.messages],
   );
+  // The mounted window (thread-window.ts): the latest STEP rows on open, STEP
+  // more each way as the reader nears an edge, never more than MAX_MOUNTED.
+  // Every lookup (quotes, the menu, the viewer, voice chains) still reads the
+  // whole loaded list; only the rendered rows are windowed.
+  const ids = useMemo(() => props.messages.map((m) => m.id), [props.messages]);
+  const { win, set: setWin } = useThreadWindow(ids);
+  const total = props.messages.length;
+  const live = isLive(win, total);
+  const winRef = useRef(win);
+  winRef.current = win;
+  const idsRef = useRef(ids);
+  idsRef.current = ids;
+  const shown = useMemo(
+    () => props.messages.slice(win.start, win.end),
+    [props.messages, win.start, win.end],
+  );
   // The open menu: its message, anchor, held bubble and the server moment its
   // rows were judged at (the edit and delete windows). While it is open, one
   // timeout for the message's next window boundary re-judges them.
@@ -3574,7 +3616,7 @@ function ThreadBody(
   // do not move what the reader was looking at.
   const anchorHeightRef = useRef<number | null>(null);
   // The first row at the last new-rows pass: a change means an older page painted.
-  const firstIdRef = useRef<string | null>(props.messages[0]?.id ?? null);
+  const firstIdRef = useRef<string | null>(shown[0]?.id ?? null);
   const newestIdRef = useRef<string | null>(null);
   // The newest message last seen by the pin, to tell an own send from a re-render.
   const lastIdRef = useRef<string | null>(null);
@@ -3583,8 +3625,11 @@ function ThreadBody(
   // The ids at the last new-rows pass, and the first row on screen (its Y)
   // while the reader is away from the bottom: a row filled into a gap above
   // (catch-up reading back a dropped live row) keeps that row where it was.
-  const shownIdsRef = useRef<readonly string[]>(props.messages.map((m) => m.id));
+  const shownIdsRef = useRef<readonly string[]>(shown.map((m) => m.id));
   const viewAnchorRef = useRef<RowAnchor | null>(null);
+  // The first row on screen before the window let go of rows at its far side;
+  // the next pass puts it back where it was (no-op when only rows below went).
+  const trimAnchorRef = useRef<RowAnchor | null>(null);
   // One observer over the list and every row: any height change re-pins.
   const observerRef = useRef<ResizeObserver | null>(null);
   const observedRef = useRef<Set<Element>>(new Set());
@@ -3599,10 +3644,36 @@ function ThreadBody(
     if (before !== null) paintLog(`thread program scroll ${before} -> ${Math.round(el.scrollTop)}`);
   }, []);
   const pin = useCallback((): void => {
+    // The newest row is not mounted (the reader paged far up, or jumped): the
+    // latest rows mount first; their new-rows pass pins again on the newest.
+    if (!isLive(winRef.current, idsRef.current.length)) {
+      setWin(latestWindow(idsRef.current.length));
+    }
     programScroll((el) => {
       el.scrollTop = el.scrollHeight;
     });
-  }, [programScroll]);
+  }, [programScroll, setWin]);
+  /** Px below the fold, as far as the stick intent goes: unmounted newer rows are never "near the bottom". */
+  const bottomDistance = useCallback(
+    (el: HTMLElement): number =>
+      isLive(winRef.current, idsRef.current.length)
+        ? distanceFromBottom(el)
+        : Number.POSITIVE_INFINITY,
+    [],
+  );
+  /**
+   * A loaded message outside the window: mount the window around it (its
+   * new-rows pass then reveals it). False when it is not loaded or is mounted.
+   */
+  const recentreOn = useCallback(
+    (id: string): boolean => {
+      const at = idsRef.current.indexOf(id);
+      if (at < 0 || isMounted(winRef.current, at)) return false;
+      setWin(centreOn(idsRef.current.length, at));
+      return true;
+    },
+    [setWin],
+  );
   // Selection entry and exit: the pressed row keeps its screen Y while the
   // check column comes and goes (taken when the menu entry runs and again just
   // before exit, restored before paint); a thread pinned at entry re-pins on
@@ -3663,13 +3734,13 @@ function ThreadBody(
       deferredPinRef.current = false;
       const settled = settleDecision({
         intent: stickRef.current,
-        distanceFromBottom: distanceFromBottom(el),
+        distanceFromBottom: bottomDistance(el),
         restoring: pendingJumpRef.current !== null || anchorHeightRef.current !== null,
       });
       stickRef.current = settled.intent;
       if (settled.action === 'pin') pin();
     }, SCROLL_SETTLE_MS);
-  }, [pin]);
+  }, [pin, bottomDistance]);
   const touchStart = (): void => {
     userGesture();
     touchingRef.current = true;
@@ -3769,6 +3840,13 @@ function ThreadBody(
     const id = jumpRequest.id;
     const quiet = jumpRequest.quiet === true;
     if (reveal(id, JUMP_HIGHLIGHT_MS)) return;
+    // Loaded but outside the window: the window mounts around it and its
+    // new-rows pass reveals it (no read).
+    if (recentreOn(id)) {
+      pendingJumpRef.current = id;
+      stickRef.current = false;
+      return;
+    }
     const ensure = ensureLoadedRef.current;
     if (ensure === undefined) {
       if (!quiet) toastRef.current.show({ title: JUMP_NOT_LOADED_TOAST });
@@ -3790,28 +3868,37 @@ function ThreadBody(
         return;
       }
       if (reveal(id, JUMP_HIGHLIGHT_MS)) pendingJumpRef.current = null;
+      else recentreOn(id);
     });
-  }, [jumpRequest, reveal, pin]);
+  }, [jumpRequest, reveal, pin, recentreOn]);
   // New rows: a pending jump owns the position while its pages land; an older
   // page keeps the reader where they were; else an own send takes hold of the
   // bottom again and, while the intent holds, the list pins instantly before
   // paint (open included, so the first paint is final).
+  // The window counts as new rows too: its first row and ids are the mounted
+  // ones; the newest and the intent read the whole loaded list.
   useLayoutEffect(() => {
     const el = listRef.current;
     if (el === null || props.messages.length === 0) return;
     const last = props.messages[props.messages.length - 1];
-    const first = props.messages[0]?.id ?? null;
+    const first = shown[0]?.id ?? null;
     const prepended = first !== firstIdRef.current;
     firstIdRef.current = first;
-    const filledGap = insertedInside(shownIdsRef.current, props.messages);
-    shownIdsRef.current = props.messages.map((m) => m.id);
+    const filledGap = insertedInside(shownIdsRef.current, shown);
+    shownIdsRef.current = shown.map((m) => m.id);
     const viewAnchor = viewAnchorRef.current;
     if (filledGap && !stickRef.current && viewAnchor !== null) {
       programScroll((list) => void restoreRowAnchor(list, viewAnchor));
     }
+    // The window let go of rows at its far side: the reader's row stays put
+    // (a direct scroll, so the reader's own gesture keeps owning the list).
+    const trimAnchor = trimAnchorRef.current;
+    trimAnchorRef.current = null;
+    if (trimAnchor !== null && !stickRef.current) restoreRowAnchor(el, trimAnchor);
     if (pendingJumpRef.current !== null) {
       anchorHeightRef.current = null;
       if (reveal(pendingJumpRef.current, JUMP_HIGHLIGHT_MS)) pendingJumpRef.current = null;
+      else recentreOn(pendingJumpRef.current);
       return;
     }
     if (anchorHeightRef.current !== null) {
@@ -3857,12 +3944,58 @@ function ThreadBody(
       if (!touchingRef.current && settleTimerRef.current === null) scheduleSettle();
       return;
     }
+    // Not mounted yet (a window up in history): pin mounts the latest rows
+    // and their pass lands here again to pin and count the newest as seen.
+    if (!isLive(winRef.current, props.messages.length)) {
+      pin();
+      return;
+    }
     pin();
     if (last !== undefined && newestIdRef.current !== last.id) {
       newestIdRef.current = last.id;
       onNewestVisible?.();
     }
-  }, [props.messages, onNewestVisible, reveal, pin, programScroll, scheduleSettle]);
+  }, [
+    props.messages,
+    shown,
+    onNewestVisible,
+    reveal,
+    pin,
+    programScroll,
+    scheduleSettle,
+    recentreOn,
+  ]);
+  // Never more than MAX_MOUNTED rows: after any commit over it (an older page
+  // or STEP mounted above, STEP below, live rows), the rows farthest from the
+  // first row on screen unmount; its Y is restored by the next new-rows pass.
+  // An older-page restore in flight finishes first; a pending jump keeps the
+  // top (where its pages land).
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    const w = winRef.current;
+    if (list === null || w.end - w.start <= MAX_MOUNTED || anchorHeightRef.current !== null) return;
+    const anchor = firstVisibleRow(list);
+    const at = anchor !== null ? idsRef.current.indexOf(anchor.id) : -1;
+    const visible =
+      pendingJumpRef.current !== null ? w.start : at >= 0 ? at : stickRef.current ? w.end - 1 : w.start;
+    const next = trimWindow(w, visible);
+    if (next.start === w.start && next.end === w.end) return;
+    trimAnchorRef.current = anchor;
+    setWin(next);
+  });
+  // A short window (its rows do not fill the list) with loaded rows above
+  // mounts STEP more at once: there is no scroll to page it up with.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    const w = winRef.current;
+    if (list === null || w.start <= 0 || anchorHeightRef.current !== null) return;
+    if (pendingJumpRef.current !== null || w.end - w.start + STEP > MAX_MOUNTED) return;
+    // A list with no size (not laid out yet, or hidden) has nothing to fill.
+    if (list.clientHeight === 0) return;
+    if (list.scrollHeight - list.clientHeight > LOAD_OLDER_THRESHOLD_PX) return;
+    anchorHeightRef.current = list.scrollHeight;
+    setWin(extendUp(w));
+  });
   // After every commit (and on scroll), the first row on screen while away from
   // the bottom; pinned threads need none.
   useLayoutEffect(() => {
@@ -3953,7 +4086,15 @@ function ThreadBody(
   const dividerWhere = (): 'above' | 'visible' | 'below' | 'missing' => {
     const list = listRef.current;
     const divider = list?.querySelector('[data-unread-divider]');
-    if (list == null || divider == null) return 'missing';
+    if (list == null) return 'missing';
+    if (divider == null) {
+      // A loaded first unread outside the window sits where its rows would.
+      if (unread == null || unread.kind !== 'loaded') return 'missing';
+      const at = idsRef.current.indexOf(unread.firstId);
+      if (at >= 0 && at < winRef.current.start) return 'above';
+      if (at >= winRef.current.end) return 'below';
+      return 'missing';
+    }
     const lr = list.getBoundingClientRect();
     const dr = divider.getBoundingClientRect();
     if (lr.height > 0 && dr.bottom <= lr.top) return 'above';
@@ -4004,9 +4145,17 @@ function ThreadBody(
       observed.clear();
     };
   }, []);
+  // A quote tapped whose message is loaded but outside the window: the window
+  // mounts around it, then the scroll runs on that commit.
+  const pendingQuoteRef = useRef<string | null>(null);
   const scrollToMessage = (id: string): void => {
     const el = listRef.current?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`);
     if (el == null) {
+      if (recentreOn(id)) {
+        stickRef.current = false;
+        pendingQuoteRef.current = id;
+        return;
+      }
       toast.show({ title: 'That message is not loaded here' });
       return;
     }
@@ -4018,6 +4167,73 @@ function ThreadBody(
     flash.classList.add(...ring);
     window.setTimeout(() => flash.classList.remove(...ring), 1200);
   };
+  const onJumpToMessage = useStableCallback(scrollToMessage);
+  useLayoutEffect(() => {
+    const id = pendingQuoteRef.current;
+    if (id === null) return;
+    pendingQuoteRef.current = null;
+    onJumpToMessage(id);
+  }, [shown, onJumpToMessage]);
+  // Every row prop is stable (MessageRow is memoised): callbacks keep one
+  // identity and take the message or its id; a row's object props come from
+  // per-row caches that keep the last object while its contents are the same.
+  const onOpenRow = useStableCallback(
+    (m: ThreadMessage, rect: DOMRect | null, held: HTMLElement | null, reactionsOnly?: boolean) => {
+      if (m.deleted === true) return;
+      // Another menu opening ends text selection.
+      setSelectingTextId(null);
+      setMenu({
+        message: m,
+        rect,
+        held,
+        openedAt: serverNow(),
+        reactionsOnly: reactionsOnly === true,
+      });
+    },
+  );
+  const onOpenImage = useCallback(
+    (m: ThreadMessage, index: number) => setViewer({ messageId: m.id, index }),
+    [],
+  );
+  const onSwipeReply = useStableCallback(props.onReply);
+  const onTranscribeRow = useOptionalCallback(props.onTranscribe);
+  const onRetryRow = useOptionalCallback(props.onRetry);
+  const onDiscardRow = useOptionalCallback(props.onDiscard);
+  const onCancelUploadRow = useOptionalCallback(props.onCancelUpload);
+  const onChangePriorityRow = useOptionalCallback(props.onChangePriority);
+  const onOpenReactionsRow = useOptionalCallback(props.onOpenReactions);
+  const onTalkAboutRow = useOptionalCallback(props.onTalkAbout);
+  const onTalkAboutFocusRow = useOptionalCallback(props.onTalkAboutFocus);
+  const onOpenMention = useOptionalCallback(props.mentions?.onOpen);
+  const mentionPeer = props.mentions?.peerUserId ?? null;
+  const rowMentions = useMemo<BubbleMentions | undefined>(
+    () =>
+      onOpenMention !== undefined ? { peerUserId: mentionPeer, onOpen: onOpenMention } : undefined,
+    [onOpenMention, mentionPeer],
+  );
+  // The latest selection and chips, read by each row's stable toggle and tap.
+  const selectionRef = useRef(props.selection);
+  selectionRef.current = props.selection;
+  const chipsRef = useRef(new Map<string, BubbleChip>());
+  const rowCachesRef = useRef<{
+    meta: (id: string, value: BubbleMeta) => BubbleMeta;
+    rail: (id: string, value: RowRail | undefined) => RowRail | undefined;
+    selection: (id: string, value: RowSelection) => RowSelection;
+    chip: (id: string, value: BubbleChip | undefined) => BubbleChip | undefined;
+    postRefs: (id: string, value: BubblePostRefs) => BubblePostRefs;
+    toggle: (id: string) => () => void;
+    chipTap: (id: string) => () => void;
+  } | null>(null);
+  rowCachesRef.current ??= {
+    meta: createStableCache<BubbleMeta>(),
+    rail: createStableCache<RowRail | undefined>(),
+    selection: createStableCache<RowSelection>(),
+    chip: createStableCache<BubbleChip | undefined>(),
+    postRefs: createStableCache<BubblePostRefs>(),
+    toggle: createIdCallbacks((id) => selectionRef.current?.onToggle(id)),
+    chipTap: createIdCallbacks((id) => chipsRef.current.get(id)?.onTap()),
+  };
+  const rowCaches = rowCachesRef.current;
   if (props.loading) return threadSkeleton();
   if (props.loadFailed === true && props.messages.length === 0) {
     return threadLoadError(props.onRetryLoad);
@@ -4075,11 +4291,28 @@ function ThreadBody(
   // "N replies" are hidden while selecting (rows then keep today's place).
   const memberOf = props.threads?.memberOf;
   const threads = props.selection === undefined ? props.threads : undefined;
-  const listRows = threadRows(props.messages, nowMs, undefined, {
-    showTicks: props.showTicks,
-    days: props.threads?.viewRootId === undefined,
-    ...(props.taskLines !== undefined ? { taskEvents: props.taskLines.events } : {}),
-  });
+  // The window's rows, grouped with one loaded message past each edge so the
+  // edge rows keep their true head, tail and day pill.
+  const lead = props.messages[win.start - 1];
+  const trail = props.messages[win.end];
+  const listRows = cropToWindow(
+    threadRows(
+      props.messages.slice(
+        lead !== undefined ? win.start - 1 : win.start,
+        trail !== undefined ? win.end + 1 : win.end,
+      ),
+      nowMs,
+      undefined,
+      {
+        showTicks: props.showTicks,
+        days: props.threads?.viewRootId === undefined,
+        ...(props.taskLines !== undefined ? { taskEvents: props.taskLines.events } : {}),
+      },
+    ),
+    (row) => (row.kind === 'message' ? row.message.id : null),
+    lead?.id ?? null,
+    trail?.id ?? null,
+  );
   const taskCtx = props.taskLines?.ctx;
   const plans =
     threads !== undefined
@@ -4110,12 +4343,32 @@ function ThreadBody(
             stickRef.current = intentAfterScroll({
               intent: stickRef.current,
               source: sourceRef.current,
-              distanceFromBottom: distanceFromBottom(el),
+              distanceFromBottom: bottomDistance(el),
             });
             setShowLatest(!stickRef.current);
             if (stickRef.current) setNewCount(0);
             updatePill();
-            if (isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight)) {
+            // Near an edge of the window with loaded rows past it: STEP more
+            // mount that way (rows above keep the reader in place through the
+            // older-page restore). The first loaded row's edge pages as before.
+            const edge =
+              sourceRef.current === 'user' && anchorHeightRef.current === null
+                ? windowEdge({
+                    win: winRef.current,
+                    total: idsRef.current.length,
+                    scrollTop: el.scrollTop,
+                    distanceFromBottom: distanceFromBottom(el),
+                    viewport: el.clientHeight,
+                    edgePx: LOAD_OLDER_THRESHOLD_PX,
+                  })
+                : 'none';
+            if (edge === 'up') {
+              anchorHeightRef.current = el.scrollHeight;
+              setWin(extendUp(winRef.current));
+            } else if (edge === 'down') {
+              setWin(extendDown(winRef.current, idsRef.current.length));
+            }
+            if (live && isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight)) {
               const last = props.messages[props.messages.length - 1];
               if (last !== undefined && newestIdRef.current !== last.id) {
                 newestIdRef.current = last.id;
@@ -4124,6 +4377,7 @@ function ThreadBody(
             }
             if (
               sourceRef.current === 'user' &&
+              winRef.current.start === 0 &&
               el.scrollTop <= LOAD_OLDER_THRESHOLD_PX &&
               props.hasMore === true &&
               props.loadingOlder !== true &&
@@ -4168,6 +4422,17 @@ function ThreadBody(
                   ? replyCountLabel(threads.countOf(row.message.id))
                   : null;
               const openThread = (rootId: string): void => threads?.onOpen(rootId);
+              const id = row.message.id;
+              // The chip as drawn: its post, and a tap that runs the latest chip's.
+              const chipNow = props.chipFor?.(row.message);
+              if (chipNow !== undefined) chipsRef.current.set(id, chipNow);
+              else chipsRef.current.delete(id);
+              const chip = rowCaches.chip(
+                id,
+                chipNow !== undefined
+                  ? { kind: 'chip', post: chipNow.post, onTap: rowCaches.chipTap(id) }
+                  : undefined,
+              );
               return (
                 <Fragment key={row.message.id}>
                   {unread?.kind === 'loaded' && unread.firstId === row.message.id ? (
@@ -4208,59 +4473,51 @@ function ThreadBody(
                       afterLabel={afterLabel}
                       layout={props.layout}
                       viewerUserId={props.viewerUserId}
-                      mentions={props.mentions}
+                      mentions={rowMentions}
                       workspaceId={props.workspaceId}
-                      meta={row.meta}
-                      onOpen={(m, rect, held, reactionsOnly) => {
-                        if (m.deleted === true) return;
-                        // Another menu opening ends text selection.
-                        setSelectingTextId(null);
-                        setMenu({
-                          message: m,
-                          rect,
-                          held,
-                          openedAt: serverNow(),
-                          reactionsOnly: reactionsOnly === true,
-                        });
-                      }}
-                      onOpenImage={(m, index) => setViewer({ messageId: m.id, index })}
+                      meta={rowCaches.meta(id, row.meta)}
+                      onOpen={onOpenRow}
+                      onOpenImage={onOpenImage}
                       hoverMenu={hoverMenu}
                       coarsePointer={coarsePointer}
                       reducedMotion={reducedMotion}
-                      onSwipeReply={props.onReply}
-                      onJumpToMessage={scrollToMessage}
+                      onSwipeReply={onSwipeReply}
+                      onJumpToMessage={onJumpToMessage}
                       nextVoiceId={voiceNext.get(row.message.id) ?? null}
-                      onTranscribe={props.onTranscribe}
+                      onTranscribe={onTranscribeRow}
                       quoted={
                         row.message.reply !== null
                           ? messagesById.get(row.message.reply.id)
                           : undefined
                       }
-                      postRefs={{
-                        chip: props.chipFor?.(row.message),
-                        onTalkAbout: props.onTalkAbout,
-                        onTalkAboutFocus: props.onTalkAboutFocus,
-                      }}
+                      postRefs={rowCaches.postRefs(id, {
+                        chip,
+                        onTalkAbout: onTalkAboutRow,
+                        onTalkAboutFocus: onTalkAboutFocusRow,
+                      })}
                       threadMember={memberOf?.(row.message) != null}
-                      rail={rowRail}
+                      rail={rowCaches.rail(id, rowRail)}
                       mark={props.marks.get(row.message.id)}
-                      {...(props.onChangePriority !== undefined
-                        ? { onChangePriority: props.onChangePriority }
+                      {...(onChangePriorityRow !== undefined
+                        ? { onChangePriority: onChangePriorityRow }
                         : {})}
                       {...(props.selection !== undefined
                         ? {
-                            selection: rowSelection(row.message, props.selection),
+                            selection: rowCaches.selection(id, {
+                              ...rowSelection(row.message, props.selection),
+                              onToggle: rowCaches.toggle(id),
+                            }),
                           }
                         : {})}
-                      {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
-                      {...(props.onDiscard !== undefined && props.selection === undefined
-                        ? { onDiscard: props.onDiscard }
+                      {...(onRetryRow !== undefined ? { onRetry: onRetryRow } : {})}
+                      {...(onDiscardRow !== undefined && props.selection === undefined
+                        ? { onDiscard: onDiscardRow }
                         : {})}
-                      {...(props.onCancelUpload !== undefined
-                        ? { onCancelUpload: props.onCancelUpload }
+                      {...(onCancelUploadRow !== undefined
+                        ? { onCancelUpload: onCancelUploadRow }
                         : {})}
-                      {...(props.onOpenReactions !== undefined && props.selection === undefined
-                        ? { onOpenReactions: props.onOpenReactions }
+                      {...(onOpenReactionsRow !== undefined && props.selection === undefined
+                        ? { onOpenReactions: onOpenReactionsRow }
                         : {})}
                       selectingText={selectingTextId === row.message.id}
                     />
@@ -4292,7 +4549,10 @@ function ThreadBody(
                 </Fragment>
               );
             },
-            props.loadOlderRow === true && props.hasMore === true
+            // The thread view's Load older reads the older page: only once
+            // the window is at the first loaded row (above it, scrolling up
+            // mounts the loaded rows).
+            props.loadOlderRow === true && props.hasMore === true && win.start === 0
               ? () => {
                   const el = listRef.current;
                   if (el === null || anchorHeightRef.current !== null) return;
@@ -4306,7 +4566,7 @@ function ThreadBody(
             taskCtx !== undefined
               ? (row) => <TaskEventLine key={row.key} line={row.line} ctx={taskCtx} />
               : undefined,
-            olderFailed && props.loadingOlder !== true ? retryOlder : undefined,
+            olderFailed && props.loadingOlder !== true && win.start === 0 ? retryOlder : undefined,
           )}
         </ul>
         {unread !== undefined && unread !== null && pill !== 'unknown' ? (

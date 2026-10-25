@@ -56,6 +56,7 @@ const CHAT_SPECS = [
   'chat-status-ticker',
   'chat-tasks',
   'chat-thread',
+  'chat-thread-window',
   'chat-tray',
   'chat-username-mentions',
   'chat-voice-playback',
