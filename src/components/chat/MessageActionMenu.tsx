@@ -1024,10 +1024,7 @@ export function EmojiPickerShell(props: {
   } as const;
 
   if (layout === 'laptop') {
-    const position =
-      props.anchor !== null
-        ? popoverPosition(props.anchor, viewportSize())
-        : null;
+    const position = props.anchor !== null ? popoverPosition(props.anchor, viewportSize()) : null;
     return createPortal(
       <>
         <div data-emoji-dismiss="" className="fixed inset-0 z-[60]" onClick={onClose} />

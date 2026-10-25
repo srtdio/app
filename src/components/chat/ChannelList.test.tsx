@@ -408,9 +408,7 @@ describe('load status', () => {
           el !== tile &&
           /rounded-(full|xl)/.test((el.props as { className?: string }).className ?? ''),
       );
-      expect((photo!.props as { className: string }).className).toContain(
-        'h-[72px] w-[72px]',
-      );
+      expect((photo!.props as { className: string }).className).toContain('h-[72px] w-[72px]');
     }
     expect(
       findAll(withStatus('loading'), (el) =>

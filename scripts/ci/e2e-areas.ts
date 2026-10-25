@@ -81,6 +81,12 @@ const CHAT_SPECS = [
   'workspace-delete-chat-purge',
   // The chat PostSheet's decisions (Reject from the bar, Park from its ⋯ menu).
   'chat-post-sheet-decisions',
+  // Esc closes each overlay on laptop (chat among Pipeline, post, Assets, Settings).
+  'overlay-esc',
+  // Right-click a chat row and a message (also a Pipeline card and a file tile).
+  'context-menu',
+  // Pipeline and Chat at iPad portrait (820x1180).
+  'ipad-layout',
 ];
 
 export const AREAS: Area[] = [
@@ -127,7 +133,10 @@ export const AREAS: Area[] = [
       'assets-type-tabs',
       'chat-back-navigation',
       'chat-status-ticker',
+      'context-menu',
       'detail-frame',
+      'ipad-layout',
+      'overlay-esc',
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
@@ -152,6 +161,7 @@ export const AREAS: Area[] = [
       'onboarding-invited',
       'onboarding-approver',
       'link-previews',
+      'overlay-esc',
       'pdf-opens-instantly',
       'post-delete-undo',
     ].map(t),
@@ -187,10 +197,12 @@ export const AREAS: Area[] = [
       'assets-type-tabs',
       'assets-recently-deleted',
       'assets-select-box',
+      'context-menu',
       'files-open-in-viewer',
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
+      'overlay-esc',
       'pdf-opens-instantly',
     ].map(t),
   },
@@ -203,6 +215,7 @@ export const AREAS: Area[] = [
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
+      'overlay-esc',
       'workspace-storage',
       'workspace-delete-chat-purge',
     ].map(t),
@@ -290,3 +303,10 @@ export const ALWAYS_FULL = [
 
 /** Any stylesheet runs the whole suite. */
 export const FULL_EXTENSIONS = ['.css'];
+
+/**
+ * The visual lock (screenshot baselines). Not an area spec: it runs under its
+ * own config (e2e/visual/playwright.visual.config.ts) in visual-ci.yml on
+ * every PR, never through e2e-select.ts or the root playwright.config.ts.
+ */
+export const VISUAL_SPECS = ['e2e/visual/screens.spec.ts'];

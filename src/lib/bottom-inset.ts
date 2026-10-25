@@ -44,8 +44,7 @@ export function useBottomInset(self?: RefObject<Element | null>): number {
   useLayoutEffect(() => {
     measure();
     window.addEventListener('resize', measure);
-    const observer =
-      typeof MutationObserver === 'function' ? new MutationObserver(measure) : null;
+    const observer = typeof MutationObserver === 'function' ? new MutationObserver(measure) : null;
     observer?.observe(document.body, {
       childList: true,
       subtree: true,
