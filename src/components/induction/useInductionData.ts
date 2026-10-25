@@ -45,10 +45,7 @@ export interface InductionData {
  * not replaying), or a role with no route: the guide never shows, so the route
  * change reads nothing.
  */
-export function readsOnRouteChange(
-  state: InductionState | null,
-  hasWorkspace: boolean,
-): boolean {
+export function readsOnRouteChange(state: InductionState | null, hasWorkspace: boolean): boolean {
   if (state === null) return false;
   if (state === FAIL_OPEN_STATE) return true;
   if (state.done) return false;

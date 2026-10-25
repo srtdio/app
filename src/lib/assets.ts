@@ -296,7 +296,11 @@ export async function listAssetsPage(
 
   const fetched = (assetsResult.data ?? []) as unknown as RawAssetRow[];
   const rows = fetched.slice(0, ASSETS_PAGE_SIZE);
-  const counts = await attachmentCountsFor(client, workspaceId, rows.map((row) => row.id));
+  const counts = await attachmentCountsFor(
+    client,
+    workspaceId,
+    rows.map((row) => row.id),
+  );
   if (!counts.ok) return counts;
 
   const last = rows[rows.length - 1];
@@ -346,7 +350,9 @@ export async function listRootAssetLabels(
   }>;
   return {
     ok: true,
-    data: rows.map((row) => displayLabel({ displayName: row.display_name, filename: row.filename })),
+    data: rows.map((row) =>
+      displayLabel({ displayName: row.display_name, filename: row.filename }),
+    ),
   };
 }
 
@@ -372,7 +378,11 @@ export async function getAssetItem(
     return { ok: false, error: { code: 'unknown', message: result.error.message } };
   }
   const rows = (result.data ?? []) as unknown as RawAssetRow[];
-  const counts = await attachmentCountsFor(client, workspaceId, rows.map((row) => row.id));
+  const counts = await attachmentCountsFor(
+    client,
+    workspaceId,
+    rows.map((row) => row.id),
+  );
   if (!counts.ok) return counts;
   return { ok: true, data: shapeAssets(rows, counts.data) };
 }

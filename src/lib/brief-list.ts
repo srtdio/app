@@ -158,7 +158,10 @@ export async function listBriefsPage(
 
   const fetched: Brief[] = data ?? [];
   const rows = fetched.slice(0, BRIEF_LIST_PAGE_SIZE);
-  const thumbnails = await firstImageByBrief(client, rows.map((brief) => brief.id));
+  const thumbnails = await firstImageByBrief(
+    client,
+    rows.map((brief) => brief.id),
+  );
   if (!thumbnails.ok) return thumbnails;
 
   const last = rows[rows.length - 1];

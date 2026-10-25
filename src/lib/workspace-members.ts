@@ -218,7 +218,8 @@ function startRead(key: string, entry: Entry, mode: LoadMode): void {
   }
   entry.inflight = true;
   if (mode === 'initial') publish(key, entry, LOADING);
-  else if (mode === 'refetch') publish(key, entry, { ...entry.snapshot, loading: true, error: null });
+  else if (mode === 'refetch')
+    publish(key, entry, { ...entry.snapshot, loading: true, error: null });
   const started = generation;
   const { workspaceId } = entry;
   void loadWorkspaceMembers({

@@ -100,9 +100,7 @@ describe('listBriefsPage keyset paging', () => {
       ['created_at', { ascending: false }],
       ['id', { ascending: false }],
     ]);
-    expect(briefCalls.find((c) => c.method === 'limit')?.args).toEqual([
-      BRIEF_LIST_PAGE_SIZE + 1,
-    ]);
+    expect(briefCalls.find((c) => c.method === 'limit')?.args).toEqual([BRIEF_LIST_PAGE_SIZE + 1]);
     expect(briefCalls.some((c) => c.method === 'or')).toBe(false);
     // Two requests per page: the briefs read, then ONE thumbnails IN read.
     expect(reads).toEqual(['briefs', 'asset_attachments']);
