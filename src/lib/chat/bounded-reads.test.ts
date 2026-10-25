@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Result } from '@srtdio/rpc';
 import {
+  ceilingNowMs,
   noteAuthToken,
   resetServerClock,
   SERVER_NOW_MARGIN_MS,
@@ -21,6 +22,7 @@ import {
   type HistoryPage,
 } from '@/lib/chat/history';
 import type { MessageCursor } from '@/lib/chat/thread';
+import { fetchInboxSince } from '@/lib/inbox/inbox-reads';
 import {
   monthsTouched,
   noteServerNow,
@@ -241,10 +243,14 @@ describe('partition bounds come from the server clock, never the device clock', 
       const page = await loadLatestMessages(client, CH);
       expect(page.ok && page.data.rows.map((r) => r.id).at(-1)).toBe('newest');
       const [read] = historyReads(queries);
-      const serverUpper = new Date(Date.parse(NOW) + SERVER_NOW_MARGIN_MS).toISOString();
+      // The ceiling is the later of the device and the server now: a slow
+      // device is lifted to the server's now, a fast one keeps its own.
+      const upper = new Date(
+        Math.max(Date.parse(NOW), Date.parse(NOW) + skewMs) + SERVER_NOW_MARGIN_MS,
+      ).toISOString();
       expect(read?.range).toEqual([
-        ['gte', new Date(Date.parse(serverUpper) - HISTORY_WINDOW_MS).toISOString()],
-        ['lt', serverUpper],
+        ['gte', new Date(Date.parse(upper) - HISTORY_WINDOW_MS).toISOString()],
+        ['lt', upper],
       ]);
     });
   }
@@ -331,6 +337,97 @@ describe('server clock from the access token iat', () => {
       });
     }
   }
+});
+
+describe('a wrong-low server estimate never hides recent rows (ceiling = max(device, server))', () => {
+  const MIN_MS = 60_000;
+  const DAY_MS = 86_400_000;
+  const OLD_AT = '2026-10-20T08:00:00.000Z';
+  const inboxRow = (id: string, createdAt: string): FakeRow => ({
+    id,
+    created_at: createdAt,
+    workspace_id: 'ws1',
+    user_id: 'u1',
+    actor_user_id: null,
+    event_type: 'asset_uploaded',
+    entity_type: null,
+    entity_id: null,
+    scope: 'posts',
+    tier: 'active',
+    payload: {},
+    read_at: null,
+    snoozed_until: null,
+    deleted_at: null,
+  });
+
+  /** A message and an inbox entry from 1 min ago (real time) come back from every now-bounded read. */
+  async function expectRecentEverywhere(): Promise<void> {
+    const recentAt = new Date(Date.parse(NOW) - MIN_MS).toISOString();
+    const chat: FakeRow[] = [
+      { id: 'older', created_at: OLD_AT, channel_id: CH, workspace_id: 'ws1', deleted_at: null },
+      { id: 'recent', created_at: recentAt, channel_id: CH, workspace_id: 'ws1', deleted_at: null },
+    ];
+    const { client } = partitionFake({
+      chat_messages: chat,
+      inbox_entries: [inboxRow('e-old', OLD_AT), inboxRow('e-recent', recentAt)],
+    });
+    // Newest page (the open read and the tap prefetch share it).
+    const page = await loadLatestMessages(client, CH);
+    expect(page.ok && page.data.rows.map((r) => r.id).at(-1)).toBe('recent');
+    // Catch-up from the older row.
+    const newer = await loadNewerMessages(client, CH, { createdAt: OLD_AT, id: 'older' });
+    expect(newer.ok && newer.data.map((r) => r.id)).toEqual(['recent']);
+    // Conversation previews: the last line is the recent message.
+    const previews = await loadConversationPreviews(client, 'ws1');
+    expect(previews.ok && previews.data.map((p) => p.messageId)).toEqual(['recent']);
+    // Since-poll: the recent inbox entry is picked up.
+    const since = await fetchInboxSince(client, {
+      workspaceId: 'ws1',
+      userId: 'u1',
+      sinceIso: '2026-10-24T00:00:00.000Z',
+    });
+    expect(since.ok && since.data.rows.map((r) => r.id)).toEqual(['e-recent']);
+  }
+
+  it('SIGNED_IN with a 50-min-old stored token and no INITIAL_SESSION first', async () => {
+    resetServerClock();
+    noteAuthToken('SIGNED_IN', tokenIssuedAt(Date.parse(NOW) - 50 * MIN_MS));
+    // The estimate is wrong low (taken as fresh), the ceiling is not.
+    expect(serverNowMs()).toBe(Date.parse(NOW) - 50 * MIN_MS);
+    expect(ceilingNowMs()).toBe(Date.parse(NOW));
+    await expectRecentEverywhere();
+  });
+
+  it("another tab's older-but-newer-than-seen token (offset -30 min)", async () => {
+    resetServerClock();
+    noteAuthToken('INITIAL_SESSION', tokenIssuedAt(Date.parse(NOW) - 55 * MIN_MS));
+    noteAuthToken('SIGNED_IN', tokenIssuedAt(Date.parse(NOW) - 30 * MIN_MS));
+    expect(serverNowMs()).toBe(Date.parse(NOW) - 30 * MIN_MS);
+    expect(ceilingNowMs()).toBe(Date.parse(NOW));
+    await expectRecentEverywhere();
+  });
+
+  it('device 3 days slow + a fresh TOKEN_REFRESHED: the server estimate wins', async () => {
+    vi.setSystemTime(new Date(Date.parse(NOW) - 3 * DAY_MS));
+    resetServerClock();
+    noteAuthToken('TOKEN_REFRESHED', tokenIssuedAt(Date.parse(NOW)));
+    expect(ceilingNowMs()).toBe(Date.parse(NOW));
+    await expectRecentEverywhere();
+  });
+
+  it('device 3 days fast: the device clock is the ceiling, the newest row still comes back', async () => {
+    vi.setSystemTime(new Date(Date.parse(NOW) + 3 * DAY_MS));
+    resetServerClock();
+    noteAuthToken('TOKEN_REFRESHED', tokenIssuedAt(Date.parse(NOW)));
+    expect(ceilingNowMs()).toBe(Date.parse(NOW) + 3 * DAY_MS);
+    await expectRecentEverywhere();
+  });
+
+  it('no offset yet: no ceiling at all, the newest row comes back', async () => {
+    resetServerClock();
+    expect(ceilingNowMs()).toBeNull();
+    await expectRecentEverywhere();
+  });
 });
 
 describe('readBoundedPage / readBoundedForward', () => {

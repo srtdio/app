@@ -35,10 +35,10 @@ import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable, withLinkedSignal, withReadTimeout } from '@/lib/chat-reads';
 import {
+  ceilingNowMs,
   OldestCache,
   readBoundedPage,
   SERVER_NOW_MARGIN_MS,
-  serverNowMs,
   upperFromNow,
   type TimeBounds,
 } from '@/lib/chat/bounded-window';
@@ -322,12 +322,12 @@ export function loadNewerMessages(
 }
 
 /**
- * The catch-up read's upper bound: the server's now or the cursor, whichever
- * is later, plus SERVER_NOW_MARGIN_MS; null (no upper bound) before the server
- * clock is known. Never the device clock.
+ * The catch-up read's upper bound: the latest of the device clock, the server
+ * estimate and the cursor (ceilingNowMs, then the cursor), plus
+ * SERVER_NOW_MARGIN_MS; null (no upper bound) before the server clock is known.
  */
 export function catchUpCeiling(cursor: MessageCursor): string | null {
-  const now = serverNowMs();
+  const now = ceilingNowMs();
   if (now === null) return null;
   const at = Date.parse(cursor.createdAt);
   return new Date(Math.max(now, Number.isNaN(at) ? now : at) + SERVER_NOW_MARGIN_MS).toISOString();

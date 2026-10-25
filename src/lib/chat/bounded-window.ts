@@ -16,12 +16,16 @@
 //      the loop always terminates and never hides an older row: scrolling
 //      back always reaches the first message or inbox entry.
 //
-// "Now" is never the device clock: it is the server's clock, learned from the
+// Upper bounds use ceilingNowMs(): the later of the device clock and the
+// server's clock. The server's clock is learned from the
 // iat claim of each freshly issued access token (noteAuthToken, called from the
 // one auth subscription on SIGNED_IN and TOKEN_REFRESHED, stores offset =
 // iat*1000 - Date.now() at receipt; the latest wins). A token read back from
-// storage (INITIAL_SESSION, or a SIGNED_IN replaying it) is never used: its iat
-// can be up to an hour old. Until the first fresh token lands, a newest page
+// storage (INITIAL_SESSION, or a SIGNED_IN replaying it after one) is skipped:
+// its iat can be up to an hour old. One can still slip through (a SIGNED_IN
+// replay before INITIAL_SESSION, another tab's older token), so the estimate
+// can run low; the max() with the device clock keeps that from hiding rows.
+// Until the first fresh token lands, a newest page
 // has no upper bound (its lower bound is then only a starting point: a short
 // window still widens back to the oldest row, so nothing is hidden whatever
 // the device clock says).
@@ -89,6 +93,19 @@ export function serverNowMs(): number | null {
   return serverOffsetMs === null ? null : Date.now() + serverOffsetMs;
 }
 
+/**
+ * The "now" every upper bound is built from: the later of the device clock and
+ * the server estimate, or null before the first fresh token (no upper bound).
+ * A server estimate that is wrong low (a stored token taken as fresh: a
+ * SIGNED_IN replaying it before INITIAL_SESSION, or another tab's older token)
+ * can never pull a ceiling below the device clock, and a slow device is still
+ * lifted by a fresh token, so rows hide only if both clocks are low at once.
+ */
+export function ceilingNowMs(): number | null {
+  const server = serverNowMs();
+  return server === null ? null : Math.max(Date.now(), server);
+}
+
 /** Forget the server clock (tests; a fresh session learns it again from its first fresh token). */
 export function resetServerClock(): void {
   serverOffsetMs = null;
@@ -135,11 +152,12 @@ export interface BoundedPageInput<Row> {
 }
 
 /**
- * The newest-page edge: the server's now plus SERVER_NOW_MARGIN_MS, as an ISO
- * string; null while the server clock is unknown (no upper bound then).
+ * The newest-page edge: ceilingNowMs() (the later of device and server now)
+ * plus SERVER_NOW_MARGIN_MS, as an ISO string; null while the server clock is
+ * unknown (no upper bound then).
  */
 export function upperFromNow(): string | null {
-  const now = serverNowMs();
+  const now = ceilingNowMs();
   return now === null ? null : new Date(now + SERVER_NOW_MARGIN_MS).toISOString();
 }
 
@@ -232,7 +250,7 @@ export async function readBoundedForward<Row>(
       error: { code: 'unknown', message: 'readBoundedForward: bad lower bound' },
     };
   }
-  const ceilingMs = input.nowMs ?? serverNowMs() ?? Date.now();
+  const ceilingMs = input.nowMs ?? ceilingNowMs() ?? Date.now();
   let from = input.lower;
   let span = input.windowMs ?? HISTORY_WINDOW_MS;
   for (;;) {
