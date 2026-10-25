@@ -52,7 +52,7 @@ function bucketName(): string {
 describe.runIf(RPC_SUITE)('storage_workspace_cutover and the workspace restore window', () => {
   let admin: SupabaseClient<Database>;
   let g: GenericClient;
-  let owner: SeededUser;
+  const owners: SeededUser[] = [];
   const workspaces: SeededWorkspace[] = [];
 
   async function workspaceRow(id: string): Promise<WorkspaceRow> {
@@ -89,7 +89,11 @@ describe.runIf(RPC_SUITE)('storage_workspace_cutover and the workspace restore w
     return res.error;
   }
 
+  // One owner per workspace: an owner may only create a limited number of
+  // workspaces (workspace_limit_reached).
   async function seed(label: string): Promise<SeededWorkspace> {
+    const owner = await seedUser(loadRlsEnv(), admin);
+    owners.push(owner);
     const ws = await seedWorkspace(admin, owner, `${label} ${owner.email}`);
     workspaces.push(ws);
     return ws;
@@ -103,11 +107,10 @@ describe.runIf(RPC_SUITE)('storage_workspace_cutover and the workspace restore w
     const env = loadRlsEnv();
     admin = createAdminClient(env);
     g = asGeneric(admin);
-    owner = await seedUser(env, admin);
   });
 
   afterAll(async () => {
-    await cleanupWorkspaces(admin, workspaces, [owner]);
+    await cleanupWorkspaces(admin, workspaces, owners);
   });
 
   it('refuses anon and authenticated callers, even the workspace owner', async () => {
@@ -118,7 +121,7 @@ describe.runIf(RPC_SUITE)('storage_workspace_cutover and the workspace restore w
       cutoverArgs(ws.id, bucketName()),
     );
     expect(asAnon.error).not.toBeNull();
-    const asOwner = await clientFor(owner.id).rpc(
+    const asOwner = await clientFor(ws.ownerId).rpc(
       'storage_workspace_cutover',
       cutoverArgs(ws.id, bucketName()),
     );
