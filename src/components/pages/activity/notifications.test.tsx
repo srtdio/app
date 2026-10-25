@@ -256,14 +256,16 @@ describe('Mark all read', () => {
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
   });
 
-  it('Mark all read is a link on the "{n} unread" meta line, not in the toolbar', () => {
+  it('Mark all read is a right-aligned link above the list, not in the toolbar', () => {
     const page = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // Shown only with something unread; the link sits after "{n} unread ·".
-    expect(page).toMatch(/\{chipUnread > 0 \? \(\s*<div data-activity-unread-line=""/);
-    expect(page).toContain('{chipUnread} unread</span>');
+    // Shown only with something unread, right-aligned; no count text (the Unread chip has it).
+    expect(page).toMatch(
+      /\{chipUnread > 0 \? \(\s*<div data-activity-mark-all="" className="[^"]*justify-end/,
+    );
+    expect(page).not.toContain('{chipUnread} unread');
     expect(page).toMatch(/<Button variant="link" onClick=\{handleMarkAll\}>\s*Mark all read/);
     // The toolbar keeps one IconButton (Sort): no ⋯ menu, no text button there.
     expect(page).not.toContain('ActionMenu');

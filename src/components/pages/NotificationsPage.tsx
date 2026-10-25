@@ -838,13 +838,10 @@ export function NotificationsPage() {
         mentionCount={mentionCount}
       />
 
-      {/* The toolbar keeps one IconButton (Sort): Mark all read sits on the meta line above the list. */}
+      {/* The toolbar keeps one IconButton (Sort): Mark all read sits right-aligned above the
+          list. The Unread chip already shows the count. */}
       {chipUnread > 0 ? (
-        <div data-activity-unread-line="" className="mt-2 flex items-center gap-1 px-4 md:px-6">
-          <span className="text-sm text-fg-3">{chipUnread} unread</span>
-          <span aria-hidden="true" className="text-sm text-fg-3">
-            ·
-          </span>
+        <div data-activity-mark-all="" className="mt-2 flex justify-end px-4 md:px-6">
           <Button variant="link" onClick={handleMarkAll}>
             Mark all read
           </Button>
