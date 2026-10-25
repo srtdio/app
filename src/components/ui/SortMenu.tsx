@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconCheck, IconChevronDown, IconSort, ICON_SIZE } from '@/components/ui/icons';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -51,6 +52,8 @@ interface SortMenuProps<T extends string> {
   onChange: (value: T) => void;
   /** Accessible label for the trigger and menu. Defaults to "Sort". */
   label?: string;
+  /** List toolbars: one IconButton (sort icon, no label text, no chevron). */
+  iconOnly?: boolean;
 }
 
 // Canonical sort control. Generic over the option value so every page
@@ -62,6 +65,7 @@ export function SortMenu<T extends string>({
   value,
   onChange,
   label = 'Sort',
+  iconOnly = false,
 }: SortMenuProps<T>) {
   const [open, setOpen] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -72,7 +76,18 @@ export function SortMenu<T extends string>({
     setOpen(false);
   }
 
-  const trigger = (
+  const trigger = iconOnly ? (
+    <IconButton
+      type="button"
+      label={label}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      onClick={() => setOpen((prev) => !prev)}
+      className="shrink-0"
+    >
+      <IconSort size={ICON_SIZE.control} />
+    </IconButton>
+  ) : (
     <Button
       type="button"
       variant="secondary"

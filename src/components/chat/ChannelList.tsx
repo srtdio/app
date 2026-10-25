@@ -13,7 +13,14 @@ import { SectionHeader } from '@/components/shell/SectionHeader';
 import { useLongPress } from '@/components/ui';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Chip } from '@/components/ui/Chip';
-import { ICON_SIZE, IconChat, IconEyeOff, IconMore, IconPlus } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconChat,
+  IconEyeOff,
+  IconMore,
+  IconPlus,
+  IconTaskSquare,
+} from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -1106,9 +1113,9 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
               node: (
                 <>
                   {select !== undefined && hasChannels ? (
-                    <Button variant="ghost" onClick={select.onStart}>
-                      Select
-                    </Button>
+                    <IconButton label="Select" onClick={select.onStart}>
+                      <IconTaskSquare size={ICON_SIZE.control} />
+                    </IconButton>
                   ) : null}
                   <Button
                     variant="primary"

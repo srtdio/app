@@ -110,6 +110,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Hide what a person can't do; never disable for permission.
 - Delete = UndoStrip for UNDO_MS (src/lib/undo.ts). ConfirmDialog only when the action cannot be undone.
 - Toasts come from ui/toast only. Phone vs laptop comes from useIsLaptop only.
+- List toolbars: search, at most one IconButton, then the New button. No text buttons or dropdown chevrons in the toolbar.
 
 ## Canonical living docs
 

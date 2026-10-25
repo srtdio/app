@@ -19,6 +19,8 @@ interface SectionHeaderSort<S extends string> {
   onChange: (value: S) => void;
   /** Accessible label for the sort trigger. Defaults to the SortMenu default. */
   label?: string;
+  /** One IconButton trigger (list toolbars): sort icon only, no chevron. */
+  iconOnly?: boolean;
 }
 
 /**
@@ -84,6 +86,7 @@ function renderSort<S extends string>(sort: SectionHeaderSort<S> | { node: React
       value={sort.value}
       onChange={sort.onChange}
       {...(sort.label !== undefined ? { label: sort.label } : {})}
+      {...(sort.iconOnly === true ? { iconOnly: true } : {})}
     />
   );
 }

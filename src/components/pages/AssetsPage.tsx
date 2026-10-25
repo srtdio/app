@@ -586,7 +586,7 @@ export function AssetsPage() {
       {/* Search + sort + add, then the type tabs: shared page-header chrome. */}
       <SectionHeader<AssetSort>
         search={{ value: search, onChange: setSearch, placeholder: 'Search files' }}
-        sort={{ options: ASSET_SORT_OPTIONS, value: sort, onChange: setSort }}
+        sort={{ options: ASSET_SORT_OPTIONS, value: sort, onChange: setSort, iconOnly: true }}
         primaryAction={{
           node: (
             <AssetAddMenu

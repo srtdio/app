@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import type { ReactElement, ReactNode } from 'react';
 
 // ChannelList now consumes the chat store, whose provider import graph pulls the
@@ -83,6 +84,10 @@ function texts(tree: ReactNode): string[] {
 
 function ariaLabel(el: ReactElement): string | undefined {
   return (el.props as { 'aria-label'?: string })['aria-label'];
+}
+
+function isSelectButton(el: ReactElement): boolean {
+  return el.type === IconButton && (el.props as { label?: string }).label === 'Select';
 }
 
 function isNewChat(el: ReactElement): boolean {
@@ -292,10 +297,7 @@ describe('select mode', () => {
 
   it('offers Select next to search and new chat, which starts select mode', () => {
     const mode = select({});
-    const buttons = findAll(tree(mode), (el) => texts(el).includes('Select'));
-    const selectButton = buttons.find(
-      (el) => (el.props as { children?: unknown }).children === 'Select',
-    );
+    const selectButton = findAll(tree(mode), isSelectButton)[0];
     expect(selectButton).toBeDefined();
     (selectButton!.props as { onClick: () => void }).onClick();
     expect(mode.onStart).toHaveBeenCalledTimes(1);
@@ -382,7 +384,7 @@ describe('load status', () => {
     expect(skeletons.length).toBeGreaterThan(0);
     expect(findAll(tree, (el) => el.type === EmptyState)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === ChannelCard)).toHaveLength(0);
-    expect(texts(tree)).not.toContain('Select');
+    expect(findAll(tree, isSelectButton)).toHaveLength(0);
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
@@ -421,7 +423,7 @@ describe('load status', () => {
     const onRetry = vi.fn();
     const tree = withStatus('error', onRetry);
     expect(findAll(tree, (el) => el.type === ChannelCard)).toHaveLength(0);
-    expect(texts(tree)).not.toContain('Select');
+    expect(findAll(tree, isSelectButton)).toHaveLength(0);
     const empty = findAll(tree, (el) => el.type === EmptyState)[0]!;
     const retry = (empty.props as { action: ReactElement }).action;
     // A Button: 44 tall by the design system.
