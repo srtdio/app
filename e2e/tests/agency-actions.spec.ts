@@ -142,11 +142,13 @@ for (const c of CASES) {
   test(`a post in a ${c.label} workspace shows the ${c.label} preview @theme`, async ({ page }) => {
     const network = await installHarnessNetwork(page);
     setHarnessPlatform(network.world, c.platform, c.format);
-    await page.goto(`/posts/${POST_IDS[0]}`);
-
+    // Post detail hides the Topbar on a phone, so the workspace label is read
+    // on Pipeline first, then the post opens.
+    await page.goto('/pipeline');
     await expect(workspaceLabel(page)).toContainText(`Harness Studio - ${c.label}`, {
       timeout: 15_000,
     });
+    await page.goto(`/posts/${POST_IDS[0]}`);
     const chip = page.getByRole('button', { name: `${c.label} preview` });
     await expect(chip).toBeVisible();
     expectMinTouchTarget(await chip.boundingBox());

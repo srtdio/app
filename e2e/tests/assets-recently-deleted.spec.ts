@@ -66,8 +66,10 @@ function finish({ network, errors }: Setup, allow: RegExp[] = []): void {
   expect(errors.filter((e) => ![...NOISE, ...allow].some((re) => re.test(e)))).toEqual([]);
 }
 
+// The shared ui/toast: a toast with no onPress shows its title as text in the
+// polite live region (only Dismiss and an action are buttons).
 const toast = (page: Page, text: string): Locator =>
-  page.locator('[aria-live="polite"]').getByRole('button', { name: text, exact: true });
+  page.locator('[aria-live="polite"]').getByText(text, { exact: true });
 
 /** The computed transform has no X move, scale or rotation (translateY only). */
 async function expectTranslateYOnly(el: Locator): Promise<void> {

@@ -92,7 +92,7 @@ async function pickSelect(page: Page): Promise<void> {
   await expect(menu(page)).toHaveCount(0);
 }
 
-/** Menu style in the current theme: icons in the row ink, 44px rows and reaction cells. */
+/** Menu style in the current theme: icons in the row ink at the container's size, 44px rows and reaction cells. */
 async function expectMenuStyle(page: Page): Promise<void> {
   // Let the entrance scale finish so sizes read at 1.
   await page.waitForTimeout(400);
@@ -124,11 +124,13 @@ async function expectMenuStyle(page: Page): Promise<void> {
     probe.remove();
     return out;
   });
+  // ICON_SIZE.tray in the phone sheet, ICON_SIZE.inline in the laptop popover.
+  const iconWidth = (page.viewportSize()?.width ?? 0) >= 768 ? '16' : '22';
   expect(style.icons.length).toBeGreaterThan(3);
   for (const icon of style.icons) {
     expect(icon.icon).toBe(icon.row);
     expect(icon.row).toBe(style.fg);
-    expect(icon.width).toBe('22');
+    expect(icon.width).toBe(iconWidth);
     expectMinTouchTarget({ height: icon.height }, { dimension: 'height' });
   }
   expect(style.cells).toHaveLength(6);

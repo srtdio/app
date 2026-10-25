@@ -481,6 +481,12 @@ test.describe('chat status ticker', () => {
     await drawerOpen(page);
     await page.locator('[data-status-brief]').first().click();
     await expect(page).toHaveURL(/\/briefs\//);
+    // Brief detail has no bottom tabs on a phone: Back to the chat, its header
+    // arrow to the list, then another tab.
+    await page.goBack();
+    await expect(page.locator('[data-status-drawer="open"]')).toHaveCount(1, { timeout: 8000 });
+    await page.getByRole('button', { name: 'Back to conversations' }).click();
+    await expect(page).toHaveURL(/\/chat$/);
     await page.getByRole('link', { name: 'Pipeline' }).first().click();
     await expect(page).toHaveURL(/\/pipeline/);
     await page.getByRole('link', { name: 'Chat' }).first().click();
