@@ -6,7 +6,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Sheet } from '@/components/ui/Sheet';
 import { PageHead } from '@/components/shell/PageHead';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import { ActionMenu } from '@/components/ui/ActionMenu';
 import {
   ICON_SIZE,
   IconActivity,
@@ -14,7 +13,6 @@ import {
   IconAt,
   IconBriefs,
   IconCalendarClock,
-  IconCheck,
   IconPlan,
 } from '@/components/ui/icons';
 import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
@@ -824,28 +822,12 @@ export function NotificationsPage() {
       <PageHead
         title={ACTIVITY_TITLE}
         actions={
-          <>
-            <SortMenu<ActivityDirection>
-              options={SORT_OPTIONS}
-              value={sort}
-              onChange={setSort}
-              label="Sort activity"
-            />
-            {/* Mark all read lives in the ⋯ menu (list-toolbar rule); hidden with nothing unread. */}
-            {chipUnread > 0 ? (
-              <ActionMenu
-                title="Activity"
-                items={[
-                  {
-                    id: 'mark-all-read',
-                    label: 'Mark all read',
-                    icon: IconCheck,
-                    onSelect: () => void handleMarkAll(),
-                  },
-                ]}
-              />
-            ) : null}
-          </>
+          <SortMenu<ActivityDirection>
+            options={SORT_OPTIONS}
+            value={sort}
+            onChange={setSort}
+            label="Sort activity"
+          />
         }
       />
 
@@ -855,6 +837,19 @@ export function NotificationsPage() {
         totalUnread={totalUnread}
         mentionCount={mentionCount}
       />
+
+      {/* The toolbar keeps one IconButton (Sort): Mark all read sits on the meta line above the list. */}
+      {chipUnread > 0 ? (
+        <div data-activity-unread-line="" className="mt-2 flex items-center gap-1 px-4 md:px-6">
+          <span className="text-sm text-fg-3">{chipUnread} unread</span>
+          <span aria-hidden="true" className="text-sm text-fg-3">
+            ·
+          </span>
+          <Button variant="link" onClick={handleMarkAll}>
+            Mark all read
+          </Button>
+        </div>
+      ) : null}
 
       {state === 'upcoming' ? (
         upcomingError ? (

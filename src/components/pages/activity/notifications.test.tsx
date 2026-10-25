@@ -256,6 +256,20 @@ describe('Mark all read', () => {
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
   });
 
+  it('Mark all read is a link on the "{n} unread" meta line, not in the toolbar', () => {
+    const page = readFileSync(
+      fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    // Shown only with something unread; the link sits after "{n} unread ·".
+    expect(page).toMatch(/\{chipUnread > 0 \? \(\s*<div data-activity-unread-line=""/);
+    expect(page).toContain('{chipUnread} unread</span>');
+    expect(page).toMatch(/<Button variant="link" onClick=\{handleMarkAll\}>\s*Mark all read/);
+    // The toolbar keeps one IconButton (Sort): no ⋯ menu, no text button there.
+    expect(page).not.toContain('ActionMenu');
+    expect(count(page, 'onClick={handleMarkAll}')).toBe(1);
+  });
+
   it('Upcoming has no inbox rows: nothing to mark, nothing counted', () => {
     expect(ids('upcoming')).toEqual([]);
     expect(markAllTargets(feed, 'upcoming', NOW)).toEqual([]);
