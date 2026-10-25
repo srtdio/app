@@ -38,6 +38,7 @@ import type { ThreadMessage } from '@/lib/chat/thread';
 import { formatClock, formatSendLabel } from '@/lib/chat/scheduled';
 import { cn } from '@/lib/cn';
 import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
+import { REMOVE_FILE_MENU_LABEL } from '@/lib/chat/remove-files';
 import { useModalFocus } from '@/lib/modal-focus';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
 
@@ -227,6 +228,13 @@ interface MessageActionMenuProps {
    * cancel it. Never shown on the bubble itself.
    */
   reminderAt?: string | null;
+  /**
+   * Offers "Remove file", last under More: an own, unmarked message with
+   * exactly one file that is not a voice note (canRemoveSingleFile). The
+   * message stays; the file goes behind an Undo.
+   */
+  canRemoveFile?: boolean;
+  onRemoveFile?: () => void;
 }
 
 /** One entry of the message action menu. */
@@ -279,6 +287,8 @@ type MenuItemProps = Pick<
   | 'canRemind'
   | 'onRemind'
   | 'reminderAt'
+  | 'canRemoveFile'
+  | 'onRemoveFile'
 >;
 
 /** The menu row that copies a message into Personal notes. */
@@ -414,7 +424,8 @@ export function messageMenuItems(
 /**
  * The rows under More, in display order: Transcribe, Select, "Save to notes",
  * "Remind me" (or "Reminder · <time>"), "Mark as" (or the static "Marked as
- * <type>"). Rows that do not apply are not rendered; empty hides More. Pure.
+ * <type>"), then "Remove file" last (danger). Rows that do not apply are not
+ * rendered; empty hides More. Pure.
  */
 export function moreMenuItems(
   props: MenuItemProps,
@@ -476,6 +487,16 @@ export function moreMenuItems(
       icon: <IconBookmark size={size} />,
       run: () => {},
       submenu: true,
+    });
+  }
+  if (props.canRemoveFile === true) {
+    items.push({
+      kind: 'action',
+      key: 'remove-file',
+      label: REMOVE_FILE_MENU_LABEL,
+      icon: <IconTrash size={size} />,
+      danger: true,
+      run: () => props.onRemoveFile?.(),
     });
   }
   return items;
