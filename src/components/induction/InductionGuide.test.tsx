@@ -300,9 +300,19 @@ describe('the guide bar', () => {
   });
 
   it('docks at the top when the control is in the bottom third', async () => {
-    control('pipeline-approved-chip', { top: 700, left: 16, width: 120, height: 44 });
-    await mount({ step: 'c_approved_chip' });
-    expect(q('[data-induction-bar]').getAttribute('data-induction-bar')).toBe('top');
+    // The phone tab bar (a shared bottom anchor, 56 tall): the bar docks above it.
+    const tabs = document.createElement('nav');
+    tabs.setAttribute('data-undo-anchor', '');
+    tabs.getBoundingClientRect = () =>
+      ({ top: 788, left: 0, width: 390, height: 56, right: 390, bottom: 844 }) as DOMRect;
+    document.body.appendChild(tabs);
+    try {
+      control('pipeline-approved-chip', { top: 700, left: 16, width: 120, height: 44 });
+      await mount({ step: 'c_approved_chip' });
+      expect(q('[data-induction-bar]').getAttribute('data-induction-bar')).toBe('top');
+    } finally {
+      tabs.remove();
+    }
   });
 
   it('names the current chapter on a look-around step', async () => {

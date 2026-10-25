@@ -205,6 +205,14 @@ async function pointAway(page: Page, avoid: R[]): Promise<{ x: number; y: number
       if (!zones.some((z) => inside(p, z))) return p;
     }
   }
+  // A crowded screen (the bar docked above a decision bar, a form filling the
+  // rest): walk a 1% grid for the narrow gaps between them.
+  for (let fy = 0.05; fy <= 0.95; fy += 0.01) {
+    for (const fx of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+      const p = { x: Math.round(vp.w * fx), y: Math.round(vp.h * fy) };
+      if (!zones.some((z) => inside(p, z))) return p;
+    }
+  }
   throw new Error('no point clear of the guide for a tap away');
 }
 

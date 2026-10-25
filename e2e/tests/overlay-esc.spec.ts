@@ -57,6 +57,11 @@ test('Escape: the Due date DatePicker closes alone and focus returns to its fiel
   await installHarnessNetwork(page);
   await page.goto('/pipeline');
   await page.getByRole('button', { name: 'New post', exact: true }).first().click();
+  // Due date sits under the sheet's More options (Bucket, due date, brief).
+  await page
+    .getByRole('button', { name: /^More options/ })
+    .first()
+    .click();
   // The visible Due date field (the DatePicker trigger carries aria-label "Due date").
   const trigger = page
     .getByRole('button', { name: 'Due date', exact: true })
