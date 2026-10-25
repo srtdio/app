@@ -59,13 +59,19 @@ vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: { getSession: async () => ({ data: { session: null } }) },
     from: () => {
+      // Awaitable at any step: the side panel (Comments) mounts with the first
+      // render and pages its read with .order().range().
+      const result = { data: [], error: null };
       const chain = {
         select: () => chain,
         eq: () => chain,
         in: () => chain,
         not: () => chain,
         is: () => chain,
-        order: async () => ({ data: [], error: null }),
+        order: () => chain,
+        range: async () => result,
+        limit: async () => result,
+        then: (resolve: (value: typeof result) => unknown) => resolve(result),
       };
       return chain;
     },
