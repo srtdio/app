@@ -36,7 +36,7 @@ import { useModalFocus } from '@/lib/modal-focus';
 /** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */
 const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
+const SIGN_FAIL = "Couldn't get a link for this file. Try again.";
 const SWIPE_THRESHOLD = 48;
 
 // The top bar's 44px icon buttons on the overlay (light and dark share it).
@@ -541,7 +541,7 @@ export function AssetLightbox({
           <>
             <IconButton
               type="button"
-              label="Previous asset"
+              label="Previous file"
               onClick={() => go(-1)}
               className={cn('left-2', STAGE_ARROW)}
             >
@@ -549,7 +549,7 @@ export function AssetLightbox({
             </IconButton>
             <IconButton
               type="button"
-              label="Next asset"
+              label="Next file"
               onClick={() => go(1)}
               className={cn('right-2', STAGE_ARROW)}
             >
@@ -578,7 +578,7 @@ export function AssetLightbox({
               </p>
               <p className="mt-1 text-sm text-fg-3">{humanizeSize(item.sizeBytes)}</p>
               {mediaFailed ? (
-                <p className="mt-1 text-sm text-fg-3">This asset could not be loaded.</p>
+                <p className="mt-1 text-sm text-fg-3">Couldn't load this file. Try again.</p>
               ) : null}
               {openFailed ? (
                 <p role="status" className="mt-1 text-sm text-fg-3">
@@ -628,7 +628,7 @@ export function AssetLightbox({
                 {editingName ? (
                   <div className="mt-1 flex flex-col gap-2">
                     <Input
-                      aria-label="Asset name"
+                      aria-label="File name"
                       value={nameDraft}
                       autoFocus
                       disabled={savingName}
@@ -658,7 +658,7 @@ export function AssetLightbox({
                     {canRename ? (
                       <IconButton
                         type="button"
-                        label="Rename asset"
+                        label="Rename file"
                         onClick={() => {
                           setNameDraft(name);
                           setEditingName(true);

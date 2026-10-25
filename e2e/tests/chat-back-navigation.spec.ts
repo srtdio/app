@@ -27,7 +27,7 @@ function expectClean(network: HarnessNetwork, allowed: readonly string[] = []): 
 
 /** The chat list is on screen (chat home), no thread. */
 async function expectList(page: Page): Promise<void> {
-  await expect(page.getByRole('searchbox', { name: 'Search conversations' })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Search chats' })).toBeVisible();
   await expect(page.locator('[data-msg-id]')).toHaveCount(0);
 }
 

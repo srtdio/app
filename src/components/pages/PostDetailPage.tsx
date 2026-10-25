@@ -126,7 +126,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { formatDue } from '@/lib/display-date';
+import { formatDue } from '@/lib/time';
 import {
   annotationCreate,
   getPost,
@@ -190,7 +190,7 @@ const SEND_AGAIN_ACTION = 'send the post for review';
  */
 export function sendAgainErrorCopy(message: string | null): string {
   if (message === 'invalid_stage') {
-    return `Couldn't ${SEND_AGAIN_ACTION}. It isn't in review anymore.`;
+    return `Couldn't ${SEND_AGAIN_ACTION}. Someone else changed it. Refresh to see the latest.`;
   }
   return errorText(SEND_AGAIN_ACTION, message);
 }
@@ -238,7 +238,8 @@ export const CLIENT_REVIEW_NOTE = 'Review and approve one post at a time.';
 export function fromBriefLabel(briefTitle: string): string {
   return `From brief: ${briefTitle}`;
 }
-import { formatLabel, postStatusLine } from '@/lib/post-detail-presentation';
+import { postStatusLine } from '@/lib/post-detail-presentation';
+import { postFormatLabel } from '@/lib/post-format';
 import { isPostPlatform, platformLabel as postPlatformLabel } from '@srtdio/posts';
 
 // The platform's display name from the single source (@srtdio/posts); a raw
@@ -1442,7 +1443,7 @@ export function PostDetailPage({
         logger.warn('post page: delete failed', { error: String(result.error.message) });
         showWhenVisible(document, () => {
           toastRef.current?.show({
-            title: `Couldn't delete ${postTitle}. It's still there.`,
+            title: errorText(`delete ${postTitle}`, result.error),
             tone: 'error',
             action: { label: 'Open', onPress: () => navigate(`/posts/${deletedId}`) },
           });
@@ -1603,11 +1604,11 @@ export function PostDetailPage({
         return { ok: false, message: "Couldn't upload. Try again." };
       }
       if (workspaceId === null) {
-        return { ok: false, message: 'No workspace selected.' };
+        return { ok: false, message: "Couldn't upload. Try again." };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
+        return { ok: false, message: "Couldn't upload. Try again." };
       }
       const outcome = await uploadAssetFile(file, {
         endpoint: uploadEndpoint,
@@ -1819,6 +1820,8 @@ export function PostDetailPage({
     dispatchInductionRefresh();
   }
 
+  // The workspace civil clock the details sheet's date input round-trips on.
+  // Visible dates read the viewer's device clock (src/lib/time.ts).
   const approveTimeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
   // Spec A1: one meta line under the title. Owner · "Due 20 Jul" · "From
@@ -1832,7 +1835,7 @@ export function PostDetailPage({
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
   const dueLabel =
-    post.target_date !== null ? formatDue(post.target_date, approveTimeZone, new Date()) : null;
+    post.target_date !== null ? formatDue(post.target_date) : null;
   const detailsEditable = canEditContent;
   const metaDot = (
     <span aria-hidden className="shrink-0 text-fg-3">
@@ -2077,7 +2080,6 @@ export function PostDetailPage({
                 post.updated_at,
                 post.stage_entered_at,
                 new Date(),
-                approveTimeZone,
               )}
             </span>
           </div>
@@ -2603,7 +2605,7 @@ export function PostDetailPage({
           if (workspaceId === null) {
             return Promise.resolve({
               ok: false as const,
-              error: { code: 'unknown' as const, message: 'No workspace selected.' },
+              error: { code: 'unknown' as const, message: "Couldn't create the bucket. Try again." },
             });
           }
           return createBucket(supabase, workspaceId, name, newTrace()).then((result) => {
@@ -2617,7 +2619,7 @@ export function PostDetailPage({
           });
         }}
         lockedFields={approvedLocked}
-        platformFormat={`${platformLabel(post.platform)} · ${formatLabel(post.format)}`}
+        platformFormat={`${platformLabel(post.platform)} · ${postFormatLabel(post.format, post.platform)}`}
       />
 
       <PlatformPreviewPanel
@@ -2636,7 +2638,7 @@ export function PostDetailPage({
         gate={approveGate}
         gateState={approveState}
         mediaCount={gallery.length > 0 ? gallery.length : null}
-        targetDate={approveTargetDate(post.target_date, approveTimeZone)}
+        targetDate={approveTargetDate(post.target_date)}
         busy={transitioning}
         error={approveError}
       />

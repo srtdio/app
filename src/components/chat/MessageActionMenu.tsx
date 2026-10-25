@@ -901,7 +901,7 @@ export function returnPickerFocus(plus: (Focusable & { isConnected: boolean }) |
 }
 
 /** The picker body's load failure line (never the raw error). */
-export const EMOJI_LOAD_FAILED = "Couldn't load emoji";
+export const EMOJI_LOAD_FAILED = "Couldn't load emoji. Try again.";
 
 /** What the picker shell shows under its frame. Pure. */
 export function pickerBodyState(

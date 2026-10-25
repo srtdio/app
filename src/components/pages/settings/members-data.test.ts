@@ -179,9 +179,13 @@ describe('roleLabel / memberRemoveErrorMessage / formatJoined', () => {
   });
 
   it('maps domain codes to friendly copy and falls back for the rest', () => {
-    expect(memberRemoveErrorMessage('forbidden_role')).toContain('permission');
-    expect(memberRemoveErrorMessage('workspace_member_only')).toContain('no longer');
-    expect(memberRemoveErrorMessage('unknown')).toContain('try again');
+    expect(memberRemoveErrorMessage('forbidden_role')).toBe(
+      "Couldn't remove the member. You don't have access to do this.",
+    );
+    expect(memberRemoveErrorMessage('workspace_member_only')).toBe(
+      "Couldn't remove the member. Someone else changed it. Refresh to see the latest.",
+    );
+    expect(memberRemoveErrorMessage('unknown')).toBe("Couldn't remove the member. Try again.");
   });
 
   it('formats an accepted date and returns null for missing/invalid input', () => {

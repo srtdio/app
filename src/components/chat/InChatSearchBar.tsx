@@ -2,6 +2,7 @@ import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { NoResults } from '@/components/ui/NoResults';
 import { ICON_SIZE, IconChevronDown, IconChevronLeft } from '@/components/ui/icons';
 import {
   normalizeQuery,
@@ -73,7 +74,7 @@ export interface InChatSearchBarProps {
  * FN23: 16px on a phone (iOS never zooms the page on focus), 14px from md up.
  */
 export const BAR_INPUT =
-  'h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-input text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none md:text-base';
+  'h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-2 text-input text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none md:px-3 md:text-base';
 
 /**
  * The in-chat search bar, in place of the thread header: close, the input,
@@ -195,6 +196,8 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
     state.query === normalizeQuery(query) &&
     (state.status === 'error' || state.moreFailed);
   const total = state.hits.length;
+  // A finished search with no hit: the one NoResults state, under the bar.
+  const none = ready && total === 0 && !state.hasMore;
   return (
     <div
       ref={rootRef}
@@ -208,7 +211,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
         type="search"
         enterKeyHint="search"
         aria-label="Search this chat"
-        placeholder="Search"
+        placeholder="Search this chat"
         value={query}
         // From the header icon the keyboard comes up; from a home hit the match shows first.
         autoFocus={props.anchorMessageId === null}
@@ -266,6 +269,13 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
         >
           {SEARCH_FAILED_COPY}
         </PressableRow>
+      ) : none ? (
+        <div
+          data-search-none=""
+          className="absolute left-0 right-0 top-full z-10 mt-px border-b border-border bg-panel"
+        >
+          <NoResults query={query} filtersActive={false} onClear={() => setQuery('')} />
+        </div>
       ) : null}
     </div>
   );

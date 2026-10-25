@@ -16,6 +16,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { countBadgeText } from '@/components/ui/CountBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults } from '@/components/ui/NoResults';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { popoverClass } from '@/components/ui/popover-classes';
 import { SectionHeader } from '@/components/shell/SectionHeader';
@@ -35,8 +36,7 @@ import {
 } from '@/lib/chat/chat-store';
 import { deleteChatFailedMessage, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
-import { formatRelativeTime } from '@/lib/chat/format-relative-time';
-import { workspaceTimeZone } from '@/lib/chat/time-format';
+import { formatChatTime } from '@/lib/time';
 import { draftText, draftsVersion, subscribeDrafts } from '@/lib/chat/drafts';
 import { mentionNamesIn, resolveMentionPreview, splitAllMentions } from '@/lib/chat/mentions';
 import { leaveSelectionThen } from '@/lib/chat/forward';
@@ -53,6 +53,7 @@ import {
   type SearchKind,
 } from '@/lib/chat/search';
 import { NOTES_TILE_LINE } from '@/lib/chat/notes';
+import { chatDisplayName } from '@/lib/chat/chat-name';
 import { NotesAvatar } from '@/components/chat/NotesBits';
 import { useSession } from '@/lib/session-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
@@ -132,7 +133,7 @@ interface ChannelListProps {
   onSelect: (channel: ChannelSummary) => void;
   /** Opens the New chat sheet (header "+" and empty-state action). */
   onNewChat: () => void;
-  /** The workspace IANA zone the card dates render in; the browser zone when absent. */
+  /** For tests: the zone card times render in. The app passes none (the viewer's device zone). */
   timeZone?: string;
   /**
    * Delete chats for the caller only (sequential, stops at the first failure);
@@ -158,8 +159,10 @@ interface ChannelListProps {
 interface ChannelListBodyProps extends Omit<ChannelListProps, 'status' | 'onRetry'> {
   /** Whether any conversations exist before the search filter is applied. */
   hasChannels: boolean;
-  /** The name search; the no-match heading names it. */
+  /** The name search; the no-match line names it. */
   search?: string;
+  /** Clears the name search (the no-match state's Clear search). */
+  onClearSearch?: () => void;
   /** Read-only store summaries; absent in pure tests (every card reads empty). */
   summaryFor?: SummaryLookup;
   /** Clock for relative-time labels; defaults to 0 when no summary is supplied. */
@@ -205,7 +208,7 @@ export function useChannelListInput(): ChannelListInput {
 /**
  * The channel list body. Pure and exported so its three states are unit tested:
  * the zero-state when no conversations exist (with a real "New chat" action), a
- * distinct "No chats called" state when a search hides every conversation, and one row
+ * NoResults state when a search hides every conversation, and one row
  * per channel otherwise.
  */
 export function channelListView(props: ChannelListBodyProps): ReactElement {
@@ -213,8 +216,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
     return (
       <EmptyState
         icon={<IconChat size={ICON_SIZE.status} />}
-        title="No conversations yet"
-        description="Messages from your team will show up here."
+        title="Chats with your team show up here."
         action={
           <Button variant="primary" onClick={props.onNewChat}>
             New chat
@@ -225,17 +227,16 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   }
   if (props.channels.length === 0) {
     return (
-      <div className="px-4 py-12 text-center">
-        <p className="text-lg font-semibold text-fg">
-          {`No chats called "${(props.search ?? '').trim()}"`}
-        </p>
-        <p className="mt-1 text-base text-fg-2">Try a different name or clear the search.</p>
-      </div>
+      <NoResults
+        query={props.search ?? ''}
+        filtersActive={false}
+        onClear={props.onClearSearch ?? (() => undefined)}
+      />
     );
   }
   const summaryFor: SummaryLookup = props.summaryFor ?? (() => undefined);
   const nowMs = props.nowMs ?? 0;
-  const timeZone = workspaceTimeZone(props.timeZone);
+  const timeZone = props.timeZone;
   // Group rows carry the induction key plus their channel id; the guide boxes the
   // row whose id is the default group's (attributes only).
   const groupAnchor = (channel: ChannelSummary) => ({
@@ -562,7 +563,7 @@ export function channelRowBody(props: {
   /** The chat's unsent draft (not open): the preview reads "Draft: <text>". */
   draft?: string | null;
   nowMs: number;
-  timeZone: string;
+  timeZone?: string | undefined;
   selecting: boolean;
   checked: boolean;
 }): ReactElement {
@@ -575,14 +576,14 @@ export function channelRowBody(props: {
   const previewIcon = hasMessage ? summaryIconOfLine(summary.lastMessageText) : null;
   const draft = props.draft ?? null;
   const time = hasMessage
-    ? formatRelativeTime(summary.lastMessageTs, props.nowMs, props.timeZone)
+    ? formatChatTime(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
     : '';
   // Wide clamps to two lines; square is one line with an ellipsis.
   const fit = wide ? 'break-words line-clamp-2' : 'max-w-full truncate';
   const previewType = wide ? GROUP_PREVIEW_TYPE : PERSON_PREVIEW_TYPE;
   const name = (
     <span className={cn('min-w-0 truncate text-fg', wide ? GROUP_NAME_TYPE : PERSON_NAME_TYPE)}>
-      {channel.title}
+      {chatDisplayName(channel)}
     </span>
   );
   const timeNode =
@@ -614,7 +615,7 @@ export function channelRowBody(props: {
       className={wide ? GROUP_TILE_PHOTO : PERSON_TILE_PHOTO}
     >
       <Avatar
-        name={channel.title}
+        name={chatDisplayName(channel)}
         {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
         size="row"
       />
@@ -682,7 +683,7 @@ export function ChannelCard(props: {
   /** The chat's unsent draft when it is not open; null or absent shows the last message. */
   draft?: string | null;
   nowMs: number;
-  timeZone: string;
+  timeZone?: string | undefined;
   onSelect: (channel: ChannelSummary) => void;
   /** The list's input (hover, coarse), read once by the list. */
   input: ChannelListInput;
@@ -757,12 +758,12 @@ export function ChannelCard(props: {
           leaveSelectionThen(() => props.onSelect(channel));
         }}
         aria-label={channelTileLabel({
-          title: channel.title,
+          title: chatDisplayName(channel),
           unread: summary?.unread ?? 0,
           preview: summary !== undefined && summary.lastMessageTs > 0 ? previewLine(summary) : '',
           time:
             summary !== undefined && summary.lastMessageTs > 0
-              ? formatRelativeTime(summary.lastMessageTs, props.nowMs, props.timeZone)
+              ? formatChatTime(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
               : '',
           draft: props.draft ?? null,
         })}
@@ -790,7 +791,7 @@ export function ChannelCard(props: {
           type="button"
           data-more=""
           data-row-more=""
-          label={`Actions for ${channel.title}`}
+          label={`Actions for ${chatDisplayName(channel)}`}
           aria-haspopup="menu"
           onClick={(e) => openMenu(e.currentTarget.getBoundingClientRect())}
           className={rowMoreClass(tileKind(channel))}
@@ -821,13 +822,13 @@ export function notesTile(props: {
   onSelect: (channel: ChannelSummary) => void;
 }): ReactElement {
   const { notes, summary } = props;
-  const last = notesLastLine(summary, props.nowMs ?? 0, workspaceTimeZone(props.timeZone));
+  const last = notesLastLine(summary, props.nowMs ?? 0, props.timeZone);
   return (
     <div className={cn(CHAT_HOME_STACK, 'pb-2')}>
       <PressableRow
         type="button"
         data-notes-tile=""
-        aria-label={`Open ${notes.title}`}
+        aria-label={`Open ${chatDisplayName(notes)}`}
         disabled={props.selecting}
         onClick={() => {
           if (props.selecting) return;
@@ -851,7 +852,7 @@ export function notesTile(props: {
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 items-baseline gap-2">
             <span className={cn('min-w-0 flex-1 truncate text-fg', GROUP_NAME_TYPE)}>
-              {notes.title}
+              {chatDisplayName(notes)}
             </span>
             {last !== null && last.time !== '' ? (
               <span data-notes-time="" className="shrink-0 text-sm tabular-nums text-fg-3">
@@ -878,12 +879,12 @@ export function notesTile(props: {
 export function notesLastLine(
   summary: ConversationSummary | undefined,
   nowMs: number,
-  timeZone: string,
+  timeZone?: string,
 ): { preview: string; time: string } | null {
   if (summary === undefined || summary.lastMessageTs <= 0) return null;
   const preview = summary.lastMessageText;
   if (preview === '') return null;
-  return { preview, time: formatRelativeTime(summary.lastMessageTs, nowMs, timeZone) };
+  return { preview, time: formatChatTime(summary.lastMessageTs, new Date(nowMs), timeZone) };
 }
 
 /** A chat home chip: Starred, or one of the message search kinds. */
@@ -1079,8 +1080,8 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
             search={{
               value: props.search,
               onChange: props.onSearchChange,
-              placeholder: 'Search',
-              label: 'Search conversations',
+              placeholder: 'Search chats',
+              label: 'Search chats',
             }}
             primaryAction={{
               node: (
@@ -1128,6 +1129,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                   channels: visibleChannels(props.channels, summaryFor, isHidden, props.search),
                   hasChannels: hasChannels || props.search.trim() !== '',
                   search: props.search,
+                  onClearSearch: () => props.onSearchChange(''),
                   selectedChannelId: props.selectedChannelId,
                   onSelect: props.onSelect,
                   onNewChat: newChat,
@@ -1342,7 +1344,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
       exitSelect();
       return;
     }
-    toast.show({ title: deleteChatFailedMessage(result.failed.title) });
+    toast.show({ title: deleteChatFailedMessage(chatDisplayName(result.failed)) });
     // The chats before the failed one are gone; keep the rest checked.
     const at = list.findIndex((c) => c.channelId === result.failed.channelId);
     setSelectedIds(new Set(list.slice(Math.max(0, at)).map((c) => c.channelId)));
@@ -1396,10 +1398,11 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         <StarredList
           channelId={null}
           query={search}
+          onClearQuery={() => setSearch('')}
           showChat
           channelsById={channelsById}
           currentUserId={currentUserId ?? ''}
-          timeZone={workspaceTimeZone(props.timeZone)}
+          {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
           nowMs={nowMs}
           inlineEdit
           editing={starEditing}
@@ -1426,9 +1429,13 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         currentUserId={currentUserId}
         nameOf={nameOf}
         nowMs={nowMs}
-        timeZone={workspaceTimeZone(props.timeZone)}
+        {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
         onOpenChat={openChat}
         onOpenHit={openHit}
+        onClear={() => {
+          setSearch('');
+          setKind(null);
+        }}
       />
     ) : undefined;
   return (

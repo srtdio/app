@@ -196,7 +196,7 @@ export function sendToLabel(count: number): string {
 
 /** Toast when forwarding to a chat failed. */
 export function forwardFailedMessage(title: string): string {
-  return `Could not forward to ${title}.`;
+  return `Couldn't forward to ${title}. Try again.`;
 }
 
 /** The label shown above a forwarded message's body. */

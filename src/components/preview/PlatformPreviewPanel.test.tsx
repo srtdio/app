@@ -131,7 +131,7 @@ describe('PreviewBody on a composer draft', () => {
       />,
     );
     expect(html).toContain('Full-screen preview');
-    expect(html).toContain('No media yet');
+    expect(html).toContain('Photos and videos show up here.');
     expect(html).toContain('Soon');
   });
 });

@@ -158,7 +158,7 @@ describe('the row: tag, link and the bell words', () => {
   });
 
   it("keeps the bell's strings", () => {
-    expect(UPCOMING_EMPTY).toBe('Nothing coming up');
+    expect(UPCOMING_EMPTY).toBe('Reminders and scheduled messages show up here.');
     expect(CANCEL_REMINDER_TITLE).toBe('Cancel this reminder?');
     expect(CHANGE_TIME_LABEL).toBe('Change time');
     expect(upcomingEditLabel({ kind: 'reminder' })).toBe('Change time');

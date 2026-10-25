@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
 import { LAPTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
+import { chatDisplayName } from '@/lib/chat/chat-name';
 import {
   listGroupMemberIds,
   readMentionProfiles,
@@ -38,7 +39,7 @@ import {
 import { generateTraceId } from '@/lib/trace';
 import { clearChannelRecord } from '@/lib/chat/record';
 import { runClearChannels, type ClearRunResult } from '@/lib/chat/clear-flow';
-import { workspaceTimeZone } from '@/lib/chat/time-format';
+import { safeTimeZone } from '@/lib/time';
 import { useChatThread } from '@/lib/chat/use-chat-thread';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
@@ -178,7 +179,7 @@ interface SavedState {
 const NO_SAVED: SavedState = { key: '', sources: new Map(), failed: new Set() };
 
 /** The toast when opening a DM from a mention fails; the raw error is only logged. */
-export const MENTION_DM_FAILED = "Couldn't open that chat, try again";
+export const MENTION_DM_FAILED = "Couldn't open that chat. Try again.";
 
 /**
  * The user ids a thread's first paint needs names for: every sender, the DM
@@ -577,12 +578,13 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const { client, status, workspaceId, currentUserId } = props;
   const isDesktop = useMediaQuery(LAPTOP_QUERY);
   const { workspaces } = useWorkspace();
-  // The workspace civil clock every timestamp renders on; the browser's own zone
-  // only when the workspace has none.
   const workspace = workspaces.find((w) => w.id === workspaceId);
   // Every chat screen shows the workspace as "<Brand> - <Platform>"; stored group names stay as they are.
   const workspaceLabel = workspace !== undefined ? workspaceDisplayName(workspace) : undefined;
-  const timeZone = workspaceTimeZone(workspace?.timezone);
+  // The workspace civil clock the plan logic (plan weeks, today) reads; the
+  // device zone when the workspace has none. Visible times read the viewer's
+  // device zone (src/lib/time.ts), never this.
+  const timeZone = safeTimeZone(workspace?.timezone);
 
   const [selected, setSelected] = useState<ChannelSummary | null>(null);
   // The thread's profiles belong to one workspace: another workspace starts
@@ -1790,7 +1792,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     );
   }, [selectedChannelForSearch]);
 
-  const chatName = selected !== null ? (shown ?? selected).title : '';
+  const chatName = selected !== null ? chatDisplayName(shown ?? selected) : '';
   const readsLoading = thread.readState.status === 'loading';
   const scheduleWiring = useMemo<ChatSchedule | null>(
     () =>
@@ -1945,7 +1947,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
               openChannel(channel);
             }}
             onNewChat={() => setNewChatOpen(true)}
-            timeZone={timeZone}
             onDeleteChats={onDeleteChats}
             workspaceId={workspaceId}
             onOpenSearchHit={openSearchHit}
@@ -1978,7 +1979,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                 channelId={selected.channelId}
                 userId={currentUserId}
                 planIds={cardIds.planIds}
-                chatTitle={(shown ?? selected).title}
+                chatTitle={chatDisplayName(shown ?? selected)}
                 onOpenPlan={onOpenPlan}
                 onRowHere={(row, traceId) => void thread.addSentRow(row, traceId)}
                 status={status}
@@ -1987,7 +1988,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                   <SavedFromProvider value={savedWiring}>
                     <MessageThread
                       key={selected.channelId}
-                      title={(shown ?? selected).title}
+                      title={chatDisplayName(shown ?? selected)}
                       channelId={selected.channelId}
                       avatarUrl={(shown ?? selected).avatarUrl}
                       {...(!isGroup && !notesOpen && workspaceLabel !== undefined
@@ -2088,7 +2089,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                                 workspaceId={workspaceId}
                                 workspaceName={workspaceLabel}
                                 groupId={infoGroupId}
-                                groupName={(shown ?? selected).title}
+                                groupName={chatDisplayName(shown ?? selected)}
                                 avatarUrl={(shown ?? selected).avatarUrl}
                                 createdBy={(shown ?? selected).createdBy ?? null}
                                 viewerRole={
@@ -2148,10 +2149,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                     planId={openPlan.planId}
                     {...(openPlanItem !== null ? { initialItemId: openPlanItem } : {})}
                     senderName={openPlan.senderName}
-                    chatTitle={(shown ?? selected).title}
+                    chatTitle={chatDisplayName(shown ?? selected)}
                     chat={{
                       channelId: selected.channelId,
-                      name: (shown ?? selected).title,
+                      name: chatDisplayName(shown ?? selected),
                       hasClient,
                       cardPlanIds: cardIds.planIds,
                       onSent: (row, traceId) => {

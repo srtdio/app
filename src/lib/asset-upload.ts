@@ -823,7 +823,7 @@ export function canRenameAssets(role: string | null): boolean {
  */
 export function renameErrorMessage(status: number): string {
   if (status === 403) return 'Only creators and admins can rename files.';
-  return "Couldn't rename this asset. Try again.";
+  return "Couldn't rename this file. Try again.";
 }
 
 export type RenameOutcome = { ok: true } | { ok: false; message: string };

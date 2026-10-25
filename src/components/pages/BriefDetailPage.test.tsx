@@ -12,11 +12,11 @@ import type { BriefGalleryItem } from '@srtdio/briefs';
 describe('briefRaisedLabel', () => {
   const now = new Date('2026-10-23T12:00:00Z');
 
-  it('renders the raised day in the workspace zone, no year in the current year', () => {
+  it('renders the raised day in the given zone, no year in the current year', () => {
     expect(briefRaisedLabel('2026-09-22T12:00:00Z', 'Asia/Kolkata', now)).toBe('22 Sep');
   });
 
-  it('reads day AND year in the workspace zone, not the browser zone', () => {
+  it('reads day AND year from the same zoned reading', () => {
     // 19:00Z on 31 Dec 2025 is already 1 Jan 2026 in Mumbai; London still reads
     // the old year, so the year must come from the same zoned reading as the day.
     expect(briefRaisedLabel('2025-12-31T19:00:00Z', 'Asia/Kolkata', now)).toBe('1 Jan');

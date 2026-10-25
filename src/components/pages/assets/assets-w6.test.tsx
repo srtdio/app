@@ -197,7 +197,7 @@ describe('8. one upload summary toast; failures stay', () => {
       sticky: false,
     });
     expect(uploadSummary({ uploaded: 3, reused: 0, failed: 2 })).toEqual({
-      title: 'Uploaded 3 of 5. 2 failed.',
+      title: "Uploaded 3 of 5. Couldn't upload 2. Try again.",
       sticky: true,
     });
     expect(uploadSummary({ uploaded: 0, reused: 0, failed: 1 })?.sticky).toBe(true);
@@ -212,8 +212,8 @@ describe('8. one upload summary toast; failures stay', () => {
 });
 
 describe('9. small fixes', () => {
-  it('the library is All assets and names wrap to 2 lines', () => {
-    expect(ROOT_LABEL).toBe('All assets');
+  it('the library is All files and names wrap to 2 lines', () => {
+    expect(ROOT_LABEL).toBe('All files');
     expect(read('src/components/pages/assets/AssetUploadSheet.tsx')).toContain('{ROOT_LABEL}');
     const card = renderToStaticMarkup(
       <AssetCard

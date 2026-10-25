@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastOptions } from '@/components/ui/toast/types';
@@ -153,20 +154,20 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
 
 /** Which empty state the list shows when no card is visible. */
 export type BriefsEmpty =
-  /** A typed search matched nothing: one line + Clear (clears the search only). */
-  | { kind: 'no-results'; title: string }
-  /** A client with no open briefs: heading, line and New brief. */
+  /** A typed search matched nothing: NoResults + Clear search (clears the search only). */
+  | { kind: 'no-results'; query: string }
+  /** A client with no open briefs: one line and New brief. */
   | { kind: 'client-empty' }
   /** The agency side with no briefs at all: one line, no heading. */
   | { kind: 'agency-empty' }
-  /** A chip with nothing under it (no search typed): a heading only. */
+  /** A chip with nothing under it (no search typed): one line only. */
   | { kind: 'filtered'; title: string };
 
 /**
  * Pick the empty state. A typed search always wins and is the only state with
  * Clear. Then a workspace with no briefs at all (client or agency copy), then
  * the chip: Closed has its own heading; a client on Open (nothing open) gets the
- * "No open briefs yet" state with New brief. Pure.
+ * "Open briefs show up here." state with New brief. Pure.
  */
 export function briefsEmptyState(
   filter: BriefFilter,
@@ -176,12 +177,12 @@ export function briefsEmptyState(
 ): BriefsEmpty {
   const query = search.trim();
   if (query !== '') {
-    return { kind: 'no-results', title: `No briefs with “${query}” in the title` };
+    return { kind: 'no-results', query };
   }
   if (total === 0) return canCreate ? { kind: 'client-empty' } : { kind: 'agency-empty' };
-  if (filter === BRIEF_STATUS.closed) return { kind: 'filtered', title: 'No closed briefs yet' };
+  if (filter === BRIEF_STATUS.closed) return { kind: 'filtered', title: 'Closed briefs show up here.' };
   if (canCreate) return { kind: 'client-empty' };
-  return { kind: 'filtered', title: 'No open briefs right now' };
+  return { kind: 'filtered', title: 'Open briefs show up here.' };
 }
 
 /**
@@ -363,19 +364,12 @@ export function briefsEmptyView(
   const icon = <IconBriefs size={ICON_SIZE.status} />;
   switch (state.kind) {
     case 'no-results':
-      return (
-        <EmptyState
-          icon={icon}
-          title={state.title}
-          action={<Button onClick={onClearSearch}>Clear</Button>}
-        />
-      );
+      return <NoResults query={state.query} filtersActive={false} onClear={onClearSearch} />;
     case 'client-empty':
       return (
         <EmptyState
           icon={icon}
-          title="No open briefs yet"
-          description="Tell the agency what you need next."
+          title="Open briefs show up here."
           action={
             <Button variant="primary" onClick={onNewBrief}>
               New brief

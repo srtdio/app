@@ -237,12 +237,12 @@ describe('X6 lightbox', () => {
     const bar = document.querySelector<HTMLElement>('[data-lightbox-bar]');
     await act(async () => bar?.querySelector<HTMLButtonElement>('[aria-label="Info"]')?.click());
     await act(async () =>
-      document.querySelector<HTMLButtonElement>('[aria-label="Rename asset"]')?.click(),
+      document.querySelector<HTMLButtonElement>('[aria-label="Rename file"]')?.click(),
     );
-    expect(document.querySelector('[aria-label="Asset name"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="File name"]')).not.toBeNull();
 
     await escape();
-    expect(document.querySelector('[aria-label="Asset name"]')).toBeNull();
+    expect(document.querySelector('[aria-label="File name"]')).toBeNull();
     expect(document.querySelector('[aria-label^="Details for"]')).not.toBeNull();
     expect(onClose).not.toHaveBeenCalled();
 

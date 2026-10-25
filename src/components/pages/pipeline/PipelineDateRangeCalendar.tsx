@@ -16,6 +16,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
+import { formatSpokenDate } from '@/lib/time';
 
 interface DateRange {
   start: string;
@@ -81,17 +82,11 @@ function shiftMonth(
 }
 
 /**
- * The full spoken date for a day cell: "Monday, 19 October 2026" (locale
- * ordered). Built at UTC from the civil parts so no zone can shift the day.
+ * The full spoken date for a day cell: "Monday, 19 October 2026". Read off the
+ * civil date string so no zone can shift the day.
  */
 export function dayAriaLabel(year: number, monthIndex: number, day: number): string {
-  return new Date(Date.UTC(year, monthIndex, day)).toLocaleDateString(undefined, {
-    timeZone: 'UTC',
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  return formatSpokenDate(toISO(year, monthIndex, day));
 }
 
 /**

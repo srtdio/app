@@ -102,7 +102,7 @@ export function ApprovedAddressesSection({
       </div>
 
       {loadError ? (
-        <p className="text-base text-bad">Couldn&apos;t load addresses. Refresh and try again.</p>
+        <p className="text-base text-bad">Couldn&apos;t load addresses. Try again.</p>
       ) : domains.length > 0 ? (
         <ul aria-label="Approved addresses" className="flex flex-col divide-y divide-border">
           {domains.map((domain) => (

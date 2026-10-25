@@ -31,7 +31,7 @@ import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 
 /** The upload path itself is not set up (no endpoint or session): nothing was sent. */
-const NOT_STARTED = "We couldn't start the upload. Try again in a moment.";
+const NOT_STARTED = "Couldn't start the upload. Try again.";
 
 type Upload =
   | { phase: 'idle' }
@@ -342,7 +342,7 @@ const SENT_SHARE = 90;
 
 /** The line under the bar. */
 export function uploadLine(percent: number, retrying: boolean): string {
-  if (retrying) return `The connection dropped. Trying again, ${percent}%`;
+  if (retrying) return `Uploading again, ${percent}%`;
   if (percent >= SENT_SHARE) return 'Almost done, saving your photo';
   return `Uploading, ${percent}%`;
 }

@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
 import { startDmChannel } from '@/components/chat/chat-actions';
@@ -20,7 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
 import { readMentionProfiles, READ_TIMEOUT_MS } from '@/lib/chat-reads';
-import { formatRelativeTime } from '@/lib/chat/format-relative-time';
+import { formatChatTime } from '@/lib/time';
 import {
   mentionIds,
   mentionNamesIn,
@@ -39,7 +40,6 @@ import {
   SEARCH_FAILED_COPY,
   type SearchHit,
 } from '@/lib/chat/search';
-import { safeTimeZone } from '@/lib/chat/time-format';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import {
   deviceStorage,
@@ -217,7 +217,8 @@ export function paletteSections(input: {
   workspaceId: string | null;
   workspaceKey: string | null;
   nowMs: number;
-  timeZone: string;
+  /** For tests; the app passes none (the viewer's device zone). */
+  timeZone?: string;
 }): PaletteSection[] {
   const query = normalizeQuery(input.query);
   if (query === '') {
@@ -240,7 +241,7 @@ export function paletteSections(input: {
   const words = queryWords(search.query);
   const time = (createdAt: string): string => {
     const ts = Date.parse(createdAt);
-    return Number.isNaN(ts) ? '' : formatRelativeTime(ts, input.nowMs, input.timeZone);
+    return Number.isNaN(ts) ? '' : formatChatTime(ts, new Date(input.nowMs), input.timeZone);
   };
   const ctx = {
     query: search.query,
@@ -282,9 +283,9 @@ export function paletteSections(input: {
   return sections;
 }
 
-/** The empty copy for a query with no hits. Pure. */
+/** The empty copy for a query with no hits (the NoResults line). Pure. */
 export function emptyCopy(query: string): string {
-  return `Nothing called "${normalizeQuery(query)}"`;
+  return noResultsCopy(normalizeQuery(query), false).title;
 }
 
 /** The person, mention and actor ids a set of rows needs names for. Pure. */
@@ -319,6 +320,8 @@ export interface PaletteBodyProps {
   onHover: (index: number) => void;
   onPick: (item: PaletteItem) => void;
   onRetry: () => void;
+  /** Clears the search box (the no-results state's Clear search). */
+  onClearQuery?: () => void;
 }
 
 /** The palette's list: sections, then the loading, empty or error line. Pure. */
@@ -349,8 +352,12 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
     );
   } else if (ready && search.status === 'ready' && hits === 0) {
     status = (
-      <div data-palette-state="empty" className="px-4 py-6 text-center text-base text-fg-3">
-        {emptyCopy(props.query)}
+      <div data-palette-state="empty">
+        {props.onClearQuery !== undefined ? (
+          <NoResults query={props.query} filtersActive={false} onClear={props.onClearQuery} />
+        ) : (
+          <p className="px-4 py-6 text-center text-base text-fg-3">{emptyCopy(props.query)}</p>
+        )}
       </div>
     );
   }
@@ -557,7 +564,6 @@ export function CommandPalette({
         workspaceId,
         workspaceKey,
         nowMs: Date.now(),
-        timeZone: safeTimeZone(''),
       }),
     [query, search, recents, expanded, workspaceKey, workspaceId],
   );
@@ -726,6 +732,10 @@ export function CommandPalette({
             onHover={setActive}
             onPick={pick}
             onRetry={() => runnerRef.current?.retry()}
+            onClearQuery={() => {
+              setQuery('');
+              inputRef.current?.focus({ preventScroll: true });
+            }}
           />
         </div>
       </div>

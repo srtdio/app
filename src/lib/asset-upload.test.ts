@@ -555,8 +555,8 @@ describe('canRenameAssets gates the edit affordance by role', () => {
 describe('renameErrorMessage', () => {
   it('maps a 403 to the agency-only line and everything else to retry', () => {
     expect(renameErrorMessage(403)).toBe('Only creators and admins can rename files.');
-    expect(renameErrorMessage(0)).toBe("Couldn't rename this asset. Try again.");
-    expect(renameErrorMessage(500)).toBe("Couldn't rename this asset. Try again.");
+    expect(renameErrorMessage(0)).toBe("Couldn't rename this file. Try again.");
+    expect(renameErrorMessage(500)).toBe("Couldn't rename this file. Try again.");
   });
 });
 
@@ -589,7 +589,7 @@ describe('renameAsset', () => {
     const out = await renameAsset(renameConfig(fetcher));
     expect(out).toEqual({
       ok: false,
-      message: "Couldn't rename this asset. Try again.",
+      message: "Couldn't rename this file. Try again.",
     });
   });
 });

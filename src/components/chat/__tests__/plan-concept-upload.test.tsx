@@ -334,7 +334,7 @@ describe('the sheet (U1, U2, U5)', () => {
 
   it('failed or timed out: "Couldn\'t load files." with a 44px Retry, no Add or Upload', () => {
     const html = sheet({ filesState: 'failed' });
-    expect(CONCEPT_FILES_READ_FAILED).toBe("Couldn't load files.");
+    expect(CONCEPT_FILES_READ_FAILED).toBe("Couldn't load files. Try again.");
     expect(html).toContain('t load files.');
     const retry = /<button[^>]*data-plan-concept-files-retry=""[^>]*>/.exec(html)?.[0] ?? '';
     expect(retry).toMatch(/class="[^"]*\bh-11\b/);

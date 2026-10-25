@@ -35,7 +35,7 @@ export function activeMemberIds(rows: readonly MemberRow[]): string[] {
 }
 
 /** The members failure line; the raw error goes to the logger only. */
-export const MEMBERS_LOAD_FAILED = "Couldn't load members, try again";
+export const MEMBERS_LOAD_FAILED = "Couldn't load members. Try again.";
 
 /** The two reads, injected so the error mapping is unit-tested. */
 export interface MemberReaders {

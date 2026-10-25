@@ -18,7 +18,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconArrowUp, IconChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
-import { formatClockTime, civilDay } from '@/lib/chat/time-format';
+import { civilDay, formatTime } from '@/lib/time';
 import { dayPillLabel } from '@/components/chat/day-separators';
 import { BUBBLE_META_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RailThrough } from '@/components/chat/ThreadRail';
@@ -159,7 +159,8 @@ export function LatestButton(props: {
  */
 export function SeenLine(props: {
   readAt: string | null;
-  timeZone: string;
+  /** For tests: the zone times render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   rail?: boolean;
 }): ReactElement {
   return (
@@ -178,7 +179,7 @@ export function SeenLine(props: {
           <>
             {' '}
             <span className="font-sans tabular-nums">
-              {formatClockTime(props.readAt, props.timeZone)}
+              {formatTime(props.readAt, props.timeZone)}
             </span>
           </>
         ) : null}
@@ -263,12 +264,12 @@ export function SheetAvatar(props: {
   );
 }
 
-/** "Sent Today at 2:05 pm" for the Message info sheet. Pure. */
-export function sentLine(createdAt: string, timeZone: string, nowMs: number): string {
+/** "Sent Today at 2:05 PM" for the Message info sheet. `timeZone` is for tests. Pure. */
+export function sentLine(createdAt: string, timeZone: string | undefined, nowMs: number): string {
   const ms = Date.parse(createdAt);
   if (Number.isNaN(ms)) return '';
   const day = dayPillLabel(civilDay(ms, timeZone), nowMs, timeZone);
-  return `Sent ${day} at ${formatClockTime(ms, timeZone)}`;
+  return `Sent ${day} at ${formatTime(ms, timeZone)}`;
 }
 
 /** The group Message info sheet: who has read the message and who has not. */
@@ -276,7 +277,8 @@ export function MessageInfoSheet(props: {
   open: boolean;
   onClose: () => void;
   createdAt: string;
-  timeZone: string;
+  /** For tests: the zone times render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   /** Server time now, for the Today / Yesterday label. */
   nowMs: number;
   read: readonly ReadPosition[];
@@ -310,7 +312,7 @@ export function MessageInfoSheet(props: {
               </span>
               {pos.readAt !== null ? (
                 <span className="font-mono text-sm tabular-nums text-fg-3">
-                  {formatClockTime(pos.readAt, props.timeZone)}
+                  {formatTime(pos.readAt, props.timeZone)}
                 </span>
               ) : null}
             </li>

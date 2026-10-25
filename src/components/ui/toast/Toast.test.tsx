@@ -168,7 +168,7 @@ describe('Toast', () => {
 
   it('renders the error tone on bad-solid with white ink and an alert icon', () => {
     const tree = Toast({
-      toast: { ...base, title: "Couldn't move the post. You're offline.", tone: 'error' },
+      toast: { ...base, title: "Couldn't move the post. Try again.", tone: 'error' },
       onDismiss: () => {},
     });
     const root = tree as ReactElement<{ className: string; 'data-toast-tone'?: string }>;

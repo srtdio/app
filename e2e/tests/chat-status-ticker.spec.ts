@@ -453,7 +453,9 @@ test.describe('chat status ticker', () => {
     const row = page.locator('[data-status-post]').first();
     await row.click();
     await expect(row).toHaveAttribute('aria-busy', 'true');
-    await expect(page.getByText("Couldn't open this post")).toBeVisible({ timeout: 9000 });
+    await expect(page.getByText("Couldn't open this post. Try again.")).toBeVisible({
+      timeout: 9000,
+    });
     await expect(row).toHaveAttribute('aria-busy', 'false');
     await expect(page.locator('[data-sheet-title]')).toHaveCount(0);
   });
@@ -546,7 +548,9 @@ test.describe('chat status ticker', () => {
       expect(network.rpcCalls.filter((c) => c.name === 'chat_mark_reopen')).toHaveLength(0);
     });
 
-    test(`${s.type} stamp refused: "Could not update" and the row stays`, async ({ page }) => {
+    test(`${s.type} stamp refused: "Couldn't update. Try again." and the row stays`, async ({
+      page,
+    }) => {
       const network = await installHarnessNetwork(page);
       network.refuseRpc.add('chat_mark_resolve');
       seedMarks(network, {
@@ -566,7 +570,7 @@ test.describe('chat status ticker', () => {
         .getByRole('button', { name: s.stamp, exact: true })
         .tap();
 
-      await expect(page.getByText('Could not update')).toBeVisible();
+      await expect(page.getByText("Couldn't update. Try again.")).toBeVisible();
       await expect(page.locator(`[data-status-mark="${messageId}"]`)).toHaveCount(1);
       await expect(number).toHaveText('2');
       await expect(

@@ -365,16 +365,16 @@ export function MembersList({
         title="Approvers"
         {...(clientName !== null ? { subtitle: clientName } : {})}
         count={client.length}
-        emptyText="No approvers yet"
+        emptyText="Approvers show up here."
       >
         {client.map(renderActive)}
       </Group>
 
-      <Group title="Creators" count={agency.length} emptyText="No creators yet">
+      <Group title="Creators" count={agency.length} emptyText="Creators show up here.">
         {agency.map(renderActive)}
       </Group>
 
-      <Group title="Invited" count={pending.length} emptyText="Nobody waiting to join yet">
+      <Group title="Invited" count={pending.length} emptyText="People you invite show up here.">
         {pending.map((member) => {
           const known = pendingEmails.get(member.id);
           return (

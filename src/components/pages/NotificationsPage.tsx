@@ -20,7 +20,6 @@ import { useToasts } from '@/components/pages/assets/useToasts';
 import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { AvatarStack } from '@/components/pages/activity/AvatarStack';
-import { NOTIFICATIONS_TITLE } from '@/components/shell/NotificationsButton';
 import { REMINDER_CANCELLED_COPY, createReminderActions } from '@/components/chat/ReminderContext';
 import { CANCEL_REMINDER_LABEL, ReminderSheet } from '@/components/chat/ReminderSheet';
 import {
@@ -93,6 +92,9 @@ import { undoFailureTitle } from '@/lib/use-undoable-action';
 
 /** Fixed failure copy for Mark all read: "Couldn't mark as read. Try again." */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
+
+/** The page title: the surface is Activity. */
+export const ACTIVITY_TITLE = 'Activity';
 
 const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest' },
@@ -316,7 +318,7 @@ export function NotificationsPage() {
       return;
     }
     if (!result.ok) {
-      push('Could not load more activity');
+      push("Couldn't load more activity. Try again.");
       return;
     }
     setItems((prev) => appendUnique(prev, result.data));
@@ -549,7 +551,7 @@ export function NotificationsPage() {
       markReadLocal(item.id);
       void markEntryRead(supabase, item, workspaceId, newTrace()).then((result) => {
         if (!result.ok) {
-          push('Could not mark as read');
+          push("Couldn't mark as read. Try again.");
           void loadActivity();
           return;
         }
@@ -815,7 +817,7 @@ export function NotificationsPage() {
   return (
     <>
       <PageHead
-        title={NOTIFICATIONS_TITLE}
+        title={ACTIVITY_TITLE}
         actions={
           <>
             {chipUnread > 0 ? (
@@ -827,7 +829,7 @@ export function NotificationsPage() {
               options={SORT_OPTIONS}
               value={sort}
               onChange={setSort}
-              label="Sort notifications"
+              label="Sort activity"
             />
           </>
         }
@@ -880,8 +882,7 @@ export function NotificationsPage() {
         ) : (
           <EmptyState
             icon={<IconActivity size={ICON_SIZE.status} />}
-            title="You are all caught up"
-            description="Activity across posts, briefs and people will appear here."
+            title="Activity across posts, briefs and people shows up here."
           />
         )
       ) : (

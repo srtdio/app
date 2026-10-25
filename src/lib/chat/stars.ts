@@ -51,10 +51,9 @@ export const STAR_LABEL = 'Star';
 export const UNSTAR_LABEL = 'Unstar';
 export const STARRED_TITLE = 'Starred';
 export const STARRED_HEADER_LABEL = 'Starred messages';
-export const STARRED_EMPTY_TITLE = 'No starred messages';
-export const STARRED_EMPTY_LINE = 'Long-press a message and tap Star.';
+export const STARRED_EMPTY_TITLE = 'Starred messages show up here.';
 /** The error toast when a star or unstar did not save (the change has reverted). */
-export const STAR_FAILED_TOAST = 'Could not update star';
+export const STAR_FAILED_TOAST = "Couldn't update the star. Try again.";
 
 /** One message a star write names. */
 export interface StarTarget {

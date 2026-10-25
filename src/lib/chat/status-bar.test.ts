@@ -233,7 +233,7 @@ describe('bar wording', () => {
 describe('empty and failed reads', () => {
   it('empty only when every read succeeded with zero', () => {
     expect(statusBar(input())).toEqual({ kind: 'empty' });
-    expect(NOTHING_OPEN_LINE).toBe('Nothing open between you');
+    expect(NOTHING_OPEN_LINE).toBe('Open posts and marks show up here.');
   });
 
   it('a failed read never yields empty, and omits only its own item', () => {

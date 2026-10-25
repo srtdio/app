@@ -3245,7 +3245,7 @@ describe('F11: selection entry keeps the pressed row at its screen Y', () => {
 describe('F14: a failed mark never shows raw error text', () => {
   it('maps any failure to the fixed mark copy; success shows nothing', () => {
     expect(markOutcomeCopy({ ok: false, message: 'new row violates row-level security' })).toBe(
-      "Couldn't mark, try again",
+      "Couldn't mark. Try again.",
     );
     expect(markOutcomeCopy({ ok: true })).toBeNull();
   });

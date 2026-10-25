@@ -37,7 +37,7 @@ import { readPostsByIds } from '@srtdio/posts';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { readBriefsByIds } from '@/lib/chat/briefs';
 import { readPlanTitles } from '@/lib/chat/plans';
-import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
+import { formatChatTime, formatDate } from '@/lib/time';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { WriteResult } from '@/lib/chat/record';
 import type { ThreadMessage } from '@/lib/chat/thread';
@@ -62,7 +62,7 @@ import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
 /** The marks section body when posts are listed but no mark is open. */
-export const NO_OPEN_MARKS = 'No open marks';
+export const NO_OPEN_MARKS = 'Open marks show up here.';
 
 /** The 44px cover of an open post (lazy, same presign path as the cards); a post glyph without one. */
 function OpenPostThumb(props: { assetVersionId: string | null }) {
@@ -96,13 +96,13 @@ function OpenPostThumb(props: { assetVersionId: string | null }) {
 export const IN_THIS_CHAT = 'in this chat';
 export const NOT_SHARED_HERE = 'not shared here yet';
 
-/** The two text lines of an open post row; target_date is a timestamptz, shown in the workspace zone. Pure. */
+/** The two text lines of an open post row; target_date shows on the viewer's clock (`timeZone` is for tests). Pure. */
 export function openPostLines(
   post: OpenPostRow,
   shared: boolean,
-  timeZone: string,
+  timeZone?: string,
 ): { title: string; meta: string } {
-  const date = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
+  const date = post.target_date !== null ? formatDate(post.target_date, undefined, timeZone) : '';
   return {
     title: post.title,
     meta: [formatLabel(post.format), date, shared ? IN_THIS_CHAT : NOT_SHARED_HERE]
@@ -115,8 +115,8 @@ export function openPostLines(
 export function OpenPostSheetRow(props: {
   post: OpenPostRow;
   shared: boolean;
-  /** The workspace IANA zone the target date renders in. */
-  timeZone: string;
+  /** For tests: the zone the target date renders in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   onJump: () => void;
   onShare: () => void;
 }): ReactElement {
@@ -155,7 +155,7 @@ export interface OpenPostsSection {
 }
 
 /** The posts section above the Open marks; nothing when no post is waiting. */
-export function OpenPostsList(props: OpenPostsSection & { timeZone: string }): ReactElement | null {
+export function OpenPostsList(props: OpenPostsSection & { timeZone?: string | undefined }): ReactElement | null {
   if (props.posts === null || props.posts.length === 0) return null;
   return (
     <section data-open-posts="" className="flex flex-col gap-1">
@@ -364,7 +364,8 @@ export interface MarksListProps {
   messageFor: (messageId: string) => ThreadMessage | undefined;
   profiles: Map<string, ChatProfile>;
   currentUserId: string;
-  timeZone: string;
+  /** For tests: the zone mark times render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   onJump: (messageId: string) => void;
   onResolve: (messageId: string) => Promise<WriteResult>;
   onReopen: (messageId: string) => Promise<WriteResult>;
@@ -460,10 +461,7 @@ export function MarksList(props: MarksListProps): ReactElement {
       ) : body === 'empty' ? (
         <EmptyState
           icon={<IconBookmark size={ICON_SIZE.tray} />}
-          title="All clear"
-          description={
-            tab === 'open' ? 'No open marks in this chat.' : 'Nothing has been stamped yet.'
-          }
+          title={tab === 'open' ? 'Open marks show up here.' : 'Stamped marks show up here.'}
         />
       ) : (
         <ul className="flex max-h-[55vh] flex-col overflow-y-auto">
@@ -479,8 +477,8 @@ export function MarksList(props: MarksListProps): ReactElement {
                       : undefined) ?? 'Member');
             const when =
               message !== undefined && message.createdAt !== ''
-                ? formatClockTime(message.createdAt, props.timeZone)
-                : formatClockTime(mark.markedAt, props.timeZone);
+                ? formatChatTime(message.createdAt, undefined, props.timeZone)
+                : formatChatTime(mark.markedAt, undefined, props.timeZone);
             return (
               <MarkSheetRow
                 key={mark.messageId}
@@ -494,7 +492,7 @@ export function MarksList(props: MarksListProps): ReactElement {
                         name: resolverName(mark, props.currentUserId, displayNameOf),
                         when:
                           mark.resolvedAt !== null
-                            ? formatClockTime(mark.resolvedAt, props.timeZone)
+                            ? formatChatTime(mark.resolvedAt, undefined, props.timeZone)
                             : '',
                       },
                     }

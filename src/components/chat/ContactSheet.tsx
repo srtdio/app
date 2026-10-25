@@ -153,7 +153,8 @@ export interface ContactSheetProps {
   roleLine: string | null;
   profiles: Map<string, ChatProfile>;
   currentUserId: string;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   cache: PresignCache;
   presignEnabled: boolean;
   marks: Omit<MarksListProps, 'open' | 'onJump'> | null;

@@ -116,9 +116,9 @@ export function clientDomainErrorMessage(code: string): string {
     case 'invalid_payload':
       return 'Enter a company domain, like groupcompany.com.';
     case 'forbidden_role':
-      return 'Only the workspace owner can change approved addresses.';
+      return "Couldn't save that. You don't have access to do this.";
     case 'not_found':
-      return 'That address was already removed.';
+      return "Couldn't save that. It was deleted.";
     default:
       return "Couldn't save that. Try again.";
   }
@@ -128,7 +128,7 @@ export function clientDomainErrorMessage(code: string): string {
 export function workspaceUpdateErrorMessage(code: string): string {
   switch (code) {
     case 'forbidden_role':
-      return 'Only an owner or admin can change workspace settings.';
+      return "Couldn't save. You don't have access to do this.";
     case 'invalid_payload':
       return 'That value is not allowed. Check it and try again.';
     default:
@@ -169,7 +169,9 @@ export function workspaceDeletedToast(name: string): string {
 
 /** Copy for a failed workspace_delete, shown inline in the sheet. */
 export function workspaceDeleteErrorMessage(code: string): string {
-  return code === 'owner_only' ? DELETE_OWNER_ONLY_LINE : "Couldn't delete. Try again.";
+  return code === 'owner_only'
+    ? "Couldn't delete. You don't have access to do this."
+    : "Couldn't delete. Try again.";
 }
 
 function localStorageOrNull(): OutboxStorage | null {

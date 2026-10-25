@@ -58,7 +58,7 @@ import {
 } from '@/components/chat/post-sheet';
 import { onBehalfConfirmLine } from '@/components/pages/pcs/stage-actions';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
-import { formatShortDate } from '@/lib/chat/time-format';
+import { formatDate } from '@/lib/time';
 import { actsOnBehalfOfClient, type ViewerSide } from '@/lib/chat/viewer-role';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
@@ -368,7 +368,8 @@ export function PostSheetMedia(props: {
 /** The full title, the Stage tag, then the key/value rows. Presentational. */
 export function PostSheetDetails(props: {
   view: PostView;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   /** The workspace's brand name for "on behalf of <Brand>"; null falls back. */
   brand?: string | null;
 }): ReactElement {
@@ -608,7 +609,8 @@ export interface PostSheetProps {
   onClose: () => void;
   view: PostView;
   side: ViewerSide;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   cache: PresignCache;
   deps: PresignDeps;
   presignEnabled: boolean;
@@ -669,7 +671,8 @@ export function PostSheet(props: PostSheetProps): ReactElement {
 
   const subject = postSubject(post.title);
   const set = sheetActions(side, post, timeZone);
-  const targetDate = post.target_date !== null ? formatShortDate(post.target_date, timeZone) : '';
+  const targetDate =
+    post.target_date !== null ? formatDate(post.target_date, undefined, timeZone) : '';
   const items = gallery.status === 'ready' ? gallery.items : [];
 
   // Escape belongs to the viewer while it is open (it closes itself on Escape).

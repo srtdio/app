@@ -426,7 +426,7 @@ export function OnboardingFlow({
     const saved = await onStep(APPROVER_BRAND_STEP);
     setBusy(false);
     if (!saved) {
-      setError("We couldn't save that. Try again.");
+      setError("Couldn't save that. Try again.");
       return;
     }
     setChangingSide(false);
@@ -440,7 +440,7 @@ export function OnboardingFlow({
     const saved = await onStep(WORKSPACE_STEP);
     if (!saved) {
       setBusy(false);
-      setError("We couldn't save that. Try again.");
+      setError("Couldn't save that. Try again.");
       return;
     }
     finish(SHELL_HOME);
@@ -530,7 +530,7 @@ export function OnboardingFlow({
         return;
       }
       logger.error('onboarding save failed', { error: saved.error.message });
-      setError("We couldn't save that. Try again.");
+      setError("Couldn't save that. Try again.");
       return;
     }
     // Saved: the profile itself now says where to resume, the draft is done.
@@ -568,7 +568,7 @@ export function OnboardingFlow({
     if (cropper === null || !cropper.hasPhoto()) return;
     const file = await cropper.exportPng();
     if (file === null) {
-      setError("We couldn't read that photo. Try another one.");
+      setError("Couldn't read that photo. Try another one.");
       setCropOpen(false);
       return;
     }
@@ -712,7 +712,7 @@ export function OnboardingFlow({
       <>
         <Heading
           title="Your name"
-          lead="This is how people see you in notifications, comments and chat."
+          lead="This is how people see you in Activity, comments and chat."
         />
         <div className="flex items-center gap-4">
           {photoPreview !== null ? (
@@ -1221,7 +1221,7 @@ function PersonPreview({
           it now.
         </p>
       </PreviewCard>
-      <PreviewCard label="Notification">
+      <PreviewCard label="Activity">
         <p className="text-base text-fg [text-wrap:balance]">
           <span className="font-semibold">{shown}</span> approved a post in {where}.
         </p>

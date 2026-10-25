@@ -203,7 +203,7 @@ describe('8 / 9 / 10. reason sheet dirty, Back, delete', () => {
 
 describe('11. FN7 / FN9 / FN11 copy', () => {
   it('version history uses the app formatter, title edit shows Save / Cancel on touch, settings path copy', () => {
-    expect(VERSION_HISTORY).toContain("import { formatDay } from '@/lib/display-date';");
+    expect(VERSION_HISTORY).toContain("import { formatDate } from '@/lib/time';");
     expect(VERSION_HISTORY).not.toContain('toLocaleString()');
     expect(PAGE).toContain('{isTouchDevice() ? (');
     expect(PAGE).toContain('onPointerDown={(event) => event.preventDefault()}');
@@ -233,9 +233,9 @@ describe('13 / 14. skeleton and load error', () => {
   });
 });
 
-describe('15. FB8 workspace-zone date', () => {
-  it('the details row and the details sheet read the day in the workspace zone', () => {
-    expect(PAGE).toContain('formatDue(post.target_date, approveTimeZone, new Date())');
+describe('15. FB8 date reads', () => {
+  it('the details row reads the viewer clock; the details sheet input keeps the workspace zone', () => {
+    expect(PAGE).toContain('formatDue(post.target_date)');
     expect(PAGE).not.toContain('toLocaleDateString');
     expect(PAGE).toContain('timeZone={approveTimeZone}');
     expect(DETAILS).toContain('targetDateInputValue(targetDate, timeZone)');

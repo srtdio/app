@@ -32,22 +32,22 @@ function render(path: string, unread = 0): string {
 }
 
 describe('NotificationsButton', () => {
-  it('is a 44x44 button named "Notifications", with the unread count when there is one', () => {
-    expect(notificationsLabel(0)).toBe('Notifications');
-    expect(notificationsLabel(3)).toBe('Notifications, 3 unread');
+  it('is a 44x44 button named "Activity", with the unread count when there is one', () => {
+    expect(notificationsLabel(0)).toBe('Activity');
+    expect(notificationsLabel(3)).toBe('Activity, 3 unread');
     const html = render('/pipeline', 3);
-    expect(html).toContain('aria-label="Notifications, 3 unread"');
+    expect(html).toContain('aria-label="Activity, 3 unread"');
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('>3</span>');
   });
 
   it('shows no badge with nothing unread', () => {
     const html = render('/pipeline', 0);
-    expect(html).toContain('aria-label="Notifications"');
+    expect(html).toContain('aria-label="Activity"');
     expect(html).not.toContain('bg-accent px-1');
   });
 
-  it('tints while the Notifications page is on screen, never elsewhere', () => {
+  it('tints while the Activity page is on screen, never elsewhere', () => {
     const active = render(NOTIFICATIONS_PATH);
     expect(active).toContain('bg-accent-soft');
     // The accent ink rides on the icon's span, never as a ! override on the button.

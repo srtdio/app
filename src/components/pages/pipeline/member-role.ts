@@ -34,7 +34,7 @@ export async function readMemberRole(
 }
 
 /** The line the move sheet shows when the role read failed. */
-export const ROLE_READ_ERROR = "Couldn't check your access.";
+export const ROLE_READ_ERROR = "Couldn't check your access. Try again.";
 
 /** The line the move sheet shows while the role read is in flight. */
 export const ROLE_READ_PENDING = 'Checking your access…';

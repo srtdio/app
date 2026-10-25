@@ -536,9 +536,9 @@ export function failedUploadCount(
   return rows.filter((row) => row.error !== null && row.file !== undefined).length;
 }
 
-/** The line under the tiles while files failed: "1 file didn't upload." Pure. */
+/** The line under the tiles while files failed: "Couldn't upload 1 file. Try again." Pure. */
 export function failedFilesLine(count: number): string {
-  return count === 1 ? "1 file didn't upload." : `${count} files didn't upload.`;
+  return `Couldn't upload ${count} ${count === 1 ? 'file' : 'files'}. Try again.`;
 }
 
 /**
@@ -650,7 +650,7 @@ export function AttachmentsField({
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
+        return { ok: false, message: "Couldn't upload. Try again." };
       }
       return uploadChatAttachment({
         file,
@@ -671,7 +671,7 @@ export function AttachmentsField({
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
+        return { ok: false, message: linkErrorMessage('network') };
       }
       return addAssetLink({
         endpoint: uploadEndpoint,

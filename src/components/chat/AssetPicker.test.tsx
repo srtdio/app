@@ -98,11 +98,11 @@ describe('AssetPicker grid', () => {
     expect(grid({ count: 2 })).not.toContain('Load 50 more');
   });
 
-  it('empty library and empty search say so', () => {
-    expect(grid({ rows: [], count: 0 })).toContain('No assets');
-    expect(grid({ rows: [], count: 0, searching: true, query: 'deck' })).toContain(
-      'No files called &quot;deck&quot;',
-    );
+  it('empty library reads one positive line; empty search is NoResults', () => {
+    expect(grid({ rows: [], count: 0 })).toContain('Files added to Assets show up here.');
+    const none = grid({ rows: [], count: 0, searching: true, query: 'deck' });
+    expect(none).toContain('Try another word for &quot;deck&quot;.');
+    expect(none).toContain('Clear search');
   });
 
   it('the loading state is static placeholder tiles (no motion)', () => {

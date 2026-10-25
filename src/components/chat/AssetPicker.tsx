@@ -13,6 +13,7 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults } from '@/components/ui/NoResults';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
@@ -168,6 +169,7 @@ export function AssetPicker(props: {
         selected={selected}
         onToggle={(asset) => setSelected((prev) => toggleLibraryAsset(prev, asset))}
         onLoadMore={loadMore}
+        onClearSearch={() => setQuery('')}
       />
     );
   }
@@ -197,7 +199,7 @@ export function AssetPicker(props: {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by name"
+              placeholder="Search files"
               className="pl-9"
             />
           </div>
@@ -213,7 +215,7 @@ const GRID_CLASS = 'grid max-h-[50vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-
 /** Loading state: six static placeholder tiles (no motion). */
 export function AssetGridSkeleton(): ReactElement {
   return (
-    <ul aria-busy="true" aria-label="Loading assets" className={GRID_CLASS}>
+    <ul aria-busy="true" aria-label="Loading files" className={GRID_CLASS}>
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <li key={i} data-skeleton-tile="" className="aspect-square rounded-lg bg-panel-3" />
       ))}
@@ -226,19 +228,29 @@ export function AssetGrid(props: {
   rows: LibraryAsset[];
   count: number;
   searching: boolean;
-  /** The search text; the no-match heading names it. */
+  /** The search text; the no-match line names it. */
   query: string;
   loadingMore: boolean;
   selected: readonly LibraryAsset[];
   onToggle: (asset: LibraryAsset) => void;
   onLoadMore: () => void;
+  /** Clears the search box (the no-results state's Clear search). */
+  onClearSearch?: () => void;
 }): ReactElement {
   if (props.rows.length === 0) {
+    if (props.searching) {
+      return (
+        <NoResults
+          query={props.query}
+          filtersActive={false}
+          onClear={props.onClearSearch ?? (() => undefined)}
+        />
+      );
+    }
     return (
       <EmptyState
         icon={<IconAssets size={ICON_SIZE.tray} />}
-        title={props.searching ? `No files called "${props.query.trim()}"` : 'No assets'}
-        description={props.searching ? 'Try another name.' : 'Files added to Assets show up here.'}
+        title="Files added to Assets show up here."
       />
     );
   }

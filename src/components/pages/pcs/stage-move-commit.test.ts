@@ -60,12 +60,12 @@ function harness(overrides: Partial<StageMoveCommitDeps> = {}) {
 }
 
 describe('stageMoveFailureTitle / reasonFailureTitle', () => {
-  it('names the verb, the post and the stage it is still in', () => {
-    expect(stageMoveFailureTitle('rejected', 'Diwali teaser', 'review')).toBe(
-      "Couldn't reject Diwali teaser. It's still in review.",
+  it('names the verb, the post and the reason', () => {
+    expect(stageMoveFailureTitle('rejected', 'Diwali teaser')).toBe(
+      "Couldn't reject Diwali teaser. Try again.",
     );
-    expect(stageMoveFailureTitle('parked', 'Diwali teaser', 'review')).toBe(
-      "Couldn't park Diwali teaser. It's still in review.",
+    expect(stageMoveFailureTitle('parked', 'Diwali teaser', { code: 'forbidden_role' })).toBe(
+      "Couldn't park Diwali teaser. You don't have access to do this.",
     );
     expect(reasonFailureTitle('rejected')).toBe("Rejected, but your reason didn't post.");
     expect(reasonFailureTitle('parked')).toBe("Parked, but your reason didn't post.");
@@ -100,7 +100,7 @@ describe('runStageMoveCommit', () => {
     const [options] = show.mock.calls[0] as [
       { title: string; tone?: string; action?: { label: string } },
     ];
-    expect(options.title).toBe("Couldn't reject Diwali teaser. It's still in review.");
+    expect(options.title).toBe("Couldn't reject Diwali teaser. You don't have access to do this.");
     expect(options.tone).toBe('error');
     expect(options.action?.label).toBe('Open');
     expect(deps.revert).not.toHaveBeenCalled();

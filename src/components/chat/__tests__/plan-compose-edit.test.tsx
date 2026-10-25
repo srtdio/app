@@ -96,11 +96,11 @@ describe('New plan rows', () => {
 
   it('notes for a move and a clear', () => {
     expect(row({ ...P, day: '2026-10-13', chosen: true })).toContain(
-      'Pipeline date moves from Mon 2 Nov to Tue 13 Oct.',
+      'Due date moves from Mon 2 Nov to Tue 13 Oct.',
     );
     const cleared = row({ ...P, day: 'none', chosen: true });
     expect(cleared).toContain('No date');
-    expect(cleared).toContain('Pipeline date Mon 2 Nov will be cleared.');
+    expect(cleared).toContain('Due date Mon 2 Nov will be cleared.');
   });
 
   it('concept form round trip: No date, a day, a flagged day', () => {
@@ -118,8 +118,8 @@ describe('New plan rows', () => {
 
   it('server errors lead with their first sentence', () => {
     expect(composeServerError('Failed to fetch')).toEqual({
-      heading: "Couldn't reach Sorted.",
-      lines: ['Nothing was saved. Check your connection and tap Create plan again.'],
+      heading: "Couldn't create the plan.",
+      lines: ['Try again. Nothing was saved.'],
     });
   });
 });
@@ -221,7 +221,7 @@ describe('day picker sheet', () => {
     expect(html).not.toContain('data-plan-day-none');
     expect(html).not.toContain('Need a later day?');
     expect(html).not.toContain('Current Pipeline day');
-    expect(dayPickerSubline({ kind: 'post', orig: null }, RANGE)).toBe('No Pipeline date yet');
+    expect(dayPickerSubline({ kind: 'post', orig: null }, RANGE)).toBe('No due date yet');
     expect(dayPickerSubline({ kind: 'concept' }, RANGE)).toBe('Concept');
   });
 

@@ -314,7 +314,7 @@ describe('D5: chunked delete, a later chunk fails', () => {
     const copy = result.ok
       ? ''
       : deleteOutcomeCopy(result.deleted.length, ids.length, result.message);
-    expect(copy).toBe("Deleted 100 of 150. Couldn't delete the rest, try again");
+    expect(copy).toBe("Couldn't delete 50 of 150. Try again.");
   });
 
   it('N = 0 uses the mapped delete copy, never the raw error', () => {
@@ -322,7 +322,7 @@ describe('D5: chunked delete, a later chunk fails', () => {
       "Marked messages can't be deleted",
     );
     expect(deleteOutcomeCopy(0, 3, 'TypeError: Failed to fetch')).toBe(
-      "Couldn't delete, try again",
+      "Couldn't delete. Try again.",
     );
   });
 });

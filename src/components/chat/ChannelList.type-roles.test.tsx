@@ -15,7 +15,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { channelListView } from '@/components/chat/ChannelList';
-import { formatRelativeTime } from '@/lib/chat/format-relative-time';
+import { formatChatTime } from '@/lib/time';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ConversationSummary } from '@/lib/chat/chat-store';
 
@@ -95,7 +95,7 @@ describe('chat list type roles', () => {
   });
 
   it('meta: the tile time is sm with tabular figures; the preview is secondary ink', () => {
-    const time = formatRelativeTime(SENT, NOW, 'UTC');
+    const time = formatChatTime(SENT, new Date(NOW), 'UTC');
     const [stamp] = paint(list([group]), 'span', time);
     expect(classes(stamp as Element)).toEqual(
       expect.arrayContaining(['text-sm', 'tabular-nums', 'text-fg-2']),
@@ -106,12 +106,11 @@ describe('chat list type roles', () => {
     );
   });
 
-  it('no match: the title is lg/600 fg, the description base fg-2', () => {
-    const [title] = paint(list([], 'zzz'), 'p', 'No chats called "zzz"');
+  it('no match: NoResults names the query (lg/600 fg) with Clear search', () => {
+    const [title] = paint(list([], 'zzz'), 'div', 'Try another word for "zzz".');
     expect(classes(title as Element)).toEqual(
       expect.arrayContaining(['text-lg', 'font-semibold', 'text-fg']),
     );
-    const [hint] = paint(list([], 'zzz'), 'p', 'Try a different name or clear the search.');
-    expect(classes(hint as Element)).toEqual(expect.arrayContaining(['text-base', 'text-fg-2']));
+    expect(paint(list([], 'zzz'), 'button', 'Clear search')).toHaveLength(1);
   });
 });

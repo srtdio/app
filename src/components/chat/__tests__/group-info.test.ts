@@ -66,7 +66,7 @@ describe('F1: every group failure is a readable sentence', () => {
   const known: Array<[string, string]> = [
     ['group_name_taken', 'A group with this name already exists'],
     ['group_name_invalid', 'Enter a valid group name'],
-    ['group_not_found', 'This group no longer exists'],
+    ['group_not_found', "Couldn't update the group. It was deleted."],
     ['member_not_in_workspace', "This person isn't in the workspace"],
     ['group_manage_denied', "Only the group's creator or an admin can edit this group's info"],
   ];
@@ -77,7 +77,7 @@ describe('F1: every group failure is a readable sentence', () => {
   });
 
   it('an unknown code (and any raw message) reads the fallback, never the raw text', () => {
-    expect(GROUP_ACTION_FALLBACK).toBe('Something went wrong. Try again.');
+    expect(GROUP_ACTION_FALLBACK).toBe("Couldn't update the group. Try again.");
     for (const error of [
       { code: 'weird_code', message: 'weird_code' },
       { code: 'unknown', message: 'Network down' },
@@ -164,10 +164,10 @@ describe('R6: the group sheet never sticks busy and never shows raw text', () =>
 
   it("maps 'workspace_member_only' to its sentence", () => {
     expect(groupActionMessage({ code: 'workspace_member_only', message: 'x' })).toBe(
-      'Only workspace members can do this',
+      "Couldn't update the group. You don't have access to do this.",
     );
     expect(groupActionMessage({ code: 'unknown', message: 'workspace_member_only' })).toBe(
-      'Only workspace members can do this',
+      "Couldn't update the group. You don't have access to do this.",
     );
   });
 });
@@ -192,7 +192,7 @@ describe('G4: a failed member refresh after an add or remove', () => {
   });
 
   it('shows "Couldn\'t refresh members, try again" as a 44px retry', () => {
-    expect(MEMBERS_REFRESH_FAILED).toBe("Couldn't refresh members, try again");
+    expect(MEMBERS_REFRESH_FAILED).toBe("Couldn't refresh members. Try again.");
     const onRetry = vi.fn();
     const el = MembersRefreshNotice({ onRetry });
     expect(el.props.children).toBe(MEMBERS_REFRESH_FAILED);

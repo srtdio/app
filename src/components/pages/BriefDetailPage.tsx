@@ -30,8 +30,8 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
-import { formatDay, formatDue, formatOverdue } from '@/lib/display-date';
-import { formatLabel } from '@/lib/post-detail-presentation';
+import { civilDay, formatDate, formatDue, formatOverdue } from '@/lib/time';
+import { postFormatLabel } from '@/lib/post-format';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
 import { useEscapeLayer } from '@/lib/escape-stack';
@@ -112,23 +112,7 @@ export function BriefDetailSkeleton(): ReactElement {
  * string's own parts, never new Date(value)).
  */
 export function briefDueDateLabel(targetDate: string | null, now: Date = new Date()): string {
-  return targetDate !== null ? formatDay(targetDate, 'UTC', now) || targetDate : 'Not set';
-}
-
-/** Today's civil date in the zone as "YYYY-MM-DD"; an unknown zone reads UTC. */
-function todayIso(timeZone: string, now: Date): string {
-  const format = (zone: string): string =>
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: zone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(now);
-  try {
-    return format(timeZone);
-  } catch {
-    return format('UTC');
-  }
+  return targetDate !== null ? formatDate(targetDate, now) || targetDate : 'Not set';
 }
 
 export interface BriefStatusLine {
@@ -141,28 +125,29 @@ export interface BriefStatusLine {
 
 /**
  * The top bar's status line: "Open · Due 14 Aug", "Open · Overdue 2 months"
- * once the due day has passed in the workspace zone, plain "Open" with no due
+ * once the due day has passed on the viewer's clock, plain "Open" with no due
  * date, and plain "Closed" for a closed brief. The date-only target_date is read
- * as written; the zone only decides which day is today. Pure.
+ * as written; the zone (the device's; `timeZone` is for tests) only decides
+ * which day is today. Pure.
  */
 export function briefStatusLine(
   status: string,
   targetDate: string | null,
-  timeZone: string,
+  timeZone?: string,
   now: Date = new Date(),
 ): BriefStatusLine {
   if (status === BRIEF_STATUS.closed) return { status: 'Closed', due: null, overdue: false };
   if (targetDate === null) return { status: 'Open', due: null, overdue: false };
-  if (targetDate < todayIso(timeZone, now)) {
-    return { status: 'Open', due: formatOverdue(targetDate, timeZone, now).text, overdue: true };
+  if (targetDate < civilDay(now, timeZone)) {
+    return { status: 'Open', due: formatOverdue(targetDate, now, timeZone).text, overdue: true };
   }
-  const due = formatDue(targetDate, timeZone, now);
+  const due = formatDue(targetDate, now, timeZone);
   return { status: 'Open', due: due === '' ? null : due, overdue: false };
 }
 
 /** The requested format proper-cased ("carousel" -> "Carousel"), never the raw enum. */
 export function briefFormatLabel(format: string): string {
-  return formatLabel(format.trim());
+  return postFormatLabel(format.trim());
 }
 
 /**
@@ -227,17 +212,17 @@ export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
 }
 
 /**
- * The day this brief was raised, read in the WORKSPACE zone with the app day
- * format: "22 Sep", or "22 Sep 2025" outside now's year (the same formatter as
+ * The day this brief was raised, read on the viewer's clock (`timeZone` is for
+ * tests) with the app day format: "22 Sep", or "22 Sep 2025" outside now's year (the same formatter as
  * the list's day headings, so the two can never disagree). An unparseable
  * created_at is returned unchanged, and an unknown zone never throws.
  */
 export function briefRaisedLabel(
   createdAt: string,
-  timeZone: string,
+  timeZone?: string,
   now: Date = new Date(),
 ): string {
-  return formatDay(createdAt, timeZone, now) || createdAt;
+  return formatDate(createdAt, now, timeZone) || createdAt;
 }
 
 /**
@@ -399,7 +384,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const briefId = briefIdProp ?? params.briefId;
   const navigate = useNavigate();
   const newTrace = useNewTrace();
-  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
+  const { workspaceId, workspaceKey } = useWorkspace();
   const { toasts, push, dismiss } = useToasts();
   const toast = useOptionalToast();
   const { run: runUndoable } = useUndoableAction();
@@ -411,11 +396,6 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const isApprover = useWorkspaceCapability('brief.create') === true;
   // Creators (they make posts, not briefs) start a post from an open brief.
   const canCreatePost = useWorkspaceCapability('post.create') === true;
-
-  // The active workspace's zone, derived exactly as the Pipeline surface derives
-  // it, so the Raised row reads on the workspace calendar rather than whatever
-  // zone the reviewer's laptop happens to be in.
-  const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
 
   // Resolve created_by to a current member's display name, never a raw uuid.
   // Reuses the post detail page's member hook unchanged; the map is the resolver
@@ -710,7 +690,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const canClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
   const hasBrand = brief.brand_requirements !== null && brief.brand_requirements.trim() !== '';
   const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
-  const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone);
+  const statusLine = briefStatusLine(brief.status, brief.target_date);
   const showNewPost = canCreatePost && !isApprover && !closed && briefId !== undefined;
   const startPost = (): void => navigate(`/pipeline?new=1&brief=${encodeURIComponent(brief.id)}`);
   const authorLabel = briefAuthorLabel(
@@ -726,7 +706,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     <div className="flex min-w-0 flex-col gap-1 text-base">
       <p data-brief-raised="" className="min-w-0 break-words text-fg">
         <span className="text-fg-3">Raised</span>{' '}
-        <span className="tabular-nums">{briefRaisedLabel(brief.created_at, timeZone)}</span>
+        <span className="tabular-nums">{briefRaisedLabel(brief.created_at)}</span>
         {authorLabel === '' && membersLoading ? (
           <span
             data-testid="created-by-skeleton"

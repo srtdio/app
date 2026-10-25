@@ -1883,7 +1883,7 @@ export function composeSummary(items: readonly ComposeItem[]): string {
   const need = composeNeedsDay(items).length;
   if (need > 0) return `${need} ${need === 1 ? 'item needs' : 'items need'} a day`;
   const moves = composeMoves(items);
-  if (moves > 0) return `${moves} Pipeline ${moves === 1 ? 'date' : 'dates'} will move to match`;
+  if (moves > 0) return `${moves} due ${moves === 1 ? 'date' : 'dates'} will move to match`;
   return 'Ready';
 }
 
@@ -1898,15 +1898,15 @@ export function composeItemNote(item: ComposeItem): { text: string; warn: boolea
   }
   if (item.day === 'none') {
     return item.orig !== null
-      ? { text: `Pipeline date ${fmt(item.orig)} will be cleared.`, warn: false }
+      ? { text: `Due date ${fmt(item.orig)} will be cleared.`, warn: false }
       : null;
   }
   if (item.day === item.orig) return null;
   return {
     text:
       item.orig !== null
-        ? `Pipeline date moves from ${fmt(item.orig)} to ${fmt(item.day)}.`
-        : `Pipeline date moves to ${fmt(item.day)}.`,
+        ? `Due date moves from ${fmt(item.orig)} to ${fmt(item.day)}.`
+        : `Due date moves to ${fmt(item.day)}.`,
     warn: false,
   };
 }
@@ -1973,11 +1973,11 @@ export function composeCreateArgs(input: {
   };
 }
 
-/** The toast after Create: "Plan created with 4 items. 2 Pipeline dates updated." Pure. */
+/** The toast after Create: "Plan created with 4 items. 2 due dates updated." Pure. */
 export function composeCreatedToast(items: number, updated: number): string {
   const head = `Plan created with ${items} ${items === 1 ? 'item' : 'items'}`;
   return updated > 0
-    ? `${head}. ${updated} Pipeline ${updated === 1 ? 'date' : 'dates'} updated.`
+    ? `${head}. ${updated} due ${updated === 1 ? 'date' : 'dates'} updated.`
     : `${head}.`;
 }
 

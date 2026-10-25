@@ -302,7 +302,7 @@ describe('detailRows', () => {
     );
     const approved = rows.find((r) => r.key === 'approved');
     expect(approved?.label).toBe('Approved');
-    expect(approved?.value).toMatch(/^Asha · 1 Oct /);
+    expect(approved?.value).toBe('Asha · 1 Oct, 9:05 AM');
   });
 
   it('approved with no approver: the date it entered approved', () => {

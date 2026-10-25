@@ -33,7 +33,7 @@ import {
   UnreadPill,
 } from '@/components/chat/ReadingLayer';
 import { chatLayout } from '@/components/chat/chat-type';
-import { formatClockTime } from '@/lib/chat/time-format';
+import { formatTime } from '@/lib/time';
 
 const EM_DASH = String.fromCharCode(0x2014);
 
@@ -220,11 +220,12 @@ describe('reading layer elements', () => {
     expect(html).not.toContain('font-mono');
   });
 
-  it('Seen shows read_at on the workspace clock; no read_at reads "Seen" with no time', () => {
+  it('Seen shows read_at as a clock time; no read_at reads "Seen" with no time', () => {
     const at = '2026-10-02T11:30:00Z';
     const kolkata = renderToStaticMarkup(<SeenLine readAt={at} timeZone="Asia/Kolkata" />);
-    expect(kolkata).toContain(formatClockTime(at, 'Asia/Kolkata'));
-    expect(kolkata).not.toContain(formatClockTime(at, 'UTC'));
+    expect(kolkata).toContain(formatTime(at, 'Asia/Kolkata'));
+    expect(kolkata).toContain('5:00 PM');
+    expect(kolkata).not.toContain(formatTime(at, 'UTC'));
     const none = renderToStaticMarkup(<SeenLine readAt={null} timeZone="UTC" />);
     expect(none).toContain('Seen');
     expect(none).not.toContain('font-sans tabular-nums');
@@ -256,7 +257,7 @@ describe('reading layer elements', () => {
         ]}
       />,
     );
-    expect(html).toContain(formatClockTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
+    expect(html).toContain(formatTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
     expect(html.match(/font-mono text-sm tabular-nums/g)?.length).toBe(1);
   });
 

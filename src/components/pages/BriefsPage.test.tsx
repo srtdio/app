@@ -415,10 +415,10 @@ describe('briefSections', () => {
 });
 
 describe('briefsEmptyState', () => {
-  it('a typed search with no match: one line naming the query (the only state with Clear)', () => {
+  it('a typed search with no match: NoResults with the query (the only state with Clear)', () => {
     expect(briefsEmptyState('open', ' diwali ', 4, true)).toEqual({
       kind: 'no-results',
-      title: 'No briefs with “diwali” in the title',
+      query: 'diwali',
     });
     expect(briefsEmptyState('closed', 'x', 4, false).kind).toBe('no-results');
   });
@@ -436,11 +436,11 @@ describe('briefsEmptyState', () => {
   it('a chip with nothing under it and no search: a heading, no Clear', () => {
     expect(briefsEmptyState('closed', '', 2, true)).toEqual({
       kind: 'filtered',
-      title: 'No closed briefs yet',
+      title: 'Closed briefs show up here.',
     });
     expect(briefsEmptyState('open', '', 2, false)).toEqual({
       kind: 'filtered',
-      title: 'No open briefs right now',
+      title: 'Open briefs show up here.',
     });
   });
 });

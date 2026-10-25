@@ -410,7 +410,7 @@ export function takeDrawerMemory(
 }
 
 /** The copy when a tapped post cannot be opened. */
-export const POST_OPEN_FAILED = "Couldn't open this post";
+export const POST_OPEN_FAILED = "Couldn't open this post. Try again.";
 
 /** How long a tapped post may wait on its read before the tap gives up (ms). */
 export const POST_TAP_WAIT_MS = READ_TIMEOUT_MS + 1_000;

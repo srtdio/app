@@ -172,16 +172,16 @@ describe('caption quote inside the comment (item 3)', () => {
     expect(quote).toBeGreaterThan(-1);
     expect(quote).toBeLessThan(body);
     expect(SRC).toContain('data-comment-role=""');
-    expect(SRC).toContain('formatAgo(comment.created_at, new Date())');
+    expect(SRC).toContain('formatRelative(comment.created_at)');
   });
 });
 
 describe('section title, empty states and the top pill', () => {
   it('posts read in checkpoints; briefs keep comments', () => {
-    expect(emptyListText('post', 'all')).toBe('No checkpoints yet');
-    expect(emptyListText('post', 'open')).toBe('No open checkpoints');
-    expect(emptyListText('brief', 'all')).toBe('No comments yet');
-    expect(emptyListText('brief', 'open')).toBe('No open comments');
+    expect(emptyListText('post', 'all')).toBe('Checkpoints show up here.');
+    expect(emptyListText('post', 'open')).toBe('Open checkpoints show up here.');
+    expect(emptyListText('brief', 'all')).toBe('Comments show up here.');
+    expect(emptyListText('brief', 'open')).toBe('Open comments show up here.');
   });
 
   it('the top pill reads "{n} open checkpoints", singular at one', () => {

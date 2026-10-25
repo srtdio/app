@@ -16,10 +16,10 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 /** The Notifications page's route. */
 export const NOTIFICATIONS_PATH = '/notifications';
 
-/** The page's title and the button's name. */
-export const NOTIFICATIONS_TITLE = 'Notifications';
+/** The page's title and the button's name (the surface is called Activity). */
+export const NOTIFICATIONS_TITLE = 'Activity';
 
-/** The button's accessible name: "Notifications", plus the unread count. Pure. */
+/** The button's accessible name and tooltip: "Activity", plus the unread count. Pure. */
 export function notificationsLabel(unread: number): string {
   return unread > 0 ? `${NOTIFICATIONS_TITLE}, ${unread} unread` : NOTIFICATIONS_TITLE;
 }

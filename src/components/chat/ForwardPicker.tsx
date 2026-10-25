@@ -3,7 +3,7 @@
 // and a sticky "Send to N chats" footer button disabled at 0. The same visual
 // language as NewChatSheet and MemberPicker (Sheet, Input, 44px avatar rows,
 // accent-soft selected state). The send runs through the caller's forward
-// action; a failure toasts "Could not forward to [chat name]." and keeps the
+// action; a failure toasts "Couldn't forward to [chat name]. Try again." and keeps the
 // sheet open. Design tokens only, so light and dark stay at parity.
 
 import { useCallback, useEffect, useState } from 'react';
@@ -15,10 +15,12 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { SelectCheck } from '@/components/ui/SelectCheck';
+import { NoResults } from '@/components/ui/NoResults';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { selectConversation } from '@/lib/chat/chat-store';
+import { chatDisplayName } from '@/lib/chat/chat-name';
 import {
   forwardFailedMessage,
   forwardPickerChannels,
@@ -65,7 +67,7 @@ export function forwardRowAvatar(channel: ChannelSummary, selected: boolean): Re
   }
   return (
     <Avatar
-      name={channel.title}
+      name={chatDisplayName(channel)}
       {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
       size="md"
     />
@@ -105,7 +107,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
       props.onSent();
       return;
     }
-    if (result.failed !== null) toast.show({ title: forwardFailedMessage(result.failed.title) });
+    if (result.failed !== null) toast.show({ title: forwardFailedMessage(chatDisplayName(result.failed)) });
   }
 
   return (
@@ -134,9 +136,11 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
         aria-label="Search chats"
       />
       {listed.length === 0 ? (
-        <p className="px-1 py-3 text-base text-fg-3">
-          {search.trim() !== '' ? `No chats called "${search.trim()}"` : 'No chats yet'}
-        </p>
+        search.trim() !== '' ? (
+          <NoResults query={search} filtersActive={false} onClear={() => setSearch('')} />
+        ) : (
+          <p className="px-1 py-3 text-base text-fg-3">Chats show up here.</p>
+        )
       ) : (
         <ul className="mt-3 flex flex-col">
           {listed.map((channel) => {
@@ -156,7 +160,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
                 >
                   {forwardRowAvatar(channel, isSelected)}
                   <span className="min-w-0 flex-1 truncate text-base font-medium">
-                    {channel.title}
+                    {chatDisplayName(channel)}
                   </span>
                   <SelectCheck checked={isSelected} />
                 </PressableRow>

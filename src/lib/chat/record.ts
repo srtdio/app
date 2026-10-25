@@ -190,11 +190,11 @@ export function editFailureCopy(message: string): string {
   if (/marked messages (cannot|can't) be edited/i.test(message)) {
     return "Marked messages can't be edited";
   }
-  return "Couldn't edit, try again";
+  return "Couldn't edit. Try again.";
 }
 
 /** User-facing copy for a failed mark; the raw proc text is only ever logged. */
-export const MARK_FAILED_COPY = "Couldn't mark, try again";
+export const MARK_FAILED_COPY = "Couldn't mark. Try again.";
 
 /**
  * User-facing copy for a failed delete, mapped from the proc's exception text
@@ -206,7 +206,7 @@ export function deleteFailureCopy(message: string): string {
     return 'Delete window has closed (30 min)';
   }
   if (/marked messages cannot be deleted/i.test(message)) return "Marked messages can't be deleted";
-  return "Couldn't delete, try again";
+  return "Couldn't delete. Try again.";
 }
 
 /**
@@ -215,7 +215,7 @@ export function deleteFailureCopy(message: string): string {
  */
 export function deleteOutcomeCopy(deleted: number, total: number, message: string): string {
   if (deleted === 0) return deleteFailureCopy(message);
-  return `Deleted ${deleted} of ${total}. Couldn't delete the rest, try again`;
+  return `Couldn't delete ${total - deleted} of ${total}. Try again.`;
 }
 
 /** A void proc outcome; the message is the raw error for logging. */

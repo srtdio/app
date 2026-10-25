@@ -15,7 +15,7 @@ const cache = { peek: vi.fn(() => null), resolve: vi.fn() } as unknown as Presig
 describe('X5 empty pipeline', () => {
   it('people with post.create get a headline and a create button', () => {
     const out = renderToStaticMarkup(emptyPipeline(true));
-    expect(out).toContain('No posts yet');
+    expect(out).toContain('Posts show up here.');
     expect(out).toContain('Create your first post');
     // The header owns the exact "New post" name; no second control shares it.
     expect(out.toLowerCase()).not.toContain('new post');
@@ -23,7 +23,7 @@ describe('X5 empty pipeline', () => {
 
   it('people without post.create get the headline only', () => {
     const out = renderToStaticMarkup(emptyPipeline(false));
-    expect(out).toContain('No posts yet');
+    expect(out).toContain('Posts show up here.');
     expect(out).not.toContain('Create your first post');
   });
 

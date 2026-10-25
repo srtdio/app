@@ -119,7 +119,7 @@ describe('Nothing open', () => {
   it('shows the check and the line in fg-3, and is not a button', () => {
     const html = renderToStaticMarkup(<StatusTickerBar bar={bar()} />);
     expect(html).toContain('data-loops-strip="empty"');
-    expect(html).toContain('Nothing open between you');
+    expect(html).toContain('Open posts and marks show up here.');
     expect(html).toContain('text-fg-3');
     expect(html).not.toContain('<button');
     expect(html).not.toContain('role="button"');
@@ -467,7 +467,7 @@ describe('post rows never fail silently', () => {
     expect(tapPost(cache, 'f')).toBe('busy');
     expect(retries).toEqual([['f']]);
     expect(tapPost(null, 'a')).toBe('toast');
-    expect(POST_OPEN_FAILED).toBe("Couldn't open this post");
+    expect(POST_OPEN_FAILED).toBe("Couldn't open this post. Try again.");
   });
 
   it('outcomes read the snapshot: open, failed, pending, not visible', () => {

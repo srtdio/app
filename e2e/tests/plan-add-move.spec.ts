@@ -158,7 +158,7 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   // An empty day: Add sits right of "Nothing planned", 44px tall.
   const add = wed.locator('[data-plan-add="2026-10-14"]');
   expectMinTouchTarget(await add.boundingBox());
-  await expect(wed.locator('[data-plan-day-empty]')).toHaveText('Nothing planned');
+  await expect(wed.locator('[data-plan-day-empty]')).toHaveText('Planned posts show up here.');
 
   // Add on an empty day, New concept: it lands under that day.
   await add.click();

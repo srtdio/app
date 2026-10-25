@@ -380,7 +380,7 @@ function LayoutMock({
   );
   const placeholder = (
     <span className="flex h-full w-full items-center justify-center text-sm text-fg-3">
-      {hasMedia ? 'Loading' : 'No media yet'}
+      {hasMedia ? 'Loading' : 'Photos and videos show up here.'}
     </span>
   );
 

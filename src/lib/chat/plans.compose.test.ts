@@ -71,10 +71,10 @@ describe('notes and summary', () => {
       warn: true,
     });
     expect(composeItemNote({ ...out, day: '2026-10-13', chosen: true })?.text).toBe(
-      'Pipeline date moves from Mon 2 Nov to Tue 13 Oct.',
+      'Due date moves from Mon 2 Nov to Tue 13 Oct.',
     );
     expect(composeItemNote({ ...out, day: 'none', chosen: true })?.text).toBe(
-      'Pipeline date Mon 2 Nov will be cleared.',
+      'Due date Mon 2 Nov will be cleared.',
     );
     const same = composePostItem(post('a', '2026-10-14'), 'post', RANGE, ZONE);
     expect(composeItemNote(same)).toBeNull();
@@ -86,9 +86,9 @@ describe('notes and summary', () => {
     expect(composeSummary([out])).toBe('1 item needs a day');
     expect(composeSummary([out, concept('k', null)])).toBe('2 items need a day');
     const moved: ComposeItem = { ...out, day: '2026-10-13', chosen: true };
-    expect(composeSummary([moved])).toBe('1 Pipeline date will move to match');
+    expect(composeSummary([moved])).toBe('1 due date will move to match');
     expect(composeSummary([moved, { ...moved, key: 'z' }])).toBe(
-      '2 Pipeline dates will move to match',
+      '2 due dates will move to match',
     );
     expect(composeSummary([concept('k', 'none')])).toBe('Ready');
     expect(composeMoves([{ ...out, day: 'none' }])).toBe(0);
@@ -202,10 +202,10 @@ describe('soft word counter', () => {
 });
 
 describe('toast', () => {
-  it('items, plus Pipeline dates updated when any', () => {
+  it('items, plus due dates updated when any', () => {
     expect(composeCreatedToast(4, 0)).toBe('Plan created with 4 items.');
-    expect(composeCreatedToast(4, 2)).toBe('Plan created with 4 items. 2 Pipeline dates updated.');
-    expect(composeCreatedToast(1, 1)).toBe('Plan created with 1 item. 1 Pipeline date updated.');
+    expect(composeCreatedToast(4, 2)).toBe('Plan created with 4 items. 2 due dates updated.');
+    expect(composeCreatedToast(1, 1)).toBe('Plan created with 1 item. 1 due date updated.');
   });
 });
 

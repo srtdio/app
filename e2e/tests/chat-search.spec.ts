@@ -32,7 +32,7 @@ async function runSearchFlow(page: Page): Promise<void> {
   const before = await tileNames(page);
   expect(before.length).toBeGreaterThan(1);
 
-  const box = page.getByRole('searchbox', { name: 'Search conversations' });
+  const box = page.getByRole('searchbox', { name: 'Search chats' });
   await box.fill(QUERY);
   // The old list is gone in the same frame the results come in.
   await expect(page.locator('[data-search-results]')).toBeVisible();

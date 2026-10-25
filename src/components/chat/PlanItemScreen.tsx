@@ -107,7 +107,7 @@ import {
   type ReviewSide,
   type ReviewStatus,
 } from '@/lib/chat/plans';
-import { formatClockTime, workspaceTimeZone } from '@/lib/chat/time-format';
+import { formatRelative, safeTimeZone } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
@@ -287,7 +287,8 @@ export function PlanItemScreen(props: {
 }): ReactElement | null {
   const { bundle, item, side } = props;
   const { workspaces, workspaceId } = useWorkspace();
-  const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
+  // The workspace civil clock the plan days read on (device zone when unset).
+  const timeZone = safeTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
   const { session } = useSession();
   const me = session?.user.id ?? null;
   const navigate = useNavigate();
@@ -986,7 +987,7 @@ export function PlanItemScreen(props: {
               ) : read.status === 'error' ? (
                 <ScreenFailed onRetry={reload} />
               ) : shown.length === 0 ? (
-                <p className="text-md text-fg-3">No comments yet.</p>
+                <p className="text-md text-fg-3">Comments show up here.</p>
               ) : (
                 shown.map((c) =>
                   c.id === highlightId ? (
@@ -994,7 +995,6 @@ export function PlanItemScreen(props: {
                       key={c.id}
                       comment={c}
                       workspaceId={workspaceId}
-                      timeZone={timeZone}
                       highlighted={highlighted === c.id}
                       rowRef={highlightRef}
                     />
@@ -1003,7 +1003,6 @@ export function PlanItemScreen(props: {
                       key={c.id}
                       comment={c}
                       workspaceId={workspaceId}
-                      timeZone={timeZone}
                     />
                   ),
                 )
@@ -1139,7 +1138,6 @@ const HIGHLIGHT_MS = 2400;
 function CommentRow(props: {
   comment: ShownComment;
   workspaceId: string | null;
-  timeZone: string;
   highlighted?: boolean;
   rowRef?: RefObject<HTMLDivElement>;
 }): ReactElement {
@@ -1167,7 +1165,7 @@ function CommentRow(props: {
           </span>
         ) : null}
         <time className="ml-auto font-sans text-sm tabular-nums text-fg-3">
-          {formatClockTime(c.createdAt, props.timeZone)}
+          {formatRelative(c.createdAt)}
         </time>
       </div>
       {/* No mention picker here, but a typed token reads "@username" (or "@Former member"), never raw. */}

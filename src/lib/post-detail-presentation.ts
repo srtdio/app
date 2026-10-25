@@ -4,8 +4,8 @@
 // an unknown value title-cases its raw token rather than rendering blank.
 
 import type { Stage } from '@srtdio/posts';
-import { browserTimeZone } from './chat/time-format';
-import { formatAgo, formatDay } from './display-date';
+import { formatDate, formatRelative } from './time';
+import { postFormatLabel } from './post-format';
 
 const PLATFORM_LABELS = {
   linkedin: 'LinkedIn',
@@ -13,14 +13,6 @@ const PLATFORM_LABELS = {
   instagram: 'Instagram',
   facebook: 'Facebook',
   threads: 'Threads',
-} as Record<string, string>;
-
-const FORMAT_LABELS = {
-  text: 'Text',
-  single_image: 'Single Image',
-  carousel: 'Carousel',
-  video: 'Video',
-  link: 'Link',
 } as Record<string, string>;
 
 // Title-case a snake_case token for the unknown-value fallback (single_image ->
@@ -36,33 +28,34 @@ export function platformLabel(p: string): string {
   return PLATFORM_LABELS[p] ?? titleCase(p);
 }
 
-export function formatLabel(f: string): string {
-  return FORMAT_LABELS[f] ?? titleCase(f);
+/** A format's display name; reads the one map in ./post-format (create-sheet labels). */
+export function formatLabel(f: string, platform?: string | null): string {
+  return postFormatLabel(f, platform);
 }
 
 /**
  * The single-line status read for the post-detail header, per stage. Draft tracks
  * the last edit (updated_at); review tracks how long it has waited
  * (stage_entered_at); approved/parked/rejected read as a dated event, its day
- * read in `timeZone` (the workspace zone; the browser's when omitted).
+ * read on the viewer's clock (`timeZone` is for tests).
  */
 export function postStatusLine(
   stage: Stage,
   updatedAt: string,
   stageEnteredAt: string,
   now: Date,
-  timeZone: string = browserTimeZone(),
+  timeZone?: string,
 ): string {
   switch (stage) {
     case 'draft':
-      return `Updated ${formatAgo(updatedAt, now)}`;
+      return `Updated ${formatRelative(updatedAt, now)}`;
     case 'review':
-      return `In review · ${formatAgo(stageEnteredAt, now)}`;
+      return `In review · ${formatRelative(stageEnteredAt, now)}`;
     case 'approved':
-      return `Approved ${formatDay(stageEnteredAt, timeZone, now)}`;
+      return `Approved ${formatDate(stageEnteredAt, now, timeZone)}`;
     case 'parked':
-      return `Parked ${formatDay(stageEnteredAt, timeZone, now)}`;
+      return `Parked ${formatDate(stageEnteredAt, now, timeZone)}`;
     case 'rejected':
-      return `Rejected ${formatDay(stageEnteredAt, timeZone, now)}`;
+      return `Rejected ${formatDate(stageEnteredAt, now, timeZone)}`;
   }
 }

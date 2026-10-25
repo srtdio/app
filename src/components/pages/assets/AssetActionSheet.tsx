@@ -16,7 +16,7 @@ import { assetLink } from '@/components/pages/assets/assets-nav';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { useEscapeLayer } from '@/lib/escape-stack';
 
-const SIGN_FAIL = "Couldn't get a link for this asset. Try again.";
+const SIGN_FAIL = "Couldn't get a link for this file. Try again.";
 
 /** One row of the file menu, in display order. */
 export type AssetMenuRow = 'primary' | 'copy' | 'rename' | 'info' | 'delete';

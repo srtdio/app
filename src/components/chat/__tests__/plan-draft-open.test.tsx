@@ -402,15 +402,15 @@ describe('item 6: Approved by', () => {
     expect(approverIds(bundle('team'))).toEqual([]);
   });
 
-  it('"today, 6:45 pm" / "yesterday, 6:45 pm" / "12 Oct, 6:45 pm" in the workspace zone', () => {
+  it('"today, 6:45 PM" / "yesterday, 6:45 PM" / "12 Oct, 6:45 PM" in the given zone', () => {
     const now = new Date('2026-10-12T15:00:00Z');
-    expect(approvedWhen('2026-10-12T13:15:00Z', now, 'Asia/Kolkata')).toBe('today, 6:45 pm');
-    expect(approvedWhen('2026-10-11T13:15:00Z', now, 'Asia/Kolkata')).toBe('yesterday, 6:45 pm');
-    expect(approvedWhen('2026-10-02T13:15:00Z', now, 'Asia/Kolkata')).toBe('2 Oct, 6:45 pm');
+    expect(approvedWhen('2026-10-12T13:15:00Z', now, 'Asia/Kolkata')).toBe('today, 6:45 PM');
+    expect(approvedWhen('2026-10-11T13:15:00Z', now, 'Asia/Kolkata')).toBe('yesterday, 6:45 PM');
+    expect(approvedWhen('2026-10-02T13:15:00Z', now, 'Asia/Kolkata')).toBe('2 Oct, 6:45 PM');
     // 23:30 UTC on 11 Oct is 12 Oct in Kolkata: today there.
-    expect(approvedWhen('2026-10-11T23:30:00Z', now, 'Asia/Kolkata')).toBe('today, 5:00 am');
-    expect(approvedByLine('Riya Shah', 'today, 6:45 pm')).toBe(
-      'Approved by Riya Shah · today, 6:45 pm',
+    expect(approvedWhen('2026-10-11T23:30:00Z', now, 'Asia/Kolkata')).toBe('today, 5:00 AM');
+    expect(approvedByLine('Riya Shah', 'today, 6:45 PM')).toBe(
+      'Approved by Riya Shah · today, 6:45 PM',
     );
   });
 

@@ -275,7 +275,7 @@ describe('R3: the picker chunk fails to load', () => {
     // The markup escapes the apostrophe; the line itself is the fixed copy.
     const line = all(EmojiPickerLoadFailed({ onRetry })).find((e) => e.type === 'p');
     expect(line?.props.children).toBe(EMOJI_LOAD_FAILED);
-    expect(EMOJI_LOAD_FAILED).toBe("Couldn't load emoji");
+    expect(EMOJI_LOAD_FAILED).toBe("Couldn't load emoji. Try again.");
     expect(html).toContain('Try again');
     expect(html).toMatch(/h-11[^"]*min-w-\[44px\]|min-w-\[44px\][^"]*h-11/);
     expect(html).not.toContain('chunk');

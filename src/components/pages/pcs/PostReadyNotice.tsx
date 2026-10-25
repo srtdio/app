@@ -9,8 +9,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
-import { formatAgo } from '@/lib/display-date';
-import { errorText } from '@/lib/error-copy';
+import { formatRelative } from '@/lib/time';
+import { REASON_COPY, errorText } from '@/lib/error-copy';
 import { supabase } from '@/lib/supabase';
 import { personName, resolvePeople } from '@/lib/people-names';
 import { useNewTrace } from '@/lib/trace-context';
@@ -91,9 +91,9 @@ export function notifyErrorMessage(message: string): string {
     case 'checkpoints_open':
       return 'Some checkpoints are still open. Resolve them all first.';
     case 'forbidden_role':
-      return 'Only creators can send this.';
+      return errorText('notify the approvers', 'forbidden_role');
     case 'invalid_stage':
-      return "This post isn't in review anymore.";
+      return `Couldn't notify the approvers. ${REASON_COPY.stale}`;
     default:
       return errorText('notify the approvers', message);
   }
@@ -213,7 +213,7 @@ export function PostReadyNotice({
         <div className="flex flex-col gap-1">
           <p className="text-base font-medium text-fg">{view.headline}</p>
           <p className="text-sm tabular-nums text-fg-3">
-            {formatAgo(view.latest.sent_at, new Date())}
+            {formatRelative(view.latest.sent_at)}
             {' · '}
             {checkpointCountLabel(view.latest.checkpoint_count)}
             {view.latest.sent_by !== null && resolveName(profiles, view.latest.sent_by) !== null
@@ -224,7 +224,7 @@ export function PostReadyNotice({
             <ul className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
               {view.earlier.map((notif) => (
                 <li key={notif.id} className="text-sm tabular-nums text-fg-3">
-                  {formatAgo(notif.sent_at, new Date())}
+                  {formatRelative(notif.sent_at)}
                   {' · '}
                   {checkpointCountLabel(notif.checkpoint_count)}
                 </li>

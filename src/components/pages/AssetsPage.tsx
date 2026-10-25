@@ -3,6 +3,7 @@ import { appPresignCache } from '@/lib/shared-presign';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ICON_SIZE, IconAssets, IconUpload } from '@/components/ui/icons';
@@ -468,11 +469,11 @@ export function AssetsPage() {
         return { ok: false, message: "Couldn't upload. Try again." };
       }
       if (workspaceId === null) {
-        return { ok: false, message: 'No workspace selected.' };
+        return { ok: false, message: "Couldn't upload. Try again." };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
+        return { ok: false, message: "Couldn't upload. Try again." };
       }
       return uploadAssetFile(file, {
         endpoint: uploadEndpoint,
@@ -499,11 +500,11 @@ export function AssetsPage() {
         return { ok: false, message: "Couldn't add the link. Try again." };
       }
       if (workspaceId === null) {
-        return { ok: false, message: 'No workspace selected.' };
+        return { ok: false, message: "Couldn't add the link. Try again." };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
+        return { ok: false, message: "Couldn't add the link. Try again." };
       }
       return addAssetLink({
         endpoint: uploadEndpoint,
@@ -525,15 +526,15 @@ export function AssetsPage() {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
         return {
           ok: false,
-          message: "Couldn't rename this asset. Try again.",
+          message: "Couldn't rename this file. Try again.",
         };
       }
       if (workspaceId === null) {
-        return { ok: false, message: 'No workspace selected.' };
+        return { ok: false, message: "Couldn't rename this file. Try again." };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: 'Your session expired. Sign in again.' };
+        return { ok: false, message: "Couldn't rename this file. Try again." };
       }
       const outcome = await renameAsset({
         endpoint: uploadEndpoint,
@@ -649,8 +650,7 @@ export function AssetsPage() {
         ) : tab === 'all' && liveItems.length === 0 ? (
           <EmptyState
             icon={<IconAssets size={ICON_SIZE.status} />}
-            title="No assets yet"
-            description="Upload photos, videos, PDFs and docs, or add a link. Files used in posts and briefs show up here too."
+            title="Files show up here."
             action={
               <Button variant="primary" onClick={() => setUploadOpen(true)}>
                 <IconUpload size={ICON_SIZE.inline} />
@@ -660,12 +660,14 @@ export function AssetsPage() {
           />
         ) : visible.length === 0 ? (
           searching ? (
-            <div className="px-4 md:px-6 py-12 text-center">
-              <p className="text-lg font-semibold text-fg">
-                No assets match &quot;{search.trim()}&quot;
-              </p>
-              <p className="mt-1 text-base text-fg-2">Try a different name or clear the search.</p>
-            </div>
+            <NoResults
+              query={search}
+              filtersActive={tab !== 'all'}
+              onClear={() => {
+                setSearch('');
+                setTab('all');
+              }}
+            />
           ) : tab !== 'all' ? (
             <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-base text-fg-2">
               {TAB_EMPTY[tab]}

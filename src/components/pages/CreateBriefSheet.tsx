@@ -18,7 +18,8 @@ import { useNewTrace } from '@/lib/trace-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import { briefCreate, type Client, type Result } from '@srtdio/rpc';
-import { FORMATS_BY_PLATFORM, formatLabel, type PostPlatform } from '@srtdio/posts';
+import { FORMATS_BY_PLATFORM, type PostPlatform } from '@srtdio/posts';
+import { postFormatLabel } from '@/lib/post-format';
 import { createComment, type CreateCommentInput, type CommentResult } from '@srtdio/comments';
 import type { Json } from '@srtdio/schemas';
 
@@ -53,7 +54,7 @@ export function briefFormatOptions(platform: PostPlatform | null): SelectOption[
   return [
     { value: FORMAT_ANY, label: 'Any' },
     ...(platform !== null
-      ? briefFormatsFor(platform).map((value) => ({ value, label: formatLabel(platform, value) }))
+      ? briefFormatsFor(platform).map((value) => ({ value, label: postFormatLabel(value, platform) }))
       : []),
   ];
 }

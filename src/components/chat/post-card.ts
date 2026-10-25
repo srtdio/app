@@ -6,7 +6,7 @@
 // footer wording, media pills and refetch triggers are decided here too.
 
 import type { PostCardRow } from '../../../packages/posts/src/reads';
-import { formatClockTime, formatShortDate } from '@/lib/chat/time-format';
+import { formatDate, formatDateTime } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 import { entityUrlPath } from '@/lib/entityRef';
@@ -124,12 +124,6 @@ export interface CardFooter {
   check: boolean;
 }
 
-/** "Oct 2 2:05 pm" (device hour cycle, workspace zone), or '' for an unparseable instant. */
-function dateTime(iso: string, timeZone: string): string {
-  const date = formatShortDate(iso, timeZone);
-  return date === '' ? '' : `${date} ${formatClockTime(iso, timeZone)}`;
-}
-
 /**
  * The footer for a card, by stage and the viewer's side. Approved names the
  * approver (first name, plus "on behalf of client" when agency-side; pass it
@@ -142,20 +136,21 @@ export function cardFooter(
   post: Pick<PostCardRow, 'stage' | 'approved_at' | 'stage_entered_at'>,
   approverName: string | null,
   side: ViewerSide,
-  timeZone: string,
+  /** For tests; the app passes none (the viewer's device zone). */
+  timeZone?: string,
 ): CardFooter {
   const plain = { action: 'Open', accent: false, check: false } as const;
   switch (post.stage) {
     case 'approved': {
       if (approverName !== null && post.approved_at !== null) {
-        const at = dateTime(post.approved_at, timeZone);
+        const at = formatDateTime(post.approved_at, undefined, timeZone);
         return {
           ...plain,
           check: true,
           state: at === '' ? `Approved by ${approverName}` : `Approved by ${approverName} · ${at}`,
         };
       }
-      const on = formatShortDate(post.stage_entered_at, timeZone);
+      const on = formatDate(post.stage_entered_at, undefined, timeZone);
       return { ...plain, check: true, state: on === '' ? 'Approved' : `Approved · ${on}` };
     }
     case 'review':

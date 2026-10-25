@@ -379,7 +379,7 @@ test.describe('search basics on a laptop @desktop', () => {
     const dialog = page.getByRole('dialog', { name: 'Command palette' });
 
     // Typing in another text field: the shortcut does nothing.
-    const other = page.getByRole('searchbox', { name: 'Search conversations' });
+    const other = page.getByRole('searchbox', { name: 'Search chats' });
     await other.focus();
     await page.keyboard.press(`${mod}+k`);
     await expect(dialog).toHaveCount(0);

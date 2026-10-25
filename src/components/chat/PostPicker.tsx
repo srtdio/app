@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
@@ -75,7 +76,7 @@ import {
   type BriefFilter,
   type BriefPickerRow,
 } from '@/lib/chat/briefs';
-import { formatShortDate, formatShortDateOnly, workspaceTimeZone } from '@/lib/chat/time-format';
+import { formatDate } from '@/lib/time';
 import {
   PICKER_PAGE_SIZE,
   buildPickerSections,
@@ -142,10 +143,10 @@ export interface PickerSectionsData {
 }
 
 /** The picker's error line when a posts read fails; the raw text is only logged. */
-export const POSTS_LOAD_FAILED = "Couldn't load posts, try again";
+export const POSTS_LOAD_FAILED = "Couldn't load posts. Try again.";
 
 /** The picker's error line when the briefs read fails; the raw text is only logged. */
-export const BRIEFS_LOAD_FAILED = "Couldn't load briefs, try again";
+export const BRIEFS_LOAD_FAILED = "Couldn't load briefs. Try again.";
 
 /** The briefs tab's error line for a read: fixed copy on failure (raw text logged), else null. */
 export function briefsLoadError(
@@ -415,8 +416,7 @@ export async function warmPostPicker(params: {
 }
 
 export function PostPicker(props: PostPickerProps): ReactElement {
-  const { workspaceId, workspaceKey, workspaces } = useWorkspace();
-  const timeZone = workspaceTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
+  const { workspaceId, workspaceKey } = useWorkspace();
   const sheetMode = props.mode ?? 'posts';
   const mode: PickerMode = props.inline === true ? 'inline' : sheetMode;
   const reads = pickerReads(mode);
@@ -593,7 +593,6 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   const rowProps: PostRowContext = {
     selected: props.selected,
     onToggle: props.onToggle,
-    timeZone,
     sharedPostIds: props.sharedPostIds,
     excludePostIds: props.excludePostIds,
   };
@@ -659,6 +658,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
         query={trimmed}
         loadingMore={search.loadingMore}
         onLoadMore={loadMore}
+        {...(props.query === undefined ? { onClearSearch: () => setQuery('') } : {})}
         {...listProps}
       />
     );
@@ -691,7 +691,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={mode === 'briefs' ? 'Search all briefs' : 'Search by word or number'}
+              placeholder={mode === 'briefs' ? 'Search briefs' : 'Search posts'}
               className="pl-9"
             />
           </div>
@@ -719,7 +719,12 @@ export function PostPicker(props: PostPickerProps): ReactElement {
               error={briefError}
               selected={props.selectedBriefs}
               onToggle={props.onToggleBrief}
-              timeZone={timeZone}
+              query={trimmed}
+              filtersActive={briefFilter !== DEFAULT_BRIEF_FILTER}
+              onClear={() => {
+                setQuery('');
+                setBriefFilter(DEFAULT_BRIEF_FILTER);
+              }}
             />
           </>
         )}
@@ -753,7 +758,8 @@ export function InlinePickerPanel(props: {
 export interface PostRowContext {
   selected: readonly PostCardFields[];
   onToggle: (post: PostCardFields) => void;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   sharedPostIds?: ReadonlySet<string> | undefined;
   /** Post ids whose rows are not rendered (already in the plan being added to). */
   excludePostIds?: ReadonlySet<string> | undefined;
@@ -830,41 +836,41 @@ export function PostSectionsView(
   );
 }
 
-/** The empty default view's copy per mode. */
-export function sectionsEmptyCopy(mode: PickerMode): { title: string; description: string } {
-  if (mode === 'drafts') return { title: 'No drafts yet', description: 'No post is in draft.' };
-  if (mode === 'inline') {
-    return { title: 'No posts yet', description: 'Nothing is waiting or recently approved.' };
-  }
-  return {
-    title: 'No posts yet',
-    description: 'Nothing is waiting, approved, parked or rejected.',
-  };
+/** The empty default view's one line per mode. */
+export function sectionsEmptyCopy(mode: PickerMode): { title: string } {
+  if (mode === 'drafts') return { title: 'Drafts show up here.' };
+  if (mode === 'inline') return { title: 'Posts in review and recently approved show up here.' };
+  return { title: 'Posts show up here.' };
 }
 
-/** The search no-match heading, naming the trimmed query. */
+/** The search no-match line, naming the trimmed query (the NoResults copy). */
 export function searchEmptyTitle(query: string): string {
-  return `Nothing called "${query.trim()}". Try another word.`;
+  return noResultsCopy(query, false).title;
 }
 
-/** The briefs tab's empty line under a filter with no match. */
-export const BRIEFS_EMPTY_COPY = 'No briefs fit this filter yet.';
+/** The briefs tab's empty line when no search or filter is narrowing it. */
+export const BRIEFS_EMPTY_COPY = 'Briefs show up here.';
 
 /** Search results: "<N> matches", the rows, and a "Load 50 more" row while more remain. */
 export function SearchResultsView(
   props: PostRowContext & {
     rows: PostPickerPageRow[];
     count: number;
-    /** The search text; the no-match heading names it. */
+    /** The search text; the no-match line names it. */
     query: string;
     loadingMore: boolean;
     onLoadMore: () => void;
+    /** Clears the search box; absent (inline, the composer owns the text) shows the line alone. */
+    onClearSearch?: () => void;
   },
 ): ReactElement {
   if (props.rows.length === 0) {
-    return (
+    return props.onClearSearch !== undefined ? (
+      <NoResults query={props.query} filtersActive={false} onClear={props.onClearSearch} />
+    ) : (
       <EmptyState
-        icon={<IconPipeline size={ICON_SIZE.tray} />}
+        compact
+        icon={<IconSearch size={ICON_SIZE.control} />}
         title={searchEmptyTitle(props.query)}
       />
     );
@@ -903,7 +909,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
   const inChat = props.sharedPostIds?.has(post.id) === true;
   const meta = [
     formatLabel(post.format),
-    post.target_date !== null ? formatShortDate(post.target_date, props.timeZone) : '',
+    post.target_date !== null ? formatDate(post.target_date, undefined, props.timeZone) : '',
   ]
     .filter((part) => part !== '')
     .join(' · ');
@@ -947,7 +953,12 @@ export function BriefPickerList(props: {
   error: string | null;
   selected: readonly BriefCardFields[];
   onToggle: (brief: BriefCardFields) => void;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
+  /** The live search text; a search or a non-default filter turns zero rows into NoResults. */
+  query?: string;
+  filtersActive?: boolean;
+  onClear?: () => void;
 }): ReactElement {
   if (props.loading) {
     return listSkeleton('Loading briefs');
@@ -963,19 +974,23 @@ export function BriefPickerList(props: {
     );
   }
   if (props.briefs.length === 0) {
-    return (
-      <EmptyState
-        icon={<IconBriefs size={ICON_SIZE.tray} />}
-        title="No briefs"
-        description={BRIEFS_EMPTY_COPY}
-      />
-    );
+    const narrowed = (props.query ?? '').trim() !== '' || props.filtersActive === true;
+    if (narrowed && props.onClear !== undefined) {
+      return (
+        <NoResults
+          query={props.query ?? ''}
+          filtersActive={props.filtersActive === true}
+          onClear={props.onClear}
+        />
+      );
+    }
+    return <EmptyState icon={<IconBriefs size={ICON_SIZE.tray} />} title={BRIEFS_EMPTY_COPY} />;
   }
   return (
     <ul className={LIST_CLASS}>
       {props.briefs.map((brief) => {
         const active = isBriefSelected(props.selected, brief.id);
-        const target = brief.targetDate !== null ? formatShortDateOnly(brief.targetDate) : '';
+        const target = brief.targetDate !== null ? formatDate(brief.targetDate) : '';
         return (
           <li key={brief.id}>
             <PressableRow
@@ -1008,7 +1023,7 @@ export function BriefPickerList(props: {
                   ) : null}
                   <span className="flex-1" />
                   <span className="text-sm text-fg-2">
-                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatShortDate(brief.createdAt, props.timeZone)}`}
+                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatDate(brief.createdAt, undefined, props.timeZone)}`}
                   </span>
                 </span>
               </span>

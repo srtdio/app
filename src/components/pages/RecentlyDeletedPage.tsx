@@ -23,7 +23,9 @@ import {
   type DeletedAssetItem,
 } from '@/lib/assets';
 
-const RETRY = 'Something went wrong. Try again.';
+const RESTORE_FAILED = "Couldn't restore the file. Try again.";
+const DELETE_ONE_FAILED = "Couldn't delete the file. Try again.";
+const EMPTY_FAILED = "Couldn't empty Recently deleted. Try again.";
 
 /**
  * What a member who is not the owner reads under the list. It matches
@@ -77,7 +79,7 @@ export function RecentlyDeletedView({
       {failed ? (
         <div className="mt-4">
           <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-base text-bad">
-            Could not load assets.
+            Couldn't load deleted files. Try again.
           </div>
           <div className="mt-3">
             <Button onClick={onRetry}>Retry</Button>
@@ -185,7 +187,7 @@ export function RecentlyDeletedPage() {
       try {
         const result = await restoreAsset(supabase, item.id, newTrace());
         if (!result.ok) {
-          push(RETRY);
+          push(RESTORE_FAILED);
           return;
         }
         setItems((prev) => prev.filter((candidate) => candidate.id !== item.id));
@@ -224,7 +226,7 @@ export function RecentlyDeletedPage() {
     try {
       const ok = await purge(confirm.kind === 'one' ? [confirm.item.id] : undefined);
       if (!ok) {
-        push(RETRY);
+        push(confirm.kind === 'one' ? DELETE_ONE_FAILED : EMPTY_FAILED);
         return;
       }
       push(confirm.kind === 'one' ? 'Deleted for good' : 'Emptied. Space freed.');
@@ -233,7 +235,7 @@ export function RecentlyDeletedPage() {
       logger.warn('recently deleted: purge failed', {
         error: cause instanceof Error ? cause.message : String(cause),
       });
-      push(RETRY);
+      push(confirm.kind === 'one' ? DELETE_ONE_FAILED : EMPTY_FAILED);
     } finally {
       setConfirmBusy(false);
       setConfirm(null);

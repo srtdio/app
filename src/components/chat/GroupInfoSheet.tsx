@@ -60,10 +60,9 @@ export const GROUP_INFO_ADMIN_ONLY =
   "Only the group's creator or an admin can edit this group's info";
 
 /** Group photo failures in plain words (FN23); the raw upload error goes to the logger. */
-export const GROUP_PHOTO_UNAVAILABLE = "Photos can't be added right now. Try again later.";
-export const GROUP_PHOTO_UNREADABLE = "That photo couldn't be opened. Choose another one.";
-export const GROUP_PHOTO_UPLOAD_FAILED =
-  "The photo didn't upload. Check your connection and try again.";
+export const GROUP_PHOTO_UNAVAILABLE = "Couldn't add the photo. Try again.";
+export const GROUP_PHOTO_UNREADABLE = "Couldn't open that photo. Choose another one.";
+export const GROUP_PHOTO_UPLOAD_FAILED = "Couldn't upload the photo. Try again.";
 
 /** FN24: the member list's loading state, three row skeletons (tokens only). */
 export function membersSkeleton(): ReactElement {
@@ -71,17 +70,17 @@ export function membersSkeleton(): ReactElement {
 }
 
 /** Any failure without a sentence of its own. */
-export const GROUP_ACTION_FALLBACK = 'Something went wrong. Try again.';
+export const GROUP_ACTION_FALLBACK = "Couldn't update the group. Try again.";
 
 /** Every group proc refusal the sheet can meet, as the sentence shown. */
 export const GROUP_ACTION_MESSAGES: Readonly<Record<string, string>> = {
   group_name_taken: 'A group with this name already exists',
   group_name_invalid: 'Enter a valid group name',
-  group_not_found: 'This group no longer exists',
+  group_not_found: "Couldn't update the group. It was deleted.",
   member_not_in_workspace: "This person isn't in the workspace",
   group_manage_denied: GROUP_INFO_ADMIN_ONLY,
   group_avatar_invalid: "That photo can't be used. Try another",
-  workspace_member_only: 'Only workspace members can do this',
+  workspace_member_only: "Couldn't update the group. You don't have access to do this.",
 };
 
 /** A group action that threw (network, a bug): no code, so it reads the fallback. */
@@ -477,7 +476,7 @@ export interface MembersState {
 }
 
 /** The line when the member list could not be re-read after an add or remove. */
-export const MEMBERS_REFRESH_FAILED = "Couldn't refresh members, try again";
+export const MEMBERS_REFRESH_FAILED = "Couldn't refresh members. Try again.";
 
 /**
  * The member list after a refresh (following an add or remove). A failed

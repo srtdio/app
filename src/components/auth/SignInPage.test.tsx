@@ -21,7 +21,7 @@ describe('signInErrorMessage (W11 fix 6)', () => {
 
   it('never shows the raw provider text', () => {
     expect(signInErrorMessage({ message: 'AuthApiError: boom', httpStatus: 500 })).toBe(
-      'Something went wrong. Try again.',
+      "Couldn't send the link. Try again.",
     );
   });
 });

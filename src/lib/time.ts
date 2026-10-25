@@ -8,6 +8,7 @@
 //   formatDayRange    "19 - 25 Oct"; "28 Oct - 3 Nov"
 //   formatDue         "Due 23 Oct"
 //   formatOverdue     "Overdue · 12 Oct" up to a month late, then "Overdue 5 months"
+//   formatSpokenDate  "Monday, 19 October 2026" (accessible names)
 // Days and clock times are read on the VIEWER's device time zone. A date-only
 // "YYYY-MM-DD" value is read off the string itself so no zone can shift it.
 // 'en-US' parts are re-assembled by type so the output never follows the
@@ -30,6 +31,31 @@ const SHORT_MONTHS = [
   'Oct',
   'Nov',
   'Dec',
+] as const;
+
+const LONG_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+const LONG_WEEKDAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
 ] as const;
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -250,4 +276,13 @@ export function formatOverdue(
   const moreThanMonth = months > 1 || (months === 1 && today.day > civil.day);
   if (!moreThanMonth) return { text: `Overdue · ${dayText(civil, today.year)}`, bad: true };
   return { text: `Overdue ${plural(months, 'month')}`, bad: true };
+}
+
+/** "Monday, 19 October 2026": the full spoken date, for accessible names. '' when unparseable. */
+export function formatSpokenDate(value: DateInput, timeZone?: string): string {
+  const civil = civilOf(value, safeTimeZone(timeZone));
+  if (civil === undefined) return '';
+  const weekday = new Date(Date.UTC(civil.year, civil.month - 1, civil.day)).getUTCDay();
+  const month = LONG_MONTHS[civil.month - 1] ?? '';
+  return `${LONG_WEEKDAYS[weekday] ?? ''}, ${civil.day} ${month} ${civil.year}`;
 }

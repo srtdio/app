@@ -109,8 +109,8 @@ describe('server error', () => {
   });
 
   it('turns raw codes and multi-line errors into one readable line', () => {
-    expect(profileErrorMessage('invalid_payload')).toBe('Could not save your profile. Try again');
-    expect(profileErrorMessage('')).toBe('Could not save your profile. Try again');
+    expect(profileErrorMessage('invalid_payload')).toBe("Couldn't save your profile. Try again.");
+    expect(profileErrorMessage('')).toBe("Couldn't save your profile. Try again.");
     expect(profileErrorMessage('Bad thing\nstack here')).toBe('Bad thing');
   });
 });

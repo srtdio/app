@@ -134,7 +134,7 @@ describe('X6 files read failure', () => {
       "Couldn't load your files.",
     );
     expect(text()).not.toContain('permission denied');
-    expect(text()).not.toContain('No assets yet');
+    expect(text()).not.toContain('Files show up here.');
   });
 });
 

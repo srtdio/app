@@ -97,7 +97,7 @@ export { DATE_FIELD, DATE_FIT } from '@/components/chat/PlanDayPickerSheet';
 export const NEW_PLAN_AUDIENCE = 'team';
 
 /** The empty list's line. */
-export const COMPOSE_NO_ITEMS = 'No items yet. Add a concept, a Pipeline post or a draft.';
+export const COMPOSE_NO_ITEMS = 'Concepts, posts and drafts you add show up here.';
 
 /** The day button while an item needs a day. */
 export const PICK_A_DAY = 'Pick a day';

@@ -192,10 +192,10 @@ describe('ContactSheetView states', () => {
     expect(emptyTitles(view(props({ tab: 'files' })))).toEqual([CONTACT_EMPTY.files]);
     expect(emptyTitles(view(props({ tab: 'links' })))).toEqual([CONTACT_EMPTY.links]);
     expect(CONTACT_EMPTY).toEqual({
-      media: 'No photos yet',
-      files: 'No files yet',
-      links: 'No links yet',
-      starred: 'No starred messages',
+      media: 'Photos in this chat show up here.',
+      files: 'Files in this chat show up here.',
+      links: 'Links in this chat show up here.',
+      starred: 'Starred messages show up here.',
     });
     expect(emptyTitles(view(props({ tab: 'starred' })))).toEqual([CONTACT_EMPTY.starred]);
   });

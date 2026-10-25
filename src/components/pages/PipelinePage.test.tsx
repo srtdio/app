@@ -86,7 +86,7 @@ import type { MovePostDeps, UndoableMoveDeps } from '@/components/pages/Pipeline
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parsePipelineQuery } from '@/components/pages/pipeline/pipeline-query';
 import type { UndoableAction } from '@/lib/use-undoable-action';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults } from '@/components/ui/NoResults';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -594,7 +594,7 @@ describe('every move: flip, "Moved to {Stage}" with Undo, then send', () => {
     });
     runUndoableMove(deps, 'p1', 'review');
     await actions[0]!.commit();
-    expect(failures).toEqual([{ message: "Couldn't move the post. You're offline.", retry: true }]);
+    expect(failures).toEqual([{ message: "Couldn't move the post. Try again.", retry: true }]);
   });
 
   it('a refusal toasts as a failure with no Retry', async () => {
@@ -918,14 +918,14 @@ describe('W4 fix 3: create gating', () => {
 });
 
 describe('W4 fix 4: filtered empty state', () => {
-  it('says "Nothing fits these filters" with a Clear filters button that fires the reset', () => {
+  it('renders the shared NoResults with the search and date filter, wired to the reset', () => {
     const onClear = vi.fn();
-    const tree = filteredEmpty(onClear);
-    const empty = findAll(tree, (el) => el.type === EmptyState)[0]!;
-    const props = empty.props as { title: string; action: ReactElement };
-    expect(props.title).toBe('Nothing fits these filters');
-    expect(texts(props.action)).toContain('Clear filters');
-    (props.action.props as { onClick: () => void }).onClick();
+    const tree = filteredEmpty('launch', true, onClear);
+    const empty = findAll(tree, (el) => el.type === NoResults)[0]!;
+    const props = empty.props as { query: string; filtersActive: boolean; onClear: () => void };
+    expect(props.query).toBe('launch');
+    expect(props.filtersActive).toBe(true);
+    props.onClear();
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 });

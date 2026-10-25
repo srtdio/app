@@ -78,6 +78,7 @@ import { readPendingReminders, type ReminderRow } from '@/lib/chat/reminders';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
+import { civilDay } from '@/lib/time';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -646,7 +647,9 @@ function stagePhrase(toStage: string | null, ref: string | null): string {
     case 'review':
       return `sent${at} for review`;
     default:
-      return toStage !== null ? `moved${at} to ${toStage}` : `moved${at}`;
+      return toStage !== null
+        ? `moved${at} to ${toStage.charAt(0).toUpperCase()}${toStage.slice(1)}`
+        : `moved${at}`;
   }
 }
 
@@ -779,9 +782,9 @@ export function activityLine(item: ActivityItem): string {
     case BRIEF_REOPENED_EVENT:
       return `${who ?? UNKNOWN_ACTOR} reopened ${target}`;
     case 'asset_uploaded':
-      return who !== null ? `${who} uploaded an asset` : 'New asset uploaded';
+      return who !== null ? `${who} uploaded a file` : 'New file uploaded';
     case 'asset_version_added':
-      return who !== null ? `${who} added an asset version` : 'New asset version';
+      return who !== null ? `${who} added a file version` : 'New file version';
     case 'invite':
       return who !== null ? `${who} invited a new member` : 'New workspace invite';
     case 'checkpoints_added':
@@ -842,9 +845,9 @@ export function shortLine(item: ActivityItem, parts: { name?: boolean } = {}): s
         ? `Created from ${item.fromBriefTitle}`
         : 'Created from a brief';
     case 'asset_uploaded':
-      return 'New asset';
+      return 'New file';
     case 'asset_version_added':
-      return 'New asset version';
+      return 'New file version';
     case 'invite':
       return 'New member invited';
     case 'checkpoints_added':
@@ -1116,7 +1119,7 @@ export const REFRESH_FAILED = "Couldn't refresh. Try again.";
 export const SNOOZE_FAILED = "Couldn't snooze. Try again.";
 
 /** The loading line under the chips. */
-export const LOADING_NOTIFICATIONS = 'Loading notifications';
+export const LOADING_NOTIFICATIONS = 'Loading activity';
 
 /** A bucket header's count: "1 update" / "N updates". Pure. */
 export function updatesLabel(n: number): string {
@@ -1132,7 +1135,7 @@ export const EMPTY_LINES = {
 } as const;
 
 /** The load error: plain copy, never the raw error. */
-export const ACTIVITY_LOAD_FAILED = "Couldn't load activity. Check your connection and try again.";
+export const ACTIVITY_LOAD_FAILED = "Couldn't load activity. Try again.";
 
 /**
  * Whether a chip's Mark all read is the one workspace-wide inbox_mark_all_read
@@ -1211,28 +1214,6 @@ export function unreadCount(items: readonly ActivityItem[], nowMs: number): numb
   );
 }
 
-/**
- * A compact relative-time label. No dependency: just elapsed buckets. Future or
- * unparseable timestamps collapse to "just now".
- */
-export function relativeTime(iso: string, nowMs: number): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return '';
-  const sec = Math.round((nowMs - then) / 1000);
-  if (sec < 45) return 'just now';
-  const min = Math.round(sec / 60);
-  if (min < 60) return `${min}m`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h`;
-  const day = Math.round(hr / 24);
-  if (day < 7) return `${day}d`;
-  const wk = Math.round(day / 7);
-  if (wk < 5) return `${wk}w`;
-  const mo = Math.round(day / 30);
-  if (mo < 12) return `${mo}mo`;
-  return `${Math.round(day / 365)}y`;
-}
-
 export interface DigestBucket {
   key: 'today' | 'yesterday' | 'earlier';
   label: string;
@@ -1272,8 +1253,7 @@ function zonedParts(ms: number, tz: string | null): Record<string, number> {
 
 /** The calendar day of an instant in a timezone, as a sortable "YYYY-MM-DD". Pure. */
 export function zonedDayKey(ms: number, tz: string | null): string {
-  const p = zonedParts(ms, tz);
-  return dayKeyOf(Date.UTC(p.year ?? 1970, (p.month ?? 1) - 1, p.day ?? 1));
+  return civilDay(ms, tz ?? undefined);
 }
 
 function dayKeyOf(utcMidnightMs: number): string {
@@ -2340,7 +2320,7 @@ export async function fetchUpcoming(client: Client, workspaceId: string): Promis
 }
 
 /** Upcoming's empty state, in the bell's words. */
-export const UPCOMING_EMPTY = 'Nothing coming up';
+export const UPCOMING_EMPTY = 'Reminders and scheduled messages show up here.';
 
 /** The confirm before a pending reminder is cancelled, in the bell's words. */
 export const CANCEL_REMINDER_TITLE = 'Cancel this reminder?';

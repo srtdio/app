@@ -140,8 +140,8 @@ describe('MembersList', () => {
     const out = renderToStaticMarkup(
       <MembersList {...listProps({ derived: { ...derived, client: [] } })} />,
     );
-    expect(out).toContain('No approvers yet');
-    expect(out).toContain('Nobody waiting to join yet');
+    expect(out).toContain('Approvers show up here.');
+    expect(out).toContain('People you invite show up here.');
   });
 
   it('hides Edit and Cancel for viewers who cannot manage', () => {

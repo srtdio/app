@@ -13,10 +13,12 @@ describe('platformLabel', () => {
 
 describe('formatLabel', () => {
   it('maps known formats', () => {
-    expect(formatLabel('single_image')).toBe('Single Image');
+    expect(formatLabel('single_image')).toBe('Single image');
+    expect(formatLabel('single_image', 'x')).toBe('Image');
+    expect(formatLabel('reel')).toBe('Reel');
   });
-  it('title-cases an unknown value', () => {
-    expect(formatLabel('photo_grid')).toBe('Photo Grid');
+  it('sentence-cases an unknown value', () => {
+    expect(formatLabel('photo_grid')).toBe('Photo grid');
   });
 });
 

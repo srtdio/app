@@ -17,7 +17,6 @@ import {
   type SearchPageFetch,
   type SearchResult,
 } from '@/lib/chat/search';
-import { formatClockTime } from '@/lib/chat/time-format';
 
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -265,9 +264,7 @@ describe('searchDateLabel', () => {
   const tz = 'UTC';
   const now = Date.parse('2026-10-03T15:00:00Z'); // a Saturday
   it('today is the time', () => {
-    expect(searchDateLabel('2026-10-03T09:05:00Z', now, tz)).toBe(
-      formatClockTime('2026-10-03T09:05:00Z', tz),
-    );
+    expect(searchDateLabel('2026-10-03T09:05:00Z', now, tz)).toBe('9:05 AM');
   });
   it('yesterday is "Yesterday"', () => {
     expect(searchDateLabel('2026-10-02T23:00:00Z', now, tz)).toBe('Yesterday');
@@ -313,7 +310,7 @@ describe('in-chat counter and arrows', () => {
   it('reads "N of M", "+" while more pages exist', () => {
     expect(searchCounterText(0, 4, false)).toBe('1 of 4');
     expect(searchCounterText(2, 30, true)).toBe('3 of 30+');
-    expect(searchCounterText(0, 0, false)).toBe('Not in this chat');
+    expect(searchCounterText(0, 0, false)).toBe('0 of 0');
   });
 });
 

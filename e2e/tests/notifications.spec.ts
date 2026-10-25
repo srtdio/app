@@ -144,12 +144,12 @@ test(
     await expect(button).toHaveCount(1);
     expectMinTouchTarget(await button.boundingBox());
     await expect(button).toHaveText('3');
-    await expect(button).toHaveAttribute('aria-label', 'Notifications, 3 unread');
+    await expect(button).toHaveAttribute('aria-label', 'Activity, 3 unread');
     await expect(page.locator('[data-bell-button]')).toHaveCount(0);
 
     await button.click();
     await expect(page).toHaveURL(/\/notifications$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Activity' })).toBeVisible();
     await expect(button).toHaveAttribute('aria-current', 'page');
 
     // All: the chat mention, the plan alert and the failed send, as cards.
@@ -404,7 +404,7 @@ test('Upcoming: a pending reminder and a scheduled message, soonest first; never
   const button = page.locator('header [data-notifications-button]');
   await button.waitFor({ state: 'visible', timeout: 15_000 });
   // Neither is an inbox row: the badge counts only the fixture's one chat mention.
-  await expect(button).toHaveAttribute('aria-label', 'Notifications, 1 unread');
+  await expect(button).toHaveAttribute('aria-label', 'Activity, 1 unread');
 
   await page.getByRole('button', { name: 'Upcoming', exact: true }).click();
   const rows = page.locator('[data-upcoming-row]');
@@ -550,7 +550,7 @@ test('Notifications: every button is 44 tall with an 8px radius or round', async
   const network = await installHarnessNetwork(page);
   seedAlerts(network.world);
   await page.goto('/notifications');
-  await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible({
+  await expect(page.getByRole('heading', { level: 1, name: 'Activity' })).toBeVisible({
     timeout: 15_000,
   });
   await expect(card(page, 'scheduled_failed')).toBeVisible();
@@ -575,7 +575,7 @@ test(
         return { size: s.fontSize, weight: s.fontWeight, transform: s.textTransform };
       });
 
-    const header = page.getByRole('heading', { level: 1, name: 'Notifications' });
+    const header = page.getByRole('heading', { level: 1, name: 'Activity' });
     await expect(header).toBeVisible({ timeout: 15_000 });
     const headerType = await typeOf(header);
     expect(headerType.size).toBe('15px');

@@ -201,7 +201,7 @@ function AppLayoutBody() {
       setFlow({
         ...flow,
         finishing: null,
-        finishError: "We couldn't open your workspace. Check your connection and try again.",
+        finishError: "Couldn't open your workspace. Try again.",
       });
       return;
     }
@@ -282,8 +282,8 @@ function AppLayoutBody() {
       <div className="grid h-full w-full place-items-center bg-bg px-6">
         <EmptyState
           icon={<IconPipeline />}
-          title="We couldn't load your workspaces"
-          description="Check your connection, then reload the page."
+          title="Couldn't load your workspaces. Try again."
+          description="Reload the page."
         />
       </div>
     );

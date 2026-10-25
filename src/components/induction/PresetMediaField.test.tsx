@@ -190,7 +190,7 @@ describe('PresetMediaField', () => {
   it('never reads 100% before the server answers', () => {
     expect(sendingPercent(1)).toBe(90);
     expect(uploadLine(90, false)).toBe('Almost done, saving your photo');
-    expect(uploadLine(10, true)).toBe('The connection dropped. Trying again, 10%');
+    expect(uploadLine(10, true)).toBe('Uploading again, 10%');
   });
 
   it('regression: an Instagram Reel with no media shows the empty 9:16 frame as the upload target', async () => {

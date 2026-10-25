@@ -79,7 +79,7 @@ export interface MoveSheetProps {
  */
 export function MoveSheet(props: MoveSheetProps): ReactElement | null {
   const { onMove, busy = false } = props;
-  const { workspaces, workspaceId, workspaceName } = useWorkspace();
+  const { workspaceId, workspaceName } = useWorkspace();
   const approvers = useWorkspaceApprovers(workspaceId);
   const { gate, state } = useApproveGate(onMove);
   const postId = props.post?.id ?? null;
@@ -92,13 +92,12 @@ export function MoveSheet(props: MoveSheetProps): ReactElement | null {
   useEffect(() => {
     if (!busy) gate.settle();
   }, [gate, busy]);
-  const timeZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? 'UTC';
   return (
     <MoveSheetView
       {...props}
       gate={gate}
       gateState={state}
-      targetDate={props.post !== null ? approveTargetDate(props.post.target_date, timeZone) : ''}
+      targetDate={props.post !== null ? approveTargetDate(props.post.target_date) : ''}
       brand={workspaceName}
       approvers={approvers}
     />

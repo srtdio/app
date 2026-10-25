@@ -236,7 +236,7 @@ describe('ChatInfoTabsView preview', () => {
     expect(previewOf([1, 2, 3, 4], true, null)).toEqual({ shown: [1, 2, 3, 4], seeAll: false });
   });
 
-  it('empty preview with an older page: "Nothing recent" then See all, per tab', () => {
+  it('empty preview with an older page: "Recent items show up here." then See all, per tab', () => {
     const cases: Array<Partial<ChatInfoTabsViewProps>> = [
       { tab: 'media', attachments: feed<ChannelAttachmentItem>([], true) },
       { tab: 'files', attachments: feed<ChannelAttachmentItem>([], true) },

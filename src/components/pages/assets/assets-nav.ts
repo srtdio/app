@@ -2,7 +2,7 @@
 // selection. React-free so each rule is unit-tested without a DOM.
 
 /** The library's name, everywhere it is shown (upload copy). */
-export const ROOT_LABEL = 'All assets';
+export const ROOT_LABEL = 'All files';
 
 /** The search param that opens one asset in the viewer (the existing email deep link). */
 export const ASSET_PARAM = 'asset';

@@ -4,6 +4,7 @@ import { PageHead } from '@/components/shell/PageHead';
 import { Chip } from '@/components/ui/Chip';
 import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
+import { NoResults } from '@/components/ui/NoResults';
 
 const CATEGORIES = [
   'All topics',
@@ -58,7 +59,7 @@ const ARTICLES: HelpArticle[] = [
     category: 'Posts & approvals',
     title: 'How do I create or update a post?',
     content:
-      'Creators can start a post from the Create menu. Add the post details and any relevant assets, then move it to review when it is ready for the approvers. Changes to a post are kept as versions so the team can follow its history.',
+      'Creators can start a post from the Create menu. Add the post details and any relevant files, then move it to review when it is ready for the approvers. Changes to a post are kept as versions so the team can follow its history.',
   },
   {
     id: 'post-stages',
@@ -84,23 +85,23 @@ const ARTICLES: HelpArticle[] = [
   {
     id: 'upload-assets',
     category: 'Assets',
-    title: 'Where can I find and upload assets?',
+    title: 'Where can I find and upload files?',
     content:
-      'Open Assets to browse the workspace library or add a file. You can also reach assets while working on a post or brief. If an upload does not complete, try again; if it keeps failing, share the page and any error message with your team in Chat.',
+      'Open Assets to browse the workspace library or add a file. You can also reach files while working on a post or brief. If an upload does not complete, try again; if it keeps failing, share the page and any error message with your team in Chat.',
   },
   {
     id: 'asset-versions',
     category: 'Assets',
-    title: 'Why do assets have versions?',
+    title: 'Why do files have versions?',
     content:
-      'Uploading an updated file creates a new asset version instead of replacing the old one. Existing post and brief attachments stay connected to the specific version they used, so earlier work remains intact.',
+      'Uploading an updated file creates a new version instead of replacing the old one. Existing post and brief attachments stay connected to the specific version they used, so earlier work remains intact.',
   },
   {
     id: 'roles',
     category: 'Roles & access',
     title: 'What can creators and approvers see?',
     content:
-      'Creators can use the workspace sections available to their role; admin settings are limited to workspace admins. Approvers can see posts outside Draft, their own briefs, assets, and Activity events that involve them. Your role determines which actions are available.',
+      'Creators can use the workspace sections available to their role; admin settings are limited to workspace admins. Approvers can see posts outside Draft, their own briefs, files, and Activity events that involve them. Your role determines which actions are available.',
   },
   {
     id: 'missing-content',
@@ -162,18 +163,18 @@ export function HelpPage() {
           <p className="text-base font-medium text-accent">Sorted Help Center</p>
           <h2 className="mt-2 text-lg font-semibold">Find your way through the workflow</h2>
           <p className="mt-2 max-w-2xl text-base leading-6 text-fg-2">
-            Quick answers about pipeline, briefs, posts, approvals, assets, and chat with your team.
+            Quick answers about pipeline, briefs, posts, approvals, files, and chat with your team.
           </p>
           <div className="mt-5 max-w-xl">
             <label htmlFor="help-search" className="sr-only">
-              Search help articles
+              Search help
             </label>
             <Input
               id="help-search"
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search help articles"
+              placeholder="Search help"
             />
           </div>
           <nav aria-label="Helpful sections" className="mt-5 flex flex-wrap gap-2">
@@ -237,12 +238,14 @@ export function HelpPage() {
               ))}
             </div>
           ) : (
-            <div className="mt-2 rounded-xl border border-border bg-panel px-4 py-8 text-center">
-              <p className="text-lg font-semibold">No help articles like that</p>
-              <p className="mt-1 text-base text-fg-2">
-                Try another search or choose a different topic.
-              </p>
-            </div>
+            <NoResults
+              query={query}
+              filtersActive={category !== 'All topics'}
+              onClear={() => {
+                setQuery('');
+                setCategory('All topics');
+              }}
+            />
           )}
         </section>
       </div>

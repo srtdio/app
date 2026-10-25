@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { ICON_SIZE, IconBriefs, IconLock } from '@/components/ui/icons';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Thumbnail } from '@/components/media';
-import { formatDue } from '@/lib/display-date';
+import { formatDue } from '@/lib/time';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
@@ -62,7 +62,7 @@ export function briefCardLink(brief: BriefWithThumbnail): ExternalLink | null {
  * off the date-only string itself so no zone can shift the day.
  */
 export function briefDueLabel(targetDate: string, now: Date = new Date()): string {
-  return formatDue(targetDate, 'UTC', now);
+  return formatDue(targetDate, now);
 }
 
 interface BriefCardProps {

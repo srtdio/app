@@ -274,9 +274,9 @@ describe('the week card', () => {
 
   it('shows the post stage as stored, or No post yet', () => {
     const b = bundle(p, [c, post], { postStages: { p9: 'review' } });
-    expect(postStageLine(b, post)).toBe('Post: review');
+    expect(postStageLine(b, post)).toBe('Post: In review');
     expect(postStageLine(b, c)).toBe('No post yet');
-    expect(postStageLine(b, item({ id: 'dr', kind: 'post', draft_row: true }))).toBe('Post: draft');
+    expect(postStageLine(b, item({ id: 'dr', kind: 'post', draft_row: true }))).toBe('Post: Draft');
   });
 });
 

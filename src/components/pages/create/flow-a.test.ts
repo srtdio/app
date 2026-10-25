@@ -174,8 +174,8 @@ describe('Post flow A helpers', () => {
         { error: 'y', file },
       ]),
     ).toBe(2);
-    expect(failedFilesLine(1)).toBe("1 file didn't upload.");
-    expect(failedFilesLine(3)).toBe("3 files didn't upload.");
+    expect(failedFilesLine(1)).toBe("Couldn't upload 1 file. Try again.");
+    expect(failedFilesLine(3)).toBe("Couldn't upload 3 files. Try again.");
   });
 
   it('fix 15: caption limits, Indian digit grouping and the over-limit flag', () => {

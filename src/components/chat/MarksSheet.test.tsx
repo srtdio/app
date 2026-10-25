@@ -159,13 +159,13 @@ describe('MarkSheetRow (History)', () => {
 });
 
 describe('confirmMarkTransition', () => {
-  it('runs the matching handler and toasts "Could not update" on failure', async () => {
+  it('runs the matching handler and toasts "Couldn\'t update. Try again." on failure', async () => {
     const onResolve = vi.fn(() => Promise.resolve({ ok: false as const, message: 'boom' }));
     const onReopen = vi.fn(() => Promise.resolve({ ok: true as const }));
     const toast = { show: vi.fn() };
     await confirmMarkTransition({ action: 'resolve', messageId: 'm1', onResolve, onReopen, toast });
     expect(onResolve).toHaveBeenCalledWith('m1');
-    expect(toast.show).toHaveBeenCalledWith({ title: 'Could not update' });
+    expect(toast.show).toHaveBeenCalledWith({ title: "Couldn't update. Try again." });
 
     toast.show.mockClear();
     await confirmMarkTransition({ action: 'reopen', messageId: 'm2', onResolve, onReopen, toast });
@@ -321,7 +321,7 @@ describe('Open tab posts section', () => {
 describe('marks section body (B3)', () => {
   it('posts listed and no open mark: the muted No open marks line, not the empty state', () => {
     expect(marksListBody('open', 0, 2)).toBe('no-open-marks');
-    expect(NO_OPEN_MARKS).toBe('No open marks');
+    expect(NO_OPEN_MARKS).toBe('Open marks show up here.');
   });
 
   it('both empty keeps the EmptyState; rows win; History ignores posts', () => {

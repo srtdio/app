@@ -29,6 +29,12 @@ export const PLAN_ITEM_LEGEND = "Plan item, in its plan's colour";
 export const LOOSE_POST_LEGEND = 'Post not in a plan';
 export const NO_POST_YET = 'No post yet';
 
+/** A stage as a status line says it: "In review", else the capitalised stage. Pure. */
+export function stageStatusWord(stage: string): string {
+  if (stage === 'review') return 'In review';
+  return stage.charAt(0).toUpperCase() + stage.slice(1);
+}
+
 // ---------------------------------------------------------------------------
 // Colours: colour = which plan
 // ---------------------------------------------------------------------------
@@ -403,14 +409,15 @@ export function planPill(
 }
 
 /**
- * The card's post line: "Post: <stage as stored>" for a post item (a draft
- * row reads "draft"), "No post yet" for a concept or an unreadable post. Pure.
+ * The card's post line: "Post: <stage status word>" ("Post: In review",
+ * "Post: Draft") for a post item (a draft row reads "Draft"), "No post yet"
+ * for a concept or an unreadable post. Pure.
  */
 export function postStageLine(bundle: Pick<PlanBundle, 'postStages'>, item: PlanItemRow): string {
   if (item.kind !== 'post') return NO_POST_YET;
-  if (item.draft_row === true) return 'Post: draft';
+  if (item.draft_row === true) return 'Post: Draft';
   const stage = item.post_id !== null ? bundle.postStages[item.post_id] : undefined;
-  return stage !== undefined ? `Post: ${stage}` : NO_POST_YET;
+  return stage !== undefined ? `Post: ${stageStatusWord(stage)}` : NO_POST_YET;
 }
 
 // ---------------------------------------------------------------------------

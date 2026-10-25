@@ -291,7 +291,7 @@ describe('delete workspace', () => {
     await type('Acme');
     await act(async () => button('Delete permanently')!.click());
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(
-      'Only the owner can delete this workspace.',
+      "Couldn't delete. You don't have access to do this.",
     );
     expect(button('Delete permanently')!.disabled).toBe(false);
     expect(mockDeleted).not.toHaveBeenCalled();

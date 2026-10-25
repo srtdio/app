@@ -241,7 +241,7 @@ describe('forward picker', () => {
     expect(sendToLabel(0)).toBe('Send to 0 chats');
     expect(sendToLabel(1)).toBe('Send to 1 chat');
     expect(sendToLabel(3)).toBe('Send to 3 chats');
-    expect(forwardFailedMessage('Design')).toBe('Could not forward to Design.');
+    expect(forwardFailedMessage('Design')).toBe("Couldn't forward to Design. Try again.");
   });
 });
 

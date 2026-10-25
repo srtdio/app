@@ -146,9 +146,7 @@ describe('W8 fix 5: Mark all read applies to the active chip only', () => {
 
 describe('W8 fix 6: the load error is plain copy, never raw error text', () => {
   it('is a fixed sentence with no em-dash', () => {
-    expect(ACTIVITY_LOAD_FAILED).toBe(
-      "Couldn't load activity. Check your connection and try again.",
-    );
+    expect(ACTIVITY_LOAD_FAILED).toBe("Couldn't load activity. Try again.");
     expect(ACTIVITY_LOAD_FAILED).not.toContain('—');
   });
 });

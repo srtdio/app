@@ -88,7 +88,7 @@ import {
   type PlanSegment,
   type StatusKey,
 } from '@/lib/chat/status-bar';
-import { formatClockTime } from '@/lib/chat/time-format';
+import { formatChatTime } from '@/lib/time';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
@@ -115,7 +115,8 @@ export interface StatusDrawerData {
   /** The sections to show, in the bar's order (its non-zero items). */
   keys: readonly StatusKey[];
   side: ViewerSide;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   /** The workspace's current shared plans, ending soonest first (the bar's set). */
   plans: readonly PlanBundle[];
   posts: { heading: string; rows: readonly OpenPostRow[]; count: number };
@@ -571,7 +572,7 @@ export function StatusDrawerList(
             String(props.posts.count),
             <>
               {shown.map((post) => {
-                const lines = openPostLines(post, false, props.timeZone);
+                const lines = openPostLines(post, false);
                 const busy = props.busyPostId === post.id;
                 return (
                   <PressableRow
@@ -583,7 +584,7 @@ export function StatusDrawerList(
                     // Waiting on its read: pressed tint and a pulsing chevron, same box.
                     className={cn(ROW, busy && 'bg-panel-2')}
                   >
-                    <span className={DATE_COL}>{drawerDay(post.target_date, props.timeZone)}</span>
+                    <span className={DATE_COL}>{drawerDay(post.target_date)}</span>
                     <PostCover cover={covers(post.id)} />
                     <span className="min-w-0 flex-1">
                       <span className={ROW_TITLE}>{lines.title}</span>
@@ -615,7 +616,7 @@ export function StatusDrawerList(
                   onClick={() => props.onOpenBrief(brief.id)}
                   className={ROW}
                 >
-                  <span className={DATE_COL}>{drawerDay(brief.created_at, props.timeZone)}</span>
+                  <span className={DATE_COL}>{drawerDay(brief.created_at)}</span>
                   <span className="min-w-0 flex-1">
                     <span className={ROW_TITLE}>{brief.title}</span>
                   </span>
@@ -639,8 +640,8 @@ export function StatusDrawerList(
               const message = messageFor(mark.messageId);
               const when =
                 message !== undefined && message.createdAt !== ''
-                  ? formatClockTime(message.createdAt, props.timeZone)
-                  : formatClockTime(mark.markedAt, props.timeZone);
+                  ? formatChatTime(message.createdAt)
+                  : formatChatTime(mark.markedAt);
               return (
                 <StatusMarkRow
                   key={mark.messageId}
@@ -758,7 +759,8 @@ export function DrawerPostSheet(props: {
   postId: string | null;
   open: boolean;
   side: ViewerSide;
-  timeZone: string;
+  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
+  timeZone?: string | undefined;
   onClose: () => void;
 }): ReactElement | null {
   const { cache, postId } = props;

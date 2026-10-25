@@ -21,7 +21,7 @@ export interface TranscribeParams {
   timeoutMs?: number;
 }
 
-const FAILURE_MESSAGE = 'Could not transcribe the voice note.';
+const FAILURE_MESSAGE = "Couldn't transcribe the voice note. Try again.";
 
 export async function transcribeAudio(params: TranscribeParams): Promise<TranscribeResult> {
   const controller = new AbortController();

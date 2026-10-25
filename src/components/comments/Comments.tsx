@@ -27,8 +27,7 @@ import { MenuPopover } from '@/components/shell/MenuPopover';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { browserTimeZone } from '@/lib/chat/time-format';
-import { formatAgo, formatDateTime } from '@/lib/display-date';
+import { formatDateTime, formatRelative } from '@/lib/time';
 import { UNDO_WINDOW_MS, useUndoableAction } from '@/lib/use-undoable-action';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -188,9 +187,9 @@ export const CHECKPOINTS_TITLE = 'Checkpoints';
 /** The empty-list line: posts read in checkpoints, briefs keep comments. Pure. */
 export function emptyListText(entityType: CommentEntityType, filter: CommentFilter): string {
   if (entityType === 'post') {
-    return filter === 'open' ? 'No open checkpoints' : 'No checkpoints yet';
+    return filter === 'open' ? 'Open checkpoints show up here.' : 'Checkpoints show up here.';
   }
-  return filter === 'open' ? 'No open comments' : 'No comments yet';
+  return filter === 'open' ? 'Open comments show up here.' : 'Comments show up here.';
 }
 
 /**
@@ -297,13 +296,13 @@ export function annotationChip(
   );
 }
 
-// Format a stored timestamp with the app formatter ("23 Oct, 2:14 PM", browser
-// zone: comments carry no workspace zone). Falls back to the raw value if it is
+// Format a stored timestamp with the app formatter ("23 Oct, 2:14 PM", the
+// viewer's clock). Falls back to the raw value if it is
 // somehow unparseable so nothing is silently dropped.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatDateTime(value, browserTimeZone(), new Date());
+  return formatDateTime(value);
 }
 
 // ---------------------------------------------------------------------------
@@ -796,10 +795,10 @@ export function pointActions(
   return base;
 }
 
-/** When an edit happened, via the app formatter: "1 Mar, 2:14 PM" (browser
- *  zone). Unparseable input yields '' so nothing raw is shown. */
+/** When an edit happened, via the app formatter: "1 Mar, 2:14 PM" (the
+ *  viewer's clock). Unparseable input yields '' so nothing raw is shown. */
 export function editedTime(ts: string, now: Date): string {
-  return formatDateTime(ts, browserTimeZone(), now);
+  return formatDateTime(ts, now);
 }
 
 /** The "edited <time>" marker shared by comments and ledger points, or null when
@@ -1852,7 +1851,7 @@ export function Comments({
           </span>
         ) : null}
         <span data-comment-time="" className={ROW_TIME_CLASS}>
-          {formatAgo(comment.created_at, new Date())}
+          {formatRelative(comment.created_at)}
         </span>
         {opts.seq !== null ? (
           <span data-checkpoint-seq="" className="whitespace-nowrap text-sm tabular-nums text-fg-3">

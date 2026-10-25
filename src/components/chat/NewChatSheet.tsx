@@ -32,8 +32,8 @@ interface NewChatSheetProps {
 type Mode = 'choose' | 'dm' | 'group';
 
 /** The sheet's failure lines; the raw error goes to the logger only. */
-export const NEW_DM_FAILED = "Couldn't start the chat, try again";
-export const NEW_GROUP_FAILED = "Couldn't create the group, try again";
+export const NEW_DM_FAILED = "Couldn't start the chat. Try again.";
+export const NEW_GROUP_FAILED = "Couldn't create the group. Try again.";
 
 /** Discard confirm while a group name is typed or anyone is picked (FB3). */
 export const NEW_CHAT_DISCARD = {
@@ -264,7 +264,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
           onToggle={(id) => setPeerId((prev) => (prev === id ? null : id))}
           loading={members.loading}
           error={members.error}
-          emptyLabel="No one else is in this workspace yet."
+          emptyLabel="People in this workspace show up here."
         />
       );
     }
@@ -287,7 +287,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
             onToggle={toggleSelected}
             loading={members.loading}
             error={members.error}
-            emptyLabel="No one else is in this workspace yet."
+            emptyLabel="People in this workspace show up here."
           />
         </div>
       </div>
