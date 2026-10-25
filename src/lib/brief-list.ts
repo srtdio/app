@@ -1,10 +1,15 @@
 // Pure status filter for the Briefs surface. Search and sort are shared via
 // list-sort; this covers the All / Open / Closed chips, the URL state they live
 // in (?status=&q=), and the keyset-paged workspace read the list loads from.
+// The chips' counts are server counts (see brief-counts), never these rows.
 
-import type { Brief, BriefWithThumbnail } from '@srtdio/briefs';
+import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
 import type { Client, Result } from '@srtdio/rpc';
-import type { BriefStatus } from '@/components/pages/BriefCard';
+
+// The same status type BriefCard's BriefStatus is built from. Read off the
+// package here (type only) so this module imports nothing from components and
+// the DB-backed briefs suite can load it without the UI tree.
+type BriefStatus = NonNullable<ListBriefsFilters['status']>;
 
 export type BriefFilter = 'all' | BriefStatus;
 

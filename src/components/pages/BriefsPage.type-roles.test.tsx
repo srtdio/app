@@ -42,6 +42,10 @@ vi.mock('@/lib/brief-list', async (importOriginal) => {
     },
   };
 });
+// Chip counts are server HEAD counts; none are needed for these specs.
+vi.mock('@/lib/brief-counts', () => ({
+  countBriefsByFilter: async () => ({ ok: true, data: { all: 0, open: 0, closed: 0 } }),
+}));
 vi.mock('@/lib/supabase', () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
 }));

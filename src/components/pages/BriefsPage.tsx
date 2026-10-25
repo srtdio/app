@@ -40,6 +40,7 @@ import {
   type BriefFilter,
   type BriefPageNext,
 } from '@/lib/brief-list';
+import { countBriefsByFilter } from '@/lib/brief-counts';
 import {
   groupBriefsByDay,
   groupBriefsByTime,
@@ -63,7 +64,10 @@ interface BriefsHeaderProps {
   onSearchChange: (value: string) => void;
   filter: BriefFilter;
   onFilterChange: (filter: BriefFilter) => void;
-  /** Per-chip brief counts (after the search); a chip shows its count only above 0. */
+  /**
+   * Per-chip brief counts (after the search), read on the server, never from
+   * the loaded page; a chip shows its count only above 0, as plain text.
+   */
   counts?: Partial<Record<BriefFilter, number>>;
   /** Whether the viewer holds brief.create; the "+" shows only then (same gate as Topbar). */
   canCreate: boolean;
@@ -217,6 +221,9 @@ export function deriveSortedBriefs(
 
 const LIST_CLASS = 'px-4 md:px-6 py-4 flex flex-col gap-6';
 const GRID_CLASS = 'pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3';
+
+/** How long the search must sit still before the chip counts are re-read. */
+export const BRIEF_COUNTS_SEARCH_DELAY_MS = 250;
 
 /** The Load more failure toast: "Couldn't {action}. {reason}". */
 export const BRIEFS_LOAD_MORE_FAILED = "Couldn't load more briefs. Try again.";
@@ -453,6 +460,16 @@ export function BriefsPage() {
   // reload (or a workspace switch) never appends onto the fresh list.
   const loadGeneration = useRef(0);
   const [createOpen, setCreateOpen] = useState(false);
+  // The chips' real counts (server HEAD counts, never the loaded rows). Empty
+  // until the first read lands, and after a failed one: a chip then shows its
+  // label alone rather than a wrong number.
+  const [chipCounts, setChipCounts] = useState<Partial<Record<BriefFilter, number>>>({});
+  const countsGeneration = useRef(0);
+  // The search the counts were last read for, so the search effect only
+  // re-reads when the search really moved (a reload reads them itself).
+  const countedSearch = useRef<string | null>(null);
+  const searchRef = useRef(search);
+  searchRef.current = search;
 
   // One presign cache + presignEnabled for the WHOLE list (the wiring fix: the page
   // previously built none, so image thumbnails could never resolve). Built exactly as
@@ -461,12 +478,28 @@ export function BriefsPage() {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
 
+  // Every chip's count for the search, in parallel; only the newest read lands.
+  const loadCounts = useCallback(
+    async (forSearch: string) => {
+      if (workspaceId === null) return;
+      countsGeneration.current += 1;
+      const generation = countsGeneration.current;
+      countedSearch.current = forSearch;
+      const result = await countBriefsByFilter(supabase, workspaceId, forSearch);
+      if (generation !== countsGeneration.current) return;
+      setChipCounts(result.ok ? result.data : {});
+    },
+    [workspaceId],
+  );
+
   // The active workspace's newest briefs, one keyset page read on the server by
   // workspace_id, then grouped and filtered in memory over what is loaded. A
   // failure shows LoadError (never the server's text); Retry runs this same
   // read again. Every reload starts over from the newest page.
   const loadBriefs = useCallback(async () => {
     if (workspaceId === null) return;
+    // The counts reload on every event the list reloads on, alongside it.
+    void loadCounts(searchRef.current);
     loadGeneration.current += 1;
     const generation = loadGeneration.current;
     setLoading(true);
@@ -481,7 +514,7 @@ export function BriefsPage() {
     }
     setBriefs(result.data.items);
     setNext(result.data.next);
-  }, [workspaceId]);
+  }, [workspaceId, loadCounts]);
 
   // The next page, appended with duplicates (by id) dropped. A failure keeps
   // what is loaded and says so in a toast; the button stays for another try.
@@ -504,6 +537,14 @@ export function BriefsPage() {
     void loadBriefs();
   }, [loadBriefs]);
   useWorkspaceDataChanged(() => void loadBriefs());
+
+  // The search is applied to the loaded rows in memory, but the counts are
+  // server reads, so a changed search re-reads them once typing pauses.
+  useEffect(() => {
+    if (workspaceId === null || countedSearch.current === search) return;
+    const timer = window.setTimeout(() => void loadCounts(search), BRIEF_COUNTS_SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [workspaceId, search, loadCounts]);
 
   // The New brief button and the command palette dispatch this event; the sheet
   // lives here so the list can re-fetch on success.
@@ -537,15 +578,6 @@ export function BriefsPage() {
     () => (showSort ? deriveSortedBriefs(workspaceBriefs, filter, search, sort) : []),
     [showSort, workspaceBriefs, filter, search, sort],
   );
-
-  // The chip counts: each filter's briefs after the search.
-  const chipCounts = useMemo(() => {
-    const out: Partial<Record<BriefFilter, number>> = {};
-    for (const item of FILTERS) {
-      out[item.key] = filterByTitle(filterBriefsByStatus(workspaceBriefs, item.key), search).length;
-    }
-    return out;
-  }, [workspaceBriefs, search]);
 
   const shownCount = showSort
     ? sortedBriefs.length
@@ -620,8 +652,8 @@ export function BriefsPage() {
         </div>
       )}
 
-      {/* Older briefs load a page at a time; chips, search and sort work over
-          what is loaded. */}
+      {/* Older briefs load a page at a time; chips, search and sort narrow
+          what is loaded, while the chip counts are server totals. */}
       {!loadFailed && !listLoading
         ? briefsLoadMore(next, loadingMore, () => void loadMore())
         : null}

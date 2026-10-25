@@ -12,10 +12,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
 import {
   Comments,
+  fetchCheckpoints,
   openCheckpointsLabel,
   runCreateCommentBatch,
 } from '@/components/comments/Comments';
-import type { CommentCounts } from '@/components/comments/Comments';
+import type { CommentCounts, SharedCheckpoints } from '@/components/comments/Comments';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { dispatchInductionDid, dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
 import type { CommentAnnotation } from '@/components/comments/Comments';
@@ -113,6 +114,7 @@ import {
 import type { GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
 import { errorText } from '@/lib/error-copy';
 import { createComment } from '@srtdio/comments';
+import type { CommentRow } from '@srtdio/comments';
 import { getBrief } from '@srtdio/briefs';
 import type { Json } from '@srtdio/schemas';
 import { postSoftDelete } from '@srtdio/rpc';
@@ -375,6 +377,37 @@ export function PostDetailPage({
   const [annotating, setAnnotating] = useState(false);
   const [annotateError, setAnnotateError] = useState<string | null>(null);
   const [commentsRefresh, setCommentsRefresh] = useState(0);
+
+  // The post's checkpoints: ONE read the page owns, handed to both Comments
+  // (merged into its list) and the CheckpointStrip (its chips), so neither
+  // reads them itself. It starts on the first render, alongside Comments' own
+  // list read (never after it), and re-runs on every commentsRefresh bump (pin
+  // or caption comment, a decision, live events) and whenever Comments asks
+  // after its own writes. A read that lands after a newer one started is dropped.
+  const [checkpointRows, setCheckpointRows] = useState<CommentRow[] | null>(null);
+  const checkpointSeq = useRef(0);
+  const loadCheckpoints = useCallback(async (): Promise<void> => {
+    if (workspaceId === null || postId === undefined) return;
+    const seq = ++checkpointSeq.current;
+    const rows = await fetchCheckpoints(supabase, workspaceId, postId);
+    if (seq !== checkpointSeq.current) return;
+    setCheckpointRows(rows);
+  }, [workspaceId, postId]);
+  useEffect(() => {
+    // Switching posts drops the prior rows so nothing bleeds across.
+    setCheckpointRows(null);
+    void loadCheckpoints();
+  }, [loadCheckpoints]);
+  const lastCheckpointRefresh = useRef(commentsRefresh);
+  useEffect(() => {
+    if (lastCheckpointRefresh.current === commentsRefresh) return;
+    lastCheckpointRefresh.current = commentsRefresh;
+    void loadCheckpoints();
+  }, [commentsRefresh, loadCheckpoints]);
+  const sharedCheckpoints = useMemo<SharedCheckpoints>(
+    () => ({ rows: checkpointRows, reload: loadCheckpoints }),
+    [checkpointRows, loadCheckpoints],
+  );
   // Comment drafts keyed per selection (caption span or pin), kept while the
   // page is open so a Cancel and a reselect bring the text back.
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -1385,12 +1418,14 @@ export function PostDetailPage({
                 )}
                 showHeader
                 onCountsChange={handleCommentCounts}
+                sharedCheckpoints={sharedCheckpoints}
                 belowHeader={
                   <CheckpointStrip
                     workspaceId={workspaceId}
                     postId={postId}
                     viewerIsClient={clientRole}
                     refreshSignal={commentsRefresh}
+                    checkpoints={checkpointRows}
                   />
                 }
               />

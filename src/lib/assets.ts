@@ -9,7 +9,7 @@
 // and unit-tested; kinds, labels and counts are derived from the fetched rows,
 // never hardcoded.
 
-import { assetRestore, type Client, type Result } from '@srtdio/rpc';
+import { assetRestore, type Client, type DomainError, type Result } from '@srtdio/rpc';
 import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-purge-contracts';
 
 /**
@@ -325,6 +325,127 @@ export async function listAssets(
   return { ok: true, data: page.data.items };
 }
 
+// ---------------------------------------------------------------------------
+// Server totals. The tab counts and Select all read the server, never the
+// loaded pages: the same table, filters and RLS as listAssetsPage (workspace_id,
+// deleted_at is null), plus the tab's own filter. A tab filters on the current
+// version's kind, so its reads inner-join that embed (an asset with no current
+// version, or an unknown kind, is under All only, exactly as inTab says).
+// ---------------------------------------------------------------------------
+
+/** The version kinds a (non-All) tab shows: KIND_TAB read backwards. Pure. */
+export function tabKinds(tab: Exclude<AssetTab, 'all'>): AssetKind[] {
+  return ASSET_KINDS.filter((kind) => KIND_TAB[kind] === tab);
+}
+
+// Inner-joined so the kind filter drops the parent row; disambiguated by the
+// constraint name for the same reason as ASSET_SELECT.
+const TAB_KIND_EMBED = 'current_version:asset_versions!assets_current_version_id_fkey!inner(kind)';
+
+/**
+ * One tab's total: a HEAD read with an exact count, so no row is sent back. One
+ * request. A transport failure (or a throw) is { ok: false }, never a throw.
+ */
+export async function countAssetsInTab(
+  client: Client,
+  workspaceId: string,
+  tab: AssetTab,
+): Promise<Result<number>> {
+  try {
+    let query = client
+      .from('assets')
+      .select(tab === 'all' ? 'id' : `id, ${TAB_KIND_EMBED}`, { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null);
+    if (tab !== 'all') query = query.in('current_version.kind', tabKinds(tab));
+    const result = await query;
+    if (result.error) {
+      return { ok: false, error: { code: 'unknown', message: result.error.message } };
+    }
+    return { ok: true, data: result.count ?? 0 };
+  } catch (error) {
+    return { ok: false, error: { code: 'unknown', message: String(error) } };
+  }
+}
+
+/**
+ * Every tab's server total, one HEAD count per tab, all in flight at once
+ * (ASSET_TABS.length requests in parallel). Any failure fails the whole read so
+ * the page never shows a mix of fresh and stale counts.
+ */
+export async function countAssetTabs(
+  client: Client,
+  workspaceId: string,
+): Promise<Result<Record<AssetTab, number>>> {
+  const results = await Promise.all(
+    ASSET_TABS.map((tab) => countAssetsInTab(client, workspaceId, tab)),
+  );
+  const counts: Record<AssetTab, number> = {
+    all: 0,
+    media: 0,
+    pdf: 0,
+    docs: 0,
+    sheets: 0,
+    links: 0,
+  };
+  for (const [index, tab] of ASSET_TABS.entries()) {
+    const result = results[index];
+    if (result === undefined) continue;
+    if (!result.ok) return result;
+    counts[tab] = result.data;
+  }
+  return { ok: true, data: counts };
+}
+
+/**
+ * Rows per Select all id read. Equal to the API's max_rows (supabase/config.toml)
+ * so a short page always means the last page; never above it, or the server
+ * would cap the page silently and the loop would stop early.
+ */
+export const ASSET_ID_PAGE_SIZE = 1000;
+
+/**
+ * The ids of every asset in a tab, loaded or not, for Select all: keyset paged
+ * in ASSET_ID_PAGE_SIZE pages on (uploaded_at desc, id desc), the list's own
+ * order and index, so a page boundary inside a run of equal upload times never
+ * skips or repeats a row. ceil(total / 1000) requests (one more when the total
+ * is an exact multiple). Sequential, since each page starts after the last.
+ */
+export async function listAssetIds(
+  client: Client,
+  workspaceId: string,
+  tab: AssetTab,
+): Promise<Result<string[]>> {
+  const ids: string[] = [];
+  let cursor: AssetCursor | undefined;
+  try {
+    for (;;) {
+      let query = client
+        .from('assets')
+        .select(tab === 'all' ? 'id, uploaded_at' : `id, uploaded_at, ${TAB_KIND_EMBED}`)
+        .eq('workspace_id', workspaceId)
+        .is('deleted_at', null);
+      if (tab !== 'all') query = query.in('current_version.kind', tabKinds(tab));
+      if (cursor !== undefined) query = query.or(assetKeysetFilter(cursor));
+      const result = await query
+        .order('uploaded_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(ASSET_ID_PAGE_SIZE);
+      if (result.error) {
+        return { ok: false, error: { code: 'unknown', message: result.error.message } };
+      }
+      const rows = (result.data ?? []) as unknown as Array<{ id: string; uploaded_at: string }>;
+      for (const row of rows) ids.push(row.id);
+      const last = rows[rows.length - 1];
+      if (rows.length < ASSET_ID_PAGE_SIZE || last === undefined) break;
+      cursor = { uploadedAt: last.uploaded_at, id: last.id };
+    }
+  } catch (error) {
+    return { ok: false, error: { code: 'unknown', message: String(error) } };
+  }
+  return { ok: true, data: ids };
+}
+
 /**
  * Every active root-folder file's label (display name, else filename), for the
  * post page's upload naming: it must see the whole library, not one page, or an
@@ -487,6 +608,70 @@ export async function deleteAssetsBatch(
   }
 
   await Promise.all(Array.from({ length: width }, () => worker()));
+  return outcome;
+}
+
+/**
+ * Ids per bulk delete call. The ask was 500, but asset_delete_many refuses more
+ * than BULK_DELETE_MAX (200) ids, so the smaller server cap wins.
+ */
+export const BULK_BATCH_SIZE = Math.min(500, BULK_DELETE_MAX);
+
+/** Split ids into consecutive batches of at most `size` (at least 1), order kept. Pure. */
+export function chunkIds(ids: readonly string[], size: number): string[][] {
+  const width = Math.max(1, Math.floor(size));
+  const out: string[][] = [];
+  for (let at = 0; at < ids.length; at += width) out.push(ids.slice(at, at + width));
+  return out;
+}
+
+/** What one batch step did: the ids the server deleted, and the ones kept as in use. */
+export interface BatchStepResult {
+  deleted: string[];
+  kept: string[];
+}
+
+/** Where a batched bulk delete ended. */
+export interface BatchedDeleteOutcome {
+  /** Every id the server deleted, across the batches that succeeded. */
+  deleted: string[];
+  /** Ids skipped because they are in use (the step's own pre-check). */
+  kept: string[];
+  /** The first failure, with the batch it hit; null when every batch went through. */
+  failure: { batch: string[]; error: DomainError } | null;
+  /** Ids never deleted because the run stopped: the failed batch and every one after. */
+  notDeleted: string[];
+}
+
+/**
+ * Run a bulk delete in batches of `size`, one batch at a time (never two in
+ * flight), and stop at the first failed batch: what is deleted stays deleted,
+ * the rest is reported back so the caller can say "M deleted" and restore the
+ * others. `step` is injected (findAssetsInUse + asset_delete_many in the app, a
+ * fake in tests) and must not throw; a throw is still treated as a failure.
+ */
+export async function deleteInBatches(
+  ids: readonly string[],
+  size: number,
+  step: (batch: string[]) => Promise<Result<BatchStepResult>>,
+): Promise<BatchedDeleteOutcome> {
+  const batches = chunkIds(ids, size);
+  const outcome: BatchedDeleteOutcome = { deleted: [], kept: [], failure: null, notDeleted: [] };
+  for (const [index, batch] of batches.entries()) {
+    let result: Result<BatchStepResult>;
+    try {
+      result = await step(batch);
+    } catch (error) {
+      result = { ok: false, error: { code: 'unknown', message: String(error) } };
+    }
+    if (!result.ok) {
+      outcome.failure = { batch, error: result.error };
+      outcome.notDeleted = batches.slice(index).flat();
+      return outcome;
+    }
+    outcome.deleted.push(...result.data.deleted);
+    outcome.kept.push(...result.data.kept);
+  }
   return outcome;
 }
 

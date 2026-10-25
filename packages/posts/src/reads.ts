@@ -33,10 +33,16 @@ export interface ListPostsInput {
 /**
  * A Pipeline board row: the full post Row plus the asset_version_id of its first
  * image attachment (for the card thumbnail), or null when the post has no image
- * attached. The thumbnail is resolved by {@link listPosts} in one extra batched
- * query over every returned post, never one query per post.
+ * attached, and its cover (first photo or video with its stored size, null for
+ * none). Both are resolved by {@link listPosts} in one extra batched query over
+ * every returned post, never one query per post. `firstMedia` is optional so
+ * rows built elsewhere (fixtures, optimistic rows) need not carry it; absent
+ * means "not read", null means "no photo or video".
  */
-export type PipelinePost = Post & { thumbnailAssetVersionId: string | null };
+export type PipelinePost = Post & {
+  thumbnailAssetVersionId: string | null;
+  firstMedia?: CardFirstMedia | null;
+};
 
 /** A post with its full version chain and annotations, fetched in one query. */
 export interface PostDetail {
@@ -452,6 +458,29 @@ export const POST_CARD_ROW_COLUMNS =
   'id, number, title, format, platform, stage, target_date, stage_entered_at, approved_by, approved_at';
 
 /**
+ * Every live attachment row for `postIds` with its version's mime and stored
+ * size embedded, in ONE asset_attachments read ordered entity_id, position,
+ * attached_at ascending (the order {@link mediaSummaryByPost} expects). Shared
+ * by the card, cover and Pipeline reads so all three fold the same rows.
+ */
+async function readCardMediaRows(
+  client: Client,
+  postIds: readonly string[],
+): Promise<Result<CardMediaRow[]>> {
+  const { data, error } = await client
+    .from('asset_attachments')
+    .select('entity_id, asset_version_id, asset_versions!inner(mime_type, width, height)')
+    .eq('entity_type', 'post')
+    .in('entity_id', [...postIds])
+    .is('deleted_at', null)
+    .order('entity_id', { ascending: true })
+    .order('position', { ascending: true })
+    .order('attached_at', { ascending: true });
+  if (error) return { ok: false, error: transportError(error.message) };
+  return { ok: true, data: (data ?? []) as unknown as CardMediaRow[] };
+}
+
+/**
  * Batched resolve of shared posts for the live chat post card: at most TWO
  * queries for the whole batch, never one per post. (1) One RLS-scoped posts IN
  * read over every id. (2) One asset_attachments IN read over the posts that came
@@ -479,21 +508,13 @@ export async function readPostCards(
   const posts = (data ?? []) as Array<Omit<PostCardRow, keyof PostMediaSummary>>;
   if (posts.length === 0) return { ok: true, data: [] };
 
-  const media = await client
-    .from('asset_attachments')
-    .select('entity_id, asset_version_id, asset_versions!inner(mime_type, width, height)')
-    .eq('entity_type', 'post')
-    .in(
-      'entity_id',
-      posts.map((post) => post.id),
-    )
-    .is('deleted_at', null)
-    .order('entity_id', { ascending: true })
-    .order('position', { ascending: true })
-    .order('attached_at', { ascending: true });
-  if (media.error) return { ok: false, error: transportError(media.error.message) };
+  const media = await readCardMediaRows(
+    client,
+    posts.map((post) => post.id),
+  );
+  if (!media.ok) return media;
 
-  const byPost = mediaSummaryByPost((media.data ?? []) as unknown as CardMediaRow[]);
+  const byPost = mediaSummaryByPost(media.data);
   return {
     ok: true,
     data: posts.map((post) => ({
@@ -521,17 +542,9 @@ export async function readPostCovers(
   postIds: readonly string[],
 ): Promise<Result<Map<string, CardFirstMedia | null>>> {
   if (postIds.length === 0) return { ok: true, data: new Map() };
-  const { data, error } = await client
-    .from('asset_attachments')
-    .select('entity_id, asset_version_id, asset_versions!inner(mime_type, width, height)')
-    .eq('entity_type', 'post')
-    .in('entity_id', [...postIds])
-    .is('deleted_at', null)
-    .order('entity_id', { ascending: true })
-    .order('position', { ascending: true })
-    .order('attached_at', { ascending: true });
-  if (error) return { ok: false, error: transportError(error.message) };
-  const byPost = mediaSummaryByPost((data ?? []) as unknown as CardMediaRow[]);
+  const media = await readCardMediaRows(client, postIds);
+  if (!media.ok) return media;
+  const byPost = mediaSummaryByPost(media.data);
   const covers = new Map<string, CardFirstMedia | null>();
   for (const id of postIds) covers.set(id, byPost.get(id)?.firstMedia ?? null);
   return { ok: true, data: covers };
@@ -541,9 +554,12 @@ export async function readPostCovers(
  * List live posts in a workspace, newest first. Soft-deleted rows are excluded.
  * A single posts query: stage and the `before` cursor are applied as filters, the
  * page size is capped, and ordering matches the composite index
- * (workspace_id, stage, created_at desc). One additional batched query then
- * resolves each row's first-image asset_version_id for the card thumbnail
- * ({@link firstImageByPost}); posts with no image carry null. No N+1.
+ * (workspace_id, stage, created_at desc). One additional batched asset_attachments
+ * read (the same rows {@link readPostCovers} reads) then resolves, per row, the
+ * first image's asset_version_id for the card thumbnail and the cover (first
+ * photo or video with its stored size); posts with neither carry null. The
+ * caller can seed a cover store from `firstMedia` instead of reading the
+ * attachments again. Skipped when no post came back. No N+1.
  */
 export async function listPosts(
   client: Client,
@@ -569,18 +585,24 @@ export async function listPosts(
   if (error) return { ok: false, error: transportError(error.message) };
 
   const posts = data ?? [];
-  const thumbnails = await firstImageByPost(
+  if (posts.length === 0) return { ok: true, data: [] };
+  const media = await readCardMediaRows(
     client,
     posts.map((post) => post.id),
   );
-  if (!thumbnails.ok) return thumbnails;
+  if (!media.ok) return media;
+  const byPost = mediaSummaryByPost(media.data);
 
   return {
     ok: true,
-    data: posts.map((post) => ({
-      ...post,
-      thumbnailAssetVersionId: thumbnails.data.get(post.id) ?? null,
-    })),
+    data: posts.map((post) => {
+      const summary = byPost.get(post.id);
+      return {
+        ...post,
+        thumbnailAssetVersionId: summary?.thumbnailAssetVersionId ?? null,
+        firstMedia: summary?.firstMedia ?? null,
+      };
+    }),
   };
 }
 

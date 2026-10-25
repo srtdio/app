@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 // Pipeline reads, page level: each read the page owns runs once per load and is
-// shared by every consumer. listPosts once; the cover request once per id set
+// shared by every consumer. listPosts once, and its one asset_attachments read
+// seeds the cover store (primeCovers), so the page issues no separate cover read
+// for the listed posts; a row without a cover is asked for once per id set
 // (a re-sort or a plain re-render never asks again); the members read once,
 // with the board and the move sheet handed the page's approvers instead of
 // each reading their own.
@@ -19,6 +21,7 @@ const h = vi.hoisted(() => ({
   posts: [] as PipelinePost[],
   listPosts: vi.fn(),
   requestPostCovers: vi.fn(async (): Promise<void> => {}),
+  primeCovers: vi.fn<(ws: string, covers: Iterable<readonly [string, unknown]>) => void>(),
   people: {
     approverFirstNames: ['Riya'],
     names: new Map<string, string>([['u2', 'Riya Menon']]),
@@ -45,6 +48,7 @@ vi.mock('@/lib/shared-presign', () => ({ appPresignCache: () => ({}) }));
 vi.mock('@/lib/chat/post-covers', () => ({
   usePostCovers: () => () => undefined,
   requestPostCovers: h.requestPostCovers,
+  primeCovers: h.primeCovers,
 }));
 vi.mock('@/components/pages/pipeline/use-workspace-people', () => ({
   useWorkspacePeople: () => {
@@ -89,7 +93,7 @@ vi.mock('@/components/pages/pipeline/PipelineSortControl', () => ({
 }));
 vi.mock('@/components/pages/CreatePostSheet', () => ({ CreatePostSheet: () => null }));
 
-import { PipelinePage, coverIdsKey } from '@/components/pages/PipelinePage';
+import { PipelinePage, coverIdsKey, listedCovers } from '@/components/pages/PipelinePage';
 import { x5Post } from './x5-fixtures';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -97,7 +101,34 @@ import { x5Post } from './x5-fixtures';
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
+const COVER_B = { assetVersionId: 'v-b', kind: 'image' as const, width: 1080, height: 1350 };
+const COVER_A = { assetVersionId: 'v-a', kind: 'video' as const, width: null, height: null };
+
+// As listPosts returns them: every row carries its cover (null for none).
 const POSTS = [
+  x5Post({
+    id: 'b',
+    title: 'Recap reel',
+    updated_at: '2026-01-02T00:00:00Z',
+    thumbnailAssetVersionId: 'v-b',
+    firstMedia: COVER_B,
+  }),
+  x5Post({
+    id: 'a',
+    title: 'Launch teaser',
+    updated_at: '2026-01-03T00:00:00Z',
+    firstMedia: COVER_A,
+  }),
+  x5Post({
+    id: 'c',
+    title: 'Behind the scenes',
+    updated_at: '2026-01-01T00:00:00Z',
+    firstMedia: null,
+  }),
+];
+
+// Rows built without a cover (no firstMedia key): the page still asks for them.
+const UNREAD_POSTS = [
   x5Post({ id: 'b', title: 'Recap reel', updated_at: '2026-01-02T00:00:00Z' }),
   x5Post({ id: 'a', title: 'Launch teaser', updated_at: '2026-01-03T00:00:00Z' }),
   x5Post({ id: 'c', title: 'Behind the scenes', updated_at: '2026-01-01T00:00:00Z' }),
@@ -109,6 +140,7 @@ beforeEach(() => {
   h.listPosts.mockReset();
   h.listPosts.mockImplementation(async () => ({ ok: true, data: h.posts }));
   h.requestPostCovers.mockClear();
+  h.primeCovers.mockClear();
   h.peopleCalls = 0;
   h.boardApprovers = [];
   h.sheetApprovers = [];
@@ -143,8 +175,46 @@ describe('coverIdsKey', () => {
   });
 });
 
+describe('listedCovers', () => {
+  it('keeps every row listPosts resolved (null included) and drops unread rows', () => {
+    expect(listedCovers(POSTS)).toEqual([
+      ['b', COVER_B],
+      ['a', COVER_A],
+      ['c', null],
+    ]);
+    expect(listedCovers(UNREAD_POSTS)).toEqual([]);
+  });
+});
+
 describe('pipeline reads: once per load, shared by every consumer', () => {
-  it('reads the posts once and asks for the covers once, for every id', async () => {
+  it('reads the posts once, seeds the covers from that read, and issues no cover read', async () => {
+    await render();
+    expect(h.listPosts).toHaveBeenCalledTimes(1);
+    expect(h.primeCovers).toHaveBeenCalledTimes(1);
+    const [ws, covers] = h.primeCovers.mock.calls[0]!;
+    expect(ws).toBe('ws-1');
+    expect(new Map(covers)).toEqual(
+      new Map<string, unknown>([
+        ['a', COVER_A],
+        ['b', COVER_B],
+        ['c', null],
+      ]),
+    );
+    // listPosts' one asset_attachments read covered every listed post.
+    expect(h.requestPostCovers).not.toHaveBeenCalled();
+  });
+
+  it('a re-sort or a plain re-render never reads the covers either', async () => {
+    await render();
+    h.sort = 'oldest';
+    await render();
+    await render();
+    expect(h.requestPostCovers).not.toHaveBeenCalled();
+    expect(h.listPosts).toHaveBeenCalledTimes(1);
+  });
+
+  it('rows that came without a cover are asked for once, for every such id', async () => {
+    h.posts = UNREAD_POSTS;
     await render();
     expect(h.listPosts).toHaveBeenCalledTimes(1);
     expect(h.requestPostCovers).toHaveBeenCalledTimes(1);
@@ -153,7 +223,8 @@ describe('pipeline reads: once per load, shared by every consumer', () => {
     expect([...ids[2]].sort()).toEqual(['a', 'b', 'c']);
   });
 
-  it('a re-sort or a plain re-render never asks for the covers again', async () => {
+  it('a re-sort or a plain re-render never asks for unread covers again', async () => {
+    h.posts = UNREAD_POSTS;
     await render();
     expect(h.requestPostCovers).toHaveBeenCalledTimes(1);
     // Same posts, new display order.

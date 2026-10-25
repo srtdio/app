@@ -33,7 +33,12 @@ import type { ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
 import { postStageReason } from '@/components/pages/pipeline/stage-reason';
 import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 import { isClient } from '@/components/pages/pcs/roles';
-import { requestPostCovers, usePostCovers, type CoverLookup } from '@/lib/chat/post-covers';
+import {
+  primeCovers,
+  requestPostCovers,
+  usePostCovers,
+  type CoverLookup,
+} from '@/lib/chat/post-covers';
 import { generateTraceId } from '@/lib/trace';
 import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import {
@@ -339,6 +344,20 @@ const COVER_BATCH = 100;
 /** The cover read's key: the distinct post ids, sorted, comma-joined. Pure. */
 export function coverIdsKey(posts: readonly Pick<PipelinePost, 'id'>[]): string {
   return [...new Set(posts.map((post) => post.id))].sort().join(',');
+}
+
+/**
+ * The covers listPosts already resolved (its one asset_attachments read), as
+ * store entries; rows without `firstMedia` (never read) are left out. Pure.
+ */
+export function listedCovers(
+  posts: readonly Pick<PipelinePost, 'id' | 'firstMedia'>[],
+): Array<[string, NonNullable<PipelinePost['firstMedia']> | null]> {
+  const out: Array<[string, NonNullable<PipelinePost['firstMedia']> | null]> = [];
+  for (const post of posts) {
+    if (post.firstMedia !== undefined) out.push([post.id, post.firstMedia]);
+  }
+  return out;
 }
 
 /** Skeleton cards: one board page's worth. */
@@ -856,6 +875,9 @@ export function PipelinePage() {
       // A transport throw (offline) is the same plain failure as an error Result.
     }
     if (seq !== loadSeq.current) return;
+    // Seed the cover store from the same read before the cards render, so the
+    // board never reads asset_attachments a second time for these posts.
+    if (ok) primeCovers(workspaceId, listedCovers(data));
     if (ok) setPosts(data);
     else if (loadedForRef.current !== workspaceId) setPosts([]);
     loadedForRef.current = workspaceId;
@@ -992,12 +1014,17 @@ export function PipelinePage() {
     dateFilterActive(query) && !includeUndated ? inStage(searched).filter(isUndated).length : 0;
 
   // Card covers (first photo or video with its stored size) for the platform
-  // frame, read in batches through the chat cover store; cached on the device.
+  // frame, served by the chat cover store; cached on the device. listPosts
+  // already resolved them and loadPosts seeded the store, so only a row that
+  // came without a cover (none today) is read here, in batches.
   // The key is the id SET (sorted), not the display order, so a re-sort or an
   // optimistic stage move never re-runs the request loop; only a different set
   // of posts (a load, a search) asks again, and the store skips ids it holds.
   const covers = usePostCovers(NO_IDS);
-  const coverKey = useMemo(() => coverIdsKey(sorted), [sorted]);
+  const coverKey = useMemo(
+    () => coverIdsKey(sorted.filter((post) => post.firstMedia === undefined)),
+    [sorted],
+  );
   useEffect(() => {
     if (workspaceId === null || coverKey === '') return;
     const ids = coverKey.split(',');

@@ -5,7 +5,13 @@ vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: 'ws-1', workspaceKey: 'GBL', workspaces: [] }),
 }));
 
-import { COVER_TTL_MS, coverFor, idsToRead, requestPostCovers } from '@/lib/chat/post-covers';
+import {
+  COVER_TTL_MS,
+  coverFor,
+  idsToRead,
+  primeCovers,
+  requestPostCovers,
+} from '@/lib/chat/post-covers';
 import type { Client } from '@srtdio/rpc';
 
 const NOW = 1_000_000;
@@ -62,6 +68,24 @@ describe('requestPostCovers', () => {
     });
     expect(coverFor('ws-x', 'p-2')).toBeNull();
     await requestPostCovers(client, 'ws-x', ['p-1', 'p-2']);
+    expect(reads()).toBe(1);
+  });
+});
+
+describe('primeCovers', () => {
+  it('stores covers a caller already read, so a request for them reads nothing', async () => {
+    const cover = { assetVersionId: 'v-9', kind: 'video' as const, width: 1080, height: 1920 };
+    primeCovers('ws-p', [
+      ['p-9', cover],
+      ['p-10', null],
+    ]);
+    expect(coverFor('ws-p', 'p-9')).toEqual(cover);
+    expect(coverFor('ws-p', 'p-10')).toBeNull();
+    const { client, reads } = recordingClient([]);
+    await requestPostCovers(client, 'ws-p', ['p-9', 'p-10']);
+    expect(reads()).toBe(0);
+    // An id it was not given is still read.
+    await requestPostCovers(client, 'ws-p', ['p-9', 'p-11']);
     expect(reads()).toBe(1);
   });
 });

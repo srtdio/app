@@ -1,7 +1,9 @@
-// Boundary coverage for listPosts' first-image thumbnail resolution: after the
-// posts SELECT, exactly ONE additional read over asset_attachments resolves each
-// row's first image attachment's asset_version_id (no N+1, never one read per
-// post). The spec asserts the single batched query regardless of post count, the
+// Boundary coverage for listPosts' media resolution: after the posts SELECT,
+// exactly ONE additional read over asset_attachments resolves each row's first
+// image attachment's asset_version_id (the thumbnail) AND its cover, the first
+// photo or video with its stored size (no N+1, never one read per post). The
+// Pipeline seeds its cover store from that cover instead of reading again. The
+// spec asserts the single batched query regardless of post count, the
 // lowest-position pick, and the null cases (video/link only, none, soft-deleted).
 
 import { describe, expect, it, vi } from 'vitest';
@@ -49,11 +51,16 @@ function post(id: string) {
 }
 
 // One asset_attachments row as it arrives from the embedded inner-join select.
-function attachment(entityId: string, assetVersionId: string) {
+function attachment(
+  entityId: string,
+  assetVersionId: string,
+  mimeType = 'image/png',
+  size: { width: number | null; height: number | null } = { width: null, height: null },
+) {
   return {
     entity_id: entityId,
     asset_version_id: assetVersionId,
-    asset_versions: { mime_type: 'image/png' },
+    asset_versions: { mime_type: mimeType, ...size },
   };
 }
 
@@ -75,7 +82,13 @@ describe('listPosts thumbnail resolution', () => {
 
     // Exactly one asset_attachments read, regardless of the three posts returned.
     expect(attachmentCalls(calls)).toHaveLength(1);
-    // Scoped to post entities, the returned ids, live rows, image mime only.
+    // Scoped to post entities, the returned ids, live rows; every photo and
+    // video comes back with its stored size (the cover read's exact select).
+    expect(calls).toContainEqual({
+      table: 'asset_attachments',
+      method: 'select',
+      args: ['entity_id, asset_version_id, asset_versions!inner(mime_type, width, height)'],
+    });
     expect(calls).toContainEqual({
       table: 'asset_attachments',
       method: 'eq',
@@ -91,11 +104,8 @@ describe('listPosts thumbnail resolution', () => {
       method: 'is',
       args: ['deleted_at', null],
     });
-    expect(calls).toContainEqual({
-      table: 'asset_attachments',
-      method: 'like',
-      args: ['asset_versions.mime_type', 'image/%'],
-    });
+    // No image-only filter: the same read also yields video covers.
+    expect(calls.filter((c) => c.method === 'like')).toHaveLength(0);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -120,16 +130,70 @@ describe('listPosts thumbnail resolution', () => {
     expect(result.ok && result.data[0]?.thumbnailAssetVersionId).toBe('ver-low');
   });
 
-  it('returns null when a post has only a non-image (video/link) attachment', async () => {
-    // The inner join + LIKE 'image/%' filters non-image attachments server-side,
-    // so the post simply never appears in the attachments result.
+  it('returns a null thumbnail when a post has only non-image (video/link) attachments', async () => {
+    // Non-image rows come back for the cover, but the thumbnail stays image-only.
     const { client } = makeClient({
-      posts: { data: [post('p1')], error: null },
-      asset_attachments: { data: [], error: null },
+      posts: { data: [post('p1'), post('p2')], error: null },
+      asset_attachments: {
+        data: [
+          attachment('p1', 'ver-video', 'video/mp4', { width: 1080, height: 1920 }),
+          attachment('p2', 'ver-link', 'text/uri-list'),
+        ],
+        error: null,
+      },
     });
 
     const result = await listPosts(client, { workspaceId: WS });
-    expect(result.ok && result.data[0]?.thumbnailAssetVersionId).toBeNull();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data[0]?.thumbnailAssetVersionId).toBeNull();
+    expect(result.data[0]?.firstMedia).toEqual({
+      assetVersionId: 'ver-video',
+      kind: 'video',
+      width: 1080,
+      height: 1920,
+    });
+    expect(result.data[1]?.thumbnailAssetVersionId).toBeNull();
+    expect(result.data[1]?.firstMedia).toBeNull();
+  });
+
+  it('returns each post cover (first photo or video, with size) from the SAME single read', async () => {
+    const { client, calls } = makeClient({
+      posts: { data: [post('p1'), post('p2'), post('p3')], error: null },
+      asset_attachments: {
+        data: [
+          // p1: a video first, then an image: cover is the video, thumbnail the image.
+          attachment('p1', 'ver-v1', 'video/mp4', { width: 1920, height: 1080 }),
+          attachment('p1', 'ver-i1', 'image/jpeg', { width: 1080, height: 1350 }),
+          // p2: an image with no stored size (older upload).
+          attachment('p2', 'ver-i2'),
+        ],
+        error: null,
+      },
+    });
+
+    const result = await listPosts(client, { workspaceId: WS });
+    expect(attachmentCalls(calls)).toHaveLength(1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = new Map(result.data.map((p) => [p.id, p]));
+    expect(byId.get('p1')?.thumbnailAssetVersionId).toBe('ver-i1');
+    expect(byId.get('p1')?.firstMedia).toEqual({
+      assetVersionId: 'ver-v1',
+      kind: 'video',
+      width: 1920,
+      height: 1080,
+    });
+    expect(byId.get('p2')?.thumbnailAssetVersionId).toBe('ver-i2');
+    expect(byId.get('p2')?.firstMedia).toEqual({
+      assetVersionId: 'ver-i2',
+      kind: 'image',
+      width: null,
+      height: null,
+    });
+    // No photo or video: the cover is known to be none (null), not unread.
+    expect(byId.get('p3')?.thumbnailAssetVersionId).toBeNull();
+    expect(byId.get('p3')?.firstMedia).toBeNull();
   });
 
   it('returns null when a post has no attachments at all', async () => {

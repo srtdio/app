@@ -211,6 +211,7 @@ describe('action row and composer (items 3, 4)', () => {
   it('loading is a skeleton and a failed load is ui/LoadError with Retry', () => {
     expect(SRC).toContain('<span className="sr-only">Loading comments</span>');
     expect(SRC).toContain('animate-pulse rounded bg-panel-3');
-    expect(SRC).toContain('<LoadError title="comments" onRetry={() => void loadPage(0)} />');
+    // Retry re-reads page zero and, on a post page, the host's shared checkpoints.
+    expect(SRC).toContain('<LoadError title="comments" onRetry={() => void reloadAll()} />');
   });
 });

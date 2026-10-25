@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // one read that waits, for the post's brief_id. The page never reads the
 // buckets itself (the details sheet does, when it opens). The comments section
 // mounts once, hidden behind the skeleton, and is the same instance after the
-// first paint (no second comments read).
+// first paint (no second comments read). The checkpoints are read ONCE, by the
+// page, and handed to both Comments (sharedCheckpoints) and the strip
+// (checkpoints): neither reads them itself.
 
 type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void };
 function deferred<T>(): Deferred<T> {
@@ -54,6 +56,9 @@ const h = vi.hoisted(() => ({
   commentsMounts: 0,
   stripMounts: 0,
   focusIds: [] as (string | null | undefined)[],
+  tables: [] as string[],
+  sharedRows: [] as unknown[],
+  stripRows: [] as unknown[],
 }));
 
 vi.mock('agora-chat', () => ({
@@ -119,7 +124,8 @@ vi.mock('@/lib/assets', async (importOriginal) => {
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: { getSession: async () => ({ data: { session: null } }) },
-    from: () => {
+    from: (table: string) => {
+      h.tables.push(table);
       const chain = {
         select: () => chain,
         eq: () => chain,
@@ -157,8 +163,15 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
   const { useEffect } = await import('react');
   return {
     ...actual,
-    Comments: (props: { focusCommentId?: string | null; belowHeader?: React.ReactNode }) => {
+    Comments: (props: {
+      focusCommentId?: string | null;
+      belowHeader?: React.ReactNode;
+      sharedCheckpoints?: { rows: unknown };
+    }) => {
       h.focusIds.push(props.focusCommentId);
+      h.sharedRows.push(
+        props.sharedCheckpoints === undefined ? 'absent' : props.sharedCheckpoints.rows,
+      );
       useEffect(() => {
         h.commentsMounts += 1;
         h.calls.push('comments');
@@ -177,7 +190,8 @@ vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
   const { useEffect } = await import('react');
   return {
     ...actual,
-    CheckpointStrip: () => {
+    CheckpointStrip: (props: { checkpoints?: unknown }) => {
+      h.stripRows.push(props.checkpoints === undefined ? 'absent' : props.checkpoints);
       useEffect(() => {
         h.stripMounts += 1;
         h.calls.push('checkpoints');
@@ -251,6 +265,9 @@ beforeEach(() => {
   h.commentsMounts = 0;
   h.stripMounts = 0;
   h.focusIds = [];
+  h.tables = [];
+  h.sharedRows = [];
+  h.stripRows = [];
   Element.prototype.scrollIntoView = vi.fn();
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -312,5 +329,23 @@ describe('post page reads start concurrently', () => {
     expect(h.calls.filter((c) => c === 'comments')).toHaveLength(1);
     // Revealed: the deep-linked comment is handed over now.
     expect(h.focusIds.at(-1)).toBe('c1');
+  });
+});
+
+describe('post page reads the checkpoints once', () => {
+  it('issues exactly one checkpoint read, on the first render, shared by Comments and the strip', async () => {
+    await render();
+    // The page's one read went out before anything answered (the skeleton holds).
+    expect(skeleton()).not.toBeNull();
+    expect(h.tables.filter((t) => t === 'comments')).toHaveLength(1);
+    await landAll();
+    // Still one: the paint, the members flip and the brief never re-read them.
+    expect(h.tables.filter((t) => t === 'comments')).toHaveLength(1);
+    // Both consumers are handed the page's read (never left to read their own).
+    expect(h.sharedRows).not.toContain('absent');
+    expect(h.stripRows).not.toContain('absent');
+    // Once landed, both get the same rows.
+    expect(h.sharedRows.at(-1)).toEqual([]);
+    expect(h.stripRows.at(-1)).toBe(h.sharedRows.at(-1));
   });
 });
