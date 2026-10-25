@@ -22,8 +22,8 @@ import {
   IconAlertTriangle,
   IconBookmark,
   IconFile,
-  IconImage,
   IconLink,
+  IconPhoto,
   IconStar,
 } from '@/components/ui/icons';
 import { UnsafeLinkText } from '@/components/ui/UnsafeLinkSheet';
@@ -556,7 +556,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
         feed={props.attachments}
         isEmpty={split.images.length === 0}
         empty={
-          <EmptyState icon={<IconImage size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.media} />
+          <EmptyState icon={<IconPhoto size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.media} />
         }
         {...feedProps('attachments', view.seeAll)}
       >
