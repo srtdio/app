@@ -256,6 +256,7 @@ export function LegalPolicyPage() {
 
   return (
     <AuthShell
+      backdrop={false}
       title={title}
       subtitle="Please read the following information carefully."
       wide={policy === 'privacy-policy'}
