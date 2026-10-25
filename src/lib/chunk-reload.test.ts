@@ -47,6 +47,21 @@ describe('chunk reload guard', () => {
     expect(deps.reload).toHaveBeenCalledTimes(1);
   });
 
+  it('two failures from two different call sites still produce at most one reload', async () => {
+    // One shared guard: a route chunk, the agora SDK load and a boot import all
+    // go through reloadOnce(), so a second failing site never reloads again.
+    const deps = memoryDeps();
+    const routeChunk = withChunkReload(() => Promise.reject(chunkError()), deps);
+    const sdkChunk = withChunkReload(() => Promise.reject(chunkError()), deps);
+
+    void routeChunk();
+    await new Promise((r) => setTimeout(r, 0));
+    await expect(sdkChunk()).rejects.toBeInstanceOf(TypeError);
+    // A boot import failure (main.tsx calls reloadOnce directly) is refused too.
+    expect(reloadOnce(deps)).toBe(false);
+    expect(deps.reload).toHaveBeenCalledTimes(1);
+  });
+
   it('never reloads when storage throws', () => {
     const reload = vi.fn();
     const issued = reloadOnce({

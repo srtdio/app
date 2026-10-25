@@ -4,7 +4,7 @@ import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereSt
 import { RequireAuth, RequireGuest, SessionLoading } from '@/components/auth/RouteGuards';
 import { HomeGate } from '@/components/home/HomeGate';
 import { SessionProvider } from '@/lib/session-context';
-import { lazyRoute, whenIdle } from '@/lib/chunk-reload';
+import { lazyRoute, loadPipeline, loadShell, whenIdle } from '@/lib/chunk-reload';
 import { warmMonoFont } from '@/lib/fonts';
 
 // Chat times and dates are mono: load the face at boot, before any thread paints.
@@ -14,7 +14,6 @@ warmMonoFont();
 // never download the shell, chat, pipeline, posts, plan, assets or briefs.
 // Each loader is a named function so the idle prefetch below warms the exact
 // chunk the route later asks for.
-const loadPipeline = () => import('@/components/pages/PipelinePage');
 const loadChat = () => import('@/components/pages/ChatPage');
 
 const PipelinePage = lazyRoute(loadPipeline, (m) => m.PipelinePage);
@@ -113,12 +112,7 @@ const TestInviteePage = lazyRoute(
 // across route changes, tearing down only on signout or workspace switch.
 // The three modules load as one lazy unit (in parallel, no waterfall).
 const WorkspaceLayout = lazyRoute(
-  () =>
-    Promise.all([
-      import('@/lib/workspace-context'),
-      import('@/lib/chat'),
-      import('@/components/shell/AppLayout'),
-    ]),
+  loadShell,
   ([{ WorkspaceProvider }, { ChatProvider }, { AppLayout }]) =>
     function WorkspaceLayout(): ReactElement {
       useEffect(() => prefetchShellPages(), []);

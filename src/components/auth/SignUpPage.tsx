@@ -10,6 +10,7 @@ import { isValidInviteEmail } from '@/components/pages/settings/MembersInviteFor
 import { CHECK_EMAIL_COPY, fillCopy } from '@/lib/induction-copy';
 import { entryCopyContext } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
+import { prefetchShellWhenIdle } from '@/lib/chunk-reload';
 import { deviceTimeZone } from '@/lib/time';
 
 /** Seconds before Resend link can be tapped again. */
@@ -119,6 +120,8 @@ export function testSignUpMessage(code: string): string {
 }
 
 export function SignUpPage(): ReactElement {
+  // After first paint, when idle: warm the shell and Pipeline chunks (code only).
+  useEffect(() => prefetchShellWhenIdle(), []);
   const navigate = useNavigate();
   // The homepage signup band and the sign-in screen hand off ?email=; prefilled, still editable.
   const [searchParams] = useSearchParams();

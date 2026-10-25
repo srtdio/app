@@ -10,6 +10,7 @@ import { dispatchSorted, SIGNOUT_EVENT } from '@/lib/events';
 import { RECOVERY_COPY } from '@/lib/induction-copy';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
+import { prefetchShellWhenIdle } from '@/lib/chunk-reload';
 
 // Friendly, code-free copy: the screen never parses server error codes.
 export const ACCEPT_ERROR_MESSAGE =
@@ -207,6 +208,8 @@ export function AcceptFailureView(props: {
 }
 
 export function AcceptInvitePage() {
+  // After first paint, when idle: warm the shell and Pipeline chunks (code only).
+  useEffect(() => prefetchShellWhenIdle(), []);
   const navigate = useNavigate();
   const location = useLocation();
   // Path id is the canonical form (/invite/accept/:inviteId); the ?invite=

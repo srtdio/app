@@ -1,3 +1,5 @@
+// The app's one chunk-error handler: main.tsx (boot imports), every lazy route
+// and the agora SDK load all reload through reloadOnce() and its one guard.
 // Route chunks are loaded with dynamic import(). A tab opened before a deploy
 // asks for hashed chunks that no longer exist; the import rejects. Reload the
 // page once so the fresh index.html and chunk names load. A sessionStorage
@@ -82,4 +84,39 @@ export function whenIdle(task: () => void, timeoutMs = 4000): () => void {
   }
   const id = window.setTimeout(task, 1);
   return () => window.clearTimeout(id);
+}
+
+/** The lazy signed-in shell unit (App.tsx renders it) and the Pipeline page chunk. */
+export const loadShell = () =>
+  Promise.all([
+    import('@/lib/workspace-context'),
+    import('@/lib/chat'),
+    import('@/components/shell/AppLayout'),
+  ]);
+export const loadPipeline = () => import('@/components/pages/PipelinePage');
+
+/** True when the browser asks to save data (Network Information API, where present). */
+function saveData(): boolean {
+  try {
+    const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
+    return nav.connection?.saveData === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sign in, sign up and invite: once the page has painted and the browser is
+ * idle, warm the shell and Pipeline chunks so the first signed-in screen is
+ * cached. Code only: import() runs no data fetch, Supabase, auth or Agora
+ * call (the SDK and the connection start only when the shell mounts).
+ * Skipped under Save-Data. Returns a cancel for the effect cleanup.
+ */
+export function prefetchShellWhenIdle(): () => void {
+  if (saveData()) return () => {};
+  return whenIdle(() => {
+    // A failed prefetch is harmless: the route's own lazy load retries and recovers.
+    void loadShell().catch(() => undefined);
+    void loadPipeline().catch(() => undefined);
+  });
 }

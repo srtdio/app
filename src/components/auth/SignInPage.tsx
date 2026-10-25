@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { emailFieldError, linkErrorMessage } from '@/components/auth/SignUpPage';
 import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
 import { supabase } from '@/lib/supabase';
+import { prefetchShellWhenIdle } from '@/lib/chunk-reload';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -160,6 +161,8 @@ export function signInErrorMessage(result: {
 }
 
 export function SignInPage() {
+  // After first paint, when idle: warm the shell and Pipeline chunks (code only).
+  useEffect(() => prefetchShellWhenIdle(), []);
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const next = resolveNext(searchParams.get('next'), location.state);
