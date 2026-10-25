@@ -101,6 +101,7 @@ function row(over: Partial<ChatMessageRow>): ChatMessageRow {
     created_at: '2026-09-22T10:00:00.123456+00:00',
     edited_at: null,
     deleted_at: null,
+    removed_files: {},
     ...over,
   };
 }
