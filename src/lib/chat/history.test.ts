@@ -388,6 +388,7 @@ describe('deleted rows: returned where the thread renders them, filtered where t
     shared_brief_ids: null,
     reply_to_message_id: null,
     forwarded_from_message_id: null,
+    removed_files: {},
     agora_event_id: null,
     created_at: '2026-09-22T10:00:01+00:00',
     edited_at: null,

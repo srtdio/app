@@ -52,7 +52,7 @@ type ThreadReplyCountRow =
   Database['public']['Functions']['chat_thread_reply_counts']['Returns'][number];
 
 const MESSAGE_COLUMNS =
-  'id, channel_id, workspace_id, sender_user_id, body, mentions, attachment_asset_ids, shared_post_ids, shared_brief_ids, shared_plan_ids, reply_to_message_id, forwarded_from_message_id, attachment_meta, agora_event_id, created_at, edited_at, deleted_at, thread_root_message_id';
+  'id, channel_id, workspace_id, sender_user_id, body, mentions, attachment_asset_ids, shared_post_ids, shared_brief_ids, shared_plan_ids, reply_to_message_id, forwarded_from_message_id, attachment_meta, agora_event_id, created_at, edited_at, deleted_at, thread_root_message_id, removed_files';
 
 function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };

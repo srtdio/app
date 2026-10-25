@@ -22,6 +22,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconDownload,
+  IconTrash,
   IconX,
   ICON_SIZE,
 } from '@/components/ui/icons';
@@ -276,6 +277,27 @@ export interface LightboxImage {
   caption?: string;
   /** A local preview (own instant send): shown and downloaded without presigning. */
   src?: string;
+  /**
+   * Chat: the viewer may remove this file. A bin shows left of Download; the
+   * caller drops the image from its list (the viewer then shows the next one,
+   * or closes on the last). Absent: no bin (posts, assets, comments).
+   */
+  onRemove?: () => void;
+  /** The bin's label; defaults to REMOVE_IMAGE_LABEL. */
+  removeLabel?: string;
+}
+
+/** The bin's default label. */
+export const REMOVE_IMAGE_LABEL = 'Remove photo';
+
+/**
+ * After the current image was removed (the caller drops it from its list): the
+ * index the viewer shows next, or null to close (it was the last one). The
+ * same index points at the next image; past the end it wraps to the first. Pure.
+ */
+export function indexAfterRemove(index: number, count: number): number | null {
+  if (count <= 1) return null;
+  return index >= count - 1 ? 0 : index;
 }
 
 /** Optional bottom bar (chat): who sent the image and when, plus Download. */
@@ -404,7 +426,7 @@ export interface ImageLightboxProps {
   presignEnabled: boolean;
   onIndexChange: (index: number) => void;
   onClose: () => void;
-  /** Chat: sender + time and a Download control in a bottom bar. Comments omit it. */
+  /** Chat: sender + time, the bin (onRemove) and Download in a bottom bar. Comments omit it. */
   details?: LightboxDetails;
 }
 
@@ -509,6 +531,16 @@ export function ImageLightbox({
 
   const go = (delta: number): void => {
     if (paging) onIndexChange(wrapIndex(index, delta, count));
+  };
+
+  // The bin: the caller drops the image; the next one shows, the last one closes.
+  const onRemoveCurrent = (): void => {
+    const remove = current.onRemove;
+    if (remove === undefined) return;
+    remove();
+    const next = indexAfterRemove(index, count);
+    if (next === null) onClose();
+    else if (next !== index) onIndexChange(next);
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -738,6 +770,16 @@ export function ImageLightbox({
               {details.time}
             </span>
           </span>
+          {current.onRemove !== undefined ? (
+            <button
+              type="button"
+              aria-label={current.removeLabel ?? REMOVE_IMAGE_LABEL}
+              onClick={onRemoveCurrent}
+              className={TOOLBAR_BUTTON}
+            >
+              <IconTrash size={ICON_SIZE.control} />
+            </button>
+          ) : null}
           <DownloadControl
             key={`${current.assetId}:${current.src ?? ''}`}
             image={current}

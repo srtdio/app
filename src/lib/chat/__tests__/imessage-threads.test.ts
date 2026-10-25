@@ -44,6 +44,7 @@ function row(over: Partial<ChatMessageRow>): ChatMessageRow {
     shared_plan_ids: null,
     reply_to_message_id: null,
     forwarded_from_message_id: null,
+    removed_files: {},
     agora_event_id: null,
     created_at: '2026-10-01T10:00:00Z',
     edited_at: null,

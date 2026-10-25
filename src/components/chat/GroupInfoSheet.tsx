@@ -38,7 +38,11 @@ import {
   renameGroupChannel,
   setGroupAvatar,
 } from '@/components/chat/chat-actions';
-import { ChatInfoTabs, type ChatInfoTabsProps } from '@/components/chat/ChatInfoTabs';
+import {
+  ChatInfoTabs,
+  type ChatInfoTabsProps,
+  type InfoSelectChrome,
+} from '@/components/chat/ChatInfoTabs';
 import { MemberPicker } from '@/components/chat/MemberPicker';
 import {
   excludeMembers,
@@ -200,6 +204,7 @@ export function MembersRefreshNotice(props: { onRetry: () => void }): ReactEleme
 /**
  * The chat info tabs wiring the thread already holds (the same values the DM
  * Contact page receives): the group page adds mode, open, frame and Escape.
+ * It carries onRemoveFiles (Select in Media / Files, the viewer's bin) too.
  */
 export type GroupInfoTabsWiring = Omit<ChatInfoTabsProps, 'mode' | 'open' | 'frame' | 'onEscape'>;
 
@@ -294,7 +299,7 @@ export function groupInfoTabs(input: {
   open: boolean;
   onClose: () => void;
   escape: (() => void) | null;
-  frame: (tabs: ReactElement) => ReactElement;
+  frame: (tabs: ReactElement, select: InfoSelectChrome) => ReactElement;
 }): ReactElement {
   const { tabs, onClose } = input;
   return (
@@ -415,6 +420,8 @@ export function GroupHero(props: {
 /**
  * The page chrome: back bar, then the scrolling body with the sections in
  * `groupInfoSections` order, bottom padding clear of the home indicator.
+ * With `select`, the bar carries Select top right; in select mode the bar is
+ * "n selected" and Cancel, and the Remove bar sits under the page.
  * Hook-free; `nodes` holds each section's content.
  */
 export function groupInfoPage(props: {
@@ -422,7 +429,9 @@ export function groupInfoPage(props: {
   error: string | null;
   sections: ReadonlyArray<GroupInfoSection>;
   nodes: Readonly<Record<GroupInfoSection, ReactNode>>;
+  select?: InfoSelectChrome;
 }): ReactElement {
+  const select = props.select;
   return (
     <ModalPanel
       aria-label={GROUP_INFO_HEADING}
@@ -430,10 +439,17 @@ export function groupInfoPage(props: {
       className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel px-2 md:px-4">
-        <IconButton label="Close group info" onClick={props.onClose}>
-          <IconChevronLeft size={ICON_SIZE.control} />
-        </IconButton>
-        <h2 className="truncate text-lg font-semibold text-fg">{GROUP_INFO_HEADING}</h2>
+        {select?.selecting === true ? (
+          select.header
+        ) : (
+          <>
+            <IconButton label="Close group info" onClick={props.onClose}>
+              <IconChevronLeft size={ICON_SIZE.control} />
+            </IconButton>
+            <h2 className="truncate text-lg font-semibold text-fg">{GROUP_INFO_HEADING}</h2>
+            {select?.header ?? null}
+          </>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-6">
@@ -456,6 +472,7 @@ export function groupInfoPage(props: {
           ))}
         </div>
       </div>
+      {select?.bar ?? null}
     </ModalPanel>
   );
 }
@@ -884,12 +901,13 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
           open: props.open,
           onClose: props.onClose,
           escape: overlayOpen ? null : props.onClose,
-          frame: (tabs) =>
+          frame: (tabs, select) =>
             groupInfoPage({
               onClose: props.onClose,
               error,
               sections,
               nodes: { ...nodes, tabs },
+              select,
             }),
         }),
         document.body,

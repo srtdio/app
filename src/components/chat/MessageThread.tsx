@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
@@ -14,7 +15,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { useUndoableAction } from '@/lib/use-undoable-action';
+import { useUndoableAction, type UndoableAction } from '@/lib/use-undoable-action';
 import {
   OLDER_LOAD_FAILED,
   channelOlderKey,
@@ -102,7 +103,7 @@ import {
   MOVE_CANCEL_PX,
 } from '@/components/ui/useLongPress';
 import { useToast } from '@/components/ui/toast';
-import { deleteConfirmCopy } from '@/lib/chat/delete-flow';
+import { deleteConfirmCopy, purgeChatFiles, type PurgeChatOutcome } from '@/lib/chat/delete-flow';
 import { cn } from '@/lib/cn';
 import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import type { ChannelSummary, ChatProfile } from '@/lib/chat-reads';
@@ -159,7 +160,7 @@ import {
   type ComposerSend,
   type EditingDraft,
 } from '@/components/chat/Composer';
-import { MessageAttachments } from '@/components/chat/MessageAttachments';
+import { FilesRemovedLine, MessageAttachments } from '@/components/chat/MessageAttachments';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import {
   ImageLightbox,
@@ -349,6 +350,28 @@ import {
   type WhoReactedLoad,
 } from '@/components/chat/ReadingLayer';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import {
+  applyRemovedOverlay,
+  createRemovedFilesStore,
+  canRemoveFile,
+  canRemoveSingleFile,
+  removeMediaAria,
+  removedCountsOf,
+  removedFilesLabel,
+  removedFilesStore,
+  rereadRemovedRows,
+  runRemoveFiles,
+  subscribeFilesRemoved,
+  type MarkedLookup,
+  type RemovableFile,
+  type RemoveFilesOutcome,
+} from '@/lib/chat/remove-files';
+import { useChat } from '@/lib/chat/chat-context';
+import { sendSignal, type TypingConnection } from '@/lib/chat/typing';
+import { createCmdMessage } from '@/lib/chat/message-factory';
+import { env } from '@/lib/env';
+import { fetchWithTrace } from '@/lib/fetch';
+import type { ChatConnection } from '@/lib/chat/types';
 
 interface MessageThreadProps {
   title: string;
@@ -836,6 +859,39 @@ export function threadLightbox(
       sender: senderName(message, profiles),
       time: formatTime(messageTimeSource(message), timeZone),
     },
+  };
+}
+
+/**
+ * The viewer's images with the bin on each one the viewer may remove (own,
+ * recorded, unmarked; canRemoveFile): its label reads "Remove photo" and its
+ * tap removes just that file. Unchanged without a remove handler. Pure.
+ */
+export function withRemovableImages(
+  data: { images: LightboxImage[]; details: LightboxDetails },
+  message: ThreadMessage,
+  onRemoveFiles: ((files: RemovableFile[]) => void) | undefined,
+  viewerId: string,
+  marks: MarkedLookup,
+): { images: LightboxImage[]; details: LightboxDetails } {
+  if (onRemoveFiles === undefined || message.state !== 'sent') return data;
+  const byAsset = new Map(message.attachments.map((a) => [a.assetId, a] as const));
+  return {
+    ...data,
+    images: data.images.map((image) => {
+      const attachment = byAsset.get(image.assetId);
+      if (attachment === undefined || !canRemoveFile(message, attachment, viewerId, marks)) {
+        return image;
+      }
+      return {
+        ...image,
+        removeLabel: removeMediaAria(attachment.mime),
+        onRemove: () =>
+          onRemoveFiles([
+            { messageId: message.id, assetId: attachment.assetId, mime: attachment.mime },
+          ]),
+      };
+    }),
   };
 }
 
@@ -2204,6 +2260,14 @@ export function MessageBubble(props: {
   const checked = selection?.checked === true;
   const parentDeleted = message.parentDeleted === true;
   const spacer = placement === 'inline' ? <MetaSpacer meta={meta} /> : null;
+  // Files the sender removed: one line where they were (never on a tombstone,
+  // which returned above). Above the caption of media, at the files' spot, or
+  // above the text when nothing is left beside it.
+  const removedLine =
+    message.removedFiles !== undefined ? (
+      <FilesRemovedLine counts={message.removedFiles} mine={mine} layout={layout} />
+    ) : null;
+  const hasAttachments = message.attachments.length > 0;
   const quotedMine =
     reply !== null && reply.authorUserId !== null && reply.authorUserId === props.viewerUserId;
   const body = (
@@ -2355,27 +2419,31 @@ export function MessageBubble(props: {
               ) : null}
               {textOnly ? (
                 <>
+                  {removedLine}
                   {linkCard}
                   {body}
                 </>
               ) : voiceOnly ? (
-                <MessageAttachments
-                  attachments={message.attachments}
-                  cache={cache}
-                  presignEnabled={presignEnabled}
-                  onCancelUpload={cancelUpload}
-                  voice={{
-                    messageId: message.id,
-                    mine,
-                    sender: { name, ...senderAvatarProps(message, profiles) },
-                    nextVoiceId: props.nextVoiceId ?? null,
-                    // The time sits in the note's last row (Transcribe row / length row).
-                    meta: <BubbleMetaView meta={meta} mine={mine} placement={placement} />,
-                    ...(!mine && props.onTranscribe !== undefined && isTranscribable(message)
-                      ? { onTranscribe: props.onTranscribe }
-                      : {}),
-                  }}
-                />
+                <>
+                  {removedLine}
+                  <MessageAttachments
+                    attachments={message.attachments}
+                    cache={cache}
+                    presignEnabled={presignEnabled}
+                    onCancelUpload={cancelUpload}
+                    voice={{
+                      messageId: message.id,
+                      mine,
+                      sender: { name, ...senderAvatarProps(message, profiles) },
+                      nextVoiceId: props.nextVoiceId ?? null,
+                      // The time sits in the note's last row (Transcribe row / length row).
+                      meta: <BubbleMetaView meta={meta} mine={mine} placement={placement} />,
+                      ...(!mine && props.onTranscribe !== undefined && isTranscribable(message)
+                        ? { onTranscribe: props.onTranscribe }
+                        : {}),
+                    }}
+                  />
+                </>
               ) : album ? (
                 <>
                   <MessageAttachments
@@ -2385,7 +2453,14 @@ export function MessageBubble(props: {
                     album
                     albumCorners={bubbleCorners(shape)}
                     onCancelUpload={cancelUpload}
-                    caption={hasBody ? body : undefined}
+                    caption={
+                      removedLine !== null || hasBody ? (
+                        <>
+                          {removedLine}
+                          {hasBody ? body : null}
+                        </>
+                      ) : undefined
+                    }
                     onImageClick={(_attachment, index) => props.onOpenImage?.(index)}
                   />
                   {hasCards ? (
@@ -2398,8 +2473,10 @@ export function MessageBubble(props: {
                 </>
               ) : (
                 <>
+                  {hasAttachments ? null : removedLine}
                   {hasBody ? linkCard : null}
                   {hasBody ? body : null}
+                  {hasAttachments ? removedLine : null}
                   <MessageAttachments
                     attachments={message.attachments}
                     cache={cache}
@@ -3337,6 +3414,11 @@ function ThreadBody(
     onStar?: (message: ThreadMessage, starred: boolean) => void;
     /** The chat's task changes for the loaded window (thread lines); absent: none. */
     taskLines?: { events: readonly TaskEvent[]; ctx: TaskLineContext } | undefined;
+    /**
+     * Remove own files behind the Undo (menu "Remove file", the viewer bin);
+     * absent hides both.
+     */
+    onRemoveFiles?: ((files: RemovableFile[]) => void) | undefined;
   },
 ): ReactElement {
   const { onNewestVisible, jumpRequest } = props;
@@ -3972,7 +4054,23 @@ function ThreadBody(
   const viewerMessage =
     viewer !== null ? props.messages.find((m) => m.id === viewer.messageId) : undefined;
   const viewerData =
-    viewerMessage !== undefined ? threadLightbox(viewerMessage, props.profiles) : null;
+    viewerMessage !== undefined
+      ? withRemovableImages(
+          threadLightbox(viewerMessage, props.profiles),
+          viewerMessage,
+          props.onRemoveFiles,
+          props.viewerUserId ?? '',
+          props.marks,
+        )
+      : null;
+  // More -> "Remove file": an own, unmarked message with exactly one file.
+  const onRemoveFiles = props.onRemoveFiles;
+  const menuRemoveFile =
+    menu !== null &&
+    onRemoveFiles !== undefined &&
+    canRemoveSingleFile(menu.message, props.viewerUserId ?? '', props.marks)
+      ? menu.message.attachments[0]
+      : undefined;
   // Card threads: decided per row at first paint; the rail, its chips and
   // "N replies" are hidden while selecting (rows then keep today's place).
   const memberOf = props.threads?.memberOf;
@@ -4254,6 +4352,17 @@ function ThreadBody(
         }
         onSaveToNotes={() => {
           if (menu) props.onSaveToNotes?.(menu.message);
+        }}
+        canRemoveFile={menuRemoveFile !== undefined}
+        onRemoveFile={() => {
+          if (menu === null || menuRemoveFile === undefined) return;
+          onRemoveFiles?.([
+            {
+              messageId: menu.message.id,
+              assetId: menuRemoveFile.assetId,
+              mime: menuRemoveFile.mime,
+            },
+          ]);
         }}
         currentReaction={menu ? (menu.message.reactions.find((r) => r.mine)?.emoji ?? null) : null}
         canCopy={menu ? menu.message.body.trim() !== '' || menuPlanTitle !== null : false}
@@ -4774,6 +4883,68 @@ export function withUndoTombstones(
   return markMessagesDeleted(messages, [...tombstoned]);
 }
 
+/**
+ * The live chat connection, or null outside a ChatProvider (tests, previews)
+ * or before it opens. useChat throws outside a provider; the hook itself
+ * always runs, so the hook order never changes.
+ */
+function useLiveChatClient(): ChatConnection | null {
+  try {
+    return useChat().client;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One removal behind the Undo strip: the files leave the overlay store at once
+ * (every surface updates); the strip reads "1 photo removed"; the commit runs
+ * the record, purge and signal; Undo puts the files back. A refused record
+ * brings back only the files it refused and toasts its copy ("Couldn't
+ * remove. Only your own files can be removed."). No confirm.
+ */
+export function removeFilesAction(input: {
+  store: Pick<ReturnType<typeof createRemovedFilesStore>, 'add'>;
+  channelId: string;
+  files: RemovableFile[];
+  remove: () => Promise<RemoveFilesOutcome>;
+  showToast: (title: string) => void;
+}): UndoableAction {
+  let undo = input.store.add(input.channelId, input.files);
+  return {
+    label: removedFilesLabel(removedCountsOf(input.files.map((f) => f.mime))),
+    commit: async () => {
+      const result = await input.remove();
+      if (result.ok) return;
+      undo();
+      undo = input.store.add(input.channelId, result.removed);
+      input.showToast(result.message);
+    },
+    revert: () => undo(),
+  };
+}
+
+/** The chat's purge-chat call for removed files (as use-chat-thread's delete path). */
+async function purgeRemovedFiles(
+  workspaceId: string | null,
+  assetIds: string[],
+  traceId: string,
+): Promise<PurgeChatOutcome> {
+  const endpoint = env.VITE_ASSET_UPLOAD_URL;
+  if (endpoint === undefined || endpoint === '' || workspaceId === null) {
+    return { ok: false, error: 'purge-chat not configured' };
+  }
+  const token = (await supabase.auth.getSession()).data.session?.access_token ?? '';
+  if (token === '') return { ok: false, error: 'no session' };
+  return purgeChatFiles({
+    endpoint,
+    token,
+    workspaceId,
+    assetIds,
+    fetcher: (input, init) => fetchWithTrace(input, init, traceId),
+  });
+}
+
 /** The view's extra seam: tombstone a row locally (on) or bring it back (off). */
 type MessageThreadViewProps = MessageThreadProps & {
   tombstone?: (messageId: string, on: boolean) => void;
@@ -4804,10 +4975,32 @@ export function MessageThread(props: MessageThreadProps): ReactElement {
       setDiscarded((prev) => new Set(prev).add(messageId));
     };
   }, [propDiscard, settle, channelId]);
-  const messages = useMemo(
-    () => withUndoTombstones(withoutDiscarded(props.messages, discarded), tombstoned),
-    [props.messages, discarded, tombstoned],
+  // Files removed in this chat (here behind the Undo, or live by a peer): every
+  // bubble, the viewer and the counts read them at once.
+  const removedOverlay = useSyncExternalStore(
+    removedFilesStore.subscribe,
+    () => removedFilesStore.get(channelId ?? ''),
+    () => removedFilesStore.get(channelId ?? ''),
   );
+  const messages = useMemo(
+    () =>
+      applyRemovedOverlay(
+        withUndoTombstones(withoutDiscarded(props.messages, discarded), tombstoned),
+        removedOverlay,
+      ),
+    [props.messages, discarded, tombstoned, removedOverlay],
+  );
+  // A peer removed files: re-read those rows (never the payload) into the overlay.
+  const liveClient = useLiveChatClient();
+  useEffect(() => {
+    if (liveClient === null || channelId === undefined) return;
+    return subscribeFilesRemoved(liveClient, ({ messageIds, fromUserId }) => {
+      void rereadRemovedRows(supabase, { channelId, messageIds, fromUserId }).then((read) => {
+        if (read.ok) removedFilesStore.applyRows(channelId, read.data);
+        else logger.warn('chat: files removed re-read failed', { error: read.error.message });
+      });
+    });
+  }, [liveClient, channelId]);
   return (
     <MessageThreadView
       {...props}
@@ -4891,10 +5084,19 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   }, [view, props.messages]);
   // The open thread: its root, then its replies oldest first (the chat's loaded
   // rows win over the view's own copies, so live arrivals and own sends show).
-  const viewParts = useMemo(
-    () => (view !== null ? threadViewRows(view, props.messages) : null),
-    [view, props.messages],
+  // The view's own rows (older than the chat's pages) take the removed-files
+  // overlay too; the chat's rows already carry it.
+  const viewOverlay = useSyncExternalStore(
+    removedFilesStore.subscribe,
+    () => removedFilesStore.get(channelId ?? ''),
+    () => removedFilesStore.get(channelId ?? ''),
   );
+  const viewParts = useMemo(() => {
+    if (view === null) return null;
+    const parts = threadViewRows(view, props.messages);
+    const [root, ...replies] = applyRemovedOverlay([parts.root, ...parts.replies], viewOverlay);
+    return root !== undefined ? { root, replies } : parts;
+  }, [view, props.messages, viewOverlay]);
   const viewMessages = useMemo(
     () => (viewParts !== null ? [viewParts.root, ...viewParts.replies] : []),
     [viewParts],
@@ -5211,6 +5413,72 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       revert,
     });
   };
+  // Remove files, keep the message: the files go at once (the overlay), behind
+  // the Undo strip; the record, purge and signal run when the window ends (or
+  // the chat is left). Undo, or a refused record, brings back what was refused.
+  const liveClient = useLiveChatClient();
+  const removeTarget = useMemo(() => {
+    const summary = (forwardChannels ?? []).find((c) => c.channelId === channelId);
+    if (summary === undefined || props.notes === true) return null;
+    try {
+      return targetFromSummary(summary);
+    } catch {
+      return null;
+    }
+  }, [forwardChannels, channelId, props.notes]);
+  const removeFilesWithUndo = (files: RemovableFile[]): void => {
+    // Bound now: the commit may run after the chat was left (unmount flush).
+    const forChannel = channelId;
+    if (forChannel === undefined || files.length === 0) return;
+    const forWorkspace = workspaceId;
+    const connection = liveClient;
+    const target = removeTarget;
+    const action = removeFilesAction({
+      store: removedFilesStore,
+      channelId: forChannel,
+      files,
+      showToast: (title) => toast.show({ title }),
+      remove: async () => {
+        const traceId = generateTraceId();
+        const result = await runRemoveFiles(
+          {
+            client: supabase,
+            purgeChat: (assetIds) => purgeRemovedFiles(forWorkspace, assetIds, traceId),
+            onPurgeFailed: (error) =>
+              logger.warn('chat: purge-chat failed', { trace_id: traceId, error }),
+            signal:
+              connection !== null && target !== null
+                ? (ext) =>
+                    sendSignal({
+                      connection: connection as TypingConnection,
+                      target,
+                      createCmd: createCmdMessage,
+                      ext,
+                    })
+                : undefined,
+            onSignalFailed: (error) =>
+              logger.warn('chat: files removed signal failed', {
+                trace_id: traceId,
+                error: String(error),
+              }),
+          },
+          { channelId: forChannel, files, traceId },
+        );
+        if (!result.ok) {
+          logger.warn('chat: remove files failed', {
+            trace_id: traceId,
+            removed: result.removed.length,
+            error: result.error,
+          });
+        }
+        return result;
+      },
+    });
+    undoable.run(action);
+  };
+  // Only where the viewer can act on their own messages (the same gate as Delete).
+  const canRemoveHere = channelId !== undefined && onDeleteMessages !== undefined;
+  const onRemoveFiles = canRemoveHere ? removeFilesWithUndo : undefined;
   // Escape leaves selection mode (the laptop's Cancel).
   useEffect(() => {
     if (!selecting) return;
@@ -6053,6 +6321,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         }
       : {}),
     ...(onEditMessage !== undefined && !selecting ? { onEditMessage: startEdit } : {}),
+    ...(onRemoveFiles !== undefined && !selecting ? { onRemoveFiles } : {}),
     ...(canForwardHere && !selecting
       ? {
           onForwardMessage: (message: ThreadMessage): boolean => {
@@ -6382,6 +6651,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           presignEnabled={presignEnabled}
           marks={infoMarks}
           onJump={jumpTo}
+          {...(onRemoveFiles !== undefined ? { onRemoveFiles } : {})}
         />
       ) : null}
       {starStore !== null && props.channelId !== undefined ? (
@@ -6406,6 +6676,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             presignEnabled,
             marks: infoMarks,
             onJump: jumpTo,
+            ...(onRemoveFiles !== undefined ? { onRemoveFiles } : {}),
           })
         : null}
       {onForward !== undefined && forwardChannels !== undefined ? (

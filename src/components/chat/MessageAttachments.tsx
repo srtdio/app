@@ -30,13 +30,19 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { ICON_SIZE, IconDownload, IconFile, IconImage } from '@/components/ui/icons';
+import { ICON_SIZE, IconBan, IconDownload, IconFile, IconImage } from '@/components/ui/icons';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
 import { VoiceNote } from '@/components/chat/VoiceNote';
 import { UploadRing } from '@/components/chat/UploadRing';
 import { BUBBLE_FILL, FileBubble } from '@/components/chat/FileBubble';
-import { BUBBLE_SHAPE } from '@/components/chat/chat-type';
+import {
+  BUBBLE_BODY_TYPE,
+  BUBBLE_SHAPE,
+  sized,
+  type ChatLayout,
+} from '@/components/chat/chat-type';
+import { removedFilesLabel, type RemovedFiles } from '@/lib/chat/remove-files';
 import { cn } from '@/lib/cn';
 import { middleTruncate } from '@/lib/files/display-name';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -510,6 +516,36 @@ export function AlbumGrid({
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The line a message keeps where its removed files were ("1 photo removed",
+ * "File removed"): the tombstone's IconBan and italic text in the bubble's own
+ * meta ink, at the body size. Never on a tombstone (the caller skips it); null
+ * when nothing was removed.
+ */
+export function FilesRemovedLine(props: {
+  counts: Partial<RemovedFiles> | undefined;
+  mine: boolean;
+  layout: ChatLayout;
+  className?: string | undefined;
+}): ReactElement | null {
+  const label = props.counts !== undefined ? removedFilesLabel(props.counts) : '';
+  if (label === '') return null;
+  return (
+    <p
+      data-testid="files-removed-line"
+      className={cn(
+        'flex min-w-0 items-center gap-1.5 italic',
+        props.mine ? 'text-[color:var(--bubble-meta-own)]' : 'text-[color:var(--bubble-meta)]',
+        sized(BUBBLE_BODY_TYPE, props.layout),
+        props.className,
+      )}
+    >
+      <IconBan size={ICON_SIZE.inline} />
+      <span>{label}</span>
+    </p>
   );
 }
 

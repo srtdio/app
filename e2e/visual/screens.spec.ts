@@ -15,6 +15,12 @@ import {
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
 import { AUDIT_BRIEF_ID, seedAudit, type AuditSeedOptions } from '../fixtures/audit-pr-b';
+import {
+  ALBUM_PHOTOS,
+  REMOVED_BODY,
+  seedRemovableFiles,
+  seedRemovedLine,
+} from '../fixtures/remove-files';
 import { ONBOARDING_NOW, ONBOARDING_SCREENS, signOut } from './onboarding-steps';
 
 // Visual lock: every screen of the consistency audit (24 Oct 2026), the chat
@@ -233,6 +239,27 @@ async function openChatPlan(page: Page): Promise<void> {
   const card = await openChatPlanCard(page);
   await card.locator('[data-plan-open]').click();
   await waitFor([page.locator('[data-plan-page="plan"]')], 'plan screen');
+}
+
+/** The DM's contact info on one tab (Media, Files, ...). */
+async function openContactTab(page: Page, label: string): Promise<void> {
+  await openDm(page);
+  await tap([page.locator('[data-contact-open]')], 'contact info trigger');
+  await waitFor([page.getByRole('button', { name: 'Close contact info', exact: true })], 'contact');
+  await tap(
+    [page.getByRole('tablist').getByRole('button', { name: label, exact: true })],
+    `${label} tab`,
+  );
+  await waitFor([page.locator(`[data-contact-tab="${label.toLowerCase()}"]`)], `${label} tab`);
+}
+
+/** Select mode on a contact info tab with the first own file ticked. */
+async function contactSelect(page: Page, label: string): Promise<void> {
+  await openContactTab(page, label);
+  await tap([page.getByTestId('info-select')], 'Select');
+  await waitFor([page.getByTestId('info-select-bar')], 'select bar');
+  await tap([page.locator('[data-info-tick][aria-pressed="false"]')], 'own file');
+  await waitFor([page.locator('[data-info-tick][aria-pressed="true"]')], 'ticked file');
 }
 
 // ---------------------------------------------------------------------------
@@ -630,6 +657,50 @@ const SCREENS: Screen[] = [
       await openDm(page);
       await tap([page.getByRole('button', { name: 'Add attachment', exact: true })], 'attach');
       await waitFor([page.locator('[data-tray]')], 'composer tray');
+    },
+  },
+  {
+    // Contact info -> Media in select mode: own photos ticked, a peer's without a check.
+    name: 'contact-media-select',
+    seed: creator,
+    extra: (network) => seedRemovableFiles(network.world),
+    url: '/chat',
+    steps: async (page) => contactSelect(page, 'Media'),
+  },
+  {
+    // Contact info -> Files in select mode with the own PDF ticked.
+    name: 'contact-files-select',
+    seed: creator,
+    extra: (network) => seedRemovableFiles(network.world),
+    url: '/chat',
+    steps: async (page) => contactSelect(page, 'Files'),
+  },
+  {
+    // The photo viewer on an own photo: the bin left of Download.
+    name: 'viewer-remove',
+    seed: creator,
+    extra: (network) => seedRemovableFiles(network.world),
+    url: '/chat',
+    steps: async (page) => {
+      await openContactTab(page, 'Media');
+      const own = ALBUM_PHOTOS[0].name;
+      const media = page.locator('[data-contact-tab="media"]');
+      await tap([media.getByRole('button', { name: own, exact: true })], 'own photo tile');
+      const viewer = page.getByRole('dialog', { name: 'Image viewer' });
+      await waitFor([viewer.getByRole('button', { name: 'Remove photo' })], 'viewer bin');
+    },
+  },
+  {
+    // An own message that lost two photos and kept its text: the removed line.
+    name: 'chat-thread-files-removed',
+    seed: creator,
+    extra: (network) => seedRemovedLine(network.world),
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const kept = page.locator('[data-bubble]', { hasText: REMOVED_BODY }).last();
+      await kept.scrollIntoViewIfNeeded();
+      await waitFor([kept.getByTestId('files-removed-line')], 'files removed line');
     },
   },
 ];

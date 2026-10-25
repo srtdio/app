@@ -45,6 +45,7 @@ function row(id: string, channelId: string, over: Partial<DispatchedRow> = {}): 
     deleted_at: null,
     edited_at: null,
     forwarded_from_message_id: null,
+    removed_files: {},
     id,
     mentions: null,
     reply_to_message_id: null,

@@ -42,6 +42,7 @@ function row(id: string, createdMs: number): ChatMessageRow {
     reply_to_message_id: null,
     thread_root_message_id: null,
     forwarded_from_message_id: null,
+    removed_files: {},
     attachment_meta: null,
     agora_event_id: null,
     created_at: new Date(createdMs).toISOString(),

@@ -12,10 +12,12 @@ import {
   ChatInfoTabs,
   ChatInfoTabsView,
   type ChatInfoTabsViewProps,
+  type InfoSelectChrome,
 } from '@/components/chat/ChatInfoTabs';
 import type { MarksListProps } from '@/components/chat/MarksSheet';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { ChatProfile } from '@/lib/chat-reads';
+import type { RemovableFile } from '@/lib/chat/remove-files';
 
 export {
   appendPage,
@@ -51,7 +53,11 @@ function ContactPhoto(props: { name: string; avatarUrl: string | null }): ReactE
   );
 }
 
-/** The page chrome around the tabs: back bar, photo, name, role line. Hook-free. */
+/**
+ * The page chrome around the tabs: back bar, photo, name, role line. With
+ * `select`, the bar carries Select top right; in select mode the bar is "n
+ * selected" and Cancel, and the Remove bar sits under the page. Hook-free.
+ */
 function contactPage(props: {
   heading: string;
   onClose: () => void;
@@ -59,7 +65,9 @@ function contactPage(props: {
   avatarUrl: string | null;
   roleLine: string | null;
   tabs: ReactElement;
+  select?: InfoSelectChrome;
 }): ReactElement {
+  const select = props.select;
   return (
     <ModalPanel
       aria-label={props.heading}
@@ -67,10 +75,17 @@ function contactPage(props: {
       className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel px-2 md:px-4">
-        <IconButton label={`Close ${props.heading.toLowerCase()}`} onClick={props.onClose}>
-          <IconChevronLeft size={ICON_SIZE.control} />
-        </IconButton>
-        <h2 className="truncate text-lg font-semibold text-fg">{props.heading}</h2>
+        {select?.selecting === true ? (
+          select.header
+        ) : (
+          <>
+            <IconButton label={`Close ${props.heading.toLowerCase()}`} onClick={props.onClose}>
+              <IconChevronLeft size={ICON_SIZE.control} />
+            </IconButton>
+            <h2 className="truncate text-lg font-semibold text-fg">{props.heading}</h2>
+            {select?.header ?? null}
+          </>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6">
@@ -88,6 +103,7 @@ function contactPage(props: {
           {props.tabs}
         </div>
       </div>
+      {select?.bar ?? null}
     </ModalPanel>
   );
 }
@@ -145,6 +161,8 @@ export interface ContactSheetProps {
   presignEnabled: boolean;
   marks: Omit<MarksListProps, 'open' | 'onJump'> | null;
   onJump: (messageId: string) => void;
+  /** Remove own files from Media / Files (Select, the viewer's bin); absent hides both. */
+  onRemoveFiles?: (files: RemovableFile[]) => void;
 }
 
 /** The stateful page: ChatInfoTabs owns the tab, feeds and lightbox. Key it by channel. */
@@ -167,7 +185,8 @@ export function ContactSheet(props: ContactSheetProps): ReactElement {
         onJump(messageId);
       }}
       onEscape={onClose}
-      frame={(tabs) =>
+      {...(props.onRemoveFiles !== undefined ? { onRemoveFiles: props.onRemoveFiles } : {})}
+      frame={(tabs, select) =>
         contactPage({
           heading,
           onClose,
@@ -175,6 +194,7 @@ export function ContactSheet(props: ContactSheetProps): ReactElement {
           avatarUrl: props.avatarUrl,
           roleLine: props.roleLine,
           tabs,
+          select,
         })
       }
     />,
