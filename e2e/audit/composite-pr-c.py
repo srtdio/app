@@ -8,12 +8,15 @@ ipad cells about 486, laptop cells 1000), a label is stamped top-left, and a
 missing PNG renders a placeholder cell labelled "not captured".
 
 Usage (PIL required; run isolated):
-  python3 -I e2e/audit/composite-pr-c.py BEFORE_DIR AFTER_DIR OUT_DIR
+  python3 -I e2e/audit/composite-pr-c.py BEFORE_DIR AFTER_DIR OUT_DIR [onboarding]
 
 Inputs are capture-pr-c.spec.ts PNGs: <screen>__<phone|laptop|ipad>__<light|dark>.png.
 Writes OUT_DIR/<screen>.jpg and OUT_DIR/index.json (screen -> what it shows:
 E3-01 and E5-01 are the 24 Oct consistency audit findings; PRC1 to PRC5 are
-PR C's decisions) and prints the total size.
+PR C's decisions) and prints the total size. With the onboarding argument it
+composes the ONBOARDING screens instead (capture-pr-c-onboarding.spec.ts PNGs)
+and merges them into the index.json already in OUT_DIR, keeping its entries;
+the size check then covers the whole OUT_DIR.
 """
 
 import json
@@ -24,20 +27,50 @@ from PIL import Image, ImageDraw, ImageFont
 
 # Screen -> what the before/after pair shows.
 SCREENS = {
-    "chat-list": ["E3-01", "E5-01", "PRC1-avatars", "PRC2-badges"],
-    "chat-thread": ["E3-01", "PRC1-avatars", "PRC3-icons"],
-    "chat-thread-group": ["E3-01", "PRC1-avatars", "PRC3-icons"],
-    "chat-search-empty": ["E3-01", "PRC1-avatars"],
-    "chat-info-group": ["PRC1-avatars", "PRC3-icons"],
+    "chat-list": ["E3-01", "E5-01", "PRC1-avatars"],
+    "chat-thread": ["E3-01", "PRC1-avatars"],
+    "chat-thread-group": ["E3-01", "PRC1-avatars"],
+    "chat-search-empty": ["E3-01"],
+    "chat-info-group": ["PRC1-avatars"],
     "members": ["PRC1-avatars"],
-    "pipeline": ["E5-01", "PRC2-badges", "PRC3-icons"],
-    "notifications": ["E5-01", "PRC1-avatars", "PRC2-badges"],
-    "post-more-menu": ["PRC3-icons", "PRC5-gestures"],
-    "message-action-menu": ["PRC3-icons", "PRC5-gestures"],
+    "pipeline": ["E5-01", "PRC2-badges"],
+    "notifications": ["E5-01", "PRC1-avatars"],
+    "post-more-menu": ["PRC3-icons"],
+    "message-action-menu": ["PRC3-icons"],
     "composer-tray": ["PRC3-icons"],
-    "post-detail-approver": ["PRC1-avatars", "PRC3-icons"],
+    "post-detail-approver": ["PRC1-avatars"],
     "chat-list-ipad": ["PRC4-breakpoint"],
     "pipeline-ipad": ["PRC4-breakpoint"],
+}
+
+# The onboarding screens (capture-pr-c-onboarding.spec.ts) -> what they show:
+# ONB-auth the signed-out screens, ONB-preapp OnboardingFlow, ONB-setup the
+# creator's setup in the shell under the guide, ONB-tour the approver tour.
+# Then what the pair shows: unchanged (no pixel differs), PRC1-avatars,
+# guide-dock (the guide bar and cards dock on the shared inset), preview-race
+# (the laptop composer preview ends measured or "Measuring the original." run
+# to run, a product race the visual lock masks).
+ONBOARDING = {
+    "onboarding-sign-up": ["ONB-auth", "unchanged"],
+    "onboarding-sign-in": ["ONB-auth", "unchanged"],
+    "onboarding-invite-accept": ["ONB-auth", "unchanged"],
+    "onboarding-welcome": ["ONB-preapp", "unchanged"],
+    "onboarding-side": ["ONB-preapp", "PRC1-avatars"],
+    "onboarding-name": ["ONB-preapp", "PRC1-avatars"],
+    "onboarding-photo-crop": ["ONB-preapp", "PRC1-avatars"],
+    "onboarding-role": ["ONB-preapp", "PRC1-avatars"],
+    "onboarding-brand": ["ONB-preapp", "PRC1-avatars"],
+    "onboarding-waiting": ["ONB-preapp", "unchanged"],
+    "onboarding-workspace-slot": ["ONB-setup", "PRC1-avatars"],
+    "onboarding-workspace-name": ["ONB-setup", "PRC1-avatars"],
+    "onboarding-workspace-confirm": ["ONB-setup", "PRC1-avatars"],
+    "onboarding-first-post": ["ONB-setup", "PRC1-avatars", "preview-race"],
+    "onboarding-invite-approver": ["ONB-setup", "PRC1-avatars"],
+    "onboarding-done": ["ONB-setup", "PRC1-avatars", "guide-dock"],
+    "onboarding-tour-intro": ["ONB-tour", "PRC1-avatars", "guide-dock"],
+    "onboarding-tour-1": ["ONB-tour", "PRC1-avatars", "guide-dock"],
+    "onboarding-tour-2": ["ONB-tour", "PRC1-avatars", "guide-dock"],
+    "onboarding-tour-3": ["ONB-tour", "PRC1-avatars", "guide-dock"],
 }
 
 # Cell sizes: iPhone 13 is 390x844 CSS px, iPad portrait 820x1180, the laptop 1280x800.
@@ -135,22 +168,40 @@ def composite(before, after, screen):
     return sheet
 
 
+def folder_size(directory):
+    return sum(
+        os.path.getsize(os.path.join(directory, name))
+        for name in os.listdir(directory)
+        if os.path.isfile(os.path.join(directory, name))
+    )
+
+
 def main(argv):
-    if len(argv) != 4:
+    if len(argv) not in (4, 5) or (len(argv) == 5 and argv[4] != "onboarding"):
         print(__doc__)
         return 2
     before, after, out = argv[1], argv[2], argv[3]
+    onboarding = len(argv) == 5
+    screens = ONBOARDING if onboarding else SCREENS
     os.makedirs(out, exist_ok=True)
     total = 0
-    for screen in SCREENS:
+    for screen in screens:
         path = os.path.join(out, f"{screen}.jpg")
         composite(before, after, screen).save(path, "JPEG", quality=QUALITY, optimize=True)
         total += os.path.getsize(path)
     index = os.path.join(out, "index.json")
+    entries = {}
+    if onboarding and os.path.isfile(index):
+        with open(index, encoding="utf-8") as fh:
+            entries = json.load(fh)
+    entries.update(screens)
     with open(index, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps(SCREENS, indent=2) + "\n")
+        fh.write(json.dumps(entries, indent=2) + "\n")
     total += os.path.getsize(index)
-    print(f"{len(SCREENS)} composites, {total / 1_000_000:.2f} MB in {out}")
+    print(f"{len(screens)} composites, {total / 1_000_000:.2f} MB written in {out}")
+    if onboarding:
+        total = folder_size(out)
+        print(f"{out} holds {total / 1_000_000:.2f} MB")
     return 0 if total < 10_000_000 else 1
 
 

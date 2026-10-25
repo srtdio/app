@@ -15,9 +15,12 @@ import {
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
 import { AUDIT_BRIEF_ID, seedAudit, type AuditSeedOptions } from '../fixtures/audit-pr-b';
+import { ONBOARDING_NOW, ONBOARDING_SCREENS, signOut } from './onboarding-steps';
 
-// Visual lock: every screen of the consistency audit (24 Oct 2026) plus the
-// chat PostSheet, one toHaveScreenshot each, in every project of
+// Visual lock: every screen of the consistency audit (24 Oct 2026), the chat
+// PostSheet and the onboarding screens (onboarding-steps.ts: sign up, sign in,
+// the invite link, every pre-app screen, the creator's setup in the shell and
+// the approver tour's first steps), one toHaveScreenshot each, in every project of
 // e2e/visual/playwright.visual.config.ts (iPhone 13 light and dark, laptop
 // light). Run and update through that config (see its header):
 //
@@ -31,7 +34,7 @@ import { AUDIT_BRIEF_ID, seedAudit, type AuditSeedOptions } from '../fixtures/au
 // Selectors are roles, labels, visible text and data- hooks only.
 
 /** The fixed instant: a Wednesday morning (UTC, the fixture workspace's zone). */
-const NOW = Date.parse('2026-10-21T10:30:00Z');
+const NOW = ONBOARDING_NOW;
 const POST = POST_IDS[0] ?? '';
 const READY_MS = 20_000;
 /** A query no fixture row matches. */
@@ -44,9 +47,16 @@ const LIB_IMAGE_VERSION = '0190e100-0000-7000-8000-0000000000f1';
 
 interface Screen {
   name: string;
-  seed: AuditSeedOptions;
+  /** The audit world on top of the fixture world; null leaves the fixture world as built. */
+  seed: AuditSeedOptions | null;
   /** Extra world edits after the seed. */
   extra?: (network: HarnessNetwork) => void;
+  /** World edits that may also add page routes (the onboarding screens). */
+  prepare?: (network: HarnessNetwork, page: Page, now: number) => Promise<void> | void;
+  /** No session (the guest routes and the invite link's Join card). */
+  signedOut?: boolean;
+  /** Regions masked in the screenshot (a product race no walker can settle). */
+  mask?: (page: Page) => Locator[];
   url: string;
   /** Waits for the page, then walks to the state to capture. */
   steps: (page: Page) => Promise<void>;
@@ -665,8 +675,10 @@ for (const screen of SCREENS) {
     const network = await installHarnessNetwork(page);
     // Rebuild the world at the fixed instant (the handlers read world.tables per request).
     Object.assign(network.world, buildWorld(NOW));
-    seedAudit(network, screen.seed, NOW);
+    if (screen.signedOut === true) await signOut(page);
+    if (screen.seed !== null) seedAudit(network, screen.seed, NOW);
     screen.extra?.(network);
+    await screen.prepare?.(network, page, NOW);
     await installDeletedRoutes(page, network);
     await page.goto(screen.url);
     await screen.steps(page);
@@ -675,6 +687,7 @@ for (const screen of SCREENS) {
       maxDiffPixelRatio: 0.002,
       animations: 'disabled',
       caret: 'hide',
+      ...(screen.mask !== undefined ? { mask: screen.mask(page) } : {}),
     });
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   });
