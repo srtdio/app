@@ -7,7 +7,7 @@ import { useSession } from '@/lib/session-context';
  * Minimal centered loading state shown while the initial Supabase session
  * resolves, so neither guard flashes the wrong screen on first paint.
  */
-function SessionLoading() {
+export function SessionLoading() {
   return (
     <div className="min-h-full w-full grid place-items-center bg-bg">
       <span className="text-base text-fg-3">Loading</span>

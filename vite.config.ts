@@ -23,6 +23,24 @@ const sentryPlugins: PluginOption[] = isCI
     ]
   : [];
 
+// Stable vendors get their own long-cached chunks, so an app code change does
+// not change their hashes. Matched on the package directory under the last
+// node_modules segment (pnpm nests packages under node_modules/.pnpm/...).
+const VENDOR_CHUNKS: ReadonlyArray<readonly [string, RegExp]> = [
+  [
+    'vendor-react',
+    /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|@remix-run[\\/]router|scheduler)[\\/]/,
+  ],
+  ['vendor-supabase', /[\\/]node_modules[\\/]@supabase[\\/]/],
+  ['vendor-agora', /[\\/]node_modules[\\/]agora-chat[\\/]/],
+  ['vendor-sentry', /[\\/]node_modules[\\/]@sentry(-internal)?[\\/]/],
+  ['vendor-zod', /[\\/]node_modules[\\/]zod[\\/]/],
+];
+
+function vendorChunk(id: string): string | undefined {
+  return VENDOR_CHUNKS.find(([, pattern]) => pattern.test(id))?.[0];
+}
+
 export default defineConfig({
   plugins: [react(), ...sentryPlugins],
   resolve: {
@@ -38,5 +56,10 @@ export default defineConfig({
     // scripts/prerender.ts reads the hashed CSS for each prerendered page from
     // the manifest, then deletes it from dist.
     manifest: true,
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunk,
+      },
+    },
   },
 });

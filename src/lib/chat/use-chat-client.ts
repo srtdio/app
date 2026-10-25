@@ -15,9 +15,15 @@ import { SIGNOUT_EVENT } from '@/lib/events';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { fetchChatToken } from '@/lib/chat/chat-token';
-import { createAgoraConnection } from '@/lib/chat/connection';
+import { createAgoraConnection, loadAgoraSdk } from '@/lib/chat/connection';
+import { withChunkReload } from '@/lib/chunk-reload';
 import { runChatConnection } from '@/lib/chat/controller';
-import type { ChatConnection, ChatContextValue, ChatStatus } from '@/lib/chat/types';
+import type {
+  ChatConnection,
+  ChatContextValue,
+  ChatStatus,
+  ChatTokenResult,
+} from '@/lib/chat/types';
 
 /** The inputs a connection is keyed on; anything else (the token) never reopens it. */
 export interface ConnectionKeyInputs {
@@ -33,6 +39,17 @@ export interface ConnectionKeyInputs {
  */
 export function connectionKey(inputs: ConnectionKeyInputs): string {
   return `${inputs.url ?? ''}|${inputs.userId ?? ''}|${inputs.workspaceId ?? ''}`;
+}
+
+/** Load the SDK chunk; a stale chunk after a deploy reloads the page once. */
+const loadSdkOnce = withChunkReload(loadAgoraSdk);
+
+/** True once the SDK is loaded; false on a failed load (never rejects). */
+function loadSdk(): Promise<boolean> {
+  return loadSdkOnce().then(
+    () => true,
+    () => false,
+  );
 }
 
 /** Subscribe to the shell's signout event; returns the unsubscribe. */
@@ -87,13 +104,21 @@ export function useChatClient(): ChatContextValue {
       return;
     }
     const handle = runChatConnection({
-      fetchToken: () =>
-        fetchChatToken({
-          url,
-          accessToken: accessTokenRef.current,
-          workspaceId,
-          fetcher: fetchWithTrace,
-        }),
+      // The agora-chat SDK chunk loads in parallel with the token, so the
+      // connection is built only once the SDK is on the page. A failed SDK
+      // load reads as a network failure and retries on the same backoff.
+      fetchToken: async (): Promise<ChatTokenResult> => {
+        const [result, sdkReady] = await Promise.all([
+          fetchChatToken({
+            url,
+            accessToken: accessTokenRef.current,
+            workspaceId,
+            fetcher: fetchWithTrace,
+          }),
+          loadSdk(),
+        ]);
+        return sdkReady ? result : { ok: false, reason: 'network' };
+      },
       createConnection: createAgoraConnection,
       setStatus,
       setClient,

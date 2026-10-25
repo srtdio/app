@@ -1,11 +1,17 @@
 // The single place a message object is built from the real agora-chat SDK,
 // isolating the SDK value import the way connection.ts isolates the Connection
 // constructor. thread.ts and typing.ts stay SDK-free by taking these as
-// injected factories.
+// injected factories. The SDK itself is the lazily loaded module from
+// connection.ts: a message is only built for a live connection, which exists
+// only once that load resolved.
 
-import websdk from 'agora-chat';
+import { agoraSdk, loadAgoraSdk } from '@/lib/chat/connection';
 import type { CreateTextMessage } from '@/lib/chat/thread';
 import type { CreateCmdMessage } from '@/lib/chat/typing';
+
+// Start the SDK chunk as soon as chat code is on the page; the connection
+// awaits the same load, so this only warms it. A failure is retried there.
+void loadAgoraSdk().catch(() => undefined);
 
 /**
  * Bind `AgoraChat.message.create` to the text-message option shape. Plain text
@@ -14,7 +20,7 @@ import type { CreateCmdMessage } from '@/lib/chat/typing';
  * extension field, which the receiver reads back to dedupe against the record.
  */
 export const createTextMessage: CreateTextMessage = (options) =>
-  websdk.message.create({
+  agoraSdk().message.create({
     chatType: options.chatType,
     type: options.type,
     to: options.to,
@@ -30,7 +36,7 @@ export const createTextMessage: CreateTextMessage = (options) =>
  * deliverOnlineOnly: true to drop them for offline recipients instead.
  */
 export const createCmdMessage: CreateCmdMessage = (options) =>
-  websdk.message.create({
+  agoraSdk().message.create({
     chatType: options.chatType,
     type: options.type,
     to: options.to,
