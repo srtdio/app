@@ -2,38 +2,40 @@ import { useState, type CSSProperties } from 'react';
 import { cn } from '@/lib/cn';
 import { IconUser } from '@/components/ui/icons';
 
+/**
+ * Where an avatar sits; the role alone decides its size. 'inline' (20) beside a
+ * name in a meta line; 'header' (32) in a thread or detail header; 'row' (40)
+ * in a list row (chat list, members, search, pickers); 'profile' (72) on a
+ * profile or group info screen. No other sizes.
+ */
+export type AvatarRole = 'inline' | 'header' | 'row' | 'profile';
+
+/** Who the avatar stands for: people are circles, groups and personal notes rounded squares. */
+export type AvatarKind = 'person' | 'group' | 'note';
+
 interface AvatarProps {
   name?: string;
   src?: string;
-  /**
-   * 'row' is the 48px dense chat-list row avatar (text-base initials); 'header' is
-   * the 40px group thread header photo; 'hero' is the 112px group info photo.
-   */
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'row' | 'header' | 'hero';
-  /** 'rounded' is the 24px-radius rounded square (group info photo); default circle. */
-  shape?: 'circle' | 'rounded';
+  role: AvatarRole;
+  /** Defaults to 'person' (circle). */
+  kind?: AvatarKind;
   /** 'online' adds a bottom-right presence dot; absent renders no dot. */
   presence?: 'online' | undefined;
 }
 
-const PX: Record<NonNullable<AvatarProps['size']>, number> = {
-  sm: 24,
-  md: 26,
-  lg: 32,
-  xl: 48,
-  row: 48,
-  header: 40,
-  hero: 112,
+/** The pixel size of each role (exported for tests and for layout that must line up with it). */
+export const AVATAR_PX: Record<AvatarRole, number> = {
+  inline: 20,
+  header: 32,
+  row: 40,
+  profile: 72,
 };
 
-const INITIALS_TYPE: Record<NonNullable<AvatarProps['size']>, string> = {
-  sm: 'text-sm',
-  md: 'text-sm',
-  lg: 'text-sm',
-  xl: 'text-sm',
+const INITIALS_TYPE: Record<AvatarRole, string> = {
+  inline: 'text-xs',
+  header: 'text-sm',
   row: 'text-base',
-  header: 'text-base',
-  hero: 'text-3xl',
+  profile: 'text-2xl',
 };
 
 // Token-driven fills (--avatar-1..6 in index.css, light and dark), each 4.5:1 or
@@ -56,19 +58,21 @@ export function avatarFillFor(name: string): string {
   return PALETTE[sum % PALETTE.length] ?? 'bg-avatar-1';
 }
 
-function initialsFor(name: string): string {
+/** One or two initials for a name (first and last word). */
+export function initialsFor(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const first = parts[0]?.charAt(0) ?? '';
   const last = parts.length > 1 ? (parts[parts.length - 1]?.charAt(0) ?? '') : '';
   return (first + last).toUpperCase();
 }
 
-const base = 'inline-flex items-center justify-center select-none';
+/** The shape class for a kind at a role: circle for people; rounded-lg at 40 and below, rounded-xl above. */
+export function avatarShapeClass(role: AvatarRole, kind: AvatarKind = 'person'): string {
+  if (kind === 'person') return 'rounded-full';
+  return AVATAR_PX[role] <= 40 ? 'rounded-lg' : 'rounded-xl';
+}
 
-const SHAPE: Record<NonNullable<AvatarProps['shape']>, string> = {
-  circle: 'rounded-full',
-  rounded: 'rounded-2xl',
-};
+const base = 'inline-flex shrink-0 items-center justify-center select-none';
 
 export function Avatar({ presence, ...props }: AvatarProps) {
   if (presence !== 'online') return <AvatarFace {...props} />;
@@ -84,10 +88,10 @@ export function Avatar({ presence, ...props }: AvatarProps) {
   );
 }
 
-function AvatarFace({ name, src, size = 'md', shape = 'circle' }: Omit<AvatarProps, 'presence'>) {
+function AvatarFace({ name, src, role, kind = 'person' }: Omit<AvatarProps, 'presence'>) {
   const [errored, setErrored] = useState(false);
-  const px = PX[size];
-  const box = `${SHAPE[shape]} ${base}`;
+  const px = AVATAR_PX[role];
+  const box = `${avatarShapeClass(role, kind)} ${base}`;
   const style: CSSProperties = { width: px, height: px };
 
   if (src !== undefined && !errored) {
@@ -96,6 +100,7 @@ function AvatarFace({ name, src, size = 'md', shape = 'circle' }: Omit<AvatarPro
         src={src}
         alt={name ?? ''}
         style={style}
+        data-avatar-role={role}
         onError={() => setErrored(true)}
         className={cn(box, 'object-cover')}
       />
@@ -106,7 +111,8 @@ function AvatarFace({ name, src, size = 'md', shape = 'circle' }: Omit<AvatarPro
     return (
       <div
         style={style}
-        className={cn(box, avatarFillFor(name), 'text-white font-medium', INITIALS_TYPE[size])}
+        data-avatar-role={role}
+        className={cn(box, avatarFillFor(name), 'text-white font-medium', INITIALS_TYPE[role])}
       >
         {initialsFor(name)}
       </div>
@@ -114,7 +120,11 @@ function AvatarFace({ name, src, size = 'md', shape = 'circle' }: Omit<AvatarPro
   }
 
   return (
-    <div style={style} className={cn(box, 'bg-accent-soft border border-accent-line text-accent')}>
+    <div
+      style={style}
+      data-avatar-role={role}
+      className={cn(box, 'bg-accent-soft border border-accent-line text-accent')}
+    >
       <IconUser size={Math.round(px * 0.6)} />
     </div>
   );

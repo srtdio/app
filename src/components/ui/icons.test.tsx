@@ -53,6 +53,7 @@ const DOCUMENTED = [
   'IconPaperclip',
   'IconPause',
   'IconPauseFill',
+  'IconPhoto',
   'IconPin',
   'IconPipeline',
   'IconPlan',
