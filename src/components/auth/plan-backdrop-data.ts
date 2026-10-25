@@ -2,6 +2,9 @@
 // of the device's current date, every cell carrying a sample thumbnail that
 // already ships under public/induction-sample/thumb/.
 
+import { monthLabel } from '@/lib/plan-tab';
+import { civilWeekdayShort } from '@/lib/plan-week';
+
 export const BACKDROP_THUMBS = [
   'look-1',
   'look-2',
@@ -80,13 +83,19 @@ export function backdropMonth(today: Date): BackdropCell[][] {
   return weeks;
 }
 
-/** Monday-first short weekday labels in the device locale. */
-export function backdropWeekdays(): string[] {
-  const format = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
-  // 5 Jan 2026 is a Monday.
-  return Array.from({ length: 7 }, (_, i) => format.format(new Date(2026, 0, 5 + i)));
+function civil(date: Date): string {
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${m}-${d}`;
 }
 
+/** Monday-first short weekday labels, the same ones the Plan month header shows. */
+export function backdropWeekdays(): string[] {
+  // 5 Jan 2026 is a Monday.
+  return Array.from({ length: 7 }, (_, i) => civilWeekdayShort(civil(new Date(2026, 0, 5 + i))));
+}
+
+/** "October 2026", the same label the Plan toolbar shows. */
 export function backdropMonthLabel(today: Date): string {
-  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(today);
+  return monthLabel(civil(today));
 }

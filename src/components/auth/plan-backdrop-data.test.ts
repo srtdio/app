@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BACKDROP_THUMBS,
   backdropMonth,
+  backdropMonthLabel,
   backdropThumbSrc,
   backdropWeekdays,
 } from '@/components/auth/plan-backdrop-data';
@@ -73,12 +74,14 @@ describe('backdropMonth', () => {
 });
 
 describe('backdropWeekdays', () => {
-  it('returns 7 labels starting Monday', () => {
-    const labels = backdropWeekdays();
-    expect(labels).toHaveLength(7);
-    const monday = new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(
-      new Date(2026, 9, 26),
-    );
-    expect(labels[0]).toBe(monday);
+  it('returns the Plan header labels starting Monday', () => {
+    expect(backdropWeekdays()).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+  });
+});
+
+describe('backdropMonthLabel', () => {
+  it('matches the Plan toolbar label', () => {
+    expect(backdropMonthLabel(new Date(2026, 9, 25))).toBe('October 2026');
+    expect(backdropMonthLabel(new Date(2027, 1, 1))).toBe('February 2027');
   });
 });
