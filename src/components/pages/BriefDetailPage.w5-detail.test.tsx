@@ -36,7 +36,7 @@ const h = vi.hoisted(() => ({
   getBriefGallery: vi.fn(),
   briefClose: vi.fn(),
   reopenBrief: vi.fn(),
-  listPosts: vi.fn(),
+  linkedPosts: vi.fn(),
   caps: {} as Record<string, boolean>,
   members: { loading: false },
   viewer: 'u1',
@@ -49,9 +49,10 @@ vi.mock('@srtdio/briefs', () => ({
   reopenBrief: (...args: unknown[]) => h.reopenBrief(...args),
 }));
 vi.mock('@srtdio/rpc', () => ({ briefClose: (...args: unknown[]) => h.briefClose(...args) }));
-vi.mock('@srtdio/posts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@srtdio/posts')>()),
-  listPosts: (...args: unknown[]) => h.listPosts(...args),
+// The linked-posts list is one posts read filtered on brief_id.
+vi.mock('../../../packages/posts/src/reads', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../packages/posts/src/reads')>()),
+  listBriefLinkedPosts: (...args: unknown[]) => h.linkedPosts(...args),
 }));
 vi.mock('@/lib/supabase', () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
@@ -191,7 +192,7 @@ beforeEach(() => {
   h.getBriefGallery.mockReset().mockResolvedValue({ ok: true, data: [] });
   h.briefClose.mockReset().mockResolvedValue({ ok: true, data: null });
   h.reopenBrief.mockReset().mockResolvedValue({ ok: true, data: undefined });
-  h.listPosts.mockReset().mockResolvedValue({ ok: true, data: [] });
+  h.linkedPosts.mockReset().mockResolvedValue({ ok: true, data: [] });
   h.caps = {};
   h.members.loading = false;
   h.viewer = 'u1';
@@ -846,7 +847,7 @@ describe('Brief detail linked posts', () => {
     brief_id: briefId,
   });
 
-  it('0 linked posts shows nothing and reads nothing', async () => {
+  it('0 linked posts shows nothing', async () => {
     h.getBrief.mockResolvedValue({
       ...detail(),
       data: { ...detail().data, linked_posts_count: 0 },
@@ -854,21 +855,47 @@ describe('Brief detail linked posts', () => {
     await mount();
     expect(document.querySelector('[data-linked-posts]')).toBeNull();
     expect(text()).not.toContain('Linked posts');
-    expect(h.listPosts).not.toHaveBeenCalled();
   });
 
-  it('lists the linked posts as rows that open /posts/{id}, newest first', async () => {
-    h.listPosts.mockResolvedValue({
+  it('reads the linked posts by brief_id beside the brief read (never a workspace scan)', async () => {
+    let answerBrief: (value: unknown) => void = () => {};
+    h.getBrief.mockReturnValue(
+      new Promise((resolve) => {
+        answerBrief = resolve;
+      }),
+    );
+    await mount();
+    // The brief has not answered, yet the linked read already went out.
+    expect(h.linkedPosts).toHaveBeenCalledTimes(1);
+    expect(h.linkedPosts.mock.calls[0]?.[1]).toEqual({ briefId: 'b1', limit: LINKED_POSTS_SCAN });
+    answerBrief(detail());
+    await flush();
+    expect(h.linkedPosts).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the skeleton until the linked list lands (it never pops in under the page)', async () => {
+    let answerLinked: (value: unknown) => void = () => {};
+    h.linkedPosts.mockReturnValue(
+      new Promise((resolve) => {
+        answerLinked = resolve;
+      }),
+    );
+    h.getBrief.mockResolvedValue(detail());
+    await mount();
+    expect(document.querySelector('[data-testid="brief-detail-skeleton"]')).not.toBeNull();
+    answerLinked({ ok: true, data: [post('p1', 'b1', '2026-10-02T00:00:00Z')] });
+    await flush();
+    expect(document.querySelector('[data-testid="brief-detail-skeleton"]')).toBeNull();
+    expect(document.querySelector('[data-linked-posts]')).not.toBeNull();
+  });
+
+  it('lists the linked posts as rows that open /posts/{id}, in the read order (newest first)', async () => {
+    h.linkedPosts.mockResolvedValue({
       ok: true,
-      data: [
-        post('p1', 'b1', '2026-10-02T00:00:00Z'),
-        post('p9', 'other', '2026-10-03T00:00:00Z'),
-        post('p2', 'b1', '2026-10-04T00:00:00Z'),
-      ],
+      data: [post('p2', 'b1', '2026-10-04T00:00:00Z'), post('p1', 'b1', '2026-10-02T00:00:00Z')],
     });
     h.getBrief.mockResolvedValue(detail());
     await mount();
-    expect(h.listPosts.mock.calls[0]?.[1]).toEqual({ workspaceId: 'w1', limit: LINKED_POSTS_SCAN });
     const rows = [
       ...document.querySelectorAll<HTMLAnchorElement>(
         '[data-brief-details="desktop"] ~ [data-linked-posts] a[data-linked-post]',
@@ -880,7 +907,7 @@ describe('Brief detail linked posts', () => {
   });
 
   it('keeps the count as a pipeline link when the read cannot list every post', async () => {
-    h.listPosts.mockResolvedValue({ ok: true, data: [post('p1', 'b1', '2026-10-02T00:00:00Z')] });
+    h.linkedPosts.mockResolvedValue({ ok: true, data: [post('p1', 'b1', '2026-10-02T00:00:00Z')] });
     h.getBrief.mockResolvedValue(detail());
     await mount();
     const count = document.querySelector<HTMLAnchorElement>('[data-linked-posts-count]');

@@ -86,3 +86,37 @@ describe('resolveRef', () => {
     expect(await resolveRef(client, 'GBL-5', 'post')).toEqual({ status: 'notfound' });
   });
 });
+
+describe('resolveRef with the loaded workspaces', () => {
+  function countingClient(tables: Record<string, SingleResult>): {
+    client: Client;
+    asked: string[];
+  } {
+    const asked: string[] = [];
+    const client = {
+      from(table: string): FakeBuilder {
+        asked.push(table);
+        return builder(tables[table] ?? { data: null, error: null });
+      },
+    };
+    return { client: client as unknown as Client, asked };
+  }
+
+  it('skips the workspace lookup for a key the session already loaded (one request)', async () => {
+    const { client, asked } = countingClient({ posts: row('post-1') });
+    const res = await resolveRef(client, 'gbl-5', 'post', {
+      workspaces: [{ id: 'w1', key: 'GBL' }],
+    });
+    expect(res).toEqual({ status: 'resolved', id: 'post-1' });
+    expect(asked).toEqual(['posts']);
+  });
+
+  it('still looks up a key that is not among the loaded workspaces', async () => {
+    const { client, asked } = countingClient({ workspaces: row('w9'), briefs: row('brief-1') });
+    const res = await resolveRef(client, 'XYZ-5', 'brief', {
+      workspaces: [{ id: 'w1', key: 'GBL' }],
+    });
+    expect(res).toEqual({ status: 'resolved', id: 'brief-1' });
+    expect(asked).toEqual(['workspaces', 'briefs']);
+  });
+});

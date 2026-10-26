@@ -115,7 +115,10 @@ import type { GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/po
 import { errorText } from '@/lib/error-copy';
 import { createComment } from '@srtdio/comments';
 import type { CommentRow } from '@srtdio/comments';
-import { getBrief } from '@srtdio/briefs';
+// Title only (no linked-posts count, which this page never shows); not on the
+// package index, so it is imported from the read module itself.
+import { getBriefTitle } from '../../../packages/briefs/src/read';
+import { takePostDetail, takePostGallery } from '@/lib/post-prefetch';
 import type { Json } from '@srtdio/schemas';
 import { postSoftDelete } from '@srtdio/rpc';
 
@@ -260,8 +263,15 @@ export function PostDetailPage({
   actionsOpen: actionsOpenProp,
   onActionsOpenChange,
   onOpenInPipeline,
+  resolving = false,
 }: {
   postId?: string;
+  /**
+   * The pretty-link resolver (/p/:ref) is still finding the id: hold the
+   * skeleton (never not-found) while the role and members reads already run,
+   * so the route shows one loader, not a resolver spinner then a skeleton.
+   */
+  resolving?: boolean;
   /**
    * Shown inside another screen (the plan item): no page header or back button,
    * no URL reads or writes, and both panels stacked.
@@ -628,13 +638,22 @@ export function PostDetailPage({
   const load = useCallback(
     async (silent = false): Promise<void> => {
       if (postId === undefined) {
+        if (resolving) {
+          setLoading(true);
+          return;
+        }
         setLoading(false);
         setNotFound(true);
         return;
       }
       if (!silent) setLoading(true);
       setLoadError(false);
-      const result = await getPost(supabase, postId);
+      // The first read joins the read a card press already started (see
+      // src/lib/post-prefetch.ts); a silent refresh always reads afresh.
+      const result =
+        silent || userId === null || workspaceId === null
+          ? await getPost(supabase, postId)
+          : await takePostDetail(supabase, userId, workspaceId, postId);
       if (!silent) setLoading(false);
       if (!result.ok) {
         logger.warn('post page: load failed', { error: result.error.message });
@@ -649,7 +668,7 @@ export function PostDetailPage({
       setNotFound(false);
       setDetail(result.data);
     },
-    [postId],
+    [postId, resolving, userId, workspaceId],
   );
 
   useEffect(() => {
@@ -694,7 +713,12 @@ export function PostDetailPage({
     }
     let active = true;
     setGalleryLoaded(false);
-    void getPostGallery(supabase, postId)
+    // Joins the gallery read a card press already started, else reads.
+    const read =
+      userId === null || workspaceId === null
+        ? getPostGallery(supabase, postId)
+        : takePostGallery(supabase, userId, workspaceId, postId);
+    void read
       .catch(() => null)
       .then((result) => {
         if (!active) return;
@@ -713,12 +737,13 @@ export function PostDetailPage({
     return () => {
       active = false;
     };
-  }, [postId]);
+  }, [postId, userId, workspaceId]);
 
   // The brief name for the details row, read once per brief_id. No brief (or
   // no post yet) settles at once; a failed read just omits the brief. This is
   // the page's one serial read, on purpose: the brief id is only known once
-  // getPost lands (posts.brief_id), so it cannot start any earlier.
+  // getPost lands (posts.brief_id), so it cannot start any earlier. It reads
+  // the title alone (one request): the linked-posts count is never shown here.
   const briefId = detail?.post.brief_id ?? null;
   useEffect(() => {
     if (briefId === null) {
@@ -727,11 +752,11 @@ export function PostDetailPage({
       return;
     }
     let active = true;
-    void getBrief(supabase, briefId)
+    void getBriefTitle(supabase, briefId)
       .catch(() => null)
       .then((result) => {
         if (!active) return;
-        setBriefName(result !== null && result.ok ? (result.data?.brief.title ?? null) : null);
+        setBriefName(result !== null && result.ok ? result.data : null);
         setBriefLoadedFor(briefId);
       });
     return () => {

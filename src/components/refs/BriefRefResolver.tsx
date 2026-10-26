@@ -1,6 +1,8 @@
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { BriefDetailPage } from '@/components/pages/BriefDetailPage';
 import { useRefResolution } from '@/components/refs/useRefResolution';
+import { knownRefId } from '@/lib/entityRef';
+import { useWorkspace } from '@/lib/workspace-context';
 
 /**
  * Route target for `/b/:ref`. Resolves the pretty reference to a concrete brief id
@@ -9,14 +11,24 @@ import { useRefResolution } from '@/components/refs/useRefResolution';
  * out to be a post, it replace-navigates to the matching /p/:ref. An unparseable
  * ref, unknown workspace key, or missing number renders the detail page's own
  * not-found surface (BriefDetailPage with no id).
+ *
+ * One loader: while the ref resolves, the detail page itself shows its skeleton
+ * (resolving), the same instance once the id lands. A key among the loaded
+ * workspaces skips the workspace lookup; router state carrying the id for this
+ * exact ref skips every lookup.
  */
 export function BriefRefResolver() {
   const { ref } = useParams();
-  const resolution = useRefResolution(ref, 'brief');
+  const location = useLocation();
+  const { workspaces } = useWorkspace();
+  const resolution = useRefResolution(ref, 'brief', {
+    workspaces,
+    knownId: knownRefId(location.state, 'brief', ref),
+  });
 
   switch (resolution.status) {
     case 'loading':
-      return <div className="px-4 md:px-6 py-10 text-base text-fg-3">Loading brief</div>;
+      return <BriefDetailPage resolving />;
     case 'redirect':
       return <Navigate to={resolution.to} replace />;
     case 'resolved':

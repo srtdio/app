@@ -16,7 +16,7 @@ import { BriefDetailPage, CLOSED_BRIEF_LINE } from '@/components/pages/BriefDeta
 const h = vi.hoisted(() => ({
   getBrief: vi.fn(),
   getBriefGallery: vi.fn(),
-  listPosts: vi.fn(),
+  linkedPosts: vi.fn(),
 }));
 
 vi.mock('@srtdio/briefs', () => ({
@@ -25,9 +25,10 @@ vi.mock('@srtdio/briefs', () => ({
   reopenBrief: vi.fn(),
 }));
 vi.mock('@srtdio/rpc', () => ({ briefClose: vi.fn() }));
-vi.mock('@srtdio/posts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@srtdio/posts')>()),
-  listPosts: (...args: unknown[]) => h.listPosts(...args),
+// The linked-posts list is one posts read filtered on brief_id.
+vi.mock('../../../packages/posts/src/reads', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../packages/posts/src/reads')>()),
+  listBriefLinkedPosts: (...args: unknown[]) => h.linkedPosts(...args),
 }));
 vi.mock('@/lib/supabase', () => ({
   supabase: { auth: { getSession: async () => ({ data: { session: null } }) } },
@@ -134,7 +135,7 @@ const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06e
 beforeEach(() => {
   h.getBrief.mockReset().mockResolvedValue(detail());
   h.getBriefGallery.mockReset().mockResolvedValue({ ok: true, data: [] });
-  h.listPosts.mockReset().mockResolvedValue({ ok: true, data: [] });
+  h.linkedPosts.mockReset().mockResolvedValue({ ok: true, data: [] });
 });
 
 afterEach(() => {

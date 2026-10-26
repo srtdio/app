@@ -1141,6 +1141,12 @@ export function CreatePostSheet({
     setSubmitMode(mode);
     setSubmitError(null);
 
+    // The new post's link needs only its id, so its number read starts the
+    // moment the row exists and runs beside gallery_set and the review move
+    // instead of after them. createdPath never rejects; an unused read (a
+    // failed attach or move) is simply dropped.
+    const pathRead: { current: Promise<string> | null } = { current: null };
+
     // The duplicate guard (as the preset's): once the post row exists its id is
     // kept, so a retry after a failed attach or move re-uses it.
     const result = await submitCreatePost({
@@ -1154,6 +1160,7 @@ export function CreatePostSheet({
       existingPostId: createdPostId.current,
       onPostCreated: (postId) => {
         createdPostId.current = postId;
+        pathRead.current = createdPath(postId);
       },
     });
 
@@ -1174,6 +1181,9 @@ export function CreatePostSheet({
       return;
     }
 
+    // A retry on an existing post never passed through onPostCreated.
+    const path = pathRead.current ?? createdPath(result.postId);
+
     // Send for review: the same move the preset's Send for review makes.
     if (mode === 'review') {
       const moved = await stageTransition(supabase, {
@@ -1192,7 +1202,7 @@ export function CreatePostSheet({
       }
     }
 
-    const path = await createdPath(result.postId);
+    const createdLink = await path;
     submitLock.current = false;
     setSubmitting(false);
     setSubmitMode(null);
@@ -1207,7 +1217,7 @@ export function CreatePostSheet({
         ? { action: { label: 'Undo', onPress: () => void undoDraft(savedId) } }
         : {}),
     });
-    onCreated(savedId, { stage: mode, path });
+    onCreated(savedId, { stage: mode, path: createdLink });
   }
 
   /** The draft strip's Undo. Runs after the sheet has gone, so it reads only stable values. */

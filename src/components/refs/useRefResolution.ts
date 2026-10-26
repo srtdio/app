@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Client } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { parseEntityRef, entityUrlPath } from '@/lib/entityRef';
@@ -23,6 +23,25 @@ type RefResolution =
   | { status: 'redirect'; to: string }
   | { status: 'notfound' };
 
+/** What the caller already knows, so the resolver can skip lookups. */
+export interface RefHints {
+  /**
+   * The workspaces this session already loaded (useWorkspace().workspaces): a
+   * ref whose key is among them needs no workspace lookup. A key not among
+   * them still gets the lookup (never a guess).
+   */
+  workspaces?: readonly { id: string; key: string | null }[];
+}
+
+/** The loaded workspace id for an uppercase key, or null when it is not loaded. */
+export function loadedWorkspaceId(
+  workspaces: RefHints['workspaces'],
+  key: string,
+): string | null {
+  const hit = workspaces?.find((w) => w.key !== null && w.key.toUpperCase() === key);
+  return hit?.id ?? null;
+}
+
 /**
  * Pure resolution of a raw `<key>-<number>` reference to a post or brief id for
  * the given primary kind. One workspace lookup then one entity lookup; only when
@@ -36,11 +55,17 @@ export async function resolveRef(
   client: Client,
   rawRef: string | undefined,
   primaryKind: 'post' | 'brief',
+  hints: RefHints = {},
 ): Promise<RefResolution> {
   const parsed = rawRef === undefined ? null : parseEntityRef(rawRef);
   if (parsed === null) return { status: 'notfound' };
 
-  const workspace = await resolveWorkspaceIdByKey(client, parsed.key);
+  // A key this session already loaded resolves in memory (no round trip).
+  const loaded = loadedWorkspaceId(hints.workspaces, parsed.key);
+  const workspace =
+    loaded !== null
+      ? { ok: true as const, data: loaded }
+      : await resolveWorkspaceIdByKey(client, parsed.key);
   if (!workspace.ok || workspace.data === null) return { status: 'notfound' };
 
   const primary =
@@ -65,23 +90,44 @@ export async function resolveRef(
 /**
  * React hook wrapper around {@link resolveRef}: re-resolves whenever the raw ref
  * changes, ignoring a stale in-flight result if the ref changed mid-flight.
+ * `knownId` (an in-app open's router state for exactly this ref, see
+ * knownRefId in src/lib/entityRef.ts) resolves on the first render with no
+ * lookup at all; the loaded workspaces skip the workspace lookup.
  */
 export function useRefResolution(
   rawRef: string | undefined,
   primaryKind: 'post' | 'brief',
+  hints: RefHints & { knownId?: string | null } = {},
 ): RefResolution {
-  const [resolution, setResolution] = useState<RefResolution>({ status: 'loading' });
+  const knownId = hints.knownId ?? null;
+  const [resolution, setResolution] = useState<RefResolution>(() =>
+    knownId !== null ? { status: 'resolved', id: knownId } : { status: 'loading' },
+  );
+  // Read at resolve time, not a dependency: the list arriving or refreshing
+  // never re-runs a resolution for the same ref.
+  const workspacesRef = useRef(hints.workspaces);
+  workspacesRef.current = hints.workspaces;
 
   useEffect(() => {
+    if (knownId !== null) {
+      setResolution((prev) =>
+        prev.status === 'resolved' && prev.id === knownId
+          ? prev
+          : { status: 'resolved', id: knownId },
+      );
+      return;
+    }
     let active = true;
-    setResolution({ status: 'loading' });
-    void resolveRef(supabase, rawRef, primaryKind).then((result) => {
+    setResolution((prev) => (prev.status === 'loading' ? prev : { status: 'loading' }));
+    const workspaces = workspacesRef.current;
+    const lookupHints: RefHints = workspaces === undefined ? {} : { workspaces };
+    void resolveRef(supabase, rawRef, primaryKind, lookupHints).then((result) => {
       if (active) setResolution(result);
     });
     return () => {
       active = false;
     };
-  }, [rawRef, primaryKind]);
+  }, [rawRef, primaryKind, knownId]);
 
   return resolution;
 }

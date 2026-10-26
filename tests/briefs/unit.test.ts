@@ -14,6 +14,7 @@ import {
   reopenBrief,
   BRIEFS_PAGE_SIZE,
 } from '../../packages/briefs/src/index';
+import { getBriefTitle } from '../../packages/briefs/src/read';
 import { briefClose, briefCreate, briefReopen, commentCreate } from '../../packages/rpc/src/index';
 
 vi.mock('../../packages/rpc/src/index', () => ({
@@ -330,13 +331,27 @@ describe('getBrief', () => {
     expect(postsOp.filters).toContainEqual(['is', 'deleted_at', null]);
   });
 
-  it('returns null (and never counts posts) when the brief is not visible', async () => {
-    const { client, ops } = mockClient({ briefs: { data: null, error: null, count: null } });
+  it('returns null when the brief is not visible (the parallel count is discarded)', async () => {
+    const { client } = mockClient({
+      briefs: { data: null, error: null, count: null },
+      posts: { data: null, error: null, count: 4 },
+    });
 
     const result = await getBrief(client, 'missing');
 
     expect(result).toEqual({ ok: true, data: null });
-    expect(ops.some((o) => o.table === 'posts')).toBe(false);
+  });
+
+  it('asks for the brief and the count together (one round trip, not two)', async () => {
+    const { client, ops } = mockClient({
+      briefs: { data: { id: 'b1' }, error: null, count: null },
+      posts: { data: null, error: null, count: 2 },
+    });
+
+    const pending = getBrief(client, 'b1');
+    // Both reads were built before either answered.
+    expect(ops.map((o) => o.table)).toEqual(['briefs', 'posts']);
+    await pending;
   });
 
   it('treats a null count as zero linked posts', async () => {
@@ -349,5 +364,25 @@ describe('getBrief', () => {
     const result = await getBrief(client, 'b1');
 
     expect(result).toEqual({ ok: true, data: { brief, linked_posts_count: 0 } });
+  });
+});
+
+describe('getBriefTitle', () => {
+  it('reads the title alone, live briefs only, and never counts posts', async () => {
+    const { client, ops } = mockClient({
+      briefs: { data: { title: 'T' }, error: null, count: null },
+    });
+
+    const result = await getBriefTitle(client, 'b1');
+
+    expect(result).toEqual({ ok: true, data: 'T' });
+    expect(ops.map((o) => o.table)).toEqual(['briefs']);
+    expect(ops[0]?.filters).toContainEqual(['eq', 'id', 'b1']);
+    expect(ops[0]?.filters).toContainEqual(['is', 'deleted_at', null]);
+  });
+
+  it('is null when the brief is absent or hidden', async () => {
+    const { client } = mockClient({ briefs: { data: null, error: null, count: null } });
+    expect(await getBriefTitle(client, 'missing')).toEqual({ ok: true, data: null });
   });
 });

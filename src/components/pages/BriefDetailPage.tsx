@@ -47,7 +47,9 @@ import { bottomAnchorProps } from '@/lib/bottom-inset';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import { getBrief, getBriefGallery, reopenBrief } from '@srtdio/briefs';
 import type { Brief, BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
-import { listPosts, type PipelinePost } from '@srtdio/posts';
+import type { PipelinePost } from '@srtdio/posts';
+// Not on the package index (owned elsewhere); the read lives beside listPosts.
+import { listBriefLinkedPosts } from '../../../packages/posts/src/reads';
 import { briefClose } from '@srtdio/rpc';
 
 // The line under a closed brief's title (and in the Close confirm).
@@ -178,9 +180,9 @@ export function briefCopyText(
 }
 
 /**
- * How many workspace posts the linked-posts list reads (the existing listPosts
- * read, filtered here by brief_id). When the filter finds fewer than the
- * brief's linked count, the section falls back to the count.
+ * How many of the brief's posts the linked-posts list reads (one posts read
+ * filtered on brief_id). When it finds fewer than the brief's linked count,
+ * the section falls back to the count.
  */
 export const LINKED_POSTS_SCAN = 200;
 
@@ -349,7 +351,17 @@ export function briefMenuItems(args: {
   return items;
 }
 
-export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } = {}) {
+export function BriefDetailPage({
+  briefId: briefIdProp,
+  resolving = false,
+}: {
+  briefId?: string;
+  /**
+   * The pretty-link resolver (/b/:ref) is still finding the id: hold the
+   * skeleton (never not-found) so the route shows one loader, not two.
+   */
+  resolving?: boolean;
+} = {}) {
   const params = useParams();
   // The pretty-link resolver (/b/:ref) passes the resolved id as a prop; the
   // classic /briefs/:briefId route supplies it via the URL. The prop wins so the
@@ -452,6 +464,10 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
   const load = useCallback(
     async (silent = false): Promise<void> => {
       if (briefId === undefined) {
+        if (resolving) {
+          setLoading(true);
+          return;
+        }
         setLoading(false);
         setNotFound(true);
         return;
@@ -472,7 +488,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
       setNotFound(false);
       setDetail(result.data);
     },
-    [briefId],
+    [briefId, resolving],
   );
 
   useEffect(() => {
@@ -515,18 +531,20 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     };
   }, [briefId]);
 
-  // Linked posts: the existing workspace posts read, filtered to this brief.
-  // Only read when the brief has any; null until the read settles (nothing
-  // shows meanwhile), and a failed read leaves the count to stand in.
+  // Linked posts: one posts read filtered on this brief's id (never a whole
+  // workspace scan), started on the first render beside the brief read rather
+  // than after its count lands, so both arrive in the same round trip. null
+  // until it settles; a failed read leaves the count to stand in. A brief with
+  // no linked posts shows nothing whatever this read returns.
   const [linkedPosts, setLinkedPosts] = useState<LinkedPost[] | null>(null);
   const linkedCount = detail?.linked_posts_count ?? 0;
   useEffect(() => {
     setLinkedPosts(null);
-    if (briefId === undefined || workspaceId === null || linkedCount === 0) return;
+    if (briefId === undefined) return;
     let active = true;
-    listPosts(supabase, { workspaceId, limit: LINKED_POSTS_SCAN }).then(
+    listBriefLinkedPosts(supabase, { briefId, limit: LINKED_POSTS_SCAN }).then(
       (result) => {
-        if (active) setLinkedPosts(result.ok ? linkedPostsFor(result.data, briefId) : []);
+        if (active) setLinkedPosts(result.ok ? result.data : []);
       },
       () => {
         if (active) setLinkedPosts([]);
@@ -535,7 +553,11 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     return () => {
       active = false;
     };
-  }, [briefId, workspaceId, linkedCount]);
+  }, [briefId]);
+  // First paint = final state: while a brief that has linked posts waits on
+  // their list, the skeleton holds (the list never pops in under the page).
+  // Both reads left together, so this rarely waits at all.
+  const linkedPending = detail !== null && linkedCount > 0 && linkedPosts === null;
 
   // Close straight away behind the UNDO_MS Undo (PR B: a close comes back
   // with Reopen, so it asks nothing): the badge flips to Closed at once, Undo
@@ -627,7 +649,7 @@ export function BriefDetailPage({ briefId: briefIdProp }: { briefId?: string } =
     </div>
   );
 
-  if (loading) {
+  if (loading || (linkedPending && !loadFailed && !notFound)) {
     return (
       <>
         {bareHeader}
