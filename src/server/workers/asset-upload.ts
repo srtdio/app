@@ -8,10 +8,13 @@
 //      workspace_id, runs the upload pipeline, and returns the asset summary.
 //      The acting user is the verified token's `sub` claim only - the body never
 //      carries an uploaded_by id.
-//      An optional `thumbnail` JPEG (pdf/video only, made on the sender's
-//      device) is validated here and stored as the version's thumbnail
-//      rendition; an invalid or failed thumbnail is ignored and never fails
-//      the upload. The response then carries thumbnail {width,height,page_count?}.
+//      An optional `thumbnail` JPEG (pdf, video, docx, xlsx, or a raster
+//      image's list copy; made on the sender's device) rides in the SAME
+//      request as the file and is stored in the same flow, right after the
+//      original, as the version's thumbnail rendition (shared bucket:
+//      ws/<ws>/<asset>/<version>/thumbnail). An invalid or failed thumbnail is
+//      ignored and never fails the upload. The response then carries
+//      thumbnail {width,height,page_count?}. There is no later thumbnail pass.
 // GET   ?workspace_id=&asset_id=
 //   -> same auth + membership gate, then returns the current summary scoped to
 //      the workspace (cross-tenant 404).
@@ -47,6 +50,7 @@ import {
   createSupabaseRenditionStore,
   storeThumbnailRendition,
   getAssetSummary,
+  resolveUploadTarget,
   renameAsset,
   runUploadPipeline,
   selectScanner,
@@ -96,6 +100,12 @@ export interface AssetUploadEnv {
   /** Public key: POST /purge calls asset_purge_request as the caller (anon role + bearer). */
   SUPABASE_PUBLISHABLE_KEY: string;
   VIRUS_SCAN_PROVIDER?: string;
+  /**
+   * The one shared R2 bucket (a wrangler [vars] entry). A workspace whose
+   * asset_bucket equals it gets ID-only keys; an empty legacy workspace is
+   * moved to it on its first upload. Never hardcoded in code.
+   */
+  SHARED_ASSET_BUCKET: string;
   /**
    * Comma-separated list of browser origins allowed to call this Worker
    * cross-origin. Operator sets it as a Worker var/secret; when unset the code
@@ -348,6 +358,7 @@ function buildPipelineRunner(env: AssetUploadEnv): PipelineRunner {
     storage: buildStorage(env),
     repository: buildRepository(env),
     scanner: selectScanner(env.VIRUS_SCAN_PROVIDER),
+    sharedBucket: env.SHARED_ASSET_BUCKET,
   };
   return (input) => runUploadPipeline(deps, input);
 }
@@ -422,6 +433,7 @@ async function attachThumbnail(
           { SUPABASE_URL: env.SUPABASE_URL, SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY },
           input.traceId,
         ),
+        sharedBucket: env.SHARED_ASSET_BUCKET,
       },
       {
         summary: input.summary,
@@ -715,6 +727,14 @@ function buildMultipartDeps(env: AssetUploadEnv): MultipartDeps {
   return {
     storage: buildStorage(env),
     bucketFor: (workspaceId) => repository.getAssetBucket(workspaceId),
+    uploadBucketFor: async (workspaceId, traceId) =>
+      (
+        await resolveUploadTarget(repository, {
+          workspaceId,
+          sharedBucket: env.SHARED_ASSET_BUCKET,
+          traceId,
+        })
+      ).bucket,
     newId: () => crypto.randomUUID(),
     checkCap: ({ workspaceId, addBytes, traceId }) =>
       checkWorkspaceCap({ workspaceId, addBytes, store: createSupabaseUsageStore(env, traceId) }),

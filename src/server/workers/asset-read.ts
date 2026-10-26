@@ -238,11 +238,6 @@ const EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
 };
 
 /** Last path segment of an R2 key, stripped of the version prefix where present. */
-function keyBasename(key: string): string {
-  const segment = key.split('/').pop() ?? key;
-  return segment.replace(/^v\d+-/, '');
-}
-
 /** The extension on a filename (lowercased), or '' when it has none. */
 function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -251,16 +246,14 @@ function extensionOf(name: string): string {
 
 /**
  * Build the filename the browser should save under: the asset's display name (or
- * original filename, or key basename), carrying the correct extension for its
+ * original filename, never parsed from the key), carrying the correct extension for its
  * mime type. The mime-derived extension wins; otherwise the existing extension
  * is kept.
  */
 export function buildDownloadFilename(version: AssetVersionLocator): string {
-  const fallback =
-    version.r2Key !== null && version.r2Key !== '' ? keyBasename(version.r2Key) : 'download';
-  const base = (version.displayName ?? '').trim() || (version.filename ?? '').trim() || fallback;
+  const base = (version.displayName ?? '').trim() || (version.filename ?? '').trim() || 'download';
   const mimeExt = version.mimeType ? EXTENSION_BY_MIME[version.mimeType.toLowerCase()] : undefined;
-  const ext = mimeExt ?? (extensionOf(base) || extensionOf(fallback));
+  const ext = mimeExt ?? extensionOf(base);
   if (ext === '') return base;
   const stem = base.lastIndexOf('.') > 0 ? base.slice(0, base.lastIndexOf('.')) : base;
   return `${stem}.${ext}`;

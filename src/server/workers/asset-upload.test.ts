@@ -95,7 +95,12 @@ vi.mock('@/server/assets', async (importOriginal) => {
     // per-test rendition store (the worker's R2 client is never used).
     storeThumbnailRendition: (_deps: unknown, input: ThumbnailInput) =>
       actual.storeThumbnailRendition(
-        { storage: state.thumbStorage, repository: state.repo, renditions: state.renditions },
+        {
+          storage: state.thumbStorage,
+          repository: state.repo,
+          renditions: state.renditions,
+          sharedBucket: 'srtdio-files',
+        },
         input,
       ),
     runUploadPipeline: async (_deps: unknown, input: Record<string, unknown>) => {
@@ -107,6 +112,7 @@ vi.mock('@/server/assets', async (importOriginal) => {
             storage: new InMemoryStorageClient(),
             repository: state.repo,
             scanner: new actual.NoOpScanner(),
+            sharedBucket: 'srtdio-files',
           },
           input as unknown as UploadInput,
         );
@@ -171,6 +177,7 @@ const env: AssetUploadEnv = {
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
   SUPABASE_SECRET_KEY: 'service-role-key',
+  SHARED_ASSET_BUCKET: 'srtdio-files',
 };
 
 let signingKey: KeyLike;
@@ -1371,6 +1378,21 @@ describe('asset-upload thumbnail part', () => {
     expect(state.thumbStorage.objects.size).toBe(0);
   });
 
+  it('stores original and thumbnail in one request, both under ID-only keys', async () => {
+    state.realPipeline = true;
+    const res = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '2' });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as UploadBody;
+    // The empty workspace moved to the shared bucket on this first upload.
+    expect(state.repo.moves).toHaveLength(1);
+    expect(state.repo.versions[0]?.r2_key).toBe(
+      `ws/${WORKSPACE}/${body.asset.assetId}/${body.asset.versionId}/original`,
+    );
+    const thumbKey = `ws/${WORKSPACE}/${body.asset.assetId}/${body.asset.versionId}/thumbnail`;
+    expect(state.renditions.rows[0]?.r2Key).toBe(thumbKey);
+    expect(state.thumbStorage.get('srtdio-files', thumbKey)?.contentType).toBe('image/jpeg');
+  });
+
   it('a reused upload sent without a thumbnail part still reports the stored one', async () => {
     state.realPipeline = true;
     const first = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '3' });
@@ -1420,7 +1442,7 @@ describe('resumable (multipart) upload routes', () => {
     return (await res.json()) as { key: string; upload_id: string };
   }
 
-  it('creates an upload under the caller staging prefix with 8 MB parts', async () => {
+  it('creates an upload under uploads/<workspace_id>/<upload_id> with 8 MB parts', async () => {
     state.members.add(`${USER}:${WORKSPACE}`);
     const token = await mintToken(USER);
     const res = await worker.fetch(
@@ -1433,9 +1455,39 @@ describe('resumable (multipart) upload routes', () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as { key: string; part_size: number; part_count: number };
-    expect(body.key.startsWith(`_uploads/${USER}/`)).toBe(true);
+    expect(body.key).toMatch(new RegExp(`^uploads/${WORKSPACE}/[0-9a-f-]{36}$`));
     expect(body.part_size).toBe(PART);
     expect(body.part_count).toBe(3);
+  });
+
+  it('create on an empty workspace moves it once and stages in the shared bucket', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await create(await mintToken(USER), 10);
+    expect(state.repo.moves).toEqual([
+      expect.objectContaining({
+        workspaceId: WORKSPACE,
+        bucket: 'srtdio-files',
+        expectedObjects: 0,
+      }),
+    ]);
+    const [upload] = [...state.r2.uploads.values()];
+    expect(upload?.bucket).toBe('srtdio-files');
+  });
+
+  it('create never makes a bucket: a missing shared bucket is a 500 and nothing staged', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.r2.missingBuckets.add('srtdio-files');
+    const res = await worker.fetch(
+      jsonPost('/multipart/create', await mintToken(USER), {
+        workspace_id: WORKSPACE,
+        size: 10,
+        content_type: 'application/pdf',
+      }),
+      env,
+    );
+    expect(res.status).toBe(500);
+    expect(state.r2.uploads.size).toBe(0);
+    expect(state.r2.buckets.has('srtdio-files')).toBe(false);
   });
 
   it('keeps the 100 MB cap and the type allowlist at create', async () => {
@@ -1474,15 +1526,15 @@ describe('resumable (multipart) upload routes', () => {
     expect(res.status).toBe(403);
   });
 
-  it("refuses another user's staging key", async () => {
+  it("refuses another workspace's staging key", async () => {
     state.members.add(`${USER}:${WORKSPACE}`);
-    state.members.add(`${OTHER_USER}:${WORKSPACE}`);
+    state.members.add(`${OTHER_USER}:${OTHER_WORKSPACE}`);
     const created = await create(await mintToken(USER), 10);
     const res = await worker.fetch(
       partRequest(
         await mintToken(OTHER_USER),
         {
-          workspace_id: WORKSPACE,
+          workspace_id: OTHER_WORKSPACE,
           key: created.key,
           upload_id: created.upload_id,
           part_number: '1',

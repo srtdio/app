@@ -200,9 +200,37 @@ export interface ShaLookup {
   uploadedBy: string;
 }
 
+/** Result of {@link AssetRepository.moveWorkspaceStorage}. */
+export type WorkspaceMoveOutcome =
+  | { moved: true }
+  /** storage_workspace_move raised object_count_changed; liveCount is its DETAIL. */
+  | { moved: false; liveCount: number | null };
+
 export interface AssetRepository {
-  /** The workspace's permanent, stored R2 bucket name (workspaces.asset_bucket). */
+  /** The workspace's stored R2 bucket name (workspaces.asset_bucket). */
   getAssetBucket(workspaceId: string): Promise<string>;
+  /**
+   * Objects the workspace holds in a bucket: versions with an r2_key plus
+   * renditions with an r2_key, leaving out induction-sample/ keys (static
+   * files that live in no bucket). Head count queries, no row fetch.
+   */
+  countStoredObjects(workspaceId: string): Promise<number>;
+  /**
+   * Every version and rendition row with an r2_key, induction-sample/ keys
+   * included: the number storage_workspace_move compares p_expected_objects to.
+   */
+  countKeyedRows(workspaceId: string): Promise<number>;
+  /**
+   * storage_workspace_move(ws, bucket, expected, trace) as the service role:
+   * renames the workspace's keys to the ID-only layout and points
+   * workspaces.asset_bucket at `bucket`. Any error but object_count_changed throws.
+   */
+  moveWorkspaceStorage(input: {
+    workspaceId: string;
+    bucket: string;
+    expectedObjects: number;
+    traceId: string;
+  }): Promise<WorkspaceMoveOutcome>;
   getAsset(workspaceId: string, assetId: string): Promise<AssetRow | null>;
   /** A version by id, scoped to a workspace (cross-tenant reads return null). */
   getVersionById(workspaceId: string, versionId: string): Promise<VersionRef | null>;
@@ -396,6 +424,44 @@ interface SupabaseAssetEnv {
   SUPABASE_SECRET_KEY: string;
 }
 
+/** Sample files ship with the app and live in no bucket. */
+const SAMPLE_KEY_LIKE = 'induction-sample/%';
+
+/** The count of a head-only count query, or its error thrown. */
+function countOf(result: { count: number | null; error: unknown }): number {
+  if (result.error) {
+    throw result.error;
+  }
+  return result.count ?? 0;
+}
+
+/**
+ * Head counts of a workspace's version and rendition rows with an r2_key;
+ * `storedOnly` leaves out induction-sample/ keys. No row is fetched.
+ */
+async function countKeyed(
+  client: SupabaseClient<Database>,
+  workspaceId: string,
+  storedOnly: boolean,
+): Promise<number> {
+  let versions = client
+    .from('asset_versions')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceId)
+    .not('r2_key', 'is', null);
+  let renditions = client
+    .from('asset_renditions')
+    .select('id', { count: 'exact', head: true })
+    .eq('workspace_id', workspaceId)
+    .not('r2_key', 'is', null);
+  if (storedOnly) {
+    versions = versions.not('r2_key', 'like', SAMPLE_KEY_LIKE);
+    renditions = renditions.not('r2_key', 'like', SAMPLE_KEY_LIKE);
+  }
+  const [v, r] = await Promise.all([versions, renditions]);
+  return countOf(v) + countOf(r);
+}
+
 /**
  * Build a service-role-backed repository. The service role bypasses RLS; the
  * Worker is the only caller and never exposes this key to the browser.
@@ -421,6 +487,32 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
         throw new Error(`workspace ${workspaceId} has no asset_bucket`);
       }
       return data.asset_bucket;
+    },
+
+    countStoredObjects(workspaceId) {
+      return countKeyed(client, workspaceId, true);
+    },
+
+    countKeyedRows(workspaceId) {
+      return countKeyed(client, workspaceId, false);
+    },
+
+    async moveWorkspaceStorage(input) {
+      // trace_id rides as an explicit RPC parameter (p_trace_id), the same id
+      // as the request's X-Trace-Id.
+      const args = {
+        p_workspace_id: input.workspaceId,
+        p_bucket: input.bucket,
+        p_expected_objects: input.expectedObjects,
+        p_trace_id: input.traceId,
+      };
+      const { error } = await client.rpc('storage_workspace_move', args);
+      if (!error) return { moved: true };
+      if (error.message.includes('object_count_changed')) {
+        const live = Number.parseInt(error.details ?? '', 10);
+        return { moved: false, liveCount: Number.isFinite(live) ? live : null };
+      }
+      throw error;
     },
 
     async getAsset(workspaceId, assetId) {
@@ -800,6 +892,14 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
 // In-memory implementation for tests.
 // ---------------------------------------------------------------------------
 
+/** One recorded storage_workspace_move call on the in-memory repository. */
+interface WorkspaceMoveCall {
+  workspaceId: string;
+  bucket: string;
+  expectedObjects: number;
+  traceId: string;
+}
+
 interface AuditRecord extends AuditEntry {
   outcome: 'success';
 }
@@ -816,8 +916,57 @@ export class InMemoryAssetRepository implements AssetRepository {
   assetBucket = 'assets-test-ws';
   readonly assetBuckets = new Map<string, string>();
 
+  /** Rendition rows with an r2_key per workspace (renditions live in their own store). */
+  readonly renditionKeys = new Map<string, string[]>();
+  /** storage_workspace_move calls, in order. */
+  readonly moves: WorkspaceMoveCall[] = [];
+  /** When set, the next move raises object_count_changed (and is cleared). */
+  moveConflict: { liveCount: number } | null = null;
+
   getAssetBucket(workspaceId: string): Promise<string> {
     return Promise.resolve(this.assetBuckets.get(workspaceId) ?? this.assetBucket);
+  }
+
+  private keyedRows(workspaceId: string): string[] {
+    return [
+      ...this.versions
+        .filter((v) => v.workspace_id === workspaceId && v.r2_key !== null)
+        .map((v) => v.r2_key ?? ''),
+      ...(this.renditionKeys.get(workspaceId) ?? []),
+    ];
+  }
+
+  countStoredObjects(workspaceId: string): Promise<number> {
+    return Promise.resolve(
+      this.keyedRows(workspaceId).filter((key) => !key.startsWith('induction-sample/')).length,
+    );
+  }
+
+  countKeyedRows(workspaceId: string): Promise<number> {
+    return Promise.resolve(this.keyedRows(workspaceId).length);
+  }
+
+  /** Mirrors storage_workspace_move: count check, ID-only rename, cutover. */
+  moveWorkspaceStorage(input: WorkspaceMoveCall): Promise<WorkspaceMoveOutcome> {
+    this.moves.push({ ...input });
+    const live = this.keyedRows(input.workspaceId).length;
+    if (this.moveConflict !== null || live !== input.expectedObjects) {
+      const liveCount = this.moveConflict?.liveCount ?? live;
+      this.moveConflict = null;
+      return Promise.resolve({ moved: false, liveCount });
+    }
+    for (const v of this.versions) {
+      if (
+        v.workspace_id === input.workspaceId &&
+        v.r2_key !== null &&
+        !v.r2_key.startsWith('ws/') &&
+        !v.r2_key.startsWith('induction-sample/')
+      ) {
+        v.r2_key = `ws/${input.workspaceId}/${v.asset_id}/${v.id}/original`;
+      }
+    }
+    this.assetBuckets.set(input.workspaceId, input.bucket);
+    return Promise.resolve({ moved: true });
   }
 
   getAsset(workspaceId: string, assetId: string): Promise<AssetRow | null> {
