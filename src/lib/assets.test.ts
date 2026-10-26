@@ -148,13 +148,17 @@ describe('listAssets states', () => {
     if (result.ok) expect(result.data).toEqual([]);
   });
 
-  it('shapes rows with kind and live attachment counts', async () => {
+  it('shapes rows with kind and live attachment counts (embedded)', async () => {
     const client = makeClient({
       assets: {
-        data: [assetRow('a', 'image'), assetRow('b', 'link'), assetRow('c', 'pdf')],
+        data: [
+          assetRow('a', 'image', { asset_attachments: [{ asset_id: 'a' }, { asset_id: 'a' }] }),
+          assetRow('b', 'link', { asset_attachments: [] }),
+          assetRow('c', 'pdf', { asset_attachments: [{ asset_id: 'c' }] }),
+        ],
         error: null,
       },
-      attachments: { data: [{ asset_id: 'a' }, { asset_id: 'a' }, { asset_id: 'c' }], error: null },
+      attachments: { data: null, error: { message: 'never read' } },
     });
     const result = await listAssets(client, 'ws-1');
     expect(result.ok).toBe(true);
@@ -235,8 +239,8 @@ describe('listAssetsPage keyset paging', () => {
     expect(assetCalls.find((c) => c.method === 'limit')?.args).toEqual([ASSETS_PAGE_SIZE + 1]);
     // First page: no keyset filter.
     expect(assetCalls.some((c) => c.method === 'or')).toBe(false);
-    // Two requests per page: the assets read, then ONE attachments IN read.
-    expect(reads).toEqual(['assets', 'asset_attachments']);
+    // ONE request per page: attachments ride along as an embed.
+    expect(reads).toEqual(['assets']);
   });
 
   it('the second page filters strictly after the last row (uploaded_at, id) with .or', async () => {
@@ -257,22 +261,33 @@ describe('listAssetsPage keyset paging', () => {
     if (result.ok) expect(result.data.next).toEqual({ done: true });
   });
 
-  it('reads attachment counts for exactly the page ids with one IN read', async () => {
-    const rows = [assetRow('a', 'image'), assetRow('b', 'pdf')];
-    const { client, calls, reads } = recordingClient({
-      assets: [{ data: rows, error: null }],
-      asset_attachments: [{ data: [{ asset_id: 'a' }, { asset_id: 'a' }], error: null }],
-    });
+  it('counts live attachments from the embed, filtered like the old IN read, in one request', async () => {
+    const rows = [
+      assetRow('a', 'image', { asset_attachments: [{ asset_id: 'a' }, { asset_id: 'a' }] }),
+      assetRow('b', 'pdf', { asset_attachments: [] }),
+    ];
+    const { client, calls, reads } = recordingClient({ assets: [{ data: rows, error: null }] });
     const result = await listAssetsPage(client, 'ws-1');
-    const inCalls = calls.filter((c) => c.table === 'asset_attachments' && c.method === 'in');
-    expect(inCalls).toEqual([
-      { table: 'asset_attachments', method: 'in', args: ['asset_id', ['a', 'b']] },
-    ]);
-    expect(reads.filter((t) => t === 'asset_attachments')).toHaveLength(1);
+    expect(reads).toEqual(['assets']);
+    const select = calls.find((c) => c.table === 'assets' && c.method === 'select');
+    expect(String(select?.args[0])).toContain(
+      'asset_attachments!asset_attachments_asset_id_fkey(asset_id)',
+    );
+    // The embed keeps the old read's filters: live rows of this workspace.
+    expect(calls).toContainEqual({
+      table: 'assets',
+      method: 'is',
+      args: ['asset_attachments.deleted_at', null],
+    });
+    expect(calls).toContainEqual({
+      table: 'assets',
+      method: 'eq',
+      args: ['asset_attachments.workspace_id', 'ws-1'],
+    });
     expect(result.ok && result.data.items.map((i) => i.attachmentCount)).toEqual([2, 0]);
   });
 
-  it('skips the attachments read for an empty page', async () => {
+  it('an empty page is still one request', async () => {
     const { client, reads } = recordingClient({ assets: [{ data: [], error: null }] });
     const result = await listAssetsPage(client, 'ws-1');
     expect(reads).toEqual(['assets']);
@@ -317,10 +332,9 @@ describe('listAssetsPage keyset paging', () => {
     expect(result.ok && result.data).toHaveLength(ASSETS_PAGE_SIZE);
   });
 
-  it('a failed attachments read fails the page', async () => {
+  it('a failed read fails the page', async () => {
     const { client } = recordingClient({
-      assets: [{ data: [assetRow('a', 'image')], error: null }],
-      asset_attachments: [{ data: null, error: { message: 'boom' } }],
+      assets: [{ data: null, error: { message: 'boom' } }],
     });
     const result = await listAssetsPage(client, 'ws-1');
     expect(result.ok).toBe(false);
@@ -339,15 +353,18 @@ describe('mergeAssetPages', () => {
 describe('getAssetItem', () => {
   it('reads one asset by id in the workspace, returning [] when it is not there', async () => {
     const found = recordingClient({
-      assets: [{ data: [assetRow('x', 'image')], error: null }],
-      asset_attachments: [{ data: [{ asset_id: 'x' }], error: null }],
+      assets: [
+        { data: [assetRow('x', 'image', { asset_attachments: [{ asset_id: 'x' }] })], error: null },
+      ],
     });
     const hit = await getAssetItem(found.client, 'ws-1', 'x');
     expect(hit.ok && hit.data.map((i) => [i.id, i.attachmentCount])).toEqual([['x', 1]]);
+    expect(found.reads).toEqual(['assets']);
     const eqs = found.calls.filter((c) => c.table === 'assets' && c.method === 'eq');
     expect(eqs.map((c) => c.args)).toEqual([
       ['workspace_id', 'ws-1'],
       ['id', 'x'],
+      ['asset_attachments.workspace_id', 'ws-1'],
     ]);
 
     const missing = recordingClient({ assets: [{ data: [], error: null }] });

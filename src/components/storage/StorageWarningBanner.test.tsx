@@ -24,6 +24,8 @@ vi.mock('@/lib/env', () => ({ env: { VITE_ASSET_UPLOAD_URL: 'https://upload.test
 vi.mock('@/lib/fetch', () => ({ fetchWithTrace: mockFetch }));
 
 import { UPLOAD_COMPLETE_EVENT } from '@/lib/asset-upload';
+import { resetSessionReads } from '@/lib/session-read';
+import { useStorageWarning } from './useStorageWarning';
 import { StorageWarningBanner } from './StorageWarningBanner';
 import {
   parseStorageUsage,
@@ -65,6 +67,8 @@ const banner = (): Element | null => document.querySelector('[role="status"]');
 
 afterEach(() => {
   unmount();
+  // The /usage read is session-shared: each test starts with none held.
+  resetSessionReads();
   mockFetch.mockReset();
   localStorage.clear();
   state.userId = 'user-member';
@@ -117,6 +121,7 @@ describe('StorageWarningBanner', () => {
     await render();
     expect(banner()).toBeNull();
     unmount();
+    resetSessionReads();
     mockFetch.mockImplementation(async () => new Response('{}', { status: 503 }));
     await render();
     expect(banner()).toBeNull();
@@ -164,6 +169,73 @@ describe('StorageWarningBanner', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(banner()?.textContent).toContain('810 MB');
     expect(document.querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+});
+
+describe('one /usage request per session window', () => {
+  function SettingsUsage(): null {
+    // Settings reads the same hook for its usage line.
+    useStorageWarning();
+    return null;
+  }
+
+  it('the shell banner and Settings mounted together ask once', async () => {
+    mockFetch.mockImplementation(async () => usageResponse(820 * MB, true));
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () =>
+      root!.render(
+        <>
+          <StorageWarningBanner />
+          <SettingsUsage />
+        </>,
+      ),
+    );
+    await settle();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(banner()).not.toBeNull();
+  });
+
+  it('a later mount within the window reuses the reading; a failure is not kept', async () => {
+    mockFetch.mockImplementation(async () => new Response('{}', { status: 503 }));
+    await render();
+    unmount();
+    mockFetch.mockImplementation(async () => usageResponse(820 * MB, true));
+    await render();
+    // The failed read was not kept: the second mount asked again.
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    unmount();
+    await render();
+    // The good reading is fresh: no third request.
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(banner()).not.toBeNull();
+  });
+
+  it('an upload drops the reading: banner and Settings re-read with one request', async () => {
+    mockFetch.mockImplementation(async () => usageResponse(700 * MB, false));
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () =>
+      root!.render(
+        <>
+          <StorageWarningBanner />
+          <SettingsUsage />
+        </>,
+      ),
+    );
+    await settle();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    mockFetch.mockImplementation(async () => usageResponse(810 * MB, true));
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(UPLOAD_COMPLETE_EVENT, { detail: { workspaceId: 'ws-1' } }),
+      );
+    });
+    await settle();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(banner()?.textContent).toContain('810 MB');
   });
 });
 

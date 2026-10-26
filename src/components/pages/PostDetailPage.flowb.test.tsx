@@ -83,11 +83,9 @@ vi.mock('@/lib/buckets', () => ({
     data: [{ id: 'b1', name: 'Monsoon drop', colorHex: '#3b82f6', position: 0 }],
   }),
 }));
-vi.mock('@srtdio/briefs', () => ({
-  getBrief: async () => ({
-    ok: true,
-    data: { brief: { title: 'Monsoon edit' }, linked_posts_count: 1 },
-  }),
+// The page reads the brief's title alone (no linked-posts count).
+vi.mock('../../../packages/briefs/src/read', () => ({
+  getBriefTitle: async () => ({ ok: true, data: 'Monsoon edit' }),
 }));
 vi.mock('@/lib/assets', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/assets')>();

@@ -1390,6 +1390,12 @@ export async function readPlanScreen(
   signal?: AbortSignal,
   opts: PlanScreenReadOptions = {},
 ): Promise<Result<PlanScreenData>> {
+  const channelId = opts.sentInChannelId;
+  // The last send needs only the plan and chat ids: it runs beside the bundle read.
+  const lastSentRead =
+    channelId !== undefined
+      ? readLastPlanSend(client, channelId, planId, signal)
+      : Promise.resolve<Result<string | null>>({ ok: true, data: null });
   const bundles = await readPlanBundles(client, [planId], signal, opts.timeZone);
   if (!bundles.ok) return bundles;
   const bundle = bundles.data.get(planId) ?? null;
@@ -1398,7 +1404,6 @@ export async function readPlanScreen(
   const conceptIds = bundle.items.flatMap((i) => (i.kind === 'concept' ? [i.id] : []));
   const approvers = opts.approvers?.(bundle) ?? [];
   const readNames = opts.readNames;
-  const channelId = opts.sentInChannelId;
   const [counts, thumbs, alsoIn, names, lastSent] = await Promise.all([
     readCommentCounts(
       client,
@@ -1410,9 +1415,7 @@ export async function readPlanScreen(
     approvers.length > 0 && readNames !== undefined
       ? readNames(approvers, signal)
       : Promise.resolve<Result<NameRow[]>>({ ok: true, data: [] }),
-    channelId !== undefined
-      ? readLastPlanSend(client, channelId, planId, signal)
-      : Promise.resolve<Result<string | null>>({ ok: true, data: null }),
+    lastSentRead,
   ]);
   if (!counts.ok) return counts;
   const nameMap: Record<string, string> = {};

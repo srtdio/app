@@ -8,7 +8,7 @@
 // the Plan screen's own "Plan not available" state, never a blank page.
 // ?comment= scrolls to and highlights that comment once the item lists it.
 // Laptop (md and up): the page beside the plan and the plan route share one
-// layout (PlanBesideLayout: Notifications over /notifications and
+// layout (PlanBesideLayout.tsx: Notifications over /notifications and
 // /plans/:planId, the Plan tab over /plan and /plan/:planId), so that page
 // stays mounted (its scroll, filters and data) while the plan opens beside it
 // as the same docked panel as in a chat, and closing returns to it without a
@@ -18,9 +18,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import {
-  Outlet,
   useLocation,
-  useMatch,
   useNavigate,
   useNavigationType,
   useParams,
@@ -32,7 +30,6 @@ import { readSearchJump } from '@/lib/search/jump';
 import { PLAN_NOT_AVAILABLE } from '@/components/chat/plan-card';
 import { PlanScreen, PlanPage as PlanFrame } from '@/components/chat/PlanScreen';
 import { hasPreviousEntry } from '@/lib/chat/use-history-step';
-import { cn } from '@/lib/cn';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace } from '@/lib/workspace-context';
 
@@ -74,26 +71,9 @@ export function replacesPlanEntry(input: {
   );
 }
 
-/**
- * The route layout over a page and its plan route (`planPattern`): the page in
- * one fixed place (never remounted between the two) on a laptop and on the
- * page's own route, with the plan route beside it. From 1180px the page
- * narrows by the panel's width; below, the panel overlays it.
- */
-export function PlanBesideLayout(props: { page: ReactElement; planPattern: string }): ReactElement {
-  const plan = useMatch(props.planPattern) !== null;
-  const desktop = useIsLaptop();
-  return (
-    <>
-      {!plan || desktop ? (
-        <div data-plan-beside="" className={cn(plan && 'min-[1180px]:mr-[440px]')}>
-          {props.page}
-        </div>
-      ) : null}
-      <Outlet />
-    </>
-  );
-}
+// The layout lives in its own tiny module (Activity and the Plan tab load it
+// without this page's chunk); re-exported here for existing importers.
+export { PlanBesideLayout } from '@/components/pages/PlanBesideLayout';
 
 /** `fallback`: where Back goes on a cold deep link (the page this plan sits beside). */
 export function PlanPage(props: { fallback: string }): ReactElement {

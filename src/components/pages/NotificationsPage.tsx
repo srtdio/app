@@ -40,6 +40,14 @@ import { POLL_CHANGE_SOURCE } from '@/lib/inbox/inbox-live';
 import {
   ACTIVITY_PAGE_SIZE,
   EMPTY_LINES,
+  activityPageKey,
+  invalidateActivityReads,
+  mentionCountKey,
+  peekActivityPage,
+  peekMentionCount,
+  sharedActivityPage,
+  sharedMentionCount,
+  type LoadResult,
   LOADING_NOTIFICATIONS,
   REFRESH_FAILED,
   SNOOZE_FAILED,
@@ -202,13 +210,31 @@ export function NotificationsPage() {
   const [state, setState] = useState<ActivityState>('all');
   const { value: sort, setValue: setSort } = useSort<ActivityDirection>('activity', 'newest');
 
-  const [items, setItems] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Page one of All as the bell press (or a visit within the window) read it,
+  // when fresh: the first frame is the list. Else the first frame is the
+  // loading line, never the zero state (loading starts true: the load runs
+  // in an effect, after the first paint).
+  const [items, setItems] = useState<ActivityItem[]>(() =>
+    userId !== null && workspaceId !== null
+      ? (peekActivityPage(activityPageKey(userId, workspaceId, 'all', sort)) ?? [])
+      : [],
+  );
+  const [loading, setLoading] = useState(
+    () =>
+      userId === null ||
+      workspaceId === null ||
+      peekActivityPage(activityPageKey(userId, workspaceId, 'all', sort)) === undefined,
+  );
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [mentionCount, setMentionCount] = useState(0);
+  const [mentionCount, setMentionCount] = useState(
+    () =>
+      (userId !== null && workspaceId !== null
+        ? peekMentionCount(mentionCountKey(userId, workspaceId))
+        : undefined) ?? 0,
+  );
   const toast = useOptionalToast();
   // A failure line rides the shared toast in its error tone.
   const toastRef = useRef(toast);
@@ -243,26 +269,43 @@ export function NotificationsPage() {
   // never hidden behind the page cap. A stale response (the chip, sort or
   // workspace moved on) is dropped. A failure with rows on screen keeps them and
   // toasts; only a first load with nothing on screen shows the error box.
+  // Page one is the chip's shared session read (activity/data.ts): a chip
+  // switch (or the mount) within the window paints the held page with no
+  // request; a refresh (a retry, a failed write, workspace data) reads anew; a
+  // merge follows an inbox change, which already dropped the held pages.
   const loadActivity = useCallback(
     async (mode: LoadMode = 'refresh') => {
       if (workspaceId === null) return;
       if (mode !== 'merge') activitySeqRef.current += 1;
       const seq = activitySeqRef.current;
+      const key = userId !== null ? activityPageKey(userId, workspaceId, state, sort) : null;
+      if (mode === 'refresh' && key !== null) invalidateActivityReads(key);
       if (mode === 'reset') {
         setItems([]);
         setHasMore(false);
         setEntering(new Set());
         loadingMoreRef.current = false;
         setLoadingMore(false);
+        const held = key !== null ? peekActivityPage(key) : undefined;
+        if (held !== undefined) {
+          setNowMs(Date.now());
+          setLoading(false);
+          setError(false);
+          setItems(held);
+          setHasMore(held.length === ACTIVITY_PAGE_SIZE);
+          return;
+        }
       }
       if (mode !== 'merge') {
         setLoading(true);
         setError(false);
       }
-      const result = await fetchActivityEntries(supabase, workspaceId, {
-        state,
-        direction: sort,
-      });
+      const read = (): Promise<LoadResult> =>
+        fetchActivityEntries(supabase, workspaceId, {
+          state,
+          direction: sort,
+        });
+      const result = key !== null ? await sharedActivityPage(key, read) : await read();
       if (seq !== activitySeqRef.current) return;
       setNowMs(Date.now());
       if (mode !== 'merge') setLoading(false);
@@ -284,7 +327,7 @@ export function NotificationsPage() {
       setItems(result.data);
       setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
     },
-    [workspaceId, state, sort, push],
+    [workspaceId, userId, state, sort, push],
   );
 
   // Hold the topmost visible card still when a merge adds cards above it.
@@ -329,16 +372,25 @@ export function NotificationsPage() {
   }, [workspaceId, state, sort, push]);
 
   // The unread-mention count for the Mentions chip. Independent of the active
-  // view (it is a HEAD count), so it is not affected by the chips.
-  const loadMentionCount = useCallback(async () => {
-    if (workspaceId === null || userId === null) return;
-    const res = await fetchUnreadMentionCount(supabase, {
-      workspaceId,
-      userId,
-      nowIso: new Date().toISOString(),
-    });
-    if (res.ok) setMentionCount(res.data);
-  }, [workspaceId, userId]);
+  // view (it is a HEAD count), so it is not affected by the chips. The mount
+  // (`join`) joins the bell press's shared read while fresh; every later load
+  // (a write, the poll) reads anew.
+  const loadMentionCount = useCallback(
+    async (join = false) => {
+      if (workspaceId === null || userId === null) return;
+      const key = mentionCountKey(userId, workspaceId);
+      if (!join) invalidateActivityReads(key);
+      const res = await sharedMentionCount(key, () =>
+        fetchUnreadMentionCount(supabase, {
+          workspaceId,
+          userId,
+          nowIso: new Date().toISOString(),
+        }),
+      );
+      if (res.ok) setMentionCount(res.data);
+    },
+    [workspaceId, userId],
+  );
 
   // Upcoming: the viewer's scheduled messages not yet sent and pending
   // reminders, soonest first (fetchUpcoming). Never inbox rows: they never
@@ -433,7 +485,7 @@ export function NotificationsPage() {
   }, [state, loadUpcoming]);
 
   useEffect(() => {
-    void loadMentionCount();
+    void loadMentionCount(true);
   }, [loadMentionCount]);
   useWorkspaceDataChanged(() => {
     if (state === 'upcoming') void loadUpcoming();

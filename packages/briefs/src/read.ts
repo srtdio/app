@@ -147,27 +147,49 @@ export async function listBriefs(
 /**
  * Fetch one brief by id together with a freshly derived linked_posts_count.
  * Returns `{ ok: true, data: null }` when the brief is absent or hidden by RLS.
- * The count is never stored; it is computed per request.
+ * The count is never stored; it is computed per request. The brief row and the
+ * count are independent reads (the count filters posts on the brief id the
+ * caller already has), so they go out together: one round trip, not two. A
+ * count for a brief that turns out absent is simply discarded.
  */
 export async function getBrief(
   client: Client,
   briefId: string,
 ): Promise<Result<BriefWithLinkedCount | null>> {
+  const [briefResult, countResult] = await Promise.all([
+    client.from('briefs').select('*').eq('id', briefId).is('deleted_at', null).maybeSingle(),
+    client
+      .from('posts')
+      .select('*', { count: 'exact', head: true })
+      .eq('brief_id', briefId)
+      .is('deleted_at', null),
+  ]);
+  if (briefResult.error) return { ok: false, error: transportError(briefResult.error.message) };
+  if (briefResult.data === null) return { ok: true, data: null };
+  if (countResult.error) return { ok: false, error: transportError(countResult.error.message) };
+
+  return {
+    ok: true,
+    data: { brief: briefResult.data, linked_posts_count: countResult.count ?? 0 },
+  };
+}
+
+/**
+ * Just a live brief's title, for a surface that names the brief and nothing
+ * more (Post detail's "From brief: {title}"). One RLS-scoped briefs read; no
+ * linked-posts count, which such a surface never shows. Returns
+ * `{ ok: true, data: null }` when the brief is absent, soft-deleted or hidden.
+ */
+export async function getBriefTitle(
+  client: Client,
+  briefId: string,
+): Promise<Result<string | null>> {
   const { data, error } = await client
     .from('briefs')
-    .select('*')
+    .select('title')
     .eq('id', briefId)
     .is('deleted_at', null)
     .maybeSingle();
   if (error) return { ok: false, error: transportError(error.message) };
-  if (data === null) return { ok: true, data: null };
-
-  const countResult = await client
-    .from('posts')
-    .select('*', { count: 'exact', head: true })
-    .eq('brief_id', briefId)
-    .is('deleted_at', null);
-  if (countResult.error) return { ok: false, error: transportError(countResult.error.message) };
-
-  return { ok: true, data: { brief: data, linked_posts_count: countResult.count ?? 0 } };
+  return { ok: true, data: (data as { title: string } | null)?.title ?? null };
 }

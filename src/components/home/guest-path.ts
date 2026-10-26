@@ -18,7 +18,12 @@ export interface GuestPathInput {
   storageKeys: () => string[];
 }
 
-function hasStoredSession(storageKeys: () => string[]): boolean {
+/**
+ * Whether supabase-js has a stored auth session key on this device. Only the
+ * key's existence is checked (never its value): it decides what boots, not
+ * what is shown.
+ */
+export function hasStoredSession(storageKeys: () => string[]): boolean {
   try {
     return storageKeys().some((key) => AUTH_TOKEN_KEY.test(key));
   } catch {

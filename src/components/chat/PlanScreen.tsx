@@ -227,7 +227,14 @@ import {
   stepSlot,
 } from '@/lib/chat/plan-keyboard-move';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
-import { LATE_READ_GRACE_MS, READ_TIMEOUT_MS, readProfiles, withLateRead } from '@/lib/chat-reads';
+import {
+  LATE_READ_GRACE_MS,
+  READ_TIMEOUT_MS,
+  readProfiles,
+  withLateRead,
+  type ChatProfile,
+} from '@/lib/chat-reads';
+import { peekWorkspaceMembers } from '@/lib/workspace-members';
 import { newMessageId } from '@/lib/chat/message-id';
 import { sharePlanToChannel } from '@/lib/chat/share-plan';
 import type { ChatMessageRow } from '@/lib/chat/thread';
@@ -252,6 +259,7 @@ import {
   type ConceptThumb,
   type PlanBundle,
   type PlanItemRow,
+  type NameRow,
   type PlanScreenData,
   type ReviewSide,
   type ReviewStatus,
@@ -958,6 +966,24 @@ interface KeepAsk {
 /** Where a discard confirm leads: back to view mode, or out of the screen (Back). */
 type LeaveEdit = 'exit' | 'close';
 
+/**
+ * The approvers' names the workspace members read already holds, and the ids
+ * it lacks (an ex-member, or no members read in this window). Pure.
+ */
+export function namesFromMembers(
+  ids: readonly string[],
+  profiles: ReadonlyMap<string, ChatProfile> | null,
+): { known: NameRow[]; missing: string[] } {
+  const known: NameRow[] = [];
+  const missing: string[] = [];
+  for (const id of new Set(ids)) {
+    const profile = profiles?.get(id);
+    if (profile !== undefined) known.push({ userId: id, displayName: profile.displayName });
+    else missing.push(id);
+  }
+  return { known, missing };
+}
+
 export function PlanScreen(props: {
   open: boolean;
   planId: string;
@@ -994,6 +1020,21 @@ export function PlanScreen(props: {
   const undoable = useUndoableAction();
   const planId = props.planId;
   const sentInChannelId = props.chat?.channelId;
+  // The approvers' names come from the workspace members this session already
+  // read (the shell, Settings, the approvers' pickers): no request when every
+  // approver is there; only the ones it lacks (an ex-member) are read.
+  const readApproverNames = async (
+    ids: string[],
+    signal?: AbortSignal,
+  ): Promise<Result<NameRow[]>> => {
+    const members =
+      me !== null && workspaceId !== null ? peekWorkspaceMembers(me, workspaceId) : null;
+    const { known, missing } = namesFromMembers(ids, members?.profiles ?? null);
+    if (missing.length === 0) return { ok: true, data: known };
+    const rest = await readProfiles(supabase, missing, signal);
+    if (!rest.ok) return known.length > 0 ? { ok: true, data: known } : rest;
+    return { ok: true, data: [...known, ...rest.data] };
+  };
   const { read, reload } = useScreenRead<PlanScreenData>(
     props.open,
     `${planId}:${timeZone}:${sentInChannelId ?? ''}`,
@@ -1001,7 +1042,7 @@ export function PlanScreen(props: {
       readPlanScreen(supabase, planId, signal, {
         timeZone,
         approvers: approverIds,
-        readNames: (ids, s) => readProfiles(supabase, ids, s),
+        readNames: (ids, s) => readApproverNames(ids, s),
         sentInChannelId,
       }),
   );

@@ -47,6 +47,22 @@ function Probe() {
   return null;
 }
 
+// Two buttons on one screen asking the same capability.
+function Pair() {
+  seen.push(useWorkspaceCapability('brief.create'));
+  seen.push(useWorkspaceCapability('brief.create'));
+  return null;
+}
+
+function renderPair(): void {
+  act(() => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    root.render(<Pair />);
+  });
+}
+
 function render(): void {
   act(() => {
     if (host === null) {
@@ -179,6 +195,41 @@ describe('useWorkspaceCapability', () => {
     root = null;
     render();
     // The late answer was not stored: a fresh read goes out.
+    expect(calls).toHaveLength(2);
+  });
+
+  it('two hooks asking the same capability at once share one rpc', async () => {
+    who.userId = 'u-a';
+    renderPair();
+    expect(calls).toHaveLength(1);
+    await settle(0, true);
+    expect(seen.slice(-2)).toEqual([true, true]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('never renders allowed then hides: null until known, then the answer only', async () => {
+    who.userId = 'u-a';
+    renderPair();
+    await settle(0, false);
+    // Every render before the answer is null (hidden); after it, false. Never true.
+    expect(seen).not.toContain(true);
+    const firstFalse = seen.indexOf(false);
+    expect(firstFalse).toBeGreaterThan(0);
+    expect(seen.slice(0, firstFalse).every((v) => v === null)).toBe(true);
+    expect(seen.slice(firstFalse).every((v) => v === false)).toBe(true);
+  });
+
+  it('a failed read stays hidden and is not cached: the next mount retries', async () => {
+    who.userId = 'u-a';
+    render();
+    await act(async () => {
+      calls[0]?.resolve({ data: null, error: { message: 'boom' } });
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+    expect(last()).toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    render();
     expect(calls).toHaveLength(2);
   });
 });

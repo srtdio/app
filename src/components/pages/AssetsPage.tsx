@@ -61,6 +61,7 @@ import {
   ASSET_TAB_DEFAULT,
   countAssetTabs,
   deleteInBatches,
+  dropAssetsReads,
   displayLabel,
   fetchMemberRole,
   filterAssets,
@@ -75,6 +76,8 @@ import {
   listAssetsPage,
   mergeAssetPages,
   parseAssetTab,
+  readAssetTabCounts,
+  readAssetsFirstPage,
   removeAssetsById,
   renameAssetInList,
   sortAssets,
@@ -113,7 +116,9 @@ export function AssetsPage() {
   const userId = session?.user.id ?? null;
 
   const [items, setItems] = useState<AssetListItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading from the first render: the read starts in an effect, after the
+  // first paint, so a false start would flash "Files show up here." first.
+  const [loading, setLoading] = useState(true);
   // A failed read of the files is a page load error: the grid and counts never
   // render from a partial read. The cause is logged.
   const [assetsFailed, setAssetsFailed] = useState(false);
@@ -198,43 +203,60 @@ export function AssetsPage() {
   const cache = appPresignCache();
 
   // Every tab's total in one parallel burst of HEAD counts. Runs with every
-  // first-page load and after every delete; the latest read wins.
-  const loadCounts = useCallback(async () => {
-    if (workspaceId === null) return;
-    countGeneration.current += 1;
-    const generation = countGeneration.current;
-    const result = await countAssetTabs(supabase, workspaceId);
-    if (generation !== countGeneration.current) return;
-    if (!result.ok) {
-      logger.warn('assets: tab counts read failed', { error: result.error.message });
-      return;
-    }
-    setCounts(result.data);
-  }, [workspaceId]);
+  // first-page load and after every delete; the latest read wins. The mount
+  // (`join`) joins the burst a nav press already started (prefetchAssetsData);
+  // every other run drops that shared read first and asks the server anew.
+  const loadCounts = useCallback(
+    async (join = false) => {
+      if (workspaceId === null) return;
+      countGeneration.current += 1;
+      const generation = countGeneration.current;
+      if (userId !== null && !join) dropAssetsReads(userId, workspaceId);
+      const result =
+        userId === null
+          ? await countAssetTabs(supabase, workspaceId)
+          : await readAssetTabCounts(supabase, userId, workspaceId, countAssetTabs);
+      if (generation !== countGeneration.current) return;
+      if (!result.ok) {
+        logger.warn('assets: tab counts read failed', { error: result.error.message });
+        return;
+      }
+      setCounts(result.data);
+    },
+    [workspaceId, userId],
+  );
 
   // The first page. Every reload (upload, link, data change, Retry) starts over
   // from the newest page, so the list never mixes a stale tail with fresh rows.
-  // The counts reload alongside it, not after it.
-  const loadAssets = useCallback(async () => {
-    if (workspaceId === null) return;
-    void loadCounts();
-    loadGeneration.current += 1;
-    const generation = loadGeneration.current;
-    setLoading(true);
-    const result = await listAssetsPage(supabase, workspaceId);
-    if (generation !== loadGeneration.current) return;
-    setLoading(false);
-    setLoadingMore(false);
-    if (!result.ok) {
-      logger.warn('assets: list read failed', { error: result.error.message });
-      setAssetsFailed(true);
-      return;
-    }
-    setAssetsFailed(false);
-    setItems(result.data.items);
-    setNext(result.data.next);
-    setAssetsLoaded(true);
-  }, [workspaceId, loadCounts]);
+  // The counts reload alongside it, not after it. Only the mount joins the
+  // shared read a nav press started; a reload drops it and reads anew.
+  const loadAssets = useCallback(
+    async (join = false) => {
+      if (workspaceId === null) return;
+      if (userId !== null && !join) dropAssetsReads(userId, workspaceId);
+      void loadCounts(true);
+      loadGeneration.current += 1;
+      const generation = loadGeneration.current;
+      setLoading(true);
+      const result =
+        userId === null
+          ? await listAssetsPage(supabase, workspaceId)
+          : await readAssetsFirstPage(supabase, userId, workspaceId, listAssetsPage);
+      if (generation !== loadGeneration.current) return;
+      setLoading(false);
+      setLoadingMore(false);
+      if (!result.ok) {
+        logger.warn('assets: list read failed', { error: result.error.message });
+        setAssetsFailed(true);
+        return;
+      }
+      setAssetsFailed(false);
+      setItems(result.data.items);
+      setNext(result.data.next);
+      setAssetsLoaded(true);
+    },
+    [workspaceId, userId, loadCounts],
+  );
 
   // The next page, appended with duplicates (by id) dropped. A failure keeps
   // what is loaded and says so in a toast; the button stays for another try.
@@ -264,8 +286,15 @@ export function AssetsPage() {
   }, [loadAssets]);
 
   useEffect(() => {
-    void loadAssets();
+    void loadAssets(true);
   }, [loadAssets]);
+  // Leaving the page forgets its shared first reads: this page renames and
+  // deletes in place, and other surfaces add files, so a later visit must read
+  // the server again, never paint this visit's list.
+  useEffect(() => {
+    if (workspaceId === null || userId === null) return;
+    return () => dropAssetsReads(userId, workspaceId);
+  }, [workspaceId, userId]);
   useWorkspaceDataChanged(() => {
     void loadAssets();
   });

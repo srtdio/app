@@ -150,8 +150,9 @@ describe('Comments page-0 stale-response guard', () => {
     const text = host?.textContent ?? '';
     expect(text).toContain('newest body');
     expect(text).not.toContain('stale body');
-    // The stale load bailed before its checkpoint read.
-    expect(fromSpy.mock.calls.filter(([t]) => t === 'comments')).toHaveLength(1);
+    // Each page-0 load issues its checkpoint read in parallel with its list
+    // (one round trip); the stale load's rows, both reads, are never applied.
+    expect(fromSpy.mock.calls.filter(([t]) => t === 'comments')).toHaveLength(2);
   });
 
   it('sets no state when unmounted mid-load', async () => {
@@ -162,8 +163,9 @@ describe('Comments page-0 stale-response guard', () => {
 
     await resolveLoad(0, [row('c-1', 'late body')]);
 
-    // The load stopped at the guard: no checkpoint read, nothing rendered.
-    expect(fromSpy).not.toHaveBeenCalledWith('comments');
+    // The checkpoint read went out with the list (parallel), but the load
+    // stopped at the guard: nothing rendered.
+    expect(fromSpy).toHaveBeenCalledWith('comments');
     expect(host?.textContent ?? '').toBe('');
   });
 });

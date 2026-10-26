@@ -7,6 +7,12 @@
 // trigger during a round marks it dirty and exactly one more round follows.
 // React-free pieces are exported so the query plan, the single-flight runner,
 // the merge on failure and the refetch triggers are unit tested without a DOM.
+//
+// The two reads are workspace-wide (the same in every chat), so with the
+// viewer known they are one shared session read (workspace-reads.ts): chat B
+// opened right after A joins A's round, and a fresh one paints in B's first
+// frame. Older than the window is absent (B loads as a cold open does); a post
+// change drops it before this hook's refetch reads again.
 
 import { useEffect, useRef, useState } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
@@ -17,7 +23,7 @@ import {
 } from '@/components/chat/post-card';
 import { withReadTimeout } from '@/lib/chat-reads';
 import { sameReadValue } from '@/lib/chat/plans';
-import { chatKey, openCache, type ChatKey } from '@/lib/chat/open-cache';
+import { peekChatRead, sharedChatRead } from '@/lib/chat/workspace-reads';
 import { supabase } from '@/lib/supabase';
 import { countOpenPosts, listOpenPosts, type OpenPostRow } from '../../../packages/posts/src/reads';
 
@@ -54,6 +60,36 @@ export async function fetchOpenPosts(
     posts: list.ok ? list.data : null,
     count: count.ok ? count.data : null,
   };
+}
+
+/** A round both of whose reads answered is kept for the other chats. */
+function roundOk(data: OpenPostsData): boolean {
+  return data.posts !== null && data.count !== null;
+}
+
+/**
+ * {@link fetchOpenPosts} as the workspace's shared session read for this
+ * viewer: joined while it runs and while fresh; a round with a failed read is
+ * never kept. The tap's kickoff and the hook's rounds both go through here.
+ */
+export function sharedOpenPosts(
+  client: Client,
+  userId: string,
+  workspaceId: string,
+  reads: OpenPostsReads = READS,
+): Promise<OpenPostsData> {
+  return sharedChatRead(
+    userId,
+    workspaceId,
+    'openPosts',
+    () => fetchOpenPosts(client, workspaceId, reads),
+    roundOk,
+  );
+}
+
+/** The shared round while fresh, else undefined (never reads). */
+export function peekOpenPosts(userId: string, workspaceId: string): OpenPostsData | undefined {
+  return peekChatRead<OpenPostsData>(userId, workspaceId, 'openPosts');
 }
 
 /** What the strip and sheet read. `failed`: the list has never been read here. */
@@ -197,9 +233,9 @@ function roundKey(workspaceId: string, threadKey: string): string {
  * Posts in review for the open thread. A thread switch (`threadKey`) is not
  * ready until the new thread's round settles; a failed round keeps what the
  * same workspace already showed (see {@link mergeOpenPosts}). With `memory`
- * (the viewer and the chat), the chat's last settled view shows at once and
- * the open's round revalidates it (a same-data round changes nothing), and the
- * open's first round joins the read the tap started (kickoffChatOpen).
+ * (the viewer), every round is the workspace's shared read: a fresh one
+ * (another chat's, or the tap's kickoff) is shown at once and joined, never
+ * asked again; one older than the window is not shown (the round loads).
  */
 export function useOpenPosts(
   workspaceId: string | null,
@@ -208,44 +244,23 @@ export function useOpenPosts(
   memory?: { userId: string | null; channelId: string | null },
 ): UseOpenPosts {
   const key = workspaceId !== null ? roundKey(workspaceId, threadKey) : null;
-  const memoKey = chatKey(memory?.userId, workspaceId, memory?.channelId);
-  const memoRef = useRef<ChatKey | null>(memoKey);
-  memoRef.current = memoKey;
-  const [state, setState] = useState<OpenPostsState | null>(() => {
-    const remembered = memoKey !== null ? openCache.recall(memoKey, 'openPosts') : undefined;
-    return remembered !== undefined && workspaceId !== null && key !== null
-      ? { workspaceId, key, view: remembered }
-      : null;
-  });
+  const userId = memory?.userId ?? null;
+  const userRef = useRef(userId);
+  userRef.current = userId;
+  const [state, setState] = useState<OpenPostsState | null>(null);
   const runnerRef = useRef<ReturnType<typeof createOpenPostsRunner<string>> | null>(null);
   const keyRef = useRef<string | null>(null);
   keyRef.current = key;
-  // The next round is an open's first: it joins the tap's read.
-  const openRoundRef = useRef(false);
 
   // One runner per client; its rounds are keyed so a switch never overlaps them.
   useEffect(() => {
     const runner = createOpenPostsRunner<string>({
       fetch: (k) => {
         const ws = k.slice(0, k.indexOf('\n'));
-        const memo = memoRef.current;
-        const open = openRoundRef.current && memo !== null && memo.workspaceId === ws;
-        openRoundRef.current = false;
-        return open
-          ? openCache.joinOrStart(memo, 'openPosts', () => fetchOpenPosts(client, ws))
-          : fetchOpenPosts(client, ws);
+        const viewer = userRef.current;
+        return viewer ? sharedOpenPosts(client, viewer, ws) : fetchOpenPosts(client, ws);
       },
-      onSettle: (k, data) => {
-        const ws = k.slice(0, k.indexOf('\n'));
-        setState((prev) => {
-          const next = settleOpenPosts(prev, k, data);
-          const memo = memoRef.current;
-          if (memo !== null && memo.workspaceId === ws && !next.view.failed) {
-            openCache.remember(memo, 'openPosts', next.view);
-          }
-          return next;
-        });
-      },
+      onSettle: (k, data) => setState((prev) => settleOpenPosts(prev, k, data)),
       now: () => Date.now(),
     });
     runnerRef.current = runner;
@@ -268,12 +283,15 @@ export function useOpenPosts(
 
   useEffect(() => {
     if (key === null) return;
-    openRoundRef.current = true;
     runnerRef.current?.request(key);
   }, [key, client]);
 
   if (key === null) return { posts: null, count: null, failed: false, ready: true };
   if (state === null || state.key !== key) {
+    // This thread's round has not settled here yet: a fresh shared round (the
+    // tap's, another chat's) is the answer it will join, so it shows now.
+    const fresh = userId && workspaceId !== null ? peekOpenPosts(userId, workspaceId) : undefined;
+    if (fresh !== undefined) return { ...mergeOpenPosts(null, fresh), ready: true };
     return { posts: null, count: null, failed: false, ready: false };
   }
   return { ...state.view, ready: true };

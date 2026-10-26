@@ -1,14 +1,18 @@
 // The viewer's side (agency or client) in a workspace, for chat surfaces that
 // word things differently per side (the shared post card's "Waiting on you").
-// The workspace context does not carry the role, so it is read once through
-// fetchMemberRole (one RLS-scoped workspace_members SELECT) and cached per
+// The workspace context does not carry the role, so it is read through
+// fetchMemberRole, which is the session-shared role read (src/lib/member-role.ts:
+// one RLS-scoped workspace_members SELECT per user and workspace per window,
+// shared with Pipeline, Post detail, Assets and Plan), and the side is cached per
 // workspace and user for the session: every card in every thread shares the one
-// in-flight read, so a thread of many cards costs a single role fetch.
+// in-flight read, so a thread of many cards costs a single role fetch, and a
+// role another surface already read is ready on the first render (peek).
 
 import { useEffect, useState } from 'react';
 import type { Client } from '@srtdio/rpc';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import { fetchMemberRole } from '@/lib/assets';
+import { dropSharedMemberRole, peekSharedMemberRole } from '@/lib/member-role';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
@@ -36,9 +40,18 @@ function cacheKey(workspaceId: string, userId: string): string {
   return `${workspaceId}:${userId}`;
 }
 
-/** A side already resolved this session, or undefined. Never fetches. */
+/**
+ * A side already resolved this session, or one the shared role read already
+ * answered in this window (another surface read the role), or undefined. Never
+ * fetches. A failed or role-less shared read is 'unknown', which is never served.
+ */
 export function peekViewerSide(workspaceId: string, userId: string): ViewerSide | undefined {
-  return resolved.get(cacheKey(workspaceId, userId));
+  const hit = resolved.get(cacheKey(workspaceId, userId));
+  if (hit !== undefined) return hit;
+  const shared = peekSharedMemberRole(workspaceId, userId);
+  if (shared === undefined || !shared.ok) return undefined;
+  const side = sideForRole(shared.role);
+  return side === 'unknown' ? undefined : side;
 }
 
 /**
@@ -52,17 +65,25 @@ export function resolveViewerSide(
   userId: string,
 ): Promise<ViewerSide> {
   const key = cacheKey(workspaceId, userId);
-  const hit = resolved.get(key);
-  if (hit !== undefined) return Promise.resolve(hit);
+  const hit = peekViewerSide(workspaceId, userId);
+  if (hit !== undefined) {
+    resolved.set(key, hit);
+    return Promise.resolve(hit);
+  }
   const pending = inFlight.get(key);
   if (pending !== undefined) return pending;
   // Bounded at 5s: a role read that never answers settles as 'unknown' (not
   // cached, so the next mount retries it) and never holds a card or the strip.
+  // The hung shared read is dropped too, so that retry starts a new request
+  // instead of joining the one that never answered.
   let timer: ReturnType<typeof setTimeout> | undefined;
   const next = Promise.race([
     fetchMemberRole(client, workspaceId, userId).then(sideForRole, () => 'unknown' as const),
     new Promise<ViewerSide>((resolve) => {
-      timer = setTimeout(() => resolve('unknown'), READ_TIMEOUT_MS);
+      timer = setTimeout(() => {
+        dropSharedMemberRole(workspaceId, userId);
+        resolve('unknown');
+      }, READ_TIMEOUT_MS);
     }),
   ])
     .finally(() => clearTimeout(timer))

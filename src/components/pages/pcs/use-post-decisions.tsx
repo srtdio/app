@@ -408,7 +408,12 @@ interface PostDecisionsInput {
    * (the hook reads it when "Send for review again" is tapped).
    */
   openCount: number | null;
-  /** Refresh after a landed move (the page reloads; the chat card refetches). */
+  /**
+   * Refresh after a landed move (the page's silent reload; the chat card
+   * refetches). After an approve or another gated move it runs in the
+   * background: the confirm has already closed on the stage RPC's success.
+   * Reject / park still await it inside their commit.
+   */
   reload: () => Promise<void> | void;
   /** A reason comment or a send-again note landed: refresh the comments. */
   onCommentsChanged?: () => void;
@@ -557,11 +562,30 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
       else setActionError(message);
       return false;
     }
+    // Speed: the server has committed the move, so the post updates in place
+    // now (the RPC returns only an id, so the stage comes from the known
+    // transition) and the caller closes the approve confirm at once. The
+    // surface's refresh runs silently behind it (Post detail's load(true) never
+    // shows the skeleton); its new server stage then replaces this one. The
+    // confirm still waits for the RPC itself: no optimistic approve.
     setOptimisticStage(to);
-    await inputRef.current.reload();
     setTransitioning(false);
-    dispatchInductionRefresh();
+    refreshInBackground();
     return true;
+  }
+
+  // The silent refresh after a landed approve / move: never awaited, never
+  // throws into the caller (the move already landed; a failed refresh only
+  // leaves the known new stage on screen until the next read).
+  function refreshInBackground(): void {
+    void Promise.resolve()
+      .then(() => inputRef.current.reload())
+      .catch((error: unknown) => {
+        logger.warn('post decisions: background refresh failed', {
+          error: error instanceof Error ? error.message : 'thrown',
+        });
+      })
+      .finally(() => dispatchInductionRefresh());
   }
 
   // Approve asks first; every other target moves at once through the same
@@ -596,11 +620,12 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
       setOnBehalfError(postActionErrorCopy(result.error, 'approve the post'));
       return;
     }
+    // As handleTransition: the sheet waited for the RPC; now the stage updates
+    // in place, the sheet closes, and the refresh runs silently behind it.
     setOptimisticStage('approved');
-    await inputRef.current.reload();
     setOnBehalfBusy(false);
     setOnBehalfOpen(false);
-    dispatchInductionRefresh();
+    refreshInBackground();
   }
 
   // Reject / park confirmed: show the new stage now, commit after the Undo

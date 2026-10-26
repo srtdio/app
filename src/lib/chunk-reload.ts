@@ -9,7 +9,7 @@
 // failure (or storage that throws) surfaces the error instead, so it can never
 // loop.
 
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
+import { createElement, lazy, useState, type ComponentType, type ReactElement } from 'react';
 
 export const CHUNK_RELOAD_KEY = 'sorted:chunk-reload';
 
@@ -189,17 +189,71 @@ export function withChunkReload<T>(
     });
 }
 
+// Each page's import() goes through one memoized loader (chunkLoader), which
+// records the module once it lands. A route whose module has already landed
+// (the boot start in main.tsx, a nav press, the idle prefetch) renders it
+// directly on mount instead of through React.lazy, whose first render always
+// suspends for a tick even on a loaded module: the Suspense fallback never
+// flashes for a page whose code is already here.
+const loadedModules = new WeakMap<() => Promise<unknown>, unknown>();
+
+/**
+ * One page chunk's loader: the import() runs once (a failure is forgotten, so
+ * the next call retries) and the landed module is recorded for loadedChunk.
+ */
+export function chunkLoader<M>(load: () => Promise<M>): () => Promise<M> {
+  let pending: Promise<M> | null = null;
+  const loader = (): Promise<M> => {
+    if (pending === null) {
+      const started = load().then(
+        (module) => {
+          loadedModules.set(loader, module);
+          return module;
+        },
+        (err: unknown) => {
+          if (pending === started) pending = null;
+          throw err;
+        },
+      );
+      pending = started;
+    }
+    return pending;
+  };
+  return loader;
+}
+
+/** The module a chunkLoader already loaded, or undefined (not asked, running or failed). */
+export function loadedChunk<M>(load: () => Promise<M>): M | undefined {
+  return loadedModules.get(load) as M | undefined;
+}
+
 /**
  * React.lazy over a dynamic import, with the one-time stale chunk reload.
  * `pick` names the component in the loaded module (pages use named exports).
+ * When `load` is a chunkLoader whose module has landed, a mount renders the
+ * page directly (no Suspense tick); the choice is made once per mount, so a
+ * mounted page never swaps component type (no remount).
  */
 export function lazyRoute<M, P extends object>(
   load: () => Promise<M>,
   pick: (module: M) => ComponentType<P>,
-): LazyExoticComponent<ComponentType<P>> {
-  return lazy<ComponentType<P>>(
-    withChunkReload(() => load().then((module) => ({ default: pick(module) }))),
-  );
+): ComponentType<P> {
+  let picked: ComponentType<P> | undefined;
+  const pickOnce = (module: M): ComponentType<P> => {
+    picked ??= pick(module);
+    return picked;
+  };
+  const Lazy = lazy<ComponentType<P>>(
+    withChunkReload(() => load().then((module) => ({ default: pickOnce(module) }))),
+  ) as unknown as ComponentType<P>;
+  function LazyRoute(props: P): ReactElement {
+    const [Component] = useState<ComponentType<P>>(() => {
+      const module = loadedChunk(load);
+      return module === undefined ? Lazy : pickOnce(module);
+    });
+    return createElement(Component, props);
+  }
+  return LazyRoute;
 }
 
 /** Run a task once the browser is idle (setTimeout fallback); returns a cancel. */
@@ -212,14 +266,48 @@ export function whenIdle(task: () => void, timeoutMs = 4000): () => void {
   return () => window.clearTimeout(id);
 }
 
-/** The lazy signed-in shell unit (App.tsx renders it) and the Pipeline page chunk. */
-export const loadShell = () =>
+// The shell unit, the Pipeline chunk (the signed-out pages warm both:
+// prefetchShellWhenIdle) and the primary nav's pages. Every other page's
+// loader lives in src/lib/page-loaders.ts, which only App.tsx and main.tsx
+// import, so the shell and the chat SDK load never link every page.
+
+/** The lazy signed-in shell unit (App.tsx renders it). */
+export const loadShell = chunkLoader(() =>
   Promise.all([
     import('@/lib/workspace-context'),
     import('@/lib/chat'),
     import('@/components/shell/AppLayout'),
-  ]);
-export const loadPipeline = () => import('@/components/pages/PipelinePage');
+  ]),
+);
+export const loadPipeline = chunkLoader(() => import('@/components/pages/PipelinePage'));
+// The primary nav's other pages: the nav press prefetch (route-prefetch.ts)
+// starts them from the shell, which already links them.
+export const loadChat = chunkLoader(() => import('@/components/pages/ChatPage'));
+export const loadBriefs = chunkLoader(() => import('@/components/pages/BriefsPage'));
+export const loadAssets = chunkLoader(() => import('@/components/pages/AssetsPage'));
+export const loadPlanTab = chunkLoader(() => import('@/components/pages/PlanTabPage'));
+/** The tiny layout Activity and the Plan tab render in (without the Plan screen). */
+export const loadPlanBeside = chunkLoader(() => import('@/components/pages/PlanBesideLayout'));
+type RouteChunkTable = (pathname: string) => readonly (() => Promise<unknown>)[];
+
+// The route table (page-loaders.ts sets it when it loads, before the shell
+// mounts). Until then no path has chunks to wait for.
+let routeChunkTable: RouteChunkTable = () => [];
+
+/** page-loaders.ts: the chunks each signed-in path renders. */
+export function setRouteChunkTable(table: RouteChunkTable): void {
+  routeChunkTable = table;
+}
+
+/** True once every chunk the path renders has landed (a path with none is ready). */
+export function routeChunksLoaded(pathname: string): boolean {
+  return routeChunkTable(pathname).every((load) => loadedChunk(load) !== undefined);
+}
+
+/** Settles (never rejects) once every chunk the path renders has landed or failed. */
+export function whenRouteChunksSettle(pathname: string): Promise<void> {
+  return Promise.allSettled(routeChunkTable(pathname).map((load) => load())).then(() => undefined);
+}
 
 /** True when the browser asks to save data (Network Information API, where present). */
 function saveData(): boolean {

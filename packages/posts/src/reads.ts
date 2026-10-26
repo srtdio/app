@@ -606,6 +606,32 @@ export async function listPosts(
   };
 }
 
+/** A post linked to a brief, as Brief detail's linked-posts list shows it. */
+export type BriefLinkedPostRow = Pick<Post, 'id' | 'title' | 'stage' | 'created_at'>;
+
+export const BRIEF_LINKED_POST_COLUMNS = 'id, title, stage, created_at';
+
+/**
+ * The live posts made from one brief, newest first, capped at `limit`. One
+ * RLS-scoped posts read filtered on brief_id (never a whole-workspace scan
+ * filtered in the browser) and only the four columns the list shows, so it
+ * needs no attachments read and can start the moment the brief id is known.
+ */
+export async function listBriefLinkedPosts(
+  client: Client,
+  input: { briefId: string; limit: number },
+): Promise<Result<BriefLinkedPostRow[]>> {
+  const { data, error } = await client
+    .from('posts')
+    .select(BRIEF_LINKED_POST_COLUMNS)
+    .eq('brief_id', input.briefId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(input.limit);
+  if (error) return { ok: false, error: transportError(error.message) };
+  return { ok: true, data: (data ?? []) as BriefLinkedPostRow[] };
+}
+
 /** Row cap for {@link listOpenPosts}; the strip's number comes from {@link countOpenPosts}. */
 export const OPEN_POSTS_LIMIT = 100;
 

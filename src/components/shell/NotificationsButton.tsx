@@ -2,7 +2,8 @@
 // (phone and laptop), where the bell used to sit. Its badge is the merged
 // unread count (every inbox row the Notifications page counts as unread), from
 // the shell's inbox store. It opens /notifications and stays tinted while that
-// page is on screen.
+// page is on screen. A press (pointerdown, touchstart) prefetches the page's
+// chunk and first reads (src/lib/route-prefetch.ts).
 
 import type { ReactElement } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -12,6 +13,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { IconNotifications, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { activityPrefetchProps } from '@/lib/route-prefetch';
 
 /** The Notifications page's route. */
 export const NOTIFICATIONS_PATH = '/notifications';
@@ -42,6 +44,8 @@ export function NotificationsButton(): ReactElement {
       data-induction={INDUCTION_KEYS.activityTab}
       {...(active ? { 'aria-current': 'page' as const } : {})}
       onClick={() => navigate(NOTIFICATIONS_PATH)}
+      // A press starts the Activity chunk and its first reads before the tap lands.
+      {...activityPrefetchProps()}
       className={cn(
         'relative shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         active && 'bg-accent-soft',

@@ -1,18 +1,18 @@
 // The workspace's active members for the Pipeline: approver first names (the
 // card status line and the Send for review helper), a user id -> display
 // name map (the creator's name in the reject confirm) and the on-behalf
-// approver options (the board's and the move sheet's approve sheets). One
-// membership read and one batched profile read per workspace, shared by every
-// Pipeline consumer: the board and the move sheet take `approvers` from here
-// instead of each running useWorkspaceApprovers (two more membership + profile
-// pairs). The approvers are a subset of the active members whose profiles are
-// read here anyway, so nothing extra is read. A failed read leaves the lists
-// empty, so the copy falls back to "approvers" and "The creator".
+// approver options (the board's and the move sheet's approve sheets). The
+// rows and names come from the session-shared members read
+// (src/lib/workspace-members.ts: one membership read plus one batched profile
+// read per user and workspace), so the Pipeline, Settings, the approve sheets,
+// chat pickers and the comment @-picker opened in the same window ask once
+// between them. The approvers are a subset of the active members whose
+// profiles are read there anyway, so nothing extra is read. A failed read
+// leaves the lists empty, so the copy falls back to "approvers" and "The
+// creator".
 
-import { useEffect, useState } from 'react';
-import { listMembers } from '@srtdio/workspace';
-import { supabase } from '@/lib/supabase';
-import { readProfiles } from '@/lib/chat-reads';
+import { useMemo } from 'react';
+import { useWorkspaceMembers } from '@/lib/workspace-members';
 import { isClient } from '@/components/pages/pcs/roles';
 import { firstNameOf } from '@/components/pages/pipeline/card-status';
 import { toApproverOptions, type ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
@@ -31,47 +31,34 @@ interface WorkspacePeople {
 const EMPTY: WorkspacePeople = { approverFirstNames: [], names: new Map(), approvers: [] };
 
 /** Members as people: approvers' first names in member order plus every name. Pure. */
-function toWorkspacePeople(
+export function toWorkspacePeople(
   members: readonly { user_id: string; role: string | null; active: boolean }[],
   profiles: readonly { userId: string; displayName: string | null }[],
 ): WorkspacePeople {
+  const active = members.filter((m) => m.active);
+  const activeIds = new Set(active.map((m) => m.user_id));
   const names = new Map<string, string>();
   for (const profile of profiles) {
+    // Only active members' names, as when only their profiles were read.
+    if (!activeIds.has(profile.userId)) continue;
     if (profile.displayName !== null && profile.displayName.trim() !== '') {
       names.set(profile.userId, profile.displayName);
     }
   }
-  const approverFirstNames = members
-    .filter((m) => m.active && isClient(m.role))
+  const approverFirstNames = active
+    .filter((m) => isClient(m.role))
     .map((m) => firstNameOf(names.get(m.user_id)))
     .filter((name) => name !== '');
-  return { approverFirstNames, names, approvers: toApproverOptions(members, names) };
+  return { approverFirstNames, names, approvers: toApproverOptions(active, names) };
 }
 
 export function useWorkspacePeople(workspaceId: string | null): WorkspacePeople {
-  const [people, setPeople] = useState<WorkspacePeople>(EMPTY);
-  useEffect(() => {
-    setPeople(EMPTY);
-    if (workspaceId === null) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const members = await listMembers(supabase, workspaceId);
-        if (cancelled || !members.ok) return;
-        const active = members.data.filter((m) => m.active);
-        const profiles = await readProfiles(
-          supabase,
-          active.map((m) => m.user_id),
-        );
-        if (cancelled || !profiles.ok) return;
-        setPeople(toWorkspacePeople(active, profiles.data));
-      } catch {
-        // A transport throw keeps the fallback copy.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId]);
-  return people;
+  const { rows, profiles, loading, error } = useWorkspaceMembers(workspaceId);
+  return useMemo(
+    () =>
+      loading || error !== null || workspaceId === null
+        ? EMPTY
+        : toWorkspacePeople(rows, [...profiles.values()]),
+    [rows, profiles, loading, error, workspaceId],
+  );
 }

@@ -36,6 +36,7 @@ import { friendlyCommentError } from '@/components/comments/comment-errors';
 import { errorText } from '@/lib/error-copy';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
+import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import {
@@ -902,6 +903,70 @@ export function buildCreateInput(params: CreateCommentParams): CreateCommentInpu
   };
 }
 
+/**
+ * The row a landed write shows at once, built from the known input and the id
+ * the proc returned (comment_create returns only the id; comment_batch_create
+ * {id, seq}). It is the same row the next page-zero read returns, bar the
+ * server's timestamps, which that silent background read then swaps in. Pure.
+ */
+export function localCommentRow(params: {
+  id: string;
+  workspaceId: string;
+  entityType: CommentEntityType;
+  entityId: string;
+  authorUserId: string;
+  body: string;
+  attachmentVersionIds: readonly string[];
+  parentCommentId: string | null;
+  /** The checkpoint number (comment_batch_create's seq); null on a plain comment. */
+  ledgerSeq: number | null;
+  nowIso: string;
+}): CommentRow {
+  const mentions = parseMentions(params.body);
+  return {
+    accepted_at: null,
+    accepted_by: null,
+    asked_at: null,
+    asked_by: null,
+    attachment_asset_ids:
+      params.attachmentVersionIds.length > 0 ? [...params.attachmentVersionIds] : [],
+    author_user_id: params.authorUserId,
+    body: params.body,
+    closed_at: null,
+    closed_by: null,
+    created_at: params.nowIso,
+    deleted_at: null,
+    edited_at: null,
+    entity_id: params.entityId,
+    entity_type: params.entityType,
+    id: params.id,
+    ledger_batch_id: null,
+    ledger_seq: params.ledgerSeq,
+    legacy_author_email: null,
+    legacy_author_name: null,
+    mentions: mentions.length > 0 ? mentions : null,
+    parent_comment_id: params.parentCommentId,
+    resolution_note: null,
+    resolved_at: null,
+    resolved_by: null,
+    resolved_version_id: null,
+    sent_back_at: null,
+    sent_back_by: null,
+    unaccepted_at: null,
+    unaccepted_by: null,
+    workspace_id: params.workspaceId,
+  };
+}
+
+/** Put landed rows into a list (replacing any with the same id), newest first. Pure. */
+export function upsertRows(
+  rows: readonly CommentRow[],
+  added: readonly CommentRow[],
+): CommentRow[] {
+  const ids = new Set(added.map((row) => row.id));
+  return [...added, ...rows.filter((row) => !ids.has(row.id))];
+}
+
 /** editComment takes its traceId POSITIONALLY (not inside the input). */
 export function runEditComment(
   client: Client,
@@ -1166,28 +1231,49 @@ export function Comments({
     };
   }, []);
 
+  // True once a page-zero load of THIS entity has landed. Only the first load
+  // shows the skeleton; every later page-zero read (after a send / edit /
+  // delete / resolve, a refreshSignal bump) is a silent background refetch that
+  // swaps the rows in place. Reset when the entity changes (the mount effect).
+  const hasLoaded = useRef(false);
+
   // Fetch a single page. page 0 replaces the list (mount + post-submit refetch);
   // later pages append. A full page (exactly PAGE_SIZE) implies there may be more.
   const loadPage = useCallback(
     async (nextPage: number): Promise<void> => {
       const seq = nextPage === 0 ? ++page0Seq.current : null;
       const stale = (): boolean => !mounted.current || (seq !== null && seq !== page0Seq.current);
+      const silent = nextPage === 0 && hasLoaded.current;
       if (nextPage === 0) {
-        setLoading(true);
-        setLoadError(false);
+        if (!silent) {
+          setLoading(true);
+          setLoadError(false);
+        }
       } else {
         setLoadingMore(true);
         setMoreError(false);
       }
-      const result = await listComments(supabase, {
-        workspace_id: workspaceId,
-        entity_type: entityType,
-        entity_id: entityId,
-        page: nextPage,
-      });
+      // Page zero on a post reads every checkpoint too (so none is paginated out
+      // of reach), IN PARALLEL with the list: one round trip, not two. Posts only
+      // (checkpoints never exist on a brief); a host-owned read
+      // (sharedCheckpoints) is never repeated here.
+      const withCheckpoints = nextPage === 0 && entityType === 'post' && !sharedMode;
+      const [result, checkpointRows] = await Promise.all([
+        listComments(supabase, {
+          workspace_id: workspaceId,
+          entity_type: entityType,
+          entity_id: entityId,
+          page: nextPage,
+        }),
+        withCheckpoints ? fetchCheckpoints(supabase, workspaceId, entityId) : Promise.resolve(null),
+      ]);
       if (stale()) return;
       if (!result.ok) {
         if (nextPage === 0) {
+          // A failed silent refetch keeps the rows already on screen (they were
+          // written in place from the landed write); only a first load shows
+          // LoadError.
+          if (silent) return;
           setLoading(false);
           setLoadError(true);
         } else {
@@ -1196,15 +1282,8 @@ export function Comments({
         }
         return;
       }
-      // One extra query, only on a page-zero load: every checkpoint for the post,
-      // so none is paginated out of reach. Posts only (checkpoints never exist on
-      // a brief); a failed read keeps whatever was already shown.
-      // A host-owned read (sharedCheckpoints) is never repeated here.
-      if (nextPage === 0 && entityType === 'post' && !sharedMode) {
-        const checkpointRows = await fetchCheckpoints(supabase, workspaceId, entityId);
-        if (stale()) return;
-        setCheckpoints(checkpointRows);
-      }
+      if (checkpointRows !== null) setCheckpoints(checkpointRows);
+      if (nextPage === 0) hasLoaded.current = true;
       setComments((prev) => (nextPage === 0 ? result.data : [...prev, ...result.data]));
       setPage(nextPage);
       setHasMore(result.data.length === PAGE_SIZE);
@@ -1222,12 +1301,40 @@ export function Comments({
     await Promise.all([loadPage(0), reload !== null ? reload() : Promise.resolve()]);
   }, [loadPage]);
 
+  // After a landed write the row is already right on screen (patched in place
+  // below); this page-zero read only reconciles with the server, silently (no
+  // skeleton: hasLoaded is set) and never awaited by the write's caller.
+  const refreshInBackground = useCallback((): void => {
+    void reloadAll().catch((error: unknown) => {
+      logger.warn('comments: background refresh failed', {
+        error: error instanceof Error ? error.message : 'thrown',
+      });
+    });
+  }, [reloadAll]);
+
+  // Apply one change to a row wherever it lives (the paged list and the
+  // always-loaded checkpoints), so a write paints at once.
+  const patchRow = useCallback(
+    (commentId: string, change: (row: CommentRow) => CommentRow): void => {
+      const patch = (rows: CommentRow[]): CommentRow[] =>
+        rows.some((row) => row.id === commentId)
+          ? rows.map((row) => (row.id === commentId ? change(row) : row))
+          : rows;
+      setComments(patch);
+      setCheckpoints(patch);
+    },
+    [],
+  );
+
   // The rendered list: the always-loaded checkpoints merged into the paginated
   // comments, de-duped by id and newest-first. Only non-checkpoint comments
   // paginate; a checkpoint beyond page zero is still here.
   const merged = useMemo(() => mergeCheckpoints(comments, checkpoints), [comments, checkpoints]);
 
   useEffect(() => {
+    // A new entity (or first mount) is a first load again: skeleton, never the
+    // previous entity's rows.
+    hasLoaded.current = false;
     void loadPage(0);
   }, [loadPage]);
 
@@ -1342,21 +1449,38 @@ export function Comments({
       parentCommentId: string | null;
     },
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    const result = await createComment(
-      supabase,
-      buildCreateInput({
-        workspaceId,
-        entityType,
-        entityId,
-        body,
-        attachmentVersionIds: options.attachmentVersionIds,
-        parentCommentId: options.parentCommentId,
-        traceId: newTrace(),
-      }),
-    );
+    const input = buildCreateInput({
+      workspaceId,
+      entityType,
+      entityId,
+      body,
+      attachmentVersionIds: options.attachmentVersionIds,
+      parentCommentId: options.parentCommentId,
+      traceId: newTrace(),
+    });
+    const result = await createComment(supabase, input);
     if (!result.ok) {
       const action = options.parentCommentId !== null ? 'post the reply' : 'post the comment';
       return { ok: false, error: friendlyCommentError(result.error, action) };
+    }
+    // The landed comment shows at once, built from what was sent and the id
+    // the proc returned; the page-zero read reconciles silently behind it.
+    // Without the session's user id yet (a send in the first instant) there
+    // is no honest author to show, so that rare case waits for the read.
+    if (currentUserId !== null) {
+      const landed = localCommentRow({
+        id: result.data,
+        workspaceId,
+        entityType,
+        entityId,
+        authorUserId: currentUserId,
+        body: input.body,
+        attachmentVersionIds: input.attachment_asset_ids ?? [],
+        parentCommentId: options.parentCommentId,
+        ledgerSeq: null,
+        nowIso: new Date().toISOString(),
+      });
+      setComments((prev) => upsertRows(prev, [landed]));
     }
     const parentId = options.parentCommentId;
     if (parentId !== null) replyDrafts.delete(draftKey(parentId));
@@ -1372,14 +1496,16 @@ export function Comments({
       });
       clearReplyTarget(parentId);
     }
-    await reloadAll();
+    if (currentUserId !== null) refreshInBackground();
+    else await reloadAll();
     return { ok: true };
   }
 
   // Write one checkpoint batch through comment_batch_create, sourcing the trace
   // the same way handleCreate does (one newTrace() per action). On success the
-  // returned {id, seq} rows land in the thread the way a new comment renders
-  // today: refetch page 0.
+  // returned {id, seq} rows land in the thread at once, built from the sent
+  // points (the proc returns them in point order), and page zero reconciles
+  // silently behind them.
   async function handleCreateBatch(
     points: CheckpointPoint[],
   ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -1392,7 +1518,30 @@ export function Comments({
     if (!result.ok) {
       return { ok: false, error: friendlyCommentError(result.error, 'add the checkpoints') };
     }
-    await reloadAll();
+    // Only when every point came back (and the author is known) is the local
+    // copy exact; otherwise the read alone paints them, still without a skeleton.
+    if (currentUserId !== null && result.data.length === points.length) {
+      const nowIso = new Date().toISOString();
+      const authorUserId = currentUserId;
+      const landed = result.data.map((created, index) =>
+        localCommentRow({
+          id: created.id,
+          workspaceId,
+          entityType,
+          entityId,
+          authorUserId,
+          body: points[index]?.body ?? '',
+          attachmentVersionIds: points[index]?.attachment_version_ids ?? [],
+          parentCommentId: null,
+          ledgerSeq: created.seq,
+          nowIso,
+        }),
+      );
+      setCheckpoints((prev) => upsertRows(prev, landed));
+      refreshInBackground();
+    } else {
+      await reloadAll();
+    }
     return { ok: true };
   }
 
@@ -1411,12 +1560,8 @@ export function Comments({
       });
       return;
     }
-    const result = await runEditComment(
-      supabase,
-      commentId,
-      serializeMentions(editBody, editPicks),
-      newTrace(),
-    );
+    const nextBody = serializeMentions(editBody, editPicks);
+    const result = await runEditComment(supabase, commentId, nextBody, newTrace());
     if (!result.ok) {
       setRowError({
         id: commentId,
@@ -1426,9 +1571,14 @@ export function Comments({
       });
       return;
     }
+    // The edit landed: the row shows the saved body at once (comment_edit
+    // returns only the id, so the body is what was sent), then page zero
+    // reconciles silently.
+    const editedAt = new Date().toISOString();
+    patchRow(commentId, (row) => ({ ...row, body: nextBody, edited_at: editedAt }));
     setEditingId(null);
     setEditBody('');
-    await reloadAll();
+    refreshInBackground();
   }
 
   // Delete hides the row at once behind an Undo toast. The soft-delete RPC runs
@@ -1459,8 +1609,14 @@ export function Comments({
           });
           return;
         }
-        await reloadAll();
+        // Landed: the row becomes what the server now holds (deleted_at set: a
+        // tombstone while it has live replies, gone otherwise) before it is
+        // unhidden, so it never flashes back as live; page zero reconciles
+        // silently.
+        const deletedAt = new Date().toISOString();
+        patchRow(commentId, (row) => ({ ...row, deleted_at: deletedAt }));
         unhide();
+        refreshInBackground();
       },
       revert: unhide,
     });
@@ -1484,7 +1640,37 @@ export function Comments({
       });
       return;
     }
-    await reloadAll();
+    // Landed (comment_resolve returns nothing): the thread's state flips in
+    // place from the known input, mirroring the columns the proc writes (a
+    // reopen also clears the confirm and the approval lock), then page zero
+    // reconciles silently (resolved_version_id and the like come with it).
+    const nowIso = new Date().toISOString();
+    patchRow(comment.id, (row) =>
+      resolved
+        ? {
+            ...row,
+            resolved_at: nowIso,
+            resolved_by: currentUserId,
+            asked_at: null,
+            asked_by: null,
+            sent_back_at: null,
+            sent_back_by: null,
+            closed_at: null,
+            closed_by: null,
+          }
+        : {
+            ...row,
+            resolved_at: null,
+            resolved_by: null,
+            resolution_note: null,
+            resolved_version_id: null,
+            accepted_at: null,
+            accepted_by: null,
+            closed_at: null,
+            closed_by: null,
+          },
+    );
+    refreshInBackground();
   }
 
   // Flip one row's resolved_at in place (both the paged list and the always-loaded

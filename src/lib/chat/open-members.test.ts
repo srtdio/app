@@ -1,8 +1,9 @@
 // The chat open's people reads: names and picker rows come from the shared
 // workspace members cache once it holds a fresh, good read (no users or
 // workspace_members request), only ids it cannot answer are read, a cold cache
-// reads as before and warms it, and the two group_members asks of one open
-// share one request.
+// loads the members ONCE (shared by the names, the pickers and the next open;
+// never the cache's background warm as well), and the two group_members asks
+// of one open share one request.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 
@@ -102,7 +103,9 @@ import {
   readGroupMemberIdsShared,
   readMentionProfilesShared,
   resetGroupMemberReads,
+  startChatMembers,
 } from '@/lib/chat/open-members';
+import { READ_FRESH_MS, resetSessionReads } from '@/lib/session-read';
 
 function tables(queries: readonly { table: string }[]): string[] {
   return queries.map((q) => q.table).sort();
@@ -127,10 +130,13 @@ beforeEach(() => {
   app.queries = rec.queries;
   resetWorkspaceMembersCache();
   resetGroupMemberReads();
+  resetSessionReads();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   resetWorkspaceMembersCache();
+  resetSessionReads();
 });
 
 describe('names on chat open', () => {
@@ -170,19 +176,22 @@ describe('names on chat open', () => {
     ]);
   });
 
-  it('a cold cache reads as before and warms the cache for the next open', async () => {
+  it('a cold cache loads the members once and the next open reads nothing', async () => {
     const { client, queries } = recordingClient();
     const result = await readMentionProfilesShared(client, {
       userId: ME,
       workspaceId: WS,
       userIds: [ANA, BEN],
     });
-    expect(result.ok).toBe(true);
+    expect(result.ok && result.data.map((p) => [p.userId, p.member])).toEqual([
+      [ANA, true],
+      [BEN, true],
+    ]);
+    // One members read and one profiles read: the load the open shares.
     expect(tables(queries)).toEqual(['users', 'workspace_members']);
     await settle();
-    // The warm: one members read and one profiles read on the app client.
-    expect(tables(app.queries)).toEqual(['users', 'workspace_members']);
-    app.queries.length = 0;
+    // No second, background members read on the app client.
+    expect(app.queries).toHaveLength(0);
     const next = recordingClient();
     await readMentionProfilesShared(next.client, {
       userId: ME,
@@ -198,6 +207,54 @@ describe('names on chat open', () => {
     expect(peekWorkspaceMembers(ME, WS, Date.now() + MEMBERS_STALE_MS + 1)).toBeNull();
     // Another user never gets this user's members.
     expect(peekWorkspaceMembers('u-other', WS)).toBeNull();
+  });
+});
+
+describe('cold open: one members read', () => {
+  it('the names and the picker rows of one open join the same load', async () => {
+    const { client, queries } = recordingClient();
+    const [names, picker] = await Promise.all([
+      readMentionProfilesShared(client, { userId: ME, workspaceId: WS, userIds: [ANA, BEN] }),
+      readChatMembersShared(client, { userId: ME, workspaceId: WS, userIds: [ANA, BEN, GONE] }),
+    ]);
+    expect(names.ok && picker.ok).toBe(true);
+    // One workspace_members read and one users read in all, never one per caller.
+    expect(tables(queries)).toEqual(['users', 'workspace_members']);
+    await settle();
+    expect(app.queries).toHaveLength(0);
+  });
+
+  it("the tap's load is joined by the open (no duplicate background read)", async () => {
+    const { client, queries } = recordingClient();
+    const started = startChatMembers(client, ME, WS);
+    const result = await readMentionProfilesShared(client, {
+      userId: ME,
+      workspaceId: WS,
+      userIds: [ANA],
+    });
+    await started;
+    expect(result.ok).toBe(true);
+    expect(tables(queries)).toEqual(['users', 'workspace_members']);
+    expect(app.queries).toHaveLength(0);
+  });
+
+  it('past the window the members are not served: it loads again, once', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-26T10:00:00.000Z'));
+    const first = recordingClient();
+    await readMentionProfilesShared(first.client, { userId: ME, workspaceId: WS, userIds: [ANA] });
+    expect(tables(first.queries)).toEqual(['users', 'workspace_members']);
+    vi.setSystemTime(new Date(Date.now() + MEMBERS_STALE_MS + READ_FRESH_MS));
+    const later = recordingClient();
+    const [names, picker] = await Promise.all([
+      readMentionProfilesShared(later.client, { userId: ME, workspaceId: WS, userIds: [ANA] }),
+      readChatMembersShared(later.client, { userId: ME, workspaceId: WS, userIds: [ANA] }),
+    ]);
+    expect(names.ok && picker.ok).toBe(true);
+    // Loaded (never the old answer), and exactly one members read for both callers.
+    expect(tables(later.queries)).toEqual(['users', 'workspace_members']);
+    await settle();
+    expect(app.queries).toHaveLength(0);
   });
 });
 

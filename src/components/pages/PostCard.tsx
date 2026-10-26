@@ -17,7 +17,8 @@ import {
 import { type FormatGlyphToken } from '@/components/ui/format-icon';
 import { postFormatLabel } from '@/lib/post-format';
 import type { PresignCache } from '@/lib/asset-presign';
-import { entityUrlPath } from '@/lib/entityRef';
+import { entityUrlPath, refOpenState } from '@/lib/entityRef';
+import { confirmPostOpen, prefetchPostOpen } from '@/lib/post-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { moveActions } from '@/components/pages/pipeline/MoveSheet';
@@ -311,6 +312,17 @@ export function PostCard({
   // working fallback when the key has not resolved yet.
   const href =
     workspaceKey !== null ? entityUrlPath('post', workspaceKey, post.number) : `/posts/${post.id}`;
+  // The card already holds the post's id: the pretty link carries it in router
+  // state, so /p/:ref renders the post without looking the ref up.
+  const openState =
+    workspaceKey !== null ? refOpenState('post', workspaceKey, post.number, post.id) : undefined;
+  // A press starts the page chunk and its first reads (src/lib/post-prefetch.ts);
+  // only the click that follows lets the page join them.
+  const pressPrefetch = (): void => prefetchPostOpen(post.id);
+  const open = (): void => {
+    confirmPostOpen(post.id);
+    navigate(href, openState === undefined ? undefined : { state: openState });
+  };
   const caption = captionPreview(post);
   const stage = post.stage as Stage;
   const ratio = cardRatio(post);
@@ -355,7 +367,9 @@ export function PostCard({
       <PressableRow
         type="button"
         aria-label={`Open post ${post.title}`}
-        onClick={() => navigate(href)}
+        onPointerDown={pressPrefetch}
+        onTouchStart={pressPrefetch}
+        onClick={open}
         className="absolute inset-0"
       />
       {/* The tile is relative, so it would paint over the absolute Open post button;
@@ -474,7 +488,9 @@ export function PostCard({
                 open={menuOpen}
                 onOpenChange={setMenuOpen}
                 items={cardMenuItems({
-                  onOpen: () => navigate(href),
+                  // Opens with the id (no ref lookup) but reads afresh: no press to join.
+                  onOpen: () =>
+                    navigate(href, openState === undefined ? undefined : { state: openState }),
                   onCopyLink: copyLink,
                   ...(canMove && directMoves.length > 0
                     ? {

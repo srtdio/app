@@ -103,8 +103,9 @@ vi.mock('@/lib/buckets', () => ({
     return { ok: true, data: [] };
   },
 }));
-vi.mock('@srtdio/briefs', () => ({
-  getBrief: () => {
+// The brief is read for its title alone (one request, no linked-posts count).
+vi.mock('../../../packages/briefs/src/read', () => ({
+  getBriefTitle: () => {
     h.calls.push('brief');
     return h.brief!.promise;
   },
@@ -250,7 +251,7 @@ async function landAll(): Promise<void> {
   h.gallery!.resolve({ ok: true, data: [] });
   h.role!.resolve('agency');
   await settle();
-  h.brief!.resolve({ ok: true, data: { brief: { title: 'Monsoon edit' } } });
+  h.brief!.resolve({ ok: true, data: 'Monsoon edit' });
   h.membersLoading = false;
   await render();
 }

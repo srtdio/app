@@ -40,3 +40,45 @@ export function entityUrlPath(kind: 'post' | 'brief', key: string, number: numbe
   const prefix = kind === 'post' ? '/p' : '/b';
   return `${prefix}/${key.toLowerCase()}-${number}`;
 }
+
+/**
+ * Router state an in-app open attaches to a pretty link when it already holds
+ * the entity's id (a post card knows post.id), so the /p and /b resolvers skip
+ * their lookups. It names the ref it belongs to: a state carried to any other
+ * address is ignored. Only this app writes router state, and the page that
+ * renders still reads the entity under RLS, so a wrong id can never show what
+ * the viewer may not see.
+ */
+export interface RefOpenState {
+  entityRef: { kind: 'post' | 'brief'; key: string; number: number; id: string };
+}
+
+/** The router state for opening `id` at its pretty link. */
+export function refOpenState(
+  kind: 'post' | 'brief',
+  key: string,
+  number: number,
+  id: string,
+): RefOpenState {
+  return { entityRef: { kind, key: key.toUpperCase(), number, id } };
+}
+
+/**
+ * The id a {@link refOpenState} carries when it was made for exactly this kind
+ * and raw ref, else null (no state, another ref, a malformed value).
+ */
+export function knownRefId(
+  state: unknown,
+  kind: 'post' | 'brief',
+  rawRef: string | undefined,
+): string | null {
+  if (rawRef === undefined || state === null || typeof state !== 'object') return null;
+  const carried = (state as { entityRef?: unknown }).entityRef;
+  if (carried === null || typeof carried !== 'object') return null;
+  const { kind: k, key, number, id } = carried as Record<string, unknown>;
+  if (k !== kind || typeof key !== 'string' || typeof number !== 'number') return null;
+  if (typeof id !== 'string' || id === '') return null;
+  const parsed = parseEntityRef(rawRef);
+  if (parsed === null || parsed.key !== key.toUpperCase() || parsed.number !== number) return null;
+  return id;
+}

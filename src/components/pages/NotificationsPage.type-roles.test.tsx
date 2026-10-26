@@ -72,6 +72,7 @@ window.matchMedia ??= ((query: string) => ({
 })) as unknown as typeof window.matchMedia;
 
 import { NotificationsPage } from '@/components/pages/NotificationsPage';
+import { resetSessionReads } from '@/lib/session-read';
 
 function item(over: Partial<ActivityItem>): ActivityItem {
   return {
@@ -139,6 +140,8 @@ function expectRole(el: Element, classes: string[]): void {
 }
 
 beforeEach(() => {
+  // Page one is a shared session read: each test starts with none held.
+  resetSessionReads();
   try {
     window.localStorage.clear();
   } catch {

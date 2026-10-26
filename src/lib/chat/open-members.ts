@@ -13,6 +13,16 @@
 // open in this workspace reads nothing. Membership means the same here as in
 // those reads: an active, non-removed workspace_members row.
 //
+// A cold (or older than MEMBERS_STALE_MS) members cache is never painted from:
+// the open loads. It loads ONCE: the same two reads the shared cache makes
+// (listMembers, then readProfiles over every member id) as a shared session
+// read for this user and workspace (startChatMembers, started at the tap in
+// parallel with the messages page). The names, the picker rows and the next
+// chat's open all join it; nothing else reads members for the open (before,
+// a miss fired the cache's background warm AND the open's own users and
+// workspace_members reads). Only when that load fails do the narrow batched
+// reads run, as before.
+//
 // Group member ids: the open asks group_members twice in one commit (the live
 // target and typing names, and the mention picker). Concurrent asks for the
 // same group share one in-flight read; a settled read is never reused (a
@@ -22,16 +32,20 @@
 // workspace (its key), and nothing here widens a read.
 
 import type { Client, Result } from '@srtdio/rpc';
+import { listMembers } from '@srtdio/workspace';
 import {
+  MEMBERS_STALE_MS,
   currentMembers,
-  ensureWorkspaceMembers,
+  loadWorkspaceMembers,
   peekWorkspaceMembers,
   type WorkspaceMembersData,
 } from '@/lib/workspace-members';
+import { peekRead, readKey, sharedRead } from '@/lib/session-read';
 import {
   listGroupMemberIds,
   readChatMembers,
   readMentionProfiles,
+  readProfiles,
   withReadTimeout,
   type ChatMember,
   type MentionProfile,
@@ -105,20 +119,64 @@ function chatMembersFromMembers(
   return { members, missing };
 }
 
-/** The held members for this user and workspace, or null (cold: warmed for next time). */
-function heldMembers(userId: string, workspaceId: string): WorkspaceMembersData | null {
-  const held = peekWorkspaceMembers(userId, workspaceId);
-  if (held === null && userId !== '' && workspaceId !== '') {
-    ensureWorkspaceMembers(userId, workspaceId);
-  }
-  return held;
+/** The chat open's members load: its session read key. */
+function chatMembersKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'chat-open:members');
 }
 
 /**
- * readMentionProfiles, answered from the shared members cache when it is warm:
- * only the ids it cannot answer are read (none: no request). Cold: the read
- * exactly as before. A failed read of the rest fails the whole call, as one
- * read did before (no id is marked former on a read that did not answer).
+ * The workspace's members and every member's profile, read once per user and
+ * workspace and shared (joined while running and for MEMBERS_STALE_MS after a
+ * good read; a failed read is never kept). The tap starts it, so it runs in
+ * parallel with the messages page; every name and picker read of the open,
+ * and of the next chat opened in the window, joins it. Each read is bounded at
+ * 5s. Never throws (a failure is the data's `error`).
+ */
+export function startChatMembers(
+  client: Client,
+  userId: string,
+  workspaceId: string,
+): Promise<WorkspaceMembersData> {
+  return sharedRead(
+    chatMembersKey(userId, workspaceId),
+    () =>
+      loadWorkspaceMembers({
+        members: () => withReadTimeout(() => listMembers(client, workspaceId)),
+        profiles: (userIds) => withReadTimeout((signal) => readProfiles(client, userIds, signal)),
+      }),
+    { freshMs: MEMBERS_STALE_MS, isOk: (data) => data.error === null },
+  );
+}
+
+/** A good members read held within its window: the app's cache, else the open's. Never reads. */
+function peekMembers(userId: string, workspaceId: string): WorkspaceMembersData | null {
+  const held = peekWorkspaceMembers(userId, workspaceId);
+  if (held !== null || userId === '' || workspaceId === '') return held;
+  return peekRead<WorkspaceMembersData>(chatMembersKey(userId, workspaceId)) ?? null;
+}
+
+/**
+ * The members for this user and workspace: held and fresh, else the one
+ * shared load (joined, never a second members read). Null when that load
+ * failed (the caller reads narrowly, as before).
+ */
+async function heldMembers(
+  client: Client,
+  userId: string,
+  workspaceId: string,
+): Promise<WorkspaceMembersData | null> {
+  const held = peekMembers(userId, workspaceId);
+  if (held !== null || userId === '' || workspaceId === '') return held;
+  const loaded = await startChatMembers(client, userId, workspaceId);
+  return loaded.error === null ? loaded : null;
+}
+
+/**
+ * readMentionProfiles, answered from the members (held, else the one shared
+ * load): only the ids they cannot answer are read (none: no request). A failed
+ * load: the read exactly as before. A failed read of the rest fails the whole
+ * call, as one read did before (no id is marked former on a read that did not
+ * answer).
  */
 export async function readMentionProfilesShared(
   client: Client,
@@ -130,7 +188,7 @@ export async function readMentionProfilesShared(
       userIds,
       ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
     });
-  const held = heldMembers(params.userId, params.workspaceId);
+  const held = await heldMembers(client, params.userId, params.workspaceId);
   if (held === null) return read(params.userIds);
   const { profiles, missing } = mentionProfilesFromMembers(held, params.userIds);
   if (missing.length === 0) return { ok: true, data: profiles };
@@ -140,9 +198,9 @@ export async function readMentionProfilesShared(
 }
 
 /**
- * readChatMembers, answered from the shared members cache when it is warm:
+ * readChatMembers, answered from the members (held, else the one shared load):
  * only current members whose profile is not held are read (none: no request).
- * Cold: the read exactly as before.
+ * A failed load: the read exactly as before.
  */
 export async function readChatMembersShared(
   client: Client,
@@ -154,7 +212,7 @@ export async function readChatMembersShared(
       userIds,
       ...(params.signal !== undefined ? { signal: params.signal } : {}),
     });
-  const held = heldMembers(params.userId, params.workspaceId);
+  const held = await heldMembers(client, params.userId, params.workspaceId);
   if (held === null) return read(params.userIds);
   const { members, missing } = chatMembersFromMembers(held, params.userIds);
   if (missing.length === 0) return { ok: true, data: members };
@@ -175,7 +233,7 @@ export function approverNamesFromMembers(
   workspaceId: string,
   approverIds: readonly string[],
 ): { profiles: MentionProfile[]; roles: Map<string, string> } | null {
-  const held = peekWorkspaceMembers(userId, workspaceId);
+  const held = peekMembers(userId, workspaceId);
   if (held === null) return null;
   const { profiles, missing } = mentionProfilesFromMembers(held, approverIds);
   if (missing.length > 0) return null;

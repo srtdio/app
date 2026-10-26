@@ -153,6 +153,24 @@ export interface QueryResult {
 
 const RESERVED = new Set(['select', 'order', 'limit', 'offset', 'on_conflict', 'columns']);
 
+// A to-many embed named by its foreign key (`asset_attachments!asset_attachments_asset_id_fkey(...)`,
+// no !inner) is computed from the fixture table: the child rows whose FK column
+// holds the parent's id. A filter on such an embed's column (`asset_attachments.deleted_at`)
+// filters the embedded rows only, never the parent row, as PostgREST does for a
+// plain (non-inner) embed.
+const TO_MANY_EMBED = /(\w+)!(\w+)_fkey\(/g;
+
+function toManyEmbeds(select: string | null): Map<string, string> {
+  const embeds = new Map<string, string>();
+  if (select === null) return embeds;
+  for (const match of select.matchAll(TO_MANY_EMBED)) {
+    const [, name = '', fk = ''] = match;
+    if (!fk.startsWith(`${name}_`)) continue;
+    embeds.set(name, fk.slice(name.length + 1));
+  }
+  return embeds;
+}
+
 /** Answer one PostgREST GET/HEAD against `tables`. */
 export function answerRest(
   tables: Tables,
@@ -162,8 +180,26 @@ export function answerRest(
   headers: Record<string, string>,
 ): QueryResult {
   let rows = [...(tables[table] ?? [])];
+  const embeds = toManyEmbeds(params.get('select'));
+  for (const [name, column] of embeds) {
+    const children = tables[name] ?? [];
+    rows = rows.map((row) =>
+      name in row ? row : { ...row, [name]: children.filter((child) => child[column] === row.id) },
+    );
+  }
   for (const [key, value] of params.entries()) {
     if (RESERVED.has(key)) continue;
+    const [embed = '', ...rest] = key.split('.');
+    if (rest.length > 0 && embeds.has(embed)) {
+      const predicate = operatorPredicate(rest.join('.'), value);
+      rows = rows.map((row) => {
+        const children = row[embed];
+        return Array.isArray(children)
+          ? { ...row, [embed]: (children as Row[]).filter(predicate) }
+          : row;
+      });
+      continue;
+    }
     if (key === 'or' || key === 'and') {
       const predicate = logicalPredicate(key, value.slice(1, -1));
       rows = rows.filter(predicate);

@@ -1,6 +1,7 @@
 import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
 import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Avatar } from '@/components/ui/Avatar';
+import { settingsPrefetchProps } from '@/lib/route-prefetch';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronDown, IconPlus, IconSearch, ICON_SIZE } from '@/components/ui/icons';
@@ -88,7 +89,13 @@ export function Topbar({
         {/* Activity on every main screen (its one mount), with the unread count. */}
         {workspaceName !== null && onCreateWorkspace === undefined ? <NotificationsButton /> : null}
 
-        <IconButton type="button" label="Account menu" onClick={onOpenAvatar}>
+        {/* A press starts the Settings chunk and the members read it shows. */}
+        <IconButton
+          type="button"
+          label="Account menu"
+          onClick={onOpenAvatar}
+          {...settingsPrefetchProps()}
+        >
           <Avatar
             role="header"
             {...(currentUserName !== undefined ? { name: currentUserName } : {})}

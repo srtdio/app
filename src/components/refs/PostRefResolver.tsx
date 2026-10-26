@@ -1,6 +1,8 @@
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { PostDetailPage } from '@/components/pages/PostDetailPage';
 import { useRefResolution } from '@/components/refs/useRefResolution';
+import { knownRefId } from '@/lib/entityRef';
+import { useWorkspace } from '@/lib/workspace-context';
 
 /**
  * Route target for `/p/:ref`. Resolves the pretty reference to a concrete post id
@@ -9,14 +11,25 @@ import { useRefResolution } from '@/components/refs/useRefResolution';
  * to be a brief, it replace-navigates to the matching /b/:ref. An unparseable
  * ref, unknown workspace key, or missing number renders the detail page's own
  * not-found surface (PostDetailPage with no id).
+ *
+ * One loader: while the ref resolves, the detail page itself shows its skeleton
+ * (resolving), and it is the same page instance once the id lands, so there is
+ * no resolver spinner before the skeleton. An open from a post card carries the
+ * id in router state (no lookup at all); otherwise a key among the loaded
+ * workspaces skips the workspace lookup (one lookup, not two).
  */
 export function PostRefResolver() {
   const { ref } = useParams();
-  const resolution = useRefResolution(ref, 'post');
+  const location = useLocation();
+  const { workspaces } = useWorkspace();
+  const resolution = useRefResolution(ref, 'post', {
+    workspaces,
+    knownId: knownRefId(location.state, 'post', ref),
+  });
 
   switch (resolution.status) {
     case 'loading':
-      return <div className="px-4 md:px-6 py-10 text-base text-fg-3">Loading post</div>;
+      return <PostDetailPage resolving />;
     case 'redirect':
       return <Navigate to={resolution.to} replace />;
     case 'resolved':
