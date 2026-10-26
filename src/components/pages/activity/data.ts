@@ -88,6 +88,7 @@ import {
 import { readInboxOldest } from '@/lib/inbox/inbox-oldest';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
+import { generateTraceId } from '@/lib/trace';
 import type { PrefetchContext } from '@/lib/prefetch-context';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
@@ -2575,13 +2576,16 @@ export function prefetchActivityData(ctx: PrefetchContext): void {
           activityPageKey(ctx.userId, ctx.workspaceId, 'all', direction),
           () => fetchActivityEntries(supabase, ctx.workspaceId, { state: 'all', direction }),
         ).catch(() => undefined);
-        void sharedMentionCount(mentionCountKey(ctx.userId, ctx.workspaceId), () =>
-          reads.fetchUnreadMentionCount(supabase, {
-            workspaceId: ctx.workspaceId,
+        void sharedMentionCount(mentionCountKey(ctx.userId, ctx.workspaceId), async () => {
+          // Joins the shell's fresh badge read when there is one (one rpc gives both counts).
+          const badge = await reads.readActivityBadge(supabase, {
             userId: ctx.userId,
-            nowIso: new Date().toISOString(),
-          }),
-        ).catch(() => undefined);
+            workspaceId: ctx.workspaceId,
+            traceId: generateTraceId(),
+            refresh: false,
+          });
+          return badge.ok ? { ok: true as const, data: badge.data.mentions } : badge;
+        }).catch(() => undefined);
       })
       .catch((err: unknown) => {
         logger.warn('activity prefetch failed', { error: String(err) });

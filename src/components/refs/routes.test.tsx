@@ -9,7 +9,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 // renders its loading branch without touching the network (matching the pattern
 // in AcceptInvitePage.test).
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
-// The resolvers read the loaded workspaces (a known key skips its lookup).
+// The resolvers still receive the loaded workspaces; resolution is one ref_resolve read.
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaces: [{ id: 'w1', key: 'GBL' }] }),
 }));

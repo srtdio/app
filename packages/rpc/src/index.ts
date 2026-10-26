@@ -19,6 +19,22 @@ type FunctionName = keyof Functions;
 type ProcArgs<N extends FunctionName> = Functions[N]['Args'];
 type ProcReturns<N extends FunctionName> = Functions[N]['Returns'];
 
+/** The header that carries trace_id on every request (FE -> Supabase -> Worker). */
+export const TRACE_HEADER = 'X-Trace-Id';
+
+/**
+ * Stamp a PostgREST builder's X-Trace-Id with the call's own p_trace_id, so the
+ * header and the argument carry the same uuid_v7 (the shared fetch wrapper keeps
+ * a header already set). A builder without setHeader (a test double) passes
+ * through unchanged.
+ */
+export function withTraceHeader<B>(builder: B, traceId: string): B {
+  const stampable = builder as B & { setHeader?: (name: string, value: string) => B };
+  return typeof stampable.setHeader === 'function'
+    ? stampable.setHeader(TRACE_HEADER, traceId)
+    : builder;
+}
+
 /** A Supabase client typed against the live schema. */
 export type Client = SupabaseClient<Database>;
 
@@ -28,6 +44,7 @@ export const DOMAIN_ERROR_CODES = [
   'invalid_stage_transition',
   'workspace_member_only',
   'invalid_payload',
+  'invalid_mention',
 ] as const;
 
 export type DomainErrorCode = (typeof DOMAIN_ERROR_CODES)[number] | 'unknown';
@@ -37,13 +54,16 @@ export interface DomainError {
   code: DomainErrorCode;
   /** The raw Postgres/PostgREST error message, for logging. */
   message: string;
+  /** Postgres DETAIL, when the proc raised one (e.g. invalid_mention user ids). */
+  details?: string;
 }
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: DomainError };
 
-function toDomainError(message: string): DomainError {
+function toDomainError(message: string, details?: string | null): DomainError {
   const known = (DOMAIN_ERROR_CODES as readonly string[]).includes(message);
-  return { code: known ? (message as DomainErrorCode) : 'unknown', message };
+  const base: DomainError = { code: known ? (message as DomainErrorCode) : 'unknown', message };
+  return details ? { ...base, details } : base;
 }
 
 /**
@@ -56,7 +76,7 @@ async function callProc<N extends FunctionName>(
   args: ProcArgs<N>,
 ): Promise<Result<ProcReturns<N>>> {
   const { data, error } = await client.rpc(fn, args);
-  if (error) return { ok: false, error: toDomainError(error.message) };
+  if (error) return { ok: false, error: toDomainError(error.message, error.details) };
   return { ok: true, data: data as ProcReturns<N> };
 }
 

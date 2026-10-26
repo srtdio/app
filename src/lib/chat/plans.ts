@@ -1,19 +1,20 @@
 // Plans in chat: the reads behind the plan card, the Plan and Item screens, and
-// the share sequence behind the New plan screen. Every read is a plain
-// PostgREST select by an id list (no embeds), chunked at 100 ids and bounded at
-// 5s by the caller; RLS decides what comes back, so a plan the viewer cannot
-// read is simply absent ("Plan not available"). Cards never read per message:
-// the thread's plan card cache (createPlanCardCache) coalesces every plan id
-// asked in the same tick into one batch (plans, then their items, then the
-// items' reviews and the plans' draft rows, then the post items' stages).
-// A client never reads a draft post item from plan_items (RLS): its row comes
-// from plan_draft_rows (one call per 100 plan ids) and is merged in as a post
-// item at stage draft, name only. A post slot's day is its post's
-// posts.target_date read in the workspace zone (a draft row's too); a concept's
-// is plan_items.target_date. The Plan screen's row tiles (post images and
-// concept photos) come from one asset_attachments read. Framework-free: the
-// create steps and the readers are injected, so the contract is unit-tested
-// directly.
+// the share sequence behind the New plan screen. The cards and the Plan screen
+// read through plan_bundle_read (src/lib/chat/plan-bundle.ts): one call per
+// 200 plan ids returns the plans, their items, draft rows, reviews, post rows,
+// comment counts, tiles, Also in titles and the last send into a chat; RLS
+// decides what comes back, so a plan the viewer cannot read is simply absent
+// ("Plan not available"). Cards never read per message: the thread's plan card
+// cache (createPlanCardCache) coalesces every plan id asked in the same tick
+// into one batch. The other reads (the Plan tile's upcoming plans, the Item
+// screen, a post's plans) are plain PostgREST selects by an id list (no
+// embeds), chunked at 100 ids and bounded at 5s by the caller. A client never
+// reads a draft post item from plan_items (RLS): its row comes from
+// plan_draft_rows and is merged in as a post item at stage draft, name only.
+// A post slot's day is its post's posts.target_date read in the workspace zone
+// (a draft row's too); a concept's is plan_items.target_date. Framework-free:
+// the create steps and the readers are injected, so the contract is
+// unit-tested directly.
 
 import type {
   Client,
@@ -26,7 +27,9 @@ import { planDraftRows } from '@srtdio/rpc';
 import { abortable, READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
 import type { Precheck } from '@/lib/asset-upload';
 import type { AttachmentUploader } from '@/lib/chat/attachments';
+import { PLAN_BUNDLE_CHUNK, readPlanBundleRpc, type PlanBundleRead } from '@/lib/chat/plan-bundle';
 import { openPlans } from '@/lib/chat/status-bar';
+import { getPrefetchContext } from '@/lib/prefetch-context';
 import { civilDayOf, civilDaysBetween, formatCivilDayHeader } from '@/lib/plan-week';
 
 /** Ids per IN read (the PostgREST URL stays short). */
@@ -283,48 +286,65 @@ export function sortPlanItemsByDate(
 }
 
 /**
- * Read plans by id with their items, reviews, draft rows and post stages,
- * each a select by an id list (chunked at 100), never an embed. The plans,
- * their items and their draft rows start together (all keyed by plan id);
- * the items' reviews and the post items' stages start the moment the items
- * are in (not after the plans or the draft rows). A plan absent under RLS is
- * absent from the map (its items and draft rows are dropped). Never throws.
+ * The bundles of one plan_bundle_read answer: the draft rows merged in as
+ * post items, everything grouped by plan, items ordered in `timeZone` (the
+ * bundle's own workspace zone when absent). Pure.
+ */
+export function bundlesOfRead(read: PlanBundleRead, timeZone?: string): Map<string, PlanBundle> {
+  return assembleBundles(
+    read.plans,
+    mergeDraftRows(read.items, read.draftRows),
+    read.reviews,
+    read.posts,
+    timeZone ?? read.timezone,
+  );
+}
+
+/**
+ * Read plans by id with their items, reviews, draft rows and post stages:
+ * one plan_bundle_read per PLAN_BUNDLE_CHUNK ids (all chunks at once). A plan
+ * absent under RLS (or of another workspace) is absent from the map. The
+ * workspace is `workspaceId`, else the shell's (getPrefetchContext); without
+ * either the read fails. Items are ordered in `timeZone`, else the bundle's
+ * workspace zone. Never throws.
  */
 export async function readPlanBundles(
   client: Client,
   planIds: readonly string[],
   signal?: AbortSignal,
-  /** The workspace zone the items are ordered in (post days are read in it). */
-  timeZone = 'UTC',
+  /** The zone the items are ordered in (post days are read in it); the workspace's when absent. */
+  timeZone?: string,
+  /** The plans' workspace; the shell's active workspace when absent. */
+  workspaceId?: string,
 ): Promise<Result<Map<string, PlanBundle>>> {
   try {
     const ids = [...new Set(planIds)];
     if (ids.length === 0) return { ok: true, data: new Map() };
-    const [plans, drafts, items] = await Promise.all([
-      selectIn<PlanRow>(client, 'plans', PLAN_COLUMNS, 'id', ids, signal),
-      readDraftRows(client, ids),
-      readItemsWithReviews(client, ids, signal, () => Promise.resolve(null)),
-    ]);
-    if (!plans.ok) return plans;
-    if (!drafts.ok) return drafts;
-    if (!items.ok) return items;
-    const readable = new Set(plans.data.map((p) => p.id));
-    return {
-      ok: true,
-      data: assembleBundles(
-        plans.data,
-        mergeDraftRows(
-          items.data.items.filter((i) => readable.has(i.plan_id)),
-          drafts.data.filter((d) => readable.has(d.plan_id)),
-        ),
-        items.data.reviews,
-        items.data.stages,
-        timeZone,
+    const workspace = workspaceId ?? getPrefetchContext()?.workspaceId;
+    if (workspace === undefined) return fail('plan_bundle_read: no workspace');
+    const reads = await Promise.all(
+      bundleChunks(ids).map((chunk) =>
+        readPlanBundleRpc(client, { workspaceId: workspace, planIds: chunk }, signal),
       ),
-    };
+    );
+    const out = new Map<string, PlanBundle>();
+    for (const read of reads) {
+      if (!read.ok) return read;
+      for (const [id, bundle] of bundlesOfRead(read.data, timeZone)) out.set(id, bundle);
+    }
+    return { ok: true, data: out };
   } catch (error) {
     return fail(String(error));
   }
+}
+
+/** Split ids into by-id plan_bundle_read calls of at most PLAN_BUNDLE_CHUNK. Pure. */
+export function bundleChunks(ids: readonly string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += PLAN_BUNDLE_CHUNK) {
+    out.push(ids.slice(i, i + PLAN_BUNDLE_CHUNK));
+  }
+  return out;
 }
 
 /**
@@ -1277,35 +1297,6 @@ interface AlsoInRow {
   plans: { title: string } | Array<{ title: string }> | null;
 }
 
-/**
- * The other live plans each post sits in (the Also in pill): ONE plan_items
- * select per chunk of 100 post ids, joined to their live plans' titles, for
- * the whole plan (never per row). RLS keeps it to plans the viewer can read.
- * The plan itself is left out; a plan listed twice counts once. Never throws.
- */
-export async function readAlsoIn(
-  client: Client,
-  planId: string,
-  postIds: readonly string[],
-  signal?: AbortSignal,
-): Promise<Result<Record<string, string[]>>> {
-  try {
-    const rows = await selectIn<AlsoInRow>(
-      client,
-      'plan_items',
-      'post_id, plan_id, plans!inner(title)',
-      'post_id',
-      postIds,
-      signal,
-      (q) => q.is('deleted_at', null).is('plans.deleted_at', null),
-    );
-    if (!rows.ok) return rows;
-    return { ok: true, data: alsoInByPost(planId, rows.data) };
-  } catch (error) {
-    return fail(String(error));
-  }
-}
-
 /** Group Also in rows by post: other plans' titles, each plan once, in read order. Pure. */
 export function alsoInByPost(
   planId: string,
@@ -1332,36 +1323,10 @@ export interface PlanScreenReadOptions {
   readNames?: (userIds: string[], signal?: AbortSignal) => Promise<Result<NameRow[]>>;
   /** The approver ids to name (approverIds of the bundle). */
   approvers?: (bundle: PlanBundle) => string[];
-  /** Opened from a chat: its channel id (one read of the plan's last send there). */
+  /** Opened from a chat: its channel id (the bundle read carries the plan's last send there). */
   sentInChannelId?: string | undefined;
-}
-
-/**
- * When the plan's card was last sent into the chat: one chat_messages select
- * (channel, shared_plan_ids holds the plan, not deleted, newest first, one
- * row). Null when never sent. Never throws.
- */
-export async function readLastPlanSend(
-  client: Client,
-  channelId: string,
-  planId: string,
-  signal?: AbortSignal,
-): Promise<Result<string | null>> {
-  try {
-    const query = (client.from('chat_messages') as unknown as PlanTable)
-      .select('created_at')
-      .eq('channel_id', channelId)
-      .contains('shared_plan_ids', [planId])
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    const res = (await abortable(query, signal)) as SelectResult;
-    if (res.error !== null) return fail(`chat_messages: ${res.error.message}`);
-    const rows = (res.data ?? []) as Array<{ created_at: string }>;
-    return { ok: true, data: rows[0]?.created_at ?? null };
-  } catch (error) {
-    return fail(String(error));
-  }
+  /** The plan's workspace; the shell's active workspace when absent. */
+  workspaceId?: string | undefined;
 }
 
 /** The latest of the plan's and its items' updated_at; null when none is known. Pure. */
@@ -1380,9 +1345,12 @@ export function planLastChangedAt(bundle: PlanBundle): string | null {
 }
 
 /**
- * Read the Plan screen (plans, items, reviews, posts, then comment counts,
- * thumbnails, the Also in plans and the approvers' names: one read each,
- * batched). Never throws.
+ * Read the Plan screen: ONE plan_bundle_read by id (the plan, its items,
+ * reviews, posts, comment counts, tiles, the Also in titles and, opened from
+ * a chat, the plan's last send there), then the approvers' names (from the
+ * members already read; only the missing ones are a request). The workspace
+ * is opts.workspaceId, else the shell's; without either the read fails.
+ * Never throws.
  */
 export async function readPlanScreen(
   client: Client,
@@ -1390,49 +1358,59 @@ export async function readPlanScreen(
   signal?: AbortSignal,
   opts: PlanScreenReadOptions = {},
 ): Promise<Result<PlanScreenData>> {
-  const channelId = opts.sentInChannelId;
-  // The last send needs only the plan and chat ids: it runs beside the bundle read.
-  const lastSentRead =
-    channelId !== undefined
-      ? readLastPlanSend(client, channelId, planId, signal)
-      : Promise.resolve<Result<string | null>>({ ok: true, data: null });
-  const bundles = await readPlanBundles(client, [planId], signal, opts.timeZone);
-  if (!bundles.ok) return bundles;
-  const bundle = bundles.data.get(planId) ?? null;
+  try {
+    const workspaceId = opts.workspaceId ?? getPrefetchContext()?.workspaceId;
+    if (workspaceId === undefined) return fail('plan_bundle_read: no workspace');
+    const channelId = opts.sentInChannelId;
+    const read = await readPlanBundleRpc(
+      client,
+      {
+        workspaceId,
+        planIds: [planId],
+        ...(channelId !== undefined ? { channelId } : {}),
+      },
+      signal,
+    );
+    if (!read.ok) return read;
+    return await planScreenOfRead(read.data, planId, signal, opts);
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/**
+ * The Plan screen's data from its bundle read, plus the approvers' names (a
+ * failed name read keeps the screen: the lines read "Member"). Never throws.
+ */
+export async function planScreenOfRead(
+  read: PlanBundleRead,
+  planId: string,
+  signal: AbortSignal | undefined,
+  opts: PlanScreenReadOptions = {},
+): Promise<Result<PlanScreenData>> {
+  const bundle = bundlesOfRead(read, opts.timeZone).get(planId) ?? null;
   if (bundle === null) return { ok: true, data: { bundle, commentCounts: {}, thumbs: {} } };
-  const postIds = bundle.items.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
-  const conceptIds = bundle.items.flatMap((i) => (i.kind === 'concept' ? [i.id] : []));
   const approvers = opts.approvers?.(bundle) ?? [];
   const readNames = opts.readNames;
-  const [counts, thumbs, alsoIn, names, lastSent] = await Promise.all([
-    readCommentCounts(
-      client,
-      bundle.items.map((i) => i.id),
-      signal,
-    ),
-    readPlanThumbs(client, postIds, conceptIds, signal),
-    readAlsoIn(client, planId, postIds, signal),
+  const names: Result<NameRow[]> =
     approvers.length > 0 && readNames !== undefined
-      ? readNames(approvers, signal)
-      : Promise.resolve<Result<NameRow[]>>({ ok: true, data: [] }),
-    lastSentRead,
-  ]);
-  if (!counts.ok) return counts;
+      ? await readNames(approvers, signal)
+      : { ok: true, data: [] };
   const nameMap: Record<string, string> = {};
-  // A failed name read keeps the screen (the lines read "Member").
   if (names.ok) for (const row of names.data) nameMap[row.userId] = row.displayName;
-  // A failed thumbnail, Also in or last-send read keeps the screen: those show
-  // without (a failed last-send read leaves the button at "Send in {chat}").
+  const own = new Set(bundle.items.map((i) => i.id));
+  const counts: Record<string, number> = {};
+  for (const [id, n] of Object.entries(read.commentCounts)) if (own.has(id)) counts[id] = n;
   return {
     ok: true,
     data: {
       bundle,
-      commentCounts: counts.data,
-      thumbs: thumbs.ok ? thumbs.data.posts : {},
-      conceptThumbs: thumbs.ok ? thumbs.data.concepts : {},
+      commentCounts: counts,
+      thumbs: read.thumbs.posts,
+      conceptThumbs: read.thumbs.concepts,
       names: nameMap,
-      alsoIn: alsoIn.ok ? alsoIn.data : {},
-      lastSentAt: lastSent.ok ? lastSent.data : null,
+      alsoIn: read.alsoIn,
+      lastSentAt: read.lastSentAt,
       lastChangedAt: planLastChangedAt(bundle),
     },
   };

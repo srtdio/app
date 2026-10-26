@@ -47,10 +47,7 @@ import { safeTimeZone } from '@/lib/time';
 import { useChatThread } from '@/lib/chat/use-chat-thread';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
-import { prefetchLatestMessages } from '@/lib/chat/history';
-import { loadChannelMarks } from '@/lib/chat/marks';
-import { sharedOpenPosts } from '@/lib/chat/use-open-posts';
-import { sharedStatusRead, startStatusReads } from '@/lib/chat/use-status-counts';
+import { joinChatBundle } from '@/lib/chat/open-bundle';
 import { resolveViewerSide } from '@/lib/chat/viewer-role';
 import { createStarStore, StarStoreContext, useChannelStars } from '@/lib/chat/stars';
 import { useChatTyping } from '@/lib/chat/use-chat-typing';
@@ -149,24 +146,16 @@ const NO_PLAN_IDS: readonly string[] = [];
 const NO_SCHEDULED: ScheduledRow[] = [];
 
 /**
- * A chat tap: start every read the open needs now, together (open-cache's
- * kickoff over the app's reads), so none waits for the thread to mount or for
- * the messages page. The hooks' first rounds join these reads.
+ * A chat tap: the open's one chat_open_bundle call starts now (open-cache's
+ * kickoff over the app's reads), with the viewer side, so nothing waits for
+ * the thread to mount. The hooks' first rounds join it.
  */
 export function startChatOpen(userId: string, workspaceId: string, channelId: string): void {
   const key = chatKey(userId, workspaceId, channelId);
   if (key === null) return;
-  const status = startStatusReads(supabase, { workspaceId, channelId });
-  // The five workspace-wide reads are the workspace's shared session reads:
-  // a tap on chat B right after A joins A's (fresh) reads, never asks again.
   kickoffChatOpen(key, {
-    messages: (id) => prefetchLatestMessages(supabase, id),
+    bundle: (k) => void joinChatBundle(k),
     viewerSide: () => void resolveViewerSide(supabase, workspaceId, userId),
-    marks: (id) => withReadTimeout((signal) => loadChannelMarks(supabase, id, signal)),
-    openPosts: (ws) => sharedOpenPosts(supabase, userId, ws),
-    planIds: (ws) => sharedStatusRead(userId, ws, 'planIds', status.planIds),
-    briefs: (ws) => sharedStatusRead(userId, ws, 'briefs', status.briefs),
-    briefCount: (ws) => sharedStatusRead(userId, ws, 'briefCount', status.briefCount),
   });
   // The members the names and the pickers answer from, in parallel with the
   // page (joined by them, and by the next chat's open, while fresh). A warm
@@ -1448,37 +1437,40 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     settled: boolean;
   }>({ channelId: null, rows: NO_SCHEDULED, settled: false });
   const scheduledSeq = useRef(0);
-  const refetchScheduled = useCallback((channelId: string): void => {
+  const refetchScheduled = useCallback((channelId: string, open = false): void => {
     scheduledSeq.current += 1;
     const seq = scheduledSeq.current;
     const key = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
-    void withReadTimeout((signal) => readScheduledMessages(supabase, { channelId, signal })).then(
-      (result) => {
-        if (!mountedRef.current || seq !== scheduledSeq.current) return;
-        // Remembered only for the user and workspace still open (a late answer
-        // never re-scopes the memory).
-        const current = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
-        if (key !== null && current !== null && result.ok && current.userId === key.userId) {
-          if (current.workspaceId === key.workspaceId) {
-            openCache.remember(key, 'scheduled', result.data);
-          }
+    // An open's read is the open's chat bundle's part (no read of its own);
+    // every later one (a schedule action, the tab returning) reads.
+    const joined = open && key !== null ? openCache.join(key, 'scheduled') : null;
+    void (
+      joined ?? withReadTimeout((signal) => readScheduledMessages(supabase, { channelId, signal }))
+    ).then((result) => {
+      if (!mountedRef.current || seq !== scheduledSeq.current) return;
+      // Remembered only for the user and workspace still open (a late answer
+      // never re-scopes the memory).
+      const current = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
+      if (key !== null && current !== null && result.ok && current.userId === key.userId) {
+        if (current.workspaceId === key.workspaceId) {
+          openCache.remember(key, 'scheduled', result.data);
         }
-        if (!result.ok) {
-          logger.warn('chat: scheduled read failed', {
-            channel_id: channelId,
-            error: result.error.message,
-          });
-        }
-        setScheduled((prev) => ({
-          channelId,
-          rows: result.ok ? result.data : prev.channelId === channelId ? prev.rows : NO_SCHEDULED,
-          settled: true,
-        }));
-      },
-    );
+      }
+      if (!result.ok) {
+        logger.warn('chat: scheduled read failed', {
+          channel_id: channelId,
+          error: result.error.message,
+        });
+      }
+      setScheduled((prev) => ({
+        channelId,
+        rows: result.ok ? result.data : prev.channelId === channelId ? prev.rows : NO_SCHEDULED,
+        settled: true,
+      }));
+    });
   }, []);
   useEffect(() => {
-    if (selectedChannelId !== null && !notesOpen) refetchScheduled(selectedChannelId);
+    if (selectedChannelId !== null && !notesOpen) refetchScheduled(selectedChannelId, true);
   }, [selectedChannelId, refetchScheduled, notesOpen]);
   useEffect(() => {
     if (selectedChannelId === null || notesOpen) return;
@@ -1489,6 +1481,21 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [selectedChannelId, refetchScheduled, notesOpen]);
+  // The open's bundle failed (the thread showed Retry) and a later one landed:
+  // the parts that failed with it (marks, scheduled rows) are read again.
+  const threadFailedRef = useRef<{ channelId: string | null; failed: boolean }>({
+    channelId: null,
+    failed: false,
+  });
+  const threadLoadFailed = thread.loadFailed;
+  useEffect(() => {
+    const prev = threadFailedRef.current;
+    threadFailedRef.current = { channelId: selectedChannelId, failed: threadLoadFailed };
+    if (selectedChannelId === null || notesOpen) return;
+    if (prev.channelId !== selectedChannelId || !prev.failed || threadLoadFailed) return;
+    refetchMarks();
+    refetchScheduled(selectedChannelId);
+  }, [threadLoadFailed, selectedChannelId, notesOpen, refetchMarks, refetchScheduled]);
   // A remembered chat's scheduled rows as last read, for its first frame
   // (until this open's own state for it is set), only while fresh: older rows
   // are never painted, the open waits for its read as a cold open does.

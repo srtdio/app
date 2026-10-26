@@ -28,14 +28,13 @@ import {
   type RememberedLiveDeps,
   type RememberedThread,
 } from '@/lib/chat/open-cache';
-import { CATCH_UP_LIMIT, type HistoryPage } from '@/lib/chat/history';
+import { CATCH_UP_LIMIT, type ChatOpenBundle } from '@/lib/chat/history';
 import {
   applyLiveDelete,
   rowCursor,
   rowToThreadMessage,
   withOutboxBubbles,
   type ChatMessageRow,
-  type MessageCursor,
   type MessageReaction,
   type ThreadMessage,
 } from '@/lib/chat/thread';
@@ -455,20 +454,39 @@ describe('live events while closed', () => {
   });
 });
 
+/** A chat_open_bundle answer holding these rows, every other part empty. */
+function bundleOf(rows: ChatMessageRow[], hasMore: boolean): ChatOpenBundle {
+  return {
+    serverNow: '2026-10-26T10:00:00.000Z',
+    page: { rows, hasMore },
+    quoted: [],
+    reactions: [],
+    readPositions: { rows: [], times: new Map() },
+    replyCounts: new Map(),
+    marks: [],
+    scheduled: [],
+    openPosts: [],
+    openPostCount: 0,
+    sharedPlanIds: [],
+    openBriefs: [],
+    openBriefCount: 0,
+  };
+}
+
 describe('catch-up on reopen', () => {
+  // The bundle's p_since is inclusive; the cold one is the latest 50, has_more strict.
   const loaders = (
     record: ChatMessageRow[],
     reactions = new Map<string, MessageReaction[]>(),
   ): ReopenLoaders & {
-    loadNewer: ReturnType<typeof vi.fn>;
+    loadBundle: ReturnType<typeof vi.fn>;
     loadByIds: ReturnType<typeof vi.fn>;
   } => ({
-    loadNewer: vi.fn(async (cursor: MessageCursor) =>
-      ok(record.filter((r) => r.created_at > cursor.createdAt).slice(0, CATCH_UP_LIMIT)),
-    ),
-    loadLatest: vi.fn(async () =>
-      ok<HistoryPage>({ rows: record.slice(-50), hasMore: record.length > 50 }),
-    ),
+    loadBundle: vi.fn(async (since: string | null) => {
+      if (since === null) return ok(bundleOf(record.slice(-50), record.length > 50));
+      const after = record.filter((r) => r.created_at >= since);
+      return ok(bundleOf(after.slice(0, CATCH_UP_LIMIT), after.length > CATCH_UP_LIMIT));
+    }),
     loadByIds: vi.fn(async (ids: readonly string[]) =>
       ok(record.filter((r) => ids.includes(r.id))),
     ),
@@ -543,7 +561,9 @@ describe('catch-up on reopen', () => {
     const rows = Array.from({ length: 250 }, (_, i) => row(i + 1));
     const l = loaders(rows);
     await revalidateRemembered(l, page(rows), signal);
-    expect(l.loadNewer).toHaveBeenCalledTimes(1);
+    expect(l.loadBundle).toHaveBeenCalledTimes(1);
+    // From the remembered page's end (p_since), never the latest page.
+    expect(l.loadBundle.mock.calls[0]?.[0]).toBe(rows[rows.length - 1]?.created_at);
     expect(l.loadByIds).toHaveBeenCalledTimes(1);
     expect((l.loadByIds.mock.calls[0]?.[0] as string[]).length).toBe(CATCH_UP_LIMIT);
     expect(l.loadReactions).toHaveBeenCalledTimes(1);
@@ -552,17 +572,21 @@ describe('catch-up on reopen', () => {
   it('more than one page of new rows drops the memory (a gap)', async () => {
     const rows = Array.from({ length: 10 }, (_, i) => row(i + 1));
     const record = [...rows, ...Array.from({ length: CATCH_UP_LIMIT }, (_, i) => row(100 + i))];
-    expect((await revalidateRemembered(loaders(record), page(rows), signal)).kind).toBe('gap');
-    // An empty remembered chat whose latest page has more behind it: a gap too.
+    const gap = await revalidateRemembered(loaders(record), page(rows), signal);
+    expect(gap.kind).toBe('gap');
+    // A p_since gap carries no page: the fresh open asks its own.
+    expect(gap.kind === 'gap' ? gap.bundle : 'x').toBeNull();
+    // Nothing contiguous: the cold bundle is the latest page, used as the fresh open's.
     const latest = Array.from({ length: 60 }, (_, i) => row(i + 1));
-    expect((await revalidateRemembered(loaders(latest), page([]), signal)).kind).toBe('gap');
+    const cold = await revalidateRemembered(loaders(latest), page([]), signal);
+    expect(cold.kind).toBe('gap');
+    expect(cold.kind === 'gap' ? cold.bundle?.page.rows.length : 0).toBe(50);
   });
 
   it('a failed read keeps what is shown', async () => {
     const rows = [row(1), row(2)];
     const failing: ReopenLoaders = {
-      loadNewer: async () => ({ ok: false, error: { message: 'x' } }) as Result<ChatMessageRow[]>,
-      loadLatest: async () => ({ ok: false, error: { message: 'x' } }) as Result<HistoryPage>,
+      loadBundle: async () => ({ ok: false, error: { message: 'x' } }) as Result<ChatOpenBundle>,
       loadByIds: async () => ({ ok: false, error: { message: 'x' } }) as Result<ChatMessageRow[]>,
       loadReactions: async () =>
         ({ ok: false, error: { message: 'x' } }) as Result<Map<string, MessageReaction[]>>,
@@ -573,6 +597,7 @@ describe('catch-up on reopen', () => {
       { kind: 'read' }
     >;
     expect(read.newer).toBeNull();
+    expect(read.bundle).toBeNull();
     expect(applyReopenChecks(remembered.rows, read, CHANNEL).messages).toBe(remembered.rows);
   });
 });

@@ -15,8 +15,8 @@ import { useWorkspace } from '@/lib/workspace-context';
  * One loader: while the ref resolves, the detail page itself shows its skeleton
  * (resolving), and it is the same page instance once the id lands, so there is
  * no resolver spinner before the skeleton. An open from a post card carries the
- * id in router state (no lookup at all); otherwise a key among the loaded
- * workspaces skips the workspace lookup (one lookup, not two).
+ * id in router state (no lookup at all); otherwise one ref_resolve read maps
+ * the key and number to the post (a second only when the number is a brief).
  */
 export function PostRefResolver() {
   const { ref } = useParams();

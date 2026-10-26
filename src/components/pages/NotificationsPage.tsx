@@ -83,7 +83,8 @@ import {
   type SnoozeKind,
   type UpcomingItem,
 } from '@/components/pages/activity/data';
-import { fetchUnreadMentionCount } from '@/lib/inbox/inbox-reads';
+import { readActivityBadge } from '@/lib/inbox/inbox-reads';
+import { generateTraceId } from '@/lib/trace';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
@@ -372,21 +373,25 @@ export function NotificationsPage() {
   }, [workspaceId, state, sort, push]);
 
   // The unread-mention count for the Mentions chip. Independent of the active
-  // view (it is a HEAD count), so it is not affected by the chips. The mount
-  // (`join`) joins the bell press's shared read while fresh; every later load
-  // (a write, the poll) reads anew.
+  // view, so it is not affected by the chips. It rides the shared activity
+  // badge read (one activity_badge_read gives the shell's badge and this count).
+  // The mount and the shell poll's event (`join`) join the bell press's or the
+  // tick's read while fresh; every other load (a write) refreshes, and the
+  // change event that write dispatches joins that same read.
   const loadMentionCount = useCallback(
     async (join = false) => {
       if (workspaceId === null || userId === null) return;
       const key = mentionCountKey(userId, workspaceId);
       if (!join) invalidateActivityReads(key);
-      const res = await sharedMentionCount(key, () =>
-        fetchUnreadMentionCount(supabase, {
-          workspaceId,
+      const res = await sharedMentionCount(key, async () => {
+        const badge = await readActivityBadge(supabase, {
           userId,
-          nowIso: new Date().toISOString(),
-        }),
-      );
+          workspaceId,
+          traceId: generateTraceId(),
+          refresh: !join,
+        });
+        return badge.ok ? { ok: true as const, data: badge.data.mentions } : badge;
+      });
       if (res.ok) setMentionCount(res.data);
     },
     [workspaceId, userId],
@@ -436,7 +441,8 @@ export function NotificationsPage() {
     const onChanged = (event: Event): void => {
       if (!(event instanceof CustomEvent) || event.detail !== POLL_CHANGE_SOURCE) return;
       void loadActivity('merge');
-      void loadMentionCount();
+      // The tick already read the badge: join it.
+      void loadMentionCount(true);
     };
     window.addEventListener(INBOX_CHANGED_EVENT, onChanged);
     return () => window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);

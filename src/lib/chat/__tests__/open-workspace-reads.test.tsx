@@ -29,16 +29,14 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 import { READ_FRESH_MS, resetSessionReads } from '@/lib/session-read';
-import { useOpenPosts, sharedOpenPosts, type UseOpenPosts } from '@/lib/chat/use-open-posts';
-import {
-  sharedStatusRead,
-  useStatusCounts,
-  type OpenBriefRow,
-  type UseStatusCounts,
-} from '@/lib/chat/use-status-counts';
-import { createOpenCache, kickoffChatOpen, type OpenKickoffReads } from '@/lib/chat/open-cache';
+import { useOpenPosts, type UseOpenPosts } from '@/lib/chat/use-open-posts';
+import { useStatusCounts, type UseStatusCounts } from '@/lib/chat/use-status-counts';
+import { createOpenCache, kickoffChatOpen } from '@/lib/chat/open-cache';
+import { joinChatBundle, type ChatBundleDeps } from '@/lib/chat/open-bundle';
+import { sharedChatRead } from '@/lib/chat/workspace-reads';
+import type { ChatOpenBundle } from '@/lib/chat/history';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
-import { PLAN_CHANGED_EVENT, type PlanBundle, type PlanCardCache } from '@/lib/chat/plans';
+import { PLAN_CHANGED_EVENT, type PlanBundle } from '@/lib/chat/plans';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -194,55 +192,73 @@ describe('chat open: the workspace reads are shared across chats', () => {
   });
 });
 
-describe('kickoffChatOpen over the shared reads', () => {
-  function fakePlans(): PlanCardCache {
+describe('a chat open over its one chat_open_bundle call', () => {
+  function bundle(): ChatOpenBundle {
     return {
-      request: () => undefined,
-      refresh: () => undefined,
-      retryFailed: () => undefined,
-      retry: () => undefined,
-      snapshot: () => ({ loading: false, bundles: new Map(), failed: [] }),
-      knows: () => false,
-      revalidate: () => undefined,
-      subscribe: () => () => undefined,
-      version: () => 0,
-      dispose: () => undefined,
-      resume: () => undefined,
+      serverNow: '2026-10-26T10:00:00.000Z',
+      page: { rows: [], hasMore: false },
+      quoted: [],
+      reactions: [],
+      readPositions: { rows: [], times: new Map() },
+      replyCounts: new Map(),
+      marks: [],
+      scheduled: [],
+      openPosts: [],
+      openPostCount: 4,
+      sharedPlanIds: ['p1'],
+      openBriefs: [{ id: 'b1', number: 1, title: 'Brief', created_at: '2026-10-25T10:00:00Z' }],
+      openBriefCount: 1,
     };
   }
 
-  it('a tap on B right after A starts none of the five workspace reads again', async () => {
-    const calls: string[] = [];
-    const ok = <T,>(name: string, data: T): Promise<Result<T>> => {
-      calls.push(name);
-      return Promise.resolve({ ok: true, data });
-    };
-    const client = {} as Client;
-    const reads: OpenKickoffReads = {
-      messages: () => calls.push('messages'),
-      viewerSide: () => undefined,
-      marks: () => ok('marks', []),
-      openPosts: (ws) =>
-        sharedOpenPosts(client, ME, ws, {
-          list: () => ok('openPosts.list', []),
-          count: () => ok('openPosts.count', 0),
-        }),
-      planIds: (ws) => sharedStatusRead(ME, ws, 'planIds', () => ok('planIds', [])),
-      briefs: (ws) => sharedStatusRead(ME, ws, 'briefs', () => ok<OpenBriefRow[]>('briefs', [])),
-      briefCount: (ws) => sharedStatusRead(ME, ws, 'briefCount', () => ok('briefCount', 0)),
-    };
+  it('the hooks join the bundle parts: no read of their own, the bundle data shown', async () => {
+    const { client, tables } = recordingClient();
+    const asked: Array<string | null | undefined> = [];
     const store = createOpenCache();
-    kickoffChatOpen({ userId: ME, workspaceId: WS, channelId: 'c-a' }, reads, store, fakePlans);
-    await Promise.resolve();
-    await Promise.resolve();
-    const workspaceReads = (): string[] =>
-      calls.filter((c) => c !== 'messages' && c !== 'marks').sort();
-    expect(workspaceReads()).toEqual(
-      ['briefCount', 'briefs', 'openPosts.count', 'openPosts.list', 'planIds'].sort(),
+    const deps: ChatBundleDeps = {
+      store,
+      read: (input) => {
+        asked.push(input.since);
+        return Promise.resolve({ ok: true, data: bundle() });
+      },
+      share: sharedChatRead,
+      traceId: () => 'trace-1',
+    };
+    const key = { userId: ME, workspaceId: WS, channelId: 'c-a' };
+    kickoffChatOpen(
+      key,
+      { bundle: (k) => void joinChatBundle(k, { deps }), viewerSide: () => {} },
+      store,
     );
-    calls.length = 0;
-    kickoffChatOpen({ userId: ME, workspaceId: WS, channelId: 'c-b' }, reads, store, fakePlans);
-    // B still reads its own chat's page and marks, never the workspace's five.
-    expect(calls.sort()).toEqual(['marks', 'messages']);
+    await openChat('c-a', client);
+    // One bundle call; the hooks' first rounds made no read of their own.
+    expect(asked).toEqual([null]);
+    expect(counts(tables)).toEqual({});
+    const last = frames[frames.length - 1];
+    expect(last?.posts.count).toBe(4);
+    expect(last?.status.briefs.count).toBe(1);
+    expect(last?.status.briefs.rows.map((b) => b.id)).toEqual(['b1']);
+  });
+
+  it('a failed bundle fails every part (all or nothing)', async () => {
+    const { client } = recordingClient();
+    const store = createOpenCache();
+    const deps: ChatBundleDeps = {
+      store,
+      read: () => Promise.resolve({ ok: false, error: { code: 'unknown', message: 'down' } }),
+      share: sharedChatRead,
+      traceId: () => 'trace-2',
+    };
+    const key = { userId: ME, workspaceId: WS, channelId: 'c-f' };
+    void joinChatBundle(key, { deps });
+    // The hooks mount while it is in flight and join it.
+    await openChat('c-f', client);
+    const marks = await store.join(key, 'marks');
+    expect(marks?.ok).toBe(false);
+    const scheduled = await store.join(key, 'scheduled');
+    expect(scheduled?.ok).toBe(false);
+    const last = frames[frames.length - 1];
+    expect(last?.status.briefs.failed).toBe(true);
+    expect(last?.posts.failed).toBe(true);
   });
 });

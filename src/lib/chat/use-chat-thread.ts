@@ -14,11 +14,17 @@
 // the per-channel outbox, so switching channels keeps a sending or failed
 // bubble and its Retry payload.
 //
+// A cold open is ONE chat_open_bundle call (open-bundle.ts): the latest page
+// with its reactions, quoted and root rows and the channel's cursors (and the
+// other hooks' parts) in one round trip, started while the switch renders so
+// every other hook of the open joins it. If it fails the thread shows its
+// failed-load state with Retry (a fresh bundle).
+//
 // A chat opened before in this session reopens from memory (open-cache): its
 // remembered page is the first frame (no skeleton), then one background
-// revalidation brings it level with the record: the rows after the newest
-// remembered one, one batched re-read of the remembered rows by id and one
-// batched reactions read. While the thread shows a chat it owns that chat's
+// revalidation brings it level with the record: the same bundle call from the
+// remembered page's contiguous end (p_since), one batched re-read of the
+// remembered rows by id and one batched reactions read. While the thread shows a chat it owns that chat's
 // rows and writes them back when it leaves; while closed, live events land
 // on the remembered rows through the same apply functions used here.
 
@@ -33,8 +39,9 @@ import { newMessageId } from '@/lib/chat/message-id';
 import { createCmdMessage, createTextMessage } from '@/lib/chat/message-factory';
 import {
   CATCH_UP_LIMIT,
+  aggregateReactions,
   loadLatestMessages,
-  readLatestMessages,
+  readChatOpenBundle,
   loadMessageById,
   loadMessagesByIds,
   loadNewerMessages,
@@ -42,10 +49,13 @@ import {
   loadPeerReadCursor,
   loadReactions,
   loadReadPositions,
+  type ChatOpenBundle,
   type PeerReadCursor,
   type ReadPositionsRead,
   type HistoryPage,
 } from '@/lib/chat/history';
+import { joinChatBundle, startChatBundle, type ChatBundleDeps } from '@/lib/chat/open-bundle';
+import { sharedChatRead } from '@/lib/chat/workspace-reads';
 import {
   browserCatchUpTriggers,
   catchUpRows,
@@ -88,7 +98,7 @@ import {
 } from '@/lib/chat/read-receipts';
 import { LIVE_PUBLISH_TIMEOUT_MS, publishWithTimeout } from '@/lib/chat/send-flow';
 import { forwardRecordInput, forwardableInOrder, runForward } from '@/lib/chat/forward';
-import { withLateRead, type ChannelSummary } from '@/lib/chat-reads';
+import { withLateRead, withReadTimeout, type ChannelSummary } from '@/lib/chat-reads';
 import {
   attachmentAssetIds,
   purgeChatFiles,
@@ -457,18 +467,18 @@ export function ownEditApplier(deps: {
 }
 
 /** How a latest-page load ended: the page, or a failure (an error or the 5s timeout). */
-export type LatestLoadOutcome =
-  | { kind: 'page'; page: HistoryPage }
+export type LatestLoadOutcome<T = HistoryPage> =
+  | { kind: 'page'; page: T }
   | { kind: 'failed'; message: string };
 
 /**
- * Run one latest-page load. The read is bounded (loadLatestMessages times out
- * at 5s); a rejection is a failure too. Never throws, so the thread always
- * leaves its skeleton for rows, the empty state or Retry.
+ * Run one latest-page load (the open's bundle, or a page). The read is
+ * bounded (5s); a rejection is a failure too. Never throws, so the thread
+ * always leaves its skeleton for rows, the empty state or Retry.
  */
-export async function runLatestLoad(
-  load: () => Promise<Result<HistoryPage>>,
-): Promise<LatestLoadOutcome> {
+export async function runLatestLoad<T = HistoryPage>(
+  load: () => Promise<Result<T>>,
+): Promise<LatestLoadOutcome<T>> {
   try {
     const result = await load();
     return result.ok
@@ -481,12 +491,18 @@ export async function runLatestLoad(
 
 /** What a reopen's background revalidation read. */
 export type ReopenRead =
-  /** More new rows than one forward read holds: the remembered page is dropped (no gap shown). */
-  | { kind: 'gap' }
+  /**
+   * More new rows than one forward read holds: the remembered page is dropped
+   * (no gap shown). `bundle`: the read was the latest page itself (nothing was
+   * contiguous), so it is the fresh open's page; null: a fresh open reads.
+   */
+  | { kind: 'gap'; bundle: ChatOpenBundle | null }
   | {
       kind: 'read';
-      /** Rows after the newest remembered one (oldest first); null: that read failed. */
+      /** Rows at or after the remembered page's end (oldest first); null: that read failed. */
       newer: ChatMessageRow[] | null;
+      /** The bundle they came in (their reactions, quotes, roots); null: it failed. */
+      bundle: ChatOpenBundle | null;
       /** Where the record is contiguous through after `newer`. */
       through: MessageCursor | undefined;
       /** The remembered rows re-read by id; null: failed. */
@@ -499,8 +515,11 @@ export type ReopenRead =
 
 /** The reads a reopen's revalidation makes (the app's history reads; tests pass fakes). */
 export interface ReopenLoaders {
-  loadNewer: (cursor: MessageCursor, signal: AbortSignal) => Promise<Result<ChatMessageRow[]>>;
-  loadLatest: (signal: AbortSignal) => Promise<Result<HistoryPage>>;
+  /**
+   * The open's chat bundle from `since` (p_since: the remembered page's
+   * contiguous end, inclusive), or the latest page when null.
+   */
+  loadBundle: (since: string | null, signal: AbortSignal) => Promise<Result<ChatOpenBundle>>;
   loadByIds: (ids: readonly string[], signal: AbortSignal) => Promise<Result<ChatMessageRow[]>>;
   loadReactions: (
     ids: readonly string[],
@@ -510,11 +529,11 @@ export interface ReopenLoaders {
 
 /**
  * A reopen's safety net for events missed while closed (asleep, away, sent
- * outside live delivery, notes): one forward read after `through` (the latest
- * page when nothing was contiguous), one IN re-read of the remembered rows
- * (edited_at, deleted_at, body) and one IN reactions read, all at once, each
- * bounded at 5s by its reader. A forward read that comes back full means more
- * may follow: 'gap'.
+ * outside live delivery, notes): the open's bundle from `through` (p_since;
+ * the latest page when nothing was contiguous), one IN re-read of the
+ * remembered rows (edited_at, deleted_at, body) and one IN reactions read, all
+ * at once, each bounded at 5s by its reader. A bundle with has_more means
+ * more followed than it holds: 'gap'.
  */
 export async function revalidateRemembered(
   loaders: ReopenLoaders,
@@ -523,24 +542,21 @@ export async function revalidateRemembered(
 ): Promise<ReopenRead> {
   const ids = remembered.rows.slice(-CATCH_UP_LIMIT).map((m) => m.id);
   const through = remembered.through;
+  const since = through !== undefined ? through.createdAt : null;
   const [forward, rechecked, reactions] = await Promise.all([
-    through !== undefined
-      ? loaders
-          .loadNewer(through, signal)
-          .then((r) =>
-            r.ok ? { ok: true as const, rows: r.data, full: r.data.length >= CATCH_UP_LIMIT } : r,
-          )
-      : loaders
-          .loadLatest(signal)
-          .then((r) => (r.ok ? { ok: true as const, rows: r.data.rows, full: r.data.hasMore } : r)),
+    loaders.loadBundle(since, signal),
     ids.length > 0 ? loaders.loadByIds(ids, signal) : Promise.resolve(null),
     ids.length > 0 ? loaders.loadReactions(ids, signal) : Promise.resolve(null),
   ]);
-  if (forward.ok && forward.full) return { kind: 'gap' };
-  const newest = forward.ok ? forward.rows[forward.rows.length - 1] : undefined;
+  if (forward.ok && forward.data.page.hasMore) {
+    return { kind: 'gap', bundle: since === null ? forward.data : null };
+  }
+  const rows = forward.ok ? forward.data.page.rows : null;
+  const newest = rows !== null ? rows[rows.length - 1] : undefined;
   return {
     kind: 'read',
-    newer: forward.ok ? forward.rows : null,
+    newer: rows,
+    bundle: forward.ok ? forward.data : null,
     through: newest !== undefined ? rowCursor(newest) : through,
     rechecked: rechecked === null ? [] : rechecked.ok ? rechecked.data : null,
     reactions: reactions === null ? new Map() : reactions.ok ? reactions.data : null,
@@ -566,6 +582,32 @@ export function applyReopenChecks(
   if (read.rechecked === null || read.rechecked.length === 0)
     return { messages: next, deleted: [] };
   return applyRevalidatedRows(next, read.rechecked, channelId);
+}
+
+/**
+ * Fold an open's bundle rows in: merge (the outbox laid back on top), their
+ * reactions as recorded, and their reply quotes and thread roots from the
+ * bundle's quoted rows (settled: a quote the bundle could not return reads
+ * the generic label). No read. Pure.
+ */
+export function applyOpenBundle(
+  messages: ThreadMessage[],
+  input: {
+    fetched: readonly ThreadMessage[];
+    quoted: readonly ThreadMessage[];
+    reactions: Map<string, MessageReaction[]>;
+    entries: readonly OutboxEntry[];
+    currentUserId: string;
+  },
+): ThreadMessage[] {
+  const ids = input.fetched.map((m) => m.id);
+  const merged = withOutboxBubbles(
+    mergeFetched(messages, [...input.fetched]),
+    [...input.entries],
+    input.currentUserId,
+  );
+  const reacted = replaceReactions(merged, ids, input.reactions);
+  return hydrateRoots(hydrateReplies(reacted, input.quoted, true), input.quoted, new Set(ids));
 }
 
 /**
@@ -796,6 +838,16 @@ export function useChatThread(params: {
   );
   const outboxRef = useRef(outbox);
   outboxRef.current = outbox;
+  // The open's one bundle call, over this thread's client and memory.
+  const bundleDeps = useMemo<ChatBundleDeps>(
+    () => ({
+      store: memory,
+      read: (input, signal) => readChatOpenBundle(db, input, signal),
+      share: sharedChatRead,
+      traceId: generateTraceId,
+    }),
+    [db, memory],
+  );
 
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -902,6 +954,10 @@ export function useChatThread(params: {
       currentUserId,
     });
     seededRef.current = page;
+    // The open's bundle starts now, while the switch renders: every hook of
+    // this open (the children's effects run first) joins it, none reads alone.
+    if (memoryKey !== null && channelId !== null)
+      void joinChatBundle(memoryKey, { deps: bundleDeps });
     setMessages(opening.messages);
     setLoading(opening.loading);
     setHasMore(opening.hasMore);
@@ -936,10 +992,17 @@ export function useChatThread(params: {
     [db, currentUserId],
   );
 
-  // The open's cursors read, shared by the reading layer and the seen ticks.
+  // The open's cursors read, shared by the reading layer and the seen ticks:
+  // the open's bundle part while it can be joined, else a read of its own.
   const positionsShare = useMemo(
-    () => createPositionsShare((forChannel) => loadReadPositions(db, forChannel)),
-    [db],
+    () =>
+      createPositionsShare((forChannel) => {
+        const key = chatKey(currentUserId, workspaceId, forChannel);
+        return (
+          (key !== null ? memory.join(key, 'positions') : null) ?? loadReadPositions(db, forChannel)
+        );
+      }),
+    [db, memory, currentUserId, workspaceId],
   );
 
   /**
@@ -1042,6 +1105,38 @@ export function useChatThread(params: {
     [currentUserId, attachReactions, resolveReplies, reportDeleted],
   );
 
+  /**
+   * Fold an open's bundle in: its rows, their reactions and their quoted and
+   * root rows all came in the one call, so nothing more is read. `newOnly`
+   * (a reopen's catch-up): rows already on screen are left as they are.
+   */
+  const foldBundle = useCallback(
+    (bundle: ChatOpenBundle, forChannel: string, newOnly = false): void => {
+      const shown = new Set(messagesRef.current.map((m) => m.id));
+      const all = bundle.page.rows.map((row) => rowToThreadMessage(row, currentUserId));
+      const fetched = newOnly ? all.filter((m) => !shown.has(m.id)) : all;
+      for (const m of fetched) {
+        // A queued send whose row landed anyway (timeout after commit) is done.
+        if (outboxRef.current.entries(forChannel).some((e) => e.id === m.id)) {
+          outboxRef.current.settle(forChannel, m.id);
+        }
+      }
+      const entries = outboxRef.current.entries(forChannel);
+      const turned =
+        channelRef.current === forChannel ? newlyTombstoned(messagesRef.current, fetched) : [];
+      const quoted = bundle.quoted.map((row) => rowToThreadMessage(row, currentUserId));
+      for (const m of quoted) readTimesRef.current.set(m.id, m.createdAt);
+      const reactions = aggregateReactions(bundle.reactions, currentUserId);
+      setMessages((prev) =>
+        applyOpenBundle(prev, { fetched, quoted, reactions, entries, currentUserId }),
+      );
+      if (turned.length > 0) reportDeleted(forChannel, turned);
+    },
+    [currentUserId, reportDeleted],
+  );
+  // The load effect's Retry runs ask a fresh bundle (a failed one is never joined again).
+  const attemptSeenRef = useRef(0);
+
   // Load the latest page whenever the channel changes (and on Retry). The
   // channel's unrecorded sends (outbox) show at once and stay on top of
   // whatever loads. A failed or timed-out (5s) read is the Retry state; a
@@ -1068,45 +1163,86 @@ export function useChatThread(params: {
     let shown = false;
     // Remembered rows whose quotes and roots are not resolved yet.
     const pendingResolve = new Set<string>();
-    const applyPage = (page: HistoryPage): void => {
-      const fetched = page.rows.map((row) => rowToThreadMessage(row, currentUserId));
-      foldRows(fetched, channelId);
-      contiguity.latestPageApplied(epoch, page.rows);
-      setHasMore(page.hasMore);
+    // A Retry (or a reopen whose memory was dropped) asks a fresh bundle.
+    const retrying = loadAttempt !== attemptSeenRef.current;
+    attemptSeenRef.current = loadAttempt;
+    const settledOpen = (): void => {
       setLoadFailed(false);
       setLoading(false);
       shown = true;
       if (peerUserId !== null) void attachPeerCursor(channelId, peerUserId);
     };
-    const openFresh = (): void => {
+    const applyPage = (page: HistoryPage): void => {
+      const fetched = page.rows.map((row) => rowToThreadMessage(row, currentUserId));
+      foldRows(fetched, channelId);
+      contiguity.latestPageApplied(epoch, page.rows);
+      setHasMore(page.hasMore);
+      settledOpen();
+    };
+    const applyBundle = (bundle: ChatOpenBundle): void => {
+      foldBundle(bundle, channelId);
+      contiguity.latestPageApplied(epoch, bundle.page.rows);
+      setHasMore(bundle.page.hasMore);
+      // Its cursors came with it: a cursors read that failed with an earlier
+      // bundle (all or nothing) is ready again.
+      setReads((prev) =>
+        prev.channelId === channelId && prev.status === 'failed'
+          ? {
+              channelId,
+              status: 'ready',
+              read: bundle.readPositions,
+              open: openCursorFrom(bundle.readPositions, currentUserId),
+            }
+          : prev,
+      );
+      settledOpen();
+    };
+    const failOpen = (message: string): void => {
+      logger.error('chat: history load failed', { channel_id: channelId, error: message });
+      setLoadFailed(true);
+      setLoading(false);
+      // A page that lands later (Retry) reads the peer's cursor as it is then.
+      positionsShare.release(channelId);
+    };
+    const openFresh = (opts: { fresh: boolean; bundle?: ChatOpenBundle }): void => {
       setHasMore(false);
       setMessages(withOutboxBubbles([], outboxRef.current.entries(channelId), currentUserId));
       setLoading(true);
+      const given = opts.bundle;
+      if (given !== undefined) {
+        applyBundle(given);
+        return;
+      }
       void (async (): Promise<void> => {
-        const outcome = await runLatestLoad(() =>
-          withLateRead((signal) => readLatestMessages(db, channelId, signal), {
-            onLate: (page) => {
-              if (!cancelled) applyPage(page);
-            },
-            cancel: abort.signal,
-          }),
-        );
-        if (cancelled) return;
-        if (outcome.kind === 'failed') {
-          logger.error('chat: history load failed', {
-            channel_id: channelId,
-            error: outcome.message,
-          });
-          setLoadFailed(true);
-          setLoading(false);
-          // A page that lands later (Retry) reads the peer's cursor as it is then.
-          positionsShare.release(channelId);
+        if (memoryKey === null) {
+          // No workspace to ask the bundle for: the latest page alone.
+          const outcome = await runLatestLoad(() => loadLatestMessages(db, channelId));
+          if (cancelled) return;
+          if (outcome.kind === 'failed') failOpen(outcome.message);
+          else applyPage(outcome.page);
           return;
         }
-        applyPage(outcome.page);
+        const key = memoryKey;
+        const outcome = await runLatestLoad(() =>
+          withLateRead(
+            () =>
+              opts.fresh
+                ? startChatBundle(key, { since: null, deps: bundleDeps })
+                : joinChatBundle(key, { since: null, deps: bundleDeps }),
+            {
+              onLate: (bundle) => {
+                if (!cancelled) applyBundle(bundle);
+              },
+              cancel: abort.signal,
+            },
+          ),
+        );
+        if (cancelled) return;
+        if (outcome.kind === 'failed') failOpen(outcome.message);
+        else applyBundle(outcome.page);
       })();
     };
-    const reopen = (page: RememberedThread): void => {
+    const reopen = (page: RememberedThread, key: NonNullable<typeof memoryKey>): void => {
       // The first frame: the remembered rows with the outbox laid on top, as a
       // load does (already on screen when the render's switch seeded this page).
       if (seededRef.current !== page) {
@@ -1137,9 +1273,9 @@ export function useChatThread(params: {
       const reactionsFrom = reactionTouchesRef.current.seq;
       void revalidateRemembered(
         {
-          loadNewer: (cursor, signal) => loadNewerMessages(db, channelId, cursor, signal),
-          // Bounded at 5s like every catch-up read.
-          loadLatest: () => loadLatestMessages(db, channelId),
+          // The open's bundle from the remembered page's end, bounded at 5s.
+          loadBundle: (since) =>
+            withReadTimeout(() => joinChatBundle(key, { since, deps: bundleDeps })),
           loadByIds: (ids, signal) => loadMessagesByIds(db, ids, signal),
           // The catch-up's batched reactions re-read (chunks of 100, 5s each).
           loadReactions: (ids) =>
@@ -1156,13 +1292,11 @@ export function useChatThread(params: {
           // Too much happened while away: today's fresh open, never a gap.
           // The fresh page this open loads is what it leaves behind (a new owner:
           // the forget voided the old one's write-back).
-          if (memoryKey !== null) {
-            memory.forget(memoryKey, 'thread');
-            owner?.release();
-            owner = memory.attach(memoryKey);
-          }
+          memory.forget(key, 'thread');
+          owner?.release();
+          owner = memory.attach(key);
           shown = false;
-          openFresh();
+          openFresh(read.bundle !== null ? { fresh: false, bundle: read.bundle } : { fresh: true });
           return;
         }
         if (read.newer === null || read.rechecked === null || read.reactions === null) {
@@ -1180,21 +1314,14 @@ export function useChatThread(params: {
             onMessageEditedRef.current?.(row);
           }
         }
-        if (read.newer !== null) {
-          const fresh = unseenRows(messagesRef.current, read.newer);
-          if (fresh.length > 0) {
-            foldRows(
-              fresh.map((row) => rowToThreadMessage(row, currentUserId)),
-              channelId,
-              true,
-            );
-          }
+        if (read.bundle !== null) {
+          foldBundle(read.bundle, channelId, true);
           contiguity.catchUpApplied(epoch, read.through);
         }
       });
     };
-    if (remembered !== undefined) reopen(remembered);
-    else openFresh();
+    if (remembered !== undefined && memoryKey !== null) reopen(remembered, memoryKey);
+    else openFresh({ fresh: retrying });
     return () => {
       cancelled = true;
       abort.abort();
@@ -1234,6 +1361,7 @@ export function useChatThread(params: {
     currentUserId,
     peerUserId,
     foldRows,
+    foldBundle,
     attachPeerCursor,
     resolveReplies,
     reportDeleted,
@@ -1243,6 +1371,7 @@ export function useChatThread(params: {
     memoryKey,
     leaving,
     positionsShare,
+    bundleDeps,
   ]);
 
   // The channel's cursors, read once on open (in parallel with the latest

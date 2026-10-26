@@ -31,7 +31,15 @@ interface CommentSubmitOptions {
   attachmentVersionIds: string[];
 }
 
-type CommentSubmitResult = { ok: true } | { ok: false; error: string };
+/**
+ * ok clears the draft. A failure keeps it (text and chips): `error` is shown
+ * inline under the composer; `notified` means the parent already told the
+ * person (a toast), so nothing is shown inline.
+ */
+export type CommentSubmitResult =
+  | { ok: true }
+  | { ok: false; error: string }
+  | { ok: false; notified: true };
 
 interface CommentComposerProps {
   /** Write the comment; resolves ok to clear the draft, or an error to keep it. */
@@ -204,7 +212,7 @@ export function CommentComposer({
       return;
     }
     // Keep the draft (text + chips) so a failed write is not lost.
-    setError(result.error);
+    setError('error' in result ? result.error : null);
     setSubmitting(false);
   }
 

@@ -10,7 +10,8 @@
 // comes back in one batch, never one read per bubble. A plan the viewer can no
 // longer read (deleted, RLS) renders the neutral box with "Plan deleted";
 // a read that failed keeps the skeleton and is re-read, then shows "Couldn't
-// load" with a tap to retry. The card waits for the viewer's side and its whole
+// load" with a tap to retry. The read starts once the chat bundle returns, or
+// at a tap on the waiting card if that comes first. The card waits for the viewer's side and its whole
 // bundle (plan, items, reviews, post stages, draft rows) before its first
 // paint, at the skeleton's exact height, so it paints once and the footer never
 // flips. Tokens only (light and dark parity).
@@ -119,8 +120,13 @@ export function SharedPlanCards(props: { planIds: string[]; senderName: string }
   );
   if (props.planIds.length === 0) return <></>;
   if (skeleton) {
+    // Same box as the card (PLAN_CARD_SKELETON). A tap while the open still
+    // waits for the chat bundle starts this card's read now (plan-fire.ts).
     return (
-      <div className="mt-1.5 flex flex-col items-start gap-1.5">
+      <div
+        className="mt-1.5 flex flex-col items-start gap-1.5"
+        onPointerDown={() => ctx?.tapPlans(props.planIds)}
+      >
         {props.planIds.map((id) => (
           <div key={id} data-plan-skeleton="" className={`${PLAN_CARD_SKELETON} animate-pulse`} />
         ))}

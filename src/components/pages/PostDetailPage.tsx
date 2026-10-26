@@ -1437,6 +1437,7 @@ export function PostDetailPage({
                   pending ? null : embedded ? (focusCommentIdProp ?? null) : focusCommentId
                 }
                 viewerIsClient={clientRole}
+                {...(detail !== null ? { postStage: detail.post.stage } : {})}
                 guideReplyCommentId={firstHighlightCommentId(
                   detail?.post.caption ?? '',
                   highlights,

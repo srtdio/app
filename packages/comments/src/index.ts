@@ -44,20 +44,46 @@ export type CommentEntityType = 'post' | 'brief';
 export const PAGE_SIZE = 50;
 
 /**
- * A failed comment operation. Extends the proc's domain errors with the one
- * failure that is owned by this layer rather than the database: a mention that
- * does not resolve to an active workspace member.
+ * A failed comment operation: the proc's domain errors, plus `invalidMentions`
+ * on an 'invalid_mention'. That code has two sources with ONE shape: this
+ * layer's own pre-check (a mention that is not an active workspace member) and
+ * comment_create's RAISE 'invalid_mention' (a non-member, or a client tagged on
+ * a draft post), whose ids come from the Postgres DETAIL when it carries them.
  */
 export interface CommentError {
-  code: DomainErrorCode | 'invalid_mention';
+  code: DomainErrorCode;
   message: string;
-  /** Present only when code is 'invalid_mention': the offending user ids. */
+  /** Present only when code is 'invalid_mention': the offending user ids
+   *  (empty when the server raised it without a DETAIL). */
   invalidMentions?: string[];
 }
 
 export type CommentResult<T> = { ok: true; data: T } | { ok: false; error: CommentError };
 
+/** The offending ids in an invalid_mention DETAIL ("id1,id2"). Pure. */
+export function parseInvalidMentionDetail(details: string | undefined): string[] {
+  if (details === undefined) return [];
+  const ids = details
+    .split(',')
+    .map((id) => id.trim().toLowerCase())
+    .filter((id) => id.length > 0);
+  return Array.from(new Set(ids));
+}
+
+/** The one invalid_mention shape, from either source. Pure. */
+export function invalidMentionError(message: string, ids: readonly string[]): CommentError {
+  return { code: 'invalid_mention', message, invalidMentions: [...ids] };
+}
+
+/** Whether a comment error is a rejected mention (either source). Pure. */
+export function isInvalidMention(error: Pick<CommentError, 'code'>): boolean {
+  return error.code === 'invalid_mention';
+}
+
 function fromDomainError(error: DomainError): CommentError {
+  if (error.code === 'invalid_mention') {
+    return invalidMentionError(error.message, parseInvalidMentionDetail(error.details));
+  }
   return { code: error.code, message: error.message };
 }
 
@@ -119,11 +145,10 @@ export async function createComment(
   if (check.invalid.length > 0) {
     return {
       ok: false,
-      error: {
-        code: 'invalid_mention',
-        message: `mentions are not active workspace members: ${check.invalid.join(', ')}`,
-        invalidMentions: check.invalid,
-      },
+      error: invalidMentionError(
+        `mentions are not active workspace members: ${check.invalid.join(', ')}`,
+        check.invalid,
+      ),
     };
   }
 

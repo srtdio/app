@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-// A chat open's requests, counted per table on a recording client: the latest
-// page, then ONE reactions IN read and ONE quoted-rows IN read over the page's
-// ids, and ONE cursors read (plus its one IN read of the cursor messages) that
-// the DM seen ticks share. The counts are the same for a 10-row and a 50-row
-// page: nothing is read per message. A reopen of a remembered page is constant
-// the same way.
+// A chat open's requests, counted per table on a recording client. A cold
+// open is ONE chat_open_bundle call: the latest page, its reactions, its
+// quoted rows, the cursors and their messages all come in it (before: the
+// page, the paging floor, a quoted-rows IN, a reactions IN, a cursors read
+// and a cursor-messages IN). The DM seen ticks take the peer's cursor from
+// it. The counts are the same for a 10-row and a 50-row page: nothing is read
+// per message. A reopen of a remembered page is the same call from the
+// page's end (p_since) plus the remembered rows' recheck, constant the same way.
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -157,9 +159,50 @@ function recordingClient(page: readonly ChatMessageRow[]): { db: Client; queries
       Promise.resolve(answer(query)).then(resolve, reject);
     return builder;
   };
-  const rpc = (fn: string): Promise<{ data: unknown; error: null }> => {
-    queries.push({ table: `rpc:${fn}`, calls: [] });
-    return Promise.resolve({ data: [], error: null });
+  const cursorJson = (userId: string): Record<string, unknown> => ({
+    user_id: userId,
+    last_read_message_id: peerRead?.id ?? 'none',
+    last_read_at: peerRead?.created_at ?? '2026-10-20T10:00:00Z',
+    read_at: peerRead?.created_at ?? null,
+  });
+  // chat_open_bundle over the page: p_since inclusive, else the latest 50.
+  const bundle = (args: Record<string, unknown>): Record<string, unknown> => {
+    const since = typeof args.p_since === 'string' ? Date.parse(args.p_since) : null;
+    const rows =
+      since === null ? page.slice(-50) : page.filter((r) => Date.parse(r.created_at) >= since);
+    const ids = new Set(rows.map((r) => r.id));
+    const quoted = [
+      ...new Set(
+        rows.flatMap((r) => (r.reply_to_message_id !== null ? [r.reply_to_message_id] : [])),
+      ),
+    ]
+      .filter((id) => !ids.has(id))
+      .map((id) => row(0, { id, created_at: '2026-10-01T00:00:00Z' }));
+    return {
+      server_now: '2026-10-25T12:00:00.000Z',
+      messages: rows,
+      has_more: false,
+      quoted,
+      reactions: rows.map((r) => ({ message_id: r.id, emoji: '👍', user_id: PEER })),
+      read_cursors: [cursorJson(ME), cursorJson(PEER)],
+      cursor_messages:
+        peerRead !== undefined ? [{ id: peerRead.id, created_at: peerRead.created_at }] : [],
+      reply_counts: [],
+      marks: [],
+      scheduled: [],
+      open_posts: [],
+      open_post_count: 0,
+      shared_plan_ids: [],
+      open_briefs: [],
+      open_brief_count: 0,
+    };
+  };
+  const rpc = (
+    fn: string,
+    args: Record<string, unknown>,
+  ): Promise<{ data: unknown; error: null }> => {
+    queries.push({ table: `rpc:${fn}`, calls: [{ method: 'rpc', args: [args] }] });
+    return Promise.resolve({ data: fn === 'chat_open_bundle' ? bundle(args) : [], error: null });
   };
   return { db: { from, rpc } as unknown as Client, queries };
 }
@@ -285,18 +328,17 @@ describe('chat open: no request per message', () => {
   it('a DM open with a 50-message page reads a fixed set of batched requests', async () => {
     const { queries, thread } = await open(50, { peerUserId: PEER });
     expect(thread?.messages).toHaveLength(50);
-    expect(perTable(queries)).toEqual({
-      // The latest page, the quoted rows (one IN), the cursor messages (one IN).
-      chat_messages: 3,
-      // Every row's reactions in one IN read.
-      chat_reactions: 1,
-      // One cursors read: the seen ticks take the peer's from it.
-      chat_read_cursors: 1,
-    });
-    const reactions = queries.find((q) => q.table === 'chat_reactions');
-    expect((reactions !== undefined ? argsOf(reactions, 'in')?.[1] : []) as string[]).toHaveLength(
-      50,
-    );
+    // One call: the page, its reactions and quotes, the cursors (6 requests before).
+    expect(perTable(queries)).toEqual({ 'rpc:chat_open_bundle': 1 });
+    const call = queries.find((q) => q.table === 'rpc:chat_open_bundle');
+    const args = call?.calls[0]?.args[0] as Record<string, unknown> | undefined;
+    expect(args?.p_workspace_id).toBe(WS);
+    expect(args?.p_channel_id).toBe(CHANNEL);
+    expect(typeof args?.p_trace_id).toBe('string');
+    expect(args !== undefined && 'p_since' in args).toBe(false);
+    // The reactions and quotes came with it.
+    expect(thread?.messages[1]?.reactions).toEqual([{ emoji: '👍', count: 1, mine: false }]);
+    expect(thread?.messages[5]?.reply?.preview).not.toBe('');
     // No separate peer cursor select (maybeSingle on chat_read_cursors).
     expect(queries.some((q) => q.table === 'chat_read_cursors' && has(q, 'maybeSingle'))).toBe(
       false,
@@ -316,11 +358,7 @@ describe('chat open: no request per message', () => {
 
   it('a group open (no peer) reads the same fixed set', async () => {
     const { queries } = await open(50, { peerUserId: null });
-    expect(perTable(queries)).toEqual({
-      chat_messages: 3,
-      chat_reactions: 1,
-      chat_read_cursors: 1,
-    });
+    expect(perTable(queries)).toEqual({ 'rpc:chat_open_bundle': 1 });
   });
 
   it('a reopen of a remembered 50-row page revalidates with a fixed set too', async () => {
@@ -331,10 +369,14 @@ describe('chat open: no request per message', () => {
     const large = perTable(queries);
     expect(large).toEqual(small);
     expect(large).toEqual({
-      // The forward read, the remembered rows by id (one IN), the cursor messages (one IN).
-      chat_messages: 3,
+      // The bundle from the page's end (p_since), the remembered rows by id
+      // (one IN) and their reactions (one IN).
+      'rpc:chat_open_bundle': 1,
+      chat_messages: 1,
       chat_reactions: 1,
-      chat_read_cursors: 1,
     });
+    const call = queries.find((q) => q.table === 'rpc:chat_open_bundle');
+    const args = call?.calls[0]?.args[0] as Record<string, unknown> | undefined;
+    expect(args?.p_since).toBe(pageOf(50)[49]?.created_at);
   });
 });

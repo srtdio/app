@@ -24,6 +24,9 @@ const h = vi.hoisted(() => ({
   setParams: vi.fn(),
   navigate: vi.fn(),
   sheet: null as SheetProps | null,
+  listPosts: vi.fn<
+    (client: unknown, input: { traceId?: string }) => Promise<{ ok: true; data: never[] }>
+  >(async () => ({ ok: true, data: [] })),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -48,7 +51,7 @@ vi.mock('@/lib/use-undoable-action', async (orig) => ({
 }));
 vi.mock('@srtdio/posts', async (orig) => ({
   ...(await orig<typeof import('@srtdio/posts')>()),
-  listPosts: async () => ({ ok: true, data: [] }),
+  listPosts: h.listPosts,
 }));
 vi.mock('@/components/pages/pipeline/PipelineBoard', () => ({ PipelineBoard: () => null }));
 vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({ PipelineFeed: () => null }));
@@ -82,6 +85,7 @@ beforeEach(() => {
   h.setParams.mockReset();
   h.navigate.mockReset();
   h.sheet = null;
+  h.listPosts.mockClear();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -144,5 +148,14 @@ describe('PipelinePage flow A', () => {
     await act(async () => h.sheet?.onCreated('p1'));
     expect(h.navigate).not.toHaveBeenCalled();
     expect(h.sheet?.open).toBe(false);
+  });
+
+  it('a board load sends one uuid v7 trace id to listPosts (posts_list p_trace_id)', async () => {
+    await renderPage();
+    expect(h.listPosts).toHaveBeenCalled();
+    const input = h.listPosts.mock.calls[0]?.[1];
+    expect(input?.traceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
   });
 });

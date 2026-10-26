@@ -354,8 +354,9 @@ export function coverIdsKey(posts: readonly Pick<PipelinePost, 'id'>[]): string 
 }
 
 /**
- * The covers listPosts already resolved (its one asset_attachments read), as
- * store entries; rows without `firstMedia` (never read) are left out. Pure.
+ * The covers listPosts already returned (the first_media_* columns of its one
+ * posts_list call, no attachments read), as store entries; rows without
+ * `firstMedia` (never read) are left out. Pure.
  */
 export function listedCovers(
   posts: readonly Pick<PipelinePost, 'id' | 'firstMedia'>[],
@@ -904,11 +905,13 @@ export function PipelinePage() {
       let data: PipelinePost[] = fresh ?? [];
       if (fresh === undefined) {
         setPostsLoading(true);
+        // One trace id per load, sent as posts_list's p_trace_id.
+        const traceId = generateTraceId();
         try {
           const result =
             userId === null
-              ? await listPosts(supabase, { workspaceId, limit: PIPELINE_POSTS_LIMIT })
-              : await readPipelinePosts(supabase, userId, workspaceId, listPosts);
+              ? await listPosts(supabase, { workspaceId, limit: PIPELINE_POSTS_LIMIT, traceId })
+              : await readPipelinePosts(supabase, userId, workspaceId, listPosts, traceId);
           if (result.ok) {
             ok = true;
             data = result.data;
@@ -918,8 +921,8 @@ export function PipelinePage() {
         }
       }
       if (seq !== loadSeq.current) return;
-      // Seed the cover store from the same read before the cards render, so the
-      // board never reads asset_attachments a second time for these posts.
+      // Seed the cover store from the same posts_list call before the cards
+      // render, so the board never reads asset_attachments for these posts.
       if (ok) primeCovers(workspaceId, listedCovers(data));
       if (ok) setPosts(data);
       else if (loadedForRef.current !== workspaceId) setPosts([]);
@@ -1090,9 +1093,9 @@ export function PipelinePage() {
     dateFilterActive(query) && !includeUndated ? inStage(searched).filter(isUndated).length : 0;
 
   // Card covers (first photo or video with its stored size) for the platform
-  // frame, served by the chat cover store; cached on the device. listPosts
-  // already resolved them and loadPosts seeded the store, so only a row that
-  // came without a cover (none today) is read here, in batches.
+  // frame, served by the chat cover store; cached on the device. The one
+  // posts_list call already returned them and loadPosts seeded the store, so
+  // only a row that came without a cover (none today) is read here, in batches.
   // The key is the id SET (sorted), not the display order, so a re-sort or an
   // optimistic stage move never re-runs the request loop; only a different set
   // of posts (a load, a search) asks again, and the store skips ids it holds.

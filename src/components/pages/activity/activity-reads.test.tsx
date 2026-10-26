@@ -15,7 +15,7 @@ import type { ActivityItem, LoadResult } from '@/components/pages/activity/data'
 const h = vi.hoisted(() => ({
   fetchActivityEntries: vi.fn(),
   fetchUpcoming: vi.fn(),
-  fetchUnreadMentionCount: vi.fn(),
+  readActivityBadge: vi.fn(),
   from: vi.fn(),
 }));
 
@@ -49,7 +49,7 @@ vi.mock('@/lib/chat/viewer-role', async (importOriginal) => ({
 vi.mock('@/lib/use-workspace-data-changed', () => ({ useWorkspaceDataChanged: () => {} }));
 vi.mock('@/lib/inbox/inbox-reads', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/inbox/inbox-reads')>()),
-  fetchUnreadMentionCount: (...args: unknown[]) => h.fetchUnreadMentionCount(...args),
+  readActivityBadge: (...args: unknown[]) => h.readActivityBadge(...args),
 }));
 vi.mock('@/components/pages/activity/data', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/pages/activity/data')>()),
@@ -175,7 +175,7 @@ beforeEach(() => {
     data: [item({ id: 'e1', title: 'Q3 Launch' })],
   } satisfies LoadResult);
   h.fetchUpcoming.mockReset().mockResolvedValue({ ok: true, data: [] });
-  h.fetchUnreadMentionCount.mockReset().mockResolvedValue({ ok: true, data: 0 });
+  h.readActivityBadge.mockReset().mockResolvedValue({ ok: true, data: { unread: 0, mentions: 0 } });
   h.from.mockReset();
 });
 

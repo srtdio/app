@@ -83,6 +83,7 @@ import {
   type ThreadRow,
   mentionClass,
   mentionsMe,
+  nextPill,
   profileNameOf,
   renderBodyWithMentions,
 } from '@/components/chat/MessageThread';
@@ -3973,5 +3974,63 @@ describe('decision 128: every Reply focuses the composer inside the user event',
     const set = vi.fn();
     replyWithFocus(() => null, set)(msg);
     expect(set).toHaveBeenCalledWith(msg);
+  });
+});
+
+describe('nextPill (the jump pill waits for the open pin)', () => {
+  const loaded = { kind: 'loaded' as const };
+
+  it('settles nothing while the open pin is pending, whatever the divider reads', () => {
+    for (const where of ['above', 'visible', 'below', 'missing'] as const) {
+      expect(nextPill({ pill: 'unknown', unread: loaded, where, pinPending: true })).toBeNull();
+    }
+  });
+
+  it('regression: a divider read "below" before the pin no longer hides the pill for good', () => {
+    // Before the pin (list at scrollTop 0): no decision.
+    expect(
+      nextPill({ pill: 'unknown', unread: loaded, where: 'below', pinPending: true }),
+    ).toBeNull();
+    // The pin's scroll asks again: the run sits above the pinned view.
+    expect(nextPill({ pill: 'unknown', unread: loaded, where: 'above', pinPending: false })).toBe(
+      'show',
+    );
+  });
+
+  it('after the pin: above shows, visible and below settle as done', () => {
+    expect(nextPill({ pill: 'unknown', unread: loaded, where: 'above', pinPending: false })).toBe(
+      'show',
+    );
+    expect(nextPill({ pill: 'unknown', unread: loaded, where: 'visible', pinPending: false })).toBe(
+      'done',
+    );
+    expect(nextPill({ pill: 'unknown', unread: loaded, where: 'below', pinPending: false })).toBe(
+      'done',
+    );
+    expect(nextPill({ pill: 'show', unread: loaded, where: 'visible', pinPending: false })).toBe(
+      'done',
+    );
+  });
+
+  it('no unread settles at once; unknown unread and a done pill never change', () => {
+    expect(nextPill({ pill: 'unknown', unread: null, where: 'missing', pinPending: true })).toBe(
+      'done',
+    );
+    expect(
+      nextPill({ pill: 'unknown', unread: undefined, where: 'above', pinPending: false }),
+    ).toBeNull();
+    expect(
+      nextPill({ pill: 'done', unread: loaded, where: 'above', pinPending: false }),
+    ).toBeNull();
+  });
+
+  it('a run beyond the loaded pages shows once the pin has landed', () => {
+    const beyond = { kind: 'beyond' as const };
+    expect(
+      nextPill({ pill: 'unknown', unread: beyond, where: 'missing', pinPending: true }),
+    ).toBeNull();
+    expect(nextPill({ pill: 'unknown', unread: beyond, where: 'missing', pinPending: false })).toBe(
+      'show',
+    );
   });
 });

@@ -4,9 +4,10 @@
 // wrappers return, so callers branch uniformly; a transport/PostgREST failure
 // surfaces as a { code: 'unknown' } error rather than a throw.
 
-import type { Client, DomainError, Result } from '@srtdio/rpc';
+import { withTraceHeader, type Client, type DomainError, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import type { Stage } from './stage-machine';
+import { resolveTraceId } from './trace';
 
 export type Post = Database['public']['Tables']['posts']['Row'];
 export type PostVersion = Database['public']['Tables']['post_versions']['Row'];
@@ -28,14 +29,16 @@ export interface ListPostsInput {
   limit?: number;
   /** Keyset cursor: return rows strictly older than this created_at (ISO). */
   before?: string;
+  /** The action's trace id, sent as p_trace_id; a fresh uuid_v7 when absent. */
+  traceId?: string;
 }
 
 /**
  * A Pipeline board row: the full post Row plus the asset_version_id of its first
  * image attachment (for the card thumbnail), or null when the post has no image
  * attached, and its cover (first photo or video with its stored size, null for
- * none). Both are resolved by {@link listPosts} in one extra batched query over
- * every returned post, never one query per post. `firstMedia` is optional so
+ * none). Both come back from the same posts_list call as the posts, never one
+ * query per post. `firstMedia` is optional so
  * rows built elsewhere (fixtures, optimistic rows) need not carry it; absent
  * means "not read", null means "no photo or video".
  */
@@ -461,7 +464,7 @@ export const POST_CARD_ROW_COLUMNS =
  * Every live attachment row for `postIds` with its version's mime and stored
  * size embedded, in ONE asset_attachments read ordered entity_id, position,
  * attached_at ascending (the order {@link mediaSummaryByPost} expects). Shared
- * by the card, cover and Pipeline reads so all three fold the same rows.
+ * by the card and cover reads so both fold the same rows.
  */
 async function readCardMediaRows(
   client: Client,
@@ -550,60 +553,77 @@ export async function readPostCovers(
   return { ok: true, data: covers };
 }
 
+/** One posts_list row: the 23 posts columns plus the proc's media summary. */
+export type PostsListRow = Post & {
+  thumbnail_asset_version_id: string | null;
+  first_media_asset_version_id: string | null;
+  first_media_kind: string | null;
+  first_media_width: number | null;
+  first_media_height: number | null;
+};
+
+type PostsListArgs = Database['public']['Functions']['posts_list']['Args'];
+
 /**
- * List live posts in a workspace, newest first. Soft-deleted rows are excluded.
- * A single posts query: stage and the `before` cursor are applied as filters, the
- * page size is capped, and ordering matches the composite index
- * (workspace_id, stage, created_at desc). One additional batched asset_attachments
- * read (the same rows {@link readPostCovers} reads) then resolves, per row, the
- * first image's asset_version_id for the card thumbnail and the cover (first
- * photo or video with its stored size); posts with neither carry null. The
- * caller can seed a cover store from `firstMedia` instead of reading the
- * attachments again. Skipped when no post came back. No N+1.
+ * Map one posts_list row onto a Pipeline row: the posts columns as they are,
+ * the thumbnail from thumbnail_asset_version_id and the cover from the
+ * first_media_* columns (null when the post has no photo or video, or the kind
+ * is not one the card knows). Pure.
+ */
+export function pipelinePostFromRow(row: PostsListRow): PipelinePost {
+  const {
+    thumbnail_asset_version_id,
+    first_media_asset_version_id,
+    first_media_kind,
+    first_media_width,
+    first_media_height,
+    ...post
+  } = row;
+  const kind =
+    first_media_kind === 'image' || first_media_kind === 'video' ? first_media_kind : null;
+  return {
+    ...post,
+    thumbnailAssetVersionId: thumbnail_asset_version_id ?? null,
+    firstMedia:
+      first_media_asset_version_id !== null && kind !== null
+        ? {
+            assetVersionId: first_media_asset_version_id,
+            kind,
+            width: first_media_width ?? null,
+            height: first_media_height ?? null,
+          }
+        : null,
+  };
+}
+
+/**
+ * List live posts in a workspace, newest first, in ONE public.posts_list call.
+ * The proc applies the same filters and order as the old posts read (workspace,
+ * live rows, optional stage and `before` cursor, ordered by the composite index
+ * (workspace_id, stage, created_at desc), page size capped at 500) and returns
+ * each row's first image (the card thumbnail) and cover (first photo or video
+ * with its stored size) beside the posts columns, so no attachments read
+ * follows. The caller can seed a cover store from `firstMedia`. The trace id is
+ * an explicit p_trace_id argument (the caller's, or a fresh uuid_v7).
  */
 export async function listPosts(
   client: Client,
   input: ListPostsInput,
 ): Promise<Result<PipelinePost[]>> {
   const limit = Math.min(input.limit ?? POSTS_PAGE_SIZE, POSTS_PAGE_SIZE_MAX);
-
-  let query = client
-    .from('posts')
-    .select('*')
-    .eq('workspace_id', input.workspaceId)
-    .is('deleted_at', null);
-
-  if (input.stage !== undefined) query = query.eq('stage', input.stage);
-  if (input.before !== undefined) query = query.lt('created_at', input.before);
-
-  const { data, error } = await query
-    .order('workspace_id', { ascending: true })
-    .order('stage', { ascending: true })
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) return { ok: false, error: transportError(error.message) };
-
-  const posts = data ?? [];
-  if (posts.length === 0) return { ok: true, data: [] };
-  const media = await readCardMediaRows(
-    client,
-    posts.map((post) => post.id),
-  );
-  if (!media.ok) return media;
-  const byPost = mediaSummaryByPost(media.data);
-
-  return {
-    ok: true,
-    data: posts.map((post) => {
-      const summary = byPost.get(post.id);
-      return {
-        ...post,
-        thumbnailAssetVersionId: summary?.thumbnailAssetVersionId ?? null,
-        firstMedia: summary?.firstMedia ?? null,
-      };
-    }),
+  const args: PostsListArgs = {
+    p_trace_id: resolveTraceId(input.traceId),
+    p_workspace_id: input.workspaceId,
+    p_limit: limit,
+    ...(input.stage !== undefined ? { p_stage: input.stage } : {}),
+    ...(input.before !== undefined ? { p_before: input.before } : {}),
   };
+  const { data, error } = await withTraceHeader(client.rpc('posts_list', args), args.p_trace_id);
+  if (error) return { ok: false, error: transportError(error.message) };
+  // The generated Returns marks every column non-null; the proc's LEFT JOINs and
+  // nullable posts columns make many of them null, as PostsListRow says.
+  const rows: PostsListRow[] = data ?? [];
+  return { ok: true, data: rows.map(pipelinePostFromRow) };
 }
 
 /** A post linked to a brief, as Brief detail's linked-posts list shows it. */

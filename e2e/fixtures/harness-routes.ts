@@ -15,6 +15,7 @@ import {
   type ChatWorld,
 } from './chat-data';
 import { notesChannelRow } from './notes-data';
+import { chatOpenBundle } from './chat-open-bundle';
 import { TASK_RPC } from './tasks-data';
 import { INDUCTION_RPC } from './induction-rpc';
 import { SEARCH_RPC } from './search-data';
@@ -159,8 +160,45 @@ const CORS = {
 
 type RpcHandler = (args: Record<string, unknown>, tables: Tables) => unknown;
 
-/** A proc that raised: the route answers 400 with this message (PostgREST's shape). */
-class HarnessRpcError extends Error {}
+/**
+ * A proc that raised: the route answers 400 with this message (PostgREST's
+ * shape), and `details` as the body's details (a RAISE ... USING DETAIL).
+ */
+class HarnessRpcError extends Error {
+  readonly details: string | null;
+  constructor(message: string, details: string | null = null) {
+    super(message);
+    this.details = details;
+  }
+}
+
+/** The proc's agency-side roles: the only members a draft post comment may tag. */
+const DRAFT_MENTIONABLE_ROLES = ['owner', 'admin', 'agency'];
+const BODY_MENTION =
+  /@\[([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\]/g;
+
+/**
+ * comment_create's mention rule: every id in p_mentions or an @[uuid] in the
+ * body must be an active member, and on a draft post an agency-side one (a
+ * client cannot see drafts). Returns the offending ids, lowercased, in order.
+ */
+function invalidCommentMentions(args: Record<string, unknown>, tables: Tables): string[] {
+  const listed = Array.isArray(args.p_mentions) ? args.p_mentions.map(String) : [];
+  const typed = [...String(args.p_body ?? '').matchAll(BODY_MENTION)].map((m) => m[1] ?? '');
+  const mentioned = [...new Set([...listed, ...typed].map((id) => id.toLowerCase()))];
+  const post =
+    args.p_entity_type === 'post'
+      ? (tables.posts ?? []).find((p) => p.id === args.p_entity_id)
+      : undefined;
+  const isDraft = post?.stage === 'draft';
+  return mentioned.filter((id) => {
+    const member = (tables.workspace_members ?? []).find(
+      (m) => m.workspace_id === args.p_workspace_id && m.user_id === id && m.active === true,
+    );
+    if (member === undefined) return true;
+    return isDraft && !DRAFT_MENTIONABLE_ROLES.includes(String(member.role));
+  });
+}
 
 /** The active members of a chat (DM pair or group members), as user ids. */
 function channelMemberIds(tables: Tables, channelId: string): string[] {
@@ -191,6 +229,183 @@ function planItemsOf(tables: Tables, planId: unknown): Row[] {
 
 function inPlan(plan: Row | undefined, day: string): boolean {
   return plan !== undefined && day >= String(plan.starts_on) && day <= String(plan.ends_on);
+}
+
+/** Plans per Plan tab page (plan_bundle_read's c_page). */
+const PLAN_BUNDLE_PAGE = 12;
+
+function liveRow(row: Row): boolean {
+  return row.deleted_at === null || row.deleted_at === undefined;
+}
+
+/** public.plan_bundle_read over the fixture tables. */
+function planBundleRead(args: Record<string, unknown>, tables: Tables): Record<string, unknown> {
+  const workspace = (tables.workspaces ?? []).find((w) => w.id === args.p_workspace_id);
+  if (workspace === undefined) throw new HarnessRpcError('workspace_member_only');
+  const byId = Array.isArray(args.p_plan_ids) ? args.p_plan_ids.slice(0, 200).map(String) : null;
+  const start = typeof args.p_range_start === 'string' ? args.p_range_start : null;
+  const end = typeof args.p_range_end === 'string' ? args.p_range_end : null;
+  const shared = args.p_only_shared === true;
+  const beforeOn = typeof args.p_before_starts_on === 'string' ? args.p_before_starts_on : null;
+  const beforeId = typeof args.p_before_id === 'string' ? args.p_before_id : '';
+  const key = (p: Row): string => `${String(p.starts_on)}|${String(p.id)}`;
+  const inWorkspace = (tables.plans ?? []).filter(
+    (p) => p.workspace_id === args.p_workspace_id && liveRow(p),
+  );
+  let page: Row[];
+  let next: Record<string, unknown> | null = null;
+  if (byId !== null) {
+    page = inWorkspace.filter((p) => byId.includes(String(p.id)));
+  } else {
+    const sel = inWorkspace
+      .filter((p) => !shared || p.audience === 'client')
+      .filter(
+        (p) => start === null || (String(p.starts_on) <= String(end) && String(p.ends_on) >= start),
+      )
+      .filter((p) => beforeOn === null || key(p) < `${beforeOn}|${beforeId}`)
+      .sort((a, b) => (key(a) < key(b) ? 1 : -1))
+      .slice(0, PLAN_BUNDLE_PAGE + 1);
+    page = sel.slice(0, PLAN_BUNDLE_PAGE);
+    const last = page[page.length - 1];
+    if (sel.length > PLAN_BUNDLE_PAGE && last !== undefined) {
+      next = { starts_on: last.starts_on, id: last.id };
+    }
+  }
+  page = [...page].sort((a, b) => (key(a) < key(b) ? -1 : 1));
+  const ids = page.map((p) => String(p.id));
+  const items = (tables.plan_items ?? []).filter(
+    (i) => ids.includes(String(i.plan_id)) && liveRow(i),
+  );
+  const itemIds = items.map((i) => String(i.id));
+  const postIds = items.flatMap((i) =>
+    i.post_id !== null && i.post_id !== undefined ? [String(i.post_id)] : [],
+  );
+  const conceptIds = items.filter((i) => i.kind === 'concept').map((i) => String(i.id));
+  const draftRows =
+    ids.length > 0 ? (PLAN_RPC.plan_draft_rows?.({ p_plan_ids: ids }, tables) as unknown[]) : [];
+  let loose: Row[] = [];
+  if (byId === null && start !== null) {
+    const from = new Date(`${start}T00:00:00Z`).getTime() - 86_400_000;
+    const to = new Date(`${String(end)}T23:59:59Z`).getTime() + 86_400_000;
+    loose = (tables.posts ?? [])
+      .filter((p) => p.workspace_id === args.p_workspace_id && liveRow(p))
+      .filter((p) => {
+        const at = typeof p.target_date === 'string' ? Date.parse(p.target_date) : NaN;
+        return !Number.isNaN(at) && at >= from && at <= to;
+      })
+      .map((p) => ({ id: p.id, title: p.title, stage: p.stage, target_date: p.target_date }));
+  }
+  const looseIds = loose.map((p) => String(p.id));
+  const links = (tables.asset_attachments ?? [])
+    .filter(liveRow)
+    .sort(
+      (a, b) =>
+        Number(a.position ?? 0) - Number(b.position ?? 0) ||
+        String(a.attached_at ?? '').localeCompare(String(b.attached_at ?? '')),
+    );
+  const isImage = (link: Row): boolean =>
+    String(attachmentVersion(tables, link)?.mime_type ?? '').startsWith('image/');
+  const postThumbs: Record<string, unknown> = {};
+  for (const link of links) {
+    const id = String(link.entity_id);
+    if (link.entity_type !== 'post' || ![...postIds, ...looseIds].includes(id)) continue;
+    if (postThumbs[id] === undefined && isImage(link)) postThumbs[id] = link.asset_version_id;
+  }
+  // A concept with files: its first image, else a file tile (a version the
+  // fixture does not hold reads as a file, as the old embed read did).
+  const conceptThumbs: Record<string, unknown> = {};
+  for (const link of links) {
+    const id = String(link.entity_id);
+    if (link.entity_type !== 'plan_item' || !conceptIds.includes(id)) continue;
+    const have = conceptThumbs[id] as { kind: string } | undefined;
+    if (have?.kind === 'image') continue;
+    conceptThumbs[id] = isImage(link)
+      ? { kind: 'image', versionId: link.asset_version_id }
+      : { kind: 'file' };
+  }
+  const counts: Record<string, number> = {};
+  for (const c of tables.plan_item_comments ?? []) {
+    if (!itemIds.includes(String(c.item_id)) || !liveRow(c)) continue;
+    counts[String(c.item_id)] = (counts[String(c.item_id)] ?? 0) + 1;
+  }
+  let alsoIn: Record<string, string[]> | null = null;
+  if (byId !== null && ids.length === 1) {
+    alsoIn = {};
+    for (const postId of new Set(postIds)) {
+      const titles = [
+        ...new Set(
+          (tables.plan_items ?? [])
+            .filter((i) => i.post_id === postId && liveRow(i) && i.plan_id !== ids[0])
+            .map((i) => (tables.plans ?? []).find((p) => p.id === i.plan_id))
+            .flatMap((p) => (p !== undefined ? [String(p.title)] : [])),
+        ),
+      ].sort();
+      if (titles.length > 0) alsoIn[postId] = titles;
+    }
+  }
+  let lastSentAt: string | null = null;
+  if (typeof args.p_channel_id === 'string' && ids.length === 1) {
+    for (const m of tables.chat_messages ?? []) {
+      const shares = Array.isArray(m.shared_plan_ids) ? m.shared_plan_ids : [];
+      if (m.channel_id !== args.p_channel_id || !shares.includes(ids[0]) || !liveRow(m)) continue;
+      const at = String(m.created_at);
+      if (lastSentAt === null || at > lastSentAt) lastSentAt = at;
+    }
+  }
+  const anyPlan =
+    ids.length > 0 ||
+    (byId === null &&
+      start !== null &&
+      inWorkspace.some((p) => !shared || p.audience === 'client'));
+  const pick = (row: Row, keys: string[]): Row =>
+    Object.fromEntries(keys.map((k) => [k, row[k] ?? null]));
+  return {
+    timezone: String(workspace.timezone ?? 'UTC'),
+    plans: page.map((p) =>
+      pick(p, [
+        'id',
+        'workspace_id',
+        'title',
+        'starts_on',
+        'ends_on',
+        'audience',
+        'created_by',
+        'updated_at',
+      ]),
+    ),
+    items: items.map((i) =>
+      pick(i, [
+        'id',
+        'plan_id',
+        'kind',
+        'position',
+        'title',
+        'description',
+        'post_id',
+        'created_at',
+        'updated_at',
+        'target_date',
+      ]),
+    ),
+    draft_rows: draftRows,
+    next_cursor: next,
+    reviews: (tables.plan_item_reviews ?? [])
+      .filter((r) => itemIds.includes(String(r.item_id)))
+      .map((r) => pick(r, ['item_id', 'side', 'status', 'reviewed_by', 'reviewed_at'])),
+    posts: (tables.posts ?? [])
+      .filter((p) => postIds.includes(String(p.id)))
+      .map((p) => pick(p, ['id', 'stage', 'title', 'format', 'target_date'])),
+    comment_counts: counts,
+    thumbs: { posts: postThumbs, concepts: conceptThumbs },
+    also_in: alsoIn,
+    loose_posts: loose.sort(
+      (a, b) =>
+        String(a.target_date).localeCompare(String(b.target_date)) ||
+        String(a.id).localeCompare(String(b.id)),
+    ),
+    any_plan: anyPlan,
+    last_sent_at: lastSentAt,
+  };
 }
 
 /** The plan procs over the fixture tables (owner/agency writes; RLS is not emulated). */
@@ -307,6 +522,13 @@ const PLAN_RPC: Record<string, RpcHandler> = {
       ];
     });
   },
+  // The plan surfaces' one read (live 9-arg proc): by id (p_plan_ids, at most
+  // 200) or the Plan tab (no ids: 12 plans a page, newest starts_on first, a
+  // next_cursor while more remain, the range's loose posts and the any-plan
+  // probe). Everything a card, the Plan screen or the tab paints, in the
+  // proc's jsonb shape. RLS is not emulated beyond the fixture's stand-ins
+  // (deleted rows, hidden_plan_items via plan_draft_rows).
+  plan_bundle_read: (args, tables) => planBundleRead(args, tables),
   // The creator or an owner/admin only (forbidden_role otherwise); RLS hides
   // a deleted plan, so the fixture drops the row.
   plan_delete: (args, tables) => {
@@ -739,15 +961,137 @@ const CAPABILITY_RPC: Record<string, RpcHandler> = {
     const role = typeof member?.role === 'string' ? member.role : '';
     return (ROLE_CAPABILITIES[role] ?? []).includes(String(args.p_capability));
   },
+  // capabilities_for_workspace: the caller's allowed capabilities in one read.
+  capabilities_for_workspace: (args, tables) => {
+    const member = (tables.workspace_members ?? []).find(
+      (m) => m.workspace_id === args.p_workspace_id && m.user_id === ME && m.active === true,
+    );
+    const role = typeof member?.role === 'string' ? member.role : '';
+    return (ROLE_CAPABILITIES[role] ?? []).map((capability) => ({ capability, allowed: true }));
+  },
+};
+
+/**
+ * public.activity_badge_read over the fixture inbox: the caller's unread, not
+ * deleted, not currently snoozed rows in a workspace, and the mentions among them.
+ */
+const BADGE_RPC: Record<string, RpcHandler> = {
+  activity_badge_read: (args, tables) => {
+    const now = new Date().toISOString();
+    const live = (tables.inbox_entries ?? []).filter(
+      (e) =>
+        e.workspace_id === args.p_workspace_id &&
+        e.user_id === ME &&
+        (e.read_at ?? null) === null &&
+        (e.deleted_at ?? null) === null &&
+        ((e.snoozed_until ?? null) === null || String(e.snoozed_until) <= now),
+    );
+    return [
+      { unread: live.length, mentions: live.filter((e) => e.event_type === 'mention').length },
+    ];
+  },
+};
+
+/** An attachment's version: the embedded row the fixtures carry, else the asset_versions table. */
+function attachmentVersion(tables: Tables, link: Row): Row | undefined {
+  const embedded = link.asset_versions;
+  if (embedded !== null && typeof embedded === 'object' && !Array.isArray(embedded)) {
+    return embedded as Row;
+  }
+  return (tables.asset_versions ?? []).find((v) => v.id === link.asset_version_id);
+}
+
+/**
+ * public.posts_list over the fixture tables: the live posts of a workspace
+ * (optional stage and `before` cursor), ordered stage then newest first, capped
+ * at 500, each with its first image (thumbnail) and first photo or video (cover)
+ * in attachment display order. RLS is not emulated.
+ */
+const POSTS_RPC: Record<string, RpcHandler> = {
+  posts_list: (args, tables) => {
+    const limit = Math.min(Math.max(Number(args.p_limit ?? 50), 0), 500);
+    const stage = typeof args.p_stage === 'string' ? args.p_stage : null;
+    const before = typeof args.p_before === 'string' ? args.p_before : null;
+    const posts = (tables.posts ?? [])
+      .filter(
+        (p) =>
+          p.workspace_id === args.p_workspace_id &&
+          (p.deleted_at ?? null) === null &&
+          (stage === null || p.stage === stage) &&
+          (before === null || String(p.created_at) < before),
+      )
+      .sort(
+        (a, b) =>
+          String(a.stage).localeCompare(String(b.stage)) ||
+          String(b.created_at).localeCompare(String(a.created_at)),
+      )
+      .slice(0, limit);
+    return posts.map((post) => {
+      const media = (tables.asset_attachments ?? [])
+        .filter(
+          (a) =>
+            a.entity_type === 'post' && a.entity_id === post.id && (a.deleted_at ?? null) === null,
+        )
+        .sort(
+          (a, b) =>
+            Number(a.position ?? 0) - Number(b.position ?? 0) ||
+            String(a.attached_at ?? '').localeCompare(String(b.attached_at ?? '')),
+        )
+        .map((link) => ({ link, version: attachmentVersion(tables, link) }));
+      const mime = (v: Row | undefined): string => String(v?.mime_type ?? '');
+      const image = media.find((m) => mime(m.version).startsWith('image/'));
+      const first = media.find(
+        (m) => mime(m.version).startsWith('image/') || mime(m.version).startsWith('video/'),
+      );
+      return {
+        ...post,
+        thumbnail_asset_version_id: image?.link.asset_version_id ?? null,
+        first_media_asset_version_id: first?.link.asset_version_id ?? null,
+        first_media_kind:
+          first === undefined ? null : mime(first.version).startsWith('image/') ? 'image' : 'video',
+        first_media_width: first?.version?.width ?? null,
+        first_media_height: first?.version?.height ?? null,
+      };
+    });
+  },
+  // public.ref_resolve: the workspace whose key matches exactly, and its live
+  // post or brief with that number (null when none); no row for an unknown key.
+  ref_resolve: (args, tables) => {
+    const workspace = (tables.workspaces ?? []).find((w) => w.key === args.p_workspace_key);
+    if (workspace === undefined) return [];
+    const table = args.p_kind === 'post' ? 'posts' : args.p_kind === 'brief' ? 'briefs' : null;
+    const entity =
+      table === null
+        ? undefined
+        : (tables[table] ?? []).find(
+            (e) =>
+              e.workspace_id === workspace.id &&
+              Number(e.number) === Number(args.p_number) &&
+              (e.deleted_at ?? null) === null,
+          );
+    return [{ workspace_id: workspace.id, entity_id: entity?.id ?? null }];
+  },
 };
 
 const RPC: Record<string, RpcHandler> = {
   ...PLAN_RPC,
+  ...POSTS_RPC,
   ...CAPABILITY_RPC,
+  ...BADGE_RPC,
   ...TASK_RPC,
   ...ONBOARDING_RPC,
   ...INDUCTION_RPC,
   ...SEARCH_RPC,
+  // The live proc's mention rule (a non-member, or a client tagged on a draft
+  // post, raises invalid_mention with the ids as DETAIL), then the insert.
+  comment_create: (args, tables) => {
+    const invalid = invalidCommentMentions(args, tables);
+    if (invalid.length > 0) throw new HarnessRpcError('invalid_mention', invalid.join(','));
+    return INDUCTION_RPC.comment_create?.(args, tables) ?? null;
+  },
+  // The chat open's one call (chat-open-bundle.ts).
+  chat_open_bundle: (args, tables) =>
+    chatOpenBundle(args, tables, (code) => new HarnessRpcError(code)),
   chat_unread_counts: (_args, tables) => {
     const cursors = tables.chat_read_cursors ?? [];
     const channels = tables.chat_channels ?? [];
@@ -1071,6 +1415,8 @@ export interface HarnessNetwork {
   refuseRpc: Set<string>;
   /** Gate GET reads of one REST table until release() (a slow read). */
   holdTable: (table: string) => { release: () => void };
+  /** Gate calls of one RPC (plan_bundle_read: a slow plan read) until release(). */
+  holdRpc: (name: string) => { release: () => void };
   /** REST tables whose reads fail (500) until removed. */
   failTable: Set<string>;
 }
@@ -1105,6 +1451,7 @@ export async function installHarnessNetwork(
   const rpcCalls: HarnessNetwork['rpcCalls'] = [];
   const refuseRpc = new Set<string>();
   const tableGates = new Map<string, Promise<void>>();
+  const rpcGates = new Map<string, Promise<void>>();
   const failTable = new Set<string>();
 
   await page.addInitScript((session) => {
@@ -1139,6 +1486,23 @@ export async function installHarnessNetwork(
         if (!handler) unmatched.push(`rpc ${name}`);
         const args = (request.postDataJSON() ?? {}) as Record<string, unknown>;
         rpcCalls.push({ name, args });
+        const rpcGate = rpcGates.get(name);
+        if (rpcGate !== undefined) await rpcGate;
+        // The open's bundle carries the messages page: the history hold, a
+        // held or failing chat_messages table hold or fail it the same way.
+        if (name === 'chat_open_bundle') {
+          if (historyGate) await historyGate;
+          const messagesGate = tableGates.get('chat_messages');
+          if (messagesGate !== undefined) await messagesGate;
+          if (failTable.has('chat_messages')) {
+            await route.fulfill({
+              status: 500,
+              headers: { ...CORS, 'content-type': 'application/json' },
+              body: JSON.stringify({ code: 'XX000', message: 'failed', details: null, hint: null }),
+            });
+            return;
+          }
+        }
         if (refusedSend(name, args) || refuseRpc.has(name)) {
           await route.fulfill({
             status: 400,
@@ -1158,7 +1522,7 @@ export async function installHarnessNetwork(
             body: JSON.stringify({
               code: 'P0001',
               message: error.message,
-              details: null,
+              details: error.details,
               hint: null,
             }),
           });
@@ -1443,6 +1807,19 @@ export async function installHarnessNetwork(
         new Promise<void>((resolve) => {
           release = () => {
             tableGates.delete(table);
+            resolve();
+          };
+        }),
+      );
+      return { release };
+    },
+    holdRpc: (name) => {
+      let release = (): void => {};
+      rpcGates.set(
+        name,
+        new Promise<void>((resolve) => {
+          release = () => {
+            rpcGates.delete(name);
             resolve();
           };
         }),

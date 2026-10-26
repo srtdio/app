@@ -59,6 +59,8 @@ export {
   type ListPostsForPickerInput,
   type ListPostsInput,
   type PipelinePost,
+  pipelinePostFromRow,
+  type PostsListRow,
   type Post,
   type PostAnnotation,
   type PostCardFields,

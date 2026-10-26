@@ -20,6 +20,7 @@ import {
   mergeDraftRows,
   postPlansLine,
   readPlanBundles,
+  bundleChunks,
   readPostPlans,
   readPostThumbs,
   runSlotWrite,
@@ -191,202 +192,212 @@ describe('runPlanShare', () => {
   });
 });
 
-// A recording PostgREST-ish fake: each from() starts a query; awaiting it yields
-// rows from the table's handler, given the IN list.
-function fakeClient(tables: Record<string, (column: string, ids: string[]) => unknown[]>) {
-  const log: Array<{ table: string; select: string; column: string; ids: string[] }> = [];
-  const from = vi.fn((table: string) => {
-    let select = '';
-    let column = '';
-    let ids: string[] = [];
-    const q: Record<string, unknown> = {};
-    q.select = (cols: string) => {
-      select = cols;
-      return q;
-    };
-    q.in = (col: string, values: string[]) => {
-      column = col;
-      ids = values;
-      return q;
-    };
-    for (const m of ['is', 'eq', 'order', 'abortSignal']) q[m] = () => q;
-    q.then = (resolve: (v: unknown) => unknown) => {
-      log.push({ table, select, column, ids });
-      const handler = tables[table];
-      return Promise.resolve({ data: handler ? handler(column, ids) : [], error: null }).then(
-        resolve,
-      );
-    };
-    return q;
-  });
-  // plan_draft_rows: none (every item is readable here).
-  const rpc = vi.fn(async () => ({ data: [], error: null }));
-  return { client: { from, rpc } as unknown as Client, log, rpc };
-}
-
-describe('plan reads', () => {
-  it('reads plans, items, reviews and post stages by id lists, never an embed', async () => {
-    const { client, log, rpc } = fakeClient({
-      plans: (_c, ids) =>
-        ids
-          .filter((id) => id !== 'hidden')
-          .map((id) => ({
-            id,
-            workspace_id: 'ws',
-            title: 'T',
-            starts_on: '2026-10-12',
-            ends_on: '2026-10-18',
-            audience: 'client',
-            created_by: null,
-          })),
-      plan_items: () => [
-        {
-          id: 'i1',
-          plan_id: 'a',
-          kind: 'concept',
-          position: 1,
-          title: 'C',
-          description: null,
-          post_id: null,
-          created_at: '1',
-        },
-        {
-          id: 'i2',
-          plan_id: 'a',
-          kind: 'post',
-          position: 0,
-          title: null,
-          description: null,
-          post_id: 'p1',
-          created_at: '1',
-        },
-      ],
-      plan_item_reviews: () => [{ item_id: 'i1', side: 'client', status: 'approved' }],
-      posts: () => [{ id: 'p1', stage: 'review', title: 'Post', target_date: null }],
-    });
-    const result = await readPlanBundles(client, ['a', 'hidden']);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect([...result.data.keys()]).toEqual(['a']);
-    expect(result.data.get('a')?.items.map((i) => i.id)).toEqual(['i2', 'i1']);
-    expect(result.data.get('a')?.postStages).toEqual({ p1: 'review' });
-    expect(log.map((l) => [l.table, l.column])).toEqual([
-      ['plans', 'id'],
-      ['plan_items', 'plan_id'],
-      ['plan_item_reviews', 'item_id'],
-      ['posts', 'id'],
-    ]);
-    // The draft rows start with the plans (by plan id; an invisible id returns nothing).
-    expect(rpc).toHaveBeenCalledWith('plan_draft_rows', { p_plan_ids: ['a', 'hidden'] });
-    for (const l of log) expect(l.select).not.toMatch(/[()]/);
-  });
-
-  it('starts the plans, items and draft rows together; reviews and stages once the items are in', async () => {
-    const started: string[] = [];
-    const gates = new Map<string, () => void>();
-    const from = vi.fn((table: string) => {
-      const q: Record<string, unknown> = {};
-      for (const m of ['select', 'in', 'is', 'eq', 'order', 'abortSignal']) q[m] = () => q;
-      q.then = (resolve: (v: unknown) => unknown) => {
-        started.push(table);
-        const rows =
-          table === 'plans'
-            ? [
-                {
-                  id: 'a',
-                  workspace_id: 'ws',
-                  title: 'T',
-                  starts_on: '2026-10-12',
-                  ends_on: '2026-10-18',
-                  audience: 'client',
-                  created_by: null,
-                },
-              ]
-            : table === 'plan_items'
-              ? [
-                  {
-                    id: 'i1',
-                    plan_id: 'a',
-                    kind: 'post',
-                    position: 0,
-                    title: null,
-                    description: null,
-                    post_id: 'p1',
-                    created_at: '1',
-                  },
-                ]
-              : [];
-        return new Promise((done) =>
-          gates.set(table, () => done({ data: rows, error: null })),
-        ).then(resolve);
-      };
-      return q;
-    });
-    let draftsDone: () => void = () => {};
-    const rpc = vi.fn(
-      () =>
-        new Promise((done) => {
-          started.push('plan_draft_rows');
-          draftsDone = () => done({ data: [], error: null });
-        }),
+// A plan_bundle_read fake: by id it answers every asked plan except 'hidden'
+// (RLS), each with one post item and one concept; every call is recorded.
+function bundleRpc(over: Record<string, unknown> = {}) {
+  const calls: Array<Record<string, unknown>> = [];
+  const rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+    calls.push({ fn, ...args });
+    const ids = (Array.isArray(args.p_plan_ids) ? args.p_plan_ids : []).filter(
+      (id): id is string => typeof id === 'string' && id !== 'hidden',
     );
-    const client = { from, rpc } as unknown as Client;
-    const read = readPlanBundles(client, ['a']);
-    await new Promise((r) => setTimeout(r, 0));
-    // The first wave: all three keyed by plan id, none waiting on another.
-    expect(started.sort()).toEqual(['plan_draft_rows', 'plan_items', 'plans']);
-    // The items alone in: their reviews and the post stages start now, while
-    // the plans and the draft rows are still out.
-    gates.get('plan_items')?.();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(started).toContain('plan_item_reviews');
-    expect(started).toContain('posts');
-    gates.get('plans')?.();
-    draftsDone();
-    gates.get('plan_item_reviews')?.();
-    gates.get('posts')?.();
-    const result = await read;
-    expect(result.ok && [...result.data.keys()]).toEqual(['a']);
-  });
-
-  it('chunks id lists at 100', async () => {
-    const ids = Array.from({ length: 250 }, (_, i) => `p${i}`);
-    expect(planChunks(ids).map((c) => c.length)).toEqual([100, 100, 50]);
-    expect(PLAN_READ_CHUNK).toBe(100);
-    const { client, log } = fakeClient({ plans: () => [] });
-    await readPlanBundles(client, ids);
-    expect(log.filter((l) => l.table === 'plans').map((l) => l.ids.length)).toEqual([100, 100, 50]);
-  });
-
-  it('the plan screen adds one comment-count read over every item id', async () => {
-    const { client, log } = fakeClient({
-      plans: (_c, ids) =>
-        ids.map((id) => ({
+    return {
+      data: {
+        timezone: 'UTC',
+        plans: ids.map((id) => ({
           id,
           workspace_id: 'ws',
           title: 'T',
           starts_on: '2026-10-12',
           ends_on: '2026-10-18',
-          audience: 'team',
+          audience: 'client',
           created_by: null,
+          updated_at: '2026-10-10T00:00:00Z',
         })),
-      plan_items: () => [
-        {
-          id: 'i1',
-          plan_id: 'a',
-          kind: 'concept',
-          position: 0,
-          title: 'C',
-          description: null,
-          post_id: null,
-          created_at: '1',
-        },
-      ],
-      plan_item_comments: () => [{ item_id: 'i1' }, { item_id: 'i1' }],
+        items: ids.flatMap((id) => [
+          {
+            id: `${id}-c`,
+            plan_id: id,
+            kind: 'concept',
+            position: 1,
+            title: 'C',
+            description: null,
+            post_id: null,
+            created_at: '1',
+            target_date: null,
+          },
+          {
+            id: `${id}-p`,
+            plan_id: id,
+            kind: 'post',
+            position: 0,
+            title: null,
+            description: null,
+            post_id: `${id}-post`,
+            created_at: '1',
+            target_date: null,
+          },
+        ]),
+        draft_rows: [],
+        next_cursor: null,
+        reviews: ids.map((id) => ({ item_id: `${id}-c`, side: 'client', status: 'approved' })),
+        posts: ids.map((id) => ({
+          id: `${id}-post`,
+          stage: 'review',
+          title: 'Post',
+          format: 'image',
+          target_date: '2026-10-13T12:00:00Z',
+        })),
+        comment_counts: Object.fromEntries(ids.map((id) => [`${id}-c`, 2])),
+        thumbs: { posts: {}, concepts: {} },
+        also_in: null,
+        loose_posts: [],
+        any_plan: ids.length > 0,
+        last_sent_at: null,
+        ...over,
+      },
+      error: null,
+    };
+  });
+  const from = vi.fn(() => {
+    throw new Error('no table reads');
+  });
+  return { client: { rpc, from } as unknown as Client, calls, rpc, from };
+}
+
+describe('plan reads (plan_bundle_read)', () => {
+  it('readPlanBundles: one plan_bundle_read by id, no table read; a hidden plan is absent', async () => {
+    const { client, calls, from } = bundleRpc();
+    const result = await readPlanBundles(client, ['a', 'hidden', 'a'], undefined, 'UTC', 'ws');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect([...result.data.keys()]).toEqual(['a']);
+    // Date order: the post (13 Oct) before the undated concept.
+    expect(result.data.get('a')?.items.map((i) => i.id)).toEqual(['a-p', 'a-c']);
+    expect(result.data.get('a')?.postStages).toEqual({ 'a-post': 'review' });
+    expect(result.data.get('a')?.postInfo['a-post']).toEqual({
+      title: 'Post',
+      format: 'image',
+      target_date: '2026-10-13T12:00:00Z',
     });
-    const result = await readPlanScreen(client, 'a');
-    expect(result.ok && result.data.commentCounts).toEqual({ i1: 2 });
-    expect(log.filter((l) => l.table === 'plan_item_comments')).toHaveLength(1);
+    expect(result.data.get('a')?.reviews).toHaveLength(1);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      fn: 'plan_bundle_read',
+      p_workspace_id: 'ws',
+      p_plan_ids: ['a', 'hidden'],
+    });
+    expect(typeof calls[0]?.p_trace_id).toBe('string');
+    expect(calls[0]).not.toHaveProperty('_trace_id');
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('chunks the ids at 200 per call, all calls at once', async () => {
+    const ids = Array.from({ length: 450 }, (_, i) => `p${i}`);
+    const { client, calls } = bundleRpc();
+    const result = await readPlanBundles(client, ids, undefined, undefined, 'ws');
+    expect(calls.map((c) => (c.p_plan_ids as string[]).length)).toEqual([200, 200, 50]);
+    expect(result.ok && result.data.size).toBe(450);
+    expect(bundleChunks(ids).map((c) => c.length)).toEqual([200, 200, 50]);
+    // The table reads elsewhere still chunk at 100.
+    expect(planChunks(ids.slice(0, 250)).map((c) => c.length)).toEqual([100, 100, 50]);
+    expect(PLAN_READ_CHUNK).toBe(100);
+  });
+
+  it('orders items in the bundle zone when no zone is given', async () => {
+    // The post at 13 Oct 20:00 UTC is 14 Oct in Kolkata: after the 13 Oct concept there.
+    const items = [
+      {
+        id: 'a-p',
+        plan_id: 'a',
+        kind: 'post',
+        position: 0,
+        title: null,
+        description: null,
+        post_id: 'a-post',
+        created_at: '1',
+        target_date: null,
+      },
+      {
+        id: 'a-c',
+        plan_id: 'a',
+        kind: 'concept',
+        position: 1,
+        title: 'C',
+        description: null,
+        post_id: null,
+        created_at: '1',
+        target_date: '2026-10-13',
+      },
+    ];
+    const posts = [{ id: 'a-post', stage: 'review', target_date: '2026-10-13T20:00:00Z' }];
+    const kolkata = bundleRpc({ timezone: 'Asia/Kolkata', items, posts });
+    const inZone = await readPlanBundles(kolkata.client, ['a'], undefined, undefined, 'ws');
+    expect(inZone.ok && inZone.data.get('a')?.items.map((i) => i.id)).toEqual(['a-c', 'a-p']);
+    // An explicit zone wins over the bundle's.
+    const utc = await readPlanBundles(kolkata.client, ['a'], undefined, 'UTC', 'ws');
+    expect(utc.ok && utc.data.get('a')?.items.map((i) => i.id)).toEqual(['a-p', 'a-c']);
+  });
+
+  it('a failed chunk fails the read; no workspace fails without a call', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: { message: 'workspace_member_only' } }));
+    const client = { rpc } as unknown as Client;
+    const failed = await readPlanBundles(client, ['a'], undefined, undefined, 'ws');
+    expect(!failed.ok && failed.error.code).toBe('workspace_member_only');
+    rpc.mockClear();
+    const none = await readPlanBundles(client, ['a']);
+    expect(none.ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+    expect((await readPlanBundles(client, [], undefined, undefined, 'ws')).ok).toBe(true);
+  });
+
+  it('readPlanScreen: ONE call carries counts, tiles, Also in and the last send', async () => {
+    const { client, calls } = bundleRpc({
+      thumbs: {
+        posts: { 'a-post': 'v-post' },
+        concepts: { 'a-c': { kind: 'image', versionId: 'v-c' } },
+      },
+      also_in: { 'a-post': ['Launch'] },
+      last_sent_at: '2026-10-11T09:00:00Z',
+    });
+    const result = await readPlanScreen(client, 'a', undefined, {
+      workspaceId: 'ws',
+      sentInChannelId: 'dm__ws__a__b',
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      fn: 'plan_bundle_read',
+      p_workspace_id: 'ws',
+      p_plan_ids: ['a'],
+      p_channel_id: 'dm__ws__a__b',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.commentCounts).toEqual({ 'a-c': 2 });
+    expect(result.data.thumbs).toEqual({ 'a-post': 'v-post' });
+    expect(result.data.conceptThumbs).toEqual({ 'a-c': { kind: 'image', versionId: 'v-c' } });
+    expect(result.data.alsoIn).toEqual({ 'a-post': ['Launch'] });
+    expect(result.data.lastSentAt).toBe('2026-10-11T09:00:00Z');
+    expect(result.data.lastChangedAt).toBe('2026-10-10T00:00:00Z');
+  });
+
+  it('readPlanScreen outside a chat sends no p_channel_id; lastSentAt is null', async () => {
+    const { client, calls } = bundleRpc();
+    const result = await readPlanScreen(client, 'a', undefined, { workspaceId: 'ws' });
+    expect(calls[0]).not.toHaveProperty('p_channel_id');
+    expect(result.ok && result.data.lastSentAt).toBeNull();
+  });
+
+  it('readPlanScreen: a hidden plan is not available (bundle null), no name read', async () => {
+    const { client } = bundleRpc();
+    const readNames = vi.fn(async () => ({ ok: true as const, data: [] }));
+    const result = await readPlanScreen(client, 'hidden', undefined, {
+      workspaceId: 'ws',
+      readNames,
+      approvers: () => ['u1'],
+    });
+    expect(result.ok && result.data.bundle).toBeNull();
+    expect(readNames).not.toHaveBeenCalled();
   });
 });
 

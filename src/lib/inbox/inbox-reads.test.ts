@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Database } from '@srtdio/schemas';
-import {
-  enrichNewRows,
-  fetchInboxSince,
-  fetchInboxUnreadCount,
-  fetchNewestInboxAt,
-  fetchUnreadMentionCount,
-} from '@/lib/inbox/inbox-reads';
+import { enrichNewRows, fetchInboxSince, fetchNewestInboxAt } from '@/lib/inbox/inbox-reads';
 import { toastFromEnriched, type InboxRow } from '@/lib/inbox/inbox-live';
 import { resetMentionNames } from '@/lib/chat/mentions';
 import { resetServerClock } from '@/lib/chat/bounded-window';
@@ -101,79 +95,10 @@ function fakeClient(tables: Record<string, QueryResult>): Parameters<typeof fetc
 }
 
 const okData = (data: Record<string, unknown>[]): QueryResult => ({ data, error: null });
-const okCount = (count: number): QueryResult => ({ count, error: null });
 const err = (message: string): QueryResult => ({ data: null, count: null, error: { message } });
 
 const inboxRow = (over: Partial<InboxEntryRow>): Record<string, unknown> =>
   row(over) as unknown as Record<string, unknown>;
-
-describe('fetchInboxUnreadCount', () => {
-  it('returns the HEAD count', async () => {
-    const client = fakeClient({ inbox_entries: okCount(7) });
-    const res = await fetchInboxUnreadCount(client, {
-      workspaceId: 'w1',
-      userId: 'u1',
-      nowIso: '2026-06-14T00:00:00.000Z',
-    });
-    expect(res.ok).toBe(true);
-    if (res.ok) expect(res.data).toBe(7);
-  });
-
-  it('treats a null count as zero', async () => {
-    const client = fakeClient({ inbox_entries: { count: null, error: null } });
-    const res = await fetchInboxUnreadCount(client, {
-      workspaceId: 'w1',
-      userId: 'u1',
-      nowIso: '2026-06-14T00:00:00.000Z',
-    });
-    expect(res.ok).toBe(true);
-    if (res.ok) expect(res.data).toBe(0);
-  });
-
-  it('fails closed on a query error', async () => {
-    const client = fakeClient({ inbox_entries: err('count boom') });
-    const res = await fetchInboxUnreadCount(client, {
-      workspaceId: 'w1',
-      userId: 'u1',
-      nowIso: '2026-06-14T00:00:00.000Z',
-    });
-    expect(res.ok).toBe(false);
-  });
-});
-
-describe('fetchUnreadMentionCount', () => {
-  it('returns the HEAD count', async () => {
-    const client = fakeClient({ inbox_entries: okCount(3) });
-    const res = await fetchUnreadMentionCount(client, {
-      workspaceId: 'w1',
-      userId: 'u1',
-      nowIso: '2026-06-14T00:00:00.000Z',
-    });
-    expect(res.ok).toBe(true);
-    if (res.ok) expect(res.data).toBe(3);
-  });
-
-  it('treats a null count as zero', async () => {
-    const client = fakeClient({ inbox_entries: { count: null, error: null } });
-    const res = await fetchUnreadMentionCount(client, {
-      workspaceId: 'w1',
-      userId: 'u1',
-      nowIso: '2026-06-14T00:00:00.000Z',
-    });
-    expect(res.ok).toBe(true);
-    if (res.ok) expect(res.data).toBe(0);
-  });
-
-  it('fails closed on a query error', async () => {
-    const client = fakeClient({ inbox_entries: err('mention count boom') });
-    const res = await fetchUnreadMentionCount(client, {
-      workspaceId: 'w1',
-      userId: 'u1',
-      nowIso: '2026-06-14T00:00:00.000Z',
-    });
-    expect(res.ok).toBe(false);
-  });
-});
 
 describe('fetchInboxSince', () => {
   it('returns the raw rows', async () => {
@@ -479,67 +404,6 @@ describe('enrichNewRows', () => {
     const spec = toastFromEnriched(res);
     expect(spec?.title).toBe('Asha Rao and 1 other approved on Q3 Launch');
     expect(spec?.actorAvatarUrl).toBe('https://cdn/a.png');
-  });
-});
-
-describe('merged counts: the Notifications badge and the Mentions chip count every row', () => {
-  function recording(): {
-    client: Parameters<typeof fetchInboxUnreadCount>[0];
-    calls: { method: string; args: unknown[] }[];
-  } {
-    const calls: { method: string; args: unknown[] }[] = [];
-    const self: Record<string, unknown> = {};
-    for (const method of [
-      'select',
-      'eq',
-      'is',
-      'or',
-      'not',
-      'gt',
-      'gte',
-      'lt',
-      'lte',
-      'order',
-      'limit',
-      'in',
-    ]) {
-      self[method] = (...args: unknown[]) => {
-        calls.push({ method, args });
-        return self;
-      };
-    }
-    self.then = (onfulfilled: (v: QueryResult) => unknown) =>
-      Promise.resolve({ count: 7, error: null }).then(onfulfilled);
-    const client = { from: () => self };
-    return { client: client as unknown as Parameters<typeof fetchInboxUnreadCount>[0], calls };
-  }
-  const params = { workspaceId: 'w1', userId: 'u1', nowIso: '2026-10-03T00:00:00.000Z' };
-  const SNOOZE_OR = `snoozed_until.is.null,snoozed_until.lte.${params.nowIso}`;
-
-  it('the badge counts every unread, non-deleted, non-snoozed row: the old bell rows too', async () => {
-    const { client, calls } = recording();
-    const res = await fetchInboxUnreadCount(client, params);
-    expect(res).toEqual({ ok: true, data: 7 });
-    expect(calls).toEqual([
-      { method: 'select', args: ['id', { count: 'exact', head: true }] },
-      { method: 'eq', args: ['workspace_id', 'w1'] },
-      { method: 'eq', args: ['user_id', 'u1'] },
-      { method: 'is', args: ['read_at', null] },
-      { method: 'is', args: ['deleted_at', null] },
-      { method: 'or', args: [SNOOZE_OR] },
-    ]);
-    // No event_type or entity filter: reminders, scheduled sends, plan and
-    // task alerts and chat mentions all count.
-    expect(calls.some((c) => c.method === 'not')).toBe(false);
-  });
-
-  it('the Mentions count includes chat mentions (event_type mention, any entity)', async () => {
-    const { client, calls } = recording();
-    await fetchUnreadMentionCount(client, params);
-    expect(calls).toContainEqual({ method: 'eq', args: ['event_type', 'mention'] });
-    expect(calls.filter((c) => c.method === 'or')).toEqual([{ method: 'or', args: [SNOOZE_OR] }]);
-    expect(calls.some((c) => c.method === 'not')).toBe(false);
-    expect(calls.some((c) => c.args[0] === 'entity_type')).toBe(false);
   });
 });
 

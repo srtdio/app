@@ -1,19 +1,22 @@
 // Data access for the inbox (Notifications) live layer. Every export returns a Result
 // and never throws or returns null, so the provider can branch instead of catch.
-// These are plain RLS-scoped PostgREST selects (each member sees only their own
-// rows), NOT @srtdio/rpc procs, so no p_trace_id is involved. Enrichment is
+// The badge counts are one activity_badge_read rpc (explicit p_trace_id); the
+// rest are plain RLS-scoped PostgREST selects (each member sees only their own
+// rows), so no p_trace_id is involved there. Enrichment is
 // batched (no N+1) and degrades each field to null on a failed sub-query, exactly
 // like the Activity page's own loader, and names people through the shared name
 // registry (people-names.ts): full name, or "Former member".
 
-import type { Client, Result } from '@srtdio/rpc';
-import { MENTION_EVENT_TYPE, mapEntry } from '@/components/pages/activity/data';
+import { withTraceHeader, type Client, type Result } from '@srtdio/rpc';
+import type { Database } from '@srtdio/schemas';
+import { mapEntry } from '@/components/pages/activity/data';
 import { READ_TIMEOUT_MS, readMentionProfiles } from '@/lib/chat-reads';
 import { mentionIds } from '@/lib/chat/mentions';
 import {
   actionKey,
   eventVerb,
   pickNewest,
+  POLL_CHANGE_SOURCE,
   type EnrichedNew,
   type InboxRow,
   type ToastUpdate,
@@ -22,6 +25,8 @@ import { BELL_CHAT_ENTITY, BELL_MENTION_EVENT, withoutBellEntries } from '@/lib/
 import { personAvatar, personMentionLabel, personName, resolvePeople } from '@/lib/people-names';
 import { readBoundedPage, upperFromNow, type TimeBounds } from '@/lib/chat/bounded-window';
 import { readInboxOldest } from '@/lib/inbox/inbox-oldest';
+import { INBOX_CHANGED_EVENT, SIGNOUT_EVENT } from '@/lib/events';
+import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
 
 const SELECT_COLS =
   'id, workspace_id, user_id, actor_user_id, event_type, entity_type, entity_id, scope, tier, created_at, read_at, snoozed_until, payload';
@@ -34,49 +39,120 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-/**
- * HEAD count of the caller's actionable unread: unread, not soft-deleted, and not
- * currently snoozed (no snooze, or a snooze that has already elapsed). Every row
- * counts, the chat, plan and task alerts included: Notifications shows them all.
- * One round trip, no rows transferred.
- */
-export async function fetchInboxUnreadCount(
-  client: Client,
-  params: { workspaceId: string; userId: string; nowIso: string },
-): Promise<Result<number>> {
-  const res = await client
-    .from('inbox_entries')
-    .select('id', { count: 'exact', head: true })
-    .eq('workspace_id', params.workspaceId)
-    .eq('user_id', params.userId)
-    .is('read_at', null)
-    .is('deleted_at', null)
-    .or(`snoozed_until.is.null,snoozed_until.lte.${params.nowIso}`);
-  if (res.error) return fail(`fetchInboxUnreadCount: ${res.error.message}`);
-  return { ok: true, data: res.count ?? 0 };
+/** The caller's activity badge in one workspace: actionable unread, and the mentions among them. */
+export interface ActivityBadge {
+  /** Unread, not soft-deleted, not currently snoozed rows (every kind, chat and plan alerts included). */
+  unread: number;
+  /** The same set narrowed to mentions (post, brief and chat alike): the Mentions chip count. */
+  mentions: number;
+}
+
+type Functions = Database['public']['Functions'];
+
+function toCount(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
 }
 
 /**
- * HEAD count of the caller's actionable unread mentions: identical to
- * fetchInboxUnreadCount (unread, not soft-deleted, not currently snoozed) but
- * narrowed to event_type='mention': post, brief and chat mentions alike. Drives
- * the Mentions chip count. One round trip, no rows transferred.
+ * One activity_badge_read rpc: the unread badge and the unread-mention count
+ * together, in one round trip. The actor is auth.uid() server side (no user id
+ * is sent); the trace id is the explicit p_trace_id. The proc always returns
+ * one row; an empty answer reads as zero for both. Never throws.
  */
-export async function fetchUnreadMentionCount(
+export async function fetchActivityBadge(
   client: Client,
-  params: { workspaceId: string; userId: string; nowIso: string },
-): Promise<Result<number>> {
-  const res = await client
-    .from('inbox_entries')
-    .select('id', { count: 'exact', head: true })
-    .eq('workspace_id', params.workspaceId)
-    .eq('user_id', params.userId)
-    .eq('event_type', MENTION_EVENT_TYPE)
-    .is('read_at', null)
-    .is('deleted_at', null)
-    .or(`snoozed_until.is.null,snoozed_until.lte.${params.nowIso}`);
-  if (res.error) return fail(`fetchUnreadMentionCount: ${res.error.message}`);
-  return { ok: true, data: res.count ?? 0 };
+  params: { workspaceId: string; traceId: string },
+): Promise<Result<ActivityBadge>> {
+  const args: Functions['activity_badge_read']['Args'] = {
+    p_trace_id: params.traceId,
+    p_workspace_id: params.workspaceId,
+  };
+  try {
+    const res = await withTraceHeader(client.rpc('activity_badge_read', args), args.p_trace_id);
+    if (res.error) return fail(`fetchActivityBadge: ${res.error.message}`);
+    return { ok: true, data: mapActivityBadge(res.data) };
+  } catch (err: unknown) {
+    return fail(`fetchActivityBadge: ${String(err)}`);
+  }
+}
+
+/** Map the proc's rows (one expected) to the two counts; anything else reads as zero. */
+export function mapActivityBadge(data: unknown): ActivityBadge {
+  const row: unknown = Array.isArray(data) ? data[0] : data;
+  if (typeof row !== 'object' || row === null) return { unread: 0, mentions: 0 };
+  const rec = row as { unread?: unknown; mentions?: unknown };
+  return { unread: toCount(rec.unread), mentions: toCount(rec.mentions) };
+}
+
+// The badge read is shared within this tab session (session-read.ts: in memory
+// only, never persisted). Every consumer of one refresh (the shell's count, the
+// Activity page's Mentions chip, the bell's prefetch) joins one rpc:
+//  - a join (refresh: false) takes the running or fresh read, else starts one;
+//  - a refresh (refresh: true) drops the held read and starts a new one, unless
+//    a refresh for the same key already started in this same task, which it
+//    joins (a write's own reload and the change event it dispatches are one
+//    refresh, so they cost one rpc);
+//  - an inbox change (INBOX_CHANGED_EVENT) drops the held read, except one a
+//    refresh started in this task, and except for the shell poll's own event
+//    (the tick read the badge already).
+// Signout and workspace-data-changed drop it through session-read itself.
+
+/** The keys read this session (the change event drops exactly these). */
+const badgeKeys = new Set<string>();
+/** The keys a refresh started in the current task (cleared at its end). */
+const refreshedThisTask = new Set<string>();
+
+/** The session read key of the activity badge for one user in one workspace. */
+export function activityBadgeKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'activity-badge');
+}
+
+function markRefreshed(key: string): void {
+  if (refreshedThisTask.size === 0) queueMicrotask(() => refreshedThisTask.clear());
+  refreshedThisTask.add(key);
+}
+
+/** Drop every held badge read but the ones a refresh started in this task. */
+export function invalidateActivityBadge(): void {
+  for (const key of [...badgeKeys]) {
+    if (refreshedThisTask.has(key)) continue;
+    invalidateReads(key);
+    badgeKeys.delete(key);
+  }
+}
+
+/**
+ * The activity badge for the signed-in user (userId keys the session cache
+ * only; it is never sent) in one workspace, shared as above. A failed read is
+ * never kept, so the next caller retries. Never throws.
+ */
+export function readActivityBadge(
+  client: Client,
+  params: { userId: string; workspaceId: string; traceId: string; refresh: boolean },
+): Promise<Result<ActivityBadge>> {
+  const key = activityBadgeKey(params.userId, params.workspaceId);
+  if (params.refresh && !refreshedThisTask.has(key)) {
+    invalidateReads(key);
+    markRefreshed(key);
+  }
+  badgeKeys.add(key);
+  return sharedRead(
+    key,
+    () => fetchActivityBadge(client, { workspaceId: params.workspaceId, traceId: params.traceId }),
+    { isOk: (result) => result.ok },
+  );
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(INBOX_CHANGED_EVENT, (event: Event) => {
+    if (event instanceof CustomEvent && event.detail === POLL_CHANGE_SOURCE) return;
+    invalidateActivityBadge();
+  });
+  window.addEventListener(SIGNOUT_EVENT, () => {
+    badgeKeys.clear();
+    refreshedThisTask.clear();
+  });
 }
 
 /**

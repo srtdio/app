@@ -12,6 +12,8 @@ const env = vi.hoisted(() => ({
   side: 'agency' as 'agency' | 'client',
   guide: 'off' as 'off' | 'step',
   data: null as PlanTabData | null,
+  moreBusy: false,
+  loadMore: (): void => {},
 }));
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
@@ -36,6 +38,8 @@ vi.mock('@/components/pages/plan-tab/use-plan-tab-data', () => ({
       env.data !== null ? { status: 'ready', data: env.data } : { status: 'loading', data: null },
     reload: async () => {},
     retry: () => {},
+    loadMore: env.loadMore,
+    moreBusy: env.moreBusy,
   }),
 }));
 vi.mock('@/components/chat/PlanComposeScreen', () => ({
@@ -45,6 +49,7 @@ vi.mock('@/components/pages/plan-tab/PlanTabAdd', () => ({ PlanTabAdd: () => nul
 vi.mock('@/components/chat/PlanMoveSheet', () => ({ PlanKeepApprovalSheet: () => null }));
 vi.mock('@/components/media/Thumbnail', () => ({ Thumbnail: () => null }));
 
+import { PlanTabLoadMore } from '@/components/pages/plan-tab/PlanTabList';
 import { ToastProvider } from '@/components/ui/toast';
 import { PlanTabPage, entryRoute } from '@/components/pages/PlanTabPage';
 import { civilToday } from '@/lib/plan-week';
@@ -93,6 +98,8 @@ const DATA: PlanTabData = {
   posts: [],
   thumbs: { posts: {}, concepts: {} },
   anyPlan: true,
+  timeZone: 'UTC',
+  nextCursor: null,
 };
 
 function render(): string {
@@ -141,6 +148,77 @@ describe('PlanTabPage', () => {
     expect(html).toContain('data-plan-tab-card="shared"');
     expect(html).not.toContain('data-plan-tab-card="draft"');
     expect(html).not.toContain('data-plan-tab-new');
+  });
+
+  it('phone: Load more ends the list while more plans remain; Loading while busy; none when all are in', () => {
+    Object.assign(env, { desktop: false, side: 'agency', data: DATA, moreBusy: false });
+    expect(render()).not.toContain('data-plan-tab-load-more');
+    env.data = { ...DATA, nextCursor: { startsOn: TODAY, id: 'draft' } };
+    let html = render();
+    expect(html).toContain('data-plan-tab-load-more');
+    expect(html).toContain('>Load more</button>');
+    // The control comes after the last card.
+    expect(html.indexOf('data-plan-tab-load-more')).toBeGreaterThan(
+      html.lastIndexOf('data-plan-tab-card'),
+    );
+    // The shared Button: 44 tall, tokens only.
+    expect(html).toMatch(/<button class="[^"]*min-h-\[44px\][^"]*"[^>]*data-plan-tab-load-more=""/);
+    env.moreBusy = true;
+    html = render();
+    expect(html).toContain('>Loading</button>');
+    expect(html).toContain('data-plan-tab-load-more="" disabled=""');
+    env.moreBusy = false;
+    env.data = DATA;
+    expect(render()).not.toContain('data-plan-tab-load-more');
+  });
+
+  it('laptop: 13 plans in range show 12 and Load more under the calendar; after the tap 13 and no control', () => {
+    const many = (n: number): PlanBundle[] =>
+      Array.from({ length: n }, (_, k) =>
+        bundle(plan(`p${String(k).padStart(2, '0')}`, `Plan ${k + 1}`, 'client'), []),
+      );
+    const first: PlanTabData = {
+      ...DATA,
+      bundles: many(12),
+      nextCursor: { startsOn: TODAY, id: 'p00' },
+    };
+    Object.assign(env, { desktop: true, side: 'agency', data: first, moreBusy: false });
+    let html = render();
+    expect(html.match(/data-plan-tab-chip="p\d\d"/g)).toHaveLength(12);
+    expect(html).toContain('>Load more</button>');
+    expect(html).toMatch(/<button class="[^"]*min-h-\[44px\][^"]*"[^>]*data-plan-tab-load-more=""/);
+    // At the end of the laptop view: after the grid.
+    expect(html.indexOf('data-plan-tab-load-more')).toBeGreaterThan(
+      html.indexOf('data-plan-tab-month'),
+    );
+    env.moreBusy = true;
+    html = render();
+    expect(html).toContain('data-plan-tab-load-more="" disabled=""');
+    expect(html).toContain('>Loading</button>');
+    // The tap's page landed: every plan, no cursor, no control.
+    Object.assign(env, {
+      moreBusy: false,
+      data: { ...first, bundles: many(13), nextCursor: null },
+    });
+    html = render();
+    expect(html.match(/data-plan-tab-chip="p\d\d"/g)).toHaveLength(13);
+    expect(html).not.toContain('data-plan-tab-load-more');
+  });
+
+  it("Load more: the tap is the hook's loadMore; its label follows busy", () => {
+    const onMore = vi.fn();
+    const el = PlanTabLoadMore({ more: { busy: false, onMore } });
+    const props = el.props as { onClick: () => void; disabled: boolean; children: string };
+    props.onClick();
+    expect(onMore).toHaveBeenCalledTimes(1);
+    expect(props.disabled).toBe(false);
+    expect(props.children).toBe('Load more');
+    const busy = PlanTabLoadMore({ more: { busy: true, onMore } }).props as {
+      disabled: boolean;
+      children: string;
+    };
+    expect(busy.disabled).toBe(true);
+    expect(busy.children).toBe('Loading');
   });
 
   it('the zero state: line 2 until onboarding is done; no create button of its own', () => {

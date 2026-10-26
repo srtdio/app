@@ -196,6 +196,14 @@ function countMessageReads(page: Page): () => number {
   let n = 0;
   page.on('request', (request) => {
     const url = new URL(request.url());
+    // A cold open's latest page comes in chat_open_bundle without p_since.
+    if (request.method() === 'POST' && url.pathname === '/rest/v1/rpc/chat_open_bundle') {
+      const body: unknown = request.postDataJSON();
+      const since =
+        typeof body === 'object' && body !== null ? (body as { p_since?: unknown }).p_since : null;
+      if (since === undefined || since === null) n += 1;
+      return;
+    }
     if (request.method() !== 'GET' || url.pathname !== '/rest/v1/chat_messages') return;
     if (url.searchParams.get('select') === 'shared_plan_ids') return;
     n += 1;

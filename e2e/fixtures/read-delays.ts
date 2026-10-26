@@ -8,6 +8,8 @@ import type { Page } from '@playwright/test';
 /** What one Supabase read is, by table, select and method. Pure. */
 export function readName(method: string, url: URL): string {
   const path = url.pathname;
+  // The chat open's one call carries the messages page: it is delayed as the page.
+  if (path === '/rest/v1/rpc/chat_open_bundle') return 'chat_messages';
   if (path.startsWith('/rest/v1/rpc/')) return `rpc ${path.slice('/rest/v1/rpc/'.length)}`;
   const table = path.replace('/rest/v1/', '');
   const p = url.searchParams;
