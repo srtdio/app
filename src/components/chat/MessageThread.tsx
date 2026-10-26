@@ -692,6 +692,31 @@ export function openHoldSettled(parts: {
   return parts.marks && parts.side && parts.ticker && parts.cards && parts.tasks !== false;
 }
 
+/**
+ * The jump pill's next state, or null to leave it. Decided once the first
+ * unread is known and the open pin has landed: while the list still means to
+ * stick to the bottom but is not there yet (the pin is pending), the divider's
+ * place is not final, so nothing settles; the pin's own scroll event asks
+ * again. Pure.
+ */
+export function nextPill(input: {
+  pill: 'unknown' | 'show' | 'done';
+  unread: { kind: 'loaded' | 'beyond' } | null | undefined;
+  where: 'above' | 'visible' | 'below' | 'missing';
+  pinPending: boolean;
+}): 'show' | 'done' | null {
+  const { pill, unread, where } = input;
+  if (pill === 'done' || unread === undefined) return null;
+  if (unread === null) return 'done';
+  if (input.pinPending) return null;
+  if (where === 'visible') return 'done';
+  if (pill === 'show') return null;
+  if (unread.kind === 'beyond') return 'show';
+  if (where === 'above') return 'show';
+  if (where === 'below') return 'done';
+  return null;
+}
+
 /** How long a page row waits for its task lines before it paints without them. */
 export const TASK_LINES_WAIT_MS = 2_000;
 
@@ -4114,20 +4139,15 @@ function ThreadBody(
     return 'visible';
   };
   const updatePill = (): void => {
-    if (pill === 'done' || unread === undefined) return;
-    if (unread === null) {
-      setPill('done');
-      return;
-    }
-    const where = dividerWhere();
-    if (where === 'visible') {
-      setPill('done');
-      return;
-    }
-    if (pill === 'show') return;
-    if (unread.kind === 'beyond') setPill('show');
-    else if (where === 'above') setPill('show');
-    else if (where === 'below') setPill('done');
+    const list = listRef.current;
+    const next = nextPill({
+      pill,
+      unread,
+      where: dividerWhere(),
+      // The open pin has not landed yet: the divider's place is not final.
+      pinPending: stickRef.current && list != null && bottomDistance(list) > 1,
+    });
+    if (next !== null) setPill(next);
   };
   const updatePillRef = useRef(updatePill);
   updatePillRef.current = updatePill;
