@@ -687,11 +687,7 @@ describe('runPurge: call budget (every Supabase, R2 and Agora call counts)', () 
     const r2 = fakeStorage({ 'assets-big': keys('o', 2000) }, 1000);
     const agora = fakeAgora();
     const summary = await runPurge(deps({ db: db.db, storage: r2.storage, agora: agora.agora }));
-    const total =
-      db.calls() +
-      agora.calls() +
-      r2.deleted.length +
-      r2.listCursors.length;
+    const total = db.calls() + agora.calls() + r2.deleted.length + r2.listCursors.length;
     expect(total).toBe(RUN_CALL_BUDGET);
     expect(summary.calls).toBe(RUN_CALL_BUDGET);
     expect(summary.budgetExhausted).toBe(true);
