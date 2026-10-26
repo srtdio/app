@@ -26,7 +26,9 @@ import { planDraftRows } from '@srtdio/rpc';
 import { abortable, READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
 import type { Precheck } from '@/lib/asset-upload';
 import type { AttachmentUploader } from '@/lib/chat/attachments';
+import { PLAN_BUNDLE_CHUNK, readPlanBundleRpc, type PlanBundleRead } from '@/lib/chat/plan-bundle';
 import { openPlans } from '@/lib/chat/status-bar';
+import { getPrefetchContext } from '@/lib/prefetch-context';
 import { civilDayOf, civilDaysBetween, formatCivilDayHeader } from '@/lib/plan-week';
 
 /** Ids per IN read (the PostgREST URL stays short). */
@@ -283,48 +285,65 @@ export function sortPlanItemsByDate(
 }
 
 /**
- * Read plans by id with their items, reviews, draft rows and post stages,
- * each a select by an id list (chunked at 100), never an embed. The plans,
- * their items and their draft rows start together (all keyed by plan id);
- * the items' reviews and the post items' stages start the moment the items
- * are in (not after the plans or the draft rows). A plan absent under RLS is
- * absent from the map (its items and draft rows are dropped). Never throws.
+ * The bundles of one plan_bundle_read answer: the draft rows merged in as
+ * post items, everything grouped by plan, items ordered in `timeZone` (the
+ * bundle's own workspace zone when absent). Pure.
+ */
+export function bundlesOfRead(read: PlanBundleRead, timeZone?: string): Map<string, PlanBundle> {
+  return assembleBundles(
+    read.plans,
+    mergeDraftRows(read.items, read.draftRows),
+    read.reviews,
+    read.posts,
+    timeZone ?? read.timezone,
+  );
+}
+
+/**
+ * Read plans by id with their items, reviews, draft rows and post stages:
+ * one plan_bundle_read per PLAN_BUNDLE_CHUNK ids (all chunks at once). A plan
+ * absent under RLS (or of another workspace) is absent from the map. The
+ * workspace is `workspaceId`, else the shell's (getPrefetchContext); without
+ * either the read fails. Items are ordered in `timeZone`, else the bundle's
+ * workspace zone. Never throws.
  */
 export async function readPlanBundles(
   client: Client,
   planIds: readonly string[],
   signal?: AbortSignal,
-  /** The workspace zone the items are ordered in (post days are read in it). */
-  timeZone = 'UTC',
+  /** The zone the items are ordered in (post days are read in it); the workspace's when absent. */
+  timeZone?: string,
+  /** The plans' workspace; the shell's active workspace when absent. */
+  workspaceId?: string,
 ): Promise<Result<Map<string, PlanBundle>>> {
   try {
     const ids = [...new Set(planIds)];
     if (ids.length === 0) return { ok: true, data: new Map() };
-    const [plans, drafts, items] = await Promise.all([
-      selectIn<PlanRow>(client, 'plans', PLAN_COLUMNS, 'id', ids, signal),
-      readDraftRows(client, ids),
-      readItemsWithReviews(client, ids, signal, () => Promise.resolve(null)),
-    ]);
-    if (!plans.ok) return plans;
-    if (!drafts.ok) return drafts;
-    if (!items.ok) return items;
-    const readable = new Set(plans.data.map((p) => p.id));
-    return {
-      ok: true,
-      data: assembleBundles(
-        plans.data,
-        mergeDraftRows(
-          items.data.items.filter((i) => readable.has(i.plan_id)),
-          drafts.data.filter((d) => readable.has(d.plan_id)),
-        ),
-        items.data.reviews,
-        items.data.stages,
-        timeZone,
+    const workspace = workspaceId ?? getPrefetchContext()?.workspaceId;
+    if (workspace === undefined) return fail('plan_bundle_read: no workspace');
+    const reads = await Promise.all(
+      bundleChunks(ids).map((chunk) =>
+        readPlanBundleRpc(client, { workspaceId: workspace, planIds: chunk }, signal),
       ),
-    };
+    );
+    const out = new Map<string, PlanBundle>();
+    for (const read of reads) {
+      if (!read.ok) return read;
+      for (const [id, bundle] of bundlesOfRead(read.data, timeZone)) out.set(id, bundle);
+    }
+    return { ok: true, data: out };
   } catch (error) {
     return fail(String(error));
   }
+}
+
+/** Split ids into by-id plan_bundle_read calls of at most PLAN_BUNDLE_CHUNK. Pure. */
+export function bundleChunks(ids: readonly string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += PLAN_BUNDLE_CHUNK) {
+    out.push(ids.slice(i, i + PLAN_BUNDLE_CHUNK));
+  }
+  return out;
 }
 
 /**

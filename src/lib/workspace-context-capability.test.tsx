@@ -3,10 +3,11 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// A controllable proc_capability: each call returns a deferred the test settles,
-// so a read that lands after a user switch is observable.
+// A controllable capabilities_for_workspace: each call returns a deferred the
+// test settles, so a read that lands after a user switch is observable.
 interface Deferred {
-  args: { p_workspace_id: string; p_capability: string };
+  name: string;
+  args: { p_trace_id: string; p_workspace_id: string };
   resolve: (value: { data: unknown; error: { message: string } | null }) => void;
 }
 const { calls, who } = vi.hoisted(() => ({
@@ -16,9 +17,9 @@ const { calls, who } = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
-    rpc: (_name: string, args: Deferred['args']) =>
+    rpc: (name: string, args: Deferred['args']) =>
       new Promise((resolve) => {
-        calls.push({ args, resolve });
+        calls.push({ name, args, resolve });
       }),
   },
 }));
@@ -33,6 +34,8 @@ import { SIGNOUT_EVENT } from '@/lib/events';
 import {
   capabilityKey,
   clearCapabilityCache,
+  mapCapabilityRows,
+  readWorkspaceCapability,
   useWorkspaceCapability,
 } from '@/lib/workspace-context-capability';
 
@@ -74,13 +77,21 @@ function render(): void {
   });
 }
 
+function rows(briefCreate: boolean): { capability: string; allowed: boolean }[] {
+  return [
+    { capability: 'brief.create', allowed: briefCreate },
+    { capability: 'post.create', allowed: true },
+  ];
+}
+
 function last(): boolean | null | undefined {
   return seen[seen.length - 1];
 }
 
-async function settle(index: number, data: unknown): Promise<void> {
+// Settle read `index` with brief.create allowed (true) or not (false).
+async function settle(index: number, briefCreate: boolean): Promise<void> {
   await act(async () => {
-    calls[index]?.resolve({ data, error: null });
+    calls[index]?.resolve({ data: rows(briefCreate), error: null });
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
   });
 }
@@ -231,5 +242,82 @@ describe('useWorkspaceCapability', () => {
     root = null;
     render();
     expect(calls).toHaveLength(2);
+  });
+});
+
+describe('one capabilities_for_workspace read per workspace', () => {
+  // Five capability checks on one page (BriefDetailPage asks four, the shell one).
+  function Page() {
+    seen.push(useWorkspaceCapability('brief.create'));
+    seen.push(useWorkspaceCapability('brief.close'));
+    seen.push(useWorkspaceCapability('brief.close_own'));
+    seen.push(useWorkspaceCapability('post.create'));
+    seen.push(useWorkspaceCapability('workspace.manage_settings'));
+    return null;
+  }
+
+  it('every check on a page reads from one rpc with an explicit trace id', async () => {
+    who.userId = 'u-a';
+    act(() => {
+      host = document.createElement('div');
+      document.body.appendChild(host);
+      root = createRoot(host);
+      root.render(<Page />);
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.name).toBe('capabilities_for_workspace');
+    expect(calls[0]?.args.p_workspace_id).toBe('ws-1');
+    expect(calls[0]?.args.p_trace_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(Object.keys(calls[0]?.args ?? {}).sort()).toEqual(['p_trace_id', 'p_workspace_id']);
+    await settle(0, true);
+    // brief.create and post.create allowed; the three it does not name are false.
+    expect(seen.slice(-5)).toEqual([true, false, false, true, false]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('another workspace is its own read', async () => {
+    who.userId = 'u-a';
+    render();
+    await settle(0, true);
+    who.workspaceId = 'ws-2';
+    render();
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.args.p_workspace_id).toBe('ws-2');
+  });
+
+  it('readWorkspaceCapability answers from the cached set without a read', async () => {
+    who.userId = 'u-a';
+    render();
+    await settle(0, false);
+    await expect(readWorkspaceCapability('u-a', 'ws-1', 'post.create')).resolves.toBe(true);
+    await expect(readWorkspaceCapability('u-a', 'ws-1', 'brief.create')).resolves.toBe(false);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('a failed read resolves null and is not cached: the next ask reads again', async () => {
+    const first = readWorkspaceCapability('u-a', 'ws-1', 'brief.create');
+    expect(calls).toHaveLength(1);
+    calls[0]?.resolve({ data: null, error: { message: 'boom' } });
+    await expect(first).resolves.toBeNull();
+    const second = readWorkspaceCapability('u-a', 'ws-1', 'brief.create');
+    expect(calls).toHaveLength(2);
+    calls[1]?.resolve({ data: rows(true), error: null });
+    await expect(second).resolves.toBe(true);
+  });
+});
+
+describe('mapCapabilityRows', () => {
+  it('keeps only allowed capabilities', () => {
+    const set = mapCapabilityRows([
+      { capability: 'a', allowed: true },
+      { capability: 'b', allowed: false },
+      { capability: 'c', allowed: null },
+    ]);
+    expect([...set]).toEqual(['a']);
+  });
+
+  it('reads no rows (or a bad answer) as nothing allowed', () => {
+    expect(mapCapabilityRows([]).size).toBe(0);
+    expect(mapCapabilityRows(null).size).toBe(0);
   });
 });

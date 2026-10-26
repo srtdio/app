@@ -80,7 +80,7 @@ export function isInvalidMention(error: Pick<CommentError, 'code'>): boolean {
   return error.code === 'invalid_mention';
 }
 
-export function fromDomainError(error: DomainError): CommentError {
+function fromDomainError(error: DomainError): CommentError {
   if (error.code === 'invalid_mention') {
     return invalidMentionError(error.message, parseInvalidMentionDetail(error.details));
   }
