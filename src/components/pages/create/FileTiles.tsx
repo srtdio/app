@@ -236,7 +236,7 @@ export function FileTiles({
           {...(tile.failed ? { 'data-failed': '' } : {})}
           aria-label={tile.failed ? `${tile.name} didn't upload` : `Uploading ${tile.name}`}
           className={cn(
-            'relative h-16 w-16 shrink-0 overflow-hidden rounded-md border bg-panel-3',
+            'relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-panel-3',
             tile.failed ? 'border-bad' : 'border-border',
           )}
         >

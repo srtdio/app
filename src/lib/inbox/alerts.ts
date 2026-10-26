@@ -320,7 +320,7 @@ export function failureInPlainWords(reason: string | null): string {
   if (/exceeds 5000/i.test(r)) return 'The message is too long';
   if (/no body, attachments/i.test(r)) return 'The message was empty';
   if (/reply target/i.test(r)) return 'The message it replied to is gone';
-  return 'Something went wrong when sending';
+  return "Couldn't send. Try again.";
 }
 
 /** A previewed chat message. */

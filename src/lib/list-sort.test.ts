@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  POST_SORT_OPTIONS,
   filterByFields,
   filterByTitle,
   filterByWindow,
@@ -379,5 +380,16 @@ describe('filterByFields (Pipeline search scope)', () => {
     const platformOnly = filterByFields(posts, 'youtube', fields);
     expect(captionOnly).toHaveLength(1);
     expect(platformOnly).toHaveLength(1);
+  });
+});
+
+describe('POST_SORT_OPTIONS labels', () => {
+  it('reads Newest first, Oldest first, Due date; values unchanged', () => {
+    expect(POST_SORT_OPTIONS.map((o) => o.label)).toEqual([
+      'Newest first',
+      'Oldest first',
+      'Due date',
+    ]);
+    expect(POST_SORT_OPTIONS.map((o) => o.value)).toEqual(['updated', 'oldest', 'target']);
   });
 });

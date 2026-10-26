@@ -10,6 +10,7 @@ import {
   type DecisionModel,
 } from '@/components/pages/pcs/PostDecisionBar';
 import { visibleStageActions } from '@/components/pages/pcs/stage-actions';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 
 // T12 / FN8 / flow B 30 / 33: the decision row, phone bar and laptop row.
 // Hookless trees, walked in node.
@@ -173,7 +174,8 @@ describe('41. a failed tap shows once, inside the row that was tapped', () => {
       busy: false,
       error: "Couldn't do that. Try again.",
     });
-    const alerts = all(tree).filter((el) => el.props.role === 'alert');
+    // The alert box is ui/ErrorNote (role="alert" inside it).
+    const alerts = all(tree).filter((el) => el.type === ErrorNote);
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.props.children).toBe("Couldn't do that. Try again.");
     expect(decisionBarSpace(approver('client'), 'x')).toBeGreaterThan(

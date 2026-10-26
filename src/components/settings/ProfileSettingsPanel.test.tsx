@@ -457,6 +457,12 @@ describe('tokens', () => {
     expect(badge).toContain('h-11');
     expect(badge).toContain('w-11');
     expect(badge).toContain('rounded-full');
+    // A 32px badge with a 2px canvas ring, overlapping the avatar edge by 4px.
+    expect(badge).toContain('absolute -bottom-1 -right-1');
+    expect(badge).toContain(
+      'flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg ring-2 ring-bg',
+    );
+    expect(badge).toContain('width="16"');
     const actions = renderToStaticMarkup(
       <PhotoPickActions busy={false} onUse={() => {}} onCancel={() => {}} />,
     );

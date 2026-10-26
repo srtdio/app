@@ -94,7 +94,7 @@ describe('glowTarget (arrival tint)', () => {
     // Fading: a transition back to the row's own background.
     expect(el.style.transition).toContain('background-color');
     expect(el.style.backgroundColor).toBe('');
-    vi.advanceTimersByTime(DUR_SLOW_MS * 3);
+    vi.advanceTimersByTime(DUR_SLOW_MS);
     expect(el.hasAttribute('data-jump-glow')).toBe(false);
     expect(el.style.transition).toBe('');
   });

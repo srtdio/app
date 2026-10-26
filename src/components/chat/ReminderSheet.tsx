@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconAlarmClock, IconChevronRight, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -71,7 +72,7 @@ export function ReminderOptions(props: {
       {props.preview !== null ? (
         <p
           data-reminder-preview=""
-          className="mb-2 truncate rounded-md bg-panel-2 px-3 py-2 text-base text-fg-2"
+          className="mb-2 truncate rounded-lg bg-panel-2 px-3 py-2 text-base text-fg-2"
         >
           {props.preview}
         </p>
@@ -101,24 +102,24 @@ export function ReminderOptions(props: {
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
               Date
-              <input
+              <Input
                 type="date"
                 aria-label="Date"
                 value={date}
                 min={dateInputValue(now)}
                 max={dateInputValue(new Date(now.getTime() + MAX_LEAD_MS))}
                 onChange={(event) => setDate(event.target.value)}
-                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-input text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:text-base"
+                className="min-w-0 font-mono"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
               Time
-              <input
+              <Input
                 type="time"
                 aria-label="Time"
                 value={time}
                 onChange={(event) => setTime(event.target.value)}
-                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-input text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:text-base"
+                className="min-w-0 font-mono"
               />
             </label>
           </div>

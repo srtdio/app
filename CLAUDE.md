@@ -91,9 +91,12 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Roles: page title 3xl/600; screen header lg/600; section label sm/600 uppercase tracking-[0.06em] fg-2; card title base/500; body base fg; meta sm fg-3, meta only, never copy or controls.
 - Buttons: only Button / IconButton / Chip from src/components/ui. 44 tall. Variants primary secondary ghost link success danger; shape round for the composer.
 - Icons: only src/components/ui/icons.tsx, stroke 1.7, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
-- Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots.
+- Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots. No text-white or bg-white; on solid fills use text-accent-fg.
 - Contrast: every text token passes 4.5:1 on bg and panel in both themes.
-- Radius roles: controls 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. Chat bubble radii live only in chat/chat-type.ts.
+- Radius roles: badges (ui/Tag) 6, controls and fields 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. rounded-sm only for highlights, dots and grabbers. Chat bubble radii live only in chat/chat-type.ts.
+- Focus: Button, IconButton and Chip carry the one focus ring (accent, 2px, offset 2). Never add a second ring on a call site except for overlay or danger colours.
+- Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts).
+- Inline errors: ui/ErrorNote only. Small labels (stage, status, role, draft): ui/Tag only.
 - Shadows: cards none; menus/popovers/sheets/dialogs shadow-2xl; dragged items shadow-lg; tokens for toast, auth card, spotlight.
 - Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".
 - Icon sizes come from ICON_SIZE in ui/icons.tsx.
@@ -101,8 +104,10 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Zero results use ui/NoResults only. Zero states are one positive line, "{Things} show up here." Never "Nothing", "No matches" or "empty" in a zero state.
 - Errors: "Couldn't {action}. {reason}". Never mention connection state.
 - Dates and times come from src/lib/time.ts only. No toLocale\*, Intl.DateTimeFormat or date libraries in components.
+- Dates and times render font-mono tabular-nums everywhere (voice-note times excepted).
+- Sort labels: Newest first, Oldest first, Due date, Name, Size, Type.
 - Due dates are calendar days on the workspace zone; moments (message, comment, activity times) are on the device zone.
-- Motion: duration-fast/base/slow and ease-enter/exit only. No duration-[Nms] or raw transition values.
+- Motion: duration-fast/base/slow and ease-enter/exit only. No duration-[Nms] or raw transition values. JS animations use DUR\_\*\_MS from src/lib/motion.ts and var(--ease-enter|exit).
 - If no shared component or function fits, stop and ask. Never hand-build a new variant.
 - Post and brief decisions render only through PostDecisionBar: phone bottom bar, laptop header right. Every surface that shows a post offers the same actions for the same role.
 - ⋯ menus use ui/ActionMenu only: sheet on phone, popover on laptop. Order: Open, Copy link, others, Delete last.
@@ -114,11 +119,12 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - List toolbars: search, at most one IconButton, then the New button. No text buttons or dropdown chevrons in the toolbar.
 - Avatars: ui/Avatar roles only (inline 20, header 32, row 40, profile 72). People circle, groups and notes rounded square.
 - Counts and unread badges: ui/CountBadge only. Filter chip counts are plain text.
-- Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; attach = paper clip. Decision bar buttons have no icons.
+- Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; chat tray opener = plus; attach a file = paper clip. Photos = gallery grid; Assets = picture; Copy link = link. Decision bar buttons have no icons.
 - Long-press on touch and right-click on laptop open the same ActionMenu. Esc closes every overlay and returns focus to its trigger.
 - Exception: plan edit rows open their menu on right-click only; long-press there is drag.
 - Every UI change updates the visual baselines in the same PR and lists the changed screens. Never update baselines to hide an unplanned change.
 - Onboarding follows the app: it uses only shared pieces, the tour finds controls by data-induction. Any UI change that moves, renames or removes a data-induction control updates the tour step, its copy (src/lib/induction-copy.ts) and its visual baselines in the same PR. Never delete a data-induction attribute without updating the tour.
+- App height: html/body/#root use 100svh; never 100vh/100% alone for full-screen layout (iOS keyboard).
 - Tab return paints the kept view with no skeleton or fade; never drop a session read on page leave; own writes update kept values (src/lib/session-read.ts, src/lib/kept-view.ts).
 
 ## Canonical living docs

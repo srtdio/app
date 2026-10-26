@@ -4,7 +4,7 @@ exports[`chat home tile > Groups wide: 100 tall row, 72px rounded-square photo, 
 {
   "classes": [
     "flex shrink-0",
-    "rounded-xl inline-flex shrink-0 items-center justify-center select-none bg-avatar-4 text-white font-medium text-2xl",
+    "rounded-xl inline-flex shrink-0 items-center justify-center select-none bg-avatar-4 text-accent-fg font-medium text-2xl",
     "flex min-w-0 flex-1 flex-col gap-1",
     "flex min-w-0 items-baseline gap-2",
     "flex min-w-0 flex-1",
@@ -21,13 +21,15 @@ exports[`chat home tile > People square: 168 tall centred column, 72px disc, 1-l
 {
   "classes": [
     "flex shrink-0",
-    "rounded-full inline-flex shrink-0 items-center justify-center select-none bg-avatar-2 text-white font-medium text-2xl",
+    "rounded-full inline-flex shrink-0 items-center justify-center select-none bg-avatar-2 text-accent-fg font-medium text-2xl",
     "mt-1.5 flex w-full min-w-0 justify-center",
     "min-w-0 truncate text-fg text-lg font-semibold",
     "mt-0.5 flex w-full min-w-0 justify-center",
     "min-w-0 max-w-full truncate text-md font-normal text-fg-2",
-    "mt-auto flex px-10",
+    "mt-auto flex w-full min-w-0 pr-11",
+    "min-w-0 shrink grow basis-11",
     "shrink-0 text-fg-2 font-mono text-sm font-normal tabular-nums",
+    "min-w-0 shrink-0 grow basis-0",
     "absolute right-3 top-3 flex",
     "inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xs font-semibold leading-none text-accent-fg",
   ],

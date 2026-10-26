@@ -50,6 +50,11 @@ describe('Edit concept (E1)', () => {
     expect(src).toMatch(/\{editable \? \(\s*<Button[\s\S]*?data-plan-edit-date=""/);
     expect(src).toMatch(/\{editable \? \(\s*<ConceptSheet/);
   });
+
+  it('the Date row Edit ends on the box edge (-mr-2), like the Waiting chip', () => {
+    const src = read('PlanItemScreen.tsx');
+    expect(src).toMatch(/data-plan-edit-date=""[\s\S]*?className="-mr-2"/);
+  });
 });
 
 describe('one concept sheet (E2, E5)', () => {

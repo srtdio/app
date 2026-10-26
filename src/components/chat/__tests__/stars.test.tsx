@@ -289,7 +289,7 @@ describe('bubble meta', () => {
         },
         "light": {
           "meta": "hex ffffff",
-          "peer": "hex 6b6f76",
+          "peer": "hex 686c73",
         },
       }
     `);
@@ -588,6 +588,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
       {
         "dark": {
           "accent": "hex 6f79e3",
+          "accent-fg": "hex ffffff",
           "accent-line": "rgba(111, 121, 227, 0.34)",
           "accent-soft": "rgba(111, 121, 227, 0.16)",
           "avatar-4": "hex c2392b",
@@ -600,13 +601,14 @@ describe('Contact sheet and Group info: Starred tab', () => {
         },
         "light": {
           "accent": "hex 5e6ad2",
+          "accent-fg": "hex ffffff",
           "accent-line": "rgba(94, 106, 210, 0.3)",
           "accent-soft": "rgba(94, 106, 210, 0.1)",
           "avatar-4": "hex c2392b",
           "border": "hex e6e8eb",
           "fg": "hex 1b1c20",
           "fg-2": "hex 62666d",
-          "fg-3": "hex 6b6f76",
+          "fg-3": "hex 686c73",
           "panel": "hex ffffff",
           "panel-2": "hex f2f3f5",
         },

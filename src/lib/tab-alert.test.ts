@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ALERT_DOT, chatAlertText, dotColor, titleFor, type TabAlert } from '@/lib/tab-alert';
+import {
+  ALERT_DOT,
+  alertDotColor,
+  chatAlertText,
+  dotColor,
+  titleFor,
+  type TabAlert,
+} from '@/lib/tab-alert';
 
 const comment: TabAlert = { kind: 'activity', text: 'Chitra commented on Diwali reel' };
 const chat: TabAlert = { kind: 'chat', text: 'Chat · Aditya sent a message' };
@@ -28,6 +35,20 @@ describe('dotColor', () => {
     expect(dotColor([chat, comment])).toBe(ALERT_DOT.activity);
     expect(dotColor([comment, chat])).toBe(ALERT_DOT.chat);
     expect(dotColor([])).toBeNull();
+  });
+
+  it('reads the dot from the theme tokens: --warn for Activity, --accent for chat', () => {
+    const vars: Record<string, string> = { '--warn': ' #9a6420', '--accent': '#5e6ad2 ' };
+    const read = (name: string): string => vars[name] ?? '';
+    expect(dotColor([comment], read)).toBe('#9a6420');
+    expect(dotColor([chat], read)).toBe('#5e6ad2');
+  });
+
+  it('falls back to the prototype values only when a token reads empty', () => {
+    const empty = (): string => '';
+    expect(alertDotColor('activity', empty)).toBe('#C26A00');
+    expect(alertDotColor('chat', empty)).toBe('#2457D6');
+    expect(alertDotColor('chat', (n) => (n === '--accent' ? '   ' : ''))).toBe(ALERT_DOT.chat);
   });
 });
 

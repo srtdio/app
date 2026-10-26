@@ -943,15 +943,16 @@ export function AssetsPage() {
         ) : null}
       </div>
 
-      {/* Deleted files wait 31 days in Recently deleted; the way there from Assets. */}
+      {/* Deleted files wait 31 days in Recently deleted; the way there from Assets.
+          The link variant pads its text by 8px (px-2), so the row's left gutter
+          is 8px less than the page's: the text starts on the cards' edge. */}
       {!selectMode ? (
-        <div className="px-4 md:px-6 pb-6 pt-2">
+        <div data-recently-deleted-row="" className="pb-6 pl-2 pr-4 pt-2 md:pl-4 md:pr-6">
           <Button
-            variant="ghost"
+            variant="link"
             type="button"
             data-recently-deleted-link=""
             onClick={() => navigate(RECENTLY_DELETED_PATH)}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {RECENTLY_DELETED_LABEL}
           </Button>

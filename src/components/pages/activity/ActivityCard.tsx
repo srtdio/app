@@ -3,6 +3,7 @@ import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { tagClass } from '@/components/ui/Tag';
 import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { type FormatGlyphToken } from '@/components/ui/format-icon';
@@ -338,14 +339,14 @@ function BriefTile({ title }: { title: string }): ReactElement {
   );
 }
 
-/** The welcome card's tile: the workspace's avatar colour with its initial in white. */
+/** The welcome card's tile: the workspace's avatar colour with its initial in accent-fg ink (as ui/Avatar). */
 function WelcomeTile({ name }: { name: string }): ReactElement {
   return (
     <div
       data-activity-welcome-tile=""
       aria-hidden="true"
       className={cn(
-        'flex aspect-square w-full items-center justify-center text-3xl font-semibold text-white',
+        'flex aspect-square w-full items-center justify-center text-3xl font-semibold text-accent-fg',
         avatarFillFor(name),
       )}
     >
@@ -390,7 +391,7 @@ function DeletedFilesTile({
       {extra > 0 ? (
         <span
           data-activity-files-badge=""
-          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-md bg-panel px-1.5 text-xs font-medium tabular-nums text-fg-2"
+          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-lg bg-panel px-1.5 text-xs font-medium tabular-nums text-fg-2"
         >
           +{extra}
         </span>
@@ -516,7 +517,7 @@ export function ActivityCard({
         event.stopPropagation();
       }}
       className={cn(
-        'flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-200',
+        'flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-slow',
         unread ? 'border-accent-line' : 'border-border',
         !settled && 'motion-safe:translate-y-2',
       )}
@@ -661,24 +662,18 @@ export function ActivityCard({
             )}
           </span>
           {tag !== undefined ? (
-            <span
-              data-activity-scope-tag=""
-              className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2"
-            >
+            <span data-activity-scope-tag="" className={tagClass('neutral')}>
               {tag}
             </span>
           ) : null}
           {onlyYou ? (
-            <span
-              data-activity-only-you=""
-              className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2"
-            >
+            <span data-activity-only-you="" className={cn(tagClass('neutral'), 'gap-1')}>
               <IconLock size={ICON_SIZE.inline} inline />
               {ONLY_YOU_LABEL}
             </span>
           ) : null}
           {snoozed ? (
-            <span className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2">
+            <span className={cn(tagClass('neutral'), 'gap-1')}>
               <IconClock size={ICON_SIZE.inline} inline />
               Snoozed
             </span>

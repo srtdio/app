@@ -13,8 +13,9 @@ const row = (id: string, target_date: string | null, updated_at: string) => ({
 });
 
 describe('brief sort options', () => {
-  it('lists Due date (default) then Recently updated', () => {
-    expect(BRIEF_SORT_OPTIONS.map((o) => o.label)).toEqual(['Due date', 'Recently updated']);
+  it('lists Due date (default) then Newest first', () => {
+    expect(BRIEF_SORT_OPTIONS.map((o) => o.label)).toEqual(['Due date', 'Newest first']);
+    expect(BRIEF_SORT_OPTIONS.map((o) => o.value)).toEqual(['due', 'updated']);
     expect(BRIEF_SORT_DEFAULT).toBe('due');
   });
 

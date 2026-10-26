@@ -73,9 +73,9 @@ export function glowTarget(el: HTMLElement): () => void {
       restore();
       return;
     }
-    el.style.transition = `background-color ${DUR_SLOW_MS * 3}ms ease-out`;
+    el.style.transition = `background-color ${DUR_SLOW_MS}ms var(--ease-exit)`;
     el.style.backgroundColor = prev.background;
-    fadeTimer = window.setTimeout(restore, DUR_SLOW_MS * 3);
+    fadeTimer = window.setTimeout(restore, DUR_SLOW_MS);
   }, GLOW_MS);
   return () => {
     window.clearTimeout(settleTimer);

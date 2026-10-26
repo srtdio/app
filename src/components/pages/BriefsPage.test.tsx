@@ -78,7 +78,7 @@ describe('briefsHeader', () => {
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
   });
 
-  it('agency side: the Pipeline SortMenu with Due date (default) and Recently updated', () => {
+  it('agency side: the Pipeline SortMenu with Due date (default) and Newest first', () => {
     const onChange = vi.fn();
     const tree = briefsHeader({
       search: '',
@@ -95,7 +95,7 @@ describe('briefsHeader', () => {
       value: string;
       onChange: (value: string) => void;
     };
-    expect(props.options.map((o) => o.label)).toEqual(['Due date', 'Recently updated']);
+    expect(props.options.map((o) => o.label)).toEqual(['Due date', 'Newest first']);
     expect(props.value).toBe('due');
     props.onChange('updated');
     expect(onChange).toHaveBeenCalledWith('updated');

@@ -272,8 +272,7 @@ export function PlanCalendar(props: {
 // ---------------------------------------------------------------------------
 
 // A plan chip carries a dot and a Draft tag, so it is a Button styled as the Chip.
-const PLAN_CHIP =
-  'max-w-[260px] shrink-0 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+const PLAN_CHIP = 'max-w-[260px] shrink-0 border';
 const PLAN_CHIP_IDLE = 'border-border';
 // text-accent sorts after the ghost Button's text-fg-2 / hover:text-fg, so it wins.
 const PLAN_CHIP_ON = 'border-accent-line bg-accent-soft text-accent hover:text-accent';
@@ -530,8 +529,8 @@ function WeekGrid(props: {
 }
 
 const PILL_TONES = {
-  good: 'bg-[var(--good-solid)] text-white',
-  bad: 'bg-[var(--bad-solid)] text-white',
+  good: 'bg-good-solid text-accent-fg',
+  bad: 'bg-bad-solid text-accent-fg',
   neutral: 'bg-panel-2 text-fg-2',
 } as const;
 
@@ -615,7 +614,7 @@ function LiftedEntry(props: { drag: Drag }): ReactElement {
       data-plan-tab-drag-card=""
       aria-hidden="true"
       style={{ left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.width }}
-      className="pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-md bg-panel shadow-2xl ring-1 ring-border-strong"
+      className="pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-lg bg-panel shadow-2xl ring-1 ring-border-strong"
     >
       <span className={cn('flex h-full items-center gap-1.5 px-2 text-sm text-fg', look.soft)}>
         <span className={cn('h-2 w-2 shrink-0', look.dot)} />

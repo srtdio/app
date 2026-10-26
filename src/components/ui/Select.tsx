@@ -56,7 +56,7 @@ export function selectOptionRows(
         aria-selected={selected}
         onClick={() => onPick(option.value)}
         className={cn(
-          'flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-3 text-left text-base transition-colors',
+          'flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 text-left text-base transition-colors',
           selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
         )}
       >

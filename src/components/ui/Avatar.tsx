@@ -112,7 +112,7 @@ function AvatarFace({ name, src, role, kind = 'person' }: Omit<AvatarProps, 'pre
       <div
         style={style}
         data-avatar-role={role}
-        className={cn(box, avatarFillFor(name), 'text-white font-medium', INITIALS_TYPE[role])}
+        className={cn(box, avatarFillFor(name), 'text-accent-fg font-medium', INITIALS_TYPE[role])}
       >
         {initialsFor(name)}
       </div>

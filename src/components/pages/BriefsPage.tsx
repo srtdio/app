@@ -88,7 +88,7 @@ interface BriefsHeaderProps {
   /** Whether the viewer holds brief.create; the "+" shows only then (same gate as Topbar). */
   canCreate: boolean;
   /**
-   * The agency-side sort (Due date / Recently updated), in the same SortMenu as
+   * The agency-side sort (Due date / Newest first), in the same SortMenu as
    * Pipeline. Omitted for client approvers: their list stays grouped by time.
    */
   sort?: { value: BriefSort; onChange: (value: BriefSort) => void };

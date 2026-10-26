@@ -10,6 +10,7 @@
 // callout).
 
 import type { ReactElement } from 'react';
+import { RailCurveGlyph } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -18,29 +19,6 @@ import { replyCountLabel } from '@/lib/chat/thread-rail';
 
 /** The rail's ink: the stronger border token. */
 const RAIL_INK = 'bg-border-strong';
-
-/** A 12px-radius quarter curve of the rail, round caps and joins. */
-function RailCurve(props: { d: string; className: string }): ReactElement {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 13 13"
-      fill="none"
-      className={cn(
-        'absolute h-[13px] w-[13px] overflow-visible text-border-strong',
-        props.className,
-      )}
-    >
-      <path
-        d={props.d}
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 /** The rail through a row's whole box (x=16), for a member above and below it. */
 export function RailThrough(): ReactElement {
@@ -71,7 +49,7 @@ export function RailTick(props: { reach: string; top: string }): ReactElement {
       )}
     >
       <span className={cn('absolute bottom-3 left-0 top-0 w-[2px]', RAIL_INK)} />
-      <RailCurve d="M1 0A12 12 0 0 0 13 12" className="bottom-0 left-0" />
+      <RailCurveGlyph turn="tick" className="bottom-0 left-0" />
       <span className={cn('absolute bottom-0 left-[13px] right-0 h-[2px]', RAIL_INK)} />
     </span>
   );
@@ -94,7 +72,7 @@ export function RailElbow(props: { reach: string; bottom: string }): ReactElemen
       )}
     >
       <span className={cn('absolute left-[13px] right-0 top-0 h-[2px]', RAIL_INK)} />
-      <RailCurve d="M13 1A12 12 0 0 0 1 13" className="left-0 top-0" />
+      <RailCurveGlyph turn="elbow" className="left-0 top-0" />
       <span className={cn('absolute bottom-0 left-0 top-3 w-[2px]', RAIL_INK)} />
     </span>
   );

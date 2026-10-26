@@ -682,7 +682,7 @@ export function ImageLightbox({
       {/* The backdrop fades while a swipe down is in progress. */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-overlay"
+        className="absolute inset-0 bg-overlay backdrop-blur-xl"
         style={dragY > 0 ? { opacity: dismissOpacity(dragY) } : undefined}
       />
       <div className="relative flex h-14 shrink-0 items-center gap-2 px-3">
@@ -735,7 +735,8 @@ export function ImageLightbox({
           data-motion-axis="y"
           className={cn(
             'flex h-full w-full items-center justify-center',
-            settling && 'transition-transform duration-200 ease-out motion-reduce:transition-none',
+            settling &&
+              'transition-transform duration-slow ease-enter motion-reduce:transition-none',
           )}
           style={dismissStyle}
           onTransitionEnd={() => setSettling(false)}

@@ -818,7 +818,7 @@ export type AssetSort = 'recent' | 'name' | 'size' | 'type';
 export const ASSET_SORT_DEFAULT: AssetSort = 'recent';
 
 export const ASSET_SORT_OPTIONS: { value: AssetSort; label: string }[] = [
-  { value: 'recent', label: 'Recent' },
+  { value: 'recent', label: 'Newest first' },
   { value: 'name', label: 'Name' },
   { value: 'size', label: 'Size' },
   { value: 'type', label: 'Type' },
@@ -834,10 +834,10 @@ function compareName(a: AssetListItem, b: AssetListItem): number {
 }
 
 /**
- * Order the list by the chosen sort. Recent = uploaded_at desc; Name = label
+ * Order the list by the chosen sort. Newest first = uploaded_at desc; Name = label
  * caseless; Size = size_bytes desc; Type = tab order then name. Pure and
  * non-mutating. It orders the pages loaded so far (listAssetsPage is keyset
- * paged); Recent matches the server order, and the stable sort keeps the
+ * paged); Newest first matches the server order, and the stable sort keeps the
  * server's id desc tie-break for equal upload times.
  */
 export function sortAssets(items: AssetListItem[], sort: AssetSort): AssetListItem[] {

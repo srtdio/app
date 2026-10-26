@@ -484,7 +484,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
       data-about-bar={post?.id ?? ''}
       data-about-loading={post === null ? '' : undefined}
       className={cn(
-        'flex min-w-0 items-center gap-2 overflow-hidden rounded-md bg-panel-3',
+        'flex min-w-0 items-center gap-2 overflow-hidden rounded-lg bg-panel-3',
         NO_TOUCH_SELECT,
       )}
     >
@@ -492,7 +492,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
       {post !== null ? (
         <PostRefThumb assetVersionId={post.thumbnailAssetVersionId} size={32} />
       ) : (
-        <span aria-hidden="true" className="h-8 w-8 shrink-0 rounded-md bg-panel-2" />
+        <span aria-hidden="true" className="h-8 w-8 shrink-0 rounded-lg bg-panel-2" />
       )}
       <span className="flex min-w-0 flex-1 flex-col py-1">
         <span className="truncate text-sm font-medium text-accent">About</span>

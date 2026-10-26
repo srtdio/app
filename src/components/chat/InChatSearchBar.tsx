@@ -1,6 +1,7 @@
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
+import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { NoResults } from '@/components/ui/NoResults';
 import { ICON_SIZE, IconChevronDown, IconChevronLeft } from '@/components/ui/icons';
@@ -70,11 +71,11 @@ interface InChatSearchBarProps {
 }
 
 /**
- * The mono "N of M" ink, the 44px arrows and the input, on the header's panel.
- * FN23: 16px on a phone (iOS never zooms the page on focus), 14px from md up.
+ * The input's layout on the header row. The field look comes from ui/Input,
+ * which also keeps FN23: 16px on a phone (iOS never zooms the page on focus),
+ * 14px from md up.
  */
-export const BAR_INPUT =
-  'h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-2 text-input text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none md:px-3 md:text-base';
+export const BAR_INPUT = 'min-w-0 flex-1';
 
 /**
  * The in-chat search bar, in place of the thread header: close, the input,
@@ -207,7 +208,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
       <IconButton label="Close search" onClick={close}>
         <IconChevronLeft size={ICON_SIZE.control} />
       </IconButton>
-      <input
+      <Input
         type="search"
         enterKeyHint="search"
         aria-label="Search this chat"

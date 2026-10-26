@@ -17,7 +17,7 @@ export function PlatformMark({ platform }: { platform: string }) {
   return (
     <span
       aria-label={platform}
-      className="inline-flex h-[19px] min-w-[19px] items-center justify-center rounded-md border border-border bg-panel-2 px-1 text-xs font-semibold lowercase leading-none text-fg-2"
+      className="inline-flex h-[19px] min-w-[19px] items-center justify-center rounded-lg border border-border bg-panel-2 px-1 text-xs font-semibold lowercase leading-none text-fg-2"
     >
       {mark}
     </span>

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { cn } from '@/lib/cn';
 import {
   AdjustmentsHorizontalIcon,
   ArrowDownTrayIcon,
@@ -56,6 +57,7 @@ import {
   PlusIcon,
   QuestionMarkCircleIcon,
   RectangleStackIcon,
+  Squares2X2Icon,
   ScaleIcon,
   StarIcon,
   SunIcon,
@@ -333,9 +335,9 @@ export function IconImage(props: IconProps) {
   return <Hero icon={PhotoIcon} {...props} />;
 }
 
-/** Photos (chat info, the composer tray, Assets Media). */
+/** Photos (chat info, the composer tray, Assets Media): a gallery grid, apart from the Assets tab's photo. */
 export function IconPhoto(props: IconProps) {
-  return <Hero icon={PhotoIcon} {...props} />;
+  return <Hero icon={Squares2X2Icon} {...props} />;
 }
 
 /** A carousel badge: stacked cards. Hand-drawn: Square2StackIcon reads as copy at badge size. */
@@ -545,5 +547,68 @@ export function IconHand(props: IconProps) {
         d="M14 4a3 3 0 0 1 6 0v12a3 3 0 0 1 6 0v2a3 3 0 0 1 6 0v2a3 3 0 0 1 5 2v8c0 6-4 9-10 9h-4c-4 0-6-2-8-5l-6-8a3 3 0 0 1 5-4l0 0z"
       />
     </Svg>
+  );
+}
+
+/**
+ * A task's tick box (TaskGlyph): To do is an empty rounded square in the fg-3
+ * ink, Done a filled accent square with a panel-coloured tick. Drawn on a 16
+ * grid, stroke 1.7. Not an Icon*: it takes a state, not the IconProps contract.
+ */
+export function TaskBoxGlyph(props: { done: boolean; size: number }) {
+  return (
+    <svg
+      aria-hidden="true"
+      width={props.size}
+      height={props.size}
+      viewBox="0 0 16 16"
+      fill="none"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.done ? 'text-accent' : 'text-fg-3'}
+    >
+      {props.done ? (
+        <>
+          <rect x={1} y={1} width={14} height={14} rx={4} fill="currentColor" />
+          <path d="M4.6 8.2l2.3 2.3 4.5-4.8" className="stroke-panel" />
+        </>
+      ) : (
+        <rect x={1.5} y={1.5} width={13} height={13} rx={3.6} stroke="currentColor" />
+      )}
+    </svg>
+  );
+}
+
+/** The thread rail's two 12px-radius quarter curves: a member's tick (down then right) and a root's elbow (left then down). */
+const RAIL_CURVE_PATH = {
+  tick: 'M1 0A12 12 0 0 0 13 12',
+  elbow: 'M13 1A12 12 0 0 0 1 13',
+} as const;
+
+/**
+ * One quarter curve of the thread rail (ThreadRail): a 2px stroke in the
+ * stronger border token, round caps and joins, on a 13px box the caller
+ * positions. Not an Icon*: a rail piece, not a glyph on the IconProps contract.
+ */
+export function RailCurveGlyph(props: { turn: keyof typeof RAIL_CURVE_PATH; className: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 13 13"
+      fill="none"
+      className={cn(
+        'absolute h-[13px] w-[13px] overflow-visible text-border-strong',
+        props.className,
+      )}
+    >
+      <path
+        d={RAIL_CURVE_PATH[props.turn]}
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

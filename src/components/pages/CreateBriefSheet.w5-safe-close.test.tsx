@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // W5 FB1: the New brief sheet never loses work silently. Dirty (any text, a
 // file, an upload in flight or failed) makes Esc, X, backdrop and system Back
-// ask "Discard this brief?"; while Create is in flight every close path,
-// footer Cancel included, does nothing. Create waits for uploads and is
+// ask "Discard this brief?"; while Create is in flight every close path
+// does nothing. Create sits in the header like New post (no footer Cancel).
+// Create waits for uploads and is
 // blocked by a failed one. Required fields error inline, never disable Create.
 import { act, useEffect, useSyncExternalStore } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -192,7 +193,7 @@ describe('CreateBriefSheet: dirty close paths ask first', () => {
 });
 
 describe('CreateBriefSheet: every close path is blocked while submitting', () => {
-  it('Esc, X, backdrop and Cancel do nothing until the create settles', async () => {
+  it('Esc, X and backdrop do nothing until the create settles', async () => {
     let finish: (value: unknown) => void = () => {};
     briefCreate.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
     const { onClose, onCreated } = await mount();
@@ -208,12 +209,40 @@ describe('CreateBriefSheet: every close path is blocked while submitting', () =>
     await act(async () => {
       sheet()?.parentElement?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    await act(async () => button('Cancel')?.click());
     expect(onClose).not.toHaveBeenCalled();
     expect(confirm()).toBeNull();
 
     await act(async () => finish({ ok: true, data: 'brief-9' }));
     expect(onCreated).toHaveBeenCalledWith({ briefId: 'brief-9', noteFailed: false });
+  });
+});
+
+describe('CreateBriefSheet: header actions like New post (15f)', () => {
+  it('Create brief sits in the sheet header before the X; there is no footer or Cancel', async () => {
+    await mount();
+    const header = document.querySelector<HTMLElement>('[data-composer-header]');
+    expect(header).not.toBeNull();
+    expect(header?.querySelector('h2')?.textContent).toBe('New brief');
+    const create = createButton();
+    expect(create).toBeTruthy();
+    expect(header?.contains(create ?? null)).toBe(true);
+    const close = header?.querySelector<HTMLButtonElement>('[aria-label="Close"]');
+    expect(close).toBeTruthy();
+    // Create comes before the X, as on New post.
+    expect(
+      (create as HTMLElement).compareDocumentPosition(close as HTMLElement) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(button('Cancel')).toBeUndefined();
+  });
+
+  it('opens at the New post frame: content height, narrow (no lg 960 width)', async () => {
+    await mount();
+    const panel = document.querySelector<HTMLElement>('[data-composer-sheet]');
+    expect(panel).not.toBeNull();
+    expect(panel?.className).toContain('max-h-[90vh]');
+    expect(panel?.className).toContain('sm:max-h-[84vh]');
+    expect(panel?.className).not.toContain('lg:w-[960px]');
   });
 });
 

@@ -311,7 +311,7 @@ const SKELETON_PEOPLE = SKELETON_ROWS - SKELETON_GROUPS;
 /** A label-sized placeholder bar (16px line, same padding as the real label). */
 function skeletonLabel(first: boolean): ReactElement {
   return (
-    <div className={cn(first ? 'px-1 pt-1' : 'px-1 pt-3')}>
+    <div className={first ? 'pt-1' : 'pt-3'}>
       <div className="h-4 w-16 rounded bg-panel-2" />
     </div>
   );
@@ -440,8 +440,11 @@ export function unreadPillText(unread: number): string | null {
   return unread > 0 ? countBadgeText(unread) : null;
 }
 
-/** The home stack inside the one scroll container: 14px sides, 8px between blocks. */
-export const CHAT_HOME_STACK = 'flex flex-col gap-2 px-[14px]';
+/**
+ * The home stack inside the one scroll container: 16px sides (the same edge as
+ * the search box and filter chips above it), 8px between blocks.
+ */
+export const CHAT_HOME_STACK = 'flex flex-col gap-2 px-4';
 
 /** Groups: one full-width wide tile per row, 8px apart. */
 export const GROUP_TILE_LIST = 'flex flex-col gap-2';
@@ -453,9 +456,12 @@ export const PEOPLE_TILE_GRID =
 /** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
 export const SECTION_LABEL_TYPE = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
-/** The label's padding: 4px 4px 0 for the first section, 12px 4px 0 after. */
+/**
+ * The label's padding: 4px top for the first section, 12px after. No side
+ * padding: the label starts on the stack's 16px edge, like the cards.
+ */
 export function sectionLabelClass(first: boolean): string {
-  return cn(SECTION_LABEL_TYPE, first ? 'px-1 pt-1' : 'px-1 pt-3');
+  return cn(SECTION_LABEL_TYPE, first ? 'pt-1' : 'pt-3');
 }
 
 /** Tile type. Group: name 17/600, preview 14/20. Person: name 15/600, preview 13/18. Time 12. */
@@ -464,6 +470,12 @@ export const GROUP_PREVIEW_TYPE = 'text-base font-normal';
 export const PERSON_NAME_TYPE = 'text-lg font-semibold';
 export const PERSON_PREVIEW_TYPE = 'text-md font-normal';
 export const TILE_TIME_TYPE = 'font-mono text-sm font-normal tabular-nums';
+
+/**
+ * The square tile's time row: full width, 44px clear on the right for the
+ * corner ⋯ (36px of it inside the content box plus an 8px gap).
+ */
+export const TILE_TIME_ROW = 'mt-auto flex w-full min-w-0 pr-11';
 
 /**
  * The wide tile's group photo slot: the shared Avatar at its profile role
@@ -635,8 +647,14 @@ export function channelRowBody(props: {
       <span className="mt-1.5 flex w-full min-w-0 justify-center">{name}</span>
       <span className="mt-0.5 flex w-full min-w-0 justify-center">{previewNode}</span>
       {timeNode !== null ? (
-        <span data-tile-time="" className="mt-auto flex px-10">
+        // The ⋯ sits in the bottom-right corner (44px at right-1, 36px into the
+        // content box): pr-11 keeps 8px clear of it at every width. The two
+        // spacers centre the time on the tile while it fits; when tight only
+        // the left spacer gives way, so the time moves left and never truncates.
+        <span data-tile-time="" className={TILE_TIME_ROW}>
+          <span aria-hidden="true" className="min-w-0 shrink grow basis-11" />
           {timeNode}
+          <span aria-hidden="true" className="min-w-0 shrink-0 grow basis-0" />
         </span>
       ) : null}
       {pill !== null ? <span className="absolute right-3 top-3 flex">{pill}</span> : null}
@@ -652,7 +670,7 @@ export function channelRowBody(props: {
  * itself is ROW_MORE_BUTTON. Tokens only.
  */
 export const ROW_MORE_BUTTON =
-  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 transition-colors duration-fast hover:bg-panel-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 transition-colors duration-fast hover:bg-panel-3 hover:text-fg';
 
 export function rowMoreClass(kind: TileKind): string {
   return cn('absolute right-1 flex', kind === 'wide' ? 'top-1/2 -translate-y-1/2' : 'bottom-1');
@@ -947,10 +965,7 @@ export function searchChips(props: {
             data-search-chip={chip.kind}
             aria-pressed={on}
             onClick={() => props.onChange(toggleHomeChip(props.kind, chip.kind))}
-            className={cn(
-              'shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              NO_TOUCH_SELECT,
-            )}
+            className={cn('shrink-0 whitespace-nowrap', NO_TOUCH_SELECT)}
           />
         );
       })}
@@ -1307,7 +1322,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const nowMs = Date.now();
   const searchResults =
     kind === 'starred' ? (
-      <div data-starred-home="" className="px-[14px] pb-4 pt-1">
+      <div data-starred-home="" className="px-4 pb-4 pt-1">
         <StarredList
           channelId={null}
           query={search}

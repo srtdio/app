@@ -104,7 +104,8 @@ import {
   filterControlBody,
   sortControlBody,
 } from '@/components/pages/pipeline/PipelineSortControl';
-import { IconFilterLines } from '@/components/ui/icons';
+import { IconFilterLines, IconSort } from '@/components/ui/icons';
+import { BoardColumns } from '@/components/pages/pipeline/board-columns';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
@@ -644,7 +645,7 @@ describe('persisted sort sanitization (fix 1)', () => {
 
   it('passes a still-listed value through untouched', () => {
     expect(sanitizePostSort('updated')).toBe('updated');
-    // 'oldest' is listed again ("Least recently updated").
+    // 'oldest' is listed again ("Oldest first").
     expect(sanitizePostSort('oldest')).toBe('oldest');
     expect(sanitizePostSort('target')).toBe('target');
   });
@@ -727,7 +728,7 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
     expect(menuRows(body()).map(rowLabel)).not.toContain('This week');
   });
 
-  it('Sort lists Recently updated, Least recently updated and Due soonest first and fires onOrderChange', () => {
+  it('Sort lists Newest first, Oldest first and Due date and fires onOrderChange', () => {
     let picked: string | null = null;
     const rows = menuRows(
       body({
@@ -736,11 +737,7 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
         },
       }),
     );
-    expect(rows.map(rowLabel)).toEqual([
-      'Recently updated',
-      'Least recently updated',
-      'Due soonest first',
-    ]);
+    expect(rows.map(rowLabel)).toEqual(['Newest first', 'Oldest first', 'Due date']);
     (rows[1]!.props as { onClick: () => void }).onClick();
     expect(picked).toBe('oldest');
     (rows[2]!.props as { onClick: () => void }).onClick();
@@ -795,9 +792,7 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
         order = o;
       },
     });
-    const oldest = menuRows(shell(sortTree).body).find(
-      (r) => rowLabel(r) === 'Least recently updated',
-    )!;
+    const oldest = menuRows(shell(sortTree).body).find((r) => rowLabel(r) === 'Oldest first')!;
     (oldest.props as { onClick: () => void }).onClick();
     expect(order).toBe('oldest');
     expect(hookState.calls[0]).toEqual([false]);
@@ -1099,9 +1094,15 @@ describe('E: no jumps while loading', () => {
     expect(kanban).toContain('h-5');
     const client = renderToStaticMarkup(postsSkeleton(true, { kanban: true, ratio, columns: 4 }));
     expect((client.match(/w-\[260px\]/g) ?? []).length).toBe(4);
-    // A stage view on a laptop keeps the grid.
-    const grid = renderToStaticMarkup(postsSkeleton(true, { ratio }));
-    expect(grid).toContain('grid-cols-[repeat(auto-fill,minmax(220px,1fr))]');
+    // A stage view on a laptop draws the same column stacks as the cards.
+    const stacks = postsSkeleton(true, { ratio });
+    expect(stacks.type).toBe(BoardColumns);
+    const grid = renderToStaticMarkup(stacks);
+    expect(grid).toContain('flex items-start gap-4');
+    expect(grid).toContain('data-board-column=""');
+    expect(grid).toContain('flex min-w-0 flex-1 flex-col gap-4');
+    expect(grid).not.toContain('grid-cols-[repeat(auto-fill,minmax(220px,1fr))]');
+    expect(grid).toContain('<span class="sr-only">Loading posts</span>');
   });
 });
 
@@ -1139,15 +1140,17 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
     const { trigger } = shell(control());
     const props = trigger.props as { label: string; className: string; children: unknown };
     expect(props.label).toBe('Filter and sort');
-    // The shared IconButton (44x44 by the design system) in the secondary outline.
+    // The bare shared IconButton (44x44 by the design system), like SortMenu.
     expect(trigger.type).toBe(IconButton);
     const rendered = IconButton(trigger.props as Parameters<typeof IconButton>[0]);
     expect((rendered.props as { 'aria-label': string })['aria-label']).toBe('Filter and sort');
     expect((rendered.props as { className: string }).className).toContain('h-11 w-11');
-    expect(props.className).toContain('border border-border');
+    expect(props.className).not.toContain('border');
+    expect(props.className).not.toContain('bg-panel');
     expect(props.className).toContain('shrink-0');
     expect(props.className).not.toMatch(/(^|\s|:)!/);
-    expect(findAll(trigger, (el) => el.type === IconFilterLines)).toHaveLength(1);
+    expect(findAll(trigger, (el) => el.type === IconSort)).toHaveLength(1);
+    expect(findAll(trigger, (el) => el.type === IconFilterLines)).toHaveLength(0);
     expect(texts(trigger)).toEqual([]);
   });
 
@@ -1157,9 +1160,9 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
     const labels = menuRows(body).map(rowLabel);
     expect(labels).toContain('This week');
     expect(labels).toContain('Custom…');
-    expect(labels).toContain('Recently updated');
-    expect(labels).toContain('Due soonest first');
-    expect(labels.indexOf('Custom…')).toBeLessThan(labels.indexOf('Recently updated'));
+    expect(labels).toContain('Newest first');
+    expect(labels).toContain('Due date');
+    expect(labels.indexOf('Custom…')).toBeLessThan(labels.indexOf('Newest first'));
     const menus = findAll(body, (el) => (el.props as { role?: string }).role === 'menu').map(
       (el) => (el.props as { 'aria-label': string })['aria-label'],
     );
@@ -1171,7 +1174,7 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
     const onDateWindowChange = vi.fn();
     const { body } = shell(control({ onOrderChange, onDateWindowChange }));
     const rows = menuRows(body);
-    const oldest = rows.find((r) => rowLabel(r) === 'Least recently updated')!;
+    const oldest = rows.find((r) => rowLabel(r) === 'Oldest first')!;
     (oldest.props as { onClick: () => void }).onClick();
     expect(onOrderChange).toHaveBeenCalledWith('oldest');
     const week = rows.find((r) => rowLabel(r) === 'This week')!;
@@ -1216,6 +1219,6 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
     const checked = menuRows(body)
       .filter((r) => (r.props as { 'aria-checked': boolean })['aria-checked'])
       .map(rowLabel);
-    expect(checked).toEqual(['This month', 'Due soonest first']);
+    expect(checked).toEqual(['This month', 'Due date']);
   });
 });

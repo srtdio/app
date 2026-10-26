@@ -784,7 +784,7 @@ describe('ActivityCard: notifications fixes', () => {
 
   it('fix 8: a posts row still shows its "Posts" scope tag', () => {
     const html = renderCard([item({ eventType: 'comment', scope: 'posts' })]);
-    expect(html).toMatch(/text-xs font-medium text-fg-2">Posts</);
+    expect(html).toMatch(/text-xs font-medium bg-panel-2 text-fg-2">Posts</);
   });
 
   it('fix 10: a body line wraps anywhere so a long token never overflows', () => {
@@ -886,6 +886,8 @@ describe('ActivityCard: notifications fixes', () => {
     const tile = /<div data-activity-welcome-tile=""[^>]*class="([^"]*)"[^>]*>([^<]*)</.exec(html);
     expect(tile?.[1]).toContain(avatarFillFor('Kite'));
     expect(tile?.[1]).toMatch(/bg-avatar-\d/);
+    expect(tile?.[1]).toContain('text-accent-fg');
+    expect(tile?.[1]).not.toMatch(/\btext-white\b/);
     expect(tile?.[2]).toBe('K');
   });
 });

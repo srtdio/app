@@ -100,10 +100,7 @@ export function CommentEmojiButton(props: {
           setAnchor(button.getBoundingClientRect());
           setOpen(true);
         }}
-        className={cn(
-          'shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
-          props.className,
-        )}
+        className={cn('shrink-0 disabled:opacity-50', props.className)}
       >
         <span className={cn('inline-flex', open && 'text-accent')}>
           <IconSmile size={ICON_SIZE.control} />

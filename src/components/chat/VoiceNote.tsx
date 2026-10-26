@@ -746,7 +746,7 @@ function transcribeLink(props: {
 
 /**
  * The transcript panel: a rounded tinted box with the selectable text. It
- * reveals on height only (grid rows 0fr to 1fr), 180ms ease-out, Y only;
+ * reveals on height only (grid rows 0fr to 1fr), the slow motion token with the enter ease, Y only;
  * reduced motion shows it at once. It mounts in its current state, so a stored
  * transcript paints open on first paint with no transition. The width never
  * changes.
@@ -763,7 +763,7 @@ function TranscriptDrop(props: {
       data-voice-transcript={open ? 'open' : 'closed'}
       aria-hidden={open ? undefined : true}
       className={cn(
-        'grid transition-[grid-template-rows] duration-[180ms] ease-out motion-reduce:transition-none',
+        'grid transition-[grid-template-rows] duration-slow ease-enter motion-reduce:transition-none',
         open ? 'visible grid-rows-[1fr]' : 'invisible grid-rows-[0fr]',
       )}
     >
@@ -1198,7 +1198,7 @@ export function VoiceNote({
             ? 'opacity-[.45]'
             : null
           : cn(
-              'transition-[opacity,visibility] duration-150 motion-reduce:transition-none',
+              'transition-[opacity,visibility] duration-base motion-reduce:transition-none',
               uploading
                 ? 'invisible opacity-0'
                 : url === null || playFailed
@@ -1321,7 +1321,7 @@ export function VoiceNote({
             className={cn(
               'flex h-7 w-full items-center justify-between',
               upload !== undefined &&
-                'transition-[opacity,visibility] duration-150 motion-reduce:transition-none',
+                'transition-[opacity,visibility] duration-base motion-reduce:transition-none',
               uploading && 'invisible opacity-0',
             )}
             aria-hidden="true"
@@ -1346,7 +1346,7 @@ export function VoiceNote({
               className={cn(
                 'pointer-events-none absolute inset-x-0 top-1/2 -mt-px h-0.5 rounded-full',
                 tone.unplayed,
-                'transition-opacity duration-150 motion-reduce:transition-none',
+                'transition-opacity duration-base motion-reduce:transition-none',
                 uploading ? 'opacity-100' : 'opacity-0',
               )}
             />
@@ -1358,7 +1358,7 @@ export function VoiceNote({
               'pointer-events-none absolute top-1/2 -ml-[5px] -mt-[5px] h-2.5 w-2.5 rounded-full',
               tone.played,
               upload !== undefined &&
-                'transition-opacity duration-150 motion-reduce:transition-none',
+                'transition-opacity duration-base motion-reduce:transition-none',
               uploading && 'opacity-0',
             )}
             style={{ left: `${progress}%` }}

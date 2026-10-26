@@ -179,6 +179,7 @@ describe('StarredRowView', () => {
     expect(themed(out)).toMatchInlineSnapshot(`
       {
         "dark": {
+          "accent-fg": "rgb(255, 255, 255)",
           "avatar-4": "rgb(194, 57, 43)",
           "border": "rgb(35, 38, 44)",
           "fg": "rgb(244, 245, 246)",
@@ -187,10 +188,11 @@ describe('StarredRowView', () => {
           "panel-2": "rgb(26, 28, 33)",
         },
         "light": {
+          "accent-fg": "rgb(255, 255, 255)",
           "avatar-4": "rgb(194, 57, 43)",
           "border": "rgb(230, 232, 235)",
           "fg": "rgb(27, 28, 32)",
-          "fg-3": "rgb(107, 111, 118)",
+          "fg-3": "rgb(104, 108, 115)",
           "panel": "rgb(255, 255, 255)",
           "panel-2": "rgb(242, 243, 245)",
         },

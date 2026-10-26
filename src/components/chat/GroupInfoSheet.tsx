@@ -347,7 +347,7 @@ export function LeaveGroupRow(props: { disabled: boolean; onClick: () => void })
       data-row="leave-group"
       disabled={props.disabled}
       onClick={props.onClick}
-      className="w-full gap-3 text-bad [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="w-full gap-3 text-bad [-webkit-touch-callout:none]"
     >
       <span className="flex w-5 shrink-0 justify-center text-bad">
         <IconSignOut size={ICON_SIZE.inline} />

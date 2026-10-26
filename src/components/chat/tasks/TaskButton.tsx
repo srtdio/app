@@ -31,10 +31,7 @@ export function TaskButton(props: {
       {...(props.editing === true ? { 'data-task-editing': '' } : {})}
       onClick={props.onOpen}
       onContextMenu={(event) => event.preventDefault()}
-      className={cn(
-        'relative shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-        NO_TOUCH_SELECT,
-      )}
+      className={cn('relative shrink-0', NO_TOUCH_SELECT)}
     >
       <span
         className={cn(

@@ -290,7 +290,7 @@ export function MembersPanel() {
             'Signed out everywhere. Chat access ends immediately.',
             `Their posts, comments and uploads stay, shown as “${FORMER_MEMBER}”.`,
             'You can invite them back any time.',
-          ].join(' • ')}
+          ].join('\n')}
           confirmLabel="Remove member"
           busyLabel="Removing"
           destructive

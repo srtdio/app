@@ -81,7 +81,7 @@ export function PriorityChip(props: {
     <span
       data-task-p={props.priority}
       className={cn(
-        'inline-flex h-[22px] items-center gap-0.5 rounded-md px-1.5 font-mono text-sm',
+        'inline-flex h-[22px] items-center gap-0.5 rounded-lg px-1.5 font-mono text-sm',
         P_TAG[props.priority],
         props.ringed === true && 'ring-2 ring-accent ring-offset-1 ring-offset-panel',
       )}
@@ -200,7 +200,7 @@ function PriorityMenu(props: {
             NO_TOUCH_SELECT,
           )}
         >
-          <span className={cn('rounded-md px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
+          <span className={cn('rounded-lg px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>
           {p === props.current ? (
             <IconCheck size={ICON_SIZE.inline} className="text-accent" />
@@ -333,10 +333,7 @@ export interface TaskRowProps {
   onUndoDelete: () => void;
 }
 
-const ACTION = cn(
-  'min-w-11 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-  NO_TOUCH_SELECT,
-);
+const ACTION = cn('min-w-11 shrink-0', NO_TOUCH_SELECT);
 
 function MarkLine(props: { mark: TaskMark }): ReactElement {
   const { mark } = props;
@@ -377,10 +374,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           disabled={props.queuedDelete || props.canTick === false}
           onClick={props.onToggle}
           onContextMenu={(e) => e.preventDefault()}
-          className={cn(
-            'relative shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            NO_TOUCH_SELECT,
-          )}
+          className={cn('relative shrink-0 disabled:opacity-50', NO_TOUCH_SELECT)}
         >
           <TaskGlyph status={props.done ? 'done' : 'todo'} />
         </IconButton>
@@ -425,10 +419,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
               data-task-delete=""
               onClick={props.onDelete}
               onContextMenu={(e) => e.preventDefault()}
-              className={cn(
-                'shrink-0 text-fg-3 hover:text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                NO_TOUCH_SELECT,
-              )}
+              className={cn('shrink-0 text-fg-3 hover:text-fg-2', NO_TOUCH_SELECT)}
             >
               <IconX size={ICON_SIZE.control} />
             </IconButton>

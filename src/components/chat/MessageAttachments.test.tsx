@@ -526,7 +526,7 @@ describe('album grid', () => {
     );
     expect(html).toContain('+2');
     expect(html).toContain('bg-black/50');
-    expect(html).toContain('text-2xl font-semibold text-white');
+    expect(html).toContain('text-2xl font-semibold text-overlay-fg');
     expect(html).toContain('gap-[2px]');
     // No corners passed: the touch bubble's 18px.
     expect(html).toContain('gap-[2px] overflow-hidden rounded-[18px]');

@@ -24,8 +24,8 @@ interface ToastProps {
 export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProps) {
   const { id, title, description, icon, onPress, action, tone } = toast;
   const success = tone === 'success';
-  // A failure (or partial failure) toast: bad-solid fill under white ink, so it
-  // never reads as the success style. White on bad-solid is 4.5:1 or more in
+  // A failure (or partial failure) toast: bad-solid fill under accent-fg ink, so it
+  // never reads as the success style. accent-fg (white) on bad-solid is 4.5:1 or more in
   // both themes (index.css keeps the light value in dark).
   const error = tone === 'error';
 
@@ -39,12 +39,12 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
     <>
       {icon !== undefined ? (
         <span
-          className={`flex h-6 w-6 shrink-0 items-center justify-center ${error ? 'text-white' : 'text-fg-2'}`}
+          className={`flex h-6 w-6 shrink-0 items-center justify-center ${error ? 'text-accent-fg' : 'text-fg-2'}`}
         >
           {icon}
         </span>
       ) : error ? (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-white">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-accent-fg">
           <IconAlertTriangle size={ICON_SIZE.inline} />
         </span>
       ) : success ? (
@@ -53,11 +53,11 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         </span>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={`truncate text-base font-medium ${error ? 'text-white' : 'text-fg'}`}>
+        <span className={`truncate text-base font-medium ${error ? 'text-accent-fg' : 'text-fg'}`}>
           {title}
         </span>
         {description !== undefined ? (
-          <span className={`truncate text-sm ${error ? 'text-white' : 'text-fg-2'}`}>
+          <span className={`truncate text-sm ${error ? 'text-accent-fg' : 'text-fg-2'}`}>
             {description}
           </span>
         ) : null}
@@ -94,7 +94,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         aria-label="Dismiss notification"
         onClick={() => onDismiss(id)}
         className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors ${
-          error ? 'text-white hover:opacity-90' : 'text-fg-2 hover:bg-panel-2 hover:text-fg'
+          error ? 'text-accent-fg hover:opacity-90' : 'text-fg-2 hover:bg-panel-2 hover:text-fg'
         }`}
       >
         <IconX />
@@ -113,7 +113,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
           }}
           className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
             error
-              ? 'text-white underline hover:opacity-90 focus-visible:ring-white'
+              ? 'text-accent-fg underline hover:opacity-90 focus-visible:ring-accent-fg'
               : 'text-accent hover:bg-panel-2 focus-visible:ring-accent'
           }`}
         >

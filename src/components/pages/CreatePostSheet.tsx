@@ -6,6 +6,7 @@ import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { PressableRow } from '@/components/ui/PressableRow';
 import {
   computeMenuPlacement,
@@ -1377,14 +1378,7 @@ export function CreatePostSheet({
               captionError={gridError('caption')}
               titleError={gridError('title')}
             />
-            {submitError !== null ? (
-              <div
-                role="alert"
-                className="rounded-md border border-bad px-3 py-2 text-base text-bad"
-              >
-                {submitError}
-              </div>
-            ) : null}
+            {submitError !== null ? <ErrorNote>{submitError}</ErrorNote> : null}
           </div>
           {preview !== null ? (
             <aside
@@ -1549,7 +1543,7 @@ export function CreatePostSheet({
                 {newBucketOpen ? (
                   <div
                     data-new-bucket=""
-                    className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3"
+                    className="mt-2 flex flex-col gap-2 rounded-lg border border-border bg-panel-2 p-3"
                   >
                     <Input
                       aria-label="New bucket name"
@@ -1624,11 +1618,7 @@ export function CreatePostSheet({
             </div>
           ) : null}
 
-          {submitError !== null ? (
-            <div role="alert" className="rounded-md border border-bad px-3 py-2 text-base text-bad">
-              {submitError}
-            </div>
-          ) : null}
+          {submitError !== null ? <ErrorNote>{submitError}</ErrorNote> : null}
         </div>
       </div>
       {overlays}

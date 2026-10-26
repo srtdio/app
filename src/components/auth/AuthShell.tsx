@@ -45,7 +45,7 @@ export function AuthShell({
             to="/"
             aria-label="srtd home"
             data-auth-home-link=""
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [&_.mark]:h-[26px] [&_.mark]:w-auto md:[&_.mark]:h-[30px] [&_.mark-dot]:fill-accent"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [&_.mark]:h-[26px] [&_.mark]:w-auto md:[&_.mark]:h-[30px] [&_.mark-dot]:fill-accent"
           >
             <Wordmark />
           </Link>

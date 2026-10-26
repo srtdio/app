@@ -51,7 +51,7 @@ const SHEET_LOAD_FAILED = "Couldn't load";
 const FLOAT_SURFACE_CLASS = 'border border-border bg-panel';
 
 /** Opacity-only fade for the pill and the latest button. */
-const FADE = 'transition-opacity duration-[160ms] motion-reduce:transition-none';
+const FADE = 'transition-opacity duration-base motion-reduce:transition-none';
 
 /** The unread divider row above the first unread message: hairline + "N unread". */
 export function UnreadDivider({ count }: { count: number }): ReactElement {
@@ -96,11 +96,7 @@ export function UnreadPill(props: {
         onClick={props.onJump}
         onContextMenu={(e) => e.preventDefault()}
         // Secondary is the float surface (bg-panel, border-border, text-fg).
-        className={cn(
-          'shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          NO_TOUCH_SELECT,
-          props.visible && 'pointer-events-auto',
-        )}
+        className={cn('shadow-2xl', NO_TOUCH_SELECT, props.visible && 'pointer-events-auto')}
       >
         <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
         <span className="font-mono tabular-nums text-accent">{props.count}</span>
@@ -134,11 +130,7 @@ export function LatestButton(props: {
         tabIndex={props.visible ? 0 : -1}
         onClick={props.onTap}
         onContextMenu={(e) => e.preventDefault()}
-        className={cn(
-          'shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-          FLOAT_SURFACE_CLASS,
-          NO_TOUCH_SELECT,
-        )}
+        className={cn('shadow-2xl', FLOAT_SURFACE_CLASS, NO_TOUCH_SELECT)}
       >
         <IconChevronDown size={ICON_SIZE.control} />
         <CountBadge count={props.count} className="absolute -right-1 -top-1" />

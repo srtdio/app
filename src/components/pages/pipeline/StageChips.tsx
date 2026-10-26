@@ -37,8 +37,9 @@ export function chipRowMask(fadeStart: boolean, fadeEnd: boolean): string {
  * The Pipeline stage switcher: one horizontally scrollable, non-wrapping row of
  * the shared ui/Chip (the stages, each with its stage dot, plus the UI-only All), the same chip and
  * selected style as Briefs, Activity and Help. A chip shows its count only when
- * above 0. Runs full-bleed to the right edge with an edge-cut fade applied only
- * when the row overflows. Each chip is a 44px touch target; the active chip is
+ * above 0. The SectionHeader row already pads it, so the first chip lines up
+ * with the search field and the cards; an edge-cut fade applies only when the
+ * row overflows. Each chip is a 44px touch target; the active chip is
  * selected and carries aria-current.
  */
 export function StageChips({ items, active, onChange }: StageChipsProps): ReactElement {
@@ -72,7 +73,7 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
     <div
       ref={rowRef}
       data-chip-row=""
-      className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 pl-4 -mr-4 md:pl-6 md:-mr-6"
+      className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1"
       style={{ paddingRight: 0, WebkitMaskImage: mask, maskImage: mask }}
     >
       {items.map((item) => {

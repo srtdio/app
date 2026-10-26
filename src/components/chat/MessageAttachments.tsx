@@ -499,7 +499,7 @@ export function AlbumGrid({
             {tile.more > 0 ? (
               <span
                 aria-hidden="true"
-                className="absolute inset-0 flex items-center justify-center bg-black/50 text-2xl font-semibold text-white"
+                className="absolute inset-0 flex items-center justify-center bg-black/50 text-2xl font-semibold text-overlay-fg"
               >
                 +{tile.more}
               </span>
@@ -621,7 +621,7 @@ export function AttachmentsFallback(props: {
                 onClick={() =>
                   void downloadFile(remoteFileSource(props.cache, attachment.assetId), name)
                 }
-                className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="shrink-0"
               >
                 <IconDownload size={ICON_SIZE.control} />
               </IconButton>

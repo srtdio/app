@@ -65,6 +65,9 @@ describe('UnsafeLinkSheet', () => {
     const anyway = dialog.querySelector('a[data-unsafe-open-anyway]');
     expect(anyway?.getAttribute('rel')).toBe('noopener noreferrer');
     expect(anyway?.getAttribute('target')).toBe('_blank');
+    // The warn ink wins by its data variant, never by a "!" modifier.
+    expect(anyway?.className).toContain('data-[unsafe-open-anyway]:text-[color:var(--warn-ink)]');
+    expect(anyway?.className).not.toMatch(/(^|\s)!/);
   });
 
   it('traps Tab inside the sheet', async () => {

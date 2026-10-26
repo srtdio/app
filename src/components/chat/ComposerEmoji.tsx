@@ -78,7 +78,7 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
         onClick={() => setOpen((o) => !o)}
         // buttonRef returns focus on Escape. Accent while open (aria-expanded
         // outranks the base text-fg-2 without an important override).
-        className="aria-expanded:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="aria-expanded:text-accent"
       >
         <IconSmile size={ICON_SIZE.control} />
       </IconButton>
@@ -105,7 +105,7 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
                     label={emoji}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pick(emoji)}
-                    className="text-2xl leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="text-2xl leading-none"
                   >
                     {emoji}
                   </IconButton>

@@ -320,6 +320,8 @@ describe('week list layout (L1-L4)', () => {
     const weekday = html.match(/<span data-plan-day-weekday="" class="([^"]*)">([^<]*)<\/span>/);
     expect(weekday?.[2]).toBe('Thu');
     expect(weekday?.[1]).toContain('uppercase');
+    expect(weekday?.[1]).toContain('tracking-[0.06em]');
+    expect(weekday?.[1]).not.toContain('tracking-[.08em]');
     const number = html.match(/<span data-plan-day-number="" class="([^"]*)">([^<]*)<\/span>/);
     expect(number?.[2]).toBe('15');
     expect((number?.[1] ?? '').split(' ')).toEqual(

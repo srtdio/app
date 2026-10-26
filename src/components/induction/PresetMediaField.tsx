@@ -378,7 +378,7 @@ function MediaTile({
 }): ReactElement {
   const label = item.kind === 'image' ? 'Remove photo' : 'Remove video';
   return (
-    <li className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md border border-border bg-panel-3">
+    <li className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-3">
       {item.previewUrl !== undefined ? (
         <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
       ) : (

@@ -615,7 +615,7 @@ export const CARD_SKELETON = 'h-[118px] w-[240px] rounded-xl border border-borde
 
 /** A small pill laid over the cover image. */
 const MEDIA_PILL =
-  'inline-flex h-5 items-center gap-1 rounded-md bg-panel px-1.5 text-xs font-medium text-fg';
+  'inline-flex h-5 items-center gap-1 rounded-lg bg-panel px-1.5 text-xs font-medium text-fg';
 
 /**
  * The card's tap and Enter key: both open its sheet, neither navigates (the sheet

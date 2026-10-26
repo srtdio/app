@@ -24,6 +24,7 @@ import {
 import { ApproveConfirm } from '@/components/ui/ApproveConfirm';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { PostCard } from '@/components/pages/PostCard';
+import { BoardColumns } from '@/components/pages/pipeline/board-columns';
 import {
   APPROVE_ROLE_BLOCKED,
   BOARD_CAP,
@@ -306,10 +307,18 @@ describe('PipelineBoard single-stage grid', () => {
     });
     const grids = findAll(tree, (el) => Boolean(attr(el, 'data-board-grid')));
     expect(grids).toHaveLength(1);
+    // Independent column stacks (cards as tall as their content), not a CSS grid.
+    expect(grids[0]!.type).toBe(BoardColumns);
     const className = (grids[0]!.props as { className: string }).className;
-    expect(className).toContain('grid-cols-[repeat(auto-fill,minmax(220px,1fr))]');
-    expect(className).toContain('gap-4');
+    expect(className).not.toContain('grid');
     expect(className).not.toContain('overflow');
+    const markup = renderToStaticMarkup(<MemoryRouter>{tree}</MemoryRouter>);
+    expect(markup).toContain('flex items-start gap-4');
+    expect(markup).toContain('flex min-w-0 flex-1 flex-col gap-4');
+    // The card wrapper no longer stretches to a shared row height.
+    for (const wrapper of findAll(tree, (el) => Boolean(attr(el, 'data-post-id')))) {
+      expect((wrapper.props as { className: string }).className).not.toContain('h-full');
+    }
     expect(findAll(tree, (el) => Boolean(attr(el, 'data-drag-container')))).toHaveLength(0);
     expect(findAll(tree, (el) => Boolean(attr(el, 'data-board-scroll')))).toHaveLength(0);
     // Every post renders (no cap, no View all); none is draggable (W4 fix 9).

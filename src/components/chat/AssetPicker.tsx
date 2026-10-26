@@ -304,7 +304,7 @@ export function AssetTile(props: {
           props.active && 'bg-accent-soft',
         )}
       >
-        <span className="relative block overflow-hidden rounded-md">
+        <span className="relative block overflow-hidden rounded-lg">
           <Thumbnail
             assetVersionId={image ? asset.versionId : null}
             cache={sharedCardPresignCache()}

@@ -110,7 +110,7 @@ function stripFrame(
 
 /** A small pill laid over a slide. */
 const STRIP_PILL =
-  'pointer-events-none inline-flex h-6 items-center gap-1 rounded-md bg-panel px-2 text-sm font-medium text-fg';
+  'pointer-events-none inline-flex h-6 items-center gap-1 rounded-lg bg-panel px-2 text-sm font-medium text-fg';
 
 /** The sheet's talk-about label. */
 export function talkAboutLabel(): string {

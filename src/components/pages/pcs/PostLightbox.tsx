@@ -457,7 +457,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             keep both legible over any photo. */}
         <span
           className={cn(
-            'pointer-events-none absolute left-2 top-2 rounded-md bg-overlay-surface px-2 py-1 font-mono text-base tabular-nums text-overlay-fg',
+            'pointer-events-none absolute left-2 top-2 rounded-lg bg-overlay-surface px-2 py-1 font-mono text-base tabular-nums text-overlay-fg',
             chromeMotion(chromeVisible),
           )}
         >
@@ -637,13 +637,7 @@ function GracefulPanel({
     <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-2xl">
       <p className="text-sm text-fg-3">{message}</p>
       {onDownload !== undefined ? (
-        <Button
-          type="button"
-          variant="primary"
-          onClick={onDownload}
-          disabled={busy}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
+        <Button type="button" variant="primary" onClick={onDownload} disabled={busy}>
           <IconDownload size={ICON_SIZE.inline} />
           Download
         </Button>

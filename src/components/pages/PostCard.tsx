@@ -204,7 +204,7 @@ function CarouselBadge() {
   return (
     <span
       aria-label="Carousel"
-      className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-md bg-overlay-badge text-overlay-fg"
+      className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-lg bg-overlay-badge text-overlay-fg"
     >
       <IconCarousel size={ICON_SIZE.inline} />
     </span>
@@ -464,7 +464,7 @@ export function PostCard({
             <span
               data-post-card-due={due.overdue ? 'overdue' : ''}
               className={cn(
-                'min-w-0 truncate whitespace-nowrap text-sm tabular-nums',
+                'min-w-0 truncate whitespace-nowrap font-mono text-sm tabular-nums',
                 due.overdue ? 'text-bad' : 'text-fg-3',
               )}
             >
@@ -510,7 +510,7 @@ export function PostCard({
                     aria-haspopup="menu"
                     data-post-card-move=""
                     draggable={false}
-                    className="relative z-10 -my-3 -mr-3 text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="relative z-10 -my-3 -mr-3 text-fg-3"
                   >
                     <IconMore size={ICON_SIZE.control} />
                   </IconButton>

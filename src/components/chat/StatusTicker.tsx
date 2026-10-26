@@ -359,7 +359,7 @@ export function StatusTickerBar(props: {
       >
         <span
           data-status-chevron-icon={open ? 'up' : 'down'}
-          className="flex transition-transform duration-200 motion-reduce:transition-none"
+          className="flex transition-transform duration-slow motion-reduce:transition-none"
           style={open ? { transform: 'rotate(180deg)' } : undefined}
         >
           <IconChevronDown size={ICON_SIZE.inline} />

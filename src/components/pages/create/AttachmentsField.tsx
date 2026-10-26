@@ -153,7 +153,7 @@ export function attachmentItemList(
       return (
         <li
           key={`${item.versionId}-${index}`}
-          className="relative aspect-square h-20 shrink-0 overflow-hidden rounded-md border border-border bg-panel-3"
+          className="relative aspect-square h-20 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-3"
         >
           {item.previewUrl === undefined ? (
             <span className="flex h-full w-full items-center justify-center text-fg-3">
@@ -178,7 +178,7 @@ export function attachmentItemList(
     return (
       <li
         key={`${item.versionId}-${index}`}
-        className="flex min-h-[44px] w-full items-center gap-2 rounded-md border border-border bg-panel-2 px-3 py-2"
+        className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2"
       >
         <span className="shrink-0 text-fg-3">
           {item.kind === 'link' ? (
@@ -465,7 +465,7 @@ export function ComposerMediaFrame({
             <span
               data-frame-counter=""
               aria-live="polite"
-              className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium tabular-nums text-white"
+              className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg"
             >
               {slideCounterText(navIndex, count)}
             </span>
@@ -479,7 +479,7 @@ export function ComposerMediaFrame({
                   key={`${item.versionId}-${index}`}
                   className={cn(
                     'h-1.5 w-1.5 rounded-full transition-colors motion-reduce:transition-none',
-                    slide === navIndex ? 'bg-white' : 'bg-white/50',
+                    slide === navIndex ? 'bg-overlay-fg' : 'bg-overlay-fg/50',
                   )}
                 />
               ))}
@@ -961,7 +961,7 @@ export function AttachmentsField({
         <div
           data-upload-failed=""
           role="alert"
-          className="flex flex-wrap items-center gap-2 rounded-md border border-bad bg-bad-soft px-3 py-1"
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-bad bg-bad-soft px-3 py-1"
         >
           <p className="min-w-0 flex-1 text-base text-bad">{failedFilesLine(failedCount)}</p>
           <Button type="button" variant="link" className="shrink-0" onClick={retryFailed}>
@@ -981,7 +981,7 @@ export function AttachmentsField({
       {framed && !dropzoneEmpty ? addButtons : null}
 
       {linkOpen ? (
-        <div className="flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3">
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-panel-2 p-3">
           <Input
             type="url"
             inputMode="url"
@@ -1136,6 +1136,6 @@ export function firstMedia(
 
 function cnPending(error: string | null): string {
   return error !== null
-    ? 'flex min-h-[44px] w-full items-center gap-2 rounded-md border border-bad bg-panel-2 px-3 py-2'
-    : 'flex min-h-[44px] w-full items-center gap-2 rounded-md border border-border bg-panel-2 px-3 py-2';
+    ? 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-bad bg-panel-2 px-3 py-2'
+    : 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2';
 }

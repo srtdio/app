@@ -144,7 +144,8 @@ describe('Sheet busy', () => {
     expect(x.hasAttribute('disabled')).toBe(false);
     expect(x.className).toContain('h-11');
     expect(x.className).toContain('w-11');
-    expect(x.className).toContain('!text-fg-3');
+    expect(x.className).toContain('aria-disabled:text-fg-3');
+    expect(x.className).not.toContain('!');
   });
 
   it('uses a custom busy label', async () => {

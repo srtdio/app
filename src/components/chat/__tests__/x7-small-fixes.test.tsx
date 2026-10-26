@@ -99,7 +99,10 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
   });
 
   it('in-chat search input is 16px on a phone', () => {
-    expect(BAR_INPUT.split(' ')).toEqual(expect.arrayContaining(['text-input', 'md:text-base']));
+    // ui/Input owns the 16px phone text (text-input md:text-base).
+    expect(source('../InChatSearchBar.tsx')).toMatch(/<Input\s+type="search"/);
+    expect(source('../../ui/Input.tsx')).toContain('text-input md:text-base');
+    expect(BAR_INPUT).toBe('min-w-0 flex-1');
     expect(BAR_INPUT).not.toContain('sm:text-');
   });
 

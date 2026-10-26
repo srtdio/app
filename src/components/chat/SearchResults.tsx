@@ -5,6 +5,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { cn } from '@/lib/cn';
 import { prefersReducedMotion } from '@/lib/use-is-laptop';
+import { DUR_BASE_MS } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { chatDisplayName } from '@/lib/chat/chat-name';
@@ -71,6 +72,17 @@ export function useMessageSearch(params: {
 }
 
 /**
+ * The --ease-enter token's curve, read at runtime: Element.animate() rejects a
+ * var() easing, so the value is resolved first. The fallback is the token's
+ * own curve, used only when the variable reads empty.
+ */
+function enterEasing(): string {
+  const root = getComputedStyle(document.documentElement);
+  const value = root.getPropertyValue('--ease-enter').trim();
+  return value !== '' ? value : 'cubic-bezier(0.16, 1, 0.3, 1)';
+}
+
+/**
  * Fade an element in on mount: opacity only (no movement, no scale). Runs
  * before paint, so the first frame is already the final layout.
  */
@@ -81,8 +93,8 @@ export function useFadeIn(ref: RefObject<HTMLElement>): void {
     // Users who asked for less motion get no fade.
     if (prefersReducedMotion()) return;
     const animation = el.animate([{ opacity: 0 }, { opacity: 1 }], {
-      duration: 150,
-      easing: 'ease-out',
+      duration: DUR_BASE_MS,
+      easing: enterEasing(),
     });
     return () => animation.cancel();
   }, [ref]);

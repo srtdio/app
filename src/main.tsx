@@ -43,7 +43,7 @@ async function recoverFromFailedBoot(err: unknown): Promise<void> {
 function ErrorFallback() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-bg text-fg">
-      <span className="text-legacy-sm">Something went wrong. Refresh to try again.</span>
+      <span className="text-base">Something went wrong. Refresh to try again.</span>
     </main>
   );
 }

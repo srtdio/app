@@ -67,7 +67,7 @@ export function PreviewChip({
       type="button"
       variant="secondary"
       onClick={onClick}
-      className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none"
+      className="motion-reduce:transition-none"
     >
       <IconEye size={ICON_SIZE.inline} />
       {previewChipLabel(platform)}
@@ -263,7 +263,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
   if (kind === 'document') {
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex min-h-[44px] items-center gap-2 rounded-md border border-border bg-panel-2 px-3 py-2">
+        <div className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2">
           <IconFile size={ICON_SIZE.inline} />
           <span className="min-w-0 flex-1 truncate text-base text-fg">{firstMedia?.filename}</span>
         </div>
@@ -514,7 +514,7 @@ function CropBox({
         Original · {dims.w} x {dims.h}
       </h3>
       <div
-        className="relative mx-auto w-full max-w-[320px] overflow-hidden rounded-md bg-panel-3 [&>img]:h-full [&>img]:w-full [&>img]:object-fill [&>video]:h-full [&>video]:w-full [&>video]:object-fill"
+        className="relative mx-auto w-full max-w-[320px] overflow-hidden rounded-lg bg-panel-3 [&>img]:h-full [&>img]:w-full [&>img]:object-fill [&>video]:h-full [&>video]:w-full [&>video]:object-fill"
         style={{ aspectRatio: String(dims.w / dims.h) }}
       >
         {media}

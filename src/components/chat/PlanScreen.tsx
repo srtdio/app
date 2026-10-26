@@ -82,6 +82,7 @@ import {
 import type { PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
@@ -483,7 +484,7 @@ export function PlanPage(props: {
         aria-label={props.backLabel}
         data-plan-back-text=""
         onClick={props.onBack}
-        className="-ml-2 shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-ml-2 shrink-0 text-fg"
       >
         {props.backText}
       </Button>
@@ -492,7 +493,7 @@ export function PlanPage(props: {
         type="button"
         label={props.backLabel}
         onClick={props.onBack}
-        className="-ml-[11px] shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-ml-[11px] shrink-0 text-fg"
       >
         {props.backIcon ?? <IconChevronLeft size={ICON_SIZE.control} />}
       </IconButton>
@@ -504,7 +505,7 @@ export function PlanPage(props: {
       label={props.closeLabel ?? 'Close'}
       data-plan-close=""
       onClick={props.onDismiss ?? props.onBack}
-      className="-mr-3 shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="-mr-3 shrink-0 text-fg"
     >
       <IconX size={ICON_SIZE.control} />
     </IconButton>
@@ -549,7 +550,7 @@ export function PlanPage(props: {
             <div
               data-plan-page-titles=""
               {...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {})}
-              className="flex min-w-0 flex-1 flex-col rounded-md focus:outline-none"
+              className="flex min-w-0 flex-1 flex-col rounded-lg focus:outline-none"
             >
               {props.titleSlot ?? (
                 <h2 className={PLAN_HEADER_TITLE}>
@@ -581,7 +582,7 @@ export function PlanPage(props: {
           <div
             data-plan-page-titles=""
             {...(desktop ? { 'data-plan-heading': '', tabIndex: -1 } : {})}
-            className="flex min-w-0 flex-1 flex-col rounded-md focus:outline-none"
+            className="flex min-w-0 flex-1 flex-col rounded-lg focus:outline-none"
           >
             {props.titleSlot ?? (
               <h2 className="truncate text-lg font-semibold text-fg">
@@ -720,13 +721,13 @@ export function ConceptDateField(props: {
     <label className="flex flex-col gap-1">
       <span className="text-md text-fg-3">Date (optional)</span>
       <span className="flex items-center gap-1.5">
-        <input
+        <Input
           type="date"
           data-plan-concept-date=""
           value={props.value}
           disabled={props.disabled === true}
           onChange={(e) => props.onChange(e.target.value)}
-          className="h-11 min-h-[44px] w-full min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3.5 font-mono text-input text-fg placeholder:text-fg-3 md:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+          className="min-w-0 flex-1 font-mono disabled:opacity-60"
         />
         {props.value !== '' ? (
           <IconButton
@@ -735,7 +736,7 @@ export function ConceptDateField(props: {
             data-plan-concept-date-clear=""
             disabled={props.disabled === true}
             onClick={() => props.onChange('')}
-            className="shrink-0 text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+            className="shrink-0 text-fg-3 disabled:opacity-60"
           >
             <IconX size={ICON_SIZE.control} />
           </IconButton>
@@ -757,7 +758,7 @@ export function PlanPill(props: { pill: StatusPill }): ReactElement {
     <span
       data-plan-pill={props.pill.side}
       className={cn(
-        'inline-flex min-h-[24px] items-center rounded-md px-2 text-md',
+        'inline-flex min-h-[24px] items-center rounded-lg px-2 text-md',
         PILL_TONES[props.pill.tone],
       )}
     >
@@ -2062,7 +2063,7 @@ export function PlanScreen(props: {
       aria-busy={saving}
       disabled={saving || headerProblem !== null}
       onClick={() => void saveChanges()}
-      className="-mr-2 shrink-0 md:mr-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="-mr-2 shrink-0 md:mr-0"
     >
       {saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}
     </Button>
@@ -2182,7 +2183,7 @@ export function PlanScreen(props: {
               type="button"
               label="Dismiss"
               onClick={() => setSkippedNotes([])}
-              className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="shrink-0"
             >
               <IconX size={ICON_SIZE.control} />
             </IconButton>
@@ -2487,7 +2488,7 @@ export function PlanEditHeader(props: {
             data-plan-save-retry=""
             disabled={props.saving}
             onClick={props.onRetry}
-            className="shrink-0 text-bad hover:bg-panel hover:text-bad focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="shrink-0 text-bad hover:bg-panel hover:text-bad"
           >
             {RETRY_LABEL}
           </Button>
@@ -2495,7 +2496,7 @@ export function PlanEditHeader(props: {
       ) : null}
       <label className="flex flex-col gap-1">
         <span className="text-md text-fg-3">{EDIT_TITLE_LABEL}</span>
-        <input
+        <Input
           data-plan-edit-title=""
           value={draft.title}
           maxLength={PLAN_TITLE_MAX}
@@ -2515,7 +2516,7 @@ export function PlanEditHeader(props: {
         ).map(([field, label]) => (
           <label key={field} className="flex w-full min-w-0 flex-col gap-1">
             <span className="text-md text-fg-3">{label}</span>
-            <input
+            <Input
               type="date"
               data-plan-edit-date={field}
               value={draft[field]}
@@ -2687,7 +2688,7 @@ export function RenameField(props: {
   const valid = renameTitle(props.value) !== null;
   return (
     <div data-plan-rename="" className="flex min-w-0 items-center gap-1">
-      <input
+      <Input
         aria-label="Plan title"
         data-plan-rename-input=""
         autoFocus
@@ -2701,7 +2702,7 @@ export function RenameField(props: {
           if (e.key === 'Enter' && valid) props.onDone();
           if (e.key === 'Escape') props.onCancel();
         }}
-        className="h-11 min-h-[44px] min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-input font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60 md:text-base"
+        className="min-w-0 flex-1 font-semibold disabled:opacity-60"
       />
       <IconButton
         type="button"
@@ -2709,7 +2710,7 @@ export function RenameField(props: {
         data-plan-rename-cancel=""
         disabled={props.busy}
         onClick={props.onCancel}
-        className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+        className="shrink-0 disabled:opacity-60"
       >
         <IconX size={ICON_SIZE.control} />
       </IconButton>
@@ -2719,7 +2720,7 @@ export function RenameField(props: {
         data-plan-rename-done=""
         disabled={props.busy || !valid}
         onClick={props.onDone}
-        className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="shrink-0"
       >
         Done
       </Button>
@@ -3277,7 +3278,6 @@ function AddRow(props: {
         aria-label={label}
         data-plan-add={props.day ?? 'none'}
         onClick={() => props.onAdd(props.day)}
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <IconPlus size={ICON_SIZE.inline} />
         Add
@@ -3289,7 +3289,7 @@ function AddRow(props: {
 /**
  * A day's calendar tile, shown once per day group: 56x56, radius 10, a 1px
  * border-strong, bg-panel. An 18px strip on top holds the weekday (10px/12px,
- * 700, uppercase, .08em, bg-panel-2, text-fg-2); the day number sits centred
+ * 600, uppercase, 0.06em, bg-panel-2, text-fg-2); the day number sits centred
  * below it (JetBrains Mono 20px/24px, 500). Today (the workspace zone): the
  * strip in the accent with accent-fg text and an accent border. "No date":
  * the strip stays empty (bg-panel-2) and the body reads "No date" centred on
@@ -3314,7 +3314,7 @@ export function DayColumn(props: {
       <span
         data-plan-day-weekday=""
         className={cn(
-          'flex h-[18px] shrink-0 items-center justify-center whitespace-nowrap text-xs font-semibold uppercase leading-3 tracking-[.08em]',
+          'flex h-[18px] shrink-0 items-center justify-center whitespace-nowrap text-xs font-semibold uppercase leading-3 tracking-[0.06em]',
           isToday ? 'bg-accent text-accent-fg' : 'bg-panel-2 text-fg-2',
         )}
       >
@@ -3339,9 +3339,10 @@ export function DayColumn(props: {
 const LINE_LABEL = 'w-9 shrink-0 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /**
- * The PLAN switch: "OK" and "Not OK" joined (36px visual, min 84px each,
- * 1px border-strong, bg-panel), each in a 44px tall target. Reopened from
- * the pill, the current answer is highlighted. Not full width.
+ * The PLAN switch: "OK" and "Not OK" joined, each the shared 44px Button
+ * (min 84px, 1px border-strong, bg-panel; the inner corners square so the two
+ * read as one control). Reopened from the pill, the current answer is
+ * highlighted (good-soft / bad-soft). Not full width.
  */
 export function PlanSwitch(props: {
   side: ReviewSide;
@@ -3351,8 +3352,7 @@ export function PlanSwitch(props: {
   onOk: () => void;
   onNotOk: () => void;
 }): ReactElement {
-  const visual =
-    'flex h-9 min-w-[84px] items-center justify-center gap-1.5 border px-3.5 text-md font-semibold';
+  const segment = 'min-w-[84px] border';
   return (
     <span
       role="group"
@@ -3362,56 +3362,47 @@ export function PlanSwitch(props: {
       data-plan-control="switch"
       className="flex shrink-0 items-center"
     >
-      <PressableRow
+      <Button
         type="button"
-        inline
+        variant="ghost"
         aria-pressed={props.current === 'approved'}
         data-plan-ok=""
         onClick={props.onOk}
-        className="group flex h-11 items-center"
+        className={cn(
+          segment,
+          'rounded-r-none text-good hover:text-good',
+          props.current === 'approved'
+            ? 'border-good bg-good-soft'
+            : 'border-border-strong bg-panel',
+        )}
       >
-        <span
-          className={cn(
-            visual,
-            'rounded-l-lg text-good group-focus-visible:ring-2 group-focus-visible:ring-accent',
-            props.current === 'approved'
-              ? 'border-good bg-good-soft'
-              : 'border-border-strong bg-panel',
-          )}
-        >
-          <IconCheck size={ICON_SIZE.inline} />
-          {PLAN_OK_LABEL}
-        </span>
-      </PressableRow>
-      <PressableRow
+        <IconCheck size={ICON_SIZE.inline} />
+        {PLAN_OK_LABEL}
+      </Button>
+      <Button
         type="button"
-        inline
+        variant="ghost"
         aria-pressed={props.current === 'changes'}
         data-plan-not-ok=""
         onClick={props.onNotOk}
-        className="group -ml-px flex h-11 items-center"
+        className={cn(
+          segment,
+          '-ml-px rounded-l-none text-bad hover:text-bad',
+          props.current === 'changes' ? 'border-bad bg-bad-soft' : 'border-border-strong bg-panel',
+        )}
       >
-        <span
-          className={cn(
-            visual,
-            'rounded-r-lg text-bad group-focus-visible:ring-2 group-focus-visible:ring-accent',
-            props.current === 'changes'
-              ? 'border-bad bg-bad-soft'
-              : 'border-border-strong bg-panel',
-          )}
-        >
-          <IconX size={ICON_SIZE.inline} />
-          {PLAN_NOT_OK_LABEL}
-        </span>
-      </PressableRow>
+        <IconX size={ICON_SIZE.inline} />
+        {PLAN_NOT_OK_LABEL}
+      </Button>
     </span>
   );
 }
 
 /**
- * The decided PLAN pill: 32px visual in a 44px target, fully round, icon +
- * "OK" / "Not OK" + a chevron at 70%. Solid good / bad fills (light values in
- * both themes) under white text. Tapping it reopens the switch.
+ * The decided PLAN pill: the shared 44px Button in the success / danger
+ * variant (solid good / bad fills, light values in both themes, under
+ * accent-fg text), icon + "OK" / "Not OK" + a chevron at 70%. Tapping it
+ * reopens the switch.
  */
 export function PlanDecidedPill(props: {
   side: ReviewSide;
@@ -3421,30 +3412,23 @@ export function PlanDecidedPill(props: {
 }): ReactElement {
   const ok = props.status === 'approved';
   return (
-    <PressableRow
+    <Button
       type="button"
-      inline
+      variant={ok ? 'success' : 'danger'}
       aria-label={`${PLAN_LINE_LABEL} ${ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}: ${props.title}`}
       aria-haspopup="true"
       data-plan-slot={props.side}
       data-plan-slot-state={planControlState(props.status)}
       data-plan-control="pill"
       onClick={props.onChange}
-      className="group flex h-11 shrink-0 items-center"
+      className="shrink-0"
     >
-      <span
-        className={cn(
-          'flex h-8 items-center gap-1.5 rounded-full px-3 text-md font-semibold text-white group-focus-visible:ring-2 group-focus-visible:ring-accent group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-panel',
-          ok ? 'bg-[var(--good-solid)]' : 'bg-[var(--bad-solid)]',
-        )}
-      >
-        {ok ? <IconCheck size={ICON_SIZE.inline} /> : <IconX size={ICON_SIZE.inline} />}
-        {ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}
-        <span aria-hidden="true" className="opacity-70">
-          <IconChevronDown size={ICON_SIZE.inline} />
-        </span>
+      {ok ? <IconCheck size={ICON_SIZE.inline} /> : <IconX size={ICON_SIZE.inline} />}
+      {ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}
+      <span aria-hidden="true" className="opacity-70">
+        <IconChevronDown size={ICON_SIZE.inline} />
       </span>
-    </PressableRow>
+    </Button>
   );
 }
 

@@ -644,7 +644,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
             variant="link"
             data-starred-edit={editing ? 'done' : 'edit'}
             onClick={() => onEditingChange(!editing)}
-            className="min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="min-w-[44px]"
           >
             {editing ? 'Done' : 'Edit'}
           </Button>
@@ -725,7 +725,7 @@ export function StarredSheet(props: {
           variant="link"
           data-starred-edit={editing ? 'done' : 'edit'}
           onClick={() => setEditing((on) => !on)}
-          className="min-w-[44px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="min-w-[44px] shrink-0"
         >
           {editing ? 'Done' : 'Edit'}
         </Button>

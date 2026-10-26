@@ -40,7 +40,7 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={onCreateWorkspace}
-          className="min-w-0 border-dashed text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="min-w-0 border-dashed text-left"
         >
           <IconPlus size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
           <span className="truncate">Create your workspace</span>
@@ -55,7 +55,7 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="md:hidden min-w-0 max-w-[190px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="md:hidden min-w-0 max-w-[190px] text-left"
         >
           {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
               short lines at word breaks instead of clipping the platform. */}

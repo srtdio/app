@@ -96,7 +96,7 @@ export function ConfirmDialog({
       >
         <h2 className="text-lg font-semibold text-fg">{title}</h2>
         {message !== undefined && message !== '' ? (
-          <p data-confirm-message="" className="mt-2 text-base text-fg-2">
+          <p data-confirm-message="" className="mt-2 whitespace-pre-line text-base text-fg-2">
             {message}
           </p>
         ) : null}

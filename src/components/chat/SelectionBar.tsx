@@ -46,7 +46,11 @@ export function SelectionHeader(props: {
       <span
         data-selection-count=""
         aria-live="polite"
-        className={cn('min-w-0 flex-1 truncate text-fg', sized(HEADER_NAME_TYPE, props.layout))}
+        // pl-2: the header row is px-2 (for a back arrow), so the count starts on the 16px edge.
+        className={cn(
+          'min-w-0 flex-1 truncate pl-2 text-fg',
+          sized(HEADER_NAME_TYPE, props.layout),
+        )}
       >
         {selectedCountLabel(props.count)}
       </span>
@@ -55,7 +59,7 @@ export function SelectionHeader(props: {
         variant="link"
         data-selection-cancel=""
         onClick={props.onCancel}
-        className="min-w-[44px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="min-w-[44px] shrink-0"
       >
         Cancel
       </Button>

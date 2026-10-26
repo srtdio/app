@@ -174,6 +174,24 @@ describe('X6 Recently deleted link', () => {
       'Recently deleted',
     );
   });
+
+  it("is the link variant, its text on the cards' left edge (no double gutter)", async () => {
+    listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
+    await mount();
+    const link = document.querySelector('[data-recently-deleted-link]');
+    const cls = (link?.getAttribute('class') ?? '').split(/\s+/);
+    // The shared link variant (accent text, its own 8px side padding), 44 tall.
+    expect(cls).toContain('text-accent');
+    expect(cls).toContain('h-11');
+    expect(cls).not.toContain('text-fg-2');
+    // No duplicate call-site focus ring; the primitive carries it.
+    expect(cls.filter((c) => c === 'focus-visible:ring-2')).toHaveLength(1);
+    // The row's left gutter is the page's (16 / 24) less the link's 8px padding.
+    const row = (link?.parentElement?.getAttribute('class') ?? '').split(/\s+/);
+    expect(row).toEqual(expect.arrayContaining(['pl-2', 'md:pl-4', 'pr-4', 'md:pr-6']));
+    expect(row).not.toContain('px-4');
+    expect(row).not.toContain('md:px-6');
+  });
 });
 
 describe('X6 bulk delete keeps the files in use', () => {

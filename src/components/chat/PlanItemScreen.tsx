@@ -752,7 +752,7 @@ export function PlanItemScreen(props: {
                       data-plan-item-more=""
                       aria-haspopup="menu"
                       aria-expanded={conceptMenuOpen}
-                      className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      className="shrink-0 text-fg"
                     >
                       <IconMore size={ICON_SIZE.control} />
                     </IconButton>
@@ -770,7 +770,7 @@ export function PlanItemScreen(props: {
                   data-plan-more=""
                   aria-expanded={moreOpen}
                   onClick={() => setMoreOpen(true)}
-                  className="shrink-0 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="shrink-0 text-fg"
                 />
               ),
             }
@@ -816,7 +816,7 @@ export function PlanItemScreen(props: {
                     label="Cancel ask changes"
                     data-plan-ask-cancel=""
                     onClick={() => setAskingChanges(false)}
-                    className="shrink-0 hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="shrink-0 hover:bg-panel-3"
                   >
                     <IconX size={ICON_SIZE.control} />
                   </IconButton>
@@ -906,7 +906,7 @@ export function PlanItemScreen(props: {
                     variant="link"
                     data-plan-edit-concept=""
                     onClick={openEdit}
-                    className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="shrink-0"
                   >
                     Edit
                   </Button>
@@ -937,7 +937,7 @@ export function PlanItemScreen(props: {
                       data-plan-edit-date=""
                       aria-label="Edit date"
                       onClick={openEdit}
-                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      className="-mr-2"
                     >
                       Edit
                     </Button>
@@ -1113,7 +1113,7 @@ function ItemMedia(props: {
   return (
     <div data-plan-media="files" className="grid grid-cols-3 gap-1.5">
       {files.map((versionId) => (
-        <div key={versionId} className="overflow-hidden rounded-md border border-border bg-panel-2">
+        <div key={versionId} className="overflow-hidden rounded-lg border border-border bg-panel-2">
           <Thumbnail
             assetVersionId={versionId}
             cache={sharedCardPresignCache()}

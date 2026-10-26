@@ -16,6 +16,7 @@ vi.mock('@/lib/workspace-context', () => ({ useWorkspace: () => ({ workspaceId: 
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't-1' }));
 
 import { getInviteRoleOptions } from './MembersInviteForm';
+import { tagClass } from '@/components/ui/Tag';
 import { MembersList, memberActionItems } from './MembersList';
 import type { PendingEditHandler } from './MembersList';
 import type { DerivedMembers, MemberEntry } from './members-data';
@@ -154,6 +155,9 @@ describe('MembersList', () => {
     );
     expect(out.match(/Not delivered/g)).toHaveLength(1);
     expect(out).toMatch(/Invited<\/span><span[^>]*text-bad[^>]*>Not delivered/);
+    // Both pills are ui/Tag: Invited neutral, Not delivered bad.
+    expect(out).toContain(`<span class="${tagClass('neutral')}">Invited</span>`);
+    expect(out).toContain(`<span class="${tagClass('bad')}">Not delivered</span>`);
   });
 
   it('shows the empty lines for a side with nobody yet and no pending invites', () => {

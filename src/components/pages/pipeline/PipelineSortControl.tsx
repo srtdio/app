@@ -19,7 +19,6 @@ import {
   IconCalendar,
   IconCheck,
   IconChevronDown,
-  IconFilterLines,
   IconSort,
 } from '@/components/ui/icons';
 import { useIsLaptop } from '@/lib/use-is-laptop';
@@ -52,18 +51,11 @@ interface PipelineDateControlProps {
 }
 
 /**
- * The Pipeline's sort labels. Both update orders say what they sort by (the
- * post's last update), not just a direction.
+ * The sort menu rows, in menu order. Labels come straight from list-sort
+ * (Newest first, Oldest first, Due date), the shared sort wording.
  */
-const SORT_LABEL: Record<PostSort, string> = {
-  updated: 'Recently updated',
-  oldest: 'Least recently updated',
-  target: 'Due soonest first',
-};
-
-/** The sort menu rows, in menu order, with the Pipeline's labels. */
 export const PIPELINE_SORT_OPTIONS: readonly { value: PostSort; label: string }[] =
-  POST_SORT_OPTIONS.map((option) => ({ value: option.value, label: SORT_LABEL[option.value] }));
+  POST_SORT_OPTIONS;
 
 const MONTHS_SHORT = [
   'Jan',
@@ -411,15 +403,15 @@ export function PipelineFilterControl({
       data-filter-control=""
       {...(active ? { 'data-active': '' } : {})}
       onClick={() => setOpen((prev) => !prev)}
-      // The shared 44x44 IconButton in the secondary outline (border on panel).
-      className={cn(TRIGGER, 'relative border border-border bg-panel')}
+      // The bare shared 44x44 IconButton, like SortMenu on Briefs and Assets.
+      className={cn(TRIGGER, 'relative')}
     >
-      <IconFilterLines size={ICON_SIZE.control} />
+      <IconSort size={ICON_SIZE.control} />
       {active ? (
         <span
           aria-hidden="true"
           data-filter-dot=""
-          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-panel"
+          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-bg"
         />
       ) : null}
     </IconButton>

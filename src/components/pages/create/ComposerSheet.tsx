@@ -27,12 +27,16 @@ interface ComposerSheetProps {
   busy?: boolean;
   /** Where focus lands on open (the Title field), phone and laptop. */
   initialFocus?: () => HTMLElement | null;
+  /** Discard confirm copy. Default: "Discard changes?" with no message (New post). */
+  discard?: { title: string; message: string };
+  /** At lg+ the box widens to 960px for the side preview. Default true (New post). */
+  wide?: boolean;
 }
 
 const EXIT_MS = DUR_BASE_MS;
 
 /**
- * The full New post sheet's frame: the shared Sheet's panel, motion, focus,
+ * The full New post sheet's frame (New brief uses it too, narrow): the shared Sheet's panel, motion, focus,
  * Escape and Back handling, with its own header (the title left, then the
  * save buttons, then the close X far right, as every sheet header) and no
  * footer. The shared Sheet's header holds only a title and its X, so this
@@ -47,6 +51,8 @@ export function ComposerSheet({
   dirty = false,
   busy = false,
   initialFocus,
+  discard,
+  wide = true,
 }: ComposerSheetProps) {
   const [rendered, setRendered] = useState(open);
   const [entered, setEntered] = useState(false);
@@ -127,7 +133,8 @@ export function ComposerSheet({
         data-composer-sheet=""
         className={cn(
           // Axis: translateY only, as the shared Sheet.
-          'flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl lg:w-[960px]',
+          'flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          wide && 'lg:w-[960px]',
           entered
             ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'
             : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',
@@ -158,7 +165,8 @@ export function ComposerSheet({
       </div>
       {confirming ? (
         <ConfirmDialog
-          title={COMPOSER_DISCARD_TITLE}
+          title={discard?.title ?? COMPOSER_DISCARD_TITLE}
+          {...(discard !== undefined ? { message: discard.message } : {})}
           confirmLabel="Discard"
           cancelLabel="Keep editing"
           destructive
