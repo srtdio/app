@@ -7,7 +7,7 @@
 // never special-case cross-tenant). It is the only resolver: the short-link
 // routes (useRefResolution) and the recents recorder (recent-items) both use it.
 
-import type { Client, DomainError, Result } from '@srtdio/rpc';
+import { withTraceHeader, type Client, type DomainError, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 
 type Functions = Database['public']['Functions'];
@@ -54,7 +54,7 @@ export async function resolveEntityRef(
     p_number: params.number,
   };
   try {
-    const { data, error } = await client.rpc('ref_resolve', args);
+    const { data, error } = await withTraceHeader(client.rpc('ref_resolve', args), args.p_trace_id);
     if (error) return { ok: false, error: transportError(error.message) };
     return { ok: true, data: mapResolvedRef(data) };
   } catch (err: unknown) {

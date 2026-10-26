@@ -31,7 +31,7 @@
 // aborted on the wire (.abortSignal). The raw readers (read*) are unbounded
 // for callers that let a late answer win (withLateRead).
 
-import type { Client, Result } from '@srtdio/rpc';
+import { withTraceHeader, type Client, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable, withLinkedSignal, withReadTimeout } from '@/lib/chat-reads';
 import {
@@ -1117,7 +1117,10 @@ export async function readChatOpenBundle(
       p_channel_id: input.channelId,
       ...(input.since !== undefined && input.since !== null ? { p_since: input.since } : {}),
     };
-    const { data, error } = await abortable(client.rpc('chat_open_bundle', args), signal);
+    const { data, error } = await abortable(
+      withTraceHeader(client.rpc('chat_open_bundle', args), args.p_trace_id),
+      signal,
+    );
     if (error) {
       return {
         ok: false,

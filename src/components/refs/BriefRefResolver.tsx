@@ -13,9 +13,9 @@ import { useWorkspace } from '@/lib/workspace-context';
  * not-found surface (BriefDetailPage with no id).
  *
  * One loader: while the ref resolves, the detail page itself shows its skeleton
- * (resolving), the same instance once the id lands. A key among the loaded
- * workspaces skips the workspace lookup; router state carrying the id for this
- * exact ref skips every lookup.
+ * (resolving), the same instance once the id lands. One ref_resolve read maps
+ * the key and number to the brief (a second only when the number is a post);
+ * router state carrying the id for this exact ref skips every lookup.
  */
 export function BriefRefResolver() {
   const { ref } = useParams();

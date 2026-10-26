@@ -8,7 +8,9 @@ import {
   planItemMove,
   planPostsAdd,
   postSoftDelete,
+  TRACE_HEADER,
   userProfileUpdate,
+  withTraceHeader,
   type Client,
 } from './index';
 
@@ -370,5 +372,35 @@ describe('invalid_mention', () => {
       ok: false,
       error: { code: 'invalid_mention', message: 'invalid_mention' },
     });
+  });
+});
+
+describe('withTraceHeader', () => {
+  const TRACE = '0192a000-0000-7000-8000-000000000001';
+
+  it('names the header X-Trace-Id', () => {
+    expect(TRACE_HEADER).toBe('X-Trace-Id');
+  });
+
+  it("stamps the builder's X-Trace-Id with the trace id and returns setHeader's result", () => {
+    const stamped = { stamped: true };
+    const setHeader = vi.fn<(name: string, value: string) => typeof stamped>(() => stamped);
+    const builder = { setHeader };
+    const out = withTraceHeader(builder, TRACE);
+    expect(setHeader).toHaveBeenCalledTimes(1);
+    expect(setHeader).toHaveBeenCalledWith('X-Trace-Id', TRACE);
+    expect(out).toBe(stamped);
+  });
+
+  it('passes a builder without setHeader through unchanged', () => {
+    const builder = { then: vi.fn() };
+    expect(withTraceHeader(builder, TRACE)).toBe(builder);
+    const promise = Promise.resolve({ data: null, error: null });
+    expect(withTraceHeader(promise, TRACE)).toBe(promise);
+  });
+
+  it('passes through a builder whose setHeader is not a function', () => {
+    const builder = { setHeader: 'nope' };
+    expect(withTraceHeader(builder, TRACE)).toBe(builder);
   });
 });

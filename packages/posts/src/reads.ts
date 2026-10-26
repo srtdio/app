@@ -4,7 +4,7 @@
 // wrappers return, so callers branch uniformly; a transport/PostgREST failure
 // surfaces as a { code: 'unknown' } error rather than a throw.
 
-import type { Client, DomainError, Result } from '@srtdio/rpc';
+import { withTraceHeader, type Client, type DomainError, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import type { Stage } from './stage-machine';
 import { resolveTraceId } from './trace';
@@ -618,7 +618,7 @@ export async function listPosts(
     ...(input.stage !== undefined ? { p_stage: input.stage } : {}),
     ...(input.before !== undefined ? { p_before: input.before } : {}),
   };
-  const { data, error } = await client.rpc('posts_list', args);
+  const { data, error } = await withTraceHeader(client.rpc('posts_list', args), args.p_trace_id);
   if (error) return { ok: false, error: transportError(error.message) };
   // The generated Returns marks every column non-null; the proc's LEFT JOINs and
   // nullable posts columns make many of them null, as PostsListRow says.

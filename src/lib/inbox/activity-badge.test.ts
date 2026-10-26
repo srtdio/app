@@ -12,6 +12,24 @@ type Client = Parameters<typeof fetchActivityBadge>[0];
 
 const TRACE = '01920000-0000-7000-8000-000000000001';
 
+// A PostgREST-like builder: setHeader and abortSignal return the same builder,
+// and awaiting it resolves the answer. rpc() returns it, so the X-Trace-Id the
+// call stamps is observable beside the p_trace_id it sends.
+function headerClient(answer: { data: unknown; error: null }) {
+  const setHeader = vi.fn<(name: string, value: string) => unknown>();
+  const abortSignal = vi.fn<(signal: AbortSignal) => unknown>();
+  const builder = {
+    setHeader,
+    abortSignal,
+    then: (resolve: (value: typeof answer) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve(answer).then(resolve, reject),
+  };
+  setHeader.mockReturnValue(builder);
+  abortSignal.mockReturnValue(builder);
+  const rpc = vi.fn<(fn: string, args: Record<string, unknown>) => typeof builder>(() => builder);
+  return { client: { rpc } as unknown as Client, rpc, setHeader, abortSignal };
+}
+
 // A client whose rpc() records every call and answers from a queue (the last
 // answer repeats). Nothing else is reachable: the badge is one rpc, no table read.
 function rpcClient(answers: RpcResult[]): {
@@ -55,6 +73,20 @@ describe('mapActivityBadge', () => {
 });
 
 describe('fetchActivityBadge', () => {
+  it('stamps X-Trace-Id with the exact p_trace_id it sends', async () => {
+    const { client, rpc, setHeader } = headerClient({
+      data: [{ unread: 3, mentions: 1 }],
+      error: null,
+    });
+    const res = await fetchActivityBadge(client, { workspaceId: 'w1', traceId: TRACE });
+    expect(res).toEqual({ ok: true, data: { unread: 3, mentions: 1 } });
+    expect(rpc.mock.calls[0]?.[0]).toBe('activity_badge_read');
+    const traceId = rpc.mock.calls[0]?.[1].p_trace_id;
+    expect(traceId).toBe(TRACE);
+    expect(setHeader).toHaveBeenCalledTimes(1);
+    expect(setHeader).toHaveBeenCalledWith('X-Trace-Id', traceId);
+  });
+
   it('is one activity_badge_read rpc with the explicit trace id and no user id', async () => {
     const { client, rpc } = rpcClient([ok(5, 1)]);
     const res = await fetchActivityBadge(client, { workspaceId: 'w1', traceId: TRACE });

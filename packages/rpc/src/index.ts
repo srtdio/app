@@ -19,6 +19,22 @@ type FunctionName = keyof Functions;
 type ProcArgs<N extends FunctionName> = Functions[N]['Args'];
 type ProcReturns<N extends FunctionName> = Functions[N]['Returns'];
 
+/** The header that carries trace_id on every request (FE -> Supabase -> Worker). */
+export const TRACE_HEADER = 'X-Trace-Id';
+
+/**
+ * Stamp a PostgREST builder's X-Trace-Id with the call's own p_trace_id, so the
+ * header and the argument carry the same uuid_v7 (the shared fetch wrapper keeps
+ * a header already set). A builder without setHeader (a test double) passes
+ * through unchanged.
+ */
+export function withTraceHeader<B>(builder: B, traceId: string): B {
+  const stampable = builder as B & { setHeader?: (name: string, value: string) => B };
+  return typeof stampable.setHeader === 'function'
+    ? stampable.setHeader(TRACE_HEADER, traceId)
+    : builder;
+}
+
 /** A Supabase client typed against the live schema. */
 export type Client = SupabaseClient<Database>;
 

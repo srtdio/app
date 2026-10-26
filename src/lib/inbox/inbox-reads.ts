@@ -7,7 +7,7 @@
 // like the Activity page's own loader, and names people through the shared name
 // registry (people-names.ts): full name, or "Former member".
 
-import type { Client, Result } from '@srtdio/rpc';
+import { withTraceHeader, type Client, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { mapEntry } from '@/components/pages/activity/data';
 import { READ_TIMEOUT_MS, readMentionProfiles } from '@/lib/chat-reads';
@@ -69,7 +69,7 @@ export async function fetchActivityBadge(
     p_workspace_id: params.workspaceId,
   };
   try {
-    const res = await client.rpc('activity_badge_read', args);
+    const res = await withTraceHeader(client.rpc('activity_badge_read', args), args.p_trace_id);
     if (res.error) return fail(`fetchActivityBadge: ${res.error.message}`);
     return { ok: true, data: mapActivityBadge(res.data) };
   } catch (err: unknown) {

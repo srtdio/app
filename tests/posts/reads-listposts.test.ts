@@ -11,6 +11,24 @@ import { listPosts, pipelinePostFromRow } from '../../packages/posts/src/index';
 
 const WS = 'ws-1';
 
+// A PostgREST-like builder: setHeader and abortSignal return the same builder,
+// and awaiting it resolves the answer. rpc() returns it, so the X-Trace-Id the
+// call stamps is observable beside the p_trace_id it sends.
+function headerClient(answer: { data: unknown; error: null }) {
+  const setHeader = vi.fn<(name: string, value: string) => unknown>();
+  const abortSignal = vi.fn<(signal: AbortSignal) => unknown>();
+  const builder = {
+    setHeader,
+    abortSignal,
+    then: (resolve: (value: typeof answer) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve(answer).then(resolve, reject),
+  };
+  setHeader.mockReturnValue(builder);
+  abortSignal.mockReturnValue(builder);
+  const rpc = vi.fn<(fn: string, args: Record<string, unknown>) => typeof builder>(() => builder);
+  return { client: { rpc } as unknown as Client, rpc, setHeader, abortSignal };
+}
+
 interface RpcResult {
   data: unknown;
   error: { message: string } | null;
@@ -67,6 +85,27 @@ function row(id: string, media: Partial<PostsListRow> = {}): PostsListRow {
 }
 
 describe('listPosts: one posts_list call', () => {
+  it('stamps X-Trace-Id with the exact p_trace_id it sends', async () => {
+    const { client, rpc, setHeader } = headerClient({ data: [row('p1')], error: null });
+    const result = await listPosts(client, { workspaceId: WS, traceId: 'trace-h' });
+    expect(result.ok).toBe(true);
+    expect(rpc.mock.calls[0]?.[0]).toBe('posts_list');
+    const traceId = rpc.mock.calls[0]?.[1].p_trace_id;
+    expect(traceId).toBe('trace-h');
+    expect(setHeader).toHaveBeenCalledTimes(1);
+    expect(setHeader).toHaveBeenCalledWith('X-Trace-Id', traceId);
+  });
+
+  it('a minted trace id is a uuid v7 and is the X-Trace-Id header too', async () => {
+    const { client, rpc, setHeader } = headerClient({ data: [], error: null });
+    await listPosts(client, { workspaceId: WS });
+    const traceId = rpc.mock.calls[0]?.[1].p_trace_id;
+    expect(String(traceId)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(setHeader).toHaveBeenCalledWith('X-Trace-Id', traceId);
+  });
+
   it('makes exactly one rpc call and no table read, for any number of posts', async () => {
     const { client, rpc, from } = makeClient({
       data: [row('p1'), row('p2'), row('p3')],

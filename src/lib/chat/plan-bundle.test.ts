@@ -10,6 +10,24 @@ import {
 
 const TRACE = '01900000-0000-7000-8000-000000000000';
 
+// A PostgREST-like builder: setHeader and abortSignal return the same builder,
+// and awaiting it resolves the answer. rpc() returns it, so the X-Trace-Id the
+// call stamps is observable beside the p_trace_id it sends.
+function headerClient(answer: { data: unknown; error: null }) {
+  const setHeader = vi.fn<(name: string, value: string) => unknown>();
+  const abortSignal = vi.fn<(signal: AbortSignal) => unknown>();
+  const builder = {
+    setHeader,
+    abortSignal,
+    then: (resolve: (value: typeof answer) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve(answer).then(resolve, reject),
+  };
+  setHeader.mockReturnValue(builder);
+  abortSignal.mockReturnValue(builder);
+  const rpc = vi.fn<(fn: string, args: Record<string, unknown>) => typeof builder>(() => builder);
+  return { client: { rpc } as unknown as Client, rpc, setHeader, abortSignal };
+}
+
 /** One plan_bundle_read answer in the proc's exact jsonb shape. */
 const RAW = {
   timezone: 'Asia/Kolkata',
@@ -233,6 +251,33 @@ describe('planBundleArgs', () => {
 });
 
 describe('readPlanBundleRpc', () => {
+  it('stamps X-Trace-Id with the exact p_trace_id it sends, then attaches the signal', async () => {
+    const { client, rpc, setHeader, abortSignal } = headerClient({ data: RAW, error: null });
+    const signal = new AbortController().signal;
+    const res = await readPlanBundleRpc(
+      client,
+      { workspaceId: 'ws', planIds: ['plan-1'], traceId: TRACE },
+      signal,
+    );
+    expect(res.ok && res.data.plans.map((p) => p.id)).toEqual(['plan-1']);
+    expect(rpc.mock.calls[0]?.[0]).toBe('plan_bundle_read');
+    const traceId = rpc.mock.calls[0]?.[1].p_trace_id;
+    expect(traceId).toBe(TRACE);
+    expect(setHeader).toHaveBeenCalledTimes(1);
+    expect(setHeader).toHaveBeenCalledWith('X-Trace-Id', traceId);
+    expect(abortSignal).toHaveBeenCalledWith(signal);
+  });
+
+  it('a minted trace id is a uuid v7 and is the X-Trace-Id header too', async () => {
+    const { client, rpc, setHeader } = headerClient({ data: RAW, error: null });
+    await readPlanBundleRpc(client, { workspaceId: 'ws', planIds: ['a'] });
+    const traceId = rpc.mock.calls[0]?.[1].p_trace_id;
+    expect(String(traceId)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(setHeader).toHaveBeenCalledWith('X-Trace-Id', traceId);
+  });
+
   it('one rpc call with the built args, parsed', async () => {
     const rpc = vi.fn(async () => ({ data: RAW, error: null }));
     const res = await readPlanBundleRpc({ rpc } as unknown as Client, {

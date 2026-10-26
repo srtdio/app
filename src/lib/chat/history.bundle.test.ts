@@ -15,6 +15,24 @@ import {
 const CH = 'dm__ws__a__b';
 const WS = 'ws-1';
 
+// A PostgREST-like builder: setHeader and abortSignal return the same builder,
+// and awaiting it resolves the answer. rpc() returns it, so the X-Trace-Id the
+// call stamps is observable beside the p_trace_id it sends.
+function headerClient(answer: { data: unknown; error: null }) {
+  const setHeader = vi.fn<(name: string, value: string) => unknown>();
+  const abortSignal = vi.fn<(signal: AbortSignal) => unknown>();
+  const builder = {
+    setHeader,
+    abortSignal,
+    then: (resolve: (value: typeof answer) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve(answer).then(resolve, reject),
+  };
+  setHeader.mockReturnValue(builder);
+  abortSignal.mockReturnValue(builder);
+  const rpc = vi.fn<(fn: string, args: Record<string, unknown>) => typeof builder>(() => builder);
+  return { client: { rpc } as unknown as Client, rpc, setHeader, abortSignal };
+}
+
 function msg(n: number, extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: `m${n}`,
@@ -250,6 +268,23 @@ describe('parseChatOpenBundle: every key mapped once', () => {
 });
 
 describe('readChatOpenBundle', () => {
+  it('stamps X-Trace-Id with the exact p_trace_id it sends, then attaches the signal', async () => {
+    const { client, rpc, setHeader, abortSignal } = headerClient({ data: raw(), error: null });
+    const signal = new AbortController().signal;
+    const result = await readChatOpenBundle(
+      client,
+      { traceId: '0190a000-0000-7000-8000-0000000000bb', workspaceId: WS, channelId: CH },
+      signal,
+    );
+    expect(result.ok).toBe(true);
+    expect(rpc.mock.calls[0]?.[0]).toBe('chat_open_bundle');
+    const traceId = rpc.mock.calls[0]?.[1].p_trace_id;
+    expect(traceId).toBe('0190a000-0000-7000-8000-0000000000bb');
+    expect(setHeader).toHaveBeenCalledTimes(1);
+    expect(setHeader).toHaveBeenCalledWith('X-Trace-Id', traceId);
+    expect(abortSignal).toHaveBeenCalledWith(signal);
+  });
+
   function rpcClient(answer: { data: unknown; error: { message: string } | null }): {
     client: Client;
     calls: Array<{ name: string; args: Record<string, unknown> }>;

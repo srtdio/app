@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Database } from '@srtdio/schemas';
+import { withTraceHeader } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { SIGNOUT_EVENT } from '@/lib/events';
@@ -98,7 +99,7 @@ export function readWorkspaceCapabilities(
     p_workspace_id: workspaceId,
   };
   const read: Promise<CapabilitySet | null> = Promise.resolve(
-    supabase.rpc('capabilities_for_workspace', args),
+    withTraceHeader(supabase.rpc('capabilities_for_workspace', args), args.p_trace_id),
   )
     .then(
       ({ data, error }) => {

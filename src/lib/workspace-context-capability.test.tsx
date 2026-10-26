@@ -9,18 +9,46 @@ interface Deferred {
   name: string;
   args: { p_trace_id: string; p_workspace_id: string };
   resolve: (value: { data: unknown; error: { message: string } | null }) => void;
+  /** Every setHeader(name, value) the read made on its builder. */
+  headers: [string, string][];
 }
 const { calls, who } = vi.hoisted(() => ({
   calls: [] as Deferred[],
   who: { userId: null as string | null, workspaceId: 'ws-1' as string | null },
 }));
 
+// rpc() returns a PostgREST-like builder: setHeader records the header and
+// returns the same builder; awaiting it waits for the test to settle the read.
 vi.mock('@/lib/supabase', () => ({
   supabase: {
-    rpc: (name: string, args: Deferred['args']) =>
-      new Promise((resolve) => {
-        calls.push({ name, args, resolve });
-      }),
+    rpc: (name: string, args: Deferred['args']) => {
+      const headers: [string, string][] = [];
+      const answer = new Promise<{ data: unknown; error: { message: string } | null }>(
+        (resolve) => {
+          calls.push({ name, args, resolve, headers });
+        },
+      );
+      interface Builder {
+        setHeader: (header: string, value: string) => Builder;
+        abortSignal: () => Builder;
+        then: (
+          onFulfilled: (value: { data: unknown; error: { message: string } | null }) => unknown,
+          onRejected?: (reason: unknown) => unknown,
+        ) => Promise<unknown>;
+      }
+      const builder: Builder = {
+        setHeader: (header: string, value: string) => {
+          headers.push([header, value]);
+          return builder;
+        },
+        abortSignal: () => builder,
+        then: (
+          onFulfilled: (value: { data: unknown; error: { message: string } | null }) => unknown,
+          onRejected?: (reason: unknown) => unknown,
+        ) => answer.then(onFulfilled, onRejected),
+      };
+      return builder;
+    },
   },
 }));
 vi.mock('@/lib/session-context', () => ({
@@ -273,6 +301,18 @@ describe('one capabilities_for_workspace read per workspace', () => {
     // brief.create and post.create allowed; the three it does not name are false.
     expect(seen.slice(-5)).toEqual([true, false, false, true, false]);
     expect(calls).toHaveLength(1);
+  });
+
+  it('stamps X-Trace-Id with the minted p_trace_id, a uuid v7', async () => {
+    const read = readWorkspaceCapability('u-a', 'ws-1', 'brief.create');
+    expect(calls).toHaveLength(1);
+    const traceId = calls[0]?.args.p_trace_id;
+    expect(traceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(calls[0]?.headers).toEqual([['X-Trace-Id', traceId]]);
+    calls[0]?.resolve({ data: rows(true), error: null });
+    await expect(read).resolves.toBe(true);
   });
 
   it('another workspace is its own read', async () => {

@@ -9,7 +9,7 @@
 // generated proc signature with an explicit p_trace_id, never callRpc (that
 // injects _trace_id, which this proc does not take). Never throws.
 
-import type { Client, DomainErrorCode, Result } from '@srtdio/rpc';
+import { withTraceHeader, type Client, type DomainErrorCode, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable } from '@/lib/chat-reads';
 import type {
@@ -316,7 +316,10 @@ export async function readPlanBundleRpc(
 ): Promise<Result<PlanBundleRead>> {
   try {
     const args = planBundleArgs(query, query.traceId ?? getCurrentTraceId());
-    const res = (await abortable(client.rpc('plan_bundle_read', args), signal)) as {
+    const res = (await abortable(
+      withTraceHeader(client.rpc('plan_bundle_read', args), args.p_trace_id),
+      signal,
+    )) as {
       data: unknown;
       error: { message: string } | null;
     };
