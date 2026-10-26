@@ -28,7 +28,7 @@ function harness(env: Record<string, string>) {
     auth: {
       admin: {
         createUser: vi.fn(async () => ({ data: { user: { id: 'new-user' } }, error: null })),
-        listUsers: vi.fn(async () => ({ data: { users: [] }, error: null })),
+        getUserById: vi.fn(async () => ({ data: { user: null }, error: null })),
         generateLink: vi.fn(async () => ({
           data: {
             properties: {
@@ -40,6 +40,7 @@ function harness(env: Record<string, string>) {
         })),
       },
     },
+    rpc: vi.fn(async () => ({ data: null, error: null })),
     from: vi.fn((table: string) => {
       if (table === 'users') {
         return {

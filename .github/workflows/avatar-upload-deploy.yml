@@ -44,7 +44,11 @@ jobs:
             CLOUDFLARE_ACCOUNT_ID
             CLOUDFLARE_R2_ACCESS_KEY_ID
             CLOUDFLARE_R2_SECRET_ACCESS_KEY
+            SUPABASE_PUBLISHABLE_KEY
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
           CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          # Public key, not a secret: the worker reads the caller's profile with it
+          # to delete a replaced avatar once the new one is saved.
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}

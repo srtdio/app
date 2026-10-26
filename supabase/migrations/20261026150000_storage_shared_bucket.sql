@@ -45,3 +45,17 @@ BEGIN
 END $function$;
 REVOKE ALL ON FUNCTION public.storage_workspace_move(uuid,text,integer,uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.storage_workspace_move(uuid,text,integer,uuid) TO service_role;
+
+-- 3. auth_user_id_by_email(p_email): service role only. One lookup of
+--    an auth user id by email (lower + trim), replacing invite-send's
+--    listUsers paging. NULL when no user has that email.
+CREATE OR REPLACE FUNCTION public.auth_user_id_by_email(p_email text)
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT u.id FROM auth.users u WHERE u.email = lower(btrim(p_email)) LIMIT 1;
+$function$;
+REVOKE ALL ON FUNCTION public.auth_user_id_by_email(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.auth_user_id_by_email(text) TO service_role;

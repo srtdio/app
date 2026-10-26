@@ -14,6 +14,7 @@ vi.mock('jose', async (importOriginal) => {
 });
 
 import worker, {
+  CLEANUP_CHECK_DELAYS_MS,
   canManageGroupAsCaller,
   createCallerProfileStore,
   handleAvatarUpload,
@@ -75,8 +76,16 @@ class FakeStorage {
 /** A caller with no saved avatar: the default, so no cleanup ever runs. */
 const NO_PROFILE: ProfileAvatarStore = {
   read: () => Promise.resolve(null),
-  saveAvatar: () => Promise.resolve(false),
 };
+
+/** Background work the handler schedules (ctx.waitUntil), awaited by tests. */
+const pending: Promise<unknown>[] = [];
+async function settle(): Promise<void> {
+  while (pending.length > 0) await pending.shift();
+}
+
+/** A ctx stand-in for worker.fetch. */
+const ctx = { waitUntil: (work: Promise<unknown>) => void pending.push(work) };
 
 /** Production-shaped deps: a fake store plus the real verifyCaller/JWKS pair. */
 function deps(storage: FakeStorage, profile: ProfileAvatarStore = NO_PROFILE): AvatarUploadDeps {
@@ -85,6 +94,8 @@ function deps(storage: FakeStorage, profile: ProfileAvatarStore = NO_PROFILE): A
     profile,
     verifyToken: (request) => verifyCaller(request, getSupabaseJwks(env)),
     canManageGroup: () => Promise.resolve(false),
+    waitUntil: (work) => void pending.push(work),
+    sleep: () => Promise.resolve(),
   };
 }
 
@@ -272,6 +283,7 @@ describe('avatar-upload worker.fetch', () => {
         headers: { Origin: 'https://srtd.io' },
       }),
       env,
+      ctx,
     );
     expect(res.status).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://srtd.io');
@@ -289,6 +301,7 @@ describe('avatar-upload worker.fetch', () => {
       worker.fetch(
         new Request('https://worker.test/', { method: 'OPTIONS', headers: { Origin: origin } }),
         env,
+        ctx,
       );
     const preview = await preflight('https://pr-546.srtdio-app.pages.dev');
     expect(preview.headers.get('Access-Control-Allow-Origin')).toBe(
@@ -301,7 +314,11 @@ describe('avatar-upload worker.fetch', () => {
   });
 
   it('returns 405 for an unsupported verb', async () => {
-    const res = await worker.fetch(new Request('https://worker.test/', { method: 'PUT' }), env);
+    const res = await worker.fetch(
+      new Request('https://worker.test/', { method: 'PUT' }),
+      env,
+      ctx,
+    );
     expect(res.status).toBe(405);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe('method_not_allowed');
@@ -446,84 +463,109 @@ describe('avatar-upload refuses SVG and OLE2 on every target', () => {
   }
 });
 
-describe('avatar-upload replaces the previous avatar only after the save', () => {
+describe('avatar-upload deletes the previous avatar only after the one save', () => {
   const OLD_SHA = 'a'.repeat(64);
   const oldKey = `${USER}/${OLD_SHA}.png`;
   const oldUrl = `https://cdn.srtd.io/${oldKey}`;
+  const newKey = (): string => `${USER}/${pngSha}.png`;
+  const newUrl = (): string => `https://cdn.srtd.io/${newKey()}`;
 
-  /** A profile fake that logs into the storage's shared log so order is visible. */
+  /**
+   * A read-only profile fake: the first read (before the PUT) returns `before`;
+   * later reads return what the frontend's save left, from `after` in turn.
+   * Reads log into the storage's shared log so order is visible.
+   */
   function profileFake(
     storage: FakeStorage,
-    saved: SavedProfile | null,
-    save: 'ok' | 'refused' | 'throws' = 'ok',
-  ) {
-    const saves: { displayName: string; avatarUrl: string; traceId: string }[] = [];
-    const profile: ProfileAvatarStore = {
+    before: SavedProfile | null,
+    after: (SavedProfile | null)[] = [],
+  ): ProfileAvatarStore {
+    let reads = 0;
+    return {
       read: () => {
         storage.log.push('read');
-        return Promise.resolve(saved);
-      },
-      saveAvatar: (_request, input) => {
-        storage.log.push(`save:${input.avatarUrl}`);
-        saves.push(input);
-        if (save === 'throws') return Promise.reject(new Error('rpc down'));
-        return Promise.resolve(save === 'ok');
+        reads += 1;
+        if (reads === 1) return Promise.resolve(before);
+        return Promise.resolve(after[Math.min(reads - 2, after.length - 1)] ?? before);
       },
     };
-    return { profile, saves };
   }
 
-  it('deletes the old object after the new object is stored and the profile row is saved', async () => {
+  async function upload(storage: FakeStorage, profile: ProfileAvatarStore, trace: string) {
     const token = await mintToken(USER);
-    const storage = new FakeStorage();
-    const { profile, saves } = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
     const res = await handleAvatarUpload(
       uploadRequest(token, PNG_BYTES),
       env,
       deps(storage, profile),
-      'trace-r1',
+      trace,
       null,
     );
+    return res;
+  }
+
+  it('answers first, then deletes the old object once the profile shows the new url', async () => {
+    const storage = new FakeStorage();
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [
+      { displayName: 'Asha', avatarUrl: oldUrl },
+      { displayName: 'Asha', avatarUrl: newUrl() },
+    ]);
+    const res = await upload(storage, profile, 'trace-r1');
     expect(res.status).toBe(200);
-    const newKey = `${USER}/${pngSha}.png`;
-    const newUrl = `https://cdn.srtd.io/${newKey}`;
-    expect(storage.log).toEqual(['read', `put:${newKey}`, `save:${newUrl}`, `delete:${oldKey}`]);
+    // Nothing deleted before the response; the cleanup runs after it.
+    expect(storage.deletes).toHaveLength(0);
+    await settle();
+    expect(storage.log).toEqual(['read', `put:${newKey()}`, 'read', 'read', `delete:${oldKey}`]);
     expect(storage.deletes).toEqual([{ bucket: 'user-avatars', key: oldKey, traceId: 'trace-r1' }]);
-    expect(saves).toEqual([{ displayName: 'Asha', avatarUrl: newUrl, traceId: 'trace-r1' }]);
+  });
+
+  it('never writes the profile: the store has no save, so one save per change', () => {
+    const storage = new FakeStorage();
+    const profile = profileFake(storage, null);
+    expect(Object.keys(profile)).toEqual(['read']);
+  });
+
+  it('keeps the old object when the new url never shows up on the profile', async () => {
+    const storage = new FakeStorage();
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [
+      { displayName: 'Asha', avatarUrl: oldUrl },
+    ]);
+    const res = await upload(storage, profile, 'trace-r2');
+    expect(res.status).toBe(200);
+    await settle();
+    expect(storage.log.filter((e) => e === 'read')).toHaveLength(
+      1 + CLEANUP_CHECK_DELAYS_MS.length,
+    );
+    expect(storage.deletes).toHaveLength(0);
+  });
+
+  it('keeps the old object when the later profile reads fail', async () => {
+    const storage = new FakeStorage();
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [null]);
+    await upload(storage, profile, 'trace-r2b');
+    await settle();
+    expect(storage.deletes).toHaveLength(0);
   });
 
   it('still returns success when deleting the old object fails', async () => {
-    const token = await mintToken(USER);
     const storage = new FakeStorage();
     storage.failDelete = true;
-    const { profile } = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
-    const res = await handleAvatarUpload(
-      uploadRequest(token, PNG_BYTES),
-      env,
-      deps(storage, profile),
-      'trace-r2',
-      null,
-    );
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [
+      { displayName: 'Asha', avatarUrl: newUrl() },
+    ]);
+    const res = await upload(storage, profile, 'trace-r3');
     expect(res.status).toBe(200);
     const body = (await res.json()) as { avatar_url: string };
-    expect(body.avatar_url).toBe(`https://cdn.srtd.io/${USER}/${pngSha}.png`);
+    expect(body.avatar_url).toBe(newUrl());
+    await expect(settle()).resolves.toBeUndefined();
     expect(storage.deletes).toHaveLength(1);
   });
 
-  it('deletes nothing when there is no previous avatar', async () => {
-    const token = await mintToken(USER);
-    for (const saved of [null, { displayName: 'Asha', avatarUrl: null }]) {
+  it('schedules nothing when there is no previous avatar', async () => {
+    for (const before of [null, { displayName: 'Asha', avatarUrl: null }]) {
       const storage = new FakeStorage();
-      const { profile, saves } = profileFake(storage, saved);
-      const res = await handleAvatarUpload(
-        uploadRequest(token, PNG_BYTES),
-        env,
-        deps(storage, profile),
-        'trace-r3',
-        null,
-      );
+      const res = await upload(storage, profileFake(storage, before), 'trace-r4');
       expect(res.status).toBe(200);
-      expect(saves).toHaveLength(0);
+      expect(pending).toHaveLength(0);
       expect(storage.deletes).toHaveLength(0);
     }
   });
@@ -532,55 +574,26 @@ describe('avatar-upload replaces the previous avatar only after the save', () =>
     const token = await mintToken(USER);
     const storage = new FakeStorage();
     storage.failPut = true;
-    const { profile, saves } = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [
+      { displayName: 'Asha', avatarUrl: newUrl() },
+    ]);
     await expect(
       handleAvatarUpload(uploadRequest(token, PNG_BYTES), env, deps(storage, profile), 't', null),
     ).rejects.toThrow('r2 put failed');
-    expect(saves).toHaveLength(0);
+    await settle();
     expect(storage.deletes).toHaveLength(0);
   });
 
-  it('deletes nothing when the profile save is refused or throws, and still returns 200', async () => {
-    const token = await mintToken(USER);
-    for (const save of ['refused', 'throws'] as const) {
-      const storage = new FakeStorage();
-      const { profile, saves } = profileFake(
-        storage,
-        { displayName: 'Asha', avatarUrl: oldUrl },
-        save,
-      );
-      const res = await handleAvatarUpload(
-        uploadRequest(token, PNG_BYTES),
-        env,
-        deps(storage, profile),
-        'trace-r5',
-        null,
-      );
-      expect(res.status).toBe(200);
-      expect(saves).toHaveLength(1);
-      expect(storage.deletes).toHaveLength(0);
-    }
-  });
-
   it('deletes nothing when re-uploading the same bytes (old key equals new key)', async () => {
-    const token = await mintToken(USER);
     const storage = new FakeStorage();
-    const sameUrl = `https://cdn.srtd.io/${USER}/${pngSha}.png`;
-    const { profile, saves } = profileFake(storage, { displayName: 'Asha', avatarUrl: sameUrl });
-    const res = await handleAvatarUpload(
-      uploadRequest(token, PNG_BYTES),
-      env,
-      deps(storage, profile),
-      'trace-r6',
-      null,
-    );
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: newUrl() });
+    const res = await upload(storage, profile, 'trace-r6');
     expect(res.status).toBe(200);
-    expect(saves).toHaveLength(0);
+    expect(pending).toHaveLength(0);
     expect(storage.deletes).toHaveLength(0);
   });
 
   it("never deletes another user's object, a group photo, or a foreign URL", async () => {
-    const token = await mintToken(USER);
     for (const avatarUrl of [
       `https://cdn.srtd.io/${OTHER_USER}/${OLD_SHA}.png`,
       `https://cdn.srtd.io/groups/${USER}/${OLD_SHA}.png`,
@@ -588,16 +601,12 @@ describe('avatar-upload replaces the previous avatar only after the save', () =>
       `https://cdn.srtd.io/${USER}/../${OTHER_USER}/${OLD_SHA}.png`,
     ]) {
       const storage = new FakeStorage();
-      const { profile, saves } = profileFake(storage, { displayName: 'Asha', avatarUrl });
-      const res = await handleAvatarUpload(
-        uploadRequest(token, PNG_BYTES),
-        env,
-        deps(storage, profile),
-        'trace-r7',
-        null,
-      );
+      const profile = profileFake(storage, { displayName: 'Asha', avatarUrl }, [
+        { displayName: 'Asha', avatarUrl: newUrl() },
+      ]);
+      const res = await upload(storage, profile, 'trace-r7');
       expect(res.status).toBe(200);
-      expect(saves).toHaveLength(0);
+      await settle();
       expect(storage.deletes).toHaveLength(0);
     }
   });
@@ -605,7 +614,7 @@ describe('avatar-upload replaces the previous avatar only after the save', () =>
   it('never reads the profile or deletes anything for a group photo', async () => {
     const token = await mintToken(USER);
     const storage = new FakeStorage();
-    const { profile } = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
     const res = await handleAvatarUpload(
       uploadRequest(token, PNG_BYTES, {
         target_kind: 'group',
@@ -617,6 +626,7 @@ describe('avatar-upload replaces the previous avatar only after the save', () =>
       null,
     );
     expect(res.status).toBe(200);
+    await settle();
     expect(storage.log.includes('read')).toBe(false);
     expect(storage.deletes).toHaveLength(0);
   });
@@ -638,11 +648,10 @@ describe('avatar-upload replaces the previous avatar only after the save', () =>
       return new Request('https://worker.test/', { method: 'POST', headers });
     }
 
-    it('reads and saves as the caller, passing the trace id to user_profile_update', async () => {
+    it('reads as the caller with the configured publishable key and never writes', async () => {
       const seen: { url: string; init: RequestInit }[] = [];
       const fetcher = (url: string, init: RequestInit): Promise<Response> => {
         seen.push({ url, init });
-        if (url.includes('/rpc/')) return Promise.resolve(new Response('"id"', { status: 200 }));
         return Promise.resolve(
           new Response(JSON.stringify([{ display_name: 'Asha', avatar_url: oldUrl }]), {
             status: 200,
@@ -653,26 +662,19 @@ describe('avatar-upload replaces the previous avatar only after the save', () =>
         { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_x' },
         fetcher,
       );
-      const request = callerRequest(null);
-      expect(await store.read(request, USER)).toEqual({ displayName: 'Asha', avatarUrl: oldUrl });
-      expect(
-        await store.saveAvatar(request, { displayName: 'Asha', avatarUrl: 'u', traceId: 'tr' }),
-      ).toBe(true);
+      expect(await store.read(callerRequest(null), USER)).toEqual({
+        displayName: 'Asha',
+        avatarUrl: oldUrl,
+      });
+      expect(seen).toHaveLength(1);
       expect(seen[0]?.url).toContain(`/rest/v1/users?select=display_name,avatar_url&id=eq.${USER}`);
+      expect(seen[0]?.init.method).toBe('GET');
       const readHeaders = new Headers(seen[0]?.init.headers);
       expect(readHeaders.get('Authorization')).toBe('Bearer caller-jwt');
       expect(readHeaders.get('apikey')).toBe('sb_publishable_x');
-      expect(seen[1]?.url).toBe(`${SUPABASE_URL}/rest/v1/rpc/user_profile_update`);
-      expect(JSON.parse(String(seen[1]?.init.body))).toEqual({
-        p_display_name: 'Asha',
-        p_designation: null,
-        p_avatar_url: 'u',
-        p_email_opt_in: null,
-        p_trace_id: 'tr',
-      });
     });
 
-    it('does nothing without an apikey, and reports a failed save as false', async () => {
+    it('does nothing without an apikey, and reads a failed response as null', async () => {
       let calls = 0;
       const fetcher = (): Promise<Response> => {
         calls += 1;
@@ -681,13 +683,7 @@ describe('avatar-upload replaces the previous avatar only after the save', () =>
       const store = createCallerProfileStore({ SUPABASE_URL }, fetcher);
       expect(await store.read(callerRequest(null), USER)).toBeNull();
       expect(calls).toBe(0);
-      expect(
-        await store.saveAvatar(callerRequest('sb_publishable_x'), {
-          displayName: 'Asha',
-          avatarUrl: 'u',
-          traceId: 'tr',
-        }),
-      ).toBe(false);
+      expect(await store.read(callerRequest('sb_publishable_x'), USER)).toBeNull();
       expect(calls).toBe(1);
     });
   });

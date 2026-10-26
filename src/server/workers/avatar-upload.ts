@@ -14,14 +14,15 @@
 // The frontend later takes avatar_url and calls user_profile_update.
 //
 // Replacing an avatar cleans up the old object, and only AFTER the new one is
-// saved. Before the PUT the worker reads the caller's own profile AS the caller
-// (their Bearer JWT forwarded to PostgREST, so RLS applies). When it already
-// holds an avatar under this caller's own prefix in this bucket, the worker
-// saves the new avatar_url through user_profile_update (as the caller, with the
-// trace id) and, once both the object and the profile row are saved, deletes the
-// old object. A failed read, save or delete is logged and never fails the
-// upload; nothing is deleted unless both saves succeeded. No previous avatar
-// means no profile write here (the frontend's own save is the only one).
+// saved. The worker never writes the profile: the frontend's user_profile_update
+// is the one save per avatar change. Before the PUT the worker reads the
+// caller's own profile AS the caller (their Bearer JWT forwarded to PostgREST,
+// so RLS applies). When it already holds an avatar under this caller's own
+// prefix in this bucket, the worker answers at once and, after the response
+// (waitUntil), re-reads the profile a few times over about 20 seconds; once the
+// row shows the new avatar_url it deletes the old object. A failed read or
+// delete is logged and never fails the upload; if the row never shows the new
+// URL (the save failed or was cancelled) the old object stays.
 //
 // Group photos ride the same route: form fields target_kind=group + target_id
 // store the bytes under groups/<group id>/ instead of <user id>/. The actor is
@@ -69,10 +70,11 @@ export interface AvatarUploadEnv {
   /** Pre-provisioned public R2 bucket name, e.g. user-avatars. */
   AVATAR_BUCKET: string;
   /**
-   * Public (publishable) Supabase key, sent as `apikey` when the worker reads or
-   * saves the caller's profile as the caller. Not a secret. When unset, the
-   * request's own `apikey` header is used; with neither, the old avatar is left
-   * in place (the upload itself is unaffected).
+   * Public (publishable) Supabase key, sent as `apikey` when the worker reads the
+   * caller's profile as the caller. Not a secret; synced by avatar-upload-deploy
+   * from VITE_SUPABASE_PUBLISHABLE_KEY. When unset, the request's own `apikey`
+   * header is used; with neither, the old avatar is left in place (the upload
+   * itself is unaffected).
    */
   SUPABASE_PUBLISHABLE_KEY?: string;
   /**
@@ -133,7 +135,18 @@ export interface AvatarUploadDeps {
    * active workspace owner/admin). Runs as the caller, never as service role.
    */
   canManageGroup: (request: Request, groupId: string, userId: string) => Promise<boolean>;
+  /** Keeps the old-avatar cleanup running after the response (ctx.waitUntil). */
+  waitUntil: (work: Promise<unknown>) => void;
+  /** Resolves after `ms`; injected so tests never wait. */
+  sleep: (ms: number) => Promise<void>;
 }
+
+/**
+ * When the cleanup re-reads the profile, in ms after the response: the
+ * frontend saves right after the upload returns, so the first read usually
+ * sees it. About 20 s in total, inside the Workers waitUntil budget.
+ */
+export const CLEANUP_CHECK_DELAYS_MS: readonly number[] = [1_500, 3_000, 5_000, 10_000];
 
 /** The caller's saved profile fields the avatar replacement needs. */
 export interface SavedProfile {
@@ -141,15 +154,10 @@ export interface SavedProfile {
   avatarUrl: string | null;
 }
 
-/** Reads and saves the caller's own profile row, always as the caller. */
+/** Reads the caller's own profile row, always as the caller. Never writes. */
 export interface ProfileAvatarStore {
   /** The caller's saved profile, or null when it cannot be read. */
   read(request: Request, userId: string): Promise<SavedProfile | null>;
-  /** Saves avatar_url via user_profile_update; true only when the row was saved. */
-  saveAvatar(
-    request: Request,
-    input: { displayName: string; avatarUrl: string; traceId: string },
-  ): Promise<boolean>;
 }
 
 /** A stored user avatar key: `<user id>/<sha256>.png`, nothing else. */
@@ -189,8 +197,8 @@ function callerApiKey(
 
 /**
  * The profile store over PostgREST AS the caller: their Bearer JWT is forwarded,
- * so the read is RLS-scoped and user_profile_update acts on auth.uid(). Any
- * failed or malformed response reads as null / false (nothing gets deleted).
+ * so the read is RLS-scoped. Any failed or malformed response reads as null
+ * (nothing gets deleted).
  */
 export function createCallerProfileStore(
   env: Pick<AvatarUploadEnv, 'SUPABASE_URL' | 'SUPABASE_PUBLISHABLE_KEY'>,
@@ -218,23 +226,6 @@ export function createCallerProfileStore(
       const { display_name: displayName, avatar_url: avatarUrl } = row as Record<string, unknown>;
       if (typeof displayName !== 'string') return null;
       return { displayName, avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : null };
-    },
-    async saveAvatar(request, input) {
-      const headers = headersFor(request);
-      if (headers === null) return false;
-      const res = await fetcher(`${base}/rpc/user_profile_update`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          p_display_name: input.displayName,
-          p_designation: null,
-          p_avatar_url: input.avatarUrl,
-          p_email_opt_in: null,
-          p_trace_id: input.traceId,
-        }),
-      });
-      await res.body?.cancel();
-      return res.ok;
     },
   };
 }
@@ -435,13 +426,12 @@ export async function handleAvatarUpload(
   const avatarUrl = publicUrl(env.AVATAR_PUBLIC_BASE, key);
 
   if (previous !== null) {
-    await replacePreviousAvatar(request, env, deps, {
-      userId,
-      previous,
-      newKey: key,
-      avatarUrl,
-      traceId,
-    });
+    const oldKey = ownAvatarKey(previous.avatarUrl, env.AVATAR_PUBLIC_BASE, userId);
+    if (oldKey !== null && oldKey !== key) {
+      deps.waitUntil(
+        deleteOldAvatarOnceSaved(request, env, deps, { userId, oldKey, avatarUrl, traceId }),
+      );
+    }
   }
 
   return json(200, { avatar_url: avatarUrl }, traceId, acao);
@@ -463,55 +453,40 @@ async function readProfile(
 }
 
 /**
- * After the new object is stored: save it on the profile row, then delete the
- * old object. Runs only when the old avatar is this user's own object in this
- * bucket and differs from the new key. Never throws; every failure is logged
- * and the old object stays whenever the profile save did not succeed.
+ * After the response: wait for the frontend's save to show the new avatar_url
+ * on the caller's profile row, then delete the old object. Never throws; every
+ * failure is logged, and the old object stays unless the row shows the new URL.
  */
-async function replacePreviousAvatar(
+export async function deleteOldAvatarOnceSaved(
   request: Request,
   env: AvatarUploadEnv,
   deps: AvatarUploadDeps,
-  input: {
-    userId: string;
-    previous: SavedProfile;
-    newKey: string;
-    avatarUrl: string;
-    traceId: string;
-  },
+  input: { userId: string; oldKey: string; avatarUrl: string; traceId: string },
 ): Promise<void> {
-  const { userId, previous, newKey, avatarUrl, traceId } = input;
-  const oldKey = ownAvatarKey(previous.avatarUrl, env.AVATAR_PUBLIC_BASE, userId);
-  if (oldKey === null || oldKey === newKey || previous.displayName.trim() === '') return;
-
-  let saved = false;
-  try {
-    saved = await deps.profile.saveAvatar(request, {
-      displayName: previous.displayName,
-      avatarUrl,
-      traceId,
-    });
-  } catch (error) {
-    logger.warn('avatar profile save failed', { trace_id: traceId, error: serializeError(error) });
+  const { userId, oldKey, avatarUrl, traceId } = input;
+  for (const delay of CLEANUP_CHECK_DELAYS_MS) {
+    await deps.sleep(delay);
+    const current = await readProfile(request, userId, deps, traceId);
+    if (current === null || current.avatarUrl !== avatarUrl) continue;
+    try {
+      await deps.storage.deleteObject(env.AVATAR_BUCKET, oldKey, traceId);
+    } catch (error) {
+      logger.warn('previous avatar delete failed', {
+        trace_id: traceId,
+        key: oldKey,
+        error: serializeError(error),
+      });
+    }
     return;
   }
-  if (!saved) {
-    logger.warn('avatar profile save refused; previous avatar kept', { trace_id: traceId });
-    return;
-  }
-
-  try {
-    await deps.storage.deleteObject(env.AVATAR_BUCKET, oldKey, traceId);
-  } catch (error) {
-    logger.warn('previous avatar delete failed', {
-      trace_id: traceId,
-      key: oldKey,
-      error: serializeError(error),
-    });
-  }
+  logger.warn('new avatar never saved; previous avatar kept', { trace_id: traceId });
 }
 
-function buildDeps(env: AvatarUploadEnv, traceId: string): AvatarUploadDeps {
+function buildDeps(
+  env: AvatarUploadEnv,
+  traceId: string,
+  ctx: Pick<ExecutionContext, 'waitUntil'>,
+): AvatarUploadDeps {
   return {
     storage: new R2StorageClient(
       {
@@ -527,11 +502,17 @@ function buildDeps(env: AvatarUploadEnv, traceId: string): AvatarUploadDeps {
       canManageGroupAsCaller(request, groupId, userId, env, (input, init) =>
         tracedFetch(input, init, extractTraceId(request)),
       ),
+    waitUntil: (work) => ctx.waitUntil(work),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
 }
 
 export default {
-  async fetch(request: Request, env: AvatarUploadEnv): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: AvatarUploadEnv,
+    ctx: Pick<ExecutionContext, 'waitUntil'>,
+  ): Promise<Response> {
     const traceId = extractTraceId(request);
     logger.setTraceId(traceId);
     const acao = resolveAllowedOrigin(request, env);
@@ -540,7 +521,7 @@ export default {
         return preflightResponse(request, env);
       }
       if (request.method === 'POST') {
-        return await handleAvatarUpload(request, env, buildDeps(env, traceId), traceId, acao);
+        return await handleAvatarUpload(request, env, buildDeps(env, traceId, ctx), traceId, acao);
       }
       return fail('method_not_allowed', 'Use POST.', traceId, acao);
     } catch (error) {

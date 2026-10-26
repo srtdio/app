@@ -9167,6 +9167,7 @@ export type Database = {
         }
         Returns: string
       }
+      auth_user_id_by_email: { Args: { p_email: string }; Returns: string }
       brand_agency_request: {
         Args: {
           p_agency_email: string

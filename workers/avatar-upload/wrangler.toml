@@ -15,8 +15,9 @@ AVATAR_BUCKET = "user-avatars"
 enabled = true
 head_sampling_rate = 1.0
 
-# Only the three R2 signing credentials are secrets; supplied as Worker secrets
-# (wrangler secret put / CI), never committed. Only binding names live here:
+# Supplied as Worker secrets by avatar-upload-deploy.yml, never committed. Only
+# binding names live here:
 #   CLOUDFLARE_ACCOUNT_ID           - R2 S3 endpoint host
 #   CLOUDFLARE_R2_ACCESS_KEY_ID     - R2 SigV4 access key
 #   CLOUDFLARE_R2_SECRET_ACCESS_KEY - R2 SigV4 secret
+#   SUPABASE_PUBLISHABLE_KEY        - public key (from VITE_SUPABASE_PUBLISHABLE_KEY): caller profile reads

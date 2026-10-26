@@ -8,6 +8,8 @@
   "include": [
     "./gen-emoji-data.ts",
     "./copy-workspace-storage.ts",
-    "./copy-workspace-storage.test.ts"
+    "./copy-workspace-storage.test.ts",
+    "./storage-move.ts",
+    "./storage-move.test.ts"
   ]
 }
