@@ -36,7 +36,6 @@ export * from './zod/platform_operators';
 export * from './zod/post_annotations';
 export * from './zod/post_versions';
 export * from './zod/posts';
-export * from './zod/session_devices';
 export * from './zod/user_private';
 export * from './zod/users';
 export * from './zod/webhook_events';

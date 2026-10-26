@@ -8421,39 +8421,6 @@ export type Database = {
           },
         ]
       }
-      session_devices: {
-        Row: {
-          created_at: string
-          fingerprint_hash: string
-          id: string
-          ip_subnet: unknown
-          last_seen_at: string
-          revoked_at: string | null
-          user_agent: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          fingerprint_hash: string
-          id?: string
-          ip_subnet?: unknown
-          last_seen_at?: string
-          revoked_at?: string | null
-          user_agent?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          fingerprint_hash?: string
-          id?: string
-          ip_subnet?: unknown
-          last_seen_at?: string
-          revoked_at?: string | null
-          user_agent?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
       user_private: {
         Row: {
           age_range: string | null
@@ -9621,32 +9588,19 @@ export type Database = {
         Args: { p_batch: Json; p_channel_id: string; p_trace_id: string }
         Returns: Json
       }
-      chat_thread_reply_counts:
-        | {
-            Args: {
-              p_channel_id: string
-              p_root_ids: string[]
-              p_trace_id: string
-            }
-            Returns: {
-              last_reply_at: string
-              reply_count: number
-              root_id: string
-            }[]
-          }
-        | {
-            Args: {
-              p_channel_id: string
-              p_root_ids: string[]
-              p_since: string
-              p_trace_id: string
-            }
-            Returns: {
-              last_reply_at: string
-              reply_count: number
-              root_id: string
-            }[]
-          }
+      chat_thread_reply_counts: {
+        Args: {
+          p_channel_id: string
+          p_root_ids: string[]
+          p_since: string
+          p_trace_id: string
+        }
+        Returns: {
+          last_reply_at: string
+          reply_count: number
+          root_id: string
+        }[]
+      }
       chat_unread_bump: {
         Args: {
           p_channel_id: string

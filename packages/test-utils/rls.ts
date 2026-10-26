@@ -922,16 +922,6 @@ export const tenantTables: readonly TenantTableProbe[] = [
       return { match: [['id', String(row.id)]], patch: { route: '/y' } };
     },
   },
-  {
-    table: 'session_devices',
-    seed: async (a, c) => {
-      const row = await insertRow(a, 'session_devices', {
-        user_id: c.userId,
-        fingerprint_hash: randomSha256(),
-      });
-      return { match: [['id', String(row.id)]], patch: { user_agent: 'z' } };
-    },
-  },
 ];
 
 // ---------------------------------------------------------------------------

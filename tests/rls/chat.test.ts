@@ -117,10 +117,8 @@ type DeleteArgs = Database['public']['Functions']['chat_message_delete']['Args']
 type EditArgs = Database['public']['Functions']['chat_message_edit']['Args'];
 type ClearArgs = Database['public']['Functions']['chat_channel_clear']['Args'];
 type ResolveArgs = Database['public']['Functions']['chat_mentions_resolve']['Args'];
-// The 3-arg version (the live app's until its cleanup) and the 4-arg p_since one.
-type ThreadCountFns = Database['public']['Functions']['chat_thread_reply_counts'];
-type ThreadCountArgs = Exclude<ThreadCountFns, { Args: { p_since: string } }>['Args'];
-type ThreadCountSinceArgs = Extract<ThreadCountFns, { Args: { p_since: string } }>['Args'];
+// The 4-arg p_since version (the 3-arg one was dropped).
+type ThreadCountSinceArgs = Database['public']['Functions']['chat_thread_reply_counts']['Args'];
 
 // Proc arguments are built here (not inline at the .rpc() call) so each call
 // carries a fresh trace id the way the app's callRpc() wrapper does.
@@ -2030,8 +2028,13 @@ describe.runIf(RLS_SUITE)('chat record: channel-membership RLS and procs', () =>
       return args.p_id;
     }
 
-    function countArgs(rootIds: string[]): ThreadCountArgs {
-      return { p_trace_id: generateTraceId(), p_channel_id: ctx.channelId, p_root_ids: rootIds };
+    function countArgs(rootIds: string[]): ThreadCountSinceArgs {
+      return {
+        p_trace_id: generateTraceId(),
+        p_channel_id: ctx.channelId,
+        p_root_ids: rootIds,
+        p_since: '-infinity',
+      };
     }
 
     async function replyCounts(userId: string, rootIds: string[]): Promise<ReplyCountRow[]> {

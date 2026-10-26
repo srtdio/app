@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Sorted: a social media operations platform for agencies. A social-media approval tool: client writes a brief, agency drafts a post, the post moves through review to approved, rejected, or parked. No publishing, scheduling, plan, or insights in the MVP.
+Sorted: a social media operations platform for agencies. A social-media approval tool: client writes a brief, agency drafts a post, the post moves through review to approved, rejected, or parked. Also shipped: Plan, chat scheduled send, voice note transcription, and Inbox. No post publishing or insights in the MVP.
 
 ## Commands
 
@@ -36,10 +36,10 @@ Domain/DB suites live in `tests/<domain>/` and are NOT run by `pnpm test`. Each 
 pnpm workspace monorepo. Frontend is a Vite 5 + React 18 + Tailwind 3 SPA; backend is Supabase (Postgres + RLS + edge functions) plus Cloudflare Workers.
 
 - `src/` - the SPA. `src/components/pages/` route pages (Pipeline, PCS, Briefs, Chat, Assets, Activity, Settings, Cockpit), `src/components/ui|shell|...` shared UI, `src/lib/` client logic (contexts, chat store, inbox, hooks). Deployed to Cloudflare Pages (`srtdio-app`) via `.github/workflows/deploy.yml` on push to main.
-- `src/server/` - server-side code shared by Workers: `workers/` one module per Worker (chat-token, chat-agora-sync, asset-upload/read, avatar-upload, og-preview, chat-webhook-mirror, chat-transcribe), plus `assets/` upload pipeline (MIME allowlist, EXIF strip, SVG sanitize, virus scan), `cron/` scheduled handlers, `middleware/` (idempotency), `logger.ts`, `trace.ts`.
+- `src/server/` - server-side code shared by Workers: `workers/` one module per Worker (chat-token, chat-agora-sync, chat-scheduled-send, chat-transcribe, asset-upload/read, avatar-upload, link-preview, og-preview), plus `assets/` upload pipeline (MIME allowlist, EXIF strip, SVG sanitize, virus scan), `cron/` scheduled handlers (catchup-send, storage-purge Workers), `middleware/` (idempotency), `logger.ts`, `trace.ts`.
 - `workers/<name>/` - one `wrangler.toml` per Worker whose `main` points at `src/server/workers/<name>.ts`; secrets are Worker secrets, only binding names appear in the toml. Each Worker has its own `*-deploy.yml` workflow.
-- `packages/` - domain packages imported as `@srtdio/*`, all exporting raw TS from `src/index.ts` (no build step). `schemas` is the base: Zod schemas + generated Supabase types. `rpc` wraps Supabase RPC (`callRpc`). `auth`, `posts`, `briefs`, `comments`, `inbox`, `workspace`, `storage` are domain logic shared by frontend and Workers. `test-utils` holds RLS test helpers.
-- `supabase/` - `migrations/` (implementation truth for schema), `functions/` Deno edge functions (invite-send/accept, session-register, brief-create/close, comment-create), `config.toml`.
+- `packages/` - domain packages imported as `@srtdio/*`, all exporting raw TS from `src/index.ts` (no build step). `schemas` is the base: Zod schemas + generated Supabase types. `rpc` wraps Supabase RPC (`callRpc`). `posts`, `briefs`, `comments`, `inbox`, `workspace`, `storage` are domain logic shared by frontend and Workers. `test-utils` holds RLS test helpers.
+- `supabase/` - `migrations/` (implementation truth for schema), `functions/` Deno edge functions (invite-send/accept, brand-request-send, book-call-send, demo-request-send, catchup-unsubscribe, resend-webhook), `config.toml`.
 
 ### Supabase project
 
@@ -55,7 +55,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - TypeScript strict mode everywhere; no loosening of compiler flags.
 - Multi-tenant isolation is enforced by Postgres RLS.
 - `post.stage` is the single workflow state: draft, review, approved, parked, rejected. There is no `publish_status` field in MVP.
-- Auth: JWT expires in 15 minutes; long-lived sessions tracked in `session_devices`.
+- Auth: JWT 60 minutes with silent refresh; no device fingerprinting.
 - `trace_id` is always passed as an explicit RPC parameter, never inferred.
 - Every Supabase `.rpc()` call MUST pass `_trace_id` via the `callRpc()` helper. ESLint enforces. Never `SET LOCAL`.
 - Comments are stored in Postgres; Chat runs on Agora (Postgres holds a mirror in `chat_messages`).
@@ -65,7 +65,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Approval is per-post; there is no bulk approve.
 - Touch targets are at least 44x44 px.
 - No connection-state UI anywhere (no Reconnecting/Connecting/Offline). Failures show per message only: clock while pending, 'Not sent' + retry on failure.
-- No AI features at launch.
+- AI: voice note transcription only.
 
 ## Rules for Claude Code
 
