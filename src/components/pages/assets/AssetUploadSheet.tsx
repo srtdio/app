@@ -16,6 +16,7 @@ import {
   type UploadOutcome,
 } from '@/lib/asset-upload';
 import { useBackGuard } from '@/lib/back-guard';
+import { fractionToPercent } from '@/lib/upload-queue';
 import { dispatchInductionRefresh } from '@/lib/induction';
 import { ROOT_LABEL } from '@/components/pages/assets/assets-nav';
 import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
@@ -172,8 +173,9 @@ export function uploadStoppedLabel(done: number, total: number): string {
 /**
  * Wrap the per-file upload so a run can stop without changing runUploads: once
  * `stopped()` is true every file not started returns the stopped outcome at
- * once, and the file in flight (aborted through `signal`) reports stopped too
- * unless it had already finished. Pure orchestration, tested directly.
+ * once, and the files in flight (up to three, all aborted through `signal`)
+ * report stopped too unless they had already finished. Pure orchestration,
+ * tested directly.
  */
 export function stoppableUpload(
   upload: (item: QueueItem, signal: AbortSignal) => Promise<UploadOutcome>,
@@ -210,7 +212,8 @@ export function precheckSummary(
 /** Per-file lifecycle within an upload run. */
 type FileStatus =
   | { state: 'queued' }
-  | { state: 'uploading' }
+  /** progress: bytes sent so far as a fraction 0..1, only ever moving forward. */
+  | { state: 'uploading'; progress: number }
   | { state: 'done' }
   | { state: 'stopped' }
   | { state: 'error'; message: string };
@@ -218,7 +221,7 @@ type FileStatus =
 /** The live run, held in a ref so Stop, Back and an unmount reach the same one. */
 interface RunControl {
   controller: AbortController;
-  /** Stop was confirmed, or the sheet went away: no more files start. */
+  /** Stop was confirmed, or the sheet went away: no more files start, all in flight abort. */
   stopped: boolean;
   /** The sheet went away mid-run: the toast is out, the sheet does nothing more. */
   abandoned: boolean;
@@ -234,7 +237,9 @@ interface AssetUploadSheetProps {
    * display_name and destination folder (always null: the library root), reporting its outcome. When omitted, the
    * sheet stays a naming surface only (no upload endpoint configured) and the
    * confirm action explains that uploading is not wired yet. `signal` aborts
-   * the request in flight when the run is stopped.
+   * the requests in flight when the run is stopped. `onProgress` takes this
+   * file's bytes sent as a fraction 0..1 for its row's bar. Up to three files
+   * are submitted at once.
    */
   onSubmit?:
     | ((
@@ -242,6 +247,7 @@ interface AssetUploadSheetProps {
         displayName: string,
         folderId: string | null,
         signal?: AbortSignal,
+        onProgress?: (fraction: number) => void,
       ) => Promise<UploadOutcome>)
     | undefined;
   /** Toast sink (ui/toast): failures pass 'error' (the bad tone); successes stay neutral. */
@@ -293,8 +299,8 @@ export function AssetUploadSheet({
   const [uploads, setUploads] = useState<PendingUpload[]>([]);
   const [statuses, setStatuses] = useState<Record<string, FileStatus>>({});
   const [running, setRunning] = useState(false);
-  // Which file of the run is going up, for the busy header.
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  // How many files of the run have finished, for the busy header.
+  const [progress, setProgress] = useState({ finished: 0, total: 0 });
   // The single typed name: the file's name with one file, or the shared base
   // with several.
   const [nameInput, setNameInput] = useState('');
@@ -321,7 +327,7 @@ export function AssetUploadSheet({
 
   useEffect(() => () => abandonRun(), [abandonRun]);
 
-  // Stop confirmed: abort the file in flight; the rest return stopped at once.
+  // Stop confirmed: abort the files in flight; the rest return stopped at once.
   const confirmStop = useCallback((): void => {
     setStopAsk(false);
     const control = runRef.current;
@@ -356,6 +362,16 @@ export function AssetUploadSheet({
 
   const setStatus = useCallback((id: string, status: FileStatus): void => {
     setStatuses((prev) => ({ ...prev, [id]: status }));
+  }, []);
+
+  // One file's bytes sent moved on: only its own row's bar changes, and only
+  // while that file is still uploading (a late event after the end is dropped).
+  const setFileProgress = useCallback((id: string, fraction: number): void => {
+    setStatuses((prev) => {
+      const current = prev[id];
+      if (current?.state !== 'uploading' || fraction <= current.progress) return prev;
+      return { ...prev, [id]: { state: 'uploading', progress: Math.min(fraction, 1) } };
+    });
   }, []);
 
   // Client-side pre-checks run here, before any bytes leave the device. A file
@@ -415,7 +431,7 @@ export function AssetUploadSheet({
       };
       runRef.current = control;
       setRunning(true);
-      setProgress({ current: 0, total: targets.length });
+      setProgress({ finished: 0, total: targets.length });
       let reused = 0;
       const plan = buildUploadPlan(targets, {
         base: nameInput,
@@ -430,18 +446,25 @@ export function AssetUploadSheet({
       }));
 
       const uploadOne = stoppableUpload(
-        (item, signal) => onSubmit(item.file, item.displayName ?? '', null, signal),
+        (item, signal) =>
+          onSubmit(item.file, item.displayName ?? '', null, signal, (fraction) => {
+            if (!control.abandoned) setFileProgress(item.id, fraction);
+          }),
         { stopped: () => control.stopped, signal: control.controller.signal },
       );
 
+      // Up to three files go up at once, each with its own bar; one failing
+      // never stops the others.
       const result = await runUploads(items, uploadOne, {
         onStart: (id) => {
           if (control.stopped) return;
-          setStatus(id, { state: 'uploading' });
-          setProgress((prev) => ({ ...prev, current: Math.min(prev.current + 1, prev.total) }));
+          setStatus(id, { state: 'uploading', progress: 0 });
         },
         onResult: (id, outcome) => {
           const name = byId.get(id)?.displayName ?? 'file';
+          if (!control.abandoned) {
+            setProgress((prev) => ({ ...prev, finished: Math.min(prev.finished + 1, prev.total) }));
+          }
           if (isStoppedOutcome(outcome)) {
             setStatus(id, { state: 'stopped' });
           } else if (outcome.ok) {
@@ -503,7 +526,17 @@ export function AssetUploadSheet({
         onClose();
       }
     },
-    [onSubmit, onToast, onSummary, onUploaded, onClose, setStatus, nameInput, siblingLabels],
+    [
+      onSubmit,
+      onToast,
+      onSummary,
+      onUploaded,
+      onClose,
+      setStatus,
+      setFileProgress,
+      nameInput,
+      siblingLabels,
+    ],
   );
 
   const canCommit = onSubmit !== undefined;
@@ -556,7 +589,7 @@ export function AssetUploadSheet({
       title="Upload files"
       footer={footer}
       busy={running}
-      busyLabel={uploadBusyLabel(progress.current, progress.total)}
+      busyLabel={uploadBusyLabel(progress.finished + 1, progress.total)}
       dirty={hasFiles && !running}
       discard={UPLOAD_DISCARD}
     >
@@ -667,8 +700,8 @@ export function AssetUploadSheet({
   );
 }
 
-/** Per-file progress / outcome line: an indeterminate bar while uploading, a
- *  success marker on done, and an inline Retry on error. */
+/** Per-file progress / outcome line: the file's real bytes-sent bar while
+ *  uploading, a success marker on done, and an inline Retry on error. */
 function UploadStatusRow({
   status,
   onRetry,
@@ -679,13 +712,21 @@ function UploadStatusRow({
   disabled: boolean;
 }) {
   if (status.state === 'uploading') {
+    const percent = fractionToPercent(status.progress);
     return (
       <div
         className="h-1 w-full overflow-hidden rounded-full bg-panel-3"
         role="progressbar"
         aria-label="Uploading"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
       >
-        <div className="h-full w-1/3 animate-pulse rounded-full bg-accent" />
+        {/* Width only (no translate): a sliver shows before the first bytes land. */}
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-base ease-enter motion-reduce:transition-none"
+          style={{ width: `${Math.max(percent, 4)}%` }}
+        />
       </div>
     );
   }

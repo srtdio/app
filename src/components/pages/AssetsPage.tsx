@@ -628,6 +628,7 @@ export function AssetsPage() {
       displayName: string,
       targetFolderId: string | null,
       signal?: AbortSignal,
+      onProgress?: (fraction: number) => void,
     ): Promise<UploadOutcome> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
         return { ok: false, message: "Couldn't upload. Try again." };
@@ -648,8 +649,13 @@ export function AssetsPage() {
         displayName,
         folderId: targetFolderId,
         // XHR so Stop can abort the request in flight (fetchWithTrace takes no
-        // signal); the transport sets X-Trace-Id itself.
-        xhr: { traceId: newTrace(), ...(signal !== undefined ? { signal } : {}) },
+        // signal) and the row's bar shows real bytes sent; the transport sets
+        // X-Trace-Id itself.
+        xhr: {
+          traceId: newTrace(),
+          ...(signal !== undefined ? { signal } : {}),
+          ...(onProgress !== undefined ? { onProgress } : {}),
+        },
       });
     },
     [uploadEndpoint, workspaceId, newTrace],

@@ -1335,7 +1335,19 @@ export function PostDetailPage({
   // version id of every success so the gallery add can pin them on close.
   const uploadEndpoint = env.VITE_ASSET_UPLOAD_URL;
   const handleUploadFile = useCallback(
-    async (file: File, displayName: string, folderId: string | null): Promise<UploadOutcome> => {
+    async (
+      file: File,
+      displayName: string,
+      folderId: string | null,
+      signal?: AbortSignal,
+      onProgress?: (fraction: number) => void,
+    ): Promise<UploadOutcome> => {
+      // Up to three files go up at once and finish in any order, so each file
+      // takes its pick-order slot now (files start in pick order) and fills it
+      // on success; empty slots are dropped when the gallery is committed.
+      const slots = uploadedVersionIds.current;
+      const slot = slots.length;
+      slots.push('');
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
         return { ok: false, message: "Couldn't upload. Try again." };
       }
@@ -1354,10 +1366,18 @@ export function PostDetailPage({
         filename: file.name,
         displayName,
         folderId,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+        // XHR so the row's bar shows real bytes sent and Stop aborts the
+        // request in flight; the transport sets X-Trace-Id itself.
+        xhr: {
+          traceId: newTrace(),
+          ...(signal !== undefined ? { signal } : {}),
+          ...(onProgress !== undefined ? { onProgress } : {}),
+        },
       });
+      // The sheet was closed (the list was reset) while this file was going up.
+      if (uploadedVersionIds.current !== slots) return outcome;
       if (outcome.ok && outcome.assetVersionId !== undefined && outcome.assetVersionId !== '') {
-        uploadedVersionIds.current.push(outcome.assetVersionId);
+        slots[slot] = outcome.assetVersionId;
       }
       return outcome;
     },
@@ -1367,7 +1387,7 @@ export function PostDetailPage({
   // After a fully-successful upload run, apply append or insert-after for each
   // new version id over the current order, then commit the whole gallery once.
   async function handleUploaded(): Promise<void> {
-    const versionIds = uploadedVersionIds.current;
+    const versionIds = uploadedVersionIds.current.filter((id) => id !== '');
     uploadedVersionIds.current = [];
     const target = addTarget;
     setAddTarget(null);

@@ -28,6 +28,7 @@ import {
   type UploadConfig,
   type UploadCompleteDetail,
   type UploadFetcher,
+  type UploadOutcome,
   UPLOAD_COMPLETE_EVENT,
   xhrPost,
 } from '@/lib/asset-upload';
@@ -261,7 +262,7 @@ describe('uploadAssetFile', () => {
 });
 
 describe('runUploads success path clears the queue', () => {
-  it('uploads sequentially and reports every file succeeded', async () => {
+  it('uploads every file and reports every file succeeded', async () => {
     const fetcher = vi
       .fn()
       .mockImplementation(async () =>
@@ -299,6 +300,95 @@ describe('runUploads success path clears the queue', () => {
 
     expect(result.succeeded).toEqual(['2']);
     expect(result.failed).toEqual([{ id: '1', message: "This file type isn't supported" }]);
+  });
+});
+
+describe('runUploads in parallel (cap 3)', () => {
+  const items = (count: number): QueueItem[] =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `f${i + 1}`,
+      file: fakeFile(`f${i + 1}.png`, 'image/png', 1),
+      filename: `f${i + 1}.png`,
+    }));
+
+  it('never has more than 3 files in flight, and starts each next one as a slot frees', async () => {
+    const waiting = new Map<string, (outcome: UploadOutcome) => void>();
+    let inFlight = 0;
+    let peak = 0;
+    const started: string[] = [];
+    const run = runUploads(
+      items(6),
+      (item) =>
+        new Promise<UploadOutcome>((resolve) => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          waiting.set(item.id, (outcome) => {
+            inFlight -= 1;
+            resolve(outcome);
+          });
+        }),
+      { onStart: (id) => started.push(id) },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toEqual(['f1', 'f2', 'f3']);
+
+    const ok: UploadOutcome = { ok: true, reused: false, assetId: 'a' };
+    for (const id of ['f2', 'f1', 'f3', 'f4', 'f5', 'f6']) {
+      waiting.get(id)?.(ok);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(inFlight).toBeLessThanOrEqual(3);
+    }
+    const result = await run;
+    expect(peak).toBe(3);
+    expect(started).toEqual(['f1', 'f2', 'f3', 'f4', 'f5', 'f6']);
+    // Listed in queue order, not finish order.
+    expect(result.succeeded).toEqual(['f1', 'f2', 'f3', 'f4', 'f5', 'f6']);
+  });
+
+  it('one failing file never stops the others and is marked failed with its copy', async () => {
+    const results: [string, boolean][] = [];
+    const result = await runUploads(
+      items(5),
+      async (item) => {
+        if (item.id === 'f2') return { ok: false, message: 'This file was blocked for safety' };
+        if (item.id === 'f4') throw new Error('unexpected');
+        return { ok: true, reused: false, assetId: item.id };
+      },
+      { onResult: (id, outcome) => results.push([id, outcome.ok]) },
+    );
+    expect(result.succeeded).toEqual(['f1', 'f3', 'f5']);
+    expect(result.failed).toEqual([
+      { id: 'f2', message: 'This file was blocked for safety' },
+      // A thrown upload is a failure with the generic retry copy, never a crash.
+      { id: 'f4', message: "Couldn't upload. Try again." },
+    ]);
+    expect(new Map(results)).toEqual(
+      new Map([
+        ['f1', true],
+        ['f2', false],
+        ['f3', true],
+        ['f4', false],
+        ['f5', true],
+      ]),
+    );
+  });
+
+  it('runs one at a time when asked for a cap of 1', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    await runUploads(
+      items(4),
+      async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        inFlight -= 1;
+        return { ok: true, reused: false, assetId: 'a' };
+      },
+      undefined,
+      1,
+    );
+    expect(peak).toBe(1);
   });
 });
 
@@ -780,6 +870,27 @@ describe('uploadAssetFile over XMLHttpRequest (progress)', () => {
     const form = request.sent as FormData;
     expect(form.get('workspace_id')).toBe('ws-1');
     expect((form.get('file') as File).name).toBe('logo.png');
+  });
+
+  it('maps bytes sent to a fraction that only moves forward', async () => {
+    const request = fakeXhr({
+      status: 201,
+      body: { asset: { assetId: 'a-1', versionId: 'v-1', reused: false } },
+      ticks: [
+        [0, 400],
+        [100, 400],
+        [50, 400],
+        [100, 400],
+        [300, 400],
+        [400, 400],
+      ],
+    });
+    const progress: number[] = [];
+    await uploadAssetFile(
+      fakeFile('logo.png', 'image/png', 400),
+      xhrConfig(request, (f) => progress.push(f)),
+    );
+    expect(progress).toEqual([0, 0.25, 0.75, 1]);
   });
 
   it('a reused (200) response is success with reused: true', async () => {
