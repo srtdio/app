@@ -177,7 +177,10 @@ describe.runIf(RPC_SUITE)('plan edit notifications merge (authenticated role)', 
     const aged = await admin
       .from('inbox_entries')
       .update({ created_at: twoHoursAgo })
-      .in('id', old.map((r) => r.id));
+      .in(
+        'id',
+        old.map((r) => r.id),
+      );
     if (aged.error !== null) throw new Error(`back-date failed: ${aged.error.message}`);
     await edit(agency, planId);
     const rows = edited(await entries(planId, 'plan_updated'));
