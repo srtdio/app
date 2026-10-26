@@ -8,6 +8,7 @@
 
 import { loadPipeline } from '@/lib/chunk-reload';
 import { logger } from '@/lib/logger';
+import { prefetchRouteData } from '@/lib/route-data';
 
 export { loadPipeline };
 export const loadChat = () => import('@/components/pages/ChatPage');
@@ -58,13 +59,17 @@ export function resetRoutePrefetch(): void {
   prefetched.clear();
 }
 
-/** Spread on a nav item: a press (mouse, pen or touch) prefetches its route's code. */
+/**
+ * Spread on a nav item: a press (mouse, pen or touch) prefetches its route's
+ * code and starts its first reads (src/lib/route-data.ts).
+ */
 export function navPrefetchProps(path: string): {
   onPointerDown: () => void;
   onTouchStart: () => void;
 } {
   const prefetch = (): void => {
     prefetchRoute(path);
+    prefetchRouteData(path);
   };
   return { onPointerDown: prefetch, onTouchStart: prefetch };
 }
