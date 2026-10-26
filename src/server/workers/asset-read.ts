@@ -1031,7 +1031,9 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
     if (cached !== undefined && cached.status === 200) {
       const cachedEtag = cached.headers.get('ETag');
       if (cachedEtag !== null && etagMatches(req.ifNoneMatch, cachedEtag)) {
-        await cached.body?.cancel();
+        // Not awaited: cancelling one branch of a teed body settles only once
+        // the other branch is done too.
+        void cached.body?.cancel().catch(() => undefined);
         return notModified(cachedEtag, disposition);
       }
       return new Response(cached.body, {
