@@ -409,8 +409,15 @@ function streamMime(version: AssetVersionLocator): string | null {
   return mime !== undefined && (version.mimeType ?? '').toLowerCase() === mime ? mime : null;
 }
 
-/** Fetches an object's bytes from a presigned URL; Range passes through. */
-export type ObjectFetcher = (url: string, range: string | null) => Promise<Response>;
+/**
+ * Fetches an object's bytes from a presigned URL; Range passes through, and so
+ * does If-None-Match when the file route forwards one (R2 answers 304 on a match).
+ */
+export type ObjectFetcher = (
+  url: string,
+  range: string | null,
+  ifNoneMatch?: string | null,
+) => Promise<Response>;
 
 /** Upstream headers a stream passes back to the browser. */
 const STREAM_PASS_HEADERS = ['Content-Length', 'Content-Range', 'Accept-Ranges', 'ETag'] as const;
@@ -875,6 +882,42 @@ export interface FileRequest {
   key: string | null;
   download: boolean;
   range: string | null;
+  /** The browser's If-None-Match, forwarded to R2 only after the gate passes. */
+  ifNoneMatch?: string | null;
+}
+
+/**
+ * True when an If-None-Match header names this ETag. Weak comparison (RFC 9110
+ * 13.1.2): a W/ prefix is ignored on either side, and `*` matches any ETag. Pure.
+ */
+export function etagMatches(ifNoneMatch: string | null | undefined, etag: string | null): boolean {
+  if (ifNoneMatch === null || ifNoneMatch === undefined || etag === null || etag === '') {
+    return false;
+  }
+  const opaque = (tag: string): string => tag.trim().replace(/^W\//, '');
+  const target = opaque(etag);
+  return ifNoneMatch
+    .split(',')
+    .map((tag) => tag.trim())
+    .some((tag) => tag === '*' || (tag !== '' && opaque(tag) === target));
+}
+
+/**
+ * A 304 for a file the member already holds: no body, the ETag, and the same
+ * cache headers a 200 carries (minus the byte-describing ones).
+ */
+function notModified(etag: string, disposition: string): Response {
+  return new Response(null, {
+    status: 304,
+    headers: {
+      ETag: etag,
+      'Cache-Control': BROWSER_CACHE_CONTROL,
+      'Content-Disposition': disposition,
+      'Content-Security-Policy': FILE_CSP,
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+  });
 }
 
 function fileError(status: 401 | 403 | 404, message: string): Response {
@@ -925,7 +968,9 @@ function attachmentDisposition(filename: string): string {
  * own gate (authorizeVersion: workspace membership, or chat readability for a
  * chat file) runs live, and only then is the edge cache read or R2 fetched. A
  * cache hit therefore never skips the gate. Errors never say which check
- * failed beyond 401 / 403 / 404.
+ * failed beyond 401 / 403 / 404. If-None-Match is honoured only after the gate:
+ * a matching ETag (from the edge copy, or R2's own 304) returns a bodiless 304,
+ * so a non-member is always denied first, whatever validator they send.
  */
 export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<Response> {
   if (req.key === null || req.key === '') {
@@ -991,6 +1036,11 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
   if (req.range === null) {
     const cached = await deps.cache.match(cacheKey);
     if (cached !== undefined && cached.status === 200) {
+      const cachedEtag = cached.headers.get('ETag');
+      if (cachedEtag !== null && etagMatches(req.ifNoneMatch, cachedEtag)) {
+        await cached.body?.cancel();
+        return notModified(cachedEtag, disposition);
+      }
       return new Response(cached.body, {
         status: 200,
         headers: fileHeaders({ contentType, disposition, upstream: cached.headers }),
@@ -1003,7 +1053,15 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
     key: objectKey,
     expiresInSeconds: URL_TTL_SECONDS,
   });
-  const upstream = await deps.fetchObject(url, req.range);
+  const ifNoneMatch = req.ifNoneMatch ?? null;
+  const upstream = await deps.fetchObject(url, req.range, ifNoneMatch);
+  if (upstream.status === 304) {
+    await upstream.body?.cancel();
+    // R2 matched the validator. Echo its ETag (or the one the browser sent).
+    const etag = upstream.headers.get('ETag') ?? ifNoneMatch;
+    if (etag !== null && etag !== '') return notModified(etag, disposition);
+    throw new Error('object fetch returned 304 without a validator');
+  }
   if (upstream.status === 404) {
     await upstream.body?.cancel();
     return fileError(404, 'Not found.');
@@ -1018,6 +1076,12 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
   if (upstream.status !== 200 && upstream.status !== 206) {
     await upstream.body?.cancel();
     throw new Error(`object fetch failed with status ${upstream.status}`);
+  }
+  // An upstream that ignored If-None-Match but sent the same ETag: still a 304.
+  const upstreamEtag = upstream.headers.get('ETag');
+  if (upstream.status === 200 && upstreamEtag !== null && etagMatches(ifNoneMatch, upstreamEtag)) {
+    await upstream.body?.cancel();
+    return notModified(upstreamEtag, disposition);
   }
 
   const headers = fileHeaders({ contentType, disposition, upstream: upstream.headers });
@@ -1118,8 +1182,14 @@ async function handleFileGet(
             store: fileState(env).store,
             renditions: fileState(env).renditions,
             signer: r2Signer(env),
-            fetchObject: (objectUrl, range) =>
-              tracedFetch(objectUrl, range !== null ? { headers: { Range: range } } : {}, traceId),
+            fetchObject: (objectUrl, range, ifNoneMatch) => {
+              const headers: Record<string, string> = {};
+              if (range !== null) headers.Range = range;
+              if (ifNoneMatch !== null && ifNoneMatch !== undefined && ifNoneMatch !== '') {
+                headers['If-None-Match'] = ifNoneMatch;
+              }
+              return tracedFetch(objectUrl, { headers }, traceId);
+            },
             cache: edgeCache,
             signingKey: await fileState(env).signingKey,
             waitUntil: (work) => {
@@ -1134,6 +1204,7 @@ async function handleFileGet(
             key: url.searchParams.get('k'),
             download: url.searchParams.get('dl') === '1',
             range: request.headers.get('Range'),
+            ifNoneMatch: request.headers.get('If-None-Match'),
           },
         );
   const headers = new Headers(response.headers);
