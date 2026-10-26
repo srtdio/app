@@ -12,7 +12,7 @@
 import { assetRestore, type Client, type DomainError, type Result } from '@srtdio/rpc';
 import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-purge-contracts';
 import type { PrefetchContext } from '@/lib/prefetch-context';
-import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
+import { invalidateReads, peekKept, primeRead, readKey, sharedRead } from '@/lib/session-read';
 import { readSharedMemberRole } from '@/lib/member-role';
 
 /**
@@ -315,11 +315,11 @@ export async function listAssetsPage(
 // ---------------------------------------------------------------------------
 // Session-shared first reads. A press on the Assets nav item starts the first
 // page and the tab counts (prefetchAssetsData); the page's mount joins those
-// same requests by key instead of asking again. Every later reload (upload,
-// link, delete, data change, Retry) drops the key first and reads anew, and
-// the page drops both keys when it unmounts, so a kept value only ever bridges
-// one press to its own mount: a return to Assets never paints a list from an
-// earlier visit (another surface may have added or removed files since).
+// same requests by key instead of asking again. The kept list is every page
+// the person loaded (the page keeps it after Load more and its own writes), so
+// a return to Assets paints it with the scroll where it was, then refreshes
+// quietly. Every later reload (upload, link, delete, data change, Retry) marks
+// the keys stale first and reads anew.
 // ---------------------------------------------------------------------------
 
 /** The session key of the first library page. */
@@ -358,10 +358,49 @@ export function readAssetTabCounts(
   return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok });
 }
 
-/** Forget the shared first reads (a write, a reload, the page leaving). */
-export function dropAssetsReads(userId: string, workspaceId: string): void {
+/** Mark the shared first reads stale (a write, a reload): the next read asks again. */
+export function staleAssetsReads(userId: string, workspaceId: string): void {
   invalidateReads(assetsFirstPageKey(userId, workspaceId));
   invalidateReads(assetTabCountsKey(userId, workspaceId));
+}
+
+/** The list this session last read or kept, every loaded page, at any age; never reads. */
+export function keptAssetsPage(userId: string, workspaceId: string): AssetPage | undefined {
+  const kept = peekKept<Result<AssetPage>>(assetsFirstPageKey(userId, workspaceId));
+  return kept !== undefined && kept.ok ? kept.data : undefined;
+}
+
+/** The tab totals this session last read, at any age; never reads. */
+export function keptAssetTabCounts(
+  userId: string,
+  workspaceId: string,
+): Record<AssetTab, number> | undefined {
+  const kept = peekKept<Result<Record<AssetTab, number>>>(assetTabCountsKey(userId, workspaceId));
+  return kept !== undefined && kept.ok ? kept.data : undefined;
+}
+
+/** Keep the list the page shows (after Load more or its own write) for the next visit. */
+export function primeAssetsPage(userId: string, workspaceId: string, page: AssetPage): void {
+  primeRead<Result<AssetPage>>(assetsFirstPageKey(userId, workspaceId), { ok: true, data: page });
+}
+
+/** Whether `item` sorts after `cursor` (uploaded_at desc, id desc), as the keyset reads. */
+function pastCursor(item: AssetListItem, cursor: AssetCursor): boolean {
+  if (item.uploadedAt !== cursor.uploadedAt) return item.uploadedAt < cursor.uploadedAt;
+  return item.id < cursor.id;
+}
+
+/**
+ * A refreshed first page laid over the kept list: the fresh rows, then the
+ * kept rows past the fresh page's end (the older pages the person loaded), so
+ * a quiet refresh never shortens the list under the restored scroll. Pure.
+ */
+export function withKeptTail(fresh: AssetPage, kept: AssetPage): AssetPage {
+  if (fresh.next.done) return fresh;
+  const { cursor } = fresh.next;
+  const tail = kept.items.filter((item) => pastCursor(item, cursor));
+  if (tail.length === 0) return fresh;
+  return { items: mergeAssetPages(fresh.items, tail), next: kept.next };
 }
 
 /**

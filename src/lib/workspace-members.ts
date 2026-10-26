@@ -15,6 +15,11 @@
 // not the old list). Signout clears everything; a workspace-data-changed event
 // re-reads in the background for the screens showing the list;
 // refetch() re-reads for every subscriber (the Members panel after a change).
+//
+// Each read is also the session read membersReadKey(userId, workspaceId)
+// (src/lib/session-read.ts), whose last good list is kept for the session: the
+// Settings members panel paints it on a return while this cache loads
+// (keptWorkspaceMembers), so it never shows loading twice in a session.
 
 import { useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { listMembers } from '@srtdio/workspace';
@@ -26,6 +31,7 @@ import { readProfiles } from '@/lib/chat-reads';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { useSession } from '@/lib/session-context';
 import { SIGNOUT_EVENT, WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
+import { invalidateReads, peekKept, readKey, sharedRead } from '@/lib/session-read';
 import { toMemberOptions, type MemberOption } from '@/components/chat/member-picker';
 
 /** One membership row, exactly as listMembers returns it. */
@@ -191,6 +197,7 @@ export const MEMBERS_STALE_MS = 60_000;
 
 interface Entry {
   snapshot: WorkspaceMembersData;
+  userId: string;
   workspaceId: string;
   inflight: boolean;
   /** A refetch asked for while a read ran: one follow-up read after it. */
@@ -206,6 +213,22 @@ let generation = 0;
 
 function keyFor(userId: string, workspaceId: string): string {
   return `${userId}:${workspaceId}`;
+}
+
+/** The session read key of one user's members of a workspace. */
+function membersReadKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'members');
+}
+
+/**
+ * The last good list this session read for the user and workspace, at any
+ * age, or undefined. Never reads.
+ */
+export function keptWorkspaceMembers(
+  userId: string,
+  workspaceId: string,
+): WorkspaceMembersData | undefined {
+  return peekKept<WorkspaceMembersData>(membersReadKey(userId, workspaceId));
 }
 
 function publish(key: string, entry: Entry, snapshot: WorkspaceMembersData): void {
@@ -225,11 +248,19 @@ function startRead(key: string, entry: Entry, mode: LoadMode): void {
   else if (mode === 'refetch')
     publish(key, entry, { ...entry.snapshot, loading: true, error: null });
   const started = generation;
-  const { workspaceId } = entry;
-  void loadWorkspaceMembers({
-    members: () => listMembers(supabase, workspaceId),
-    profiles: (userIds) => readProfiles(supabase, userIds),
-  }).then((next) => {
+  const { userId, workspaceId } = entry;
+  const sessionKey = membersReadKey(userId, workspaceId);
+  // A refetch or a change reads the server again; a mount joins a fresh read.
+  if (mode !== 'initial') invalidateReads(sessionKey);
+  void sharedRead(
+    sessionKey,
+    () =>
+      loadWorkspaceMembers({
+        members: () => listMembers(supabase, workspaceId),
+        profiles: (userIds) => readProfiles(supabase, userIds),
+      }),
+    { freshMs: MEMBERS_STALE_MS, isOk: (next) => next.error === null },
+  ).then((next) => {
     if (started !== generation || entries.get(key) !== entry) return;
     entry.inflight = false;
     if (entry.queued) {
@@ -256,6 +287,7 @@ function entryFor(userId: string, workspaceId: string): Entry {
   if (entry === undefined) {
     entry = {
       snapshot: LOADING,
+      userId,
       workspaceId,
       inflight: false,
       queued: false,

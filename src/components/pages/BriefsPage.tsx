@@ -38,6 +38,7 @@ import {
   listBriefsPage,
   mergeBriefPages,
   parseBriefFilter,
+  BRIEF_FILTER_DEFAULT,
   withBriefThumbnails,
   type BriefFilter,
   type BriefPageNext,
@@ -45,11 +46,16 @@ import {
 import { countBriefsByFilter } from '@/lib/brief-counts';
 import {
   briefsPaintNeedsThumbs,
-  dropBriefsReads,
+  keptBriefCounts,
+  keptBriefsList,
+  primeBriefsList,
   readBriefCounts,
   readBriefsFirstPage,
+  staleBriefsReads,
+  withKeptBriefsTail,
 } from '@/lib/brief-list-shared';
 import { getPrefetchContext } from '@/lib/prefetch-context';
+import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import { logger } from '@/lib/logger';
 import {
   groupBriefsByDay,
@@ -451,34 +457,76 @@ export function BriefsPage() {
   const timeZone = activeWorkspace?.timezone ?? 'UTC';
   const weekStartDay = activeWorkspace?.week_start_day ?? 1;
 
+  // Who the shared first reads are keyed to: the user the shell's nav press
+  // started them for (src/lib/route-data.ts), when it is this workspace. Null:
+  // nothing is shared and the page reads on its own.
+  const sharedUserId = useCallback((): string | null => {
+    const ctx = getPrefetchContext();
+    return ctx !== null && ctx.workspaceId === workspaceId ? ctx.userId : null;
+  }, [workspaceId]);
+  const viewUserId = sharedUserId();
+  const viewKey = (part: string): string | null =>
+    viewUserId !== null && workspaceId !== null ? keptViewKey(viewUserId, workspaceId, part) : null;
+
   // The chip and the search live in the URL (?status=&q=), so a Back from a
-  // brief lands on the same filtered list. Default chip: Open.
+  // brief lands on the same filtered list. Default chip: Open, or the chip
+  // kept this session when the URL names none (a tab return).
   const [searchParams, setSearchParams] = useSearchParams();
-  const filter = parseBriefFilter(searchParams.get('status'));
+  const [keptFilter, setKeptFilter] = useKeptState<BriefFilter>(
+    viewKey('briefs:filter'),
+    BRIEF_FILTER_DEFAULT,
+  );
+  const statusParam = searchParams.get('status');
+  const filter = statusParam === null ? keptFilter : parseBriefFilter(statusParam);
   const search = searchParams.get('q') ?? '';
   const setListState = useCallback(
     (nextFilter: BriefFilter, nextSearch: string) => {
+      setKeptFilter(nextFilter);
       setSearchParams((prev) => briefListParams(prev, nextFilter, nextSearch), { replace: true });
     },
-    [setSearchParams],
+    [setSearchParams, setKeptFilter],
   );
 
-  const [briefs, setBriefs] = useState<BriefWithThumbnail[]>([]);
-  // Loading from the first render: the read starts in an effect, after the
-  // first paint, so a false start would flash a zero state for a frame.
-  const [loading, setLoading] = useState(true);
+  // A return to Briefs with no search paints the list (every page loaded) and
+  // the chip counts this session kept, at any age, then the mount refreshes
+  // them quietly. A search reads as on a first visit.
+  const [kept] = useState(() =>
+    viewUserId !== null && workspaceId !== null && search === ''
+      ? {
+          list: keptBriefsList(viewUserId, workspaceId),
+          counts: keptBriefCounts(viewUserId, workspaceId),
+        }
+      : null,
+  );
+  const [briefs, setBriefs] = useState<BriefWithThumbnail[]>(() => kept?.list?.items ?? []);
+  // Loading from the first render (unless the kept list painted): the read
+  // starts in an effect, after the first paint, so a false start would flash a
+  // zero state for a frame.
+  const [loading, setLoading] = useState(kept?.list === undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   // Keyset paging: where the next page starts, or done. Load more appends it.
-  const [next, setNext] = useState<BriefPageNext>({ done: true });
+  const [next, setNext] = useState<BriefPageNext>(() => kept?.list?.next ?? { done: true });
   const [loadingMore, setLoadingMore] = useState(false);
   // Bumped by every first-page load, so a Load more that resolves after a
   // reload (or a workspace switch) never appends onto the fresh list.
   const loadGeneration = useRef(0);
+  // The workspace whose list `briefs` holds (kept or read), so only a mount
+  // over that workspace's painted list refreshes quietly.
+  const shownFor = useRef<string | null>(kept?.list !== undefined ? workspaceId : null);
+  // Whether the person has acted on the page since it mounted: a quiet
+  // refresh lands only while they have not.
+  const untouched = useUntouched();
+  const briefsRef = useRef(briefs);
+  briefsRef.current = briefs;
+  const nextRef = useRef(next);
+  nextRef.current = next;
   const [createOpen, setCreateOpen] = useState(false);
   // The chips' real counts (server HEAD counts, never the loaded rows). Empty
   // until the first read lands, and after a failed one: a chip then shows its
   // label alone rather than a wrong number.
-  const [chipCounts, setChipCounts] = useState<Partial<Record<BriefFilter, number>>>({});
+  const [chipCounts, setChipCounts] = useState<Partial<Record<BriefFilter, number>>>(
+    () => kept?.counts ?? {},
+  );
   const countsGeneration = useRef(0);
   // The search the counts were last read for, so the search effect only
   // re-reads when the search really moved (a reload reads them itself).
@@ -493,18 +541,12 @@ export function BriefsPage() {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
 
-  // Who the shared first reads are keyed to: the user the shell's nav press
-  // started them for (src/lib/route-data.ts), when it is this workspace. Null:
-  // nothing is shared and the page reads on its own.
-  const sharedUserId = useCallback((): string | null => {
-    const ctx = getPrefetchContext();
-    return ctx !== null && ctx.workspaceId === workspaceId ? ctx.userId : null;
-  }, [workspaceId]);
-
   // Every chip's count for the search, in parallel; only the newest read lands.
-  // The first load (`join`) joins the counts a nav press already started.
+  // The first load (`join`) joins the counts a nav press already started. A
+  // `quiet` run (the kept counts painted) keeps them through a failure and
+  // lands only while untouched.
   const loadCounts = useCallback(
-    async (forSearch: string, join = false) => {
+    async (forSearch: string, join = false, quiet = false) => {
       if (workspaceId === null) return;
       countsGeneration.current += 1;
       const generation = countsGeneration.current;
@@ -515,7 +557,25 @@ export function BriefsPage() {
           ? await countBriefsByFilter(supabase, workspaceId, forSearch)
           : await readBriefCounts(supabase, userId, workspaceId, forSearch, countBriefsByFilter);
       if (generation !== countsGeneration.current) return;
+      if (quiet && (!result.ok || !untouched())) return;
       setChipCounts(result.ok ? result.data : {});
+    },
+    [workspaceId, sharedUserId, untouched],
+  );
+
+  // The list the page shows after a load, Load more or a quiet refresh is kept
+  // for the next visit, for this workspace's list only. primeBriefsList is
+  // idempotent, so the updater stays safe to run twice.
+  const setBriefsAndKeep = useCallback(
+    (update: (prev: BriefWithThumbnail[]) => BriefWithThumbnail[], page?: BriefPageNext): void => {
+      const userId = sharedUserId();
+      setBriefs((prev) => {
+        const items = update(prev);
+        if (userId !== null && workspaceId !== null && shownFor.current === workspaceId) {
+          primeBriefsList(userId, workspaceId, { items, next: page ?? nextRef.current });
+        }
+        return items;
+      });
     },
     [workspaceId, sharedUserId],
   );
@@ -530,24 +590,34 @@ export function BriefsPage() {
   // (a second round: they need the rows' ids) fill each card's fixed tile when
   // they land, unless a card's height depends on them (briefsPaintNeedsThumbs),
   // when the paint waits for them as before. Only the mount (`join`) joins the
-  // reads a nav press started; every reload drops them and reads anew.
+  // reads a nav press started; every reload marks them stale and reads anew.
+  //
+  // When the kept list painted, the mount's read is a quiet refresh: no
+  // skeleton and no wait for the counts, a failure keeps the kept list, and
+  // the rows (thumbnails filled, the older pages the person loaded kept under
+  // them) land only while untouched; otherwise they are kept for the next visit.
   const loadBriefs = useCallback(
     async (join = false) => {
       if (workspaceId === null) return;
       const userId = sharedUserId();
-      if (userId !== null && !join) dropBriefsReads(userId, workspaceId);
+      if (userId !== null && !join) staleBriefsReads(userId, workspaceId);
+      const quiet = join && shownFor.current === workspaceId;
       // The counts reload on every event the list reloads on, alongside it.
-      const counted = loadCounts(searchRef.current, true);
+      const counted = loadCounts(searchRef.current, true, quiet);
       loadGeneration.current += 1;
       const generation = loadGeneration.current;
-      setLoading(true);
-      setLoadFailed(false);
+      if (!quiet) {
+        setLoading(true);
+        setLoadFailed(false);
+      }
       // A counts read that never answers holds the paint no longer than the
       // bound; the chips then take their numbers when it lands.
-      const countsOrBound = Promise.race([
-        counted,
-        new Promise<void>((resolve) => window.setTimeout(resolve, BRIEF_COUNTS_PAINT_WAIT_MS)),
-      ]);
+      const countsOrBound = quiet
+        ? Promise.resolve()
+        : Promise.race([
+            counted,
+            new Promise<void>((resolve) => window.setTimeout(resolve, BRIEF_COUNTS_PAINT_WAIT_MS)),
+          ]);
       const [result] = await Promise.all([
         userId === null
           ? listBriefsFirstPage(supabase, workspaceId)
@@ -555,6 +625,23 @@ export function BriefsPage() {
         countsOrBound,
       ]);
       if (generation !== loadGeneration.current) return;
+      if (quiet) {
+        if (!result.ok) return;
+        const thumbnails = await result.data.thumbs;
+        if (generation !== loadGeneration.current || !thumbnails.ok) return;
+        const rows = withBriefThumbnails(result.data.items, thumbnails.data);
+        const fresh = withKeptBriefsTail(
+          { items: rows, next: result.data.next },
+          { items: briefsRef.current, next: nextRef.current },
+        );
+        if (!untouched()) {
+          if (userId !== null) primeBriefsList(userId, workspaceId, fresh);
+          return;
+        }
+        setBriefsAndKeep(() => fresh.items, fresh.next);
+        setNext(fresh.next);
+        return;
+      }
       if (!result.ok) {
         setLoading(false);
         setLoadingMore(false);
@@ -562,6 +649,7 @@ export function BriefsPage() {
         return;
       }
       const { items, next: page, thumbs } = result.data;
+      shownFor.current = workspaceId;
       if (briefsPaintNeedsThumbs(items)) {
         const thumbnails = await thumbs;
         if (generation !== loadGeneration.current) return;
@@ -571,13 +659,13 @@ export function BriefsPage() {
           setLoadFailed(true);
           return;
         }
-        setBriefs(withBriefThumbnails(items, thumbnails.data));
+        setBriefsAndKeep(() => withBriefThumbnails(items, thumbnails.data), page);
         setNext(page);
         return;
       }
       setLoading(false);
       setLoadingMore(false);
-      setBriefs(items);
+      setBriefsAndKeep(() => items, page);
       setNext(page);
       const thumbnails = await thumbs;
       if (generation !== loadGeneration.current) return;
@@ -588,9 +676,9 @@ export function BriefsPage() {
       }
       if (thumbnails.data.size === 0) return;
       // Fill only the first page's rows: a Load more page carries its own.
-      setBriefs((prev) => withBriefThumbnails(prev, thumbnails.data));
+      setBriefsAndKeep((prev) => withBriefThumbnails(prev, thumbnails.data));
     },
-    [workspaceId, loadCounts, sharedUserId],
+    [workspaceId, loadCounts, sharedUserId, untouched, setBriefsAndKeep],
   );
 
   // The next page, appended with duplicates (by id) dropped. A failure keeps
@@ -606,22 +694,13 @@ export function BriefsPage() {
       showToast?.({ title: BRIEFS_LOAD_MORE_FAILED, tone: 'error' });
       return;
     }
-    setBriefs((prev) => mergeBriefPages(prev, result.data.items));
+    setBriefsAndKeep((prev) => mergeBriefPages(prev, result.data.items), result.data.next);
     setNext(result.data.next);
-  }, [workspaceId, next, loadingMore, showToast]);
+  }, [workspaceId, next, loadingMore, showToast, setBriefsAndKeep]);
 
   useEffect(() => {
     void loadBriefs(true);
   }, [loadBriefs]);
-  // Leaving the page forgets its shared first reads, so a later visit reads the
-  // server again and never paints this visit's list.
-  useEffect(
-    () => () => {
-      const userId = sharedUserId();
-      if (workspaceId !== null && userId !== null) dropBriefsReads(userId, workspaceId);
-    },
-    [workspaceId, sharedUserId],
-  );
   useWorkspaceDataChanged(() => void loadBriefs());
 
   // The search is applied to the loaded rows in memory, but the counts are
@@ -686,6 +765,8 @@ export function BriefsPage() {
   }
 
   const listLoading = workspaceId === null || (loading && briefs.length === 0);
+  // Back on Briefs, the scroll lands where it was once the cards painted.
+  useKeptScroll(viewKey('briefs:scroll'), !listLoading && !loadFailed);
 
   // BriefCard renders its own root, so the first rendered card is marked for the
   // induction from here (attribute only). Re-run each render: the chip or search

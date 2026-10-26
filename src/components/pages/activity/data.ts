@@ -89,7 +89,14 @@ import {
 } from '@/lib/chat/bounded-window';
 import { readInboxOldest } from '@/lib/inbox/inbox-oldest';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
-import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
+import {
+  invalidateReads,
+  peekKept,
+  peekRead,
+  primeRead,
+  readKey,
+  sharedRead,
+} from '@/lib/session-read';
 import { generateTraceId } from '@/lib/trace';
 import type { PrefetchContext } from '@/lib/prefetch-context';
 
@@ -2549,15 +2556,18 @@ export function createUpcomingScheduledWrites(deps: UpcomingWriteDeps): Upcoming
 // shared session reads (src/lib/session-read.ts): in memory only, keyed by
 // user and workspace, joined while running and for READ_FRESH_MS after a good
 // read. The bell press starts the All page and the count (prefetchActivityData),
-// so the page's mount joins them; switching back to a chip within the window
-// paints its page without a request. Any inbox change (the shell's poll, a mark
-// read, a snooze, Mark all read: INBOX_CHANGED_EVENT) drops them all before the
-// page's own listener reloads, so a reload never joins an answer the change
-// made old; older than the window is absent (the page loads, never paints it).
+// so the page's mount joins them. The last good page of a chip is kept for the
+// session: a return to Activity, or to a chip, paints it at once and refreshes
+// quietly behind it (no request while it is fresh). The page's own writes (a
+// mark read, a snooze) edit the kept pages too (editKeptActivityPages). Any
+// inbox change (the shell's poll, a mark read, a snooze, Mark all read:
+// INBOX_CHANGED_EVENT) marks them all stale before the page's own listener
+// reloads, so a reload never joins an answer the change made old.
 // Upcoming is not an inbox slice (scheduled messages and reminders change
-// outside these events): it always reads.
+// outside these events): it always reads, and its last good rows are kept
+// (keepUpcoming) for a return to paint.
 
-/** The keys made this session (the inbox change event drops exactly these). */
+/** The keys made this session (the inbox change event marks exactly these stale). */
 const activityKeys = new Set<string>();
 
 /** The session read key of a chip's page one in a sort. */
@@ -2593,24 +2603,56 @@ export function sharedMentionCount(
   return sharedRead(key, load, { isOk: (result) => result.ok });
 }
 
-/** A fresh good page one for `key`, or undefined (never reads). */
+/** The last good page one for `key` this session, at any age, or undefined (never reads). */
 export function peekActivityPage(key: string): ActivityItem[] | undefined {
-  const held = peekRead<LoadResult>(key);
+  const held = peekKept<LoadResult>(key);
   return held !== undefined && held.ok ? held.data : undefined;
 }
 
-/** A fresh good unread-mention count, or undefined (never reads). */
+/** The last good unread-mention count this session, or undefined (never reads). */
 export function peekMentionCount(key: string): number | undefined {
-  const held = peekRead<Result<number>>(key);
+  const held = peekKept<Result<number>>(key);
   return held !== undefined && held.ok ? held.data : undefined;
 }
 
-/** Drop one shared Activity read (`key`) or all of them (the inbox changed). */
+/** Mark one shared Activity read (`key`) or all of them (the inbox changed) stale. */
 export function invalidateActivityReads(key?: string): void {
-  for (const k of key !== undefined ? [key] : [...activityKeys]) {
-    invalidateReads(k);
-    activityKeys.delete(k);
+  for (const k of key !== undefined ? [key] : activityKeys) invalidateReads(k);
+}
+
+/**
+ * Apply one of the page's own writes (a mark read, a snooze, their revert) to
+ * every kept chip page of this user and workspace, so a return paints it. A
+ * page that was stale stays stale (the next read still goes to the server).
+ */
+export function editKeptActivityPages(
+  userId: string,
+  workspaceId: string,
+  edit: (items: ActivityItem[]) => ActivityItem[],
+): void {
+  const prefix = readKey(userId, workspaceId, 'activity-page:');
+  for (const key of activityKeys) {
+    const kept = key.startsWith(prefix) ? peekKept<LoadResult>(key) : undefined;
+    if (kept === undefined || !kept.ok) continue;
+    const fresh = peekRead<LoadResult>(key) !== undefined;
+    primeRead(key, { ok: true, data: edit(kept.data) } satisfies LoadResult);
+    if (!fresh) invalidateReads(key);
   }
+}
+
+/** The session key of the viewer's Upcoming rows. */
+export function upcomingKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'activity-upcoming');
+}
+
+/** The last Upcoming rows read this session, or undefined (never reads). */
+export function peekUpcoming(key: string): UpcomingItem[] | undefined {
+  return peekKept<UpcomingItem[]>(key);
+}
+
+/** Keep the Upcoming rows just read, for a return to paint. */
+export function keepUpcoming(key: string, items: UpcomingItem[]): void {
+  primeRead(key, items);
 }
 
 if (typeof window !== 'undefined') {

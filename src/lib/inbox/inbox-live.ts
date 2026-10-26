@@ -175,8 +175,8 @@ function othersPhrase(n: number): string {
  *   same post + action, different people: "{Name} and {N} others {verb} on {title}"
  *   same person + post + action, repeated: "{Name} {verb} {N} times on {title}"
  *   (send for review wraps the title: "{Name} sent {title} for review [{N} times]")
- *   same person, different posts or actions: "{Name}: {N} new updates"
- *   different people, different posts or actions: "{Name} and {N} others: {M} new updates"
+ *   different posts or actions (one person or many): "{Name} {verb} {title} +{N-1}"
+ *   (send for review wraps the title; no verb or no title: "{Name} +{N-1}")
  */
 function groupedToastTitle(
   updates: readonly ToastUpdate[],
@@ -200,9 +200,10 @@ function groupedToastTitle(
       ? `${name} ${verbOnTitle(verb, title, total)}`
       : `${name} and ${othersPhrase(others)} ${verbOnTitle(verb, title)}`;
   }
-  return others === 0
-    ? `${name}: ${total} new updates`
-    : `${name} and ${othersPhrase(others)}: ${total} new updates`;
+  const more = `+${total - 1}`;
+  if (verb === null || title === null) return `${name} ${more}`;
+  const action = verb === REVIEW_VERB ? verbOnTitle(verb, title) : `${verb} ${title}`;
+  return `${name} ${action} ${more}`;
 }
 
 /** The toast content derived from an enriched batch, before it is rendered. */
@@ -371,7 +372,7 @@ function commentSnippet(
  * (the post's or brief's title), or "{name} commented" when the title is missing;
  * its description is the body with mentions resolved, else nothing. Any other
  * single event takes its neutral label, with the body, then the title, as its
- * description. Many new rows coalesce to "N new updates" with no actor. Pure;
+ * description. Many new rows with no named actor read "New activity +{N-1}". Pure;
  * produces no JSX.
  */
 export function toastFromEnriched(enriched: EnrichedNew): ToastSpec | null {
@@ -386,7 +387,7 @@ export function toastFromEnriched(enriched: EnrichedNew): ToastSpec | null {
       return { title: grouped, actorName: lead.actorName, actorAvatarUrl: lead.actorAvatarUrl };
     }
     return {
-      title: `${spellCount(enriched.count)} new updates`,
+      title: `New activity +${enriched.count - 1}`,
       actorName: null,
       actorAvatarUrl: null,
     };

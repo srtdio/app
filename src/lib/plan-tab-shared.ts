@@ -1,15 +1,15 @@
 // The Plan tab's read, shared within this tab session (in memory only,
 // src/lib/session-read.ts). A nav press on Plan starts it (prefetchPlanTabData
-// in src/lib/plan-tab.ts) and the tab's mount joins the same request. A range
-// read inside the freshness window paints at once with no request (coming back
-// to the tab, or to a month already seen); past the window it is absent, so
-// the tab shows its loading state and reads again. Older data is never
-// painted, and nothing is re-read behind a painted range.
+// in src/lib/plan-tab.ts) and the tab's mount joins the same request. The last
+// good read of a range is kept for the session: coming back to the tab, or to
+// a month already seen, paints it at once and refreshes quietly behind it
+// (no request while it is fresh).
 //
-// The kept reads are dropped the moment anything says they may differ: a plan
-// changed (PLAN_CHANGED_EVENT), a post changed (POST_CHANGED_EVENT: stages and
-// dates show on the tab), the workspace's rows changed or sign-out (both drop
-// every session read), and the tab's own reloads (dropPlanTabReads).
+// The kept reads are marked stale the moment anything says they may differ: a
+// plan changed (PLAN_CHANGED_EVENT), a post changed (POST_CHANGED_EVENT: stages
+// and dates show on the tab), the workspace's rows changed, and the tab's own
+// reloads (invalidatePlanTabReads). Stale still paints; the next read goes to
+// the server. Sign-out deletes every session read.
 //
 // The workspace zone comes with the read (plan_bundle_read returns it), so no
 // read of its own: a key never carries a zone. Only a laptop press that starts
@@ -25,7 +25,7 @@ import { canCreatePlans, visibleRange } from '@/lib/plan-tab';
 import { readPlanTab, type PlanTabData } from '@/lib/plan-tab-read';
 import { civilToday } from '@/lib/plan-week';
 import type { PrefetchContext } from '@/lib/prefetch-context';
-import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
+import { invalidateReads, peekKept, readKey, sharedRead } from '@/lib/session-read';
 import { safeTimeZone } from '@/lib/time';
 
 /** What one Plan tab read covers (the hook's inputs, minus the switches). */
@@ -47,7 +47,7 @@ export function planTabReadKey(userId: string, args: PlanTabReadArgs): string {
   return readKey(userId, args.workspaceId, what);
 }
 
-// Every key this module started, so a change event drops them all.
+// Every key this module started, so a change event marks them all stale.
 const started = new Set<string>();
 
 /** One Plan tab read (bounded at 5s, never throws). */
@@ -75,21 +75,16 @@ export function readSharedPlanTab(
   return sharedRead(key, () => loadPlanTab(client, args), { isOk: (result) => result.ok });
 }
 
-/** A read of `args` settled inside the window, or undefined. Never reads. */
-export function peekPlanTab(
-  userId: string | null,
-  args: PlanTabReadArgs,
-  nowMs: number = Date.now(),
-): PlanTabData | undefined {
+/** The last good read of `args` this session, at any age, or undefined. Never reads. */
+export function peekPlanTab(userId: string | null, args: PlanTabReadArgs): PlanTabData | undefined {
   if (userId === null) return undefined;
-  const kept = peekRead<Result<PlanTabData>>(planTabReadKey(userId, args), nowMs);
+  const kept = peekKept<Result<PlanTabData>>(planTabReadKey(userId, args));
   return kept !== undefined && kept.ok ? kept.data : undefined;
 }
 
-/** Forget every kept Plan tab read (a plan or post changed; the tab reloads). */
-export function dropPlanTabReads(): void {
+/** Mark every kept Plan tab read stale (a plan or post changed; the tab reloads). */
+export function invalidatePlanTabReads(): void {
   for (const key of started) invalidateReads(key);
-  started.clear();
 }
 
 /**
@@ -119,6 +114,6 @@ export async function startPlanTabRead(
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener(PLAN_CHANGED_EVENT, dropPlanTabReads);
-  window.addEventListener(POST_CHANGED_EVENT, dropPlanTabReads);
+  window.addEventListener(PLAN_CHANGED_EVENT, invalidatePlanTabReads);
+  window.addEventListener(POST_CHANGED_EVENT, invalidatePlanTabReads);
 }

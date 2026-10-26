@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { SIGNOUT_EVENT } from '@/lib/events';
 import { ICON_SIZE, IconFile, IconLink } from '@/components/ui/icons';
 import { formatIcon, type FormatGlyphToken } from '@/components/ui/format-icon';
 import { imageTileState } from '@/lib/assets';
@@ -62,6 +63,14 @@ const BODY_CLASS: Record<NonNullable<ThumbnailProps['bodyLines']>, string> = {
   3: 'mt-auto line-clamp-3 text-sm leading-snug text-fg-2',
   4: 'mt-auto line-clamp-4 text-sm leading-snug text-fg-2',
 };
+
+// Versions whose original has shown this session: a remount (a tab return)
+// paints it at once, with no fade. Cleared on signout.
+const shownOriginals = new Set<string>();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(SIGNOUT_EVENT, () => shownOriginals.clear());
+}
 
 /** The glyph/label/caption tile shown when there is no usable image preview. */
 function FallbackTile({
@@ -172,7 +181,11 @@ export function Thumbnail({
   const [sharp, setSharp] = useState<string | null>(null);
   const loading =
     state === 'shimmer' || (state === 'image' && painted !== smallUrl && painted !== originalUrl);
-  const originalShown = originalUrl !== null && (smallUrl === null || sharp === originalUrl);
+  // The version this mount faded in itself: it keeps its fade to the end.
+  const [fadedIn, setFadedIn] = useState<string | null>(null);
+  const instant = shownOriginals.has(versionId) && fadedIn !== versionId;
+  const originalShown =
+    originalUrl !== null && (instant || smallUrl === null || sharp === originalUrl);
 
   return (
     <div
@@ -212,12 +225,17 @@ export function Thumbnail({
               loading="lazy"
               decoding="async"
               onLoad={() => {
+                if (!shownOriginals.has(versionId)) {
+                  shownOriginals.add(versionId);
+                  setFadedIn(versionId);
+                }
                 setSharp(originalUrl);
                 setPainted(originalUrl);
               }}
               onError={original.onError}
               className={cn(
-                'absolute inset-0 h-full w-full object-cover transition-opacity duration-150 motion-reduce:transition-none',
+                'absolute inset-0 h-full w-full object-cover',
+                instant ? null : 'transition-opacity duration-150 motion-reduce:transition-none',
                 originalShown ? 'opacity-100' : 'opacity-0',
               )}
             />

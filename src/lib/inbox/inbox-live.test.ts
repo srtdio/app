@@ -159,13 +159,13 @@ describe('toastFromEnriched', () => {
     expect(spec && 'description' in spec).toBe(false);
   });
 
-  it('coalesces many new rows into a spelled-number summary with no actor', () => {
+  it('coalesces many new rows with no actor into "New activity +{N-1}"', () => {
     expect(toastFromEnriched(enriched({ count: 3, lead: null }))).toEqual({
-      title: 'Three new updates',
+      title: 'New activity +2',
       actorName: null,
       actorAvatarUrl: null,
     });
-    expect(toastFromEnriched(enriched({ count: 12, lead: null }))?.title).toBe('12 new updates');
+    expect(toastFromEnriched(enriched({ count: 12, lead: null }))?.title).toBe('New activity +11');
   });
 });
 
@@ -449,26 +449,86 @@ describe('grouped toast wording', () => {
     ).toBe('Asha Rao commented 3 times on Q3 Launch');
   });
 
-  it('same person, different posts or actions: "{Name}: N new updates"', () => {
-    expect(spec(2, [up('a', 'post:p1', 'comment'), up('a', 'post:p2', 'comment')])?.title).toBe(
-      'Asha Rao: 2 new updates',
-    );
-    expect(
-      spec(2, [up('a', 'post:p1', 'comment'), up('a', 'post:p1', 'stage_change:approved')])?.title,
-    ).toBe('Asha Rao: 2 new updates');
+  const diwaliApproved = lead({
+    eventType: 'stage_change',
+    toStage: 'approved',
+    verb: 'approved',
+    title: 'Diwali post',
   });
 
-  it('different people, different posts or actions: "{Name} and N others: M new updates"', () => {
-    expect(spec(2, [up('a', 'post:p1', 'comment'), up('b', 'post:p2', 'comment')])?.title).toBe(
-      'Asha Rao and 1 other: 2 new updates',
-    );
+  it('same person, different posts or actions: "{Name} {verb} {title} +{N-1}" from the newest', () => {
     expect(
-      spec(5, [
-        up('a', 'post:p1', 'comment'),
-        up('b', 'post:p2', 'mention'),
-        up('c', 'post:p2', 'comment'),
-      ])?.title,
-    ).toBe('Asha Rao and 2 others: 5 new updates');
+      spec(
+        4,
+        [up('a', 'post:p1', 'stage_change:approved'), up('a', 'post:p2', 'comment')],
+        diwaliApproved,
+      )?.title,
+    ).toBe('Asha Rao approved Diwali post +3');
+    expect(
+      spec(
+        2,
+        [up('a', 'post:p1', 'stage_change:approved'), up('a', 'post:p1', 'comment')],
+        diwaliApproved,
+      )?.title,
+    ).toBe('Asha Rao approved Diwali post +1');
+  });
+
+  it('different people, different posts or actions: "{Name} {verb} {title} +{N-1}" from the newest', () => {
+    expect(
+      spec(
+        2,
+        [up('a', 'post:p1', 'stage_change:approved'), up('b', 'post:p2', 'comment')],
+        diwaliApproved,
+      )?.title,
+    ).toBe('Asha Rao approved Diwali post +1');
+    expect(
+      spec(
+        5,
+        [
+          up('a', 'post:p1', 'stage_change:approved'),
+          up('b', 'post:p2', 'mention'),
+          up('c', 'post:p2', 'comment'),
+        ],
+        diwaliApproved,
+      )?.title,
+    ).toBe('Asha Rao approved Diwali post +4');
+  });
+
+  it('mixed with send for review as the newest keeps the wrapped title', () => {
+    const review = lead({
+      eventType: 'stage_change',
+      toStage: 'review',
+      verb: eventVerb({ eventType: 'stage_change', toStage: 'review' }),
+      title: 'Diwali post',
+    });
+    expect(
+      spec(4, [up('a', 'post:p1', 'stage_change:review'), up('b', 'post:p2', 'comment')], review)
+        ?.title,
+    ).toBe('Asha Rao sent Diwali post for review +3');
+  });
+
+  it('mixed with no verb or no title on the newest: "{Name} +{N-1}"', () => {
+    const mixed = [up('a', 'post:p1', 'post_ready'), up('a', 'post:p2', 'comment')];
+    expect(spec(3, mixed, lead({ verb: null }))?.title).toBe('Asha Rao +2');
+    expect(spec(3, mixed, lead({ title: null }))?.title).toBe('Asha Rao +2');
+    expect(spec(3, mixed, lead({ title: '  ' }))?.title).toBe('Asha Rao +2');
+  });
+
+  it('no grouped or fallback title ever says "updates"', () => {
+    const titles = [
+      spec(2, [up('a', 'post:p1', 'comment'), up('a', 'post:p2', 'comment')])?.title,
+      spec(3, [up('a', 'post:p1', 'comment'), up('b', 'post:p2', 'mention')])?.title,
+      spec(3, [up('a', 'post:p1', 'comment'), up('b', 'post:p2', 'comment')], lead({ verb: null }))
+        ?.title,
+      spec(3, [up('a', 'post:p1', 'comment'), up('b', 'post:p1', 'comment')])?.title,
+      spec(3, [up('a', 'post:p1', 'comment'), up('a', 'post:p1', 'comment')])?.title,
+      toastFromEnriched({ count: 3, lead: null })?.title,
+      toastFromEnriched({ count: 3, lead: lead({ actorName: null }), updates: [] })?.title,
+    ];
+    for (const title of titles) {
+      expect(title).toBeDefined();
+      expect(title).not.toMatch(/updates/i);
+    }
   });
 
   it('the count is the exact total, beyond the rows read', () => {

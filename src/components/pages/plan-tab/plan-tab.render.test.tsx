@@ -25,6 +25,10 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: 'ws', workspaces: [{ id: 'ws', timezone: 'UTC' }] }),
 }));
+vi.mock('@/lib/session-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/session-context')>()),
+  useSession: () => ({ session: { user: { id: 'u1' } } }),
+}));
 vi.mock('@/lib/chat/viewer-role', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chat/viewer-role')>()),
   useViewerSide: () => ({ side: env.side, ready: true }),

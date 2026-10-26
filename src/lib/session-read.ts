@@ -1,11 +1,16 @@
 // Reads shared within this tab session, in memory only (never localStorage or
 // IndexedDB). A keyed read started anywhere (a nav press, a card press, a
 // mount) is joined by every caller with the same key while it runs and, once
-// it settles, while it is younger than its freshness window. A settled value
-// older than the window is treated as absent: the caller loads and paints the
-// new result, never the old one (peekRead returns undefined). A failed read is
-// never kept, so the next caller retries. Signout and workspace-data-changed
-// drop everything, and the other change events callers already listen to drop their keys (invalidateReads).
+// it settles, while it is fresh (younger than its window and not marked
+// stale). A failed read is never kept, so the next caller retries.
+//
+// Fresh and kept are apart. Freshness only decides whether sharedRead starts a
+// new read; a settled ok value is kept for the whole session (peekKept), so a
+// screen coming back paints its last view at once and refreshes quietly. A
+// newer read replaces the kept value only when it settles ok. Change events
+// mark keys stale (invalidateReads) and never delete them; signout deletes
+// everything (resetSessionReads) and losing a workspace deletes its keys
+// (dropWorkspaceReads).
 //
 // Keys always carry the user id and workspace id first
 // (`${userId}:${workspaceId}:<what>`), so one person's rows are never served
@@ -21,7 +26,11 @@ interface Entry {
   /** When the read settled ok; null while it runs. */
   settledAt: number | null;
   value: unknown;
+  /** The last ok value at any age (this read's, or the one before it while it runs). */
+  kept: { value: unknown } | null;
   freshMs: number;
+  /** A change event said the value may differ: the next sharedRead reads again. */
+  stale: boolean;
 }
 
 const entries = new Map<string, Entry>();
@@ -29,6 +38,7 @@ const entries = new Map<string, Entry>();
 let generation = 0;
 
 function isFresh(entry: Entry, nowMs: number): boolean {
+  if (entry.stale) return false;
   return entry.settledAt === null || nowMs - entry.settledAt <= entry.freshMs;
 }
 
@@ -38,9 +48,10 @@ export function readKey(userId: string, workspaceId: string, what: string): stri
 }
 
 /**
- * Join the read for `key` when one runs or settled within its window, else
- * start `load`. `isOk` decides whether a settled value is kept (default: every
- * resolved value; a rejection is never kept).
+ * Join the read for `key` when one runs or settled fresh, else start `load`.
+ * `isOk` decides whether a settled value is kept (default: every resolved
+ * value; a rejection is never kept). The value kept before this read stays
+ * until this one settles ok.
  */
 export function sharedRead<T>(
   key: string,
@@ -55,7 +66,13 @@ export function sharedRead<T>(
     promise: Promise.resolve(),
     settledAt: null,
     value: undefined,
+    kept: hit?.kept ?? null,
     freshMs: opts.freshMs ?? READ_FRESH_MS,
+    stale: false,
+  };
+  const prior = (): void => {
+    if (entry.kept === null) entries.delete(key);
+    else entries.set(key, { ...entry, settledAt: 0, value: entry.kept.value, stale: true });
   };
   entry.promise = load().then(
     (value) => {
@@ -63,14 +80,15 @@ export function sharedRead<T>(
         if (opts.isOk === undefined || opts.isOk(value)) {
           entry.settledAt = Date.now();
           entry.value = value;
+          entry.kept = { value };
         } else {
-          entries.delete(key);
+          prior();
         }
       }
       return value;
     },
     (err: unknown) => {
-      if (entries.get(key) === entry) entries.delete(key);
+      if (started === generation && entries.get(key) === entry) prior();
       throw err;
     },
   );
@@ -86,13 +104,41 @@ export function peekRead<T>(key: string, nowMs: number = Date.now()): T | undefi
   return entry.value as T;
 }
 
-/** Store a value this session just produced (a write's result) as a fresh read. */
-export function primeRead<T>(key: string, value: T, freshMs: number = READ_FRESH_MS): void {
-  entries.set(key, { promise: Promise.resolve(value), settledAt: Date.now(), value, freshMs });
+/**
+ * The last ok value this session read or wrote for `key`, at any age, stale
+ * or not, even while a newer read runs; undefined when never kept. What a
+ * screen paints on a return. Never reads.
+ */
+export function peekKept<T>(key: string): T | undefined {
+  const kept = entries.get(key)?.kept;
+  return kept === null || kept === undefined ? undefined : (kept.value as T);
 }
 
-/** Drop every key that starts with `prefix` (a change event; '' drops all). */
+/** Store a value this session just produced (a write's result) as a fresh, kept read. */
+export function primeRead<T>(key: string, value: T, freshMs: number = READ_FRESH_MS): void {
+  entries.set(key, {
+    promise: Promise.resolve(value),
+    settledAt: Date.now(),
+    value,
+    kept: { value },
+    freshMs,
+    stale: false,
+  });
+}
+
+/**
+ * Mark every key that starts with `prefix` stale (a change event; '' marks
+ * all). The kept value stays for the next paint; the next sharedRead reads again.
+ */
 export function invalidateReads(prefix: string): void {
+  for (const [key, entry] of entries) {
+    if (key.startsWith(prefix)) entry.stale = true;
+  }
+}
+
+/** Delete every read of one user's workspace (that workspace was lost: removed or deleted). */
+export function dropWorkspaceReads(userId: string, workspaceId: string): void {
+  const prefix = readKey(userId, workspaceId, '');
   for (const key of [...entries.keys()]) {
     if (key.startsWith(prefix)) entries.delete(key);
   }
@@ -107,6 +153,6 @@ export function resetSessionReads(): void {
 if (typeof window !== 'undefined') {
   window.addEventListener(SIGNOUT_EVENT, resetSessionReads);
   // Rows changed under every open screen (the tour's sample week, a member
-  // change): every shared read is dropped and re-read on next use.
+  // change): every shared read is marked stale and re-read on next use.
   window.addEventListener(WORKSPACE_DATA_CHANGED_EVENT, () => invalidateReads(''));
 }
