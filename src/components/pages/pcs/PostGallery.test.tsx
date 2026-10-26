@@ -5,10 +5,8 @@ import {
   galleryView,
   galleryFrame,
   galleryFrameRatio,
-  frameCutLine,
-  frameKindNote,
+  frameCut,
   framePins,
-  slideMap,
   intrinsicSize,
   nearestTileIndex,
   resolveRibbonTileStyle,
@@ -18,11 +16,16 @@ import {
   viewerReplacesRibbon,
 } from '@/components/pages/pcs/PostGallery';
 import type { MeasuredDimensions } from '@/components/pages/pcs/PostGallery';
-import { IDENTITY_MAP } from '@/components/pages/pcs/pin-annotations';
-import { PlatformFrame } from '@/components/media/PlatformFrame';
+import {
+  cutPercent,
+  frameMap,
+  IDENTITY_MAP,
+  type PinDot,
+} from '@/components/pages/pcs/pin-annotations';
 import { IconButton } from '@/components/ui/IconButton';
+import { Button } from '@/components/ui/Button';
 import { DropZone } from '@/components/ui/DropZone';
-import type { Frame } from '@/lib/platform-specs';
+import { frameFor } from '@/lib/platform-specs';
 import { placePinFromEvent } from '@/components/pages/pcs/PostLightbox';
 import { LONG_PRESS_MS, createLongPressController } from '@/components/ui/useLongPress';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -96,10 +99,16 @@ function nullDimItem(n: number): GalleryItem {
   return { ...item(n), width: null, height: null };
 }
 
-// The tile <button>'s reserved style box, pulled from the ribbon tree.
+// The ribbon tile boxes (each holds its absolutely placed tile <button>).
+function tileBoxes(tree: ReactNode): ReactElement[] {
+  return elements(tree).filter(
+    (el) => (el.props as Record<string, unknown>)['data-ribbon-tile'] !== undefined,
+  );
+}
+
+// A ribbon tile's reserved style box, pulled from the ribbon tree.
 function tileStyle(tree: ReactNode, index: number): unknown {
-  const tile = elements(tree).find((el) => label(el) === `View image ${index + 1}`)!;
-  return (tile.props as { style?: unknown }).style;
+  return (tileBoxes(tree)[index]!.props as { style?: unknown }).style;
 }
 
 describe('galleryView', () => {
@@ -169,42 +178,49 @@ describe('galleryView', () => {
     expect(className(scroller)).toContain('overflow-x-auto');
     expect(className(scroller)).toContain('items-center');
 
-    // One snapping tile per image, hugging its image via a reserved style box:
-    // no full-width slides, no aspect crop classes, snap-align start.
+    // One snapping box per image, hugging its image via a reserved style box:
+    // no full-width slides, no aspect crop classes, snap-align start. The tile
+    // button fills its box absolutely, so the image never sizes the box.
+    const boxes = tileBoxes(tree);
+    expect(boxes.length).toBe(2);
+    for (const box of boxes) {
+      expect(className(box)).not.toContain('w-full');
+      expect(className(box)).not.toContain('aspect-[4/5]');
+      expect(className(box)).toContain('shrink-0');
+      expect(className(box)).toContain('snap-start');
+      expect(className(box)).toContain('overflow-hidden');
+      expect((box.props as { style?: unknown }).style).toEqual(ribbonTileStyle(800, 1000));
+    }
     const tiles = all.filter((el) => label(el)?.startsWith('View image'));
     expect(tiles.length).toBe(2);
-    for (const tile of tiles) {
-      expect(className(tile)).not.toContain('w-full');
-      expect(className(tile)).not.toContain('aspect-[4/5]');
-      expect(className(tile)).not.toContain('aspect-[3/2]');
-      expect(className(tile)).toContain('shrink-0');
-      expect(className(tile)).toContain('snap-start');
-      expect((tile.props as { style?: unknown }).style).toEqual(ribbonTileStyle(800, 1000));
-    }
+    for (const tile of tiles) expect(className(tile)).toContain('absolute inset-0');
+    // The whole image fits its box, never cropped.
+    const fits = all
+      .filter((el) => (el.props as { fit?: string }).fit !== undefined)
+      .map((el) => (el.props as { fit: string }).fit);
+    expect(fits).toEqual(['fit', 'fit']);
   });
 
-  it('reserves each ribbon tile box from the intrinsic dimensions, capped to the clamp and viewport', () => {
+  it('reserves each ribbon tile box from the intrinsic dimensions, capped to the clamp and column', () => {
     // Portrait 800x1000: width derived from the height cap times the ratio, the
-    // aspect ratio carried on the box, both caps applied.
+    // aspect ratio carried on the box, capped at the scroller column.
     expect(ribbonTileStyle(800, 1000)).toEqual({
       width: 'calc(clamp(200px, 38vh, 320px) * 0.8)',
-      aspectRatio: '800 / 1000',
-      maxWidth: 'calc(100vw - 2rem)',
-      maxHeight: 'clamp(200px, 38vh, 320px)',
+      aspectRatio: '0.8',
+      maxWidth: '100%',
     });
-    // Wide 2000x1000: twice as wide as tall, still viewport-capped so it renders
+    // Wide 2000x1000: twice as wide as tall, still column-capped so it renders
     // shorter (via aspect-ratio) rather than wider.
     expect(ribbonTileStyle(2000, 1000)).toEqual({
       width: 'calc(clamp(200px, 38vh, 320px) * 2)',
-      aspectRatio: '2000 / 1000',
-      maxWidth: 'calc(100vw - 2rem)',
-      maxHeight: 'clamp(200px, 38vh, 320px)',
+      aspectRatio: '2',
+      maxWidth: '100%',
     });
-    // Either dimension missing or unusable degrades to a stable fallback box.
+    // Either dimension missing or unusable degrades to a stable 4/5 box.
     const fallback = {
-      height: 'clamp(200px, 38vh, 320px)',
-      aspectRatio: '4 / 5',
-      maxWidth: 'calc(100vw - 2rem)',
+      width: 'calc(clamp(200px, 38vh, 320px) * 0.8)',
+      aspectRatio: '0.8',
+      maxWidth: '100%',
     };
     expect(ribbonTileStyle(null, 1000)).toEqual(fallback);
     expect(ribbonTileStyle(800, null)).toEqual(fallback);
@@ -257,21 +273,20 @@ describe('galleryView', () => {
 
   it('sizes a lone image to fill the column at its own ratio, never overflowing', () => {
     // A single image is not a peek tile: it fills the column width, keeps its own
-    // aspect ratio (object-contain, no crop), and carries no fixed or capped width
-    // so it can never overflow the column on the X axis.
+    // aspect ratio (fit, no crop), and a tall image narrows to the 78vh cap.
     const items = [item(0)]; // stored 800x1000
     const tree = galleryView({ items, cache, presignEnabled: true, onOpen: () => {} });
     const all = elements(tree);
-    const tile = all.find((el) => label(el) === 'View image 1')!;
-    const style = (tile.props as { style?: Record<string, unknown> }).style!;
+    const style = tileStyle(tree, 0) as Record<string, unknown>;
     expect(style).toEqual(soloTileStyle(800, 1000));
-    expect(style.width).toBe('100%');
-    expect(style.aspectRatio).toBe('800 / 1000');
-    expect(style.maxWidth).toBeUndefined();
+    expect(style.width).toBe('min(100%, calc(78vh * 0.8))');
+    expect(style.aspectRatio).toBe('0.8');
+    expect(style.maxWidth).toBe('100%');
 
-    // The lone tile still carries no aspect-crop class; the image is contained.
-    expect(className(tile)).not.toContain('aspect-[4/5]');
-    expect(className(tile)).toContain('overflow-hidden');
+    // The box carries no aspect-crop class and clips; the image fits inside.
+    const box = tileBoxes(tree)[0]!;
+    expect(className(box)).not.toContain('aspect-[4/5]');
+    expect(className(box)).toContain('overflow-hidden');
 
     // The single-image index chip still reads 1/1, exactly as before.
     const chip = all
@@ -447,28 +462,27 @@ describe('ribbon tile sizing hugs the true aspect ratio', () => {
     const style = resolveRibbonTileStyle({ ...item(0), width: 3000, height: 750 }, {});
     expect(style).toEqual(ribbonTileStyle(3000, 750));
     expect(style).toMatchObject({
-      aspectRatio: '3000 / 750',
-      maxWidth: 'calc(100vw - 2rem)',
-      maxHeight: 'clamp(200px, 38vh, 320px)',
+      aspectRatio: '4',
+      maxWidth: '100%',
     });
   });
 
   it('sizes a tall portrait tall: height cap bites, width follows the ratio', () => {
     const style = resolveRibbonTileStyle({ ...item(0), width: 1080, height: 1350 }, {});
     expect(style).toEqual(ribbonTileStyle(1080, 1350));
-    expect(style).toMatchObject({ aspectRatio: '1080 / 1350' });
+    expect(style).toMatchObject({ aspectRatio: '0.8' });
   });
 
   it('sizes a square tile square', () => {
     const style = resolveRibbonTileStyle({ ...item(0), width: 1000, height: 1000 }, {});
     expect(style).toEqual(ribbonTileStyle(1000, 1000));
-    expect(style).toMatchObject({ aspectRatio: '1000 / 1000' });
+    expect(style).toMatchObject({ aspectRatio: '1' });
   });
 
   it('uses the 4/5 fallback when stored dimensions are null and nothing is measured yet', () => {
     const style = resolveRibbonTileStyle(nullDimItem(0), {});
     expect(style).toEqual(ribbonTileStyle(null, null));
-    expect(style).toMatchObject({ aspectRatio: '4 / 5' });
+    expect(style).toMatchObject({ aspectRatio: '0.8' });
   });
 
   it('uses the measured ratio once a null-dimension tile has loaded', () => {
@@ -642,115 +656,201 @@ describe('file tiles (T8)', () => {
   });
 });
 
-describe('galleryView on the platform frame', () => {
-  const wide = (n: number): GalleryItem => ({ ...item(n), width: 1920, height: 1080 });
+describe('the post screen shows every picture whole', () => {
   const tall = (n: number): GalleryItem => ({ ...item(n), width: 1080, height: 1920 });
-  // Every slide's box is the shared PlatformFrame; its frame prop sets the ratio.
-  const framesOf = (tree: ReactNode) => elements(tree).filter((el) => el.type === PlatformFrame);
-  const frameProp = (el: ReactElement | undefined) =>
-    (el?.props as { frame: Frame; maxHeight: string } | undefined)?.frame;
-  const cutOf = (tree: ReactNode) =>
+  const square = (n: number): GalleryItem => ({ ...item(n), width: 1080, height: 1080 });
+  const lineOf = (tree: ReactNode) =>
     elements(tree).find(
       (el) => (el.props as Record<string, unknown>)['data-frame-cut'] !== undefined,
     );
+  const lineText = (tree: ReactNode): string | undefined =>
+    elements(lineOf(tree))
+      .map((el) => (el.props as { children?: ReactNode }).children)
+      .find((child): child is string => typeof child === 'string' && child.includes('cuts'));
 
-  it('every slide renders in the same fixed frame, the media cropped to fill it', () => {
-    const items = [wide(1), item(2)];
-    const frame = galleryFrame('instagram', 'carousel', items, {});
-    expect(frame?.ratio).toBeCloseTo(16 / 9);
+  it('a solo tile is never wider than its column: no fixed px width, full-width slot', () => {
+    for (const [w, h] of [
+      [1080, 1080],
+      [1080, 1350],
+      [1080, 1920],
+      [6000, 1000],
+      [null, null],
+    ] as const) {
+      const style = soloTileStyle(w, h);
+      // Width is capped by 100% of a definite slot, never a px value.
+      expect(String(style.width)).toMatch(/^min\(100%, /);
+      expect(String(style.width)).not.toMatch(/\d+px/);
+      expect(style.maxWidth).toBe('100%');
+    }
+    // The real bug: a text post, one 1080x1080 image. The slot is the scroller's
+    // full-width snap item, so the tile's 100% is never a cyclic percentage.
+    const items = [square(0)];
     const tree = galleryView({
       items,
       cache,
       presignEnabled: true,
       onOpen: () => {},
-      frame,
-      platformLabel: 'Instagram',
+      measuredDimensions: { 'aa-0': { width: 1080, height: 1080 } },
     });
-    const frames = framesOf(tree);
-    expect(frames).toHaveLength(2);
-    for (const f of frames) {
-      expect(frameProp(f)).toBe(frame);
-      expect((f.props as { maxHeight: string }).maxHeight).toBe('78vh');
-    }
-    const thumbs = elements(tree).filter((el) => (el.props as { fit?: string }).fit !== undefined);
-    expect(thumbs.every((el) => (el.props as { fit: string }).fit === 'cover')).toBe(true);
-    // 16:9 sits inside Instagram's range: nothing is cut, so no cut line.
-    expect(cutOf(tree)).toBeUndefined();
+    const slot = elements(tree).find(
+      (el) => (el.props as Record<string, unknown>)['data-ribbon-slot'] !== undefined,
+    )!;
+    expect(className(slot)).toContain('w-full');
+    expect(className(slot)).toContain('shrink-0');
+    expect(className(slot)).toContain('snap-start');
+    expect(tileBoxes((slot.props as { children?: ReactNode }).children)).toHaveLength(1);
+    expect(tileStyle(tree, 0)).toEqual(soloTileStyle(1080, 1080));
+    // Multi-image tiles cap at the scroller column too.
+    expect(ribbonTileStyle(6000, 1000).maxWidth).toBe('100%');
   });
 
-  it('a cropped slide shows the cut line, which opens the full image', () => {
-    let opened = -1;
-    const items = [tall(1)];
-    const tree = galleryView({
-      items,
-      cache,
-      presignEnabled: true,
-      onOpen: (i) => (opened = i),
-      frame: galleryFrame('facebook', 'single_image', items, {}),
-      platformLabel: 'Facebook',
-    });
-    const note = cutOf(tree);
-    expect((note?.props as { children: string }).children).toBe(
-      '30% outside the Facebook frame. Tap to see full image.',
-    );
-    (note?.props as { onClick: () => void }).onClick();
-    expect(opened).toBe(0);
-  });
-
-  it('TikTok and Shorts fit a 16:9 slide in a 9:16 frame with bands, no cut line', () => {
-    for (const [platform, format, bands] of [
-      ['tiktok', 'video', 'black'],
-      ['youtube_shorts', 'short', 'blur'],
-    ] as const) {
-      const items = [wide(1)];
-      const frame = galleryFrame(platform, format, items, {});
+  it('a text post with an image and a single_image post both render the unframed ribbon', () => {
+    for (const format of ['text', 'single_image']) {
+      const items = [square(0)];
       const tree = galleryView({
         items,
         cache,
         presignEnabled: true,
         onOpen: () => {},
-        frame,
-        frameNote: frameKindNote(platform, items),
-        platformLabel: 'P',
+        frame: galleryFrame('linkedin', format, items, {}),
+        platformLabel: 'LinkedIn',
       });
-      const f = framesOf(tree)[0];
-      expect(frameProp(f)?.ratio).toBeCloseTo(9 / 16);
-      expect(frameProp(f)?.bands).toBe(bands);
-      expect(cutOf(tree)).toBeUndefined();
+      expect(tileBoxes(tree)).toHaveLength(1);
+      expect(tileStyle(tree, 0)).toEqual(soloTileStyle(1080, 1080));
       const fits = elements(tree)
         .filter((el) => (el.props as { fit?: string }).fit !== undefined)
         .map((el) => (el.props as { fit: string }).fit);
-      expect(fits).toContain('fit');
+      expect(fits).toEqual(['fit']);
     }
+    expect(galleryFrame('linkedin', 'text', [square(0)], {})).toBeNull();
+    expect(galleryFrame('linkedin', 'single_image', [square(0)], {})).not.toBeNull();
   });
 
-  it('YouTube Shorts with an image shows the same note as the panel', () => {
-    const items = [wide(1)];
-    expect(frameKindNote('youtube_shorts', items)).toBe('Shorts are video only.');
-    expect(frameKindNote('tiktok', items)).toBeNull();
+  it('warns how much the platform cuts, never cropping the picture', () => {
+    const items = [tall(0)];
+    const frame = frameFor('linkedin', 'single_image', { kind: 'image', w: 1080, h: 1920 });
+    expect(frame?.fit).toBe('cover');
+    const n = cutPercent(frameMap({ w: 1080, h: 1920 }, frame!.ratio, 'cover'));
+    expect(n).toBeGreaterThan(0);
+    expect(frameCut(items[0], {}, galleryFrame('linkedin', 'single_image', items, {}))).toBe(n);
     const tree = galleryView({
       items,
       cache,
       presignEnabled: true,
       onOpen: () => {},
-      frame: galleryFrame('youtube_shorts', 'short', items, {}),
-      frameNote: frameKindNote('youtube_shorts', items),
-      platformLabel: 'YouTube Shorts',
+      frame: galleryFrame('linkedin', 'single_image', items, {}),
+      platformLabel: 'LinkedIn',
+      onSeePreview: () => {},
     });
-    const note = elements(tree).find(
-      (el) => (el.props as Record<string, unknown>)['data-frame-note'] !== undefined,
-    );
-    expect((note?.props as { children: string }).children).toBe('Shorts are video only.');
+    expect(lineText(tree)).toBe(`LinkedIn cuts ${n}% of this.`);
+    expect(className(lineOf(tree)!)).not.toContain('text-fg-3');
+    const p = elements(lineOf(tree)).find((el) => el.type === 'p');
+    expect(className(p!)).toBe('text-base text-fg-2');
+    // The picture itself is the whole image in a box of its own ratio.
+    expect(tileStyle(tree, 0)).toEqual(soloTileStyle(1080, 1920));
   });
 
-  it('no cut line when the slide fits the frame or sits in bands', () => {
-    expect(frameCutLine(IDENTITY_MAP, 'X')).toBeNull();
-    expect(
-      frameCutLine(slideMap(wide(1), {}, galleryFrame('tiktok', 'video', [wide(1)], {})!), 'T'),
-    ).toBeNull();
+  it('shows no line when the frame fits, uses bands, or there is no frame', () => {
+    const cases = [
+      // LinkedIn square fits a square frame: nothing cut.
+      ['linkedin', 'single_image', [square(0)]],
+      // TikTok fits a 16:9 slide in 9:16 with bands: nothing cut.
+      ['tiktok', 'video', [{ ...item(0), width: 1920, height: 1080 }]],
+      // Text posts have no frame.
+      ['linkedin', 'text', [tall(0)]],
+    ] as const;
+    for (const [platform, format, items] of cases) {
+      const frame = galleryFrame(platform, format, [...items], {});
+      if (platform === 'tiktok') expect(frame?.fit).toBe('contain');
+      const tree = galleryView({
+        items: [...items],
+        cache,
+        presignEnabled: true,
+        onOpen: () => {},
+        frame,
+        platformLabel: 'P',
+        onSeePreview: () => {},
+      });
+      expect(lineOf(tree)).toBeUndefined();
+    }
   });
 
-  it('text formats keep the uncropped ribbon (no frame)', () => {
+  it('shows no line when the active slide is not an image', () => {
+    const video: GalleryItem = {
+      ...tall(1),
+      kind: 'video',
+      mimeType: 'video/mp4',
+      filename: 'clip.mp4',
+    };
+    const frame = galleryFrame('linkedin', 'single_image', [tall(0), video], {});
+    expect(frameCut(video, {}, frame)).toBe(0);
+    const tree = galleryView({
+      items: [tall(0), video],
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      frame,
+      platformLabel: 'LinkedIn',
+      activeIndex: 1,
+    });
+    expect(lineOf(tree)).toBeUndefined();
+  });
+
+  it('"See preview" calls onSeePreview', () => {
+    const onSeePreview = vi.fn();
+    const onOpen = vi.fn();
+    const items = [tall(0)];
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen,
+      frame: galleryFrame('linkedin', 'single_image', items, {}),
+      platformLabel: 'LinkedIn',
+      onSeePreview,
+    });
+    const button = elements(lineOf(tree)).find((el) => el.type === Button)!;
+    expect((button.props as { variant: string }).variant).toBe('link');
+    expect((button.props as { children: string }).children).toBe('See preview');
+    (button.props as { onClick: () => void }).onClick();
+    expect(onSeePreview).toHaveBeenCalledOnce();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('pins render on the ribbon tiles at their stored positions, no frame mapping', () => {
+    const items = [tall(0), square(1)];
+    const pins: Record<string, PinDot[]> = {
+      'aa-0': [{ n: 1, annotationId: 'a1', commentId: 'c1', x: 0.1, y: 0.05 }],
+      'aa-1': [{ n: 2, annotationId: 'a2', commentId: 'c2', x: 0.75, y: 0.4 }],
+    };
+    const onPinClick = vi.fn();
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      // A cropping frame must not move the pins: the picture is never cut.
+      frame: galleryFrame('linkedin', 'single_image', items, {}),
+      platformLabel: 'LinkedIn',
+      pinsFor: (g) => pins[g.assetAttachmentId] ?? [],
+      onPinClick,
+    });
+    const shown = elements(tree).filter((el) => /^Pin /.test(label(el) ?? ''));
+    expect(shown.map(label)).toEqual(['Pin 1', 'Pin 2']);
+    const style = (el: ReactElement) =>
+      (el.props as { style: { left: string; top: string } }).style;
+    expect(style(shown[0]!)).toEqual({ left: '10%', top: '5%' });
+    expect(style(shown[1]!)).toEqual({ left: '75%', top: '40%' });
+    expect((shown[0]!.props as Record<string, unknown>)['data-pin-edge']).toBeUndefined();
+    (shown[1]!.props as { onClick: () => void }).onClick();
+    expect(onPinClick).toHaveBeenCalledWith('c2');
+    // Each pin sits inside its own tile box.
+    const boxes = tileBoxes(tree);
+    expect(elements(boxes[0]).some((el) => label(el) === 'Pin 1')).toBe(true);
+    expect(elements(boxes[1]).some((el) => label(el) === 'Pin 2')).toBe(true);
+  });
+
+  it('text formats have no frame', () => {
     expect(galleryFrameRatio('x', 'text', [item(1)], {})).toBeNull();
   });
 
@@ -764,31 +864,17 @@ describe('galleryView on the platform frame', () => {
     ).toBe(1);
   });
 
-  it('draws pins at their spot and cropped-off ones as edge markers', () => {
-    const map = { win: { x: 0.25, y: 0, w: 0.5, h: 1 }, box: { x: 0, y: 0, w: 1, h: 1 } };
+  it('framePins with the identity map draws every pin at its stored spot', () => {
     const tree = framePins(
-      [
-        { n: 1, annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0.5 },
-        { n: 2, annotationId: 'a2', commentId: 'c2', x: 0.1, y: 0.5 },
-      ],
-      map,
-      () => {},
-    );
-    const pins = elements(tree).filter((el) => /^Pin /.test(label(el) ?? ''));
-    expect(pins.map(label)).toEqual(['Pin 1', 'Pin 2, outside the frame']);
-    expect((pins[0]?.props as { style: { left: string } }).style.left).toBe('50%');
-    expect((pins[1]?.props as Record<string, unknown>)['data-pin-edge']).toBe('left');
-    expect(className(pins[1]!)).toContain('h-11 w-11');
-  });
-
-  it('pins sit on the media inside bands', () => {
-    const map = { win: { x: 0, y: 0, w: 1, h: 1 }, box: { x: 0, y: 0.25, w: 1, h: 0.5 } };
-    const tree = framePins(
-      [{ n: 1, annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0 }],
-      map,
+      [{ n: 1, annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0.25 }],
+      IDENTITY_MAP,
       () => {},
     );
     const pin = elements(tree).find((el) => label(el) === 'Pin 1');
-    expect((pin?.props as { style: { top: string } }).style.top).toBe('25%');
+    expect((pin?.props as { style: { left: string; top: string } }).style).toEqual({
+      left: '50%',
+      top: '25%',
+    });
+    expect(className(pin!)).toContain('h-11 w-11');
   });
 });

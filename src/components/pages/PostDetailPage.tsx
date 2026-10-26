@@ -1984,6 +1984,7 @@ export function PostDetailPage({
                     format: post.format,
                     platformLabel: platformLabel(post.platform),
                   }}
+                  onSeePreview={() => setPreviewOpen(true)}
                   pinsFor={(item) => pinsByAttachment[item.assetAttachmentId] ?? []}
                   onPinClick={(commentId) => flashTo(`comment-${commentId}`)}
                   onRequestPin={handleRequestPin}
