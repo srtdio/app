@@ -69,7 +69,11 @@ vi.mock('@/lib/env', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/env')>();
   return { ...actual, env: Object.assign(testEnv, actual.env) };
 });
-vi.mock('@/lib/avatar-upload', () => ({ uploadAvatarFile: mockUploadAvatar }));
+vi.mock('@/lib/avatar-upload', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/avatar-upload')>()),
+  uploadAvatarFile: mockUploadAvatar,
+  makeAvatarCleanup: () => () => Promise.resolve(),
+}));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@srtdio/rpc', () => ({ userOnboardingSave: mockSave, usernameAvailable: mockUsername }));
 vi.mock('@/components/induction/induction-data', () => ({

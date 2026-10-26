@@ -142,6 +142,129 @@ function saveMock(result: Result<string> = { ok: true, data: 'u-me' }) {
   );
 }
 
+describe('replaced avatar cleanup', () => {
+  const cropped = new File(['png'], 'avatar.png', { type: 'image/png' });
+
+  function cleanupMock(result: Promise<void> = Promise.resolve()) {
+    return vi.fn<(oldUrl: string) => Promise<void>>(() => result);
+  }
+
+  function usePhoto(
+    save: ReturnType<typeof saveMock>,
+    cleanup: ReturnType<typeof cleanupMock>,
+    avatarUrl: string | null,
+    uploaded = URL_NEW,
+  ) {
+    return submitUsePhoto({
+      client,
+      save,
+      newTrace: () => TRACE,
+      saved: { ...SAVED, avatar_url: avatarUrl },
+      exportPng: () => Promise.resolve(cropped),
+      upload: () =>
+        Promise.resolve<Result<{ avatarUrl: string }>>({ ok: true, data: { avatarUrl: uploaded } }),
+      onExported: () => {},
+      cleanup,
+    });
+  }
+
+  it('Use photo cleans up the previous URL once, only after the save succeeded', async () => {
+    const order: string[] = [];
+    const save = vi.fn<(c: Client, a: UserProfileUpdateArgs) => Promise<Result<string>>>(() => {
+      order.push('save');
+      return Promise.resolve({ ok: true, data: 'u-me' });
+    });
+    const cleanup = vi.fn<(oldUrl: string) => Promise<void>>(() => {
+      order.push('cleanup');
+      return Promise.resolve();
+    });
+    const result = await usePhoto(save, cleanup, URL_SAVED);
+    expect(result).toEqual({ ok: true, data: { avatarUrl: URL_NEW } });
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledWith(URL_SAVED);
+    expect(order).toEqual(['save', 'cleanup']);
+  });
+
+  it('Remove photo cleans up the previous URL after the clear is saved', async () => {
+    const cleanup = cleanupMock();
+    const result = await submitProfileChange({
+      client,
+      save: saveMock(),
+      newTrace: () => TRACE,
+      displayName: 'Asha Rao',
+      designation: 'Brand Manager',
+      emailOptIn: false,
+      photo: { kind: 'clear' },
+      previousAvatarUrl: URL_SAVED,
+      cleanup,
+    });
+    expect(result.ok).toBe(true);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledWith(URL_SAVED);
+  });
+
+  it('never cleans up when the save fails', async () => {
+    const cleanup = cleanupMock();
+    const failed = saveMock({ ok: false, error: { code: 'unknown', message: 'refused' } });
+    expect((await usePhoto(failed, cleanup, URL_SAVED)).ok).toBe(false);
+    const cleared = await submitProfileChange({
+      client,
+      save: failed,
+      newTrace: () => TRACE,
+      displayName: 'Asha Rao',
+      designation: '',
+      emailOptIn: false,
+      photo: { kind: 'clear' },
+      previousAvatarUrl: URL_SAVED,
+      cleanup,
+    });
+    expect(cleared.ok).toBe(false);
+    expect(cleanup).not.toHaveBeenCalled();
+  });
+
+  it('never cleans up without a previous photo, or when the URL is unchanged', async () => {
+    const cleanup = cleanupMock();
+    await usePhoto(saveMock(), cleanup, null);
+    await usePhoto(saveMock(), cleanup, '');
+    await usePhoto(saveMock(), cleanup, URL_SAVED, URL_SAVED);
+    expect(cleanup).not.toHaveBeenCalled();
+  });
+
+  it('never cleans up when the photo is kept (Save profile)', async () => {
+    const cleanup = cleanupMock();
+    const result = await submitProfileChange({
+      client,
+      save: saveMock(),
+      newTrace: () => TRACE,
+      displayName: 'Asha Rao',
+      designation: '',
+      emailOptIn: false,
+      photo: { kind: 'keep' },
+      previousAvatarUrl: URL_SAVED,
+      cleanup,
+    });
+    expect(result.ok).toBe(true);
+    expect(cleanup).not.toHaveBeenCalled();
+  });
+
+  it('resolves without waiting on a pending or failing cleanup', async () => {
+    const pending = cleanupMock(new Promise<void>(() => {}));
+    await expect(usePhoto(saveMock(), pending, URL_SAVED)).resolves.toEqual({
+      ok: true,
+      data: { avatarUrl: URL_NEW },
+    });
+    expect(pending).toHaveBeenCalledTimes(1);
+    const failing = vi.fn<(oldUrl: string) => Promise<void>>(() =>
+      Promise.reject(new Error('worker down')),
+    );
+    await expect(usePhoto(saveMock(), failing, URL_SAVED)).resolves.toMatchObject({ ok: true });
+    const throwing = vi.fn<(oldUrl: string) => Promise<void>>(() => {
+      throw new Error('sync throw');
+    });
+    await expect(usePhoto(saveMock(), throwing, URL_SAVED)).resolves.toMatchObject({ ok: true });
+  });
+});
+
 describe('Use photo', () => {
   const cropped = new File(['png'], 'avatar.png', { type: 'image/png' });
 

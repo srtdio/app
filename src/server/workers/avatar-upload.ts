@@ -1,28 +1,33 @@
 // Cloudflare Worker: avatar upload.
 //
-// POST multipart/form-data { file }
+// POST / multipart/form-data { file }
 //   -> verifies the caller's Bearer token, validates the image, stores it in the
 //      public R2 bucket, and returns a stable public CDN URL:
 //      { avatar_url }.
+// POST /avatar/cleanup JSON { old_url }
+//   -> deletes the caller's replaced avatar object once their profile no longer
+//      references it: { deleted: boolean }.
 //
 // This worker is deliberately SIMPLER than asset-upload: a user avatar belongs to
 // a PERSON, not a workspace. So there is NO workspace_id, NO membership check, NO
-// database access, and NO service-role key on that path. The worker only proves who the
-// caller is (verified token `sub`), validates the bytes, PUTs them, and returns
-// the URL. The acting user id comes from the verified token's `sub` claim only,
-// never from the request body, so a caller can only ever write their own avatar.
-// The frontend later takes avatar_url and calls user_profile_update.
+// database writes, and NO service-role key anywhere. The upload route only proves
+// who the caller is (verified token `sub`), validates the bytes, PUTs them, and
+// returns the URL; it reads no profile and schedules no background work. The
+// acting user id comes from the verified token's `sub` claim only, never from the
+// request body, so a caller can only ever write their own avatar. The frontend
+// later takes avatar_url and calls user_profile_update.
 //
-// Replacing an avatar cleans up the old object, and only AFTER the new one is
-// saved. The worker never writes the profile: the frontend's user_profile_update
-// is the one save per avatar change. Before the PUT the worker reads the
-// caller's own profile AS the caller (their Bearer JWT forwarded to PostgREST,
-// so RLS applies). When it already holds an avatar under this caller's own
-// prefix in this bucket, the worker answers at once and, after the response
-// (waitUntil), re-reads the profile a few times over about 20 seconds; once the
-// row shows the new avatar_url it deletes the old object. A failed read or
-// delete is logged and never fails the upload; if the row never shows the new
-// URL (the save failed or was cancelled) the old object stays.
+// Old-avatar cleanup is a separate call the frontend makes only AFTER its
+// user_profile_update succeeded (a new photo or a cleared one), passing the
+// previously saved URL. The worker never writes the profile: user_profile_update
+// is the one save per avatar change. The cleanup route maps old_url to a key
+// only when it is this caller's own `<sub>/<sha256>.png` on the public base
+// (never another user's, never groups/, never a foreign host or a path trick),
+// then reads the caller's own profile ONCE, AS the caller (their Bearer JWT
+// forwarded to PostgREST, so RLS applies). Only when that read succeeds and no
+// longer shows old_url is the object deleted. Every other outcome, including a
+// failed read or delete (logged), answers 200 { deleted: false } and leaves the
+// object in place. R2 deletes are idempotent, so a repeated call is harmless.
 //
 // Group photos ride the same route: form fields target_kind=group + target_id
 // store the bytes under groups/<group id>/ instead of <user id>/. The actor is
@@ -71,10 +76,10 @@ export interface AvatarUploadEnv {
   AVATAR_BUCKET: string;
   /**
    * Public (publishable) Supabase key, sent as `apikey` when the worker reads the
-   * caller's profile as the caller. Not a secret; synced by avatar-upload-deploy
-   * from VITE_SUPABASE_PUBLISHABLE_KEY. When unset, the request's own `apikey`
-   * header is used; with neither, the old avatar is left in place (the upload
-   * itself is unaffected).
+   * caller's profile as the caller on the cleanup route. Not a secret; synced by
+   * avatar-upload-deploy from VITE_SUPABASE_PUBLISHABLE_KEY. When unset, the
+   * request's own `apikey` header is used; with neither, the old avatar is left
+   * in place.
    */
   SUPABASE_PUBLISHABLE_KEY?: string;
   /**
@@ -104,6 +109,7 @@ type AvatarResponseCode =
   | 'unauthorized'
   | 'forbidden'
   | 'invalid_target'
+  | 'invalid_body'
   | 'method_not_allowed'
   | 'internal_error';
 
@@ -115,6 +121,7 @@ const STATUS_BY_CODE: Record<AvatarResponseCode, number> = {
   unauthorized: 401,
   forbidden: 403,
   invalid_target: 400,
+  invalid_body: 400,
   method_not_allowed: 405,
   internal_error: 500,
 };
@@ -124,9 +131,9 @@ const STATUS_BY_CODE: Record<AvatarResponseCode, number> = {
  * real ones from env; tests pass fakes so they never touch R2 or the network.
  */
 export interface AvatarUploadDeps {
-  /** Stores the avatar bytes, and deletes the replaced one after the save. */
+  /** Stores the avatar bytes; deletes a replaced one on the cleanup route. */
   storage: Pick<StorageClient, 'putObject'> & Pick<MultipartStorage, 'deleteObject'>;
-  /** The caller's own profile, read and saved AS the caller. */
+  /** The caller's own profile, read AS the caller (cleanup route only). */
   profile: ProfileAvatarStore;
   /** Verifies the Bearer token and returns the caller's `sub`, or an error. */
   verifyToken: (request: Request) => Promise<Result<string, ReadError>>;
@@ -135,18 +142,7 @@ export interface AvatarUploadDeps {
    * active workspace owner/admin). Runs as the caller, never as service role.
    */
   canManageGroup: (request: Request, groupId: string, userId: string) => Promise<boolean>;
-  /** Keeps the old-avatar cleanup running after the response (ctx.waitUntil). */
-  waitUntil: (work: Promise<unknown>) => void;
-  /** Resolves after `ms`; injected so tests never wait. */
-  sleep: (ms: number) => Promise<void>;
 }
-
-/**
- * When the cleanup re-reads the profile, in ms after the response: the
- * frontend saves right after the upload returns, so the first read usually
- * sees it. About 20 s in total, inside the Workers waitUntil budget.
- */
-export const CLEANUP_CHECK_DELAYS_MS: readonly number[] = [1_500, 3_000, 5_000, 10_000];
 
 /** The caller's saved profile fields the avatar replacement needs. */
 export interface SavedProfile {
@@ -407,10 +403,6 @@ export async function handleAvatarUpload(
     folder = `groups/${targetId.toLowerCase()}`;
   }
 
-  // The caller's saved avatar, read BEFORE the PUT so the replaced object is
-  // known. User target only: a group photo is never cleaned up here.
-  const previous = folder === userId ? await readProfile(request, userId, deps, traceId) : null;
-
   const sha256 = await computeSha256(bytes);
   // Hash in the key busts CDN caches when the photo changes; the userId (or
   // groups/<group id>) folder isolates each owner. The URL path must equal this
@@ -424,16 +416,6 @@ export async function handleAvatarUpload(
     traceId,
   });
   const avatarUrl = publicUrl(env.AVATAR_PUBLIC_BASE, key);
-
-  if (previous !== null) {
-    const oldKey = ownAvatarKey(previous.avatarUrl, env.AVATAR_PUBLIC_BASE, userId);
-    if (oldKey !== null && oldKey !== key) {
-      deps.waitUntil(
-        deleteOldAvatarOnceSaved(request, env, deps, { userId, oldKey, avatarUrl, traceId }),
-      );
-    }
-  }
-
   return json(200, { avatar_url: avatarUrl }, traceId, acao);
 }
 
@@ -452,41 +434,78 @@ async function readProfile(
   }
 }
 
+/** The `old_url` from a JSON body, or null when the body is not { old_url: string }. */
+async function readOldUrl(request: Request): Promise<string | null> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return null;
+  }
+  if (typeof body !== 'object' || body === null) return null;
+  const oldUrl = (body as { old_url?: unknown }).old_url;
+  return typeof oldUrl === 'string' && oldUrl !== '' ? oldUrl : null;
+}
+
 /**
- * After the response: wait for the frontend's save to show the new avatar_url
- * on the caller's profile row, then delete the old object. Never throws; every
- * failure is logged, and the old object stays unless the row shows the new URL.
+ * Delete the caller's replaced avatar once their profile no longer references
+ * it. Called by the frontend only after a successful user_profile_update.
+ * Answers 200 { deleted } for every authorised, well-formed call: anything
+ * that is not provably this caller's own, now-unreferenced object is kept.
  */
-export async function deleteOldAvatarOnceSaved(
+export async function handleAvatarCleanup(
   request: Request,
   env: AvatarUploadEnv,
   deps: AvatarUploadDeps,
-  input: { userId: string; oldKey: string; avatarUrl: string; traceId: string },
-): Promise<void> {
-  const { userId, oldKey, avatarUrl, traceId } = input;
-  for (const delay of CLEANUP_CHECK_DELAYS_MS) {
-    await deps.sleep(delay);
-    const current = await readProfile(request, userId, deps, traceId);
-    if (current === null || current.avatarUrl !== avatarUrl) continue;
-    try {
-      await deps.storage.deleteObject(env.AVATAR_BUCKET, oldKey, traceId);
-    } catch (error) {
-      logger.warn('previous avatar delete failed', {
-        trace_id: traceId,
-        key: oldKey,
-        error: serializeError(error),
-      });
-    }
-    return;
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await deps.verifyToken(request);
+  if (!caller.ok) {
+    return fail('unauthorized', caller.error.message, traceId, acao);
   }
-  logger.warn('new avatar never saved; previous avatar kept', { trace_id: traceId });
+  const userId = caller.value;
+
+  const oldUrl = await readOldUrl(request);
+  if (oldUrl === null) {
+    return fail('invalid_body', 'Body must be JSON { old_url }.', traceId, acao);
+  }
+
+  const kept = (): Response => json(200, { deleted: false }, traceId, acao);
+
+  // Only this caller's own `<sub>/<sha256>.png` on the public base; never another
+  // user's, never a group photo, never a foreign host or a path trick.
+  const oldKey = ownAvatarKey(oldUrl, env.AVATAR_PUBLIC_BASE, userId);
+  if (oldKey === null) return kept();
+
+  const current = await readProfile(request, userId, deps, traceId);
+  if (current === null) {
+    logger.warn('avatar cleanup skipped: profile unreadable', { trace_id: traceId });
+    return kept();
+  }
+  if (current.avatarUrl === oldUrl) return kept();
+
+  try {
+    await deps.storage.deleteObject(env.AVATAR_BUCKET, oldKey, traceId);
+  } catch (error) {
+    logger.warn('previous avatar delete failed', {
+      trace_id: traceId,
+      key: oldKey,
+      error: serializeError(error),
+    });
+    return kept();
+  }
+  logger.info('previous avatar deleted', { trace_id: traceId, key: oldKey });
+  return json(200, { deleted: true }, traceId, acao);
 }
 
-function buildDeps(
-  env: AvatarUploadEnv,
-  traceId: string,
-  ctx: Pick<ExecutionContext, 'waitUntil'>,
-): AvatarUploadDeps {
+/** Whether the request targets the cleanup route (also under a path prefix). */
+function isCleanupPath(request: Request): boolean {
+  const { pathname } = new URL(request.url);
+  return pathname.replace(/\/+$/, '').endsWith('/avatar/cleanup');
+}
+
+function buildDeps(env: AvatarUploadEnv, traceId: string): AvatarUploadDeps {
   return {
     storage: new R2StorageClient(
       {
@@ -502,17 +521,11 @@ function buildDeps(
       canManageGroupAsCaller(request, groupId, userId, env, (input, init) =>
         tracedFetch(input, init, extractTraceId(request)),
       ),
-    waitUntil: (work) => ctx.waitUntil(work),
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
 }
 
 export default {
-  async fetch(
-    request: Request,
-    env: AvatarUploadEnv,
-    ctx: Pick<ExecutionContext, 'waitUntil'>,
-  ): Promise<Response> {
+  async fetch(request: Request, env: AvatarUploadEnv): Promise<Response> {
     const traceId = extractTraceId(request);
     logger.setTraceId(traceId);
     const acao = resolveAllowedOrigin(request, env);
@@ -521,12 +534,15 @@ export default {
         return preflightResponse(request, env);
       }
       if (request.method === 'POST') {
-        return await handleAvatarUpload(request, env, buildDeps(env, traceId, ctx), traceId, acao);
+        const deps = buildDeps(env, traceId);
+        return isCleanupPath(request)
+          ? await handleAvatarCleanup(request, env, deps, traceId, acao)
+          : await handleAvatarUpload(request, env, deps, traceId, acao);
       }
       return fail('method_not_allowed', 'Use POST.', traceId, acao);
     } catch (error) {
-      logger.error(`avatar upload failed: ${serializeError(error)}`);
-      return fail('internal_error', 'Upload failed.', traceId, acao);
+      logger.error(`avatar request failed: ${serializeError(error)}`);
+      return fail('internal_error', 'Request failed.', traceId, acao);
     } finally {
       logger.clearTraceId();
     }

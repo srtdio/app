@@ -11,6 +11,8 @@
 // only the text fields and always sends NULL for the photo. Remove photo sends ''
 // for the photo, which the proc treats as clear; only Remove sends ''. Every
 // change refetches the shared profile store, so the header avatar follows.
+// After a save that replaced or cleared a saved photo succeeds, the old object
+// is handed to the avatar-upload worker's cleanup route (fire and forget).
 //
 // Network goes through the same tested helpers as onboarding (uploadAvatarFile +
 // the @srtdio/rpc userProfileUpdate wrapper); colors are tokens only so light/dark
@@ -32,7 +34,8 @@ import { fetchWithTrace } from '@/lib/fetch';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
-import { uploadAvatarFile } from '@/lib/avatar-upload';
+import { fireAvatarCleanup, makeAvatarCleanup, uploadAvatarFile } from '@/lib/avatar-upload';
+import { generateTraceId } from '@/lib/trace';
 import { useSession } from '@/lib/session-context';
 import { useCurrentProfile, type CurrentProfile } from '@/lib/use-current-profile';
 
@@ -84,6 +87,10 @@ export async function submitProfileChange(deps: {
   designation: string;
   emailOptIn: boolean;
   photo: PhotoIntent;
+  /** The avatar_url saved before this change; cleaned up once it is replaced. */
+  previousAvatarUrl?: string | null;
+  /** Deletes a replaced avatar object; started, never awaited, after a good save. */
+  cleanup?: (oldUrl: string) => Promise<void>;
 }): Promise<Result<void>> {
   let change: PhotoChange = { kind: 'keep' };
   if (deps.photo.kind === 'clear') change = { kind: 'clear' };
@@ -103,11 +110,21 @@ export async function submitProfileChange(deps: {
     }),
   );
   if (!saved.ok) return saved;
+  if (change.kind !== 'keep' && deps.cleanup !== undefined) {
+    fireAvatarCleanup(
+      deps.cleanup,
+      deps.previousAvatarUrl,
+      change.kind === 'set' ? change.url : '',
+    );
+  }
   return { ok: true, data: undefined };
 }
 
 /** The saved fields a photo-only change writes back unchanged. */
-type SavedFields = Pick<CurrentProfile, 'display_name' | 'designation' | 'email_opt_in'>;
+type SavedFields = Pick<CurrentProfile, 'display_name' | 'designation' | 'email_opt_in'> & {
+  /** The saved photo, cleaned up once the new one is saved. */
+  avatar_url?: string | null;
+};
 
 /**
  * Use photo: crop, upload, then save with the SAVED fields (never unsaved form
@@ -123,6 +140,8 @@ export async function submitUsePhoto(deps: {
   exportPng: () => Promise<File | null>;
   upload: (file: File) => Promise<Result<{ avatarUrl: string }>>;
   onExported: (file: File) => void;
+  /** Deletes the replaced avatar object; started, never awaited, after a good save. */
+  cleanup?: (oldUrl: string) => Promise<void>;
 }): Promise<Result<{ avatarUrl: string }>> {
   const file = await deps.exportPng();
   if (file === null) {
@@ -140,6 +159,8 @@ export async function submitUsePhoto(deps: {
     displayName: deps.saved.display_name,
     designation: deps.saved.designation ?? '',
     emailOptIn: deps.saved.email_opt_in,
+    previousAvatarUrl: deps.saved.avatar_url ?? null,
+    ...(deps.cleanup !== undefined ? { cleanup: deps.cleanup } : {}),
     photo: {
       kind: 'upload',
       upload: async () => {
@@ -350,6 +371,14 @@ export function ProfileSettingsPanel(): React.ReactElement {
     })();
   }
 
+  // Fire and forget: one fresh trace per cleanup call, sent as X-Trace-Id.
+  const cleanupAvatar = makeAvatarCleanup({
+    endpoint: env.VITE_AVATAR_UPLOAD_URL,
+    getToken: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null,
+    apiKey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    fetcher: (input, init) => fetchWithTrace(input, init, generateTraceId()),
+  });
+
   async function handleUsePhoto(): Promise<void> {
     if (profile === null || photoBusyRef.current) return;
     photoBusyRef.current = true;
@@ -365,6 +394,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
         saved: profile,
         exportPng: async () => (await cropperRef.current?.exportPng()) ?? null,
         upload: uploadFile,
+        cleanup: cleanupAvatar,
         onExported: (file) => {
           // Show the CROPPED png at once, never the raw original. The previous
           // URL is kept alive (not revoked) until the change settles.
@@ -455,6 +485,8 @@ export function ProfileSettingsPanel(): React.ReactElement {
         designation: profile.designation ?? '',
         emailOptIn: profile.email_opt_in,
         photo: { kind: 'clear' },
+        previousAvatarUrl: profile.avatar_url,
+        cleanup: cleanupAvatar,
       });
       if (!result.ok) {
         logger.error('settings photo remove failed', { error: result.error.message });

@@ -14,9 +14,9 @@ vi.mock('jose', async (importOriginal) => {
 });
 
 import worker, {
-  CLEANUP_CHECK_DELAYS_MS,
   canManageGroupAsCaller,
   createCallerProfileStore,
+  handleAvatarCleanup,
   handleAvatarUpload,
   MAX_AVATAR_BYTES,
   ownAvatarKey,
@@ -73,29 +73,30 @@ class FakeStorage {
   }
 }
 
-/** A caller with no saved avatar: the default, so no cleanup ever runs. */
-const NO_PROFILE: ProfileAvatarStore = {
-  read: () => Promise.resolve(null),
-};
-
-/** Background work the handler schedules (ctx.waitUntil), awaited by tests. */
-const pending: Promise<unknown>[] = [];
-async function settle(): Promise<void> {
-  while (pending.length > 0) await pending.shift();
+/**
+ * A profile store that records every read into the storage's shared log, so a
+ * test can see whether (and in what order) the profile was read.
+ */
+function profileFake(
+  storage: FakeStorage,
+  saved: SavedProfile | null | Error = null,
+): ProfileAvatarStore {
+  return {
+    read: () => {
+      storage.log.push('read');
+      if (saved instanceof Error) return Promise.reject(saved);
+      return Promise.resolve(saved);
+    },
+  };
 }
 
-/** A ctx stand-in for worker.fetch. */
-const ctx = { waitUntil: (work: Promise<unknown>) => void pending.push(work) };
-
 /** Production-shaped deps: a fake store plus the real verifyCaller/JWKS pair. */
-function deps(storage: FakeStorage, profile: ProfileAvatarStore = NO_PROFILE): AvatarUploadDeps {
+function deps(storage: FakeStorage, profile?: ProfileAvatarStore): AvatarUploadDeps {
   return {
     storage,
-    profile,
+    profile: profile ?? profileFake(storage),
     verifyToken: (request) => verifyCaller(request, getSupabaseJwks(env)),
     canManageGroup: () => Promise.resolve(false),
-    waitUntil: (work) => void pending.push(work),
-    sleep: () => Promise.resolve(),
   };
 }
 
@@ -283,7 +284,6 @@ describe('avatar-upload worker.fetch', () => {
         headers: { Origin: 'https://srtd.io' },
       }),
       env,
-      ctx,
     );
     expect(res.status).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://srtd.io');
@@ -301,7 +301,6 @@ describe('avatar-upload worker.fetch', () => {
       worker.fetch(
         new Request('https://worker.test/', { method: 'OPTIONS', headers: { Origin: origin } }),
         env,
-        ctx,
       );
     const preview = await preflight('https://pr-546.srtdio-app.pages.dev');
     expect(preview.headers.get('Access-Control-Allow-Origin')).toBe(
@@ -314,11 +313,7 @@ describe('avatar-upload worker.fetch', () => {
   });
 
   it('returns 405 for an unsupported verb', async () => {
-    const res = await worker.fetch(
-      new Request('https://worker.test/', { method: 'PUT' }),
-      env,
-      ctx,
-    );
+    const res = await worker.fetch(new Request('https://worker.test/', { method: 'PUT' }), env);
     expect(res.status).toBe(405);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe('method_not_allowed');
@@ -463,172 +458,194 @@ describe('avatar-upload refuses SVG and OLE2 on every target', () => {
   }
 });
 
-describe('avatar-upload deletes the previous avatar only after the one save', () => {
+describe('avatar-upload upload route does no cleanup work', () => {
+  it('never reads the profile, never deletes, and has no background-work deps', async () => {
+    const token = await mintToken(USER);
+    const storage = new FakeStorage();
+    const d = deps(storage, profileFake(storage, { displayName: 'Asha', avatarUrl: 'x' }));
+    expect(Object.keys(d).sort()).toEqual(['canManageGroup', 'profile', 'storage', 'verifyToken']);
+    const res = await handleAvatarUpload(uploadRequest(token, PNG_BYTES), env, d, 'trace-u', null);
+    expect(res.status).toBe(200);
+    expect(storage.log).toEqual([`put:${USER}/${pngSha}.png`]);
+    expect(storage.deletes).toHaveLength(0);
+  });
+});
+
+describe('avatar-upload cleanup route', () => {
   const OLD_SHA = 'a'.repeat(64);
   const oldKey = `${USER}/${OLD_SHA}.png`;
   const oldUrl = `https://cdn.srtd.io/${oldKey}`;
-  const newKey = (): string => `${USER}/${pngSha}.png`;
-  const newUrl = (): string => `https://cdn.srtd.io/${newKey()}`;
+  const newUrl = `https://cdn.srtd.io/${USER}/${'b'.repeat(64)}.png`;
 
-  /**
-   * A read-only profile fake: the first read (before the PUT) returns `before`;
-   * later reads return what the frontend's save left, from `after` in turn.
-   * Reads log into the storage's shared log so order is visible.
-   */
-  function profileFake(
-    storage: FakeStorage,
-    before: SavedProfile | null,
-    after: (SavedProfile | null)[] = [],
-  ): ProfileAvatarStore {
-    let reads = 0;
-    return {
-      read: () => {
-        storage.log.push('read');
-        reads += 1;
-        if (reads === 1) return Promise.resolve(before);
-        return Promise.resolve(after[Math.min(reads - 2, after.length - 1)] ?? before);
-      },
-    };
+  function cleanupRequest(token: string | null, body: unknown, raw?: string): Request {
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    if (token !== null) headers.set('Authorization', `Bearer ${token}`);
+    return new Request('https://worker.test/avatar/cleanup', {
+      method: 'POST',
+      headers,
+      body: raw ?? JSON.stringify(body),
+    });
   }
 
-  async function upload(storage: FakeStorage, profile: ProfileAvatarStore, trace: string) {
+  async function cleanup(
+    storage: FakeStorage,
+    profile: ProfileAvatarStore,
+    body: unknown,
+    trace = 'trace-c',
+  ): Promise<{ status: number; body: unknown }> {
     const token = await mintToken(USER);
-    const res = await handleAvatarUpload(
-      uploadRequest(token, PNG_BYTES),
+    const res = await handleAvatarCleanup(
+      cleanupRequest(token, body),
       env,
       deps(storage, profile),
       trace,
       null,
     );
-    return res;
+    return { status: res.status, body: await res.json() };
   }
 
-  it('answers first, then deletes the old object once the profile shows the new url', async () => {
-    const storage = new FakeStorage();
-    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [
-      { displayName: 'Asha', avatarUrl: oldUrl },
-      { displayName: 'Asha', avatarUrl: newUrl() },
-    ]);
-    const res = await upload(storage, profile, 'trace-r1');
-    expect(res.status).toBe(200);
-    // Nothing deleted before the response; the cleanup runs after it.
-    expect(storage.deletes).toHaveLength(0);
-    await settle();
-    expect(storage.log).toEqual(['read', `put:${newKey()}`, 'read', 'read', `delete:${oldKey}`]);
-    expect(storage.deletes).toEqual([{ bucket: 'user-avatars', key: oldKey, traceId: 'trace-r1' }]);
+  it('deletes the old object once the profile no longer references it', async () => {
+    for (const avatarUrl of [newUrl, null]) {
+      const storage = new FakeStorage();
+      const profile = profileFake(storage, { displayName: 'Asha', avatarUrl });
+      const res = await cleanup(storage, profile, { old_url: oldUrl }, 'trace-c1');
+      expect(res).toEqual({ status: 200, body: { deleted: true } });
+      expect(storage.log).toEqual(['read', `delete:${oldKey}`]);
+      expect(storage.deletes).toEqual([
+        { bucket: 'user-avatars', key: oldKey, traceId: 'trace-c1' },
+      ]);
+    }
   });
 
-  it('never writes the profile: the store has no save, so one save per change', () => {
+  it('keeps the old object while the profile still references it', async () => {
     const storage = new FakeStorage();
-    const profile = profileFake(storage, null);
-    expect(Object.keys(profile)).toEqual(['read']);
-  });
-
-  it('keeps the old object when the new url never shows up on the profile', async () => {
-    const storage = new FakeStorage();
-    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [
-      { displayName: 'Asha', avatarUrl: oldUrl },
-    ]);
-    const res = await upload(storage, profile, 'trace-r2');
-    expect(res.status).toBe(200);
-    await settle();
-    expect(storage.log.filter((e) => e === 'read')).toHaveLength(
-      1 + CLEANUP_CHECK_DELAYS_MS.length,
-    );
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
+    const res = await cleanup(storage, profile, { old_url: oldUrl });
+    expect(res).toEqual({ status: 200, body: { deleted: false } });
+    expect(storage.log).toEqual(['read']);
     expect(storage.deletes).toHaveLength(0);
   });
 
-  it('keeps the old object when the later profile reads fail', async () => {
-    const storage = new FakeStorage();
-    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [null]);
-    await upload(storage, profile, 'trace-r2b');
-    await settle();
-    expect(storage.deletes).toHaveLength(0);
+  it("refuses another user's object, a group photo, a foreign host, and path tricks", async () => {
+    for (const url of [
+      `https://cdn.srtd.io/${OTHER_USER}/${OLD_SHA}.png`,
+      `https://cdn.srtd.io/groups/${USER}/${OLD_SHA}.png`,
+      `https://cdn.srtd.io/groups/55555555-5555-7555-8555-555555555555/${OLD_SHA}.png`,
+      `https://evil.test/${USER}/${OLD_SHA}.png`,
+      `https://cdn.srtd.io.evil.test/${USER}/${OLD_SHA}.png`,
+      `https://cdn.srtd.io/${USER}/../${OTHER_USER}/${OLD_SHA}.png`,
+      `https://cdn.srtd.io/${USER}/%2e%2e/${OTHER_USER}/${OLD_SHA}.png`,
+      `https://cdn.srtd.io/${USER}/${OLD_SHA}.png?x=1`,
+      `https://cdn.srtd.io/${USER}/sub/${OLD_SHA}.png`,
+    ]) {
+      const storage = new FakeStorage();
+      const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: newUrl });
+      const res = await cleanup(storage, profile, { old_url: url });
+      expect(res).toEqual({ status: 200, body: { deleted: false } });
+      // Refused before any profile read or delete.
+      expect(storage.log).toEqual([]);
+    }
   });
 
-  it('still returns success when deleting the old object fails', async () => {
+  it('is safe to call twice: the repeated delete is harmless and still answers 200', async () => {
+    const storage = new FakeStorage();
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: newUrl });
+    const first = await cleanup(storage, profile, { old_url: oldUrl });
+    const second = await cleanup(storage, profile, { old_url: oldUrl });
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(storage.deletes.map((d) => d.key)).toEqual([oldKey, oldKey]);
+  });
+
+  it('deletes nothing when the profile read fails or throws', async () => {
+    for (const saved of [null, new Error('postgrest down')]) {
+      const storage = new FakeStorage();
+      const res = await cleanup(storage, profileFake(storage, saved), { old_url: oldUrl });
+      expect(res).toEqual({ status: 200, body: { deleted: false } });
+      expect(storage.deletes).toHaveLength(0);
+    }
+  });
+
+  it('answers 200 { deleted: false } when the delete fails', async () => {
     const storage = new FakeStorage();
     storage.failDelete = true;
-    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [
-      { displayName: 'Asha', avatarUrl: newUrl() },
-    ]);
-    const res = await upload(storage, profile, 'trace-r3');
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { avatar_url: string };
-    expect(body.avatar_url).toBe(newUrl());
-    await expect(settle()).resolves.toBeUndefined();
+    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: newUrl });
+    const res = await cleanup(storage, profile, { old_url: oldUrl });
+    expect(res).toEqual({ status: 200, body: { deleted: false } });
     expect(storage.deletes).toHaveLength(1);
   });
 
-  it('schedules nothing when there is no previous avatar', async () => {
-    for (const before of [null, { displayName: 'Asha', avatarUrl: null }]) {
+  it('returns 401 without a valid token and touches nothing', async () => {
+    for (const token of [null, 'not-a-real-jwt']) {
       const storage = new FakeStorage();
-      const res = await upload(storage, profileFake(storage, before), 'trace-r4');
-      expect(res.status).toBe(200);
-      expect(pending).toHaveLength(0);
-      expect(storage.deletes).toHaveLength(0);
+      const res = await handleAvatarCleanup(
+        cleanupRequest(token, { old_url: oldUrl }),
+        env,
+        deps(storage, profileFake(storage, { displayName: 'Asha', avatarUrl: newUrl })),
+        'trace-c401',
+        null,
+      );
+      expect(res.status).toBe(401);
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe('unauthorized');
+      expect(storage.log).toEqual([]);
     }
   });
 
-  it('deletes nothing when the new object fails to store', async () => {
+  it('returns 400 for bad JSON or a missing old_url', async () => {
     const token = await mintToken(USER);
-    const storage = new FakeStorage();
-    storage.failPut = true;
-    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl }, [
-      { displayName: 'Asha', avatarUrl: newUrl() },
-    ]);
-    await expect(
-      handleAvatarUpload(uploadRequest(token, PNG_BYTES), env, deps(storage, profile), 't', null),
-    ).rejects.toThrow('r2 put failed');
-    await settle();
-    expect(storage.deletes).toHaveLength(0);
-  });
-
-  it('deletes nothing when re-uploading the same bytes (old key equals new key)', async () => {
-    const storage = new FakeStorage();
-    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: newUrl() });
-    const res = await upload(storage, profile, 'trace-r6');
-    expect(res.status).toBe(200);
-    expect(pending).toHaveLength(0);
-    expect(storage.deletes).toHaveLength(0);
-  });
-
-  it("never deletes another user's object, a group photo, or a foreign URL", async () => {
-    for (const avatarUrl of [
-      `https://cdn.srtd.io/${OTHER_USER}/${OLD_SHA}.png`,
-      `https://cdn.srtd.io/groups/${USER}/${OLD_SHA}.png`,
-      `https://evil.test/${USER}/${OLD_SHA}.png`,
-      `https://cdn.srtd.io/${USER}/../${OTHER_USER}/${OLD_SHA}.png`,
+    for (const req of [
+      cleanupRequest(token, null, '{not json'),
+      cleanupRequest(token, {}),
+      cleanupRequest(token, { old_url: 42 }),
+      cleanupRequest(token, { old_url: '' }),
     ]) {
       const storage = new FakeStorage();
-      const profile = profileFake(storage, { displayName: 'Asha', avatarUrl }, [
-        { displayName: 'Asha', avatarUrl: newUrl() },
-      ]);
-      const res = await upload(storage, profile, 'trace-r7');
-      expect(res.status).toBe(200);
-      await settle();
-      expect(storage.deletes).toHaveLength(0);
+      const res = await handleAvatarCleanup(req, env, deps(storage), 'trace-c400', null);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: { code: string; message: string } };
+      expect(body.error.code).toBe('invalid_body');
+      expect(storage.log).toEqual([]);
     }
   });
 
-  it('never reads the profile or deletes anything for a group photo', async () => {
+  it('is routed by worker.fetch on /avatar/cleanup with CORS and the trace id', async () => {
     const token = await mintToken(USER);
-    const storage = new FakeStorage();
-    const profile = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
-    const res = await handleAvatarUpload(
-      uploadRequest(token, PNG_BYTES, {
-        target_kind: 'group',
-        target_id: '55555555-5555-7555-8555-555555555555',
+    const res = await worker.fetch(
+      new Request('https://worker.test/avatar/cleanup', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://srtd.io',
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-Trace-Id': '0190a8f2-0000-7000-8000-000000000001',
+        },
+        body: JSON.stringify({}),
       }),
       env,
-      { ...deps(storage, profile), canManageGroup: () => Promise.resolve(true) },
-      'trace-r8',
-      null,
     );
-    expect(res.status).toBe(200);
-    await settle();
-    expect(storage.log.includes('read')).toBe(false);
-    expect(storage.deletes).toHaveLength(0);
+    // The cleanup handler answers (the upload route would fail to parse multipart).
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('invalid_body');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://srtd.io');
+    expect(res.headers.get('X-Trace-Id')).toBe('0190a8f2-0000-7000-8000-000000000001');
+  });
+
+  it('answers the cleanup preflight allowing POST and Content-Type', async () => {
+    const res = await worker.fetch(
+      new Request('https://worker.test/avatar/cleanup', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://srtd.io' },
+      }),
+      env,
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+    const allow = (res.headers.get('Access-Control-Allow-Headers') ?? '').toLowerCase();
+    expect(allow).toContain('content-type');
+    expect(allow).toContain('authorization');
+    expect(allow).toContain('apikey');
   });
 
   describe('ownAvatarKey', () => {
