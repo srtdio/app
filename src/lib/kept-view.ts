@@ -52,8 +52,7 @@ export function useKeptState<T>(
   latest.current = current;
   const set = useCallback(
     (next: SetStateAction<T>) => {
-      const value =
-        typeof next === 'function' ? (next as (prev: T) => T)(latest.current) : next;
+      const value = typeof next === 'function' ? (next as (prev: T) => T)(latest.current) : next;
       latest.current = value;
       if (key !== null) primeRead(key, value);
       setState({ key, value });

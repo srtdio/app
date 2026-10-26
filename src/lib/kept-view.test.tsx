@@ -2,13 +2,7 @@
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  keptOr,
-  keptViewKey,
-  useKeptScroll,
-  useKeptState,
-  useUntouched,
-} from '@/lib/kept-view';
+import { keptOr, keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import { dropWorkspaceReads, peekKept, resetSessionReads } from '@/lib/session-read';
 import { SIGNOUT_EVENT } from '@/lib/events';
 

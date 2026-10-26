@@ -61,9 +61,9 @@ function cleanupDropsReads(code: string): boolean {
 
 describe('kept views survive page leave', () => {
   it('the matcher flags a dropping cleanup and passes a plain one', () => {
-    expect(
-      cleanupDropsReads('useEffect(() => { return () => dropAssetsReads(u, w); }, [])'),
-    ).toBe(true);
+    expect(cleanupDropsReads('useEffect(() => { return () => dropAssetsReads(u, w); }, [])')).toBe(
+      true,
+    );
     expect(
       cleanupDropsReads(
         'useEffect(() => {\n  return () => {\n    if (ok) dropPipelinePosts(u, w);\n  };\n}, []);',

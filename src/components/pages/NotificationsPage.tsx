@@ -712,9 +712,7 @@ export function NotificationsPage() {
     }
     const ids = new Set(targets.map((item) => item.id));
     const stamp = new Date().toISOString();
-    editItems((prev) =>
-      prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)),
-    );
+    editItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
     const traceId = newTrace();
     void markAllEntriesRead(supabase, workspaceId, traceId).then((result) => {
       if (!result.ok) {
