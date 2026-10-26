@@ -120,8 +120,12 @@ describe('Pipeline page type roles', () => {
 
   it('filter headings are section labels', () => {
     const host = paintFilter();
+    // "Due date" is also a sort row label; the section heading comes first.
+    const heading = (label: string): HTMLElement =>
+      [...host.querySelectorAll<HTMLElement>('*')].find((el) => el.textContent?.trim() === label) ??
+      byText(host, label);
     for (const label of ['Due date', 'Sort']) {
-      expect(classes(byText(host, label))).toEqual(
+      expect(classes(heading(label))).toEqual(
         expect.arrayContaining([
           'text-sm',
           'font-semibold',

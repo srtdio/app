@@ -107,7 +107,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Dates and times render font-mono tabular-nums everywhere (voice-note times excepted).
 - Sort labels: Newest first, Oldest first, Due date, Name, Size, Type.
 - Due dates are calendar days on the workspace zone; moments (message, comment, activity times) are on the device zone.
-- Motion: duration-fast/base/slow and ease-enter/exit only. No duration-[Nms] or raw transition values. JS animations use DUR_*_MS from src/lib/motion.ts and var(--ease-enter|exit).
+- Motion: duration-fast/base/slow and ease-enter/exit only. No duration-[Nms] or raw transition values. JS animations use DUR\_\*\_MS from src/lib/motion.ts and var(--ease-enter|exit).
 - If no shared component or function fits, stop and ask. Never hand-build a new variant.
 - Post and brief decisions render only through PostDecisionBar: phone bottom bar, laptop header right. Every surface that shows a post offers the same actions for the same role.
 - ⋯ menus use ui/ActionMenu only: sheet on phone, popover on laptop. Order: Open, Copy link, others, Delete last.

@@ -588,6 +588,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
       {
         "dark": {
           "accent": "hex 6f79e3",
+          "accent-fg": "hex ffffff",
           "accent-line": "rgba(111, 121, 227, 0.34)",
           "accent-soft": "rgba(111, 121, 227, 0.16)",
           "avatar-4": "hex c2392b",
@@ -600,6 +601,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
         },
         "light": {
           "accent": "hex 5e6ad2",
+          "accent-fg": "hex ffffff",
           "accent-line": "rgba(94, 106, 210, 0.3)",
           "accent-soft": "rgba(94, 106, 210, 0.1)",
           "avatar-4": "hex c2392b",

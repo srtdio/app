@@ -494,8 +494,7 @@ export function PlanComposeScreen(props: {
     </div>
   );
 
-  const addClass =
-    'w-full border-dashed border-border-strong text-accent';
+  const addClass = 'w-full border-dashed border-border-strong text-accent';
   // Left aligned inside the full-width button (the Button itself centres).
   const addInner = 'flex w-full items-center gap-2';
 
@@ -774,10 +773,7 @@ export function ComposeItemRow(props: {
         variant="secondary"
         data-plan-day-button={need ? 'need' : item.day === 'none' ? 'none' : 'day'}
         onClick={props.onDay}
-        className={cn(
-          'w-full text-left',
-          need ? 'border-warn text-warn' : 'bg-panel-2',
-        )}
+        className={cn('w-full text-left', need ? 'border-warn text-warn' : 'bg-panel-2')}
       >
         <span data-plan-day-inner="" className="flex w-full items-center justify-between gap-2">
           {need ? (

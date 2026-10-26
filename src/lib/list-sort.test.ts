@@ -385,7 +385,11 @@ describe('filterByFields (Pipeline search scope)', () => {
 
 describe('POST_SORT_OPTIONS labels', () => {
   it('reads Newest first, Oldest first, Due date; values unchanged', () => {
-    expect(POST_SORT_OPTIONS.map((o) => o.label)).toEqual(['Newest first', 'Oldest first', 'Due date']);
+    expect(POST_SORT_OPTIONS.map((o) => o.label)).toEqual([
+      'Newest first',
+      'Oldest first',
+      'Due date',
+    ]);
     expect(POST_SORT_OPTIONS.map((o) => o.value)).toEqual(['updated', 'oldest', 'target']);
   });
 });

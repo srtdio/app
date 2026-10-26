@@ -1,11 +1,5 @@
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
-import {
-  IconDownload,
-  IconEdit,
-  IconInfo,
-  IconLink,
-  IconTrash,
-} from '@/components/ui/icons';
+import { IconDownload, IconEdit, IconInfo, IconLink, IconTrash } from '@/components/ui/icons';
 import { linkDomain, type AssetListItem } from '@/lib/assets';
 import { downloadFile, openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { assetLink } from '@/components/pages/assets/assets-nav';

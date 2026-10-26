@@ -278,9 +278,7 @@ export function CommentComposer({
         </Button>
       </div>
 
-      {error !== null ? (
-        <ErrorNote>{error}</ErrorNote>
-      ) : null}
+      {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
 
       <input
         ref={fileInputRef}

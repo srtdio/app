@@ -28,7 +28,9 @@ describe('ProgressRing', () => {
     expect(html).toContain('viewBox="0 0 56 56" class="h-14 w-14 -rotate-90"');
     expect(html).toContain('r="26.5"');
     expect(html).toContain('class="text-overlay-dot"');
-    expect(html).toMatch(/data-upload-arc=""[^>]*stroke-linecap="round"[^>]*class="text-overlay-fg"/);
+    expect(html).toMatch(
+      /data-upload-arc=""[^>]*stroke-linecap="round"[^>]*class="text-overlay-fg"/,
+    );
     expect(html).toContain(`stroke-dashoffset="${String(ringDashOffset(0.6, 56, 3, 0.25))}"`);
   });
 });

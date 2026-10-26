@@ -40,10 +40,7 @@ const OPEN_TASKS_LABEL = 'Open tasks';
 const PILL =
   'rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-sm font-medium leading-4 text-fg-3';
 // The pill's tap target: a ghost Button (44 tall) around the visual pill.
-const PRESS = cn(
-  'max-w-full',
-  NO_TOUCH_SELECT,
-);
+const PRESS = cn('max-w-full', NO_TOUCH_SELECT);
 
 /** One older change's pill (no batch id). */
 function TaskEventPill(props: { event: TaskEvent; ctx: TaskLineContext }): ReactElement {
@@ -164,10 +161,7 @@ function TaskBatch(props: {
             data-task-open=""
             onClick={() => ctx.onOpenTask(TASKS_SHEET_ONLY)}
             onContextMenu={(e) => e.preventDefault()}
-            className={cn(
-              'mt-1 self-start',
-              NO_TOUCH_SELECT,
-            )}
+            className={cn('mt-1 self-start', NO_TOUCH_SELECT)}
           >
             {OPEN_TASKS_LABEL}
           </Button>

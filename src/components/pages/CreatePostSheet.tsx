@@ -1378,9 +1378,7 @@ export function CreatePostSheet({
               captionError={gridError('caption')}
               titleError={gridError('title')}
             />
-            {submitError !== null ? (
-              <ErrorNote>{submitError}</ErrorNote>
-            ) : null}
+            {submitError !== null ? <ErrorNote>{submitError}</ErrorNote> : null}
           </div>
           {preview !== null ? (
             <aside
@@ -1620,9 +1618,7 @@ export function CreatePostSheet({
             </div>
           ) : null}
 
-          {submitError !== null ? (
-            <ErrorNote>{submitError}</ErrorNote>
-          ) : null}
+          {submitError !== null ? <ErrorNote>{submitError}</ErrorNote> : null}
         </div>
       </div>
       {overlays}

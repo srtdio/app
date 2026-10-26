@@ -333,10 +333,7 @@ export interface TaskRowProps {
   onUndoDelete: () => void;
 }
 
-const ACTION = cn(
-  'min-w-11 shrink-0',
-  NO_TOUCH_SELECT,
-);
+const ACTION = cn('min-w-11 shrink-0', NO_TOUCH_SELECT);
 
 function MarkLine(props: { mark: TaskMark }): ReactElement {
   const { mark } = props;
@@ -377,10 +374,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           disabled={props.queuedDelete || props.canTick === false}
           onClick={props.onToggle}
           onContextMenu={(e) => e.preventDefault()}
-          className={cn(
-            'relative shrink-0 disabled:opacity-50',
-            NO_TOUCH_SELECT,
-          )}
+          className={cn('relative shrink-0 disabled:opacity-50', NO_TOUCH_SELECT)}
         >
           <TaskGlyph status={props.done ? 'done' : 'todo'} />
         </IconButton>
@@ -425,10 +419,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
               data-task-delete=""
               onClick={props.onDelete}
               onContextMenu={(e) => e.preventDefault()}
-              className={cn(
-                'shrink-0 text-fg-3 hover:text-fg-2',
-                NO_TOUCH_SELECT,
-              )}
+              className={cn('shrink-0 text-fg-3 hover:text-fg-2', NO_TOUCH_SELECT)}
             >
               <IconX size={ICON_SIZE.control} />
             </IconButton>

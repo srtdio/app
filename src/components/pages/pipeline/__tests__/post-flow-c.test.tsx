@@ -387,11 +387,7 @@ describe('post flow C: header, count and filters', () => {
     const sortRows = all(sortControlBody({ order: 'updated', onOrderChange: () => {} })).filter(
       (el) => (el.props as { role?: string }).role === 'menuitemradio',
     );
-    expect(sortRows.map(text)).toEqual([
-      'Recently updated',
-      'Least recently updated',
-      'Due date',
-    ]);
+    expect(sortRows.map(text)).toEqual(['Recently updated', 'Least recently updated', 'Due date']);
     for (const row of sortRows) {
       const className = (row.props as { className: string }).className;
       expect(className).toContain('h-11');

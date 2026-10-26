@@ -965,10 +965,7 @@ export function searchChips(props: {
             data-search-chip={chip.kind}
             aria-pressed={on}
             onClick={() => props.onChange(toggleHomeChip(props.kind, chip.kind))}
-            className={cn(
-              'shrink-0 whitespace-nowrap',
-              NO_TOUCH_SELECT,
-            )}
+            className={cn('shrink-0 whitespace-nowrap', NO_TOUCH_SELECT)}
           />
         );
       })}

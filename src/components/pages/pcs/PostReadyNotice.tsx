@@ -247,9 +247,7 @@ export function PostReadyNotice({
           {openCount > 0 ? (
             <p className="text-sm text-fg-3">{notifyDisabledReason(openCount)}</p>
           ) : null}
-          {error !== null ? (
-            <ErrorNote>{error}</ErrorNote>
-          ) : null}
+          {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
         </div>
       ) : null}
     </section>

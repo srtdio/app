@@ -2020,9 +2020,7 @@ export function PostDetailPage({
                   Saving…
                 </p>
               ) : null}
-              {pinError !== null ? (
-                <ErrorNote className="mt-3">{pinError}</ErrorNote>
-              ) : null}
+              {pinError !== null ? <ErrorNote className="mt-3">{pinError}</ErrorNote> : null}
             </section>
           </div>
 

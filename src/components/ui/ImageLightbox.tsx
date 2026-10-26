@@ -735,7 +735,8 @@ export function ImageLightbox({
           data-motion-axis="y"
           className={cn(
             'flex h-full w-full items-center justify-center',
-            settling && 'transition-transform duration-slow ease-enter motion-reduce:transition-none',
+            settling &&
+              'transition-transform duration-slow ease-enter motion-reduce:transition-none',
           )}
           style={dismissStyle}
           onTransitionEnd={() => setSettling(false)}

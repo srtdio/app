@@ -637,12 +637,7 @@ function GracefulPanel({
     <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-2xl">
       <p className="text-sm text-fg-3">{message}</p>
       {onDownload !== undefined ? (
-        <Button
-          type="button"
-          variant="primary"
-          onClick={onDownload}
-          disabled={busy}
-        >
+        <Button type="button" variant="primary" onClick={onDownload} disabled={busy}>
           <IconDownload size={ICON_SIZE.inline} />
           Download
         </Button>

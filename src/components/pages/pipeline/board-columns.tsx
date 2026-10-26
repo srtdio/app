@@ -37,7 +37,7 @@ export function splitIntoColumns<T>(items: readonly T[], n: number): T[][] {
 const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /** The element's content-box width (its padding taken off). */
-function innerWidth(el: HTMLElement): number {
+function contentWidth(el: HTMLElement): number {
   const style = window.getComputedStyle(el);
   const pad = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
   return el.clientWidth - pad;
@@ -62,14 +62,12 @@ export function BoardColumns({
   ...rest
 }: BoardColumnsProps): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
-  const [count, setCount] = useState<number>(() =>
-    typeof window === 'undefined' ? 1 : columnsFor(window.innerWidth),
-  );
+  const [count, setCount] = useState<number>(1);
   useBeforePaint(() => {
     const el = ref.current;
     if (el === null) return;
     const measure = (): void => {
-      const next = columnsFor(innerWidth(el));
+      const next = columnsFor(contentWidth(el));
       setCount((prev) => (prev === next ? prev : next));
     };
     measure();

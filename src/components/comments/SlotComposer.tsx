@@ -429,9 +429,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
         </Button>
       </div>
 
-      {error !== null ? (
-        <ErrorNote>{error}</ErrorNote>
-      ) : null}
+      {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
 
       {attachEnabled ? (
         <input

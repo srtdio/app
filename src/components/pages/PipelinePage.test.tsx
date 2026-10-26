@@ -737,11 +737,7 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
         },
       }),
     );
-    expect(rows.map(rowLabel)).toEqual([
-      'Recently updated',
-      'Least recently updated',
-      'Due date',
-    ]);
+    expect(rows.map(rowLabel)).toEqual(['Recently updated', 'Least recently updated', 'Due date']);
     (rows[1]!.props as { onClick: () => void }).onClick();
     expect(picked).toBe('oldest');
     (rows[2]!.props as { onClick: () => void }).onClick();

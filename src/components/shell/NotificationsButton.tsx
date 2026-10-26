@@ -46,10 +46,7 @@ export function NotificationsButton(): ReactElement {
       onClick={() => navigate(NOTIFICATIONS_PATH)}
       // A press starts the Activity chunk and its first reads before the tap lands.
       {...activityPrefetchProps()}
-      className={cn(
-        'relative shrink-0',
-        active && 'bg-accent-soft',
-      )}
+      className={cn('relative shrink-0', active && 'bg-accent-soft')}
     >
       {/* The active tint rides on the icon so the button keeps its own colours. */}
       <span className={cn('inline-flex', active && 'text-accent')}>

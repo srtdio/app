@@ -625,11 +625,7 @@ export function undatedHint(label: string, count: number, onShow: () => void): R
     <p data-undated-hint="" className="flex flex-wrap items-center gap-x-2 text-base text-fg-2">
       <IconCalendar size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
       <span>{undatedHiddenLine(label, count)}</span>
-      <Button
-        variant="link"
-        type="button"
-        onClick={onShow}
-      >
+      <Button variant="link" type="button" onClick={onShow}>
         Show them
       </Button>
     </p>

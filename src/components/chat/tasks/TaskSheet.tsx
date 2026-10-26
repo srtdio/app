@@ -179,10 +179,7 @@ function AddRow(props: {
           data-task-add-submit=""
           disabled={props.disabled || text.trim() === ''}
           onMouseDown={(e) => e.preventDefault()}
-          className={cn(
-            'min-w-11 shrink-0',
-            NO_TOUCH_SELECT,
-          )}
+          className={cn('min-w-11 shrink-0', NO_TOUCH_SELECT)}
         >
           Add
         </Button>

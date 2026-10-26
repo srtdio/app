@@ -78,8 +78,12 @@ describe('Button design system', () => {
     expect(classOf({ variant: 'ghost' })).toContain('text-fg-2 hover:bg-panel-2 hover:text-fg');
     expect(classOf({ variant: 'link' })).toContain('text-accent');
     expect(classOf({ variant: 'link' })).toContain('!px-2');
-    expect(classOf({ variant: 'success' })).toContain('bg-good-solid text-accent-fg hover:opacity-90');
-    expect(classOf({ variant: 'danger' })).toContain('bg-bad-solid text-accent-fg hover:opacity-90');
+    expect(classOf({ variant: 'success' })).toContain(
+      'bg-good-solid text-accent-fg hover:opacity-90',
+    );
+    expect(classOf({ variant: 'danger' })).toContain(
+      'bg-bad-solid text-accent-fg hover:opacity-90',
+    );
   });
 
   it("'default' is an alias of secondary and is the default", () => {

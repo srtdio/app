@@ -205,8 +205,7 @@ function dockStyle(dock: DockAt): { className: string; style: Record<string, num
 }
 
 /** Layout added to every guide control (each is a <Button>: 44 tall, 8px radius, 14 / 500). */
-const GUIDE_ACTION =
-  'min-w-[44px] shrink-0';
+const GUIDE_ACTION = 'min-w-[44px] shrink-0';
 
 export const GuideBar = forwardRef<
   HTMLElement,

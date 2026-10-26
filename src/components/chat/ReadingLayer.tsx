@@ -96,11 +96,7 @@ export function UnreadPill(props: {
         onClick={props.onJump}
         onContextMenu={(e) => e.preventDefault()}
         // Secondary is the float surface (bg-panel, border-border, text-fg).
-        className={cn(
-          'shadow-2xl',
-          NO_TOUCH_SELECT,
-          props.visible && 'pointer-events-auto',
-        )}
+        className={cn('shadow-2xl', NO_TOUCH_SELECT, props.visible && 'pointer-events-auto')}
       >
         <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
         <span className="font-mono tabular-nums text-accent">{props.count}</span>
@@ -134,11 +130,7 @@ export function LatestButton(props: {
         tabIndex={props.visible ? 0 : -1}
         onClick={props.onTap}
         onContextMenu={(e) => e.preventDefault()}
-        className={cn(
-          'shadow-2xl',
-          FLOAT_SURFACE_CLASS,
-          NO_TOUCH_SELECT,
-        )}
+        className={cn('shadow-2xl', FLOAT_SURFACE_CLASS, NO_TOUCH_SELECT)}
       >
         <IconChevronDown size={ICON_SIZE.control} />
         <CountBadge count={props.count} className="absolute -right-1 -top-1" />

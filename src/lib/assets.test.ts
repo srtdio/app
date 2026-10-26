@@ -719,7 +719,12 @@ describe('deleteAssetsBatch (bounded concurrency)', () => {
 
 describe('ASSET_SORT_OPTIONS labels', () => {
   it('reads Newest first, Name, Size, Type; values unchanged', () => {
-    expect(ASSET_SORT_OPTIONS.map((o) => o.label)).toEqual(['Newest first', 'Name', 'Size', 'Type']);
+    expect(ASSET_SORT_OPTIONS.map((o) => o.label)).toEqual([
+      'Newest first',
+      'Name',
+      'Size',
+      'Type',
+    ]);
     expect(ASSET_SORT_OPTIONS.map((o) => o.value)).toEqual(['recent', 'name', 'size', 'type']);
   });
 });

@@ -175,7 +175,7 @@ describe('X6 Recently deleted link', () => {
     );
   });
 
-  it('is the link variant, its text on the cards\' left edge (no double gutter)', async () => {
+  it("is the link variant, its text on the cards' left edge (no double gutter)", async () => {
     listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
     await mount();
     const link = document.querySelector('[data-recently-deleted-link]');

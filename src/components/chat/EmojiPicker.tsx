@@ -216,10 +216,7 @@ function EmojiButton(props: { entry: EmojiEntry; onPick: (char: string) => void 
       label={props.entry.name}
       title={props.entry.name}
       onClick={() => props.onPick(props.entry.char)}
-      className={cn(
-        'shrink-0',
-        EMOJI_GLYPH_TYPE,
-      )}
+      className={cn('shrink-0', EMOJI_GLYPH_TYPE)}
     >
       <span aria-hidden="true">{props.entry.char}</span>
     </IconButton>

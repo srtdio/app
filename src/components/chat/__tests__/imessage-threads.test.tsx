@@ -262,7 +262,7 @@ describe('thread controls', () => {
     expect(out).toContain('rounded-full');
     expect(out).toContain('bg-panel');
     expect(out).toContain('h-5 w-5');
-    expect(out).toContain('rounded-md');
+    expect(out).toContain('rounded-lg');
     expect(out).toContain('min-h-[44px]');
     expect(out).toContain('Monday carousel');
     expect(out).not.toContain('GBL-12');

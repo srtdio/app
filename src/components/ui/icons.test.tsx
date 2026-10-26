@@ -180,7 +180,9 @@ describe('non-icon glyphs drawn in the icon file', () => {
       'class="absolute h-[13px] w-[13px] overflow-visible text-border-strong bottom-0 left-0"',
     );
     expect(tick).toContain('stroke-width="2"');
-    const elbow = renderToStaticMarkup(<Icons.RailCurveGlyph turn="elbow" className="left-0 top-0" />);
+    const elbow = renderToStaticMarkup(
+      <Icons.RailCurveGlyph turn="elbow" className="left-0 top-0" />,
+    );
     expect(elbow).toContain('d="M13 1A12 12 0 0 0 1 13"');
   });
 });
