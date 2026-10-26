@@ -58,7 +58,6 @@ export function peekSharedMemberRole(
   return peekRead<MemberRoleRead>(roleKey(userId, workspaceId));
 }
 
-
 /**
  * Forget this (user, workspace)'s role read, running or settled. A caller that
  * gave up on a hung read (viewer-role's 5s bound) drops it, so the next mount

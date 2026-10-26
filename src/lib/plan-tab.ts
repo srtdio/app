@@ -13,7 +13,7 @@ import { planProgress, reviewStatus, shownReviewSide } from '@/components/chat/p
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { addCivilDays } from '@/lib/list-sort';
 import { civilMondayOf, formatCivilDayHeader, PLAN_WEEK_DAYS } from '@/lib/plan-week';
-import type { PrefetchContext } from '@/lib/route-data';
+import type { PrefetchContext } from '@/lib/prefetch-context';
 
 // ---------------------------------------------------------------------------
 // Copy (the approved lines only)

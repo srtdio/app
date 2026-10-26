@@ -33,9 +33,8 @@ vi.mock('@/components/pages/PostDetailPage', () => {
 });
 
 import { hasStoredSession } from '@/components/home/guest-path';
+import { chunkLoader, lazyRoute, loadedChunk } from '@/lib/chunk-reload';
 import {
-  chunkLoader,
-  lazyRoute,
   loadBriefDetail,
   loadNotifications,
   loadPipeline,
@@ -44,11 +43,10 @@ import {
   loadPlanTab,
   loadPostDetail,
   loadShell,
-  loadedChunk,
   routeChunkLoaders,
   routeChunksLoaded,
   startBootChunks,
-} from '@/lib/chunk-reload';
+} from '@/lib/page-loaders';
 
 async function flush(): Promise<void> {
   await act(async () => {

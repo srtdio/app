@@ -9,44 +9,20 @@
 
 import {
   loadAssets,
-  loadBriefDetail,
-  loadBriefRefResolver,
   loadBriefs,
   loadChat,
-  loadHelp,
-  loadNotifications,
   loadPipeline,
-  loadPlan,
   loadPlanBeside,
   loadPlanTab,
-  loadPostDetail,
-  loadPostRefResolver,
-  loadRecentlyDeleted,
-  loadSettings,
 } from '@/lib/chunk-reload';
 import { logger } from '@/lib/logger';
-import { prefetchRouteData } from '@/lib/route-data';
+import { getPressChunks, prefetchRouteData } from '@/lib/prefetch-context';
 
-// The loaders are defined in chunk-reload.ts (main.tsx starts them at boot,
-// before the logger loads) and re-exported here, the one place App.tsx and the
-// shell take them from.
-export {
-  loadAssets,
-  loadBriefDetail,
-  loadBriefRefResolver,
-  loadBriefs,
-  loadChat,
-  loadHelp,
-  loadNotifications,
-  loadPipeline,
-  loadPlan,
-  loadPlanBeside,
-  loadPlanTab,
-  loadPostDetail,
-  loadPostRefResolver,
-  loadRecentlyDeleted,
-  loadSettings,
-};
+// The nav pages' loaders live in chunk-reload.ts (main.tsx starts them at boot,
+// before the logger loads). This module is linked by the shell's controls, so
+// it names only the primary nav's pages: the bell's and the avatar's chunks and
+// every route's first reads are registered by App.tsx (prefetch-context.ts).
+export { loadAssets, loadBriefs, loadChat, loadPipeline, loadPlanBeside, loadPlanTab };
 
 type Loader = () => Promise<unknown>;
 
@@ -85,30 +61,8 @@ export function prefetchRoute(
   return true;
 }
 
-/**
- * Every page chunk the shell can open, warmed once the signed-in shell is idle
- * after first paint (App.tsx). Code only: an import() runs no data fetch.
- */
-export const IDLE_PREFETCH_LOADERS: readonly Loader[] = [
-  loadPipeline,
-  loadChat,
-  loadBriefs,
-  loadAssets,
-  loadPlanTab,
-  loadPlanBeside,
-  loadPlan,
-  loadNotifications,
-  loadPostDetail,
-  loadBriefDetail,
-  loadPostRefResolver,
-  loadBriefRefResolver,
-  loadSettings,
-  loadHelp,
-  loadRecentlyDeleted,
-];
-
-/** Start every loader (idle prefetch); a failure is logged and swallowed. */
-export function prefetchChunks(loaders: readonly Loader[] = IDLE_PREFETCH_LOADERS): void {
+/** Start every loader (idle and press prefetch); a failure is logged and swallowed. */
+export function prefetchChunks(loaders: readonly Loader[]): void {
   for (const loader of loaders) {
     try {
       void loader().catch((err: unknown) => {
@@ -146,7 +100,7 @@ export function navPrefetchProps(path: string): {
  */
 export function activityPrefetchProps(): { onPointerDown: () => void; onTouchStart: () => void } {
   const prefetch = (): void => {
-    prefetchChunks([loadPlanBeside, loadNotifications]);
+    prefetchChunks(getPressChunks('activity'));
     prefetchRouteData('/notifications');
   };
   return { onPointerDown: prefetch, onTouchStart: prefetch };
@@ -158,7 +112,7 @@ export function activityPrefetchProps(): { onPointerDown: () => void; onTouchSta
  */
 export function settingsPrefetchProps(): { onPointerDown: () => void; onTouchStart: () => void } {
   const prefetch = (): void => {
-    prefetchChunks([loadSettings]);
+    prefetchChunks(getPressChunks('settings'));
     prefetchRouteData('/settings');
   };
   return { onPointerDown: prefetch, onTouchStart: prefetch };

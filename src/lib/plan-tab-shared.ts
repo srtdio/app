@@ -18,7 +18,7 @@ import { withReadTimeout, READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import { canCreatePlans, visibleRange } from '@/lib/plan-tab';
 import { readPlanTab, type PlanTabData } from '@/lib/plan-tab-read';
 import { civilToday } from '@/lib/plan-week';
-import type { PrefetchContext } from '@/lib/route-data';
+import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
 import { safeTimeZone } from '@/lib/time';
 

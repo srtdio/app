@@ -30,7 +30,7 @@ import { useRecentRecorder } from '@/lib/recent-items';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
-import { setPrefetchContext } from '@/lib/route-data';
+import { setPrefetchContext } from '@/lib/prefetch-context';
 import { routeChunksLoaded, whenRouteChunksSettle } from '@/lib/chunk-reload';
 import { SessionLoading } from '@/components/auth/RouteGuards';
 

@@ -34,10 +34,7 @@ export interface RefHints {
 }
 
 /** The loaded workspace id for an uppercase key, or null when it is not loaded. */
-export function loadedWorkspaceId(
-  workspaces: RefHints['workspaces'],
-  key: string,
-): string | null {
+export function loadedWorkspaceId(workspaces: RefHints['workspaces'], key: string): string | null {
   const hit = workspaces?.find((w) => w.key !== null && w.key.toUpperCase() === key);
   return hit?.id ?? null;
 }

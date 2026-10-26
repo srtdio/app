@@ -13,7 +13,8 @@ import {
   runStaleDeployGuard,
   type StaleDeployWarn,
 } from '@/lib/stale-deploy';
-import { reloadIfStale, startBootChunks } from '@/lib/chunk-reload';
+import { reloadIfStale } from '@/lib/chunk-reload';
+import { startBootChunks } from '@/lib/page-loaders';
 
 // Entry point. Decides synchronously whether "/" is a guest visit; a guest gets
 // the homepage chunk only (no App, router, Supabase, Sentry, Agora or app CSS).

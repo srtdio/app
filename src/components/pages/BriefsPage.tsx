@@ -34,20 +34,18 @@ import {
   BRIEF_NOTE_PARAM,
   briefListParams,
   briefsPaintNeedsThumbs,
-  dropBriefsReads,
   filterBriefsByStatus,
   listBriefsFirstPage,
   listBriefsPage,
   mergeBriefPages,
   parseBriefFilter,
-  readBriefCounts,
-  readBriefsFirstPage,
   withBriefThumbnails,
   type BriefFilter,
   type BriefPageNext,
 } from '@/lib/brief-list';
 import { countBriefsByFilter } from '@/lib/brief-counts';
-import { getPrefetchContext } from '@/lib/route-data';
+import { dropBriefsReads, readBriefCounts, readBriefsFirstPage } from '@/lib/brief-list-shared';
+import { getPrefetchContext } from '@/lib/prefetch-context';
 import { logger } from '@/lib/logger';
 import {
   groupBriefsByDay,

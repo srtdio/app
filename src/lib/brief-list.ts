@@ -5,10 +5,7 @@
 
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
 import type { Client, Result } from '@srtdio/rpc';
-import { countBriefsByFilter } from '@/lib/brief-counts';
 import { toExternalLinks } from '@/lib/links';
-import type { PrefetchContext } from '@/lib/route-data';
-import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
 
 // The same status type BriefCard's BriefStatus is built from. Read off the
 // package here (type only) so this module imports nothing from components and
@@ -231,7 +228,8 @@ export async function listBriefsPage(
 // the thumbnails exactly as before.
 //
 // A nav press starts the rows (and, chained, their thumbnails) and the counts
-// (prefetchBriefsData); the page's mount joins them by key. Every later reload
+// (prefetchBriefsData, src/lib/brief-list-shared.ts); the page's mount joins
+// them by key. Every later reload
 // drops the keys first, and the page drops them when it unmounts, so a kept
 // value only ever bridges one press to its own mount.
 // ---------------------------------------------------------------------------
@@ -250,9 +248,7 @@ export interface BriefsFirstPage {
  * brief carries a reference link (its card shows the link only when there is
  * no image, so the card's height depends on the thumbnail). Pure.
  */
-export function briefsPaintNeedsThumbs(
-  briefs: readonly Pick<Brief, 'reference_links'>[],
-): boolean {
+export function briefsPaintNeedsThumbs(briefs: readonly Pick<Brief, 'reference_links'>[]): boolean {
   return briefs.some((brief) => toExternalLinks(brief.reference_links).length > 0);
 }
 
@@ -280,57 +276,4 @@ export async function listBriefsFirstPage(
       thumbs,
     },
   };
-}
-
-/** The session key prefix of every Briefs list read for this user and workspace. */
-function briefsKeyPrefix(userId: string, workspaceId: string): string {
-  return readKey(userId, workspaceId, 'briefs:');
-}
-
-/**
- * The first page, joined with one already running or just settled. `read` is
- * the page reader (the page passes its own import, so its tests can stand in
- * for the network); the key, not the reader, is what joins.
- */
-export function readBriefsFirstPage(
-  client: Client,
-  userId: string,
-  workspaceId: string,
-  read: typeof listBriefsFirstPage = listBriefsFirstPage,
-): Promise<Result<BriefsFirstPage>> {
-  const key = `${briefsKeyPrefix(userId, workspaceId)}first-page`;
-  return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok });
-}
-
-/** The chip counts for a search, joined with a read already running or just settled. */
-export function readBriefCounts(
-  client: Client,
-  userId: string,
-  workspaceId: string,
-  search: string,
-  read: typeof countBriefsByFilter = countBriefsByFilter,
-): ReturnType<typeof countBriefsByFilter> {
-  const key = `${briefsKeyPrefix(userId, workspaceId)}counts:${search}`;
-  return sharedRead(key, () => read(client, workspaceId, search), { isOk: (result) => result.ok });
-}
-
-/** Forget every shared Briefs list read (a reload, a create, the page leaving). */
-export function dropBriefsReads(userId: string, workspaceId: string): void {
-  invalidateReads(briefsKeyPrefix(userId, workspaceId));
-}
-
-/**
- * Nav-press starter (src/lib/route-data.ts): the first page (its thumbnails
- * chained on) and the unsearched chip counts. Paints nothing; never throws.
- * The client loads lazily so this module stays cheap for its pure importers.
- */
-export function prefetchBriefsData(ctx: PrefetchContext): Promise<void> {
-  return import('@/lib/supabase').then(
-    ({ supabase }) => {
-      const swallow = (): void => {};
-      readBriefsFirstPage(supabase, ctx.userId, ctx.workspaceId).catch(swallow);
-      readBriefCounts(supabase, ctx.userId, ctx.workspaceId, '').catch(swallow);
-    },
-    () => undefined,
-  );
 }

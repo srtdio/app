@@ -15,18 +15,15 @@ const { loaders, warn, routeData } = vi.hoisted(() => ({
   routeData: vi.fn(),
 }));
 
-// The Pipeline loader is the one App.tsx's lazy route uses (chunk-reload); a
-// spy stands in so the press is observable without loading the page.
+// The nav loaders are the ones App.tsx's lazy routes use (chunk-reload); a spy
+// stands in so the press is observable without loading the page.
 vi.mock('@/lib/chunk-reload', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chunk-reload')>()),
   loadPipeline: loaders.pipeline,
-  loadSettings: loaders.settings,
-  loadPlanBeside: loaders.plan,
-  loadNotifications: loaders.notifications,
 }));
 // The data half of a press: observed, not run (its starters read Supabase).
-vi.mock('@/lib/route-data', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/route-data')>()),
+vi.mock('@/lib/prefetch-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/prefetch-context')>()),
   prefetchRouteData: routeData,
 }));
 vi.mock('@/lib/logger', () => ({
@@ -40,19 +37,25 @@ vi.mock('@/lib/chat/chat-store', () => ({ selectTotalUnread: () => 0 }));
 import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Sidebar } from '@/components/shell/Sidebar';
 import {
-  IDLE_PREFETCH_LOADERS,
   NAV_ROUTE_LOADERS,
   activityPrefetchProps,
-  loadBriefDetail,
-  loadBriefRefResolver,
-  loadHelp,
-  loadPostDetail,
-  loadPostRefResolver,
-  loadRecentlyDeleted,
   prefetchRoute,
   resetRoutePrefetch,
   settingsPrefetchProps,
 } from '@/lib/route-prefetch';
+import {
+  IDLE_PREFETCH_LOADERS,
+  loadBriefDetail,
+  loadBriefRefResolver,
+  loadHelp,
+  loadNotifications,
+  loadPlanBeside,
+  loadPostDetail,
+  loadPostRefResolver,
+  loadRecentlyDeleted,
+  loadSettings,
+} from '@/lib/page-loaders';
+import { setPressChunks } from '@/lib/prefetch-context';
 import { PRIMARY_NAV } from '@/components/shell/nav';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -84,6 +87,9 @@ function press(el: Element, type: 'pointerdown' | 'touchstart'): void {
 
 beforeEach(() => {
   resetRoutePrefetch();
+  // App.tsx registers these; spies stand in for the Activity and Settings chunks.
+  setPressChunks('activity', [loaders.plan, loaders.notifications]);
+  setPressChunks('settings', [loaders.settings]);
   for (const load of Object.values(loaders)) load.mockClear();
   routeData.mockClear();
   warn.mockClear();
@@ -161,9 +167,9 @@ describe('nav press prefetch', () => {
 describe('idle prefetch of every remaining route chunk', () => {
   it('lists every page the shell opens, each through its named loader', () => {
     for (const load of [
-      loaders.settings,
-      loaders.plan,
-      loaders.notifications,
+      loadSettings,
+      loadPlanBeside,
+      loadNotifications,
       loaders.pipeline,
       loadHelp,
       loadRecentlyDeleted,

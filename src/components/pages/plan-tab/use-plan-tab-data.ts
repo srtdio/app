@@ -19,7 +19,7 @@ import {
   readSharedPlanTab,
   type PlanTabReadArgs,
 } from '@/lib/plan-tab-shared';
-import { getPrefetchContext } from '@/lib/route-data';
+import { getPrefetchContext } from '@/lib/prefetch-context';
 import { supabase } from '@/lib/supabase';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 

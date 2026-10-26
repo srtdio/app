@@ -88,7 +88,7 @@ import {
 import { readInboxOldest } from '@/lib/inbox/inbox-oldest';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
-import type { PrefetchContext } from '@/lib/route-data';
+import type { PrefetchContext } from '@/lib/prefetch-context';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 

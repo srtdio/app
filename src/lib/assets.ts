@@ -11,7 +11,7 @@
 
 import { assetRestore, type Client, type DomainError, type Result } from '@srtdio/rpc';
 import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-purge-contracts';
-import type { PrefetchContext } from '@/lib/route-data';
+import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
 import { readSharedMemberRole } from '@/lib/member-role';
 

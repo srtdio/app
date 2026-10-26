@@ -128,8 +128,7 @@ async function flush(): Promise<void> {
 const approveConfirmOpen = (): boolean =>
   document.querySelector('[aria-label="Approve this post?"]') !== null;
 const onBehalfOpen = (): boolean => document.querySelector('[data-on-behalf-approve]') !== null;
-const shownStage = (): string =>
-  document.querySelector('[data-probe-stage]')?.textContent ?? '';
+const shownStage = (): string => document.querySelector('[data-probe-stage]')?.textContent ?? '';
 
 async function click(selector: string): Promise<void> {
   const el = document.querySelector<HTMLElement>(selector);

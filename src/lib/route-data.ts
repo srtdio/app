@@ -5,34 +5,26 @@
 // the page's own mount joins the same request instead of asking again. The
 // starter modules load with import() (they are part of the route's own
 // chunks), so the shell never grows. A starter never paints anything and a
-// failure is logged and swallowed: the page's own read retries.
+// failure is logged and swallowed: the page's own read retries. App.tsx
+// imports this table (it links every route's read module); the shell's
+// presses reach it through prefetch-context.ts.
 
-import { logger } from '@/lib/logger';
+import {
+  getPrefetchContext,
+  prefetchRouteData,
+  setPrefetchContext,
+  setRouteDataStarters,
+  type DataStarter,
+  type PrefetchContext,
+} from '@/lib/prefetch-context';
 
-/** Who is asking and in which workspace; null before the shell knows. */
-export interface PrefetchContext {
-  userId: string;
-  workspaceId: string;
-}
-
-let context: PrefetchContext | null = null;
-
-/** Set by the shell once the session and the active workspace are known. */
-export function setPrefetchContext(next: PrefetchContext | null): void {
-  context = next;
-}
-
-export function getPrefetchContext(): PrefetchContext | null {
-  return context;
-}
-
-type DataStarter = (ctx: PrefetchContext) => Promise<void>;
+export { getPrefetchContext, prefetchRouteData, setPrefetchContext, type PrefetchContext };
 
 /** Route path -> its first reads. */
 export const ROUTE_DATA_STARTERS: Readonly<Record<string, DataStarter>> = {
   '/pipeline': (ctx) => import('@/lib/pipeline-posts').then((m) => m.prefetchPipelineData(ctx)),
   '/assets': (ctx) => import('@/lib/assets').then((m) => m.prefetchAssetsData(ctx)),
-  '/briefs': (ctx) => import('@/lib/brief-list').then((m) => m.prefetchBriefsData(ctx)),
+  '/briefs': (ctx) => import('@/lib/brief-list-shared').then((m) => m.prefetchBriefsData(ctx)),
   '/plan': (ctx) => import('@/lib/plan-tab').then((m) => m.prefetchPlanTabData(ctx)),
   '/notifications': (ctx) =>
     import('@/components/pages/activity/data').then((m) => m.prefetchActivityData(ctx)),
@@ -42,19 +34,4 @@ export const ROUTE_DATA_STARTERS: Readonly<Record<string, DataStarter>> = {
     }),
 };
 
-/** Start a route's first reads (every press; sharedRead joins a fresh one). */
-export function prefetchRouteData(
-  path: string,
-  starters: Readonly<Record<string, DataStarter>> = ROUTE_DATA_STARTERS,
-): void {
-  const ctx = context;
-  const start = starters[path];
-  if (ctx === null || start === undefined) return;
-  try {
-    void start(ctx).catch((err: unknown) => {
-      logger.warn('route data prefetch failed', { path, error: String(err) });
-    });
-  } catch (err: unknown) {
-    logger.warn('route data prefetch failed', { path, error: String(err) });
-  }
-}
+setRouteDataStarters(ROUTE_DATA_STARTERS);

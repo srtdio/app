@@ -16,7 +16,7 @@ import type { Result } from '@srtdio/rpc';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { PLAN_CHANGED_EVENT } from '@/lib/chat/plans';
 import { readSharedMemberRole } from '@/lib/member-role';
-import type { PrefetchContext } from '@/lib/route-data';
+import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
 
 /** The board reads the newest posts up to this many (listPosts caps it too). */

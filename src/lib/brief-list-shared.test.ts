@@ -37,7 +37,7 @@ import {
   prefetchBriefsData,
   readBriefCounts,
   readBriefsFirstPage,
-} from '@/lib/brief-list';
+} from '@/lib/brief-list-shared';
 import { resetSessionReads } from '@/lib/session-read';
 
 afterEach(() => {

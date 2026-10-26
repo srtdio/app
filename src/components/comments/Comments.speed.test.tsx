@@ -227,7 +227,10 @@ describe('page zero reads the list and the checkpoints in parallel', () => {
     expect(skeletonShown()).toBe(true);
 
     await act(async () => {
-      h.heldCheckpoints[0]?.({ data: [row('p-1', 'a checkpoint', { ledger_seq: 1 })], error: null });
+      h.heldCheckpoints[0]?.({
+        data: [row('p-1', 'a checkpoint', { ledger_seq: 1 })],
+        error: null,
+      });
       h.heldList[0]?.({ ok: true, data: [row('c-1', 'a comment')] });
     });
     await settle();
@@ -268,7 +271,9 @@ describe('writes update in place; the refetch is silent', () => {
     await act(async () => {
       h.heldList[0]?.({
         ok: true,
-        data: [row('new-reply', '@[11111111-1111-4111-8111-111111111111]', { parent_comment_id: 'p-1' })],
+        data: [
+          row('new-reply', '@[11111111-1111-4111-8111-111111111111]', { parent_comment_id: 'p-1' }),
+        ],
       });
     });
     await settle();
@@ -283,7 +288,9 @@ describe('writes update in place; the refetch is silent', () => {
 
     act(() => button('Comment actions')?.click());
     act(() => button('Edit')?.click());
-    const box = host?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Edit comment body"]');
+    const box = host?.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Edit comment body"]',
+    );
     expect(box).toBeTruthy();
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
     act(() => {

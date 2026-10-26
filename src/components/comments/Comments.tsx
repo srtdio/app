@@ -959,7 +959,10 @@ export function localCommentRow(params: {
 }
 
 /** Put landed rows into a list (replacing any with the same id), newest first. Pure. */
-export function upsertRows(rows: readonly CommentRow[], added: readonly CommentRow[]): CommentRow[] {
+export function upsertRows(
+  rows: readonly CommentRow[],
+  added: readonly CommentRow[],
+): CommentRow[] {
   const ids = new Set(added.map((row) => row.id));
   return [...added, ...rows.filter((row) => !ids.has(row.id))];
 }
@@ -1262,9 +1265,7 @@ export function Comments({
           entity_id: entityId,
           page: nextPage,
         }),
-        withCheckpoints
-          ? fetchCheckpoints(supabase, workspaceId, entityId)
-          : Promise.resolve(null),
+        withCheckpoints ? fetchCheckpoints(supabase, workspaceId, entityId) : Promise.resolve(null),
       ]);
       if (stale()) return;
       if (!result.ok) {

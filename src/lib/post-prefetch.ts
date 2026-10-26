@@ -18,12 +18,13 @@
 import type { Client } from '@srtdio/rpc';
 import { getPost, getPostGallery } from '@srtdio/posts';
 import type { GalleryItem, PostDetail, Result } from '@srtdio/posts';
-// The page chunks come from the same named loaders App.tsx's lazy routes use,
-// so a press-loaded chunk renders with no Suspense tick.
-import { loadPostDetail, loadPostRefResolver } from '@/lib/chunk-reload';
 import { logger } from '@/lib/logger';
 import { readSharedMemberRole } from '@/lib/member-role';
-import { getPrefetchContext, type PrefetchContext } from '@/lib/route-data';
+import {
+  getPostOpenChunks,
+  getPrefetchContext,
+  type PrefetchContext,
+} from '@/lib/prefetch-context';
 import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
 import { supabase } from '@/lib/supabase';
 import { ensureWorkspaceMembers } from '@/lib/workspace-members';
@@ -76,10 +77,16 @@ export interface PostOpenDeps {
   now: () => number;
 }
 
+// The page chunks are the same named loaders App.tsx's lazy routes use (so a
+// press-loaded chunk renders with no Suspense tick). App.tsx hands them over
+// (setPostOpenChunks) rather than this module importing page-loaders.ts, which
+// links every page.
 const defaultDeps: PostOpenDeps = {
   context: getPrefetchContext,
   client: supabase,
-  loaders: [loadPostRefResolver, loadPostDetail],
+  get loaders() {
+    return getPostOpenChunks();
+  },
   now: () => Date.now(),
 };
 

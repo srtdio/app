@@ -21,22 +21,32 @@ import {
   loadPostRefResolver,
   loadRecentlyDeleted,
   loadSettings,
-  prefetchChunks,
-} from '@/lib/route-prefetch';
+  IDLE_PREFETCH_LOADERS,
+} from '@/lib/page-loaders';
+import { prefetchChunks } from '@/lib/route-prefetch';
 import { warmMonoFont } from '@/lib/fonts';
+import { setPostOpenChunks, setPressChunks } from '@/lib/prefetch-context';
+// Registers each route's first reads for the shell's press prefetch.
+import '@/lib/route-data';
 
 // Chat times and dates are mono: load the face at boot, before any thread paints.
 warmMonoFont();
 
 // Every page is its own chunk (React.lazy), so sign in, sign up and invite
 // never download the shell, chat, pipeline, posts, plan, assets or briefs.
-// Each loader is a named function (src/lib/chunk-reload.ts, re-exported by
+// Each loader is a named function (src/lib/page-loaders.ts, re-exported by
 // src/lib/route-prefetch.ts) so the boot start (main.tsx), the idle prefetch
 // below and the press prefetch warm the exact chunk the route later asks for,
 // and a route whose chunk has landed renders with no Suspense tick.
 
 const PipelinePage = lazyRoute(loadPipeline, (m) => m.PipelinePage);
 const ChatPage = lazyRoute(loadChat, (m) => m.ChatPage);
+// The chunks a press starts beyond the primary nav: a post card
+// (src/lib/post-prefetch.ts), the bell (Activity) and the avatar (Settings).
+setPostOpenChunks([loadPostRefResolver, loadPostDetail]);
+setPressChunks('activity', [loadPlanBeside, loadNotifications]);
+setPressChunks('settings', [loadSettings]);
+
 const PostDetailPage = lazyRoute(loadPostDetail, (m) => m.PostDetailPage);
 const BriefsPage = lazyRoute(loadBriefs, (m) => m.BriefsPage);
 const BriefDetailPage = lazyRoute(loadBriefDetail, (m) => m.BriefDetailPage);
@@ -108,12 +118,12 @@ const WorkspaceLayout = lazyRoute(
 
 /**
  * Once the signed-in shell has painted and the browser is idle, warm every
- * page chunk the shell can open (route-prefetch's IDLE_PREFETCH_LOADERS), so
+ * page chunk the shell can open (page-loaders' IDLE_PREFETCH_LOADERS), so
  * a later tap renders its page with no chunk wait. Code only, no data.
  */
 function prefetchShellPages(): () => void {
   // A failed prefetch is harmless: the route's own lazy load retries and recovers.
-  return whenIdle(() => prefetchChunks());
+  return whenIdle(() => prefetchChunks(IDLE_PREFETCH_LOADERS));
 }
 
 /** A plan opened beside Activity (Activity plan rows); Back falls back to /notifications. */
