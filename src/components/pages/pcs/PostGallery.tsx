@@ -30,10 +30,10 @@ import { DropZone } from '@/components/ui/DropZone';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
 import { frameFor, PLATFORM_SPECS, type Frame } from '@/lib/platform-specs';
-import { frameCutText, galleryItemMedia, PlatformFrame } from '@/components/media/PlatformFrame';
+import { galleryItemMedia } from '@/components/media/PlatformFrame';
 import {
+  cutPercent,
   frameMap,
-  frameToOriginal,
   IDENTITY_MAP,
   originalToFrame,
   type FrameMap,
@@ -96,11 +96,11 @@ function GalleryThumb({
   cache: PresignCache;
   presignEnabled: boolean;
   /**
-   * 'cover' crops to fill (the brief grid, cropping platform frames); 'contain'
-   * shows the whole image at most its own size (the ribbon); 'fit' scales the
-   * whole image to the frame (banded platform frames).
+   * 'cover' crops to fill (the brief grid and the small thumbnails); 'fit'
+   * scales the whole image into its box, never cropping (the post ribbon,
+   * whose tile box already carries the image's own ratio).
    */
-  fit?: 'cover' | 'contain' | 'fit';
+  fit?: 'cover' | 'fit';
   /**
    * Ribbon only: report the image's intrinsic size once it decodes, so a tile
    * whose stored dimensions are null can still hug its true ratio. Never fires
@@ -146,13 +146,7 @@ function GalleryThumb({
           );
           if (size !== null) onMeasure(size.width, size.height);
         }}
-        className={
-          fit === 'contain'
-            ? 'max-h-full max-w-full object-contain'
-            : fit === 'fit'
-              ? 'h-full w-full object-contain'
-              : 'h-full w-full object-cover'
-        }
+        className={fit === 'fit' ? 'h-full w-full object-contain' : 'h-full w-full object-cover'}
       />
     );
   }
@@ -212,49 +206,53 @@ export function nearestTileIndex(scrollLeft: number, tileOffsets: readonly numbe
   return nearest;
 }
 
-// The ribbon's shared tile caps: never taller than the clamp, never wider than
-// the viewport (minus the page's 1rem side paddings).
+// The ribbon's shared tile height cap. Width never passes the scroller column:
+// every tile box caps at 100% of a definite width (the scroller, or the solo
+// slot), never a shrink-to-fit parent, so no percentage is ever cyclic and an
+// undecoded or huge image can never widen its tile.
 const RIBBON_TILE_MAX_HEIGHT = 'clamp(200px, 38vh, 320px)';
-const RIBBON_TILE_MAX_WIDTH = 'calc(100vw - 2rem)';
 // A solo image is not a peek ribbon: it fills the column at its own ratio, taller
 // than a ribbon tile is allowed to be.
 const SOLO_TILE_MAX_HEIGHT = '78vh';
+// Unknown dimensions: a stable 4/5 box the image fits inside until it decodes.
+const FALLBACK_RATIO = 4 / 5;
+
+/** The usable w / h ratio, or the 4/5 fallback. Pure. */
+function tileRatio(width: number | null, height: number | null): number {
+  return width !== null && height !== null && width > 0 && height > 0
+    ? width / height
+    : FALLBACK_RATIO;
+}
 
 /**
- * The reserved box for one ribbon tile. With both intrinsic dimensions known
- * the box is fixed up front (width from the height cap times the aspect ratio;
- * when the viewport cap bites, aspect-ratio pulls the auto height down), so
- * nothing shifts when the image loads and wide images render shorter, never
- * wider than the viewport. Unknown dimensions degrade to a stable 4/5 box the
- * contained image letterboxes inside. Pure.
+ * The reserved box for one ribbon tile when the ribbon holds several. Width is
+ * the height cap times the ratio, capped at the scroller's width (the tile is
+ * the scroller's own flex item, so 100% is definite); aspect-ratio carries the
+ * height, so a wide image renders shorter, never wider than the column. The
+ * box holds no in-flow content, so the image can never size it. Pure.
  */
 export function ribbonTileStyle(width: number | null, height: number | null): CSSProperties {
-  if (width !== null && height !== null && width > 0 && height > 0) {
-    return {
-      width: `calc(${RIBBON_TILE_MAX_HEIGHT} * ${width / height})`,
-      aspectRatio: `${width} / ${height}`,
-      maxWidth: RIBBON_TILE_MAX_WIDTH,
-      maxHeight: RIBBON_TILE_MAX_HEIGHT,
-    };
-  }
+  const ratio = tileRatio(width, height);
   return {
-    height: RIBBON_TILE_MAX_HEIGHT,
-    aspectRatio: '4 / 5',
-    maxWidth: RIBBON_TILE_MAX_WIDTH,
+    width: `calc(${RIBBON_TILE_MAX_HEIGHT} * ${ratio})`,
+    aspectRatio: `${ratio}`,
+    maxWidth: '100%',
   };
 }
 
 /**
- * The reserved box for the lone image in the ribbon branch: it fills the column
- * width and keeps its own aspect ratio (so the contained image never crops),
- * capped only in height. Unknown dimensions degrade to the same stable 4/5 box
- * the multi-image fallback uses. No fixed width means it can never overflow the
- * column on the X axis. Pure.
+ * The reserved box for the lone image: it fills the column width at its own
+ * ratio, and a tall image narrows (width follows the 78vh height cap) instead
+ * of overflowing. The box sits in a full-width slot, so 100% is definite. No
+ * fixed width, so it can never be wider than the column. Pure.
  */
 export function soloTileStyle(width: number | null, height: number | null): CSSProperties {
-  const aspectRatio =
-    width !== null && height !== null && width > 0 && height > 0 ? `${width} / ${height}` : '4 / 5';
-  return { width: '100%', aspectRatio, maxHeight: SOLO_TILE_MAX_HEIGHT };
+  const ratio = tileRatio(width, height);
+  return {
+    width: `min(100%, calc(${SOLO_TILE_MAX_HEIGHT} * ${ratio}))`,
+    aspectRatio: `${ratio}`,
+    maxWidth: '100%',
+  };
 }
 
 /** A tile's intrinsic size measured from the decoded image, keyed by attachment id. */
@@ -351,10 +349,19 @@ export function frameKindNote(platform: string, items: readonly GalleryItem[]): 
   return PLATFORM_SPECS[platform].imageUnsupported ?? null;
 }
 
-/** The line under the frame when it cuts the slide, or null when it fits. */
-export function frameCutLine(map: FrameMap, platformLabel: string): string | null {
-  const text = frameCutText(map, platformLabel);
-  return text === null ? null : `${text} Tap to see full image.`;
+/**
+ * How much of a slide the platform frame cuts, as a whole percent: 0 with no
+ * frame, a banded frame (nothing is cut), or a slide that is not an image. It
+ * only decides the warning line under the picture; the post screen never crops.
+ * Pure.
+ */
+export function frameCut(
+  item: GalleryItem | undefined,
+  measured: MeasuredDimensions,
+  frame: Frame | null,
+): number {
+  if (frame === null || frame.fit !== 'cover' || item === undefined || !isImage(item)) return 0;
+  return cutPercent(slideMap(item, measured, frame));
 }
 
 const EDGE_SHIFT: Record<string, string> = {
@@ -365,8 +372,9 @@ const EDGE_SHIFT: Record<string, string> = {
 };
 
 /**
- * Pins over a framed slide. Stored points are relative to the original; each is
- * mapped through the shown window. Inside: the numbered dot at its exact spot.
+ * Pins over a slide. Stored points are relative to the original; each is mapped
+ * through the shown window (the post ribbon shows the whole original, so it
+ * passes {@link IDENTITY_MAP}). Inside: the numbered dot at its exact spot.
  * Outside: a small marker on the nearest frame edge, still a 44px button.
  */
 export function framePins(
@@ -477,16 +485,17 @@ interface GalleryViewProps {
   /** Ribbon: report a tile's intrinsic size once its image decodes. */
   onMeasure?: ((assetAttachmentId: string, width: number, height: number) => void) | undefined;
   /**
-   * Platform frame (post gallery): every slide renders in this fixed ratio,
-   * cropped or fit with bands as the platform shows it. null keeps the
-   * uncropped ribbon.
+   * The post's platform frame. Never crops: the ribbon always shows every
+   * picture whole. It only decides the warning line under the picture.
    */
   frame?: Frame | null;
-  /** Framed: the platform's one-line note under the frame (Shorts with an image). */
+  /** The platform's one-line note under the picture (Shorts with an image). */
   frameNote?: string | null;
-  /** Framed: the platform's display name, for the cut line. */
+  /** The platform's display name, for the warning line. */
   platformLabel?: string;
-  /** Framed: current-version pins per slide (relative to the original). */
+  /** The warning line's "See preview": opens the platform Preview panel. */
+  onSeePreview?: (() => void) | undefined;
+  /** Current-version pins per slide (relative to the original). */
   pinsFor?: ((item: GalleryItem) => PinDot[]) | undefined;
   onPinClick?: ((commentId: string) => void) | undefined;
   /**
@@ -887,6 +896,7 @@ export function galleryView({
   frame = null,
   frameNote = null,
   platformLabel = '',
+  onSeePreview,
   pinsFor,
   onPinClick,
   onArmPin,
@@ -996,125 +1006,10 @@ export function galleryView({
       </div>
     ) : null;
 
-  if (frame !== null) {
-    // The platform frame: one fixed box for every slide, the media filling it
-    // with the platform's centre crop. Slides swipe inside the same frame
-    // (native X scrolling only). Pins map through each slide's shown window.
-    const mapFor = (item: GalleryItem): FrameMap => slideMap(item, measuredDimensions, frame);
-    const activeItem = items[active];
-    const cutLine =
-      activeItem !== undefined ? frameCutLine(mapFor(activeItem), platformLabel) : null;
-    return (
-      <div>
-        <div className="relative">
-          {pinArmedIndex !== null ? (
-            <div
-              role="status"
-              className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-sm font-medium text-overlay-fg"
-            >
-              Tap the image to place a pin
-            </div>
-          ) : null}
-          <div
-            ref={scrollerRef}
-            onScroll={onScroll}
-            aria-roledescription="carousel"
-            className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
-          >
-            {items.map((item, index) => {
-              const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
-              const map = mapFor(item);
-              return (
-                <div
-                  key={item.assetAttachmentId}
-                  className="flex w-full shrink-0 snap-start justify-center"
-                >
-                  <PlatformFrame
-                    frame={frame}
-                    maxHeight={SOLO_TILE_MAX_HEIGHT}
-                    className="rounded-xl"
-                    backdrop={
-                      <GalleryThumb
-                        item={item}
-                        cache={cache}
-                        presignEnabled={presignEnabled}
-                        fit="cover"
-                      />
-                    }
-                  >
-                    <PressableRow
-                      type="button"
-                      aria-label={`View image ${index + 1}`}
-                      {...(slideGestures !== undefined ? slideGestures(index) : {})}
-                      onClick={(event) => {
-                        if (onSlideTap !== undefined) {
-                          onSlideTap(index, event);
-                          return;
-                        }
-                        if (consumeClickSuppression !== undefined && consumeClickSuppression())
-                          return;
-                        onOpen(index);
-                      }}
-                      className={cn(
-                        'absolute inset-0 flex h-full items-center justify-center focus-visible:ring-inset',
-                        SLIDE_PRESS_CLASS,
-                        pinArmedIndex === index && 'cursor-crosshair',
-                      )}
-                    >
-                      <GalleryThumb
-                        item={item}
-                        cache={cache}
-                        presignEnabled={presignEnabled}
-                        fit={frame.fit === 'contain' ? 'fit' : 'cover'}
-                        onMeasure={
-                          onMeasure !== undefined
-                            ? (width, height) => onMeasure(item.assetAttachmentId, width, height)
-                            : undefined
-                        }
-                      />
-                    </PressableRow>
-                    {pinsFor !== undefined ? framePins(pinsFor(item), map, onPinClick) : null}
-                    {pinsFor === undefined && pinCount > 0 ? (
-                      <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg">
-                        <IconPin size={ICON_SIZE.inline} />
-                        {pinCount}
-                      </span>
-                    ) : null}
-                  </PlatformFrame>
-                </div>
-              );
-            })}
-          </div>
-          {showIndex ? (
-            <span
-              aria-live="polite"
-              className="pointer-events-none absolute bottom-2 left-2 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg"
-            >
-              {`${active + 1}/${items.length}`}
-            </span>
-          ) : null}
-        </div>
-        {dots}
-        {cutLine !== null ? (
-          <PressableRow
-            type="button"
-            data-frame-cut
-            onClick={() => onOpen(active)}
-            className="mt-1 flex items-center text-base text-fg-2 underline-offset-2 hover:underline"
-          >
-            {cutLine}
-          </PressableRow>
-        ) : null}
-        {frameNote !== null ? (
-          <p data-frame-note className="mt-1 text-base text-fg-2">
-            {frameNote}
-          </p>
-        ) : null}
-        {toolbar ?? pinControls(active, pinArmedIndex, onArmPin, onDisarmPin)}
-      </div>
-    );
-  }
-
+  // The warning line under the picture: how much the platform cuts the slide on
+  // show. The picture itself is never cropped; the Preview panel shows the cut.
+  const cut = frameCut(items[active], measuredDimensions, frame);
+  const solo = items.length === 1;
   return (
     <div>
       <div className="relative">
@@ -1134,17 +1029,18 @@ export function galleryView({
         >
           {items.map((item, index) => {
             const pinCount = pinCountFor !== undefined ? pinCountFor(item) : 0;
-            return (
-              // The wrapper carries the snap point; the tile keeps its reserved
-              // style box.
+            // The tile box carries the reserved size; everything inside it is
+            // absolutely placed, so the image can never size the box.
+            const tile = (
               <div
                 key={item.assetAttachmentId}
-                className="relative flex shrink-0 snap-start items-center justify-center"
+                data-ribbon-tile=""
+                style={resolveRibbonTileStyle(item, measuredDimensions, solo)}
+                className={cn('relative shrink-0 overflow-hidden', !solo && 'snap-start')}
               >
                 <PressableRow
                   type="button"
                   aria-label={`View image ${index + 1}`}
-                  style={resolveRibbonTileStyle(item, measuredDimensions, items.length === 1)}
                   {...(slideGestures !== undefined ? slideGestures(index) : {})}
                   onClick={(event) => {
                     if (onSlideTap !== undefined) {
@@ -1155,7 +1051,7 @@ export function galleryView({
                     onOpen(index);
                   }}
                   className={cn(
-                    'group relative flex shrink-0 snap-start items-center justify-center overflow-hidden border border-border bg-panel-2 transition-colors hover:border-border-strong',
+                    'group absolute inset-0 flex items-center justify-center border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:ring-inset',
                     SLIDE_PRESS_CLASS,
                     pinArmedIndex === index && 'cursor-crosshair',
                   )}
@@ -1164,21 +1060,35 @@ export function galleryView({
                     item={item}
                     cache={cache}
                     presignEnabled={presignEnabled}
-                    fit="contain"
+                    fit="fit"
                     onMeasure={
                       onMeasure !== undefined
                         ? (width, height) => onMeasure(item.assetAttachmentId, width, height)
                         : undefined
                     }
                   />
-                  {pinCount > 0 ? (
-                    <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg">
-                      <IconPin size={ICON_SIZE.inline} />
-                      {pinCount}
-                    </span>
-                  ) : null}
                 </PressableRow>
+                {pinsFor !== undefined ? framePins(pinsFor(item), IDENTITY_MAP, onPinClick) : null}
+                {pinsFor === undefined && pinCount > 0 ? (
+                  <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg">
+                    <IconPin size={ICON_SIZE.inline} />
+                    {pinCount}
+                  </span>
+                ) : null}
               </div>
+            );
+            // A lone tile sits in a full-width snap slot (a definite width for
+            // its 100%), centred when a tall image narrows it.
+            return solo ? (
+              <div
+                key={item.assetAttachmentId}
+                data-ribbon-slot=""
+                className="flex w-full shrink-0 snap-start justify-center"
+              >
+                {tile}
+              </div>
+            ) : (
+              tile
             );
           })}
         </div>
@@ -1192,6 +1102,21 @@ export function galleryView({
         ) : null}
       </div>
       {dots}
+      {cut > 0 ? (
+        <div data-frame-cut="" className="mt-1 flex flex-wrap items-center gap-x-1">
+          <p className="text-base text-fg-2">{`${platformLabel} cuts ${cut}% of this.`}</p>
+          {onSeePreview !== undefined ? (
+            <Button type="button" variant="link" data-see-preview="" onClick={onSeePreview}>
+              See preview
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {frameNote !== null ? (
+        <p data-frame-note className="mt-1 text-base text-fg-2">
+          {frameNote}
+        </p>
+      ) : null}
       {toolbar ?? pinControls(active, pinArmedIndex, onArmPin, onDisarmPin)}
     </div>
   );
@@ -1236,11 +1161,13 @@ interface PostGalleryProps {
    */
   saving?: boolean | undefined;
   /**
-   * The post's platform frame (workspace platform + format). Absent (briefs) or
-   * a format with no media box keeps the uncropped ribbon.
+   * The post's platform (workspace platform + format). Never crops the picture;
+   * it only decides the warning line under it. Absent on briefs.
    */
   frame?: { platform: string; format: string; platformLabel: string } | undefined;
-  /** Framed: current-version pins per slide, drawn mapped through the crop. */
+  /** The warning line's "See preview": opens the platform Preview panel. */
+  onSeePreview?: (() => void) | undefined;
+  /** Current-version pins per slide, at their stored original-relative spots. */
   pinsFor?: ((item: GalleryItem) => PinDot[]) | undefined;
   onPinClick?: ((commentId: string) => void) | undefined;
   /**
@@ -1297,6 +1224,7 @@ export function PostGallery({
   pinCountFor,
   saving = false,
   frame,
+  onSeePreview,
   pinsFor,
   onPinClick,
   tools,
@@ -1423,30 +1351,24 @@ export function PostGallery({
       })
     : undefined;
 
-  // A carousel slide tap routes through the arming state: place on the armed
-  // slide (existing onPlacePin path, percentage coords), disarm elsewhere,
-  // otherwise open the lightbox.
+  // The platform frame only decides the warning line under the picture.
   const postFrame =
     frame !== undefined && columns === 4
       ? galleryFrame(frame.platform, frame.format, items, measuredDimensions)
       : null;
 
+  // A carousel slide tap routes through the arming state: place on the armed
+  // slide (existing onPlacePin path, percentage coords), disarm elsewhere,
+  // otherwise open the lightbox.
   const handleSlideTap = (index: number, event: ReactMouseEvent<HTMLButtonElement>): void => {
     const action = slideTapAction(pinArmedIndex, index, consumeClickSuppression());
     if (action === 'suppress') return;
     if (action === 'place') {
       const point = placePinFromEvent(event.currentTarget, event.clientX, event.clientY);
       setPinArmedIndex(null);
-      if (point === null) return;
-      // On the platform frame the tap is relative to the cropped box: map it back
-      // to the original so the stored image_x / image_y stay original-relative.
-      const item = items[index];
-      // A tap on a band (outside the media) places nothing.
-      const stored =
-        postFrame !== null && item !== undefined
-          ? frameToOriginal(point, slideMap(item, measuredDimensions, postFrame))
-          : point;
-      if (stored !== null) onPlacePin?.(index, stored.x, stored.y);
+      // The tile shows the whole original at its own ratio, so the tap point is
+      // already original-relative: the stored image_x / image_y.
+      if (point !== null) onPlacePin?.(index, point.x, point.y);
       return;
     }
     if (action === 'disarm') {
@@ -1619,6 +1541,7 @@ export function PostGallery({
         frameNote:
           postFrame !== null && frame !== undefined ? frameKindNote(frame.platform, items) : null,
         platformLabel: frame?.platformLabel ?? '',
+        onSeePreview,
         pinsFor,
         onPinClick,
         onArmPin: armPin,

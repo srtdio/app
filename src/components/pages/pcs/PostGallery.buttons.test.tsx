@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  galleryFrame,
   galleryToolsRow,
+  galleryView,
   pinButton,
   reorderView,
   type ReorderModel,
@@ -84,6 +86,28 @@ describe('PostGallery buttons', () => {
       expectShared(tag);
       expect(classOf(tag)).toContain('border-border');
     }
+  });
+
+  it('cut line: "See preview" is a shared 44px link button that opens the preview', () => {
+    const onSeePreview = vi.fn();
+    const items = [{ ...item(0), width: 1080, height: 1920 }];
+    const html = renderToStaticMarkup(
+      galleryView({
+        items,
+        cache,
+        presignEnabled: false,
+        onOpen: vi.fn(),
+        frame: galleryFrame('linkedin', 'single_image', items, {}),
+        platformLabel: 'LinkedIn',
+        onSeePreview,
+      }),
+    );
+    expect(html).toMatch(/LinkedIn cuts \d+% of this\./);
+    const tag = buttonTags(html).find((t) => t.includes('data-see-preview'));
+    expect(tag).toBeDefined();
+    expectShared(tag!);
+    expect(classOf(tag!)).toContain('text-accent');
+    expect(html).not.toContain('Tap to see full image');
   });
 
   it('armed pin: Cancel is a shared secondary button', () => {
