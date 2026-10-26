@@ -49,7 +49,7 @@ import {
   type SnoozeKind,
   type UpcomingItem,
 } from '@/components/pages/activity/data';
-import { NOT_SENT_LABEL, failureInPlainWords } from '@/lib/inbox/alerts';
+import { NOT_SENT_LABEL, alertDisplayTime, failureInPlainWords } from '@/lib/inbox/alerts';
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatRelative } from '@/lib/time';
@@ -650,7 +650,10 @@ export function ActivityCard({
         <div className="h-px bg-border" />
         <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
           <span data-activity-time="" className="text-sm tabular-nums text-fg-3">
-            {formatRelative(lead.createdAt, new Date(nowMs))}
+            {formatRelative(
+              alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
+              new Date(nowMs),
+            )}
           </span>
           {tag !== undefined ? (
             <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2">
@@ -724,7 +727,10 @@ export function ActivityCard({
                     {cardBodyLine(entry, { name: entry.actorName === null })}
                   </p>
                   <p className="mt-0.5 text-sm text-fg-3">
-                    {formatRelative(entry.createdAt, new Date(nowMs))}
+                    {formatRelative(
+                      alertDisplayTime(entry.eventType, entry.createdAt, entry.alert?.plan),
+                      new Date(nowMs),
+                    )}
                   </p>
                 </div>
                 {entry.readAt === null ? (

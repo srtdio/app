@@ -94,6 +94,8 @@ export interface PlanAlertFields {
   to: string | null;
   /** plan_date_changed: the post left the plan by date. */
   leftPlan: boolean;
+  /** plan_updated edited: the merged card's latest edit (payload.last_change_at). */
+  lastChangeAt?: string | null;
 }
 
 /** A plan alert's fields from its entity and payload. Pure. */
@@ -111,6 +113,7 @@ export function planFieldsOf(
     from: str(payload, 'from'),
     to: str(payload, 'to'),
     leftPlan: flag(payload, 'left_plan'),
+    lastChangeAt: str(payload, 'last_change_at'),
   };
 }
 
@@ -223,6 +226,21 @@ export function planAlertLine(
     default:
       return `${who} updated ${plan}`;
   }
+}
+
+/**
+ * The time a card shows: a merged plan_updated edited card shows its latest
+ * edit (payload.last_change_at) when it parses; every other row its createdAt.
+ * Display only: grouping and order stay on createdAt. Pure, never null.
+ */
+export function alertDisplayTime(
+  eventType: string,
+  createdAt: string,
+  f: PlanAlertFields | undefined,
+): string {
+  const last = f?.lastChangeAt ?? null;
+  if (eventType !== 'plan_updated' || f?.kind !== 'edited' || last === null) return createdAt;
+  return Number.isNaN(Date.parse(last)) ? createdAt : last;
 }
 
 /** A task alert's label: the card's top line when no actor resolved. */

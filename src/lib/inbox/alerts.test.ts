@@ -3,6 +3,7 @@ import type { Database } from '@srtdio/schemas';
 import {
   PLAN_ALERT_EVENT_TYPES,
   PLAN_DELETED_TOAST,
+  alertDisplayTime,
   alertKindOf,
   chunked,
   failureInPlainWords,
@@ -206,6 +207,60 @@ describe('plan alert lines (the bell wording)', () => {
     );
     expect(line).toBe('Someone deleted a plan');
     expect(line).not.toContain(String.fromCharCode(0x2014));
+  });
+});
+
+describe('alert display time', () => {
+  const created = '2026-10-26T10:00:00.000Z';
+  const last = '2026-10-26T10:02:00.000Z';
+  const fields = (over: Partial<PlanAlertFields> = {}): PlanAlertFields => ({
+    planId: 'plan1',
+    itemId: null,
+    planTitle: 'Week of 12 Oct',
+    kind: 'edited',
+    itemTitle: null,
+    postId: null,
+    from: null,
+    to: null,
+    leftPlan: false,
+    lastChangeAt: last,
+    ...over,
+  });
+
+  it('an edited plan_updated card shows its latest edit', () => {
+    expect(alertDisplayTime('plan_updated', created, fields())).toBe(last);
+  });
+
+  it('maps payload.last_change_at through planFieldsOf', () => {
+    const f = planFieldsOf({
+      entity_type: 'plan',
+      entity_id: 'plan1',
+      payload: { kind: 'edited', last_change_at: last },
+    });
+    expect(alertDisplayTime('plan_updated', created, f)).toBe(last);
+  });
+
+  it('every other kind and event keeps createdAt', () => {
+    for (const kind of ['slot_added', 'slot_removed', 'concept_changed', 'renamed', null]) {
+      expect(alertDisplayTime('plan_updated', created, fields({ kind }))).toBe(created);
+    }
+    for (const event of ['plan_opened', 'plan_deleted', 'plan_date_changed', 'comment']) {
+      expect(alertDisplayTime(event, created, fields())).toBe(created);
+    }
+    expect(alertDisplayTime('plan_updated', created, undefined)).toBe(created);
+  });
+
+  it('a missing or invalid last_change_at keeps createdAt', () => {
+    expect(alertDisplayTime('plan_updated', created, fields({ lastChangeAt: null }))).toBe(created);
+    expect(alertDisplayTime('plan_updated', created, fields({ lastChangeAt: 'not a date' }))).toBe(
+      created,
+    );
+    const f = planFieldsOf({
+      entity_type: 'plan',
+      entity_id: 'plan1',
+      payload: { kind: 'edited' },
+    });
+    expect(alertDisplayTime('plan_updated', created, f)).toBe(created);
   });
 });
 
