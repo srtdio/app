@@ -924,6 +924,35 @@ const CAPABILITY_RPC: Record<string, RpcHandler> = {
     const role = typeof member?.role === 'string' ? member.role : '';
     return (ROLE_CAPABILITIES[role] ?? []).includes(String(args.p_capability));
   },
+  // capabilities_for_workspace: the caller's allowed capabilities in one read.
+  capabilities_for_workspace: (args, tables) => {
+    const member = (tables.workspace_members ?? []).find(
+      (m) => m.workspace_id === args.p_workspace_id && m.user_id === ME && m.active === true,
+    );
+    const role = typeof member?.role === 'string' ? member.role : '';
+    return (ROLE_CAPABILITIES[role] ?? []).map((capability) => ({ capability, allowed: true }));
+  },
+};
+
+/**
+ * public.activity_badge_read over the fixture inbox: the caller's unread, not
+ * deleted, not currently snoozed rows in a workspace, and the mentions among them.
+ */
+const BADGE_RPC: Record<string, RpcHandler> = {
+  activity_badge_read: (args, tables) => {
+    const now = new Date().toISOString();
+    const live = (tables.inbox_entries ?? []).filter(
+      (e) =>
+        e.workspace_id === args.p_workspace_id &&
+        e.user_id === ME &&
+        (e.read_at ?? null) === null &&
+        (e.deleted_at ?? null) === null &&
+        ((e.snoozed_until ?? null) === null || String(e.snoozed_until) <= now),
+    );
+    return [
+      { unread: live.length, mentions: live.filter((e) => e.event_type === 'mention').length },
+    ];
+  },
 };
 
 /** An attachment's version: the embedded row the fixtures carry, else the asset_versions table. */
@@ -994,6 +1023,7 @@ const RPC: Record<string, RpcHandler> = {
   ...PLAN_RPC,
   ...POSTS_RPC,
   ...CAPABILITY_RPC,
+  ...BADGE_RPC,
   ...TASK_RPC,
   ...ONBOARDING_RPC,
   ...INDUCTION_RPC,
