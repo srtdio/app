@@ -889,3 +889,41 @@ describe('ActivityCard: notifications fixes', () => {
     expect(tile?.[2]).toBe('K');
   });
 });
+
+describe('ActivityCard: merged plan edit time', () => {
+  it('an edited plan_updated card reads the last edit, not the first', () => {
+    const html = renderCard([
+      item({
+        id: 'pe',
+        eventType: 'plan_updated',
+        entityType: 'plan',
+        createdAt: '2026-06-14T00:58:00.000Z',
+        alert: {
+          kind: 'plan',
+          channelId: null,
+          chatName: null,
+          scheduledId: null,
+          reason: null,
+          stale: false,
+          preview: null,
+          plan: {
+            planId: 'plan1',
+            itemId: null,
+            planTitle: 'Week of 12 Oct',
+            kind: 'edited',
+            itemTitle: null,
+            postId: null,
+            from: null,
+            to: null,
+            leftPlan: false,
+            lastChangeAt: '2026-06-14T00:59:30.000Z',
+          },
+          planTitle: null,
+          itemTitle: null,
+        },
+      }),
+    ]);
+    expect(html).toContain('just now');
+    expect(html).not.toContain('2 min ago');
+  });
+});
