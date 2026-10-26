@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # Nightly 03:30 UTC: removes the R2 bytes of purged assets, then tears down
 # workspaces deleted more than 30 days ago (Agora groups, bucket objects,
-# bucket, rows).
+# rows; buckets are never deleted).
 # Handler: src/server/cron/storage-purge.ts.
 [triggers]
 crons = ["30 3 * * *"]
@@ -19,7 +19,7 @@ head_sampling_rate = 1.0
 # All values are supplied as Worker secrets (wrangler secret put / CI), never
 # committed. Only binding names live here:
 #   CLOUDFLARE_ACCOUNT_ID           - R2 account; the S3 endpoint host
-#   CLOUDFLARE_R2_ACCESS_KEY_ID     - R2 S3 access key: object + bucket deletes
+#   CLOUDFLARE_R2_ACCESS_KEY_ID     - R2 S3 access key: object deletes
 #   CLOUDFLARE_R2_SECRET_ACCESS_KEY - R2 S3 secret key (SigV4 signing)
 #   SUPABASE_URL                    - project URL for the purge rpcs and chat_channels reads
 #   SUPABASE_SECRET_KEY             - service role: the purge rpcs are granted to service_role only
