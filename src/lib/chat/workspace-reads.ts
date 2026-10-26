@@ -19,7 +19,6 @@
 // workspace-data-changed event (a brief closed or reopened) drops every
 // session read already (session-read.ts).
 
-import type { Result } from '@srtdio/rpc';
 import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { PLAN_CHANGED_EVENT } from '@/lib/chat/plans';
@@ -68,7 +67,7 @@ export function peekChatRead<T>(
 }
 
 /** A Result read is kept only when it succeeded. */
-export function resultOk<T>(value: Result<T>): boolean {
+export function resultOk(value: { ok: boolean }): boolean {
   return value.ok;
 }
 
