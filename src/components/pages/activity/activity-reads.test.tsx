@@ -78,6 +78,7 @@ import { NotificationsPage } from '@/components/pages/NotificationsPage';
 import {
   EMPTY_LINES,
   LOADING_NOTIFICATIONS,
+  MENTION_EVENT_TYPE,
   activityPageKey,
   mentionCountKey,
   prefetchActivityData,
@@ -207,6 +208,16 @@ describe('Activity: first paint', () => {
 
 describe('Activity: chip pages are shared within the window', () => {
   it('switching back to a chip within the window reads nothing again', async () => {
+    // The Mentions chip shows mention entries only: its page holds one.
+    h.fetchActivityEntries.mockImplementation(async (...args: unknown[]) => {
+      const state = (args[2] as { state?: string } | undefined)?.state;
+      return state === 'mentions'
+        ? {
+            ok: true,
+            data: [item({ id: 'm1', eventType: MENTION_EVENT_TYPE, title: 'Q3 Launch' })],
+          }
+        : { ok: true, data: [item({ id: 'e1', title: 'Q3 Launch' })] };
+    });
     render();
     await settle();
     await pick('Mentions');
