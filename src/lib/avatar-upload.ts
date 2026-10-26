@@ -109,9 +109,10 @@ interface AvatarCleanupConfig {
  */
 export function avatarCleanupUrl(endpoint: string): string | null {
   try {
-    const base = new URL(endpoint.endsWith('/') ? endpoint : `${endpoint}/`);
+    const base = new URL(endpoint);
     base.search = '';
     base.hash = '';
+    if (!base.pathname.endsWith('/')) base.pathname = `${base.pathname}/`;
     return new URL('avatar/cleanup', base).toString();
   } catch {
     return null;
