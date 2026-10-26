@@ -15,12 +15,12 @@
 //        a. bucket = SHARED_ASSET_BUCKET: only keys under ws/<workspace_id>/
 //           are deleted, page by page; the shared bucket itself is never
 //           emptied or deleted. Unset SHARED_ASSET_BUCKET never matches.
-//        b. legacy per-workspace bucket: emptied and deleted only when no
-//           other workspaces row (live or soft-deleted) has the same
-//           asset_bucket. A shared one is left untouched in R2 and the row
-//           still goes, so the last row referencing it deletes it.
+//        b. legacy per-workspace bucket: emptied only when no other
+//           workspaces row (live or soft-deleted) has the same asset_bucket,
+//           then left in place empty. Buckets are never deleted (the R2 key
+//           has no bucket-delete right); empty ones are removed by hand.
 //        c. keys under induction-sample/ are never deleted (they ship with
-//           the site); a legacy bucket that still holds one is kept.
+//           the site).
 //      Then workspace_purge_done drops its rows. A failing workspace is logged
 //      and skipped without purge_done, so the next night retries it; it never
 //      stops the others.
@@ -122,8 +122,12 @@ export interface PurgeDb {
   workspacePurgeDone(workspaceId: string): Promise<void>;
 }
 
-/** The R2 operations the purge needs; each treats a missing object or bucket as gone. */
-export type PurgeStorage = Pick<MultipartStorage, 'deleteObject'> & BucketStorage;
+/**
+ * The R2 operations the purge needs; each treats a missing object or bucket as
+ * gone. No deleteBucket: the purge never deletes a bucket.
+ */
+export type PurgeStorage = Pick<MultipartStorage, 'deleteObject'> &
+  Pick<BucketStorage, 'listObjects'>;
 
 /** Agora group teardown; a missing group counts as deleted. */
 export interface PurgeAgora {
@@ -350,7 +354,7 @@ async function purgeWorkspaceBucket(
     await deleteObjects(deps, bucket, sharedBucketPrefix(workspaceId), budget);
     return;
   }
-  // b. A legacy bucket goes only with the last workspaces row that names it.
+  // b. A legacy bucket is emptied only with the last workspaces row that names it.
   // Its name is unique among live workspaces only, so another row (live, or
   // soft-deleted and not yet purged) may still reference it.
   spend(budget);
@@ -366,7 +370,7 @@ async function purgeWorkspaceBucket(
   }
   const kept = await deleteObjects(deps, bucket, undefined, budget);
   if (kept > 0) {
-    // c. Sample keys stay, so the bucket is not empty and stays too.
+    // c. Sample keys stay.
     deps.log.info('storage purge kept induction-sample keys; bucket left in place', {
       trace_id: deps.traceId,
       workspace_id: workspaceId,
@@ -375,8 +379,12 @@ async function purgeWorkspaceBucket(
     });
     return;
   }
-  spend(budget);
-  await deps.storage.deleteBucket(bucket, deps.traceId);
+  // Never deleted: the empty bucket stays and is removed by hand.
+  deps.log.info('storage purge bucket left empty', {
+    trace_id: deps.traceId,
+    workspace_id: workspaceId,
+    bucket,
+  });
 }
 
 async function purgeWorkspace(
