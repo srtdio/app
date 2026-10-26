@@ -172,6 +172,12 @@ describe('plan alert lines (the bell wording)', () => {
 
   it('plan_updated kinds', () => {
     const kind = (k: string, over: Partial<PlanAlertFields> = {}) => fields({ kind: k, ...over });
+    expect(planAlertLine('plan_updated', kind('edited'), names, 'agency')).toBe(
+      'Priya updated Week of 12 Oct',
+    );
+    expect(planAlertLine('plan_updated', kind('edited'), names, 'client')).toBe(
+      'Priya updated Week of 12 Oct',
+    );
     expect(planAlertLine('plan_updated', kind('slot_added'), names, 'agency')).toBe(
       'Priya added to Week of 12 Oct',
     );

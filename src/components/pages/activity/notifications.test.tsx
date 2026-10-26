@@ -319,6 +319,10 @@ describe('taps: every former bell row keeps its behaviour', () => {
       payload: { plan_id: 'plan1', item_id: 'i1', left_plan: true },
     });
     expect(openAction(left).href).toBe('/plans/plan1');
+    const edited = plan('plan_updated', {
+      payload: { plan_id: 'plan1', plan_title: 'Week of 12 Oct', kind: 'edited' },
+    });
+    expect(openAction(edited)).toEqual({ href: '/plans/plan1', markRead: true, toast: null });
   });
 
   it('plan_deleted (or a plan alert with no id) marks read, toasts and opens nothing', () => {
@@ -487,6 +491,48 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     const p = { ...plan('plan_opened'), actorName: 'Priya' };
     expect(card([p], { side: 'client' })).toContain('Priya shared Week of 12 Oct with you');
     expect(card([p])).toContain('Priya opened Week of 12 Oct for approvers');
+  });
+
+  it('a merged plan edit reads "{name} updated {plan}" with the plan icon, light and dark', () => {
+    const edited = {
+      ...plan('plan_updated', {
+        payload: {
+          plan_id: 'plan1',
+          plan_title: 'Week of 12 Oct',
+          kind: 'edited',
+          last_change_at: '2026-10-26T10:00:00.000Z',
+        },
+      }),
+      actorName: 'Priya',
+    };
+    for (const theme of ['light', 'dark'] as const) {
+      for (const side of ['agency', 'client'] as const) {
+        const html = renderToStaticMarkup(
+          <div data-theme={theme}>
+            <ActivityCard
+              group={[edited]}
+              nowMs={NOW}
+              cache={cache}
+              presignEnabled={false}
+              onOpenGroup={() => {}}
+              onOpenEntry={() => {}}
+              onSnooze={() => {}}
+              onMarkRead={() => {}}
+              selfName={null}
+              side={side}
+            />
+          </div>,
+        );
+        expect(html).toContain('Priya updated Week of 12 Oct');
+        expect(html).toContain('data-activity-event="plan_updated"');
+        expect(html).toContain('data-activity-alert-icon="plan"');
+        // Token classes only: the theme swaps the tokens, never the markup.
+        expect(html).not.toMatch(/\bdark:|#[0-9a-f]{6}/i);
+        // Approved copy: no count, no extra words, no em dash.
+        expect(html).not.toMatch(/Priya updated Week of 12 Oct \(|\d+ (edits|changes)/);
+        expect(html).not.toContain('\u2014');
+      }
+    }
   });
 });
 

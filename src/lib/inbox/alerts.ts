@@ -80,7 +80,10 @@ export interface PlanAlertFields {
   itemId: string | null;
   /** payload.plan_title; null on older rows (the loaded title then). */
   planTitle: string | null;
-  /** plan_updated: slot_added / slot_removed / concept_changed / renamed. */
+  /**
+   * plan_updated: edited (one merged card per editor per plan per hour, from
+   * 20261026160000); older rows slot_added / slot_removed / concept_changed / renamed.
+   */
   kind: string | null;
   /** plan_updated slot_removed: the removed item's title, when the payload has it. */
   itemTitle: string | null;
@@ -174,7 +177,8 @@ interface PlanAlertNames {
  *   plan_opened: client "{who} shared {plan} with you", agency "{who} opened
  *   {plan} for approvers"; plan_deleted "{who} deleted {plan}";
  *   plan_date_changed "{item} moved to {day}" ("{item} left {plan}" when it
- *   left the plan); plan_updated slot_added "{who} added to {plan}",
+ *   left the plan); plan_updated edited "{who} updated {plan}" (the merged
+ *   card); older rows slot_added "{who} added to {plan}",
  *   slot_removed "{who} removed {item} from {plan}", concept_changed "{who}
  *   changed {item}", renamed "{who} renamed {from} to {to}". Missing names
  *   degrade, never blank. Pure.
@@ -203,6 +207,8 @@ export function planAlertLine(
     }
     case 'plan_updated':
       switch (f?.kind) {
+        case 'edited':
+          return `${who} updated ${plan}`;
         case 'slot_added':
           return `${who} added to ${plan}`;
         case 'slot_removed':

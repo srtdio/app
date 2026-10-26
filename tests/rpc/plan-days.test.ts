@@ -27,9 +27,9 @@
 // Plan updated alerts (20261012163000_plan_updated_alerts.sql) with the 2b
 // _plan_notify: one psql session drives the triggers with direct SQL inside a
 // transaction on an Open plan, reads the inbox rows it wrote and rolls back:
-// slot_added, concept_changed, renamed, slot_removed, and a post leaving by
-// date announced once (plan_date_changed only; the app.plan_day_sync flag is
-// back to 'off'); every payload carries plan_title. On a Draft plan only
+// an add, a concept edit, a rename, a post leaving by date and a remove by one
+// actor merge into one 'edited' card per recipient (20261026160000; the
+// app.plan_day_sync flag is back to 'off'); every payload carries plan_title. On a Draft plan only
 // plan_deleted is sent. The trigger functions have no EXECUTE for
 // authenticated.
 // No teardown: this suite runs no deletes; every fixture has its own workspace.
@@ -554,7 +554,7 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     ).toBe('true');
   });
 
-  it('plan_updated alerts: triggers fire with the right kinds; a post leaving by date is announced once', async () => {
+  it('plan_updated alerts: every trigger in one transaction merges into one edited card per recipient', async () => {
     const planId = await newPlan();
     const concept = await newConcept(planId, '2026-11-02');
     const post = await seedPost('2026-11-03T12:00:00Z');
@@ -580,6 +580,10 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
          from public.inbox_entries e
         where e.entity_type = 'plan' and e.entity_id = '${planId}' and e.created_at >= now()
         order by 1`,
+      `select 'per_user:' || coalesce(max(x.c), 0) from (
+         select count(*) c from public.inbox_entries e
+          where e.entity_type = 'plan' and e.entity_id = '${planId}' and e.created_at >= now()
+          group by e.user_id) x`,
       `select 'titled:' || bool_and(e.payload->>'plan_title' is not null)::text
          from public.inbox_entries e
         where e.entity_type = 'plan' and e.entity_id = '${planId}' and e.created_at >= now()`,
@@ -587,15 +591,10 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     ]);
     expect(lines).toContain('titled:true');
     expect(lines).toContain('flag:off');
-    expect(lines.filter((l) => l.startsWith('event:'))).toEqual(
-      [
-        'event:plan_date_changed::post',
-        'event:plan_updated:concept_changed:concept',
-        'event:plan_updated:renamed:',
-        'event:plan_updated:slot_added:new',
-        'event:plan_updated:slot_removed:new',
-      ].sort(),
-    );
+    // 20261026160000: add, concept edit, rename, date move and remove by one
+    // actor within the hour merge into one 'edited' plan_updated card each.
+    expect(lines.filter((l) => l.startsWith('event:'))).toEqual(['event:plan_updated:edited:']);
+    expect(lines).toContain('per_user:1');
     // Rolled back: nothing from the transaction is left behind.
     expect(
       psql(
