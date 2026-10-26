@@ -850,8 +850,12 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
     expect(res.data[0]?.alert).toMatchObject({
       stale: false,
       reason: 'not a member of this chat',
-      preview: 'Scheduled message',
+      preview: null,
     });
+    // The payload's reason still reads as the body line.
+    const alert = res.data[0]?.alert;
+    if (alert == null) throw new Error('fixture');
+    expect(alertBody(alert)).toBe("You're no longer in this chat");
   });
 
   it('a gone failed send (read ok, no row) is stale', async () => {
