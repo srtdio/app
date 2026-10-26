@@ -106,6 +106,8 @@ test('create a concept with one uploaded file and one library file', async ({ pa
   const origins: string[] = [];
   page.on('request', (req) => {
     if (req.method() !== 'POST' || !req.url().includes('asset-upload.harness.test')) return;
+    // The image's list copy follows on POST /thumbnail (no origin): not an upload.
+    if (new URL(req.url()).pathname === '/thumbnail') return;
     const body = req.postDataBuffer()?.toString('latin1') ?? '';
     origins.push(/name="origin"\r\n\r\n([a-z]+)/.exec(body)?.[1] ?? 'none');
   });

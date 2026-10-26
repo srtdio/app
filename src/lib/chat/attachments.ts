@@ -23,6 +23,7 @@ import {
 } from '@/lib/asset-upload';
 import { parsePeaks } from '@/lib/chat/waveform-peaks';
 import { isOfficeMime } from '@/lib/files/display-name';
+import { sharedThumbnail, thumbnailKind, type ThumbnailResult } from '@/lib/files/thumbnail';
 
 /**
  * One Sorted asset version referenced by a chat message: the asset VERSION id to
@@ -643,7 +644,12 @@ export type ChatAttachmentUpload =
       ok: true;
       reused: boolean;
       versionId: string;
-      /** The thumbnail the Worker stored (pdf/video); absent when none was. */
+      /**
+       * The thumbnail size the message records (pdf/video/office): the stored one when
+       * the reply carried it, else the sender's local thumbnail (the same JPEG
+       * the upload attaches later), else the kind's box while it is still being
+       * made. Absent when the file has no thumbnail.
+       */
       thumbnail?: { width: number; height: number; pageCount?: number };
     }
   | { ok: false; message: string };
@@ -668,9 +674,55 @@ export function chatUploadMessage(message: string): string {
   return message === uploadErrorMessage('network') ? CHAT_UPLOAD_FAILED : message;
 }
 
+/**
+ * The box a pdf/video/office message records when its local thumbnail is
+ * still being made as the original lands: the same boxes the sending bubble
+ * reserves (FileBubble SENDING_RATIO: a page 1.3 tall, a 16:9 frame). The thumbnail
+ * then fills this box when it lands; the box never changes.
+ */
+export const PENDING_THUMB_SIZE: Readonly<Record<'pdf' | 'video', ThumbnailMeta>> = {
+  pdf: { thumbW: 10, thumbH: 13 },
+  video: { thumbW: 16, thumbH: 9 },
+};
+
+/**
+ * The thumbnail size known on this device when the original is stored: the
+ * local thumbnail's own size (and page count) once made, the kind's pending
+ * box while it is being made, null when it failed or the file has none. Pure.
+ */
+export function pickTimeThumbnail(
+  mime: string,
+  local: ThumbnailResult | undefined,
+): { width: number; height: number; pageCount?: number } | null {
+  const kind = thumbnailKind(mime);
+  if (kind === null) return null;
+  if (local === undefined) {
+    const box = PENDING_THUMB_SIZE[kind === 'video' ? 'video' : 'pdf'];
+    return { width: box.thumbW, height: box.thumbH };
+  }
+  if (!local.ok) return null;
+  return {
+    width: local.width,
+    height: local.height,
+    ...(local.pageCount !== undefined ? { pageCount: local.pageCount } : {}),
+  };
+}
+
 export async function uploadChatAttachment(
   params: ChatUploadParams,
 ): Promise<ChatAttachmentUpload> {
+  // The local thumbnail (the one the sending bubble shows and the upload
+  // attaches) is read as it settles; the upload never waits for it.
+  const local: { made?: ThumbnailResult } = {};
+  if (thumbnailKind(params.file.type) !== null) {
+    void sharedThumbnail(params.file)
+      .then((made) => {
+        local.made = made;
+      })
+      .catch(() => {
+        local.made = { ok: false, reason: 'failed' };
+      });
+  }
   const base = {
     endpoint: params.endpoint,
     token: params.token,
@@ -687,9 +739,12 @@ export async function uploadChatAttachment(
   if (versionId === '') {
     return { ok: false, message: CHAT_UPLOAD_FAILED };
   }
-  if (outcome.thumbnail !== undefined) {
-    rememberThumbnail(versionId, outcome.thumbnail);
-    return { ok: true, reused: outcome.reused, versionId, thumbnail: outcome.thumbnail };
+  // The message records this size once (Agora meta is never updated), so it
+  // is the one the card's box keeps when the stored thumbnail fills it later.
+  const thumbnail = outcome.thumbnail ?? pickTimeThumbnail(params.file.type, local.made);
+  if (thumbnail !== null) {
+    rememberThumbnail(versionId, thumbnail);
+    return { ok: true, reused: outcome.reused, versionId, thumbnail };
   }
   return { ok: true, reused: outcome.reused, versionId };
 }

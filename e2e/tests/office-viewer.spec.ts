@@ -155,15 +155,30 @@ test('Word and Excel open inside Sorted @theme', async ({ page, context }) => {
     mimeType: DOCX_MIME,
     buffer: docxFixture(),
   });
-  // The upload carries the thumbnail part the device drew: a JPEG within the caps.
-  const upload = page.waitForRequest(
-    (r) => r.method() === 'POST' && r.url().includes('asset-upload.harness.test'),
-  );
+  // The original goes up alone; the thumbnail the device drew (a JPEG within
+  // the caps) follows on its own POST /thumbnail for the stored version.
+  const isUpload = (r: { method: () => string; url: () => string }, path: string): boolean => {
+    if (r.method() !== 'POST') return false;
+    const url = new URL(r.url());
+    return url.hostname === 'asset-upload.harness.test' && url.pathname === path;
+  };
+  const upload = page.waitForRequest((r) => isUpload(r, '/'));
+  const thumbnailPost = page.waitForRequest((r) => isUpload(r, '/thumbnail'));
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   // WebKit does not expose file bytes of a multipart body: check the part's
   // headers here and the JPEG bytes from the bubble's own blob below.
   const body = (await upload).postDataBuffer()?.toString('latin1') ?? '';
-  expect(body).toMatch(/name="thumbnail"; filename="thumbnail\.jpg"\r\nContent-Type: image\/jpeg/);
+  expect(body).toMatch(/name="file"; filename="Sent brief\.docx"/);
+  expect(body).not.toMatch(/name="thumbnail"/);
+  const thumbBody = (await thumbnailPost).postDataBuffer()?.toString('latin1') ?? '';
+  expect(thumbBody).toMatch(
+    /name="thumbnail"; filename="thumbnail\.jpg"\r\nContent-Type: image\/jpeg/,
+  );
+  expect(thumbBody).toMatch(/name="asset_version_id"\r\n\r\n0190f100-0000-7000-8000-\d{12}/);
+  expect(thumbBody).not.toMatch(/name="file"/);
+  await expect
+    .poll(() => harness.thumbnails.map((t) => t.assetVersionId))
+    .toEqual([expect.stringMatching(/^0190f100-0000-7000-8000-\d{12}$/)]);
 
   const sent = page.locator('[data-file-bubble="office"]').last();
   await sent.scrollIntoViewIfNeeded();

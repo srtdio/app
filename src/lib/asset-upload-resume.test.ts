@@ -200,9 +200,14 @@ describe('thumbnail alongside the original', () => {
       { started: 1, done: false },
       { started: 1, done: false },
     ]);
-    // The complete call (which carries the thumbnail) waits for it.
-    expect(worker.calls.map((c) => c.path)).not.toContain('/multipart/complete');
+    // The complete call never waits for it: it goes without the thumbnail.
+    const outcome = await upload;
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a1', assetVersionId: 'v1' });
+    const complete = worker.calls.find((c) => c.path === '/multipart/complete');
+    expect((complete?.body as FormData).get('thumbnail')).toBeNull();
+    expect(worker.calls.map((c) => c.path)).not.toContain('/thumbnail');
 
+    // When it is made it is attached to the stored version on POST /thumbnail.
     thumbnailDone = true;
     finishThumbnail({
       ok: true,
@@ -211,13 +216,37 @@ describe('thumbnail alongside the original', () => {
       height: 800,
       pageCount: 4,
     });
-    const outcome = await upload;
+    await vi.waitFor(() => expect(worker.calls.map((c) => c.path)).toContain('/thumbnail'));
+    const late = worker.calls.find((c) => c.path === '/thumbnail');
+    const form = late?.body as FormData;
+    expect(late?.method).toBe('POST');
+    expect(form.get('asset_version_id')).toBe('v1');
+    expect(form.get('thumbnail')).toBeInstanceOf(Blob);
+    expect(form.get('thumbnail_page_count')).toBe('4');
+  });
 
+  it('a thumbnail made before the parts finish rides on the complete form, no POST /thumbnail', async () => {
+    const worker = fakeWorker();
+    const outcome = await uploadAssetFile(
+      bigFile(),
+      config(worker.fetcher, {
+        makeThumbnail: () =>
+          Promise.resolve({
+            ok: true as const,
+            blob: new Blob(['jpeg'], { type: 'image/jpeg' }),
+            width: 580,
+            height: 800,
+            pageCount: 4,
+          }),
+      }),
+    );
     expect(outcome.ok).toBe(true);
     const form = worker.calls.at(-1)?.body as FormData;
     expect(worker.calls.at(-1)?.path).toBe('/multipart/complete');
     expect(form.get('thumbnail')).toBeInstanceOf(Blob);
     expect(form.get('thumbnail_page_count')).toBe('4');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worker.calls.map((c) => c.path)).not.toContain('/thumbnail');
   });
 
   it('a thumbnail that fails never holds up or fails the original', async () => {

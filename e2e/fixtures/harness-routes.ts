@@ -1405,8 +1405,10 @@ export interface HarnessNetwork {
   blocked: string[];
   /** Gate chat_messages reads until release() so a test can see first paint. */
   holdHistory: () => { release: () => void };
-  /** Every file name the asset-upload stub received, in order. */
+  /** Every original file name the asset-upload stub received, in order (never a thumbnail). */
   uploads: string[];
+  /** Every POST /thumbnail the stub received: the version it attaches to and its form body. */
+  thumbnails: Array<{ assetVersionId: string; body: string }>;
   /** Gate asset uploads until release() so a test can see them in flight. */
   holdUploads: () => { release: () => void };
   /** Every RPC the page called, in order, with its JSON args. */
@@ -1447,6 +1449,7 @@ export async function installHarnessNetwork(
   const blocked: string[] = [];
   let historyGate: Promise<void> | null = null;
   const uploads: string[] = [];
+  const thumbnails: HarnessNetwork['thumbnails'] = [];
   let uploadGate: Promise<void> | null = null;
   const rpcCalls: HarnessNetwork['rpcCalls'] = [];
   const refuseRpc = new Set<string>();
@@ -1722,6 +1725,19 @@ export async function installHarnessNetwork(
       });
       return;
     }
+    if (url.hostname === ASSET_UPLOAD_HOST && method === 'POST' && url.pathname === '/thumbnail') {
+      // POST /thumbnail: a sender-made thumbnail attached to a stored version
+      // after the original. Recorded apart from the original uploads.
+      const body = request.postDataBuffer()?.toString('latin1') ?? '';
+      const versionId = /name="asset_version_id"\r\n\r\n([^\r\n]+)/.exec(body)?.[1] ?? '';
+      thumbnails.push({ assetVersionId: versionId, body });
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS, 'content-type': 'application/json' },
+        body: JSON.stringify({ thumbnail: { width: 580, height: 751 } }),
+      });
+      return;
+    }
     if (url.hostname === ASSET_UPLOAD_HOST && method === 'POST') {
       // The asset-upload Worker's answer: a fresh asset and version per file.
       if (uploadGate) await uploadGate;
@@ -1788,6 +1804,7 @@ export async function installHarnessNetwork(
       return { release };
     },
     uploads,
+    thumbnails,
     holdUploads: () => {
       let release = (): void => {};
       uploadGate = new Promise<void>((resolve) => {

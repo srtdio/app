@@ -1050,9 +1050,11 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       height: 751,
       pageCount: 12,
     }));
+    const onThumbnail = vi.fn();
     const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
       ...baseConfig(fetcher, 'deck.pdf'),
       makeThumbnail,
+      onThumbnail,
     });
 
     const original = uploadForm(fetcher);
@@ -1062,7 +1064,11 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
     expect((original.get('file') as File).name).toBe('deck.pdf');
     expect(original.get('thumbnail')).toBeNull();
     expect(original.get('thumbnail_page_count')).toBeNull();
+    // The outcome is the stored original alone: the thumbnail never rides on it.
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
 
+    await vi.waitFor(() => expect(onThumbnail).toHaveBeenCalledTimes(1));
+    expect(onThumbnail).toHaveBeenCalledWith({ width: 580, height: 751, pageCount: 12 });
     const call = thumbnailCall(fetcher);
     expect(call).toBeDefined();
     const [, init] = call as [string, RequestInit];
@@ -1075,37 +1081,44 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
     expect((form.get('thumbnail') as File).name).toBe('thumbnail.jpg');
     expect(form.get('thumbnail_page_count')).toBe('12');
     expect(form.get('file')).toBeNull();
-
-    expect(outcome).toEqual({
-      ok: true,
-      reused: false,
-      assetId: 'a-1',
-      assetVersionId: 'v-1',
-      thumbnail: { width: 580, height: 751, pageCount: 12 },
-    });
   });
 
-  it('sends the original before the thumbnail is made', async () => {
+  it('resolves once the original is stored, even while the thumbnail is never made', async () => {
     const fetcher = routedFetcher();
+    // A deferred thumbnail that is never resolved: the outcome must not wait on it.
     const pending = deferred<{ ok: true; blob: Blob; width: number; height: number }>();
     const makeThumbnail = vi.fn(() => pending.promise);
-    const upload = uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
+    const outcome = await uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
       ...baseConfig(fetcher, 'clip.mp4'),
       makeThumbnail,
     });
-    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
     expect(makeThumbnail).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(thumbnailCall(fetcher)).toBeUndefined();
+  });
+
+  it('a thumbnail made after the outcome is still posted later', async () => {
+    const fetcher = routedFetcher();
+    const pending = deferred<{ ok: true; blob: Blob; width: number; height: number }>();
+    const onThumbnail = vi.fn();
+    const outcome = await uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
+      ...baseConfig(fetcher, 'clip.mp4'),
+      makeThumbnail: () => pending.promise,
+      onThumbnail,
+    });
+    // Done before the thumbnail exists.
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
     expect(uploadForm(fetcher).get('file')).toBeInstanceOf(File);
     expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
     expect(thumbnailCall(fetcher)).toBeUndefined();
 
     pending.resolve({ ok: true, blob: thumbBlob, width: 580, height: 326 });
-    const outcome = await upload;
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
     const form = (thumbnailCall(fetcher) as [string, RequestInit])[1].body as FormData;
     expect(form.get('asset_version_id')).toBe('v-1');
     expect(form.get('thumbnail_page_count')).toBeNull();
-    expect(outcome).toMatchObject({ ok: true, thumbnail: { width: 580, height: 751 } });
+    await vi.waitFor(() => expect(onThumbnail).toHaveBeenCalledWith({ width: 580, height: 751 }));
   });
 
   it('posts the thumbnail only after the original is stored', async () => {
@@ -1121,7 +1134,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
     expect(fetcher).toHaveBeenCalledTimes(1);
     stored.resolve(jsonResponse(201, okBody));
     await upload;
-    expect(thumbnailCall(fetcher)).toBeDefined();
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
   });
 
   it('an image posts its small list copy, no page count', async () => {
@@ -1138,6 +1151,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
     });
     expect(makeThumbnail).toHaveBeenCalledTimes(1);
     expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
     const form = (thumbnailCall(fetcher) as [string, RequestInit])[1].body as FormData;
     expect(form.get('thumbnail')).toBeInstanceOf(Blob);
     expect(form.get('thumbnail_page_count')).toBeNull();
@@ -1158,6 +1172,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       ...baseConfig(fetcher, name),
       makeThumbnail,
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(makeThumbnail).not.toHaveBeenCalled();
     expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -1184,6 +1199,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
     });
     expect(makeThumbnail).toHaveBeenCalledTimes(1);
     expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
     const form = (thumbnailCall(fetcher) as [string, RequestInit])[1].body as FormData;
     expect(form.get('thumbnail')).toBeInstanceOf(Blob);
     expect(form.get('thumbnail_page_count')).toBeNull();
@@ -1203,6 +1219,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       ...baseConfig(fetcher, 'deck.pdf'),
       makeThumbnail: maker,
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
     expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -1219,12 +1236,16 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
     ],
   ])('%s on /thumbnail leaves the upload ok, without a thumbnail', async (_label, reply) => {
     const fetcher = routedFetcher({ thumbnail: reply });
+    const onThumbnail = vi.fn();
     const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
       ...baseConfig(fetcher, 'deck.pdf'),
       makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
+      onThumbnail,
     });
-    expect(thumbnailCall(fetcher)).toBeDefined();
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    expect(onThumbnail).not.toHaveBeenCalled();
   });
 
   it('a failed original never posts a thumbnail', async () => {
@@ -1235,6 +1256,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       ...baseConfig(fetcher, 'deck.pdf'),
       makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(outcome).toEqual({ ok: false, message: uploadErrorMessage('virus_detected') });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
@@ -1251,6 +1273,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       ...baseConfig(fetcher, 'deck.pdf'),
       makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(outcome).toMatchObject({ ok: true, thumbnail: { width: 400, height: 566 } });
   });
@@ -1279,6 +1302,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       };
       return request as unknown as XMLHttpRequest;
     };
+    const onThumbnail = vi.fn();
     const outcome = await uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
       endpoint: 'https://upload.example.workers.dev',
       token: 'tok',
@@ -1286,19 +1310,17 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       origin: 'chat',
       filename: 'clip.mp4',
       makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 580, height: 326 }),
+      onThumbnail,
       xhr: { traceId: 'trace-1', createRequest },
     });
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    await vi.waitFor(() => expect(onThumbnail).toHaveBeenCalledWith({ width: 580, height: 326 }));
     expect(requests.map((r) => r.url)).toEqual(['https://upload.example.workers.dev', THUMB_URL]);
     expect(requests[1]?.headers).toEqual({ Authorization: 'Bearer tok', 'X-Trace-Id': 'trace-1' });
     expect((requests[1]?.sent as FormData).get('asset_version_id')).toBe('v-1');
-    expect(outcome).toMatchObject({
-      ok: true,
-      assetVersionId: 'v-1',
-      thumbnail: { width: 580, height: 326 },
-    });
   });
 
-  it('a maker that hangs never holds the original, and the outcome resolves by the cap', async () => {
+  it('a maker that hangs never holds the original or the outcome', async () => {
     vi.useFakeTimers();
     try {
       const fetcher = routedFetcher();
@@ -1306,19 +1328,19 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
         ...baseConfig(fetcher, 'deck.pdf'),
         makeThumbnail: () => new Promise(() => undefined),
       });
-      await vi.advanceTimersByTimeAsync(0);
-      expect(fetcher).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(4_000);
+      // No timer advanced: the outcome does not wait for the thumbnail cap.
       const outcome = await pending;
       expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      // Past the cap the hung thumbnail is dropped: nothing is posted.
+      await vi.advanceTimersByTimeAsync(4_000);
       expect(fetcher).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('a thumbnail that lands after the cap announces the upload again', async () => {
-    vi.useFakeTimers();
+  it('a thumbnail that lands after the outcome announces the upload again', async () => {
     const target = new EventTarget();
     vi.stubGlobal('window', target);
     const seen: string[] = [];
@@ -1328,19 +1350,17 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
     try {
       const late = deferred<Response>();
       const fetcher = routedFetcher({ thumbnail: () => late.promise });
-      const pending = uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
         ...baseConfig(fetcher, 'deck.pdf'),
         makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
       });
-      await vi.advanceTimersByTimeAsync(4_000);
-      const outcome = await pending;
       expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
       expect(seen).toEqual(['ws-1']);
+      await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
       late.resolve(jsonResponse(200, { thumbnail: { width: 10, height: 10 } }));
       await vi.waitFor(() => expect(seen).toEqual(['ws-1', 'ws-1']));
     } finally {
       vi.unstubAllGlobals();
-      vi.useRealTimers();
     }
   });
 
