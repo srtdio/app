@@ -147,7 +147,9 @@ export function PlanCardsProvider(props: {
   const raw = useMemo(
     () =>
       workspaceId !== null && channelId !== null
-        ? createPlanCardCache((ids, signal) => readPlanBundles(supabase, ids, signal))
+        ? createPlanCardCache((ids, signal) =>
+            readPlanBundles(supabase, ids, signal, undefined, workspaceId),
+          )
         : null,
     // A new open (another viewer, workspace or chat) is a new cache.
     // eslint-disable-next-line react-hooks/exhaustive-deps

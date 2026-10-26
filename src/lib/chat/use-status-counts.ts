@@ -489,7 +489,9 @@ export function useStatusCounts(params: {
     () =>
       planCards === null && params.workspaceId !== null
         ? createPlanCardCache(
-            readBundles ?? ((ids, signal) => readPlanBundles(client, ids, signal)),
+            readBundles ??
+              ((ids, signal) =>
+                readPlanBundles(client, ids, signal, undefined, params.workspaceId ?? undefined)),
           )
         : null,
     [planCards, params.workspaceId, client, readBundles],
