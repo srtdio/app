@@ -124,7 +124,9 @@ test.describe('phone', () => {
     await expect(sheet.locator('[data-schedule-summary]')).toContainText('Sends ');
     await expect(sheet.getByText('Any time from 1 minute to 1 year ahead.')).toBeVisible();
     await expect(sheet.getByRole('button', { name: 'Schedule', exact: true })).toBeEnabled();
-    await sheet.getByRole('button', { name: 'Cancel' }).last().click();
+    // Phone sheet: no footer Cancel; the header X closes it.
+    await expect(sheet.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+    await sheet.getByRole('button', { name: 'Close' }).click();
     await expect(sheet).toBeHidden();
 
     // Hold again and pick Monday: scheduled at once, the draft clears.
