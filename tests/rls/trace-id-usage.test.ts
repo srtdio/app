@@ -31,6 +31,13 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'username_available',
   // Read-only STABLE induction progress (20261015035000, definer since 20261015039000): writes nothing.
   'induction_state',
+  // Read-only STABLE invoker reads (20261026120000_speedy_b): write nothing, so nothing to log.
+  'activity_badge_read',
+  'capabilities_for_workspace',
+  'chat_open_bundle',
+  'plan_bundle_read',
+  'posts_list',
+  'ref_resolve',
 ]);
 
 /** Public functions whose arguments include p_trace_id but whose body never mentions it. */
