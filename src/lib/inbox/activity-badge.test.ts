@@ -2,11 +2,7 @@
 // The activity badge: one activity_badge_read gives the unread badge and the
 // Mentions count; consumers of one refresh share one rpc within the session.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  fetchActivityBadge,
-  mapActivityBadge,
-  readActivityBadge,
-} from '@/lib/inbox/inbox-reads';
+import { fetchActivityBadge, mapActivityBadge, readActivityBadge } from '@/lib/inbox/inbox-reads';
 import { POLL_CHANGE_SOURCE } from '@/lib/inbox/inbox-live';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 import { resetSessionReads } from '@/lib/session-read';
@@ -23,7 +19,7 @@ function rpcClient(answers: RpcResult[]): {
   rpc: ReturnType<typeof vi.fn>;
 } {
   let i = 0;
-  const rpc = vi.fn((_fn: string, _args: Record<string, unknown>) => {
+  const rpc = vi.fn(() => {
     const answer = answers[Math.min(i, answers.length - 1)] ?? { data: [], error: null };
     i += 1;
     return Promise.resolve(answer);

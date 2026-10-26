@@ -43,6 +43,7 @@ import {
   createComment,
   deleteComment,
   editComment,
+  isInvalidMention,
   listComments,
   parseMentions,
   resolveComment,
@@ -60,6 +61,7 @@ import type { DomainErrorCode } from '@srtdio/rpc';
 import type { Json } from '@srtdio/schemas';
 import { classifyAttachment, type MessageAttachment } from '@/lib/chat/attachments';
 import { CommentComposer } from '@/components/comments/CommentComposer';
+import { commentMentionCandidates } from '@/components/comments/mention-scope';
 import { SlotComposer } from '@/components/comments/SlotComposer';
 import type { CheckpointPoint } from '@/components/comments/SlotComposer';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
@@ -143,7 +145,15 @@ interface CommentsProps {
    * Comments reads them itself after each page-zero load, exactly as before.
    */
   sharedCheckpoints?: SharedCheckpoints;
+  /**
+   * Posts: the post's stage. On a draft the @-mention picker does not offer
+   * clients (they cannot see drafts). Briefs pass nothing.
+   */
+  postStage?: string;
 }
+
+/** The toast when comment_create rejects a mention (a client on a draft post). */
+export const DRAFT_MENTION_TOAST = "Clients can't see drafts. Tag them once it's in Review.";
 
 /** One checkpoint read owned by the host and shared by Comments and the strip. */
 export interface SharedCheckpoints {
@@ -1135,6 +1145,7 @@ export function Comments({
   belowHeader,
   onCountsChange,
   sharedCheckpoints,
+  postStage,
 }: CommentsProps) {
   const newTrace = useNewTrace();
   // The Open / All thread filter (posts' header); All by default.
@@ -1142,6 +1153,11 @@ export function Comments({
   const { canAttach, presignEnabled, presignCache, uploadFile } = useCommentAttachments();
   // Members for the @-mention picker; resolved once and shared by both composers.
   const { candidates } = useMentionCandidates(workspaceId);
+  // Who the picker (and a reply's @Name seed) offers: no clients on a draft post.
+  const mentionMembers = useMemo(
+    () => commentMentionCandidates(candidates, { entityType, postStage }),
+    [candidates, entityType, postStage],
+  );
 
   const [comments, setComments] = useState<CommentRow[]>([]);
   // Every checkpoint for this post, loaded whole in one query so none paginates
@@ -1448,7 +1464,7 @@ export function Comments({
       attachmentVersionIds: string[];
       parentCommentId: string | null;
     },
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
+  ): Promise<{ ok: true } | { ok: false; error: string } | { ok: false; notified: true }> {
     const input = buildCreateInput({
       workspaceId,
       entityType,
@@ -1459,6 +1475,12 @@ export function Comments({
       traceId: newTrace(),
     });
     const result = await createComment(supabase, input);
+    if (!result.ok && entityType === 'post' && isInvalidMention(result.error)) {
+      // A rejected mention (a client tagged on a draft): the composer keeps the
+      // text and files, the toast says why.
+      toast?.show({ title: DRAFT_MENTION_TOAST, tone: 'error' });
+      return { ok: false, notified: true };
+    }
     if (!result.ok) {
       const action = options.parentCommentId !== null ? 'post the reply' : 'post the comment';
       return { ok: false, error: friendlyCommentError(result.error, action) };
@@ -1825,7 +1847,7 @@ export function Comments({
       comment,
       replyTargets.get(comment.id) ?? null,
       currentUserId,
-      candidates,
+      mentionMembers,
     );
   }
 
@@ -1849,7 +1871,7 @@ export function Comments({
       author_user_id: reply.author_user_id,
       legacy_author_name: reply.legacy_author_name,
     };
-    const nextSeed = checkpointReplySeed(root, target, currentUserId, candidates);
+    const nextSeed = checkpointReplySeed(root, target, currentUserId, mentionMembers);
     const draft = replyOpen.has(rootId) ? replyDrafts.get(key) : undefined;
     replyDrafts.set(key, retargetDraft(draft, replySeedFor(root), nextSeed));
     setReplyTargets((prev) => new Map(prev).set(rootId, target));
@@ -1881,7 +1903,7 @@ export function Comments({
           onSubmit={(body, options) =>
             handleCreate(body, { ...options, parentCommentId: comment.id })
           }
-          members={candidates}
+          members={mentionMembers}
           canAttach={canAttach}
           uploadFile={uploadFile}
           placeholder="Write a reply"
@@ -2421,7 +2443,7 @@ export function Comments({
     ) : (
       <CommentComposer
         onSubmit={(body, options) => handleCreate(body, { ...options, parentCommentId: null })}
-        members={candidates}
+        members={mentionMembers}
         canAttach={canAttach}
         uploadFile={uploadFile}
         placeholder="Write a comment"

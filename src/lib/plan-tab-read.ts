@@ -1,153 +1,152 @@
-// The Plan tab's one batched read. Desktop asks for a range (the month grid's
-// whole weeks, or the week): the plans overlapping it, a one-row probe for any
-// plan at all (the zero state), and the posts dated in it, all at once; then
-// the plans' bundles through the batched plan reads (draft rows, items, then
-// reviews and post stages, each a select by id list, chunked at 100), with
-// every item's and loose post's tile read alongside the reviews (it needs only
-// the items), so the tab waits three round trips, not four. The phone
-// asks for no range: every plan, no posts. Plans and posts are list reads,
-// paged at 1000 rows (range 0 to 999, then the next page while one is full),
-// so the request count is fixed for any number of rows under a page. A post
-// that is an item of a read plan is never a loose post. Approvers (onlyShared)
-// read shared plans only (RLS returns no Draft to them anyway). Never throws.
+// The Plan tab's read: ONE plan_bundle_read in tab mode (src/lib/chat/plan-bundle.ts)
+// returns the workspace zone, a page of plans (PLAN_BUNDLE_PAGE, newest
+// starts_on first) with their items, draft rows, reviews, post rows and tiles,
+// the posts dated in the range (a day wider each side), and the any-plan probe
+// (the zero state). The phone asks for no range: one page of every plan, no
+// posts, and the next page's cursor (Load more). Desktop asks for a range (the
+// month grid's whole weeks, or the week) and reads every page of it (one call
+// unless more than a page of plans overlaps it), since a grid cannot page.
+// The client keeps the zone handling (post days in the bundle's zone), the
+// loose-post filter (a post that is an item of a read plan is never loose, and
+// a dated post is kept when its day in the zone is in the range), the order
+// (starts_on, then id) and mergeDraftRows. Approvers (onlyShared) read shared
+// plans only. Never throws.
 
 import type { Client, Result } from '@srtdio/rpc';
-import { abortable } from '@/lib/chat-reads';
 import {
-  PLAN_COLUMNS,
-  readBundlesAlongside,
-  readPlanThumbs,
-  type PlanBundle,
-  type PlanItemRow,
-  type PlanQuery,
-  type PlanRow,
-  type PlanTable,
-  type PlanThumbs,
-  type SelectResult,
-} from '@/lib/chat/plans';
+  readPlanBundleRpc,
+  type PlanBundleCursor,
+  type PlanBundleRead,
+} from '@/lib/chat/plan-bundle';
+import { bundlesOfRead, type PlanBundle, type PlanThumbs } from '@/lib/chat/plans';
 import type { LoosePost } from '@/lib/plan-tab';
-import { addCivilDays } from '@/lib/list-sort';
 import { civilDayOf } from '@/lib/plan-week';
+import { safeTimeZone } from '@/lib/time';
 
-/** Rows per page of a list read (PostgREST's max rows). */
-export const PLAN_TAB_PAGE = 1000;
+/** Range pages one desktop read follows at most (12 plans each). */
+export const PLAN_TAB_RANGE_PAGES = 20;
 
 /** What the Plan tab shows. */
 export interface PlanTabData {
-  /** Plans read (overlapping the range, or all), with their items, reviews and posts. */
+  /** Plans read (overlapping the range, or the pages so far), in starts_on then id order. */
   bundles: PlanBundle[];
   /** Dated posts in the range that are in no read plan (desktop only). */
   posts: LoosePost[];
-  /** Item and post tiles (a failed tile read leaves these empty). */
+  /** Item and post tiles. */
   thumbs: PlanThumbs;
   /** Whether the workspace holds any plan the viewer can read (the zero state). */
   anyPlan: boolean;
+  /** The workspace zone, from the bundle (post days and the loose-post filter use it). */
+  timeZone: string;
+  /** The phone list's next page (Load more); null when every plan is in, always null for a range. */
+  nextCursor: PlanBundleCursor | null;
 }
 
-interface PlanTabReadInput {
+export interface PlanTabReadInput {
   workspaceId: string;
-  /** The visible days (inclusive); null reads every plan and no posts (the phone list). */
+  /** The visible days (inclusive); null reads every plan, a page at a time, and no posts (the phone list). */
   range: { start: string; end: string } | null;
-  timeZone: string;
   /** Approvers: shared plans only. */
   onlyShared: boolean;
+  /** The phone list: the page after this cursor (Load more). */
+  before?: PlanBundleCursor | null;
 }
 
 function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
 }
 
-/** Every page of a list read: pages of PLAN_TAB_PAGE rows until one comes back short. */
-async function readAllPages<T>(
-  build: () => PlanQuery,
-  label: string,
-  signal: AbortSignal | undefined,
-): Promise<Result<T[]>> {
-  const rows: T[] = [];
-  for (let from = 0; ; from += PLAN_TAB_PAGE) {
-    const res = (await abortable(
-      build().range(from, from + PLAN_TAB_PAGE - 1),
-      signal,
-    )) as SelectResult;
-    if (res.error !== null) return fail(`${label}: ${res.error.message}`);
-    const page = (res.data ?? []) as T[];
-    rows.push(...page);
-    if (page.length < PLAN_TAB_PAGE) return { ok: true, data: rows };
-  }
-}
-
-function plansQuery(client: Client, input: PlanTabReadInput): PlanQuery {
-  let query = (client.from('plans') as unknown as PlanTable)
-    .select(PLAN_COLUMNS)
-    .eq('workspace_id', input.workspaceId)
-    .is('deleted_at', null);
-  if (input.onlyShared) query = query.eq('audience', 'client');
-  if (input.range !== null) {
-    query = query.lte('starts_on', input.range.end).gte('ends_on', input.range.start);
-  }
-  return query.order('starts_on', { ascending: true }).order('id', { ascending: true });
-}
-
-/** Whether any plan exists for the viewer: one row at most. */
-async function readAnyPlan(
-  client: Client,
-  input: PlanTabReadInput,
-  signal: AbortSignal | undefined,
-): Promise<Result<boolean>> {
-  let query = (client.from('plans') as unknown as PlanTable)
-    .select('id')
-    .eq('workspace_id', input.workspaceId)
-    .is('deleted_at', null);
-  if (input.onlyShared) query = query.eq('audience', 'client');
-  const res = (await abortable(query.limit(1), signal)) as SelectResult;
-  if (res.error !== null) return fail(`plans: ${res.error.message}`);
-  return { ok: true, data: ((res.data ?? []) as unknown[]).length > 0 };
-}
-
-/**
- * The posts dated in the range, read a day wider on each side (any zone's
- * noon lands inside) and kept when their day in the workspace zone is in it.
- */
-async function readDatedPosts(
-  client: Client,
-  input: PlanTabReadInput & { range: { start: string; end: string } },
-  signal: AbortSignal | undefined,
-): Promise<Result<LoosePost[]>> {
-  const { start, end } = input.range;
-  const rows = await readAllPages<LoosePost>(
-    () =>
-      (client.from('posts') as unknown as PlanTable)
-        .select('id, title, stage, target_date')
-        .eq('workspace_id', input.workspaceId)
-        .is('deleted_at', null)
-        .gte('target_date', `${addCivilDays(start, -1)}T00:00:00Z`)
-        .lte('target_date', `${addCivilDays(end, 1)}T23:59:59Z`)
-        .order('target_date', { ascending: true })
-        .order('id', { ascending: true }),
-    'posts',
-    signal,
+/** Bundles in the tab's order: starts_on, then id. Pure. */
+function byStart(a: PlanBundle, b: PlanBundle): number {
+  return (
+    a.plan.starts_on.localeCompare(b.plan.starts_on) || (a.plan.id < b.plan.id ? -1 : a.plan.id > b.plan.id ? 1 : 0)
   );
-  if (!rows.ok) return rows;
-  return {
-    ok: true,
-    data: rows.data.filter((p) => {
-      const day = civilDayOf(p.target_date, input.timeZone);
-      return day !== null && day >= start && day <= end;
-    }),
-  };
 }
 
-/** The posts that are items of the read plans. Pure. */
+/** The posts that are items of these plans. Pure. */
 function plannedPostIds(bundles: readonly PlanBundle[]): Set<string> {
   return new Set(
     bundles.flatMap((b) => b.items.flatMap((i) => (i.post_id !== null ? [i.post_id] : []))),
   );
 }
 
+/** Dated posts whose day in the zone is in the range and that no read plan holds. Pure. */
+function loosePosts(
+  posts: readonly LoosePost[],
+  bundles: readonly PlanBundle[],
+  range: { start: string; end: string } | null,
+  timeZone: string,
+): LoosePost[] {
+  if (range === null) return [];
+  const planned = plannedPostIds(bundles);
+  const seen = new Set<string>();
+  return posts.filter((p) => {
+    if (planned.has(p.id) || seen.has(p.id)) return false;
+    seen.add(p.id);
+    const day = civilDayOf(p.target_date, timeZone);
+    return day !== null && day >= range.start && day <= range.end;
+  });
+}
+
 /**
- * The Plan tab's read (see the header): plans, the any-plan probe and the
- * dated posts together; then the items; then reviews, stages and tiles
- * together. Never throws.
+ * One tab-mode answer as the tab's data: bundles in the bundle's zone, in
+ * starts_on then id order; the loose posts of `range`. Pure.
+ */
+export function planTabDataOf(
+  read: PlanBundleRead,
+  range: { start: string; end: string } | null,
+): PlanTabData {
+  const timeZone = safeTimeZone(read.timezone);
+  const bundles = [...bundlesOfRead(read, timeZone).values()].sort(byStart);
+  return {
+    bundles,
+    posts: loosePosts(read.loosePosts, bundles, range, timeZone),
+    thumbs: read.thumbs,
+    anyPlan: read.anyPlan || bundles.length > 0,
+    timeZone,
+    nextCursor: read.nextCursor,
+  };
+}
+
+/**
+ * Append a later page to what is shown: plans already shown are kept (no
+ * duplicates by id), the order stays starts_on then id, tiles are merged, the
+ * loose posts are re-filtered against every plan, and the cursor is the later
+ * page's. Pure.
+ */
+export function mergePlanTabPages(
+  shown: PlanTabData,
+  next: PlanTabData,
+  range: { start: string; end: string } | null = null,
+): PlanTabData {
+  const have = new Set(shown.bundles.map((b) => b.plan.id));
+  const bundles = [...shown.bundles, ...next.bundles.filter((b) => !have.has(b.plan.id))].sort(
+    byStart,
+  );
+  const timeZone = next.timeZone;
+  return {
+    bundles,
+    posts:
+      range !== null
+        ? loosePosts([...shown.posts, ...next.posts], bundles, range, timeZone)
+        : [...shown.posts, ...next.posts].filter(
+            (p, i, all) =>
+              !plannedPostIds(bundles).has(p.id) && all.findIndex((q) => q.id === p.id) === i,
+          ),
+    thumbs: {
+      posts: { ...shown.thumbs.posts, ...next.thumbs.posts },
+      concepts: { ...shown.thumbs.concepts, ...next.thumbs.concepts },
+    },
+    anyPlan: shown.anyPlan || next.anyPlan,
+    timeZone,
+    nextCursor: next.nextCursor,
+  };
+}
+
+/**
+ * The Plan tab's read (see the header). The phone list: one call (the page
+ * after `before`, when given). A range: one call per page until the cursor
+ * runs out (at most PLAN_TAB_RANGE_PAGES). Never throws.
  */
 export async function readPlanTab(
   client: Client,
@@ -156,53 +155,28 @@ export async function readPlanTab(
 ): Promise<Result<PlanTabData>> {
   try {
     const range = input.range;
-    const [plans, any, dated] = await Promise.all([
-      readAllPages<PlanRow>(() => plansQuery(client, input), 'plans', signal),
-      range !== null
-        ? readAnyPlan(client, input, signal)
-        : Promise.resolve<Result<boolean> | null>(null),
-      range !== null
-        ? readDatedPosts(client, { ...input, range }, signal)
-        : Promise.resolve<Result<LoosePost[]>>({ ok: true, data: [] }),
-    ]);
-    if (!plans.ok) return plans;
-    if (any !== null && !any.ok) return any;
-    if (!dated.ok) return dated;
-    // The tiles need only the items (and the loose posts, already in), so they
-    // load alongside the reviews and post stages: one round trip less.
-    const looseOf = (items: readonly PlanItemRow[]): LoosePost[] => {
-      const planned = new Set(items.flatMap((i) => (i.post_id !== null ? [i.post_id] : [])));
-      return dated.data.filter((p) => !planned.has(p.id));
-    };
-    const read = await readBundlesAlongside(client, plans.data, signal, input.timeZone, (items) =>
-      readPlanThumbs(
+    let before = input.before ?? null;
+    let data: PlanTabData | null = null;
+    for (let page = 0; page < PLAN_TAB_RANGE_PAGES; page += 1) {
+      const read = await readPlanBundleRpc(
         client,
-        [
-          ...items.flatMap((i) => (i.post_id !== null ? [i.post_id] : [])),
-          ...looseOf(items).map((p) => p.id),
-        ],
-        items.flatMap((i) => (i.kind === 'concept' ? [i.id] : [])),
+        {
+          workspaceId: input.workspaceId,
+          range,
+          onlyShared: input.onlyShared,
+          before,
+        },
         signal,
-      ),
-    );
-    if (!read.ok) return read;
-    const bundles = plans.data.flatMap((p) => {
-      const b = read.data.bundles.get(p.id);
-      return b !== undefined ? [b] : [];
-    });
-    const planned = plannedPostIds(bundles);
-    const posts = dated.data.filter((p) => !planned.has(p.id));
-    const thumbs = read.data.alongside;
-    return {
-      ok: true,
-      data: {
-        bundles,
-        posts,
-        // A failed tile read keeps the tab (tiles show their fallbacks).
-        thumbs: thumbs.ok ? thumbs.data : { posts: {}, concepts: {} },
-        anyPlan: any !== null ? any.data || bundles.length > 0 : bundles.length > 0,
-      },
-    };
+      );
+      if (!read.ok) return read;
+      const next = planTabDataOf(read.data, range);
+      data = data === null ? next : mergePlanTabPages(data, next, range);
+      // The phone list pages on Load more; a range reads on while more overlap it.
+      if (range === null || next.nextCursor === null) break;
+      before = next.nextCursor;
+    }
+    if (data === null) return fail('plan_bundle_read: no page');
+    return { ok: true, data: range !== null ? { ...data, nextCursor: null } : data };
   } catch (error) {
     return fail(String(error));
   }

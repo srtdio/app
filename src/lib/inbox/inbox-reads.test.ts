@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Database } from '@srtdio/schemas';
-import {
-  enrichNewRows,
-  fetchInboxSince,
-  fetchNewestInboxAt,
-} from '@/lib/inbox/inbox-reads';
+import { enrichNewRows, fetchInboxSince, fetchNewestInboxAt } from '@/lib/inbox/inbox-reads';
 import { toastFromEnriched, type InboxRow } from '@/lib/inbox/inbox-live';
 import { resetMentionNames } from '@/lib/chat/mentions';
 import { resetServerClock } from '@/lib/chat/bounded-window';

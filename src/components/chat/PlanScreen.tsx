@@ -1037,13 +1037,16 @@ export function PlanScreen(props: {
   };
   const { read, reload } = useScreenRead<PlanScreenData>(
     props.open,
-    `${planId}:${timeZone}:${sentInChannelId ?? ''}`,
+    `${planId}:${workspaceId ?? ''}:${timeZone}:${sentInChannelId ?? ''}`,
+    // One plan_bundle_read (the plan, its rows, tiles, Also in and the last
+    // send into this chat), then only the approver names the members lack.
     (signal) =>
       readPlanScreen(supabase, planId, signal, {
         timeZone,
         approvers: approverIds,
         readNames: (ids, s) => readApproverNames(ids, s),
         sentInChannelId,
+        ...(workspaceId !== null ? { workspaceId } : {}),
       }),
   );
   const [itemId, setItemId] = useState<string | null>(props.initialItemId ?? null);
