@@ -9,7 +9,7 @@
 // failure (or storage that throws) surfaces the error instead, so it can never
 // loop.
 
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
+import { createElement, lazy, useState, type ComponentType, type ReactElement } from 'react';
 
 export const CHUNK_RELOAD_KEY = 'sorted:chunk-reload';
 
@@ -189,17 +189,71 @@ export function withChunkReload<T>(
     });
 }
 
+// Each page's import() goes through one memoized loader (chunkLoader), which
+// records the module once it lands. A route whose module has already landed
+// (the boot start in main.tsx, a nav press, the idle prefetch) renders it
+// directly on mount instead of through React.lazy, whose first render always
+// suspends for a tick even on a loaded module: the Suspense fallback never
+// flashes for a page whose code is already here.
+const loadedModules = new WeakMap<() => Promise<unknown>, unknown>();
+
+/**
+ * One page chunk's loader: the import() runs once (a failure is forgotten, so
+ * the next call retries) and the landed module is recorded for loadedChunk.
+ */
+export function chunkLoader<M>(load: () => Promise<M>): () => Promise<M> {
+  let pending: Promise<M> | null = null;
+  const loader = (): Promise<M> => {
+    if (pending === null) {
+      const started = load().then(
+        (module) => {
+          loadedModules.set(loader, module);
+          return module;
+        },
+        (err: unknown) => {
+          if (pending === started) pending = null;
+          throw err;
+        },
+      );
+      pending = started;
+    }
+    return pending;
+  };
+  return loader;
+}
+
+/** The module a chunkLoader already loaded, or undefined (not asked, running or failed). */
+export function loadedChunk<M>(load: () => Promise<M>): M | undefined {
+  return loadedModules.get(load) as M | undefined;
+}
+
 /**
  * React.lazy over a dynamic import, with the one-time stale chunk reload.
  * `pick` names the component in the loaded module (pages use named exports).
+ * When `load` is a chunkLoader whose module has landed, a mount renders the
+ * page directly (no Suspense tick); the choice is made once per mount, so a
+ * mounted page never swaps component type (no remount).
  */
 export function lazyRoute<M, P extends object>(
   load: () => Promise<M>,
   pick: (module: M) => ComponentType<P>,
-): LazyExoticComponent<ComponentType<P>> {
-  return lazy<ComponentType<P>>(
-    withChunkReload(() => load().then((module) => ({ default: pick(module) }))),
-  );
+): ComponentType<P> {
+  let picked: ComponentType<P> | undefined;
+  const pickOnce = (module: M): ComponentType<P> => {
+    picked ??= pick(module);
+    return picked;
+  };
+  const Lazy = lazy<ComponentType<P>>(
+    withChunkReload(() => load().then((module) => ({ default: pickOnce(module) }))),
+  ) as unknown as ComponentType<P>;
+  function LazyRoute(props: P): ReactElement {
+    const [Component] = useState<ComponentType<P>>(() => {
+      const module = loadedChunk(load);
+      return module === undefined ? Lazy : pickOnce(module);
+    });
+    return createElement(Component, props);
+  }
+  return LazyRoute;
 }
 
 /** Run a task once the browser is idle (setTimeout fallback); returns a cancel. */
@@ -212,14 +266,126 @@ export function whenIdle(task: () => void, timeoutMs = 4000): () => void {
   return () => window.clearTimeout(id);
 }
 
-/** The lazy signed-in shell unit (App.tsx renders it) and the Pipeline page chunk. */
-export const loadShell = () =>
+// Every signed-in page's chunk loader, one named function each: App.tsx's lazy
+// routes, the nav press prefetch and the idle prefetch (src/lib/route-prefetch.ts)
+// and the boot start below all call the same function, so the chunk is asked
+// for once and the route renders it directly once it has landed. They live
+// here (not in route-prefetch.ts) because main.tsx starts them at boot and
+// this module carries no logger or Sentry.
+
+/** The lazy signed-in shell unit (App.tsx renders it). */
+export const loadShell = chunkLoader(() =>
   Promise.all([
     import('@/lib/workspace-context'),
     import('@/lib/chat'),
     import('@/components/shell/AppLayout'),
-  ]);
-export const loadPipeline = () => import('@/components/pages/PipelinePage');
+  ]),
+);
+export const loadPipeline = chunkLoader(() => import('@/components/pages/PipelinePage'));
+export const loadChat = chunkLoader(() => import('@/components/pages/ChatPage'));
+export const loadBriefs = chunkLoader(() => import('@/components/pages/BriefsPage'));
+export const loadAssets = chunkLoader(() => import('@/components/pages/AssetsPage'));
+export const loadPlanTab = chunkLoader(() => import('@/components/pages/PlanTabPage'));
+export const loadPlan = chunkLoader(() => import('@/components/pages/PlanPage'));
+/** The tiny layout Activity and the Plan tab render in (without the Plan screen). */
+export const loadPlanBeside = chunkLoader(() => import('@/components/pages/PlanBesideLayout'));
+export const loadPostDetail = chunkLoader(() => import('@/components/pages/PostDetailPage'));
+export const loadBriefDetail = chunkLoader(() => import('@/components/pages/BriefDetailPage'));
+export const loadSettings = chunkLoader(() => import('@/components/pages/SettingsPage'));
+export const loadHelp = chunkLoader(() => import('@/components/pages/HelpPage'));
+export const loadRecentlyDeleted = chunkLoader(
+  () => import('@/components/pages/RecentlyDeletedPage'),
+);
+export const loadNotifications = chunkLoader(() => import('@/components/pages/NotificationsPage'));
+export const loadPostRefResolver = chunkLoader(() => import('@/components/refs/PostRefResolver'));
+export const loadBriefRefResolver = chunkLoader(
+  () => import('@/components/refs/BriefRefResolver'),
+);
+
+type ChunkLoad = () => Promise<unknown>;
+
+/**
+ * The chunks a signed-in path renders inside the shell (App.tsx's routes), or
+ * [] for a path outside it. An unknown path redirects to /pipeline. Pure.
+ */
+export function routeChunkLoaders(pathname: string): readonly ChunkLoad[] {
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  const [, first = '', second] = path.split('/');
+  const detail = second !== undefined && second !== '';
+  switch (first) {
+    case '':
+    case 'pipeline':
+      return [loadPipeline];
+    case 'posts':
+      return detail ? [loadPostDetail] : [loadPipeline];
+    case 'p':
+      return detail ? [loadPostRefResolver] : [loadPipeline];
+    case 'briefs':
+      return detail ? [loadBriefDetail] : [loadBriefs];
+    case 'b':
+      return detail ? [loadBriefRefResolver] : [loadPipeline];
+    case 'chat':
+      return [loadChat];
+    case 'notifications':
+    case 'activity':
+      return [loadPlanBeside, loadNotifications];
+    case 'plans':
+      return [loadPlanBeside, loadNotifications, loadPlan];
+    case 'plan':
+      return detail ? [loadPlanBeside, loadPlanTab, loadPlan] : [loadPlanBeside, loadPlanTab];
+    case 'assets':
+      return [loadAssets];
+    case 'settings':
+      return [loadSettings];
+    case 'help':
+      return [loadHelp];
+    case 'deleted':
+      return [loadRecentlyDeleted];
+    case 'signin':
+    case 'signup':
+    case 'auth':
+    case 'legal':
+    case 'unsubscribe':
+    case 'invite':
+    case 'test':
+    case 'demo':
+      return [];
+    default:
+      return [loadPipeline];
+  }
+}
+
+/**
+ * Boot with a stored session (main.tsx): start the shell unit and the current
+ * route's chunks now, in parallel with the app chunk and getSession, instead
+ * of after the session resolves and the shell mounts. Code only: import() runs
+ * no data fetch. A failure is swallowed (the route's own lazy load retries and
+ * owns the reload guard).
+ */
+export function startBootChunks(pathname: string): void {
+  const route = routeChunkLoaders(pathname);
+  // Sign in, sign up, invite and the other outside pages never mount the shell first.
+  if (route.length === 0) return;
+  for (const load of [loadShell, ...route]) {
+    try {
+      void load().catch(() => undefined);
+    } catch {
+      // A loader that throws synchronously is the same harmless miss.
+    }
+  }
+}
+
+/** True once every chunk the path renders has landed (a path with none is ready). */
+export function routeChunksLoaded(pathname: string): boolean {
+  return routeChunkLoaders(pathname).every((load) => loadedChunk(load) !== undefined);
+}
+
+/** Settles (never rejects) once every chunk the path renders has landed or failed. */
+export function whenRouteChunksSettle(pathname: string): Promise<void> {
+  return Promise.allSettled(routeChunkLoaders(pathname).map((load) => load())).then(
+    () => undefined,
+  );
+}
 
 /** True when the browser asks to save data (Network Information API, where present). */
 function saveData(): boolean {

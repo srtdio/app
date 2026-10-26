@@ -6,7 +6,7 @@
 // surface can say "Couldn't check your access." rather than hide an action.
 
 import type { Client } from '@srtdio/rpc';
-import { peekRead, readKey, sharedRead } from '@/lib/session-read';
+import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
 
 export type MemberRoleRead = { ok: true; role: string | null } | { ok: false };
 
@@ -58,3 +58,12 @@ export function peekSharedMemberRole(
   return peekRead<MemberRoleRead>(roleKey(userId, workspaceId));
 }
 
+
+/**
+ * Forget this (user, workspace)'s role read, running or settled. A caller that
+ * gave up on a hung read (viewer-role's 5s bound) drops it, so the next mount
+ * starts a new read instead of joining the one that never answered.
+ */
+export function dropSharedMemberRole(workspaceId: string, userId: string): void {
+  invalidateReads(roleKey(userId, workspaceId));
+}

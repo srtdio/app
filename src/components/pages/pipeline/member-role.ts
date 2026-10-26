@@ -5,32 +5,22 @@
 // the sheet can say "Couldn't check your access." and offer Retry.
 
 import type { Client } from '@srtdio/posts';
+import { readSharedMemberRole, type MemberRoleRead } from '@/lib/member-role';
 
 /** The role read's lifecycle: unknown while loading, failed, or settled. */
 export type RoleStatus = 'loading' | 'error' | 'ready';
 
-type MemberRoleRead = { ok: true; role: string | null } | { ok: false };
-
-/** Read the viewer's active role; a PostgREST error or a throw is `{ ok: false }`. */
-export async function readMemberRole(
+/**
+ * Read the viewer's active role; a PostgREST error or a throw is `{ ok: false }`.
+ * The read is the session-shared one (src/lib/member-role.ts): a role Post
+ * detail, Assets, Plan or chat read in this window answers here with no request.
+ */
+export function readMemberRole(
   client: Client,
   workspaceId: string,
   userId: string,
 ): Promise<MemberRoleRead> {
-  try {
-    const res = await client
-      .from('workspace_members')
-      .select('role')
-      .eq('workspace_id', workspaceId)
-      .eq('user_id', userId)
-      .eq('active', true)
-      .maybeSingle();
-    if (res.error) return { ok: false };
-    if (res.data === null) return { ok: true, role: null };
-    return { ok: true, role: (res.data as { role: string | null }).role };
-  } catch {
-    return { ok: false };
-  }
+  return readSharedMemberRole(client, workspaceId, userId);
 }
 
 /** The line the move sheet shows when the role read failed. */

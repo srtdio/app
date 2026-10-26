@@ -28,6 +28,12 @@ const { state, storage, mounts, passthrough, nothing } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+// The first page's chunk counts as landed: the shell never waits on a real import here.
+vi.mock('@/lib/chunk-reload', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/chunk-reload')>()),
+  routeChunksLoaded: () => true,
+  whenRouteChunksSettle: async () => undefined,
+}));
 vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: null, loading: false }),
 }));

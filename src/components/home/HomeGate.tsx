@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSession } from '@/lib/session-context';
+import { SessionLoading } from '@/components/auth/RouteGuards';
 
 // Lazy so the app bundle never carries the homepage, its styles or its fonts.
 const HomePage = lazy(() => import('./HomePage'));
@@ -22,7 +23,11 @@ function Blank() {
 export function HomeGate() {
   const { session, loading } = useSession();
   const route = homeRouteFor({ loading, signedIn: Boolean(session) });
-  if (route === 'loading') return <Blank />;
+  // The app boots on / only with a stored session or an auth callback; the
+  // canvas there is the app's (--bg), so the wait is the app's one loader
+  // (same element and colour as every other boot wait), not the homepage's
+  // panel-coloured blank.
+  if (route === 'loading') return <SessionLoading />;
   if (route === 'app') return <Navigate to="/pipeline" replace />;
   return (
     <Suspense fallback={<Blank />}>

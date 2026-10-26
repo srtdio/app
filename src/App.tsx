@@ -7,11 +7,20 @@ import { SessionProvider } from '@/lib/session-context';
 import { lazyRoute, loadShell, whenIdle } from '@/lib/chunk-reload';
 import {
   loadAssets,
+  loadBriefDetail,
+  loadBriefRefResolver,
   loadBriefs,
   loadChat,
+  loadHelp,
+  loadNotifications,
   loadPipeline,
   loadPlan,
   loadPlanTab,
+  loadPostDetail,
+  loadPostRefResolver,
+  loadRecentlyDeleted,
+  loadSettings,
+  prefetchChunks,
 } from '@/lib/route-prefetch';
 import { warmMonoFont } from '@/lib/fonts';
 
@@ -20,53 +29,33 @@ warmMonoFont();
 
 // Every page is its own chunk (React.lazy), so sign in, sign up and invite
 // never download the shell, chat, pipeline, posts, plan, assets or briefs.
-// Each loader is a named function so the idle prefetch below and the nav
-// prefetch (src/lib/route-prefetch.ts) warm the exact chunk the route later
-// asks for.
+// Each loader is a named function (src/lib/chunk-reload.ts, re-exported by
+// src/lib/route-prefetch.ts) so the boot start (main.tsx), the idle prefetch
+// below and the press prefetch warm the exact chunk the route later asks for,
+// and a route whose chunk has landed renders with no Suspense tick.
 
 const PipelinePage = lazyRoute(loadPipeline, (m) => m.PipelinePage);
 const ChatPage = lazyRoute(loadChat, (m) => m.ChatPage);
-const PostDetailPage = lazyRoute(
-  () => import('@/components/pages/PostDetailPage'),
-  (m) => m.PostDetailPage,
-);
+const PostDetailPage = lazyRoute(loadPostDetail, (m) => m.PostDetailPage);
 const BriefsPage = lazyRoute(loadBriefs, (m) => m.BriefsPage);
-const BriefDetailPage = lazyRoute(
-  () => import('@/components/pages/BriefDetailPage'),
-  (m) => m.BriefDetailPage,
-);
+const BriefDetailPage = lazyRoute(loadBriefDetail, (m) => m.BriefDetailPage);
 const AssetsPage = lazyRoute(loadAssets, (m) => m.AssetsPage);
-const RecentlyDeletedPage = lazyRoute(
-  () => import('@/components/pages/RecentlyDeletedPage'),
-  (m) => m.RecentlyDeletedPage,
-);
-const SettingsPage = lazyRoute(
-  () => import('@/components/pages/SettingsPage'),
-  (m) => m.SettingsPage,
-);
-const HelpPage = lazyRoute(
-  () => import('@/components/pages/HelpPage'),
-  (m) => m.HelpPage,
-);
-const NotificationsPage = lazyRoute(
-  () => import('@/components/pages/NotificationsPage'),
-  (m) => m.NotificationsPage,
-);
+const RecentlyDeletedPage = lazyRoute(loadRecentlyDeleted, (m) => m.RecentlyDeletedPage);
+const SettingsPage = lazyRoute(loadSettings, (m) => m.SettingsPage);
+const HelpPage = lazyRoute(loadHelp, (m) => m.HelpPage);
+const NotificationsPage = lazyRoute(loadNotifications, (m) => m.NotificationsPage);
 const PlanTabPage = lazyRoute(loadPlanTab, (m) => m.PlanTabPage);
-const PlanBesideLayout = lazyRoute(loadPlan, (m) => m.PlanBesideLayout);
+const PlanBesideLayout = lazyRoute(
+  () => import('@/components/pages/PlanBesideLayout'),
+  (m) => m.PlanBesideLayout,
+);
 const PlanPage = lazyRoute(loadPlan, (m) => m.PlanPage);
 const ActivityRedirect = lazyRoute(
   () => import('@/components/shell/ActivityRedirect'),
   (m) => m.ActivityRedirect,
 );
-const PostRefResolver = lazyRoute(
-  () => import('@/components/refs/PostRefResolver'),
-  (m) => m.PostRefResolver,
-);
-const BriefRefResolver = lazyRoute(
-  () => import('@/components/refs/BriefRefResolver'),
-  (m) => m.BriefRefResolver,
-);
+const PostRefResolver = lazyRoute(loadPostRefResolver, (m) => m.PostRefResolver);
+const BriefRefResolver = lazyRoute(loadBriefRefResolver, (m) => m.BriefRefResolver);
 const SignInPage = lazyRoute(
   () => import('@/components/auth/SignInPage'),
   (m) => m.SignInPage,
@@ -119,13 +108,14 @@ const WorkspaceLayout = lazyRoute(
     },
 );
 
-/** Once the signed-in shell is idle, warm the Pipeline and Chat chunks (code only, no data). */
+/**
+ * Once the signed-in shell has painted and the browser is idle, warm every
+ * page chunk the shell can open (route-prefetch's IDLE_PREFETCH_LOADERS), so
+ * a later tap renders its page with no chunk wait. Code only, no data.
+ */
 function prefetchShellPages(): () => void {
-  return whenIdle(() => {
-    // A failed prefetch is harmless: the route's own lazy load retries and recovers.
-    void loadPipeline().catch(() => undefined);
-    void loadChat().catch(() => undefined);
-  });
+  // A failed prefetch is harmless: the route's own lazy load retries and recovers.
+  return whenIdle(() => prefetchChunks());
 }
 
 /** A plan opened beside Activity (Activity plan rows); Back falls back to /notifications. */

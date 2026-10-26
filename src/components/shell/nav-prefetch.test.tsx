@@ -4,9 +4,15 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { loaders, warn } = vi.hoisted(() => ({
-  loaders: { pipeline: vi.fn(async () => ({})) },
+const { loaders, warn, routeData } = vi.hoisted(() => ({
+  loaders: {
+    pipeline: vi.fn(async () => ({})),
+    settings: vi.fn(async () => ({})),
+    plan: vi.fn(async () => ({})),
+    notifications: vi.fn(async () => ({})),
+  },
   warn: vi.fn(),
+  routeData: vi.fn(),
 }));
 
 // The Pipeline loader is the one App.tsx's lazy route uses (chunk-reload); a
@@ -14,6 +20,14 @@ const { loaders, warn } = vi.hoisted(() => ({
 vi.mock('@/lib/chunk-reload', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chunk-reload')>()),
   loadPipeline: loaders.pipeline,
+  loadSettings: loaders.settings,
+  loadPlanBeside: loaders.plan,
+  loadNotifications: loaders.notifications,
+}));
+// The data half of a press: observed, not run (its starters read Supabase).
+vi.mock('@/lib/route-data', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/route-data')>()),
+  prefetchRouteData: routeData,
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { warn, error: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -25,7 +39,20 @@ vi.mock('@/lib/chat/chat-store', () => ({ selectTotalUnread: () => 0 }));
 
 import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Sidebar } from '@/components/shell/Sidebar';
-import { NAV_ROUTE_LOADERS, prefetchRoute, resetRoutePrefetch } from '@/lib/route-prefetch';
+import {
+  IDLE_PREFETCH_LOADERS,
+  NAV_ROUTE_LOADERS,
+  activityPrefetchProps,
+  loadBriefDetail,
+  loadBriefRefResolver,
+  loadHelp,
+  loadPostDetail,
+  loadPostRefResolver,
+  loadRecentlyDeleted,
+  prefetchRoute,
+  resetRoutePrefetch,
+  settingsPrefetchProps,
+} from '@/lib/route-prefetch';
 import { PRIMARY_NAV } from '@/components/shell/nav';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -57,7 +84,8 @@ function press(el: Element, type: 'pointerdown' | 'touchstart'): void {
 
 beforeEach(() => {
   resetRoutePrefetch();
-  loaders.pipeline.mockClear();
+  for (const load of Object.values(loaders)) load.mockClear();
+  routeData.mockClear();
   warn.mockClear();
 });
 
@@ -127,5 +155,41 @@ describe('nav press prefetch', () => {
     press(pipeline, 'touchstart');
     press(pipeline, 'pointerdown');
     expect(loaders.pipeline).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('idle prefetch of every remaining route chunk', () => {
+  it('lists every page the shell opens, each through its named loader', () => {
+    for (const load of [
+      loaders.settings,
+      loaders.plan,
+      loaders.notifications,
+      loaders.pipeline,
+      loadHelp,
+      loadRecentlyDeleted,
+      loadBriefDetail,
+      loadPostDetail,
+      loadPostRefResolver,
+      loadBriefRefResolver,
+    ]) {
+      expect(IDLE_PREFETCH_LOADERS).toContain(load);
+    }
+  });
+});
+
+describe('bell and avatar press prefetch', () => {
+  it('the bell press loads the Activity chunk and starts its first reads', () => {
+    const props = activityPrefetchProps();
+    act(() => props.onPointerDown());
+    expect(loaders.notifications).toHaveBeenCalledTimes(1);
+    expect(loaders.plan).toHaveBeenCalledTimes(1);
+    expect(routeData).toHaveBeenCalledWith('/notifications');
+  });
+
+  it('the avatar press loads the Settings chunk and starts the members read', () => {
+    const props = settingsPrefetchProps();
+    act(() => props.onTouchStart());
+    expect(loaders.settings).toHaveBeenCalledTimes(1);
+    expect(routeData).toHaveBeenCalledWith('/settings');
   });
 });

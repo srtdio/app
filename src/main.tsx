@@ -1,6 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
-import { isGuestHome, isHomeBundlePath, localStorageKeys } from '@/components/home/guest-path';
+import {
+  hasStoredSession,
+  isGuestHome,
+  isHomeBundlePath,
+  localStorageKeys,
+} from '@/components/home/guest-path';
 import {
   APP_STYLESHEET,
   HOME_STYLESHEET,
@@ -8,7 +13,7 @@ import {
   runStaleDeployGuard,
   type StaleDeployWarn,
 } from '@/lib/stale-deploy';
-import { reloadIfStale } from '@/lib/chunk-reload';
+import { reloadIfStale, startBootChunks } from '@/lib/chunk-reload';
 
 // Entry point. Decides synchronously whether "/" is a guest visit; a guest gets
 // the homepage chunk only (no App, router, Supabase, Sentry, Agora or app CSS).
@@ -43,6 +48,11 @@ function ErrorFallback() {
 }
 
 async function bootApp(root: HTMLElement): Promise<void> {
+  // A stored session (supabase-js's sb-*-auth-token key exists; its value is
+  // not read here) means the signed-in shell is next: start its chunk and the
+  // current route's chunk now, in parallel with the app chunk and getSession,
+  // instead of after the session resolves. Code only, no data.
+  if (hasStoredSession(localStorageKeys)) startBootChunks(window.location.pathname);
   // index.css is requested first so its <link> keeps today's cascade order.
   // Each import is destructured where it is made so Rollup can still
   // tree-shake the modules (a bare namespace import would keep all of Sentry).

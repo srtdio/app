@@ -10,11 +10,13 @@
 //
 // Cache: a module-level Map keyed by `${userId}:${workspaceId}`, so one user's
 // members are never served to another. N concurrent callers share one
-// in-flight read. A failed load is not kept (the next mount retries). Signout
-// clears everything; a workspace-data-changed event re-reads in the background;
+// in-flight read. A failed load is not kept (the next mount retries); an entry
+// older than MEMBERS_STALE_MS is absent (the next mount loads, showing loading,
+// not the old list). Signout clears everything; a workspace-data-changed event
+// re-reads in the background for the screens showing the list;
 // refetch() re-reads for every subscriber (the Members panel after a change).
 
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { listMembers } from '@srtdio/workspace';
 import type { Database } from '@srtdio/schemas';
 import type { Result } from '@srtdio/rpc';
@@ -184,7 +186,7 @@ const IDLE: WorkspaceMembersData = EMPTY_DATA;
 /** A key that has never resolved: loading, nothing to show. */
 const LOADING: WorkspaceMembersData = { ...EMPTY_DATA, loading: true };
 
-/** A served entry older than this re-reads in the background on the next mount. */
+/** An entry older than this is absent: the next mount or prefetch loads again. */
 export const MEMBERS_STALE_MS = 60_000;
 
 interface Entry {
@@ -264,17 +266,22 @@ function entryFor(userId: string, workspaceId: string): Entry {
   return entry;
 }
 
-/** A mount: read unless a good, fresh entry is held or a read is running. */
+/**
+ * A mount (or a press prefetch): read unless a good, fresh entry is held or a
+ * read is running. An entry older than MEMBERS_STALE_MS is absent: it reads as
+ * a first load (loading, the old list is not shown), never painting the old
+ * list and then swapping it.
+ */
 export function ensureWorkspaceMembers(userId: string, workspaceId: string): void {
+  if (userId === '' || workspaceId === '') return;
   const key = keyFor(userId, workspaceId);
   const entry = entryFor(userId, workspaceId);
   if (entry.inflight) return;
-  if (entry.loadedAt === null) {
-    // Never loaded, or the last load failed: failures are not cached.
+  if (entry.loadedAt === null || Date.now() - entry.loadedAt > MEMBERS_STALE_MS) {
+    // Never loaded, the last load failed (failures are not cached), or too old.
+    entry.loadedAt = null;
     startRead(key, entry, 'initial');
-    return;
   }
-  if (Date.now() - entry.loadedAt > MEMBERS_STALE_MS) startRead(key, entry, 'background');
 }
 
 /**
@@ -385,7 +392,9 @@ export function useWorkspaceMembers(workspaceId: string | null): WorkspaceMember
   const getSnapshot = useCallback(() => (key === null ? IDLE : snapshotFor(key)), [key]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  useEffect(() => {
+  // Layout effect: a stale entry turns to loading before the first paint, so
+  // the old list is never painted (a fresh or running entry is left as is).
+  useLayoutEffect(() => {
     if (key === null || userId === null || !workspaceId) return;
     ensureWorkspaceMembers(userId, workspaceId);
   }, [key, userId, workspaceId]);

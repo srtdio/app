@@ -30,6 +30,9 @@ import { useRecentRecorder } from '@/lib/recent-items';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
+import { setPrefetchContext } from '@/lib/route-data';
+import { routeChunksLoaded, whenRouteChunksSettle } from '@/lib/chunk-reload';
+import { SessionLoading } from '@/components/auth/RouteGuards';
 
 /** True on /chat with an open thread (?channel=<id>); mobile then drops the shell chrome. */
 export function isThreadRoute(pathname: string, search: URLSearchParams): boolean {
@@ -133,6 +136,36 @@ function AppLayoutBody() {
   // Induction tailors its brief steps to whether the role holds brief.create.
   const briefCreate = useWorkspaceCapability('brief.create');
   const [avatarOpen, setAvatarOpen] = useState(false);
+
+  // Press prefetch for data (src/lib/route-data.ts) needs who and where: set
+  // once the session and the active workspace are known, cleared when either
+  // goes (signout, no workspace, unmount).
+  useEffect(() => {
+    if (userId === null || workspaceId === null) {
+      setPrefetchContext(null);
+      return;
+    }
+    setPrefetchContext({ userId, workspaceId });
+    return () => setPrefetchContext(null);
+  }, [userId, workspaceId]);
+
+  // The first page's chunk (started at boot by main.tsx): the full-screen
+  // loader stays up until it has landed, so boot shows one loader until the
+  // page and never the shell with a second loader inside main. Only the first
+  // mount waits; later navigations are the routes' own business.
+  // The path at mount only: a later path never re-holds the shell.
+  const [firstPath] = useState(pathname);
+  const [firstRouteReady, setFirstRouteReady] = useState(() => routeChunksLoaded(firstPath));
+  useEffect(() => {
+    if (firstRouteReady) return;
+    let active = true;
+    void whenRouteChunksSettle(firstPath).then(() => {
+      if (active) setFirstRouteReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [firstRouteReady, firstPath]);
 
   // Email deep-link: ?w={workspaceId} sets the active workspace before the entity
   // route renders. Fired once per distinct w via a ref guard (no setSearchParams
@@ -246,12 +279,10 @@ function AppLayoutBody() {
   // and its workspace context is frozen at open, then it stays mounted until the
   // finish refetch shows a complete profile and a workspace, so the flow never
   // remounts mid-way or flashes the shell.
+  // The same loader element as the session wait and the chunk fallbacks
+  // (RouteGuards' SessionLoading): boot shows one loader, never a swap.
   if (flow === null && (profileLoading || initialLoading || inductionPending)) {
-    return (
-      <div className="min-h-full w-full grid place-items-center bg-bg">
-        <span className="text-base text-fg-3">Loading</span>
-      </div>
-    );
+    return <SessionLoading />;
   }
   if (onboardingNeeded && flow === null) {
     setFlow({
@@ -333,6 +364,10 @@ function AppLayoutBody() {
       </InductionProvider>
     );
   }
+
+  // The first page's chunk is still on its way: keep the boot loader up
+  // rather than paint the shell around a second loader in main.
+  if (!firstRouteReady) return <SessionLoading />;
 
   // ChatStoreProvider sits inside AppLayout's ToastProvider (it fires toasts) and the router
   // (toast presses navigate), and wraps the whole shell so the always-on chat

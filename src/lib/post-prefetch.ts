@@ -18,21 +18,15 @@
 import type { Client } from '@srtdio/rpc';
 import { getPost, getPostGallery } from '@srtdio/posts';
 import type { GalleryItem, PostDetail, Result } from '@srtdio/posts';
+// The page chunks come from the same named loaders App.tsx's lazy routes use,
+// so a press-loaded chunk renders with no Suspense tick.
+import { loadPostDetail, loadPostRefResolver } from '@/lib/chunk-reload';
 import { logger } from '@/lib/logger';
 import { readSharedMemberRole } from '@/lib/member-role';
 import { getPrefetchContext, type PrefetchContext } from '@/lib/route-data';
 import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
 import { supabase } from '@/lib/supabase';
 import { ensureWorkspaceMembers } from '@/lib/workspace-members';
-
-/** The Post detail page chunk (App.tsx's /posts/:postId lazy route uses this loader). */
-export const loadPostDetail = () => import('@/components/pages/PostDetailPage');
-/** The /p/:ref chunk (it renders PostDetailPage, whose chunk it pulls in alongside). */
-export const loadPostRef = () => import('@/components/refs/PostRefResolver');
-/** The Brief detail page chunk (App.tsx's /briefs/:briefId lazy route). */
-export const loadBriefDetail = () => import('@/components/pages/BriefDetailPage');
-/** The /b/:ref chunk. */
-export const loadBriefRef = () => import('@/components/refs/BriefRefResolver');
 
 /** How long a press's reads may be joined by the open that follows it. */
 export const POST_OPEN_FRESH_MS = 5_000;
@@ -85,7 +79,7 @@ export interface PostOpenDeps {
 const defaultDeps: PostOpenDeps = {
   context: getPrefetchContext,
   client: supabase,
-  loaders: [loadPostRef, loadPostDetail],
+  loaders: [loadPostRefResolver, loadPostDetail],
   now: () => Date.now(),
 };
 

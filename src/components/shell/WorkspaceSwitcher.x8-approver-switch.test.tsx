@@ -14,6 +14,12 @@ const { mockStore, mockState } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+// The first page's chunk counts as landed: the shell never waits on a real import here.
+vi.mock('@/lib/chunk-reload', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/chunk-reload')>()),
+  routeChunksLoaded: () => true,
+  whenRouteChunksSettle: async () => undefined,
+}));
 vi.mock('@/lib/env', () => ({
   env: { VITE_SUPABASE_URL: 'https://sb.test', VITE_SUPABASE_PUBLISHABLE_KEY: 'pk' },
 }));
