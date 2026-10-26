@@ -250,10 +250,12 @@ describe('readPlanBundleRpc', () => {
   });
 
   it('a generated trace id is a uuid v7 when none is given', async () => {
-    const rpc = vi.fn(async (_fn: string, _args: Record<string, unknown>) => ({
-      data: RAW,
-      error: null,
-    }));
+    const rpc = vi.fn<(fn: string, args: Record<string, unknown>) => Promise<unknown>>(
+      async () => ({
+        data: RAW,
+        error: null,
+      }),
+    );
     await readPlanBundleRpc({ rpc } as unknown as Client, { workspaceId: 'ws', planIds: ['a'] });
     const args = rpc.mock.calls[0]?.[1];
     expect(String(args?.p_trace_id)).toMatch(

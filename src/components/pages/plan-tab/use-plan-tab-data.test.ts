@@ -37,7 +37,7 @@ const SHOWN: PlanTabData = {
 
 /** The next page: one plan already shown (b) and one older (a); no cursor after it. */
 function nextPageClient() {
-  const rpc = vi.fn(async (_fn: string, _args: Record<string, unknown>) => ({
+  const rpc = vi.fn<(fn: string, args: Record<string, unknown>) => Promise<unknown>>(async () => ({
     data: {
       timezone: 'UTC',
       plans: [
