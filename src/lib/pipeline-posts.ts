@@ -18,6 +18,7 @@ import { PLAN_CHANGED_EVENT } from '@/lib/chat/plans';
 import { readSharedMemberRole } from '@/lib/member-role';
 import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
+import { generateTraceId } from '@/lib/trace';
 
 /** The board reads the newest posts up to this many (listPosts caps it too). */
 export const PIPELINE_POSTS_LIMIT = 500;
@@ -37,19 +38,29 @@ const started = new Set<string>();
  * The board's posts, joined with a read already running or settled inside the
  * window. `read` is the page's reader (the page passes its own import, so its
  * tests can stand in for the network); the key, not the reader, is what joins.
- * A failed read is never kept.
+ * `traceId` is the load's one trace id, sent as posts_list's p_trace_id (a
+ * fresh uuid_v7 when absent, e.g. the nav-press prefetch); a joined read keeps
+ * the trace of the load that started it. A failed read is never kept.
  */
 export function readPipelinePosts(
   client: Client,
   userId: string,
   workspaceId: string,
   read: typeof listPosts = listPosts,
+  traceId?: string,
 ): Promise<Result<PipelinePost[]>> {
   const key = pipelinePostsKey(userId, workspaceId);
   started.add(key);
-  return sharedRead(key, () => read(client, { workspaceId, limit: PIPELINE_POSTS_LIMIT }), {
-    isOk: (result) => result.ok,
-  });
+  return sharedRead(
+    key,
+    () =>
+      read(client, {
+        workspaceId,
+        limit: PIPELINE_POSTS_LIMIT,
+        traceId: traceId ?? generateTraceId(),
+      }),
+    { isOk: (result) => result.ok },
+  );
 }
 
 /**

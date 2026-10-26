@@ -2,10 +2,12 @@
 // returns the workspace zone, a page of plans (PLAN_BUNDLE_PAGE, newest
 // starts_on first) with their items, draft rows, reviews, post rows and tiles,
 // the posts dated in the range (a day wider each side), and the any-plan probe
-// (the zero state). The phone asks for no range: one page of every plan, no
-// posts, and the next page's cursor (Load more). Desktop asks for a range (the
-// month grid's whole weeks, or the week) and reads every page of it (one call
-// unless more than a page of plans overlaps it), since a grid cannot page.
+// (the zero state). Every read is ONE call for ONE page, and the next page's
+// cursor comes back with it (Load more passes it as `before`). The phone asks
+// for no range: a page of every plan, no posts. The laptop asks for a range
+// (the month grid's whole weeks, or the week): a page of the plans that
+// overlap it and its dated posts; more than a page of plans overlapping it
+// shows the same Load more at the end of the calendar. Nothing loops.
 // The client keeps the zone handling (post days in the bundle's zone), the
 // loose-post filter (a post that is an item of a read plan is never loose, and
 // a dated post is kept when its day in the zone is in the range), the order
@@ -23,14 +25,11 @@ import type { LoosePost } from '@/lib/plan-tab';
 import { civilDayOf } from '@/lib/plan-week';
 import { safeTimeZone } from '@/lib/time';
 
-/** Range pages one desktop read follows at most (12 plans each). */
-export const PLAN_TAB_RANGE_PAGES = 20;
-
 /** What the Plan tab shows. */
 export interface PlanTabData {
   /** Plans read (overlapping the range, or the pages so far), in starts_on then id order. */
   bundles: PlanBundle[];
-  /** Dated posts in the range that are in no read plan (desktop only). */
+  /** Dated posts in the range that are in no read plan (laptop only). */
   posts: LoosePost[];
   /** Item and post tiles. */
   thumbs: PlanThumbs;
@@ -38,17 +37,17 @@ export interface PlanTabData {
   anyPlan: boolean;
   /** The workspace zone, from the bundle (post days and the loose-post filter use it). */
   timeZone: string;
-  /** The phone list's next page (Load more); null when every plan is in, always null for a range. */
+  /** The next page's cursor (Load more); null when every plan (of the range) is in. */
   nextCursor: PlanBundleCursor | null;
 }
 
 export interface PlanTabReadInput {
   workspaceId: string;
-  /** The visible days (inclusive); null reads every plan, a page at a time, and no posts (the phone list). */
+  /** The visible days (inclusive); null reads every plan and no posts (the phone list). */
   range: { start: string; end: string } | null;
   /** Approvers: shared plans only. */
   onlyShared: boolean;
-  /** The phone list: the page after this cursor (Load more). */
+  /** The page after this cursor (Load more). */
   before?: PlanBundleCursor | null;
 }
 
@@ -139,9 +138,8 @@ export function mergePlanTabPages(
 }
 
 /**
- * The Plan tab's read (see the header). The phone list: one call (the page
- * after `before`, when given). A range: one call per page until the cursor
- * runs out (at most PLAN_TAB_RANGE_PAGES). Never throws.
+ * The Plan tab's read (see the header): one call, one page (the page after
+ * `before`, when given), with the next page's cursor. Never throws.
  */
 export async function readPlanTab(
   client: Client,
@@ -149,29 +147,18 @@ export async function readPlanTab(
   signal?: AbortSignal,
 ): Promise<Result<PlanTabData>> {
   try {
-    const range = input.range;
-    let before = input.before ?? null;
-    let data: PlanTabData | null = null;
-    for (let page = 0; page < PLAN_TAB_RANGE_PAGES; page += 1) {
-      const read = await readPlanBundleRpc(
-        client,
-        {
-          workspaceId: input.workspaceId,
-          range,
-          onlyShared: input.onlyShared,
-          before,
-        },
-        signal,
-      );
-      if (!read.ok) return read;
-      const next = planTabDataOf(read.data, range);
-      data = data === null ? next : mergePlanTabPages(data, next, range);
-      // The phone list pages on Load more; a range reads on while more overlap it.
-      if (range === null || next.nextCursor === null) break;
-      before = next.nextCursor;
-    }
-    if (data === null) return fail('plan_bundle_read: no page');
-    return { ok: true, data: range !== null ? { ...data, nextCursor: null } : data };
+    const read = await readPlanBundleRpc(
+      client,
+      {
+        workspaceId: input.workspaceId,
+        range: input.range,
+        onlyShared: input.onlyShared,
+        before: input.before ?? null,
+      },
+      signal,
+    );
+    if (!read.ok) return read;
+    return { ok: true, data: planTabDataOf(read.data, input.range) };
   } catch (error) {
     return fail(String(error));
   }

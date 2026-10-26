@@ -6,7 +6,6 @@ import type { PlanTabData } from '@/lib/plan-tab-read';
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 import { readNextPlanTabPage } from './use-plan-tab-data';
-import { getPlanTabMore, setPlanTabMore } from './plan-tab-more';
 
 function bundle(id: string, startsOn: string): PlanBundle {
   return {
@@ -88,32 +87,41 @@ describe('Load more (readNextPlanTabPage)', () => {
     expect(res.data.nextCursor).toBeNull();
   });
 
-  it('no cursor (or a range) reads nothing', async () => {
+  it('no cursor reads nothing', async () => {
     const { client, rpc } = nextPageClient();
     expect(await readNextPlanTabPage(client, ARGS, { ...SHOWN, nextCursor: null })).toBeNull();
     expect(
       await readNextPlanTabPage(
         client,
         { ...ARGS, range: { start: '2026-10-01', end: '2026-10-31' } },
-        SHOWN,
+        { ...SHOWN, nextCursor: null },
       ),
     ).toBeNull();
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('the laptop range: one request for the page after the cursor, in the same range', async () => {
+    const { client, rpc } = nextPageClient();
+    const range = { start: '2026-10-01', end: '2026-10-31' };
+    const res = await readNextPlanTabPage(client, { ...ARGS, range }, SHOWN);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls[0]?.[1]).toMatchObject({
+      p_range_start: range.start,
+      p_range_end: range.end,
+      p_before_starts_on: '2026-10-20',
+      p_before_id: 'b',
+    });
+    expect(res !== null && res.ok && res.data.bundles.map((b) => b.plan.id)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    expect(res !== null && res.ok && res.data.nextCursor).toBeNull();
   });
 
   it('a failed page is a failure (the list keeps what it shows)', async () => {
     const rpc = vi.fn(async () => ({ data: null, error: { message: 'boom' } }));
     const res = await readNextPlanTabPage({ rpc } as unknown as Client, ARGS, SHOWN);
     expect(res?.ok).toBe(false);
-  });
-});
-
-describe('plan-tab-more slot', () => {
-  it('holds the control until cleared', () => {
-    const onMore = (): void => {};
-    setPlanTabMore({ busy: false, onMore });
-    expect(getPlanTabMore()?.onMore).toBe(onMore);
-    setPlanTabMore(null);
-    expect(getPlanTabMore()).toBeNull();
   });
 });

@@ -244,6 +244,28 @@ describe('invalid_mention from comment_create', () => {
     expect(DRAFT_MENTION_TOAST).toBe("Clients can't see drafts. Tag them once it's in Review.");
   });
 
+  it('invalid_mention on a post that is not a draft keeps the generic inline copy, no toast', async () => {
+    createSpy.mockResolvedValue({
+      ok: false,
+      error: { code: 'invalid_mention', message: 'invalid_mention', details: CLIENT },
+    });
+    await mount({ entityType: 'post', postStage: 'review' });
+
+    let result: CommentSubmitResult | undefined;
+    await act(async () => {
+      result = await lastComposer().onSubmit(`over to @[${CLIENT}]`, {
+        attachmentVersionIds: [],
+      });
+    });
+
+    expect(result?.ok).toBe(false);
+    expect(result !== undefined && 'error' in result).toBe(true);
+    if (result !== undefined && 'error' in result) {
+      expect(result.error).not.toBe(DRAFT_MENTION_TOAST);
+    }
+    expect(toasts).toHaveLength(0);
+  });
+
   it('other failures still come back as inline error copy, with no toast', async () => {
     createSpy.mockResolvedValue({
       ok: false,

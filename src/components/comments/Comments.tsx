@@ -1475,9 +1475,15 @@ export function Comments({
       traceId: newTrace(),
     });
     const result = await createComment(supabase, input);
-    if (!result.ok && entityType === 'post' && isInvalidMention(result.error)) {
-      // A rejected mention (a client tagged on a draft): the composer keeps the
+    if (
+      !result.ok &&
+      entityType === 'post' &&
+      postStage === 'draft' &&
+      isInvalidMention(result.error)
+    ) {
+      // A rejected mention on a draft (a client tagged): the composer keeps the
       // text and files, the toast says why (inline only when no toast host).
+      // Any other invalid_mention (a non-member) keeps the generic inline copy.
       if (toast === null) return { ok: false, error: DRAFT_MENTION_TOAST };
       toast.show({ title: DRAFT_MENTION_TOAST, tone: 'error' });
       return { ok: false, notified: true };

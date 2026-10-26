@@ -135,23 +135,75 @@ describe('recentFromRoute', () => {
     expect(recentFromRoute('/pipeline', '', ctx)).toBeNull();
   });
 
-  it('records a short link once its number resolves (one read)', async () => {
+  it('records a short link once its number resolves (one ref_resolve rpc on the key)', async () => {
     const s = memoryStorage();
-    const maybeSingle = vi.fn(async () => ({ data: { id: 'p-uuid' }, error: null }));
-    const chain = { select: () => chain, eq: () => chain, is: () => chain, maybeSingle };
-    const client = { from: vi.fn(() => chain) } as unknown as Client;
+    const rpc = vi.fn(async () => ({
+      data: [{ workspace_id: WS, entity_id: 'p-uuid' }],
+      error: null,
+    }));
+    const from = vi.fn();
+    const client = { rpc, from } as unknown as Client;
     await recordRouteOpen({
       client,
       storage: s,
       pathname: '/p/gbl-12',
       search: '',
       workspaceId: WS,
-      workspaceKey: 'GBL',
+      workspaceKey: 'gbl',
       userId: ME,
       nowMs: 5,
+      traceId: '01920000-0000-7000-8000-0000000000aa',
     });
-    expect(maybeSingle).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('ref_resolve', {
+      p_trace_id: '01920000-0000-7000-8000-0000000000aa',
+      p_workspace_key: 'GBL',
+      p_kind: 'post',
+      p_number: 12,
+    });
+    expect(from).not.toHaveBeenCalled();
     expect(readRecents(s, ME, WS)).toEqual([{ type: 'post', id: 'p-uuid', openedAt: 5 }]);
+  });
+
+  it('a brief short link asks for the brief kind', async () => {
+    const s = memoryStorage();
+    const rpc = vi.fn(async () => ({
+      data: [{ workspace_id: WS, entity_id: 'b-uuid' }],
+      error: null,
+    }));
+    await recordRouteOpen({
+      client: { rpc } as unknown as Client,
+      storage: s,
+      pathname: '/b/gbl-3',
+      search: '',
+      workspaceId: WS,
+      workspaceKey: 'GBL',
+      userId: ME,
+      nowMs: 6,
+    });
+    expect(rpc).toHaveBeenCalledWith('ref_resolve', expect.objectContaining({ p_kind: 'brief' }));
+    expect(readRecents(s, ME, WS)).toEqual([{ type: 'brief', id: 'b-uuid', openedAt: 6 }]);
+  });
+
+  it('a number that resolves to no entity, or an rpc error, records nothing', async () => {
+    const s = memoryStorage();
+    const base = {
+      storage: s,
+      pathname: '/p/gbl-12',
+      search: '',
+      workspaceId: WS,
+      workspaceKey: 'GBL',
+      userId: ME,
+      nowMs: 7,
+    };
+    const missing = vi.fn(async () => ({
+      data: [{ workspace_id: WS, entity_id: null }],
+      error: null,
+    }));
+    await recordRouteOpen({ ...base, client: { rpc: missing } as unknown as Client });
+    const failed = vi.fn(async () => ({ data: null, error: { message: 'boom' } }));
+    await recordRouteOpen({ ...base, client: { rpc: failed } as unknown as Client });
+    expect(readRecents(s, ME, WS)).toEqual([]);
   });
 });
 

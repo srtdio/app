@@ -10,7 +10,9 @@
 // drop outline when the move is allowed; Escape cancels) and click an empty
 // part of a day for the Add on menu; approvers get neither. A click opens the
 // entry: a plan item in the docked Plan screen, a post on its page. While the
-// range reads, the grid keeps its final size. Tokens only.
+// range reads, the grid keeps its final size. The range reads a page of plans
+// at a time: while more overlap it, Load more (PlanTabLoadMore, the phone
+// list's control) ends the calendar, under the grid. Tokens only.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -63,7 +65,7 @@ import {
 } from '@/lib/plan-tab';
 import { civilDayOf, civilWeekdayShort, dayOfMonth, formatCivilDayHeader } from '@/lib/plan-week';
 import { PlanDayMenu } from './PlanDayMenu';
-import { DraftTag } from './PlanTabList';
+import { DraftTag, PlanTabLoadMore, type PlanTabMore } from './PlanTabList';
 import type { AddTarget } from './PlanTabAdd';
 import { usePlanTabMove } from './use-plan-tab-move';
 
@@ -116,6 +118,8 @@ export function PlanCalendar(props: {
   onAddTo: (target: AddTarget) => void;
   onNewPlan: (range: { startsOn: string; endsOn: string }) => void;
   reload: () => Promise<void>;
+  /** Load more while more plans overlap the range; null when every one is in. */
+  more: PlanTabMore | null;
 }): ReactElement {
   const { view, anchor, today, timeZone, side } = props;
   const data = props.data ?? EMPTY_DATA;
@@ -229,6 +233,11 @@ export function PlanCalendar(props: {
           entryProps={entryProps}
         />
       )}
+      {props.more !== null ? (
+        <div data-plan-tab-load-more-row="" className="flex px-6 pb-8 pt-3">
+          <PlanTabLoadMore more={props.more} />
+        </div>
+      ) : null}
       {drag.state !== null ? <LiftedEntry drag={drag.state} /> : null}
       {menu !== null ? (
         <PlanDayMenu

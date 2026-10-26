@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Client, PipelinePost } from '@srtdio/posts';
+import type { Client, PipelinePost, listPosts } from '@srtdio/posts';
 import type { Result } from '@srtdio/rpc';
 
 // The Pipeline's shared posts read: a tab return inside the freshness window
@@ -115,5 +115,50 @@ describe('Pipeline posts on tab return', () => {
     await prefetchPipelineData({ userId: 'u1', workspaceId: 'w1' });
     await mount;
     expect(read).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Pipeline posts trace id', () => {
+  const V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  it("passes the load's trace id to listPosts (posts_list p_trace_id)", async () => {
+    const read = reader();
+    await readPipelinePosts(client, 'u1', 'w1', read, '01920000-0000-7000-8000-0000000000bb');
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith(client, {
+      workspaceId: 'w1',
+      limit: 500,
+      traceId: '01920000-0000-7000-8000-0000000000bb',
+    });
+  });
+
+  it('mints a uuid v7 trace id when the caller passes none (nav-press prefetch)', async () => {
+    const read = vi.fn<typeof listPosts>(async () => ({ ok: true, data: [post] }));
+    await readPipelinePosts(client, 'u1', 'w1', read);
+    expect(read.mock.calls[0]?.[1].traceId).toMatch(V7);
+  });
+
+  it("a joined read keeps the first load's trace id: one request, one trace", async () => {
+    const read = reader();
+    const first = readPipelinePosts(
+      client,
+      'u1',
+      'w1',
+      read,
+      '01920000-0000-7000-8000-0000000000c1',
+    );
+    const second = readPipelinePosts(
+      client,
+      'u1',
+      'w1',
+      read,
+      '01920000-0000-7000-8000-0000000000c2',
+    );
+    await Promise.all([first, second]);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ traceId: '01920000-0000-7000-8000-0000000000c1' }),
+    );
   });
 });

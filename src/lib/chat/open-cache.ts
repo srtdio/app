@@ -22,11 +22,12 @@
 // (workspace-reads.ts), joined by every chat while fresh. Memory is
 // keyed by user id, workspace id and channel id, capped at OPEN_CACHE_LIMIT
 // chats (least recently used goes first), never persisted, and cleared in
-// full when the user or the workspace changes (checked on every access, so a
-// sign-out that never fired the event still never shows the next user the
-// last one's chats) and on sign-out (the auth state change and the sorted
-// sign-out event, listened to while anything is held). RLS still decides
-// every fresh read.
+// full when the user or the workspace changes: at once when the shell
+// switches (leaveChatScope, from ChatStoreProvider), and checked again on
+// every access, so a sign-out that never fired the event still never shows
+// the next user the last one's chats; and on sign-out (the auth state change
+// and the sorted sign-out event, listened to while anything is held). RLS
+// still decides every fresh read.
 //
 // A chat's messages page is remembered too, and it is the chat's one copy:
 // while a thread shows the chat, the thread owns its rows (attach) and writes
@@ -195,6 +196,12 @@ export interface OpenCache {
   attached: (key: ChatKey) => boolean;
   /** Forget everything. */
   clear: () => void;
+  /**
+   * The shell left this user and workspace (a workspace switch, sign-out):
+   * everything held for it goes now. A no-op when another scope is held
+   * already (entering it cleared this one, and its new open stays).
+   */
+  leaveScope: (left: ChatScope) => void;
   /** Chats held (tests). */
   size: () => number;
   /** The user whose chats are held, or null. */
@@ -203,6 +210,12 @@ export interface OpenCache {
   onEmpty: (listener: () => void) => void;
   /** Called on the first chat held after empty (the module starts listening). */
   onHeld: (listener: () => void) => void;
+}
+
+/** The signed-in user and the open workspace a store's memory belongs to. */
+export interface ChatScope {
+  userId: string;
+  workspaceId: string;
 }
 
 function slotKey(key: ChatKey): string {
@@ -385,6 +398,11 @@ export function createOpenCache(
       return slotOf(key, false)?.openedAt ?? null;
     },
     clear,
+    leaveScope(left) {
+      if (scope === null || scope.userId !== left.userId) return;
+      if (scope.workspaceId !== left.workspaceId) return;
+      clear();
+    },
     size: () => slots.size,
     heldUser: () => (slots.size > 0 ? (scope?.userId ?? null) : null),
     onEmpty: (l) => void emptyListeners.push(l),
@@ -664,6 +682,32 @@ export function kickoffChatOpen(
 /** Forget everything: every chat, every stashed read, the viewer sides, the prefetched pages. */
 export function clearOpenCache(): void {
   openCache.clear();
+}
+
+/**
+ * The scope the shell left going from `prev` to `next` (a workspace switch,
+ * another user, sign-out), or null when it stayed or there was none. Pure.
+ */
+export function chatScopeLeft(prev: ChatScope | null, next: ChatScope | null): ChatScope | null {
+  if (prev === null) return null;
+  if (next !== null && next.userId === prev.userId && next.workspaceId === prev.workspaceId) {
+    return null;
+  }
+  return prev;
+}
+
+/**
+ * The shell's user or workspace changed (ChatStoreProvider): a workspace
+ * switch or a sign-out forgets every remembered page, marks, scheduled rows
+ * and cursors at once, not at the next chat open.
+ */
+export function leaveChatScope(
+  prev: ChatScope | null,
+  next: ChatScope | null,
+  store: OpenCache = openCache,
+): void {
+  const left = chatScopeLeft(prev, next);
+  if (left !== null) store.leaveScope(left);
 }
 
 /**

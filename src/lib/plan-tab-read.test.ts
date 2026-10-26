@@ -155,18 +155,33 @@ describe('readPlanTab (plan_bundle_read, tab mode)', () => {
     expect(utc.ok && utc.data.posts).toEqual([]);
   });
 
-  it('a range with more than a page of plans reads on with the cursor (the grid cannot page)', async () => {
-    const w = world(30, 0);
+  it('a range with more than a page of plans reads ONE page and hands back the cursor (no loop)', async () => {
+    const w = world(13, 0);
     for (const p of w.plans) {
       p.starts_on = '2026-10-19';
       p.ends_on = '2026-10-25';
     }
     const fake = fakeClient(w);
-    const res = await readPlanTab(fake.client, INPUT);
-    expect(fake.rpc).toHaveBeenCalledTimes(3);
-    expect(fake.calls[1]).toMatchObject({ p_before_starts_on: '2026-10-19' });
-    expect(res.ok && res.data.bundles).toHaveLength(30);
-    expect(res.ok && res.data.nextCursor).toBeNull();
+    const first = await readPlanTab(fake.client, INPUT);
+    expect(fake.rpc).toHaveBeenCalledTimes(1);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.data.bundles).toHaveLength(PLAN_BUNDLE_PAGE);
+    const cursor = first.data.nextCursor;
+    expect(cursor).not.toBeNull();
+    // Load more: the page after the cursor, in the same range; then every plan once.
+    const second = await readPlanTab(fake.client, { ...INPUT, before: cursor });
+    expect(fake.rpc).toHaveBeenCalledTimes(2);
+    expect(fake.calls[1]).toMatchObject({
+      p_range_start: RANGE.start,
+      p_range_end: RANGE.end,
+      p_before_starts_on: '2026-10-19',
+    });
+    if (!second.ok) return;
+    const all = mergePlanTabPages(first.data, second.data, RANGE);
+    expect(all.bundles).toHaveLength(13);
+    expect(new Set(all.bundles.map((b) => b.plan.id)).size).toBe(13);
+    expect(all.nextCursor).toBeNull();
   });
 
   it('the phone list reads one page and hands back the cursor; the cursor becomes the next args', async () => {

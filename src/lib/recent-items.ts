@@ -13,9 +13,10 @@ import { useEffect, useRef } from 'react';
 import type { Client } from '@srtdio/rpc';
 import { abortable, readMentionProfiles } from '@/lib/chat-reads';
 import { isNotesChannelId, notesChannelId } from '@/lib/chat/notes';
-import { resolveBriefIdByNumber, resolvePostIdByNumber } from '@/lib/entity-resolve';
+import { resolveEntityRef } from '@/lib/entity-resolve';
 import { entityUrlPath, parseEntityRef } from '@/lib/entityRef';
 import { SIGNOUT_EVENT } from '@/lib/events';
+import { generateTraceId } from '@/lib/trace';
 import { chatMessageHref, chatTaskHref, planHref } from '@/lib/inbox/bell-types';
 
 export type RecentType = 'post' | 'brief' | 'group' | 'plan' | 'file' | 'person' | 'task';
@@ -209,7 +210,8 @@ export function recentFromRoute(
 
 /**
  * Record a route's open: an id route at once; a /p/ or /b/ short link once
- * its number resolves (one existing resolver read). Never throws.
+ * its number resolves (one ref_resolve rpc on this workspace's key, which the
+ * caller already holds in memory). Never throws.
  */
 export async function recordRouteOpen(params: {
   client: Client;
@@ -220,6 +222,8 @@ export async function recordRouteOpen(params: {
   workspaceKey: string | null;
   userId: string;
   nowMs: number;
+  /** The open's trace id, sent as p_trace_id; a fresh uuid_v7 when absent. */
+  traceId?: string;
 }): Promise<void> {
   const open = recentFromRoute(params.pathname, params.search, params);
   if (open === null) return;
@@ -227,15 +231,24 @@ export async function recordRouteOpen(params: {
     recordRecent(params.storage, params.userId, params.workspaceId, open, params.nowMs);
     return;
   }
-  const resolve = open.type === 'post' ? resolvePostIdByNumber : resolveBriefIdByNumber;
+  // recentFromRoute only returns a number for this workspace's own key.
+  if (params.workspaceKey === null) return;
   try {
-    const res = await resolve(params.client, params.workspaceId, open.number);
-    if (!res.ok || res.data === null) return;
+    const res = await resolveEntityRef(params.client, {
+      traceId: params.traceId ?? generateTraceId(),
+      workspaceKey: params.workspaceKey.toUpperCase(),
+      kind: open.type,
+      number: open.number,
+    });
+    if (!res.ok || res.data.entityId === null) return;
+    // The key names this workspace (recentFromRoute checked); a different id
+    // back means the key moved, so the open is not recorded here.
+    if (res.data.workspaceId !== params.workspaceId) return;
     recordRecent(
       params.storage,
       params.userId,
       params.workspaceId,
-      { type: open.type, id: res.data },
+      { type: open.type, id: res.data.entityId },
       params.nowMs,
     );
   } catch {

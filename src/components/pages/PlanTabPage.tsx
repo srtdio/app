@@ -1,7 +1,9 @@
 // The Plan tab (/plan). Laptop (md and up): the shared top bar (no page title)
 // with Month | Week and, for creators, New plan; then the calendar
 // (PlanCalendar) over the visible range. Phone: the top bar with New plan
-// (creators) and the plans as cards in sections (PlanTabList). Opening a plan or an item goes to
+// (creators) and the plans as cards in sections (PlanTabList). Both read a
+// page of plans at a time (usePlanTabData): while more remain, the page hands
+// the list or the calendar its Load more (the hook's loadMore and moreBusy). Opening a plan or an item goes to
 // /plan/:planId(?item=), which PlanBesideLayout docks beside this page on a
 // laptop (the page stays mounted) and shows alone on a phone. New plan and the
 // empty-day menu's "+ New plan" open the existing New plan screen
@@ -67,14 +69,17 @@ export function PlanTabPage(): ReactElement {
   const [compose, setCompose] = useState<{ range: ComposeRange | undefined } | null>(null);
   const [addTo, setAddTo] = useState<AddTarget | null>(null);
   const creator = canCreatePlans(side);
-  const { load, reload, retry } = usePlanTabData({
+  const { load, reload, retry, loadMore, moreBusy } = usePlanTabData({
     workspaceId,
     range: desktop ? visibleRange(view, anchor) : null,
-    timeZone,
     onlyShared: !creator,
     enabled: ready,
   });
   const data = load.status === 'ready' ? load.data : null;
+  const more = useMemo(
+    () => (data !== null && data.nextCursor !== null ? { busy: moreBusy, onMore: loadMore } : null),
+    [data, moreBusy, loadMore],
+  );
   const bundles = useMemo(
     () => (data !== null ? visibleBundles(data.bundles, side) : []),
     [data, side],
@@ -154,6 +159,7 @@ export function PlanTabPage(): ReactElement {
         onAddTo={setAddTo}
         onNewPlan={openCompose}
         reload={reload}
+        more={more}
       />
     );
   } else if (data === null) {
@@ -165,6 +171,7 @@ export function PlanTabPage(): ReactElement {
         thumbs={data.thumbs}
         today={today}
         onOpen={(planId) => navigate(`/plan/${planId}`)}
+        more={more}
       />
     );
   }

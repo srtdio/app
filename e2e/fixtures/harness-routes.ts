@@ -160,8 +160,45 @@ const CORS = {
 
 type RpcHandler = (args: Record<string, unknown>, tables: Tables) => unknown;
 
-/** A proc that raised: the route answers 400 with this message (PostgREST's shape). */
-class HarnessRpcError extends Error {}
+/**
+ * A proc that raised: the route answers 400 with this message (PostgREST's
+ * shape), and `details` as the body's details (a RAISE ... USING DETAIL).
+ */
+class HarnessRpcError extends Error {
+  readonly details: string | null;
+  constructor(message: string, details: string | null = null) {
+    super(message);
+    this.details = details;
+  }
+}
+
+/** The proc's agency-side roles: the only members a draft post comment may tag. */
+const DRAFT_MENTIONABLE_ROLES = ['owner', 'admin', 'agency'];
+const BODY_MENTION =
+  /@\[([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\]/g;
+
+/**
+ * comment_create's mention rule: every id in p_mentions or an @[uuid] in the
+ * body must be an active member, and on a draft post an agency-side one (a
+ * client cannot see drafts). Returns the offending ids, lowercased, in order.
+ */
+function invalidCommentMentions(args: Record<string, unknown>, tables: Tables): string[] {
+  const listed = Array.isArray(args.p_mentions) ? args.p_mentions.map(String) : [];
+  const typed = [...String(args.p_body ?? '').matchAll(BODY_MENTION)].map((m) => m[1] ?? '');
+  const mentioned = [...new Set([...listed, ...typed].map((id) => id.toLowerCase()))];
+  const post =
+    args.p_entity_type === 'post'
+      ? (tables.posts ?? []).find((p) => p.id === args.p_entity_id)
+      : undefined;
+  const isDraft = post?.stage === 'draft';
+  return mentioned.filter((id) => {
+    const member = (tables.workspace_members ?? []).find(
+      (m) => m.workspace_id === args.p_workspace_id && m.user_id === id && m.active === true,
+    );
+    if (member === undefined) return true;
+    return isDraft && !DRAFT_MENTIONABLE_ROLES.includes(String(member.role));
+  });
+}
 
 /** The active members of a chat (DM pair or group members), as user ids. */
 function channelMemberIds(tables: Tables, channelId: string): string[] {
@@ -1017,6 +1054,23 @@ const POSTS_RPC: Record<string, RpcHandler> = {
       };
     });
   },
+  // public.ref_resolve: the workspace whose key matches exactly, and its live
+  // post or brief with that number (null when none); no row for an unknown key.
+  ref_resolve: (args, tables) => {
+    const workspace = (tables.workspaces ?? []).find((w) => w.key === args.p_workspace_key);
+    if (workspace === undefined) return [];
+    const table = args.p_kind === 'post' ? 'posts' : args.p_kind === 'brief' ? 'briefs' : null;
+    const entity =
+      table === null
+        ? undefined
+        : (tables[table] ?? []).find(
+            (e) =>
+              e.workspace_id === workspace.id &&
+              Number(e.number) === Number(args.p_number) &&
+              (e.deleted_at ?? null) === null,
+          );
+    return [{ workspace_id: workspace.id, entity_id: entity?.id ?? null }];
+  },
 };
 
 const RPC: Record<string, RpcHandler> = {
@@ -1028,6 +1082,13 @@ const RPC: Record<string, RpcHandler> = {
   ...ONBOARDING_RPC,
   ...INDUCTION_RPC,
   ...SEARCH_RPC,
+  // The live proc's mention rule (a non-member, or a client tagged on a draft
+  // post, raises invalid_mention with the ids as DETAIL), then the insert.
+  comment_create: (args, tables) => {
+    const invalid = invalidCommentMentions(args, tables);
+    if (invalid.length > 0) throw new HarnessRpcError('invalid_mention', invalid.join(','));
+    return INDUCTION_RPC.comment_create?.(args, tables) ?? null;
+  },
   // The chat open's one call (chat-open-bundle.ts).
   chat_open_bundle: (args, tables) =>
     chatOpenBundle(args, tables, (code) => new HarnessRpcError(code)),
@@ -1461,7 +1522,7 @@ export async function installHarnessNetwork(
             body: JSON.stringify({
               code: 'P0001',
               message: error.message,
-              details: null,
+              details: error.details,
               hint: null,
             }),
           });

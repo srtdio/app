@@ -4,8 +4,8 @@
 // side) answers the workspace and the entity together. Tenant isolation is
 // Postgres' job, so a workspace key that belongs to another tenant simply
 // returns no row and is indistinguishable from "does not exist" (the resolvers
-// never special-case cross-tenant). The per-step RLS SELECTs below remain for
-// callers that already hold a workspace id.
+// never special-case cross-tenant). It is the only resolver: the short-link
+// routes (useRefResolution) and the recents recorder (recent-items) both use it.
 
 import type { Client, DomainError, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
@@ -64,60 +64,4 @@ export async function resolveEntityRef(
 
 function transportError(message: string): DomainError {
   return { code: 'unknown', message };
-}
-
-/**
- * Resolve a workspace id from its key (uppercase, e.g. "GBL"). Returns
- * `{ ok: true, data: null }` when no workspace with that key is visible to the
- * caller (absent or hidden by RLS).
- */
-export async function resolveWorkspaceIdByKey(
-  client: Client,
-  key: string,
-): Promise<Result<string | null>> {
-  const { data, error } = await client.from('workspaces').select('id').eq('key', key).maybeSingle();
-  if (error) return { ok: false, error: transportError(error.message) };
-  return { ok: true, data: data?.id ?? null };
-}
-
-/**
- * Resolve a live post's id from its (workspace_id, number) pair. Returns
- * `{ ok: true, data: null }` when no such post exists, is soft-deleted, or is
- * hidden by RLS.
- */
-export async function resolvePostIdByNumber(
-  client: Client,
-  workspaceId: string,
-  number: number,
-): Promise<Result<string | null>> {
-  const { data, error } = await client
-    .from('posts')
-    .select('id')
-    .eq('workspace_id', workspaceId)
-    .eq('number', number)
-    .is('deleted_at', null)
-    .maybeSingle();
-  if (error) return { ok: false, error: transportError(error.message) };
-  return { ok: true, data: data?.id ?? null };
-}
-
-/**
- * Resolve a live brief's id from its (workspace_id, number) pair. Returns
- * `{ ok: true, data: null }` when no such brief exists, is soft-deleted, or is
- * hidden by RLS.
- */
-export async function resolveBriefIdByNumber(
-  client: Client,
-  workspaceId: string,
-  number: number,
-): Promise<Result<string | null>> {
-  const { data, error } = await client
-    .from('briefs')
-    .select('id')
-    .eq('workspace_id', workspaceId)
-    .eq('number', number)
-    .is('deleted_at', null)
-    .maybeSingle();
-  if (error) return { ok: false, error: transportError(error.message) };
-  return { ok: true, data: data?.id ?? null };
 }

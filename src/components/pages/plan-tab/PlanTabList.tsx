@@ -4,9 +4,10 @@
 // plan's covers, then a shared plan's bar and "N of M OK", or a Draft's tag
 // and "N items · only your team sees this" ("1 item" for one). A tap opens the plan's own screen (full page). The phone
 // Plan screens themselves are not touched. Tokens only. While more plans
-// remain (the read's next cursor), Load more ends the list ('Loading' while
-// the page is in flight, the Comments pattern); the cards it appends enter
-// with a translateY only (duration-base, ease-enter).
+// remain (the read's next cursor), PlanTabPage hands the list its Load more
+// (from usePlanTabData) and the list ends with it (PlanTabLoadMore, which the
+// laptop calendar ends with too); the cards it appends enter with a
+// translateY only (duration-base, ease-enter).
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { PlanCardBar, PlanCardTop } from '@/components/chat/PlanCard';
@@ -18,7 +19,36 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 import { planCardMeta, planSections } from '@/lib/plan-tab';
-import { usePlanTabMore } from './plan-tab-more';
+
+/** Load more's copy: 'Loading' while the page is in flight. Pure. */
+export function loadMoreLabel(busy: boolean): string {
+  return busy ? 'Loading' : 'Load more';
+}
+
+/** What Load more needs: busy while a page is in flight, and the tap. Null: every plan is in. */
+export interface PlanTabMore {
+  busy: boolean;
+  onMore: () => void;
+}
+
+/**
+ * Load more (the Comments pattern): the shared Button, 44 tall, disabled and
+ * 'Loading' while the page is in flight. The phone list and the laptop
+ * calendar both end with it.
+ */
+export function PlanTabLoadMore(props: { more: PlanTabMore }): ReactElement {
+  return (
+    <Button
+      type="button"
+      data-plan-tab-load-more=""
+      className="self-start"
+      disabled={props.more.busy}
+      onClick={props.more.onMore}
+    >
+      {loadMoreLabel(props.more.busy)}
+    </Button>
+  );
+}
 
 /** Covers a card shows at most. */
 export const CARD_COVERS = 4;
@@ -68,8 +98,9 @@ export function PlanTabList(props: {
   thumbs: PlanThumbs;
   today: string;
   onOpen: (planId: string) => void;
+  /** Load more while more plans remain; null when every plan is in. */
+  more: PlanTabMore | null;
 }): ReactElement {
-  const more = usePlanTabMore();
   const { appended, entered } = useAppended(props.bundles.map((b) => b.plan.id));
   return (
     <div data-plan-tab-list="" className="flex flex-col gap-5 px-4 pb-8 pt-4">
@@ -108,17 +139,7 @@ export function PlanTabList(props: {
           })}
         </section>
       ))}
-      {more !== null ? (
-        <Button
-          type="button"
-          data-plan-tab-more=""
-          className="self-start"
-          disabled={more.busy}
-          onClick={more.onMore}
-        >
-          {more.busy ? 'Loading' : 'Load more'}
-        </Button>
-      ) : null}
+      {props.more !== null ? <PlanTabLoadMore more={props.more} /> : null}
     </div>
   );
 }

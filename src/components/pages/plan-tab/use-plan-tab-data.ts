@@ -9,11 +9,16 @@
 // until the new data lands. A failed background re-read keeps the data; a
 // failed first read shows the failed state with Retry.
 //
-// The phone list (no range) reads a page of plans at a time: while the read
-// returns a next cursor, the list's Load more (plan-tab-more.ts) fetches the
-// next page with it and appends it (no duplicates by id). A background re-read
-// reads as many pages as are shown, so a change never shortens the list. A
-// failed Load more keeps the list and the control (tap again).
+// Every read is one page of plans (12, src/lib/plan-tab-read.ts), on the
+// phone (no range) and on the laptop (the range) alike. While the shown data
+// has a next cursor, the hook hands PlanTabPage `loadMore` and `moreBusy`, and
+// the page draws Load more at the end of the list or the calendar: a tap reads
+// the next page (one request) and appends it (no duplicates by id). Nothing
+// reads a further page on its own. A background re-read (a change) reads the
+// pages the viewer loaded, one request each, one after another, so a change
+// never shortens what is shown and never reads past it; a new range, a Retry
+// or a first read starts again at one page. A failed Load more keeps what is
+// shown and the control (tap again).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
@@ -30,7 +35,6 @@ import {
 import { getPrefetchContext } from '@/lib/prefetch-context';
 import { supabase } from '@/lib/supabase';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
-import { setPlanTabMore } from './plan-tab-more';
 
 export type PlanTabLoad =
   | { status: 'loading'; data: null }
@@ -48,8 +52,8 @@ function sharedUserId(workspaceId: string): string | null {
 }
 
 /**
- * The phone list's page after `shown` (its cursor), bounded at 5s, appended
- * to it. Null when there is no next page. Never throws.
+ * The page after `shown` (its cursor; in its range on the laptop), bounded at
+ * 5s, appended to it. Null when there is no next page. Never throws.
  */
 export async function readNextPlanTabPage(
   client: Client,
@@ -57,12 +61,12 @@ export async function readNextPlanTabPage(
   shown: PlanTabData,
 ): Promise<Result<PlanTabData> | null> {
   const before = shown.nextCursor;
-  if (args.range !== null || before === null) return null;
+  if (before === null) return null;
   const next = await withReadTimeout(
     (signal) => readPlanTab(client, { ...args, before }, signal),
     READ_TIMEOUT_MS,
   );
-  return next.ok ? { ok: true, data: mergePlanTabPages(shown, next.data) } : next;
+  return next.ok ? { ok: true, data: mergePlanTabPages(shown, next.data, args.range) } : next;
 }
 
 /**
@@ -73,20 +77,31 @@ export function leavingToPost(pathname: string): boolean {
   return pathname.startsWith('/posts/') || pathname.startsWith('/p/');
 }
 
+/** The tab's data and its controls. */
+export interface PlanTabDataState {
+  load: PlanTabLoad;
+  /** Re-read in the background; resolves once the new data (or the failure) is in. */
+  reload: () => Promise<void>;
+  /** Read again from one page (the failed state's Retry). */
+  retry: () => void;
+  /** Read the next page and append it (Load more); a no-op without a next cursor or while one is in flight. */
+  loadMore: () => void;
+  /** Whether a Load more page is in flight ('Loading'). */
+  moreBusy: boolean;
+}
+
 /**
- * The tab's read for `range` (null: every plan, the phone list, a page at a
- * time). Off until `enabled` (the workspace and the viewer's side are known).
- * `reload` re-reads in the background and resolves once the new data (or the
- * failure) is in. `timeZone` is not part of the read: the bundle carries the
- * workspace's zone (PlanTabData.timeZone).
+ * The tab's read for `range` (null: every plan, the phone list), a page at a
+ * time. Off until `enabled` (the workspace and the viewer's side are known).
+ * The workspace zone is not an input: the bundle carries it
+ * (PlanTabData.timeZone).
  */
 export function usePlanTabData(input: {
   workspaceId: string | null;
   range: { start: string; end: string } | null;
-  timeZone?: string;
   onlyShared: boolean;
   enabled: boolean;
-}): { load: PlanTabLoad; reload: () => Promise<void>; retry: () => void } {
+}): PlanTabDataState {
   const { workspaceId, onlyShared, enabled } = input;
   const start = input.range?.start ?? null;
   const end = input.range?.end ?? null;
@@ -94,7 +109,7 @@ export function usePlanTabData(input: {
   const [load, setLoad] = useState<PlanTabLoad>({ status: 'loading', data: null });
   const [moreBusy, setMoreBusy] = useState(false);
   const seq = useRef(0);
-  // Pages the phone list shows (1 until a Load more lands).
+  // Pages shown (1 until a Load more lands; back to 1 on a first read).
   const pages = useRef(1);
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -131,7 +146,8 @@ export function usePlanTabData(input: {
         setLoad({ status: 'loading', data: null });
       }
       let result = await readSharedPlanTab(supabase, userId, args);
-      // A background re-read reads as many pages as are shown.
+      // A background re-read reads the pages the viewer loaded, one request
+      // each (bounded by their Load more taps), never further.
       for (let page = 1; result.ok && page < pages.current; page += 1) {
         if (mine !== seq.current) return;
         const next = await readNextPlanTabPage(supabase, args, result.data);
@@ -153,7 +169,7 @@ export function usePlanTabData(input: {
     [args],
   );
 
-  const loadMore = useCallback(async (): Promise<void> => {
+  const more = useCallback(async (): Promise<void> => {
     const shown = loadRef.current;
     if (args === null || shown.status !== 'ready' || moreInFlight.current) return;
     const mine = seq.current;
@@ -175,15 +191,7 @@ export function usePlanTabData(input: {
     setLoad({ status: 'ready', data: next.data });
   }, [args]);
 
-  const canMore =
-    args !== null &&
-    args.range === null &&
-    load.status === 'ready' &&
-    load.data.nextCursor !== null;
-  useEffect(() => {
-    setPlanTabMore(canMore ? { busy: moreBusy, onMore: () => void loadMore() } : null);
-  }, [canMore, moreBusy, loadMore]);
-  useEffect(() => () => setPlanTabMore(null), []);
+  const loadMore = useCallback(() => void more(), [more]);
 
   useEffect(() => {
     void read(false);
@@ -207,5 +215,5 @@ export function usePlanTabData(input: {
   );
 
   const retry = useCallback(() => void read(false), [read]);
-  return { load, reload, retry };
+  return { load, reload, retry, loadMore, moreBusy };
 }

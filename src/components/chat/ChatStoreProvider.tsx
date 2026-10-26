@@ -83,6 +83,7 @@ import {
   chatKey,
   forgetRememberedThread,
   forgetThreadsOutside,
+  leaveChatScope,
   rememberRecordedSend,
   routeRememberedCmd,
   routeRememberedText,
@@ -1141,6 +1142,16 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
 
   // Sign-out wipes drafts, emoji recents and voice transcripts, signed in or not.
   useEffect(() => listenForChatSignout(window), []);
+
+  // A workspace switch or sign-out forgets every remembered chat (pages,
+  // marks, scheduled rows, cursors) now, not at the next open.
+  const chatScopeRef = useRef<{ userId: string; workspaceId: string } | null>(null);
+  useEffect(() => {
+    const next =
+      workspaceId && currentUserId !== null ? { userId: currentUserId, workspaceId } : null;
+    leaveChatScope(chatScopeRef.current, next);
+    chatScopeRef.current = next;
+  }, [workspaceId, currentUserId]);
 
   // Every live send is stamped with this workspace (receivers elsewhere skip it).
   useEffect(() => {

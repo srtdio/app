@@ -86,6 +86,7 @@ function calendar(view: PlanTabView): string {
       onAddTo={() => {}}
       onNewPlan={() => {}}
       reload={async () => {}}
+      more={null}
     />,
   );
 }
