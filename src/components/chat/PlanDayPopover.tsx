@@ -18,7 +18,7 @@ import { cn } from '@/lib/cn';
 import { viewportSize } from '@/lib/use-is-laptop';
 
 /** Where the popover opens, as placed: under a button (right-aligned to it) or at a point. */
-export type PopoverPlace =
+type PopoverPlace =
   | { kind: 'rect'; left: number; right: number; top: number; bottom: number }
   | { kind: 'point'; x: number; y: number };
 
@@ -45,14 +45,14 @@ export function outOfView(
 }
 
 /** One day the popover offers. */
-export interface PopoverDay {
+interface PopoverDay {
   day: string | null;
   label: string;
   count: number;
 }
 
 /** The popover's fixed width (px) and its gap to the viewport edge. */
-export const POPOVER_WIDTH = 240;
+const POPOVER_WIDTH = 240;
 const EDGE = 8;
 
 /**

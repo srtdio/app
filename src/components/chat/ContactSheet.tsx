@@ -22,13 +22,9 @@ import type { RemovableFile } from '@/lib/chat/remove-files';
 export {
   appendPage,
   CONTACT_EMPTY,
-  CONTACT_TABS,
-  contactSenderName,
   FEED_LOADING,
   FeedBody,
   feedForTab,
-  fileMetaLine,
-  LinkRow,
   showLoadMore,
   type ContactTab,
   type Feed,
@@ -36,7 +32,7 @@ export {
 import { ModalPanel } from '@/components/chat/ModalPanel';
 
 /** The page title when no `heading` is given. */
-export const CONTACT_HEADING = 'Contact info';
+const CONTACT_HEADING = 'Contact info';
 
 /**
  * The contact photo: the shared Avatar at its profile role (72px circle). With
@@ -144,7 +140,7 @@ export function ContactSheetView(props: ContactSheetViewProps): ReactElement | n
   });
 }
 
-export interface ContactSheetProps {
+interface ContactSheetProps {
   open: boolean;
   onClose: () => void;
   /** The page title; defaults to "Contact info". */

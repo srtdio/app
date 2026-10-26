@@ -294,7 +294,7 @@ export function parseRemovedFiles(raw: unknown): RemovedFiles | null {
 }
 
 /** A row's stored mentions as user ids (lowercase); null when it has none. */
-export function storedMentions(raw: ChatMessageRow['mentions']): string[] | null {
+function storedMentions(raw: ChatMessageRow['mentions']): string[] | null {
   if (!Array.isArray(raw)) return null;
   return raw.filter((id): id is string => typeof id === 'string').map((id) => id.toLowerCase());
 }
@@ -329,7 +329,7 @@ export interface ThreadConnection extends ChatConnection {
  * The `ext` keys every live Agora message carries so receivers can dedupe
  * against the record and route to a channel without an Agora-side lookup.
  */
-export const LIVE_MESSAGE_ID_KEY = 'sorted_message_id';
+const LIVE_MESSAGE_ID_KEY = 'sorted_message_id';
 export const LIVE_CHANNEL_ID_KEY = 'sorted_channel_id';
 /** The `ext` key naming a live-only signal on a command message. */
 export const LIVE_EVENT_KEY = 'sorted_event';
@@ -400,7 +400,7 @@ export function parseLiveIds(ext: unknown): { ok: true; ids: LiveMessageIds } | 
 }
 
 /** A live-only signal carried on a command message's `ext`. */
-export type LiveEvent =
+type LiveEvent =
   | { kind: 'reaction'; messageId: string; emoji: string; op: 'add' | 'remove' }
   | { kind: 'read'; channelId: string; messageId: string }
   | { kind: 'mark'; messageId: string }
@@ -779,7 +779,7 @@ function keptPlanIds(
 }
 
 /** Longest body snapshot a reply quote carries. */
-export const REPLY_PREVIEW_LIMIT = 120;
+const REPLY_PREVIEW_LIMIT = 120;
 
 /** The quote line for a message: its body (clipped), else a label for its content. */
 export function replyPreview(
@@ -1620,7 +1620,7 @@ export function buildLiveTextExt(params: {
 }
 
 /** A gap this long (or longer) between neighbours starts a new run and shows a time label. */
-export const RUN_GAP_MS = 10 * 60 * 1000;
+const RUN_GAP_MS = 10 * 60 * 1000;
 
 /** True when `next` is 10 minutes or more after `prev`; unusable times (0) never count. */
 export function isTimeGap(

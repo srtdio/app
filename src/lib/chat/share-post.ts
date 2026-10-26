@@ -12,7 +12,7 @@ import type { LiveMessageIds } from '@/lib/chat/thread';
 import type { InFlightGuard } from '@/lib/chat/thread-actions';
 
 /** The one guard key: a share runs at a time per picker, whatever the channel. */
-export const SHARE_GUARD_KEY = 'share-post';
+const SHARE_GUARD_KEY = 'share-post';
 
 /** The record input for one shared-post message (no body, one post). */
 export interface SharePostRecordInput {
@@ -37,7 +37,7 @@ export interface SharePostDeps {
   publishTimeoutMs?: number;
 }
 
-export type SharePostResult =
+type SharePostResult =
   | { ok: true }
   | { ok: false; reason: 'busy' }
   | { ok: false; reason: 'record'; message: string };

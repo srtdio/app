@@ -18,7 +18,7 @@ const SIGN_FAIL = "Couldn't get a link for this file. Try again.";
 export type AssetToast = (message: string, tone?: 'error') => void;
 
 /** One row of the file menu, in display order. */
-export type AssetMenuRow = 'primary' | 'copy' | 'rename' | 'info' | 'delete';
+type AssetMenuRow = 'primary' | 'copy' | 'rename' | 'info' | 'delete';
 
 /**
  * The file menu's rows in the one ⋯ order: Open {domain} first for a link,

@@ -102,11 +102,11 @@ export interface UseChatTasks {
 }
 
 /** The SDK handler id of the task subscription. */
-export const TASKS_EVENT_HANDLER_ID = 'chat-tasks';
+const TASKS_EVENT_HANDLER_ID = 'chat-tasks';
 /** Away this long, a visible tab re-reads the list. */
-export const TASKS_STALE_MS = 60_000;
+const TASKS_STALE_MS = 60_000;
 /** The live "is editing" command's event name. */
-export const TASK_EDITING_EVENT = 'task_editing';
+const TASK_EDITING_EVENT = 'task_editing';
 /** Most event pages one older-history read walks before it lets the page go. */
 const MAX_EVENT_PAGES = 20;
 
@@ -131,7 +131,7 @@ interface Remembered {
 const remembered = new Map<string, Remembered>();
 
 /** The chat connection when a ChatProvider is mounted (the app), else null (unit tests). */
-export function useChatOptional(): ChatContextValue | null {
+function useChatOptional(): ChatContextValue | null {
   try {
     return useChat();
   } catch {
@@ -140,7 +140,7 @@ export function useChatOptional(): ChatContextValue | null {
 }
 
 /** A live "is editing" command read off a cmd's ext; null for anything else. Pure. */
-export function parseEditingSignal(ext: unknown, channelId: string): { editing: boolean } | null {
+function parseEditingSignal(ext: unknown, channelId: string): { editing: boolean } | null {
   if (typeof ext !== 'object' || ext === null) return null;
   const r = ext as Record<string, unknown>;
   if (r[LIVE_EVENT_KEY] !== TASK_EDITING_EVENT || r.channel_id !== channelId) return null;
@@ -148,7 +148,7 @@ export function parseEditingSignal(ext: unknown, channelId: string): { editing: 
 }
 
 /** The ext of a live "is editing" command. Pure. */
-export function editingSignalExt(channelId: string, editing: boolean): Record<string, unknown> {
+function editingSignalExt(channelId: string, editing: boolean): Record<string, unknown> {
   return {
     [LIVE_EVENT_KEY]: TASK_EDITING_EVENT,
     channel_id: channelId,
@@ -157,7 +157,7 @@ export function editingSignalExt(channelId: string, editing: boolean): Record<st
 }
 
 /** Subscribe to live task signals for one chat; returns the teardown. */
-export function subscribeTaskEvents(params: {
+function subscribeTaskEvents(params: {
   connection: Pick<ChatConnection, 'addEventHandler' | 'removeEventHandler'>;
   channelId: string;
   currentUserId: string;
@@ -196,7 +196,7 @@ function freshState(channelId: string | null, from: Remembered | undefined): Tas
 }
 
 /** The list with a payload's edits and deletes painted (creates wait for their rows). Pure. */
-export function paintPayload(tasks: readonly ChatTask[], payload: BatchPayload): ChatTask[] {
+function paintPayload(tasks: readonly ChatTask[], payload: BatchPayload): ChatTask[] {
   const deleting = new Set(payload.deletes.map((d) => d.task_id));
   const edits = new Map(payload.edits.map((e) => [e.task_id, e.changes] as const));
   return tasks

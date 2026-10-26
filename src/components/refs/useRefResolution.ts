@@ -17,7 +17,7 @@ import {
  * - `notfound` for an unparseable ref, an unknown workspace key, a missing
  *   number, or any transport error.
  */
-export type RefResolution =
+type RefResolution =
   | { status: 'loading' }
   | { status: 'resolved'; id: string }
   | { status: 'redirect'; to: string }

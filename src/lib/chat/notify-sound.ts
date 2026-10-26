@@ -10,7 +10,7 @@
 export const TONE_THROTTLE_MS = 2_000;
 
 /** A message older than this when it arrives is a replay (load, catch-up): no tone. */
-export const TONE_REPLAY_WINDOW_MS = 10_000;
+const TONE_REPLAY_WINDOW_MS = 10_000;
 
 /** One incoming live message, as the store commits it. */
 export interface ToneInput {

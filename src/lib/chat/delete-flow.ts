@@ -54,8 +54,8 @@ export interface DeleteConfirmCopy {
 }
 
 /** Personal notes: the delete is private and final, never "for everyone". */
-export const DELETE_NOTE_TITLE = 'Delete note?';
-export const DELETE_NOTE_MESSAGE = "This can't be undone.";
+const DELETE_NOTE_TITLE = 'Delete note?';
+const DELETE_NOTE_MESSAGE = "This can't be undone.";
 
 /** The confirm for deleting notes (one or several). Pure. */
 export function deleteNotesConfirmCopy(count: number): DeleteConfirmCopy {
@@ -159,7 +159,7 @@ export async function purgeChatFiles(config: PurgeChatConfig): Promise<PurgeChat
   }
 }
 
-export interface DeleteFlowDeps {
+interface DeleteFlowDeps {
   client: Client;
   /** Turn accepted ids into tombstones in the thread (and tell the store). */
   markDeletedLocal: (ids: string[]) => void;
@@ -210,7 +210,7 @@ export async function runDelete(
   return { ok: true, toast: FILES_DELETED_TOAST };
 }
 
-export interface EditFlowDeps {
+interface EditFlowDeps {
   client: Client;
   /** Show the recorded row (new body and edited_at) in the thread. */
   applyLocal: (row: ChatMessageRow) => void;

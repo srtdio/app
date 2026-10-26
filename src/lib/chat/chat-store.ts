@@ -37,7 +37,7 @@ import { parsePeaks } from '@/lib/chat/waveform-peaks';
 export const OWN_PREFIX = 'You';
 
 /** Preview line for a message with attachments and no text, when nothing finer is known. */
-export const ATTACHMENT_PREVIEW = 'Attachment';
+const ATTACHMENT_PREVIEW = 'Attachment';
 
 /** Preview lines for a message with no text, by what it carries (first applicable wins). */
 export const PREVIEW_LABELS = {
@@ -113,7 +113,7 @@ export interface ChannelClear {
 }
 
 /** A channel present in the workspace roster; only its id matters to the store. */
-export interface RosterEntry {
+interface RosterEntry {
   channelId: string;
 }
 
@@ -129,7 +129,7 @@ export interface IncomingMessage {
 }
 
 /** A just-sent outbound message, used to refresh the channel's last line. */
-export interface OwnMessage {
+interface OwnMessage {
   channelId: string;
   /** The recorded row's id, when known. */
   messageId?: string;
@@ -302,7 +302,7 @@ export function beginLoad(state: ChatStoreState, scope: string): ChatStoreState 
 }
 
 /** Everything the first paint needs, resolved together. */
-export interface InitialLoad {
+interface InitialLoad {
   scope: string;
   roster: readonly ChannelSummary[];
   clears: readonly ChannelClear[];
@@ -958,7 +958,7 @@ export interface OutboxStorage {
 }
 
 /** Whose outbox is persisted: one workspace, one user. */
-export interface OutboxScope {
+interface OutboxScope {
   workspaceId: string;
   userId: string;
 }

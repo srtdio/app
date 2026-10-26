@@ -95,7 +95,7 @@ interface Anchor {
  * under it when the rows fit below, else lifted so the menu ends above it; the
  * edge flips when the preferred one would run off the viewport. Pure.
  */
-export function popoverAnchor(
+function popoverAnchor(
   rect: { top: number; bottom: number; left: number; right: number },
   rows: number,
   viewport: { width: number; height: number },

@@ -31,10 +31,10 @@ import {
 
 /** The box without its radius: the tappable quote takes PressableRow's. */
 const REPLY_QUOTE_LAYOUT = 'flex min-w-0 gap-2 overflow-hidden bg-panel-3';
-export const REPLY_QUOTE_BOX = `${REPLY_QUOTE_LAYOUT} rounded-md`;
+const REPLY_QUOTE_BOX = `${REPLY_QUOTE_LAYOUT} rounded-md`;
 
 /** The rule and author ink: accent for a reply, warn for the editing bar. */
-export type QuoteTone = 'accent' | 'warn';
+type QuoteTone = 'accent' | 'warn';
 
 /** The glyph for a summary icon (quote, reply bar, chat list line). */
 export function SummaryGlyph(props: {

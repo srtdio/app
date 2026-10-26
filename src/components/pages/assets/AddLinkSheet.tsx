@@ -7,7 +7,7 @@ import { isValidLinkUrl, type LinkOutcome } from '@/lib/asset-upload';
 import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
 
 /** The Sheet's discard confirm for a typed link. */
-export const ADD_LINK_DISCARD = {
+const ADD_LINK_DISCARD = {
   title: 'Discard this link?',
   message: 'The link and name you typed will be lost.',
 };

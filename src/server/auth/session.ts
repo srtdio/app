@@ -19,7 +19,7 @@ export function toAuthSession(session: Session): AuthSession {
   };
 }
 
-export interface RefreshInput {
+interface RefreshInput {
   refreshToken: string;
 }
 
@@ -48,7 +48,7 @@ export async function refreshSession(
   return ok(toAuthSession(data.session));
 }
 
-export interface SignOutInput {
+interface SignOutInput {
   accessToken: string;
   refreshToken: string;
 }

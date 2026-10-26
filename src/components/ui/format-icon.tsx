@@ -15,14 +15,6 @@ import {
 
 export type FormatGlyphToken = 'text' | 'image' | 'carousel' | 'video' | 'link';
 
-export const FORMAT_GLYPH_LABEL: Record<FormatGlyphToken, string> = {
-  text: 'Text',
-  image: 'Image',
-  carousel: 'Carousel',
-  video: 'Video',
-  link: 'Link',
-};
-
 /** The format glyph as an icon element at the given pixel size. */
 export function formatIcon(token: FormatGlyphToken, size: number = ICON_SIZE.inline): ReactElement {
   switch (token) {

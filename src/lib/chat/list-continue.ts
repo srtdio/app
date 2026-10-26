@@ -12,7 +12,7 @@
 // - Anything else (a paragraph, a line that only looks numbered mid-way): null.
 
 /** The field after a list edit and where the caret goes. */
-export interface ListEdit {
+interface ListEdit {
   value: string;
   caret: number;
 }

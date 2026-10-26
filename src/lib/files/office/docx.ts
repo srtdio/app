@@ -32,7 +32,7 @@ const EMU_PER_PX = 9525;
 const LETTER_ASPECT = 11 / 8.5;
 
 /** Escape text for HTML. Pure. */
-export function escapeHtml(text: string): string {
+function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -42,9 +42,7 @@ export function escapeHtml(text: string): string {
 }
 
 /** The image mime from magic bytes, or null for anything that is not a plain raster. Pure. */
-export function sniffImage(
-  b: Uint8Array,
-): 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | null {
+function sniffImage(b: Uint8Array): 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | null {
   if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
     return 'image/png';
   }

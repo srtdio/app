@@ -19,7 +19,7 @@ const DISPLAY_NAME_MAX = 80;
 
 const emailSchema = z.string().email();
 
-export interface SignupInput {
+interface SignupInput {
   email: string;
   displayName: string;
   /** IANA timezone auto-detected by the client (e.g. "Asia/Kolkata"). */
@@ -77,7 +77,7 @@ export async function signupWithMagicLink(
   return ok({ email: input.email });
 }
 
-export interface VerifyMagicLinkInput {
+interface VerifyMagicLinkInput {
   /** The hashed_token delivered in the magic link. */
   tokenHash: string;
   /** Verification type GoTrue assigned to the link (magiclink for signup). */

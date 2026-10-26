@@ -17,7 +17,7 @@ export const MIME = {
   jpeg: 'image/jpeg',
 } as const;
 
-export interface ZipFile {
+interface ZipFile {
   name: string;
   data: Uint8Array | string;
   /** Default 'deflate'. */
@@ -35,7 +35,7 @@ export interface ZipFile {
  * data of entry `into`, which must itself hold a stored local header for `name`
  * (see {@link storedLocalHeader}). Builds the overlapping-entry zip bomb shape.
  */
-export interface ZipAlias {
+interface ZipAlias {
   name: string;
   into: string;
   size: number;
@@ -197,7 +197,7 @@ function contentTypes(mainPart: string, mainType: string, extra = ''): string {
 const RELS =
   '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>';
 
-export interface OfficeOptions {
+interface OfficeOptions {
   /** Use the macro-enabled main content type (a docm/xlsm/pptm). */
   macroContentType?: boolean;
   /** Extra entries placed in the package. */
@@ -349,9 +349,9 @@ function hash2b(password: Buffer, salt: Buffer, udata: Buffer): Buffer {
   return k.subarray(0, 32);
 }
 
-export type PdfRevision = 2 | 3 | 4 | 5 | 6;
+type PdfRevision = 2 | 3 | 4 | 5 | 6;
 
-export interface EncryptedPdfOptions {
+interface EncryptedPdfOptions {
   revision: PdfRevision;
   /** '' is an owner-only lock: the file opens without a password. */
   userPassword: string;

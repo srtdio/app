@@ -17,7 +17,7 @@ export const REACTION_BADGE_CLASS =
 export const REACTION_BADGE_HIT =
   "before:absolute before:-inset-x-2 before:-inset-y-3.5 before:content-['']";
 
-export interface ReactionBadgeProps {
+interface ReactionBadgeProps {
   /** The spoken summary, e.g. "2 reactions: 👍 🎉". */
   label: string;
   onClick: () => void;

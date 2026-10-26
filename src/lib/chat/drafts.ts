@@ -43,7 +43,7 @@ export function strippedReply(reply: DraftReply): DraftReply {
     : { ...reply, quote: { ...reply.quote, preview: '' }, deleted: true };
 }
 
-export interface ChannelDraft {
+interface ChannelDraft {
   text: string;
   caret: number;
   reply: DraftReply | null;
@@ -75,13 +75,13 @@ export interface DraftStorage {
 }
 
 /** Whose drafts are persisted: one user, one workspace. */
-export interface DraftScope {
+interface DraftScope {
   userId: string;
   workspaceId: string;
 }
 
 /** A draft as stored: everything but the picked files. */
-export type PersistedDraft = Omit<ChannelDraft, 'pendingFiles'>;
+type PersistedDraft = Omit<ChannelDraft, 'pendingFiles'>;
 
 /** The stored blob: one user, a slot per workspace, a draft per channel. */
 interface PersistedDrafts {
@@ -219,7 +219,7 @@ function cancelWrite(): void {
  * Write the current scope's slot from memory now (read-modify-write: other
  * workspaces' slots stay; another user's blob is replaced). No scope: nothing.
  */
-export function flushDrafts(): void {
+function flushDrafts(): void {
   cancelWrite();
   const current = scope;
   const storage = browserStorage();

@@ -1338,7 +1338,7 @@ function isNestedContainer(head: Uint8Array, name: string): boolean {
   );
 }
 
-export function ooxmlKindForMime(mimeType: string): OoxmlKind | null {
+function ooxmlKindForMime(mimeType: string): OoxmlKind | null {
   return OOXML_BY_MIME[normalizeMime(mimeType)] ?? null;
 }
 

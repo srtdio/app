@@ -12,7 +12,7 @@ const URL_TOKEN = /https?:\/\/[^\s<]+/gi;
 const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
 
 /** One run of a message body: plain text, or an http(s) url. */
-export type BodySegment = { kind: 'text'; text: string } | { kind: 'url'; url: string };
+type BodySegment = { kind: 'text'; text: string } | { kind: 'url'; url: string };
 
 /**
  * Split a body into text and url runs in order. Trailing sentence punctuation
@@ -58,9 +58,7 @@ export interface EntityRoutes {
 export const APP_ENTITY_ROUTES: EntityRoutes = { post: '/p/:ref', brief: '/b/:ref' };
 
 /** What a url in a message points at. `path` is the in-app location for the router. */
-export type LinkTarget =
-  | { kind: 'external' }
-  | { kind: 'post' | 'brief'; ref: EntityRef; path: string };
+type LinkTarget = { kind: 'external' } | { kind: 'post' | 'brief'; ref: EntityRef; path: string };
 
 /**
  * Classify a url: a link to this app's own post or brief page (same origin, a

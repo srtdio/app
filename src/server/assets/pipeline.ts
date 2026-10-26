@@ -408,7 +408,7 @@ export async function runUploadPipeline(
 }
 
 /** Input to {@link createLinkAsset}. The actor is the verified JWT sub. */
-export interface LinkInput {
+interface LinkInput {
   workspaceId: string;
   uploadedBy: string;
   /** User-given asset name; stored as assets.filename. */
@@ -550,11 +550,11 @@ export async function getAssetSummary(
 
 /** Server-side caps; the client's numbers are never trusted. */
 export const THUMBNAIL_MAX_BYTES = 300 * 1024;
-export const THUMBNAIL_MAX_WIDTH = 580;
-export const THUMBNAIL_MAX_HEIGHT = 1160;
+const THUMBNAIL_MAX_WIDTH = 580;
+const THUMBNAIL_MAX_HEIGHT = 1160;
 export const THUMBNAIL_MAX_PAGE_COUNT = 10_000;
 
-export interface ThumbnailDeps {
+interface ThumbnailDeps {
   storage: StorageClient;
   repository: AssetRepository;
   renditions: RenditionStore;

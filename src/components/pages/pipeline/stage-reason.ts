@@ -8,7 +8,7 @@ import { runCreateCommentBatch } from '@/components/comments/Comments';
 import { isClient } from '@/components/pages/pcs/roles';
 import type { Client } from '@srtdio/posts';
 
-export interface StageReasonInput {
+interface StageReasonInput {
   workspaceId: string;
   postId: string;
   body: string;

@@ -3,7 +3,7 @@ export const SWIPE_LOCK_PX = 8;
 /** Offset (px) at which a release replies; the bubble follows 1:1 up to here. */
 export const SWIPE_TRIGGER_PX = 64;
 /** Share of the finger's travel the bubble follows beyond SWIPE_TRIGGER_PX. */
-export const SWIPE_RESISTANCE = 0.3;
+const SWIPE_RESISTANCE = 0.3;
 /** The bubble never travels further than this (px). */
 export const SWIPE_MAX_PX = 120;
 /** A rightward flick at least this fast (px/ms) replies below the trigger... */
@@ -11,7 +11,7 @@ export const SWIPE_FLICK_VELOCITY = 0.5;
 /** ...once the finger has travelled at least this far (px). */
 export const SWIPE_FLICK_MIN_PX = 24;
 /** Velocity is measured over the samples of the last this-many ms. */
-export const SWIPE_VELOCITY_WINDOW_MS = 100;
+const SWIPE_VELOCITY_WINDOW_MS = 100;
 /** A press this close (px) to the left screen edge belongs to the iOS back gesture. */
 export const SWIPE_EDGE_PX = 20;
 /** Spring-back duration (ms) after a release or cancel. */
@@ -20,7 +20,7 @@ export const SWIPE_SPRING_MS = 180;
 export const SWIPE_VIBRATE_MS = 10;
 
 /** The only pointer fields the controller reads; React's PointerEvent satisfies it. */
-export interface SwipePointerSample {
+interface SwipePointerSample {
   clientX: number;
   clientY: number;
   /** 'mouse' | 'touch' | 'pen'; absent reads as touch. */

@@ -21,7 +21,7 @@
 // zone) explicitly. Unparseable input renders as ''.
 
 /** An instant (ISO string, epoch ms or Date) or a date-only "YYYY-MM-DD". */
-export type DateInput = string | number | Date;
+type DateInput = string | number | Date;
 
 const SHORT_MONTHS = [
   'Jan',
@@ -274,7 +274,7 @@ export function formatDue(
 }
 
 /** An overdue reading; `bad` is always true so callers colour it with the bad token. */
-export interface OverdueLabel {
+interface OverdueLabel {
   text: string;
   bad: true;
 }

@@ -91,7 +91,7 @@ const LISTBOX_KEYS = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' 
  * Escape is the parent's (the escape stack) and the panel's own handler.
  * Reads the options from the event's listbox, so it stays hook-free.
  */
-export function onListboxKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+function onListboxKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
   if (!LISTBOX_KEYS.has(event.key) || typeof document === 'undefined') return;
   const list: HTMLDivElement | undefined = event.currentTarget;
   if (list === undefined) return;

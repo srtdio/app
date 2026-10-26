@@ -56,7 +56,7 @@ let newestIat: number | null = null;
 const FRESH_TOKEN_EVENTS: ReadonlySet<string> = new Set(['SIGNED_IN', 'TOKEN_REFRESHED']);
 
 /** The iat claim (seconds) of a JWT, or null when the token is missing or unreadable. */
-export function tokenIat(accessToken: string | null | undefined): number | null {
+function tokenIat(accessToken: string | null | undefined): number | null {
   const payload = accessToken?.split('.')[1];
   if (payload === undefined || payload === '') return null;
   try {
@@ -113,7 +113,7 @@ export function resetServerClock(): void {
 }
 
 /** Widening steps before the next window jumps straight to the oldest row. */
-export const MAX_WIDEN_STEPS = 12;
+const MAX_WIDEN_STEPS = 12;
 
 /**
  * One window's created_at bounds: `from` is inclusive (gte); `to` is
@@ -127,7 +127,7 @@ export interface TimeBounds {
   toInclusive: boolean;
 }
 
-export interface BoundedPageInput<Row> {
+interface BoundedPageInput<Row> {
   /** Rows a full page holds. */
   pageSize: number;
   /**
@@ -220,7 +220,7 @@ export async function readBoundedPage<Row>(input: BoundedPageInput<Row>): Promis
   return { ok: true, data: rows };
 }
 
-export interface BoundedForwardInput<Row> {
+interface BoundedForwardInput<Row> {
   pageSize: number;
   /** The page's oldest edge (inclusive): the cursor's created_at, or the source's oldest row. */
   lower: string;

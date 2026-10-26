@@ -17,7 +17,7 @@ import { avatarShapeClass, type AvatarRole } from '@/components/ui/Avatar';
  * square): profile 72 (the chat home tile), header 32 (the thread header) and
  * row 40 (forward picker and search rows). Same sizes and shapes as Avatar.
  */
-export type NotesAvatarRole = Extract<AvatarRole, 'profile' | 'header' | 'row'>;
+type NotesAvatarRole = Extract<AvatarRole, 'profile' | 'header' | 'row'>;
 
 const NOTES_AVATAR_SIZE: Record<NotesAvatarRole, string> = {
   profile: 'h-[72px] w-[72px]',
@@ -46,7 +46,7 @@ const NOTES_BADGE: Record<NotesAvatarRole, { box: string; glyph: number }> = {
 };
 
 /** The surface behind the avatar: the badge ring takes it, so it cuts out cleanly. */
-export type NotesAvatarSurface = 'panel' | 'panel-2' | 'bg' | 'accent-soft';
+type NotesAvatarSurface = 'panel' | 'panel-2' | 'bg' | 'accent-soft';
 
 const RING: Record<NotesAvatarSurface, string> = {
   panel: 'border-panel',

@@ -26,7 +26,7 @@ export type ThumbnailFallback =
     }
   | { kind: 'glyph' };
 
-export interface ThumbnailProps {
+interface ThumbnailProps {
   /** The version to presign, or null for a fallback-only tile (links, docs, imageless posts). */
   assetVersionId: string | null;
   /** The page-owned presign cache, passed down; the tile never makes its own. */

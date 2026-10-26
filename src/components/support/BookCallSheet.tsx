@@ -25,7 +25,7 @@ import {
   type CallChoice,
 } from './book-call-slots';
 
-export interface BookCallSheetProps {
+interface BookCallSheetProps {
   open: boolean;
   onClose: () => void;
   workspaceId: string;

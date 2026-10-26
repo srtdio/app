@@ -43,7 +43,7 @@ type Upload =
 export const SAMPLE_VERSION_ID = 'local-first-post';
 
 /** The bundled sample photo as a file, or null when it did not load. */
-export async function loadSamplePhoto(traceId: string): Promise<File | null> {
+async function loadSamplePhoto(traceId: string): Promise<File | null> {
   try {
     const res = await fetchWithTrace(FIRST_POST_SAMPLE.photoPath, undefined, traceId);
     if (!res.ok) return null;

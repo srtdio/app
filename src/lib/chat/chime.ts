@@ -67,7 +67,7 @@ export interface Chime {
   dispose(): void;
 }
 
-export interface ChimeDeps {
+interface ChimeDeps {
   createContext?: () => ChimeAudioContext | null;
   target?: GestureTarget | null;
   setTimer?: (fn: () => void, ms: number) => unknown;

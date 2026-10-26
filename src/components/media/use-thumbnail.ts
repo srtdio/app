@@ -4,7 +4,7 @@ import { useInView } from '@/lib/use-in-view';
 import type { PresignCache } from '@/lib/asset-presign';
 
 /** Inputs for {@link useThumbnail}: a nullable version id plus the page's cache. */
-export interface UseThumbnailArgs {
+interface UseThumbnailArgs {
   /** The asset version to presign, or null when this tile shows a fallback. */
   assetVersionId: string | null;
   /** The page-owned presign cache; the hook never constructs one. */
@@ -14,7 +14,7 @@ export interface UseThumbnailArgs {
 }
 
 /** What {@link useThumbnail} returns: the inView ref plus the URL lifecycle. */
-export interface ThumbnailHandle<T extends Element> {
+interface ThumbnailHandle<T extends Element> {
   ref: React.RefObject<T>;
   url: string | null;
   failed: boolean;

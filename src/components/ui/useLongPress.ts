@@ -15,14 +15,14 @@ interface PointerSample {
   currentTarget?: unknown;
 }
 
-export interface LongPressHandlers {
+interface LongPressHandlers {
   onPointerDown: (event: PointerSample) => void;
   onPointerMove: (event: PointerSample) => void;
   onPointerUp: () => void;
   onPointerCancel: () => void;
 }
 
-export interface LongPressController {
+interface LongPressController {
   /** Spread onto the target element. */
   handlers: LongPressHandlers;
   /**
@@ -48,7 +48,7 @@ export interface LongPressController {
   dispose: () => void;
 }
 
-export interface LongPressOptions {
+interface LongPressOptions {
   onLongPress: () => void;
   thresholdMs?: number;
   moveTolerancePx?: number;
@@ -63,7 +63,7 @@ export interface LongPressOptions {
 const pendingHolds = new Map<() => void, unknown>();
 
 /** The slice of a DOM element the scoped cancel needs (a test fake satisfies it). */
-export interface HoldScope {
+interface HoldScope {
   contains: (other: Node | null) => boolean;
 }
 
@@ -176,7 +176,7 @@ export function createLongPressController({
   };
 }
 
-export interface UseLongPressResult {
+interface UseLongPressResult {
   handlers: LongPressHandlers;
   consumeClickSuppression: () => boolean;
   cancel: () => void;
@@ -219,11 +219,11 @@ export function useLongPress(
   };
 }
 
-export interface MenuGestureHandlers extends LongPressHandlers {
+interface MenuGestureHandlers extends LongPressHandlers {
   onContextMenu: (event: { preventDefault: () => void }) => void;
 }
 
-export interface UseMenuGestureResult {
+interface UseMenuGestureResult {
   /** Spread onto the row, card, tile or bubble. */
   handlers: MenuGestureHandlers;
   /** Call first in the target's onClick; true means swallow the click that trailed a long-press. */

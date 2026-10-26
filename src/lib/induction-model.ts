@@ -15,8 +15,6 @@ export const ROUTE_PREFIX = {
   approver: 'a_',
 } as const satisfies Record<Route, string>;
 
-export type RoutePrefix = (typeof ROUTE_PREFIX)[Route];
-
 /** The look-around chapters. Creator routes run Ask, Review, Talk; the approver Review, Ask, Talk. */
 export type Chapter = 'ask' | 'review' | 'talk';
 

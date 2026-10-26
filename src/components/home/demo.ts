@@ -101,7 +101,7 @@ export function shiftMonth(month: CalendarDay, delta: number): CalendarDay {
 }
 
 /** One calendar cell; `outside` marks a day of the previous or next month. */
-export interface GridCell {
+interface GridCell {
   day: CalendarDay;
   outside: boolean;
 }
@@ -137,7 +137,7 @@ export function longDate(day: CalendarDay): string {
 }
 
 /** "Thu 16 Oct": the chosen day as the page shows it. */
-export function shortDate(day: CalendarDay): string {
+function shortDate(day: CalendarDay): string {
   return `${WEEKDAYS[weekday(day)] ?? ''} ${day.d} ${MONTHS[day.m - 1] ?? ''}`;
 }
 

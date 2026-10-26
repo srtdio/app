@@ -13,14 +13,14 @@ export interface OfficeWorkerLike {
   terminate(): void;
 }
 
-export function createOfficeWorker(): OfficeWorkerLike {
+function createOfficeWorker(): OfficeWorkerLike {
   return new Worker(new URL('./office.worker.ts', import.meta.url), {
     type: 'module',
     name: 'office',
   }) as unknown as OfficeWorkerLike;
 }
 
-export interface RunOptions {
+interface RunOptions {
   op: OfficeRequest['op'];
   bytes: Uint8Array;
   mime: string | null;

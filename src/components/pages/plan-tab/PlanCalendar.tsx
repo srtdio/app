@@ -68,10 +68,10 @@ import type { AddTarget } from './PlanTabAdd';
 import { usePlanTabMove } from './use-plan-tab-move';
 
 /** Pointer travel (px) that lifts an entry into a drag. */
-export const DRAG_SLOP_PX = 4;
+const DRAG_SLOP_PX = 4;
 
 /** The calendar's data: the plans in the range and the dated posts in no plan. */
-export interface CalendarData {
+interface CalendarData {
   bundles: readonly PlanBundle[];
   posts: readonly LoosePost[];
   thumbs: PlanThumbs;

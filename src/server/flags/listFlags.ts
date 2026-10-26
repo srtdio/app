@@ -25,7 +25,7 @@ type FlagRow = Pick<
 
 const SELECT = 'workspace_id, flag_name, category, enabled, rollout_percentage, tier_min, reason';
 
-export interface ListFlagsInput {
+interface ListFlagsInput {
   /** Authenticated (non-service-role) client. */
   client: SupabaseClient<Database>;
   /** Workspace whose overrides take precedence, or null for the GLOBAL set only. */

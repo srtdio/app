@@ -3,7 +3,7 @@
  * window CustomEvents. The shell only dispatches; feature PRs (E/F and later)
  * attach the listeners. Names are generic, never tied to a specific bridge.
  */
-export type SortedEventName =
+type SortedEventName =
   | 'sorted:create-post'
   | 'sorted:create-brief'
   | 'sorted:switch-workspace'

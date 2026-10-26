@@ -13,7 +13,7 @@ import type { ScrollSource } from '@/lib/chat/stick-to-bottom';
 export const JUMP_HOLD_MS = 2000;
 
 /** The vertical extent of a box on screen. */
-export interface VerticalBox {
+interface VerticalBox {
   top: number;
   bottom: number;
 }

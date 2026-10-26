@@ -24,7 +24,7 @@ interface BriefCardRow {
 }
 
 /** Picker page size (newest first). */
-export const BRIEF_PICKER_LIMIT = 50;
+const BRIEF_PICKER_LIMIT = 50;
 
 const BRIEF_COLUMNS = 'id, title, status, created_at';
 

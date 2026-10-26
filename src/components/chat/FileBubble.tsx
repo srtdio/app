@@ -49,8 +49,8 @@ import { sharedThumbnail, thumbnailKind } from '@/lib/files/thumbnail';
 export const BUBBLE_FILL = 'grid grid-cols-[minmax(0,100vw)]';
 
 /** Thumbnail box height / width bounds: a tall page is cropped from the top, a wide frame letterboxed. */
-export const THUMB_RATIO_MIN = 0.5;
-export const THUMB_RATIO_MAX = 1.3;
+const THUMB_RATIO_MIN = 0.5;
+const THUMB_RATIO_MAX = 1.3;
 /** The box the sender's own sending PDF or video reserves before its thumbnail exists. */
 export const SENDING_RATIO: Readonly<Record<'pdf' | 'video', number>> = {
   pdf: THUMB_RATIO_MAX,
@@ -114,14 +114,14 @@ function useLocalThumbnail(file: File | null): string | null {
   return url;
 }
 
-export interface FileBubbleProps {
+interface FileBubbleProps {
   attachment: MessageAttachment;
   cache: PresignCache;
   presignEnabled: boolean;
 }
 
 /** What the card shows; everything is decided before it renders. */
-export interface FileBubbleCardProps {
+interface FileBubbleCardProps {
   kind: FileKind;
   /** Thumbnail box height / width, or null for the icon card. */
   ratio: number | null;

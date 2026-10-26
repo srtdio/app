@@ -18,7 +18,7 @@ export class FlagValidationError extends Error {
   override readonly name = 'FlagValidationError';
 }
 
-export interface SetFlagInput {
+interface SetFlagInput {
   /** Service-role client. Required: the table is operator-write only. */
   client: SupabaseClient<Database>;
   /** uuid trace id, recorded on the audit_log row. */

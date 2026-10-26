@@ -28,9 +28,7 @@ export interface CardViewer {
  * waiting on. For a creator the card shows only `ago` ("2 days ago") beside the
  * stage dot; the full phrase (`text`) is the line's title and aria-label.
  */
-export type ReviewStatus =
-  | { tone: 'you'; text: string }
-  | { tone: 'with'; text: string; ago: string };
+type ReviewStatus = { tone: 'you'; text: string } | { tone: 'with'; text: string; ago: string };
 
 /** The first word of a display name ("Meera Shah" -> "Meera"); '' for a blank name. */
 export function firstNameOf(displayName: string | null | undefined): string {

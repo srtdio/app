@@ -37,9 +37,7 @@ export interface TaskShareWiring {
   onShared: (messageId: string) => void;
 }
 
-export type SnapshotState =
-  | { state: 'waiting' }
-  | { state: 'sent' | 'failed'; message: ThreadMessage };
+type SnapshotState = { state: 'waiting' } | { state: 'sent' | 'failed'; message: ThreadMessage };
 
 /**
  * Where the just-sent snapshot stands: the own message that was not loaded

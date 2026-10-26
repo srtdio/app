@@ -104,7 +104,7 @@ function focusPanel(root: HTMLElement): void {
 }
 
 /** Push a layer; returns its pop. Popping a layer that is not on top keeps the rest in order. */
-export function pushModalLayer(panel: RefObject<HTMLElement | null>): () => void {
+function pushModalLayer(panel: RefObject<HTMLElement | null>): () => void {
   const layer: Layer = { panel };
   layers.push(layer);
   if (!listening && typeof document !== 'undefined') {
@@ -128,7 +128,7 @@ export function modalLayerCount(): number {
   return layers.length;
 }
 
-export interface ModalFocusOptions {
+interface ModalFocusOptions {
   /** Where focus lands on open (e.g. the primary action). Default: the first control, else the panel. */
   initial?: () => HTMLElement | null | undefined;
 }
@@ -181,7 +181,7 @@ export function useModalFocus(
  * nowhere. A close that moved focus elsewhere on purpose (a tap on another
  * control) keeps that choice.
  */
-export function useReturnFocus(open: boolean, panel?: RefObject<HTMLElement | null>): void {
+function useReturnFocus(open: boolean, panel?: RefObject<HTMLElement | null>): void {
   useEffect(() => {
     if (!open || typeof document === 'undefined') return;
     const before = document.activeElement;

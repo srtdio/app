@@ -11,7 +11,7 @@ import type { BriefFilter } from '@/lib/brief-list';
 export const BRIEF_COUNT_FILTERS: readonly BriefFilter[] = ['all', 'open', 'closed'];
 
 /** One count per chip. */
-export type BriefCounts = Record<BriefFilter, number>;
+type BriefCounts = Record<BriefFilter, number>;
 
 /**
  * Escape LIKE metacharacters (backslash, %, _) so a typed search matches as

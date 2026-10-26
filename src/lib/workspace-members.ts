@@ -73,7 +73,7 @@ export function activeMemberIds(
 }
 
 /** The distinct user ids of every row, in row order. */
-export function memberUserIds(rows: readonly Pick<WorkspaceMemberRow, 'user_id'>[]): string[] {
+function memberUserIds(rows: readonly Pick<WorkspaceMemberRow, 'user_id'>[]): string[] {
   return [...new Set(rows.map((row) => row.user_id))];
 }
 
@@ -95,7 +95,7 @@ export function currentMembers<
 }
 
 /** Active members as picker options: the profiles of the active ids, by name. */
-export function memberOptionsFrom(
+function memberOptionsFrom(
   rows: readonly Pick<WorkspaceMemberRow, 'user_id' | 'active'>[],
   profiles: readonly ChatProfile[],
 ): MemberOption[] {
@@ -134,7 +134,7 @@ export function withMembersLoadCopy<T extends { error: string | null }>(state: T
 }
 
 /** The two reads, injected so the load is unit-tested without a client. */
-export interface MemberReaders {
+interface MemberReaders {
   members: () => Promise<Result<WorkspaceMemberRow[]>>;
   profiles: (userIds: string[]) => ReturnType<typeof readProfiles>;
 }
@@ -297,7 +297,7 @@ export function peekWorkspaceMembers(
 }
 
 /** Re-read this workspace's members for every subscriber. */
-export function refetchWorkspaceMembers(userId: string, workspaceId: string): void {
+function refetchWorkspaceMembers(userId: string, workspaceId: string): void {
   const key = keyFor(userId, workspaceId);
   startRead(key, entryFor(userId, workspaceId), 'refetch');
 }
@@ -398,7 +398,7 @@ export function useWorkspaceMembers(workspaceId: string | null): WorkspaceMember
   return useMemo(() => ({ ...snapshot, refetch }), [snapshot, refetch]);
 }
 
-export interface MentionCandidatesState {
+interface MentionCandidatesState {
   candidates: MentionCandidate[];
   loading: boolean;
   error: string | null;

@@ -11,7 +11,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { IconCamera, IconImage, IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 
-export type PhotoOption = 'camera' | 'library' | 'remove';
+type PhotoOption = 'camera' | 'library' | 'remove';
 
 /** Which rows appear, in order. Remove only when a photo is set. Pure. */
 export function photoOptions(hasPhoto: boolean): ReadonlyArray<PhotoOption> {

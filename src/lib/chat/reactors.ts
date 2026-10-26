@@ -38,7 +38,7 @@ export interface WhoReacted {
 export const ALL_TAB = 'all';
 
 /** The viewer's own row label. */
-export const YOU_LABEL = 'You';
+const YOU_LABEL = 'You';
 
 /**
  * Group reaction rows: the All chip (every row), then one chip per emoji in

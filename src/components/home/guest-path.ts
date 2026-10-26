@@ -4,7 +4,7 @@
 // canvas; keep them in sync.
 
 /** Supabase's default localStorage key: sb-<project-ref>-auth-token. */
-export const AUTH_TOKEN_KEY = /^sb-.+-auth-token$/;
+const AUTH_TOKEN_KEY = /^sb-.+-auth-token$/;
 
 // Auth callbacks (PKCE code, implicit tokens, errors, email-link type) must
 // always reach the app so Supabase can finish the sign-in.

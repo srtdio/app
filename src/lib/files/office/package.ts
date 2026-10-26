@@ -7,9 +7,9 @@ import { scanXml } from './xml';
 import { readZipDirectory, readZipEntry, ZipError, type ZipEntry } from './zip';
 
 /** One XML part is never more than this once inflated. */
-export const PART_MAX_BYTES = 64 * 1024 * 1024;
+const PART_MAX_BYTES = 64 * 1024 * 1024;
 /** All parts read from one package together. */
-export const PACKAGE_MAX_BYTES = 160 * 1024 * 1024;
+const PACKAGE_MAX_BYTES = 160 * 1024 * 1024;
 
 export type PackageKind = 'docx' | 'xlsx' | 'pptx';
 
@@ -27,7 +27,7 @@ export interface Relationship {
 }
 
 /** Resolve a relationship target against the source part's folder. Pure. */
-export function resolveTarget(sourcePart: string, target: string): string {
+function resolveTarget(sourcePart: string, target: string): string {
   const base = target.startsWith('/') ? [] : sourcePart.split('/').slice(0, -1);
   for (const seg of target.replace(/^\/+/, '').split('/')) {
     if (seg === '' || seg === '.') continue;
@@ -38,7 +38,7 @@ export function resolveTarget(sourcePart: string, target: string): string {
 }
 
 /** The rels file for a part: "word/document.xml" -> "word/_rels/document.xml.rels". Pure. */
-export function relsPath(part: string): string {
+function relsPath(part: string): string {
   const slash = part.lastIndexOf('/');
   return `${part.slice(0, slash + 1)}_rels/${part.slice(slash + 1)}.rels`;
 }

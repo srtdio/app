@@ -60,7 +60,7 @@ export function MarkBadge(props: {
  * The circle's entrance: it fades in on opacity alone (120ms, none under
  * reduced motion); nothing around it moves.
  */
-export const SELECT_CHECK_FADE =
+const SELECT_CHECK_FADE =
   'transition-opacity duration-[120ms] motion-reduce:transition-none [@starting-style]:opacity-0';
 
 /**

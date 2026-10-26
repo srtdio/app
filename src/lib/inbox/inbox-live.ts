@@ -11,7 +11,7 @@ import { resolveMentionText, splitMentions } from '@/lib/chat/mentions';
 export type InboxRow = Database['public']['Tables']['inbox_entries']['Row'];
 
 /** The result of diffing a fresh page of rows against the high-water mark. */
-export interface NewSummary {
+interface NewSummary {
   /** Rows whose created_at is strictly newer than the high-water mark. */
   newRows: InboxRow[];
   /** The high-water mark to carry forward: max(sinceMs, newest created_at). */
@@ -62,7 +62,7 @@ export interface EnrichedNew {
 }
 
 /** The verb-bearing slice of an Activity item. */
-export interface VerbSource {
+interface VerbSource {
   eventType: string;
   toStage?: string | null;
   reviewStatus?: string | null;
@@ -147,7 +147,7 @@ export function actionKey(item: VerbSource): string {
 }
 
 /** The send-for-review verb: it wraps the title ("sent {title} for review"). */
-export const REVIEW_VERB = 'sent for review';
+const REVIEW_VERB = 'sent for review';
 
 /** The brief reopen verb: it takes the title directly ("reopened {title}"). */
 export const REOPEN_VERB = 'reopened';
@@ -178,7 +178,7 @@ function othersPhrase(n: number): string {
  *   same person, different posts or actions: "{Name}: {N} new updates"
  *   different people, different posts or actions: "{Name} and {N} others: {M} new updates"
  */
-export function groupedToastTitle(
+function groupedToastTitle(
   updates: readonly ToastUpdate[],
   total: number,
   lead: { actorName: string | null; verb?: string | null; title: string | null },
@@ -206,7 +206,7 @@ export function groupedToastTitle(
 }
 
 /** The toast content derived from an enriched batch, before it is rendered. */
-export interface ToastSpec {
+interface ToastSpec {
   title: string;
   description?: string;
   actorName: string | null;
@@ -435,7 +435,7 @@ export function toastFromEnriched(enriched: EnrichedNew): ToastSpec | null {
 }
 
 /** A batch of new rows split between the two live toasts. */
-export interface NewRowsSplit {
+interface NewRowsSplit {
   /** Rows the activity toast words (and the tone plays for). */
   activity: InboxRow[];
   /** New chat mentions: their own "<name> mentioned you" toast. */
@@ -501,7 +501,7 @@ export function mentionTabText(name: string | null): string {
 }
 
 /** The live toast for new chat mentions. */
-export interface MentionToastSpec {
+interface MentionToastSpec {
   title: string;
   description: string;
   /** Where Open goes: the message for one mention, Notifications for several. */
@@ -510,7 +510,7 @@ export interface MentionToastSpec {
 }
 
 /** Copy on the mention toast's open affordance. */
-export const MENTION_TOAST_ACTION = 'Open';
+const MENTION_TOAST_ACTION = 'Open';
 
 /**
  * "<name> mentioned you" (Open goes to the message) for one new chat mention;

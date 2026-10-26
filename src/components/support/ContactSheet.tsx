@@ -8,7 +8,7 @@ import { useOptionalToast } from '@/components/ui/toast';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { anotherWorkspaceBody, anotherWorkspaceMailto, SUPPORT_EMAIL } from '@/lib/support';
 
-export interface ContactSheetProps {
+interface ContactSheetProps {
   open: boolean;
   onClose: () => void;
   workspaceName: string;

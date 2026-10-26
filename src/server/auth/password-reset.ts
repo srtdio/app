@@ -15,7 +15,7 @@ const PASSWORD_MIN = 8;
 
 const emailSchema = z.string().email();
 
-export interface ResetRequestInput {
+interface ResetRequestInput {
   email: string;
   /** Where the recovery link returns the user. */
   redirectTo?: string;
@@ -44,7 +44,7 @@ export async function requestPasswordReset(
   return ok({ email: input.email });
 }
 
-export interface ResetConfirmInput {
+interface ResetConfirmInput {
   /** The hashed_token delivered in the recovery link. */
   tokenHash: string;
   newPassword: string;

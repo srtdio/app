@@ -104,7 +104,7 @@ export interface CropWindow {
   h: number;
 }
 
-export type CropResult =
+type CropResult =
   | { kind: 'fits'; window: CropWindow }
   | { kind: 'cut'; pct: number; from: 'sides' | 'top and bottom'; window: CropWindow }
   | { kind: 'bands'; window: CropWindow };
@@ -168,7 +168,7 @@ export function frameRatio(size: PlatformSize): number {
 }
 
 /** The label of the panel's first size: the frame this post renders in. */
-export const THIS_POST = 'This post';
+const THIS_POST = 'This post';
 
 /**
  * The frame this post renders in on the post page (frameFor), as a panel size,

@@ -82,7 +82,7 @@ export function reminderSummary(at: Date, now: Date): string {
   return `Reminds you ${inSentence(formatSendLabel(at, now)).replace(/, /, ' at ')}`;
 }
 
-export const REMINDER_RANGE_COPY = 'Pick a time at least 1 minute from now';
+const REMINDER_RANGE_COPY = 'Pick a time at least 1 minute from now';
 export const ACTION_FAILED_COPY = "Couldn't do that. Try again.";
 
 /**
@@ -106,7 +106,7 @@ export const RING_GRACE_MS = 60_000;
 export const MAX_TIMER_MS = 60 * MINUTE_MS;
 
 /** Pending (neither fired nor cancelled) rows, soonest first. Pure. */
-export function pendingSoonestFirst(rows: readonly ReminderRow[]): ReminderRow[] {
+function pendingSoonestFirst(rows: readonly ReminderRow[]): ReminderRow[] {
   return rows
     .filter((r) => r.fired_at === null && r.cancelled_at === null)
     .sort((a, b) => Date.parse(a.remind_at) - Date.parse(b.remind_at));
@@ -160,7 +160,7 @@ export function armRing(input: {
 }
 
 /** A 'reminder' inbox row as the missed count reads it. */
-export interface MissedCandidate {
+interface MissedCandidate {
   createdAt: string;
   readAt: string | null;
   reminderId: string | null;
@@ -206,16 +206,16 @@ export function missedCopy(count: number): string {
 // reads as "nothing stored" and a failed write is ignored by design)
 // ---------------------------------------------------------------------------
 
-export function lastSeenKey(userId: string): string {
+function lastSeenKey(userId: string): string {
   return `sorted:bell:last-seen:${userId}`;
 }
 
-export function rungKey(userId: string): string {
+function rungKey(userId: string): string {
   return `sorted:bell:rung:${userId}`;
 }
 
 /** The most recent rung ids kept per device. */
-export const RUNG_KEEP = 50;
+const RUNG_KEEP = 50;
 
 interface KeyValueStore {
   getItem(key: string): string | null;
@@ -312,7 +312,7 @@ export async function readPendingReminders(
 }
 
 /** How many missed 'reminder' rows one open reads. */
-export const MISSED_READ_LIMIT = 50;
+const MISSED_READ_LIMIT = 50;
 
 /**
  * The caller's unread 'reminder' inbox rows created after `sinceIso` (the
@@ -355,7 +355,7 @@ export async function readUnreadRemindersSince(
   }
 }
 
-export type ReminderWriteResult = { ok: true } | RecordFailed;
+type ReminderWriteResult = { ok: true } | RecordFailed;
 
 async function runWrite(
   timeoutMs: number | undefined,
@@ -386,7 +386,7 @@ async function runWrite(
   }
 }
 
-export interface SetReminderParams {
+interface SetReminderParams {
   client: Client;
   /** A fresh uuid_v7 per call; Change time also sends a new one. */
   id: string;
@@ -411,7 +411,7 @@ export function setReminder(params: SetReminderParams): Promise<ReminderWriteRes
   );
 }
 
-export interface CancelReminderParams {
+interface CancelReminderParams {
   client: Client;
   id: string;
   traceId: string;

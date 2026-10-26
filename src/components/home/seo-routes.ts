@@ -5,10 +5,10 @@
 
 /** Canonical origin. www and http 301 here, so every canonical URL uses it. */
 export const SITE_URL = 'https://srtd.io';
-export const SITE_NAME = 'Sorted';
+const SITE_NAME = 'Sorted';
 
 /** Other names people search for the brand by; JSON-LD alternateName on Organization and WebSite. */
-export const SITE_ALTERNATE_NAMES = ['SRTD', 'srtd.io'] as const;
+const SITE_ALTERNATE_NAMES = ['SRTD', 'srtd.io'] as const;
 
 /** "/" <title>, og:title and twitter:title. */
 export const HOME_TITLE = 'Sorted (free) | Work chat for social media teams';
@@ -34,9 +34,9 @@ export const ICON_LINKS = [
 ] as const;
 
 /** home: hydrated by the home bundle. app: the app bundle renders it (createRoot). */
-export type SeoBundle = 'home' | 'app';
+type SeoBundle = 'home' | 'app';
 
-export interface SeoRoute {
+interface SeoRoute {
   path: string;
   title: string;
   description: string;
@@ -107,7 +107,7 @@ function meta(attr: 'name' | 'property', key: string, content: string): string {
 }
 
 /** Stable JSON-LD node ids, so parsers read the three nodes as one entity graph. */
-export const JSON_LD_IDS = {
+const JSON_LD_IDS = {
   organization: `${SITE_URL}/#organization`,
   website: `${SITE_URL}/#website`,
   app: `${SITE_URL}/#app`,
@@ -179,7 +179,7 @@ export function routeHeadTags(route: SeoRoute): string {
   return tags.join('\n');
 }
 
-export interface PrerenderInput {
+interface PrerenderInput {
   /** The built shell (dist/index.html). */
   template: string;
   route: SeoRoute;

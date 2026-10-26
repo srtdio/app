@@ -40,14 +40,14 @@ import {
 } from '@/lib/chat/scheduled';
 
 /** A scheduled row's attachments in send order, read from its stored meta. Pure. */
-export function scheduledRowAttachments(
+function scheduledRowAttachments(
   row: Pick<ScheduledRow, 'attachment_meta' | 'attachment_asset_ids'>,
 ): MessageAttachment[] {
   return parseAttachmentMeta(row.attachment_meta, row.attachment_asset_ids ?? []);
 }
 
 /** At most this many photo thumbnails; the last carries "+N" for the rest. */
-export const MAX_THUMBS = 4;
+const MAX_THUMBS = 4;
 
 /** The photo thumbnails to show: up to four, the fourth with "+N" (N = count - 4). Pure. */
 export function thumbTiles(

@@ -12,7 +12,7 @@ import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 export const PICKER_PAGE_SIZE = 50;
 
 /** How far back the "Approved in the last 30 days" section reaches. */
-export const RECENT_APPROVED_DAYS = 30;
+const RECENT_APPROVED_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -93,7 +93,7 @@ export function searchStageFilter(
 }
 
 /** The review section's label: the client is who review waits on. */
-export function waitingLabel(role: string | null): string {
+function waitingLabel(role: string | null): string {
   return isClient(role) ? 'Waiting on you' : 'Waiting on approvers';
 }
 

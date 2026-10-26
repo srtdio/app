@@ -10,7 +10,7 @@ const GESTURES = ['pointerdown', 'touchstart', 'keydown'] as const;
 // HAVE_CURRENT_DATA: a frame at the current position is decoded and paintable.
 const HAVE_CURRENT_DATA = 2;
 
-export type ClipPreload = 'auto' | 'metadata';
+type ClipPreload = 'auto' | 'metadata';
 
 /**
  * The active card and its immediate neighbours load fully so the next card
@@ -86,7 +86,7 @@ function joinStack(
   };
 }
 
-export interface ClipPlayer {
+interface ClipPlayer {
   videoRef: RefObject<HTMLVideoElement>;
   /** True once a frame is decoded; the video stays hidden until then. */
   ready: boolean;

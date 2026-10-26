@@ -21,7 +21,7 @@ import { uploadErrorMessage } from '@/lib/asset-upload';
 export type SendErrorClass = 'transient' | 'permanent';
 
 /** A failed record attempt as record.ts reports it. */
-export interface RecordFailure {
+interface RecordFailure {
   /** 'timeout' when our own abort timer fired. */
   reason?: 'timeout' | 'error';
   /** The PostgREST error code (a SQLSTATE or PGRSTxxx); '' or absent on a transport failure. */
@@ -131,7 +131,7 @@ export function uploadFailureCode(message: string): string {
  * what was sent, never what it said. Only these keys, no file name, no audio
  * beyond the header bytes as hex. Pure.
  */
-export type UploadRefusalContext = {
+type UploadRefusalContext = {
   status: number | null;
   code: string;
   mime: string;

@@ -11,7 +11,7 @@ export type ButtonVariant =
   /** Alias of 'secondary', kept for one release so older call sites compile. */
   | 'default';
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   /**
    * Accepted so call sites compile; has no visual effect. Every button is 44
@@ -29,12 +29,12 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // the shape classes (never both rounded-lg and rounded-full on one element).
 // Callers never override a base property with the ! modifier (no-raw-button
 // test): pick another variant or primitive instead.
-export const BUTTON_BASE =
+const BUTTON_BASE =
   'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none';
 
 const secondary = 'bg-panel text-fg border border-border hover:bg-panel-2';
 
-export const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
+const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
   secondary,
   ghost: 'text-fg-2 hover:bg-panel-2 hover:text-fg',
@@ -44,7 +44,7 @@ export const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   default: secondary,
 };
 
-export const BUTTON_SHAPES: Record<'default' | 'round', string> = {
+const BUTTON_SHAPES: Record<'default' | 'round', string> = {
   default: 'rounded-lg px-4',
   round: 'rounded-full w-11 px-0',
 };

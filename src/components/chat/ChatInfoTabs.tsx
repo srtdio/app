@@ -170,7 +170,7 @@ export function previewLimit(
 }
 
 /** The history.state key of the info tabs' select mode (back leaves it first). */
-export const INFO_SELECT_HISTORY_KEY = 'chatInfoSelection';
+const INFO_SELECT_HISTORY_KEY = 'chatInfoSelection';
 
 /** One listed file's selection key. Pure. */
 export function fileKey(item: Pick<ChannelAttachmentItem, 'messageId' | 'versionId'>): string {
@@ -178,7 +178,7 @@ export function fileKey(item: Pick<ChannelAttachmentItem, 'messageId' | 'version
 }
 
 /** A listed file as the removal takes it. Pure. */
-export function toRemovableFile(item: ChannelAttachmentItem): RemovableFile {
+function toRemovableFile(item: ChannelAttachmentItem): RemovableFile {
   return { messageId: item.messageId, assetId: item.versionId, mime: item.mime };
 }
 
@@ -200,7 +200,7 @@ export function canTickFile(
 }
 
 /** The Media or Files list a tab shows (null for the other tabs). Pure. */
-export function selectableTabItems(
+function selectableTabItems(
   tab: ContactTab,
   items: readonly ChannelAttachmentItem[],
 ): ChannelAttachmentItem[] | null {
@@ -435,7 +435,7 @@ const ROW_ICON =
   'flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-panel-2 text-fg-3';
 
 /** "size · date" under a file name. Pure. */
-export function fileMetaLine(item: ChannelAttachmentItem, timeZone?: string): string {
+function fileMetaLine(item: ChannelAttachmentItem, timeZone?: string): string {
   return `${humanizeSize(item.size)} · ${formatDate(item.createdAt, undefined, timeZone)}`;
 }
 

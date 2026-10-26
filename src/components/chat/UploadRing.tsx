@@ -22,7 +22,7 @@ import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 
-export type UploadRingVariant = 'voice' | 'image' | 'file';
+type UploadRingVariant = 'voice' | 'image' | 'file';
 
 /** The ring's box (px) per variant, from the prototype. */
 export const UPLOAD_RING_SIZES: Readonly<Record<UploadRingVariant, number>> = {
@@ -60,10 +60,7 @@ function circumference(size: number): number {
 }
 
 /** The stroke offset for a progress 0..1 (null: the indeterminate arc). Pure. */
-export function ringDashOffset(
-  progress: number | null,
-  size: number = UPLOAD_RING_SIZES.image,
-): number {
+function ringDashOffset(progress: number | null, size: number = UPLOAD_RING_SIZES.image): number {
   const shown = progress === null ? ARC : Math.min(Math.max(progress, 0), 1);
   return circumference(size) * (1 - shown);
 }

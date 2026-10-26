@@ -18,10 +18,10 @@ import { useSyncExternalStore } from 'react';
 export const VOICE_STORE_KEY = 'srtdio.chat.voice-notes.v1';
 
 /** Most records kept; the least recently touched are evicted beyond this. */
-export const VOICE_RECORD_CAP = 500;
+const VOICE_RECORD_CAP = 500;
 
 /** One message's local voice-note state. */
-export interface VoiceRecord {
+interface VoiceRecord {
   transcript?: string;
   /** Epoch ms of the last failed transcription; absent when none failed. */
   failedAt?: number;
@@ -32,7 +32,7 @@ export interface VoiceRecord {
 }
 
 /** Fields to merge into a record; an undefined value clears that field. */
-export type VoicePatch = { [K in keyof VoiceRecord]?: VoiceRecord[K] | undefined };
+type VoicePatch = { [K in keyof VoiceRecord]?: VoiceRecord[K] | undefined };
 
 /** What a bubble renders for its transcript. */
 export type TranscriptView =
@@ -96,7 +96,7 @@ export function canOfferTranscribe(record: VoiceRecord | undefined, pending: boo
   return !pending && record?.transcript === undefined;
 }
 
-export interface VoiceStore {
+interface VoiceStore {
   get: (id: string) => VoiceRecord | undefined;
   isPending: (id: string) => boolean;
   /** Merge fields into a record (moving it to the newest end) and persist. */

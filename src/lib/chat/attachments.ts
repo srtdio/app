@@ -304,7 +304,7 @@ function parseThumbnailKeys(
  * extractAssetIds reads this exact key); `attachment_meta` is client-only render
  * metadata the mirror ignores.
  */
-export interface AttachmentExt {
+interface AttachmentExt {
   attachment_asset_ids: string[];
   attachment_meta: MessageAttachment[];
 }

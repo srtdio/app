@@ -16,8 +16,8 @@ import { formatDueDate } from '@/lib/time';
 export const APPROVE_CONFIRM_TITLE = 'Approve this post?';
 
 /** The confirm's buttons: Cancel dismisses (ghost, left of the primary). */
-export const APPROVE_BACK_LABEL = 'Cancel';
-export const APPROVE_LABEL = 'Approve';
+const APPROVE_BACK_LABEL = 'Cancel';
+const APPROVE_LABEL = 'Approve';
 
 /**
  * The target date in the app's day format ("2 Oct", "4 Jan 2027" outside now's

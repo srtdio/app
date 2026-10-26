@@ -5,7 +5,7 @@
 
 const SAMPLE_PREFIX = 'induction-sample/';
 
-export interface StaticAsset {
+interface StaticAsset {
   /** The file itself, e.g. /induction-sample/kr-ruffle.jpg. */
   full: string;
   /** Its small copy (a PDF's cover image), e.g. /induction-sample/thumb/kr-ruffle.jpg. */
@@ -15,7 +15,7 @@ export interface StaticAsset {
 const known = new Map<string, StaticAsset>();
 
 /** The static paths for a sample r2_key, or null for any other key. */
-export function staticPathsFor(r2Key: string | null): StaticAsset | null {
+function staticPathsFor(r2Key: string | null): StaticAsset | null {
   if (r2Key === null || !r2Key.startsWith(SAMPLE_PREFIX)) return null;
   const name = r2Key.slice(r2Key.lastIndexOf('/') + 1).replace(/\.pdf$/i, '.jpg');
   return { full: `/${r2Key}`, thumb: `/${SAMPLE_PREFIX}thumb/${name}` };
@@ -57,10 +57,4 @@ export function warmImages(urls: readonly string[]): void {
 /** Every registered version's thumbnail, for warming. */
 export function staticThumbs(): string[] {
   return Array.from(known.values(), (paths) => paths.thumb);
-}
-
-/** Tests: forget everything. */
-export function forgetStaticAssets(): void {
-  known.clear();
-  warmed.clear();
 }

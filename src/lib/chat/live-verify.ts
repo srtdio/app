@@ -16,7 +16,7 @@ import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import { loadMessageById, type MessageLookup } from '@/lib/chat/history';
 
 /** How many settled lookups are remembered (FIFO) for dedupe. */
-export const VERIFIED_IDS_LIMIT = 500;
+const VERIFIED_IDS_LIMIT = 500;
 
 export interface LiveVerifier {
   /** Resolve a live message id to its row, or { found: false } (discard it). */
@@ -28,7 +28,7 @@ export interface LiveVerifier {
   cancelRetries?: () => void;
 }
 
-export interface LiveVerifierDeps {
+interface LiveVerifierDeps {
   lookup: (messageId: string) => Promise<MessageLookup | { error: string }>;
   warn: (message: string, context: Record<string, unknown>) => void;
   /** Retry a failed lookup once after this long (ms); absent: no retry. */

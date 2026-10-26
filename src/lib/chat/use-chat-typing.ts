@@ -25,7 +25,7 @@ const OUTBOUND_THROTTLE_MS = 3000;
  */
 const INBOUND_CLEAR_MS = 4000;
 
-export interface UseChatTyping {
+interface UseChatTyping {
   /** Sorted user ids currently typing in the open channel (peers only). */
   typingUserIds: string[];
   /** Broadcast that the current user is typing; throttled and a no-op when idle. */

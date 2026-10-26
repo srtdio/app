@@ -46,9 +46,9 @@ export function dayTileWeeks(range: ComposeRange): Array<{ label: string | null;
   }));
 }
 
-export const NO_DATE_BUTTON = 'No date';
-export const CURRENT_PIPELINE_DAY = 'Current Pipeline day';
-export const LATER_DAY_FOOTNOTE = 'Need a later day? Close this and change the plan dates.';
+const NO_DATE_BUTTON = 'No date';
+const CURRENT_PIPELINE_DAY = 'Current Pipeline day';
+const LATER_DAY_FOOTNOTE = 'Need a later day? Close this and change the plan dates.';
 
 export function PlanDayTiles(props: {
   range: ComposeRange;
@@ -212,9 +212,9 @@ export const DATE_FIELD = cn(
   'font-mono text-input md:text-base',
 );
 
-export const PLAN_DATES_TITLE = 'Plan dates';
-export const PLAN_DATES_HINT = 'Up to 5 weeks. Items on days you drop go back to "Pick a day".';
-export const PLAN_DATES_SAVE = 'Save dates';
+const PLAN_DATES_TITLE = 'Plan dates';
+const PLAN_DATES_HINT = 'Up to 5 weeks. Items on days you drop go back to "Pick a day".';
+const PLAN_DATES_SAVE = 'Save dates';
 
 /** New plan's dates: From and To, checked on Save (end on or after start, 5 weeks max). */
 export function PlanDatesSheet(props: {

@@ -64,7 +64,7 @@ export function SelectionHeader(props: {
 }
 
 /** The selection bar's Star action: which way it goes, and the run. */
-export interface SelectionStar {
+interface SelectionStar {
   /** 'unstar' when every selected message is already starred. */
   action: 'star' | 'unstar';
   onRun: () => void;
@@ -240,12 +240,12 @@ export function SelectionBar(props: {
 }
 
 /** Confirm title for the selected messages. */
-export function deleteMessagesTitle(count: number): string {
+function deleteMessagesTitle(count: number): string {
   return `Delete ${count} ${count === 1 ? 'message' : 'messages'}?`;
 }
 
 /** Confirm body: the delete is for everyone and final. */
-export const DELETE_MESSAGES_MESSAGE =
+const DELETE_MESSAGES_MESSAGE =
   'They will be removed from this chat for everyone. This cannot be undone.';
 
 /**
@@ -280,9 +280,9 @@ export function deleteMessagesConfirm(props: {
 }
 
 /** The single-message delete confirm (the action menu's Delete). */
-export const DELETE_ONE_TITLE = 'Delete message?';
-export const DELETE_ONE_MESSAGE = 'It is removed for everyone in this chat.';
-export const DELETE_ONE_CONFIRM = 'Delete for everyone';
+const DELETE_ONE_TITLE = 'Delete message?';
+const DELETE_ONE_MESSAGE = 'It is removed for everyone in this chat.';
+const DELETE_ONE_CONFIRM = 'Delete for everyone';
 
 /**
  * The single-message delete confirm, or null when closed. Hook-free so the

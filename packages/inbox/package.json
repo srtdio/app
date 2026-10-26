@@ -8,14 +8,7 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
-    "@srtdio/schemas": "workspace:*"
-  },
-  "peerDependencies": {
-    "@supabase/supabase-js": "^2.105.4"
-  },
   "devDependencies": {
-    "@supabase/supabase-js": "^2.105.4",
     "typescript": "5.9.3"
   }
 }

@@ -50,7 +50,3 @@ export function appPresignCache(): PresignCache {
   }
   return appCache;
 }
-
-/** Whether the asset-read endpoint is configured (pictures can be signed at all). */
-export const APP_PRESIGN_ENABLED =
-  env.VITE_ASSET_READ_URL !== undefined && env.VITE_ASSET_READ_URL !== '';

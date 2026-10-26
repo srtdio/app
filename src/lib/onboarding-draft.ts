@@ -6,7 +6,7 @@
 
 import type { OnboardingStep, Side } from '@/lib/onboarding';
 
-export interface OnboardingDraft {
+interface OnboardingDraft {
   step: OnboardingStep;
   side: Side | null;
   name: string;
@@ -31,7 +31,7 @@ function text(value: unknown): string {
 }
 
 /** Rebuild a draft from stored JSON, field by field; undefined when it is not one. */
-export function parseDraft(raw: string | null): OnboardingDraft | undefined {
+function parseDraft(raw: string | null): OnboardingDraft | undefined {
   if (raw === null) return undefined;
   let value: unknown;
   try {

@@ -35,7 +35,7 @@ import { supabase } from '@/lib/supabase';
 
 type StarSetArgs = Database['public']['Functions']['chat_message_star_set']['Args'];
 type StarredListFn = Database['public']['Functions']['chat_message_starred_list'];
-export type StarredListArgs = StarredListFn['Args'];
+type StarredListArgs = StarredListFn['Args'];
 type StarredListRow = StarredListFn['Returns'][number];
 
 /** The most ids one chat_message_star_set call takes. */
@@ -43,8 +43,7 @@ export const STAR_BATCH_MAX = 100;
 /** One page of a starred list. */
 export const STARRED_PAGE_SIZE = 30;
 /** The shortest and longest trimmed text that narrows a starred list. */
-export const STARRED_QUERY_MIN = 2;
-export const STARRED_QUERY_MAX = 100;
+const STARRED_QUERY_MIN = 2;
 
 /** Copy. */
 export const STAR_LABEL = 'Star';

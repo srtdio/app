@@ -198,7 +198,7 @@ export async function clearOutboxFiles(adapter: OutboxFileAdapter | null): Promi
 }
 
 /** The IndexedDB database and object store the files live in. */
-export const OUTBOX_FILES_DB = 'sorted-chat-outbox-files';
+const OUTBOX_FILES_DB = 'sorted-chat-outbox-files';
 const STORE = 'files';
 
 /** Settle a request's promise from its transaction (completion, error or abort). */

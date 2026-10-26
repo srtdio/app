@@ -115,13 +115,13 @@ export async function fetchNewestInboxAt(
 }
 
 /** How many new activity rows one poll reads to word the toast (the count is exact regardless). */
-export const SINCE_ACTIVITY_LIMIT = 50;
+const SINCE_ACTIVITY_LIMIT = 50;
 
 /** How many new chat mention rows one poll reads for their toast. */
-export const SINCE_MENTION_LIMIT = 10;
+const SINCE_MENTION_LIMIT = 10;
 
 /** One poll's new rows: the activity toast's and the chat mentions, plus the activity count. */
-export interface InboxSince {
+interface InboxSince {
   /** Every row read, newest first (activity rows and chat mentions). */
   rows: InboxRow[];
   /** The exact number of new activity rows, counted after the bell rows are left out. */

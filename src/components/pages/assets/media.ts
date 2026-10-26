@@ -10,7 +10,7 @@ import type { AssetListItem } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
 import { fileExtension } from '@/lib/assets';
 
-export type MediaKind = 'image' | 'video' | 'pdf' | 'doc' | 'xls' | 'file';
+type MediaKind = 'image' | 'video' | 'pdf' | 'doc' | 'xls' | 'file';
 
 const VIDEO_EXT = ['mp4', 'mov', 'webm', 'm4v', 'avi', 'mkv'];
 const DOC_EXT = ['doc', 'docx', 'rtf', 'odt'];

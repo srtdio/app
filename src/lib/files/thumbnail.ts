@@ -19,8 +19,8 @@ import { DOCX_MIME, OFFICE_MAX_BYTES, XLSX_MIME } from './office/types';
 export const THUMBNAIL_SOURCE_MAX_BYTES = 60 * 1024 * 1024;
 /** Hard cap on one thumbnail attempt; past it the attempt is NoThumbnail. */
 export const THUMBNAIL_TIMEOUT_MS = 4000;
-export const THUMBNAIL_MAX_WIDTH = 580;
-export const THUMBNAIL_MAX_HEIGHT = 1160;
+const THUMBNAIL_MAX_WIDTH = 580;
+const THUMBNAIL_MAX_HEIGHT = 1160;
 export const THUMBNAIL_MAX_BYTES = 300 * 1024;
 const QUALITY_FIRST = 0.8;
 const QUALITY_SECOND = 0.6;
@@ -41,7 +41,7 @@ export interface NoThumbnail {
 
 export type ThumbnailResult = Thumbnail | NoThumbnail;
 
-export type ThumbnailKind = 'pdf' | 'video' | 'docx' | 'xlsx';
+type ThumbnailKind = 'pdf' | 'video' | 'docx' | 'xlsx';
 
 /** Which thumbnail path a mime takes, or null for none (pptx and the rest). */
 export function thumbnailKind(mime: string): ThumbnailKind | null {
@@ -72,7 +72,7 @@ export function thumbnailBox(
 // pdf.js: the narrow surface used here and by the viewer.
 // ---------------------------------------------------------------------------
 
-export interface PdfViewportLike {
+interface PdfViewportLike {
   width: number;
   height: number;
 }
@@ -272,7 +272,7 @@ async function drawOfficeFrame(
   );
 }
 
-export const browserThumbnailDeps: ThumbnailDeps = {
+const browserThumbnailDeps: ThumbnailDeps = {
   loadPdf: loadPdfJs,
   createCanvas: createBrowserCanvas,
   encode: encodeJpeg,

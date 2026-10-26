@@ -38,9 +38,9 @@ import {
 } from '@/lib/links/preview';
 
 export type CardTone = 'in' | 'out' | 'plain';
-export type CardSize = 'full' | 'compact' | 'draft';
+type CardSize = 'full' | 'compact' | 'draft';
 
-export interface LinkPreviewCardProps {
+interface LinkPreviewCardProps {
   url: string;
   /** Surface: an incoming bubble, an outgoing (accent) bubble, or a page. */
   tone?: CardTone;

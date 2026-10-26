@@ -9,13 +9,13 @@ import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
 const MAX_ASSET_NAME = 500;
 
 /** The Sheet's discard confirm for an edited file name. */
-export const ASSET_RENAME_DISCARD = {
+const ASSET_RENAME_DISCARD = {
   title: 'Discard the new name?',
   message: 'The file keeps its current name.',
 };
 
 /** Save is enabled for a non-empty, changed name within the ceiling. Pure. */
-export function canSaveAssetName(name: string, initialName: string): boolean {
+function canSaveAssetName(name: string, initialName: string): boolean {
   const trimmed = name.trim();
   return trimmed !== '' && trimmed.length <= MAX_ASSET_NAME && trimmed !== initialName.trim();
 }

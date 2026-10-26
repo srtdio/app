@@ -11,7 +11,7 @@ import type { CoverLookup } from '@/lib/chat/post-covers';
 import type { CardViewer } from '@/components/pages/pipeline/card-status';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
-export interface PipelineFeedProps {
+interface PipelineFeedProps {
   /** The already filtered + sorted board list; the feed slices it by the cap. */
   posts: PipelinePost[];
   /** 'all' shows every post; a Stage key shows just that stage. */

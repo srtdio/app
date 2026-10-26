@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { viewportSize } from '@/lib/use-is-laptop';
 import { inLayer, topDialog } from './guide-dom';
 
-export const SETTLE_MS = 120;
+const SETTLE_MS = 120;
 
 function signature(el: HTMLElement | undefined): string {
   const parts: number[] = [];

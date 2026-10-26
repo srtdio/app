@@ -26,7 +26,7 @@ export interface PendingTile {
 }
 
 /** Tile size (h-16) plus the row gap (gap-2): one slot in the reorder math. */
-export const TILE_SLOT = 64 + 8;
+const TILE_SLOT = 64 + 8;
 /** A mouse drag starts after this many pixels; a finger moving this far first scrolls instead. */
 const MOUSE_SLOP = 4;
 const TOUCH_SLOP = 8;

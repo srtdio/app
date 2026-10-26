@@ -134,7 +134,7 @@ export interface MoveSheetViewProps extends Omit<MoveSheetProps, 'onMove'> {
 }
 
 /** One move the viewer can make: its target, label and tone. One line, no helper. */
-export interface MoveAction {
+interface MoveAction {
   to: Stage;
   label: string;
   tone: 'default' | 'bad';

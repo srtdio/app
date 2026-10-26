@@ -9,10 +9,6 @@ import { cn } from '@/lib/cn';
 import type { CommentResolveArgs, DomainError } from '@srtdio/rpc';
 import { errorText } from '@/lib/error-copy';
 
-/** The proc trims and caps the note at 500 chars; the input mirrors the cap. */
-export const MAX_NOTE_CHARS = 500;
-export const NOTE_PLACEHOLDER = 'What changed (optional, approvers see this)';
-
 /**
  * Build the comment_resolve args. The note rides as p_resolution_note ONLY on a
  * resolve (the proc ignores it on reopen and only stores it on a real
@@ -34,35 +30,9 @@ export function buildResolveArgs(input: {
   };
 }
 
-/** Friendly inline copy for a failed comment_resolve. */
-export function friendlyResolveError(error: DomainError): string {
-  switch (error.code) {
-    case 'invalid_payload':
-      return `Couldn't save the note. Notes can be up to ${MAX_NOTE_CHARS} characters.`;
-    default:
-      return errorText('resolve the checkpoint', error);
-  }
-}
-
-/** Friendly inline copy for a failed checkpoint_accept. invalid_stage sits outside
- *  DOMAIN_ERROR_CODES so it arrives as the raw message; the rest map by code, the
- *  same split runPostReadyNotify uses for its ledger-specific raises. */
-export function friendlyAcceptError(error: DomainError): string {
-  if (error.message === 'invalid_stage') return 'This checkpoint is not ready to confirm yet.';
-  switch (error.code) {
-    case 'invalid_payload':
-      return 'This is not a checkpoint.';
-    case 'forbidden_role':
-    case 'workspace_member_only':
-      return 'Only approvers can confirm a checkpoint.';
-    default:
-      return errorText('confirm the checkpoint', error);
-  }
-}
-
 /** Friendly inline copy for a frozen ledger point. comment_edit / comment_soft_delete
  *  raise 'checkpoint_frozen' (outside DOMAIN_ERROR_CODES, so it arrives as the raw
- *  message, the same split friendlyAcceptError uses for invalid_stage) once a point
+ *  message) once a point
  *  is confirmed (accepted_at) or locked by post approval (closed_at). The reason is
  *  read off the row; a locked post is the terminal state, so it wins when both are
  *  set. Any other failure maps by code, including the 50-word point cap. */
@@ -125,14 +95,5 @@ export function tickCircle(done: boolean, live = false, hollow = false): ReactEl
         <IconCheck size={ICON_SIZE.inline} />
       </span>
     </span>
-  );
-}
-
-/** Note-input reveal classes: opacity/translateY only (the Sheet enter pattern). */
-export function noteRevealClass(entered: boolean): string {
-  return cn(
-    // axis: opacity + translateY only (no translateX, rotate, scale)
-    'transition-[opacity,transform] duration-fast ease-enter',
-    entered ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
   );
 }

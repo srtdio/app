@@ -350,7 +350,7 @@ export function inviteRoleLabel(role: string): string {
  * data-induction-step attribute at submit time, so the form needs no tour
  * context (and its importers no tour mocks).
  */
-export function isGuidedApproverInvite(): boolean {
+function isGuidedApproverInvite(): boolean {
   if (typeof document === 'undefined') return false;
   const step = document.querySelector('[data-induction-step]')?.getAttribute('data-induction-step');
   return typeof step === 'string' && step.endsWith('approver_invite');
@@ -426,7 +426,7 @@ export function RolePicker({
 }
 
 /** The 44px "Did you mean {domain}?" line; a tap applies the suggested address. */
-export function EmailSuggestion({
+function EmailSuggestion({
   suggestion,
   onApply,
 }: {

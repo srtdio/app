@@ -3,7 +3,7 @@
 export const SUPPORT_EMAIL = 'support@srtd.io';
 
 /** A mailto: link to support, with optional subject and body. */
-export function supportMailto(input: { subject?: string; body?: string } = {}): string {
+function supportMailto(input: { subject?: string; body?: string } = {}): string {
   const params = new URLSearchParams();
   if (input.subject) params.set('subject', input.subject);
   if (input.body) params.set('body', input.body);

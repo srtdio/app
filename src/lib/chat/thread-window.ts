@@ -26,7 +26,7 @@ export interface ThreadWindow {
  * page that lands is inside the window); a null end is the newest (live rows
  * land inside it). An id edge stays on its message as rows arrive around it.
  */
-export interface WindowKeys {
+interface WindowKeys {
   startId: string | null;
   endId: string | null;
 }

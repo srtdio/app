@@ -63,7 +63,7 @@ export interface BriefCursor {
 export type BriefPageNext = { done: true } | { done: false; cursor: BriefCursor };
 
 /** One page of a workspace's briefs, newest first. */
-export interface BriefPage {
+interface BriefPage {
   items: BriefWithThumbnail[];
   next: BriefPageNext;
 }

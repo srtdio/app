@@ -18,7 +18,7 @@ import type { Result } from '@srtdio/rpc';
 import { isFormerMember, rememberMentionNames, type MentionMember } from '@/lib/chat/mentions';
 
 /** Which chat to list: a group by its Sorted group id, or a DM by its peer. */
-export interface ChannelMembersInput {
+interface ChannelMembersInput {
   workspaceId: string | null;
   currentUserId: string | null;
   groupId: string | null;
@@ -36,7 +36,7 @@ export interface ChannelMemberReaders {
 }
 
 /** One chat's member list: loaded, or failed (a read error or a 5s timeout). */
-export type ChannelMembersLoad = { ok: true; members: MentionMember[] } | { ok: false };
+type ChannelMembersLoad = { ok: true; members: MentionMember[] } | { ok: false };
 
 /** Milliseconds left before `deadline` (never negative). */
 function budgetLeft(deadline: number): number {
@@ -192,13 +192,4 @@ export function useChannelMembersState(input: ChannelMembersInput): ChannelMembe
     };
   }, [key, workspaceId, currentUserId, groupId, peerUserId]);
   return loaded !== null && loaded.key === key ? loaded.load : null;
-}
-
-/**
- * The mention picker's people for the open chat: null until the list for THIS
- * chat has settled (loaded, or failed to []).
- */
-export function useChannelMembers(input: ChannelMembersInput): MentionMember[] | null {
-  const load = useChannelMembersState(input);
-  return load === null ? null : load.ok ? load.members : [];
 }

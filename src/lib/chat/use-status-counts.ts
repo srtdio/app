@@ -38,7 +38,7 @@ import { supabase } from '@/lib/supabase';
 import { WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
 
 /** Open briefs a round lists (newest first). */
-export const OPEN_BRIEFS_LIMIT = 100;
+const OPEN_BRIEFS_LIMIT = 100;
 
 /** Current shared plans one round reads (ending soonest first). */
 export const CURRENT_PLANS_LIMIT = 100;
@@ -91,7 +91,7 @@ export async function readCurrentSharedPlanIds(
 }
 
 /** The workspace's open briefs, newest first, at most 100. Never throws. */
-export async function listOpenBriefs(
+async function listOpenBriefs(
   client: Client,
   workspaceId: string,
   signal?: AbortSignal,
@@ -116,7 +116,7 @@ export async function listOpenBriefs(
 }
 
 /** Head-only count on the {@link listOpenBriefs} filter. Never throws. */
-export async function countOpenBriefs(
+async function countOpenBriefs(
   client: Client,
   workspaceId: string,
   signal?: AbortSignal,
@@ -163,7 +163,7 @@ const READS: StatusReads = {
 };
 
 /** How a round's reads start: `join` lets an open's first round join the tap's reads. */
-export interface StatusRoundOptions {
+interface StatusRoundOptions {
   join?: <K extends 'planIds' | 'briefs' | 'briefCount'>(
     name: K,
     start: () => Promise<StatusReadResults[K]>,

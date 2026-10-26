@@ -21,7 +21,7 @@ import { ROOT_LABEL } from '@/components/pages/assets/assets-nav';
 import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
 
 /** One queued file with an optional image preview. Names are derived per mode. */
-export interface PendingUpload {
+interface PendingUpload {
   id: string;
   file: File;
   /** Object URL for image previews, or null for non-image files. */
@@ -32,7 +32,7 @@ export interface PendingUpload {
 const DISPLAY_NAME_MAX = 500;
 
 /** The two naming modes, derived from the selected file count. */
-export type UploadMode = 'root-single' | 'root-bulk';
+type UploadMode = 'root-single' | 'root-bulk';
 
 /** Pick the naming mode: a single file takes one typed name, two or more share one base name. */
 export function uploadMode(count: number): UploadMode {
@@ -72,7 +72,7 @@ export function uploadNameError(mode: UploadMode, base: string): string | null {
 }
 
 /** One file's resolved upload: the original bytes kept as-is plus its display_name. */
-export interface UploadPlanItem {
+interface UploadPlanItem {
   id: string;
   file: File;
   displayName: string;
@@ -101,7 +101,7 @@ export function uploadBusyLabel(current: number, total: number): string {
 }
 
 /** The one toast a finished run shows. A sticky toast stays until dismissed. */
-export interface UploadSummary {
+interface UploadSummary {
   title: string;
   sticky: boolean;
 }
@@ -151,7 +151,7 @@ export function isStoppedOutcome(outcome: UploadOutcome): boolean {
 }
 
 /** The Stop confirm (from the Stop button or system Back while uploading). */
-export const STOP_CONFIRM = {
+const STOP_CONFIRM = {
   title: 'Stop uploading?',
   message: 'Files already uploaded stay. The rest are cancelled.',
   confirmLabel: 'Stop',
@@ -159,7 +159,7 @@ export const STOP_CONFIRM = {
 };
 
 /** The Sheet's discard confirm for files picked but not started. */
-export const UPLOAD_DISCARD = {
+const UPLOAD_DISCARD = {
   title: 'Discard these files?',
   message: 'The files you picked are not uploaded.',
 };

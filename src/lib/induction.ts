@@ -142,17 +142,17 @@ export function isGated(step: Pick<Step, 'kind'>): boolean {
 }
 
 /** A gated step with no later chip: an open one pulls later stored steps back to it. */
-export function isHardGate(step: Pick<Step, 'kind' | 'laterLabel'>): boolean {
+function isHardGate(step: Pick<Step, 'kind' | 'laterLabel'>): boolean {
   return isGated(step) && step.laterLabel === undefined;
 }
 
 /** The script's steps that apply to this workspace, in order. */
-export function applicableSteps(script: RouteScript, facts: InductionFacts): readonly Step[] {
+function applicableSteps(script: RouteScript, facts: InductionFacts): readonly Step[] {
   return script.steps.filter((step) => isApplicable(step, facts));
 }
 
 /** The first look-around (chapter) step, or -1 when the route has none. */
-export function firstLookAroundIndex(steps: readonly Step[]): number {
+function firstLookAroundIndex(steps: readonly Step[]): number {
   return steps.findIndex((step) => step.chapter !== undefined);
 }
 
@@ -440,14 +440,14 @@ export interface Rect {
   height: number;
 }
 
-export interface Size {
+interface Size {
   width: number;
   height: number;
 }
 
 /** 5px gap plus 2px of air: the hairline sits 7px off the control. */
-export const BOX_GAP = 5;
-export const BOX_AIR = 2;
+const BOX_GAP = 5;
+const BOX_AIR = 2;
 const BOX_OUTSET = BOX_GAP + BOX_AIR;
 
 /** The hairline's rect around a control's live rect. */
@@ -491,7 +491,7 @@ const LABEL_GAP = 8;
 /** A control this close to the right edge, and narrower than its label, takes the label on its left. */
 const RIGHT_EDGE_ZONE = 72;
 
-export type LabelSide = 'below' | 'above' | 'left' | 'inside';
+type LabelSide = 'below' | 'above' | 'left' | 'inside';
 
 /** A box taller than this share of the viewport may take the label inside its bottom edge. */
 const TALL_BOX = 0.6;
@@ -502,7 +502,7 @@ function insideBottom(box: Rect, label: Size, viewportHeight: number): number {
   return Math.max(bottom - LABEL_GAP - label.height, box.top + box.height / 2 + LABEL_GAP);
 }
 
-export interface LabelPlacement {
+interface LabelPlacement {
   side: LabelSide;
   top: number;
   left: number;
@@ -670,7 +670,7 @@ export function uploadFailedReason(failedAttempts: number): string {
   return `The file did not reach us. Your connection dropped ${timesWord(failedAttempts)}. Try again or pick a smaller file.`;
 }
 
-export type RetryOutcome<T> = { ok: true; value: T } | { ok: false; failures: number };
+type RetryOutcome<T> = { ok: true; value: T } | { ok: false; failures: number };
 
 /**
  * Run an attempt, then up to `retries` more while it fails. `onRetry` hears the

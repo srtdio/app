@@ -1,6 +1,6 @@
 // Client for the link-preview Worker (src/server/workers/link-preview.ts).
 //
-// requestLinkPreview(url, signal) answers a LinkPreview and never throws for an
+// previewClient().request(url, signal) answers a LinkPreview and never throws for an
 // expected failure: an unreachable Worker, a non-200 or a malformed body all
 // become the 'bare' card (domain + path), so a card is never blank and never a
 // spinner that stays. Unsafe links are decided here with the shared checkLink
@@ -61,7 +61,7 @@ export function barePreview(url: string): LinkPreview {
 }
 
 /** The warning card when the shared check flags the link, else null. */
-export function localUnsafe(url: string): LinkPreview | null {
+function localUnsafe(url: string): LinkPreview | null {
   const verdict = checkLink(url);
   if (verdict.verdict === 'ok') return null;
   let domain = url;
@@ -290,9 +290,4 @@ export function previewClient(): PreviewClient {
     });
   }
   return shared;
-}
-
-/** requestLinkPreview(url, signal) on the app-wide client. */
-export function requestLinkPreview(url: string, signal?: AbortSignal): Promise<LinkPreview> {
-  return previewClient().request(url, signal);
 }

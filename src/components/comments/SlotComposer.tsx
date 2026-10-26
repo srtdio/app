@@ -56,7 +56,7 @@ export function countWords(body: string): number {
   return spaceTrimmed.split(/\s+/).length;
 }
 
-export type CounterTone = 'hidden' | 'amber' | 'over';
+type CounterTone = 'hidden' | 'amber' | 'over';
 
 /** Hidden below 35 words; amber 35..50; over (red, blocks send) above 50. */
 export function counterTone(words: number): CounterTone {

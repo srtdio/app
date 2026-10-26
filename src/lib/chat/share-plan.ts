@@ -25,16 +25,16 @@ export function forwardLandsInOpenChat(
 }
 
 /** The one guard key: a share runs at a time per picker. */
-export const SHARE_PLAN_GUARD_KEY = 'share-plan';
+const SHARE_PLAN_GUARD_KEY = 'share-plan';
 
-export interface SharePlanRecordInput {
+interface SharePlanRecordInput {
   id: string;
   channelId: string;
   planId: string;
   traceId: string;
 }
 
-export interface SharePlanDeps {
+interface SharePlanDeps {
   guard: InFlightGuard;
   record: (input: SharePlanRecordInput) => Promise<Result<ChatMessageRow>>;
   /** Live publish for the recorded row, or null to skip live delivery. */
@@ -45,7 +45,7 @@ export interface SharePlanDeps {
   publishTimeoutMs?: number;
 }
 
-export type SharePlanResult =
+type SharePlanResult =
   | { ok: true; row: ChatMessageRow; traceId: string }
   | { ok: false; reason: 'busy' }
   | { ok: false; reason: 'record'; message: string; copy: string };

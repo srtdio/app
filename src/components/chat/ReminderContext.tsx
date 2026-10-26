@@ -48,11 +48,11 @@ import { useToast } from '@/components/ui/toast';
 export const REMINDER_CANCELLED_COPY = 'Reminder cancelled';
 
 /** What the reminder sheet is for: a new reminder on a message, or a new time for one. */
-export type ReminderTarget =
+type ReminderTarget =
   | { mode: 'new'; messageId: string; channelId: string; preview: string }
   | { mode: 'change'; reminder: ReminderRow; preview: string };
 
-export interface ReminderContextValue {
+interface ReminderContextValue {
   canRemind: (messageId: string) => boolean;
   /** Opens the sheet: a new reminder, or change mode when one is pending on the message. */
   openReminderFor: (messageId: string) => void;
@@ -67,9 +67,6 @@ export interface ReminderContextValue {
 }
 
 const ReminderContext = createContext<ReminderContextValue | null>(null);
-
-/** The raw provider: ReminderProvider uses it; tests hand it a fixed value. */
-export const ReminderValueProvider = ReminderContext.Provider;
 
 /** The reminders, or null outside a ReminderProvider (the menu renders without it in tests). */
 export function useReminderOptional(): ReminderContextValue | null {
@@ -97,7 +94,7 @@ export interface ReminderActionDeps {
   ) => void;
 }
 
-export interface ReminderActions {
+interface ReminderActions {
   setReminderAt: (target: { messageId: string; channelId: string }, at: Date) => Promise<void>;
   /** Resolves true when the reminder was cancelled. */
   cancelReminder: (reminder: ReminderRow) => Promise<boolean>;

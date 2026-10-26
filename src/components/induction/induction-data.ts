@@ -129,7 +129,7 @@ export interface DefaultGroup {
 }
 
 /** The workspace's default group and its chat channel (both RLS-scoped). */
-export async function readDefaultGroup(
+async function readDefaultGroup(
   client: Client,
   workspaceId: string,
 ): Promise<DefaultGroup | undefined> {
@@ -186,7 +186,7 @@ async function readDisplayName(client: Client, userId: string | null): Promise<s
 }
 
 /** The oldest post waiting in review, for the approver's review steps, with its title and creator. */
-export async function readOldestReviewPost(
+async function readOldestReviewPost(
   client: Client,
   workspaceId: string,
   samplePostIds: readonly string[] = [],
@@ -213,7 +213,7 @@ export async function readOldestReviewPost(
 }
 
 /** One post's title ('' when unreadable): the creator's own first post for the copy. */
-export async function readPostTitle(client: Client, postId: string): Promise<string> {
+async function readPostTitle(client: Client, postId: string): Promise<string> {
   try {
     const { data, error } = await client
       .from('posts')
@@ -227,7 +227,7 @@ export async function readPostTitle(client: Client, postId: string): Promise<str
 }
 
 /** Whether the workspace holds any brief that is not deleted. */
-export async function readHasBrief(client: Client, workspaceId: string): Promise<boolean> {
+async function readHasBrief(client: Client, workspaceId: string): Promise<boolean> {
   try {
     const { data, error } = await client
       .from('briefs')
@@ -245,7 +245,7 @@ export async function readHasBrief(client: Client, workspaceId: string): Promise
  * Whether a plan card sits in the default group's chat (a chat_messages row
  * carrying shared_plan_ids): the plan step boxes that card's Open plan.
  */
-export async function readHasPlanCard(client: Client, channelId: string): Promise<boolean> {
+async function readHasPlanCard(client: Client, channelId: string): Promise<boolean> {
   try {
     const { data, error } = await client
       .from('chat_messages')
@@ -275,7 +275,7 @@ function metaHasVoice(meta: unknown): boolean {
 const VOICE_SCAN_LIMIT = 100;
 
 /** Whether the default group's chat mirror holds a voice note (attachment_meta, as chat search reads it). */
-export async function readHasVoiceNote(client: Client, channelId: string): Promise<boolean> {
+async function readHasVoiceNote(client: Client, channelId: string): Promise<boolean> {
   try {
     const { data, error } = await client
       .from('chat_messages')
@@ -306,7 +306,7 @@ export interface SampleWeek {
 
 export const NO_SAMPLE: SampleWeek = { seeded: false, reviewPostId: null, postIds: [] };
 
-export async function readSampleWeek(client: Client, workspaceId: string): Promise<SampleWeek> {
+async function readSampleWeek(client: Client, workspaceId: string): Promise<SampleWeek> {
   try {
     const { data, error } = await client
       .from('induction_sample_rows')

@@ -11,7 +11,7 @@ import { IconUser } from '@/components/ui/icons';
 export type AvatarRole = 'inline' | 'header' | 'row' | 'profile';
 
 /** Who the avatar stands for: people are circles, groups and personal notes rounded squares. */
-export type AvatarKind = 'person' | 'group' | 'note';
+type AvatarKind = 'person' | 'group' | 'note';
 
 interface AvatarProps {
   name?: string;

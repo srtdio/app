@@ -38,7 +38,7 @@ import {
 } from '@/lib/chat/asset-picker';
 
 /** The sheet's title. */
-export const ASSET_PICKER_TITLE = 'Add from Assets';
+const ASSET_PICKER_TITLE = 'Add from Assets';
 
 interface AssetListState {
   /** The settled search text this list answers. */

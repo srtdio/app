@@ -44,7 +44,7 @@ export interface PlanTabData {
   anyPlan: boolean;
 }
 
-export interface PlanTabReadInput {
+interface PlanTabReadInput {
   workspaceId: string;
   /** The visible days (inclusive); null reads every plan and no posts (the phone list). */
   range: { start: string; end: string } | null;
@@ -138,7 +138,7 @@ async function readDatedPosts(
 }
 
 /** The posts that are items of the read plans. Pure. */
-export function plannedPostIds(bundles: readonly PlanBundle[]): Set<string> {
+function plannedPostIds(bundles: readonly PlanBundle[]): Set<string> {
   return new Set(
     bundles.flatMap((b) => b.items.flatMap((i) => (i.post_id !== null ? [i.post_id] : []))),
   );

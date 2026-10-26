@@ -353,7 +353,7 @@ export interface MentionProfile extends ChatProfile {
  * The ids among `userIds` with an active, non-removed membership in this
  * workspace: one batched workspace_members IN read (readChatMembers' filter).
  */
-export async function readActiveMemberIds(
+async function readActiveMemberIds(
   client: Client,
   params: { workspaceId: string; userIds: string[]; signal?: AbortSignal },
 ): Promise<Result<string[]>> {
@@ -501,7 +501,7 @@ export async function readChannelMemberIds(
 }
 
 /** One "delete chat for me" row: when the caller cleared a channel. */
-export interface ChannelClearRecord {
+interface ChannelClearRecord {
   channelId: string;
   clearedAt: string;
 }

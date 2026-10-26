@@ -383,7 +383,7 @@ export function chatKey(
  * it leaves), so its attachments read from the record like any loaded row.
  * The same object when it holds none. Pure.
  */
-export function withoutLocalFiles(message: ThreadMessage): ThreadMessage {
+function withoutLocalFiles(message: ThreadMessage): ThreadMessage {
   if (!message.attachments.some((a) => a.local !== undefined)) return message;
   return {
     ...message,

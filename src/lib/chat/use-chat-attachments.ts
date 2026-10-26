@@ -38,7 +38,7 @@ import {
   type UploadAttemptResult,
 } from '@/lib/chat/send-flow';
 
-export interface ChatAttachments {
+interface ChatAttachments {
   /** Whether the composer can upload (endpoint configured + a workspace selected). */
   canAttach: boolean;
   /** Whether thumbnails can be presigned (asset-read endpoint configured). */

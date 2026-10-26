@@ -19,7 +19,7 @@ export function showsEmojiButton(layout: ChatLayout): boolean {
 }
 
 /** The recents row's heading. */
-export const RECENTS_HEADING = 'Recent';
+const RECENTS_HEADING = 'Recent';
 
 export function ComposerEmoji(props: { onPick: (emoji: string) => void }): ReactElement {
   const [open, setOpen] = useState(false);

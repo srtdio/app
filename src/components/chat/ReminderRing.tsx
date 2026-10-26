@@ -44,9 +44,9 @@ import { useToast } from '@/components/ui/toast';
 import { ICON_SIZE, IconAlarmClock } from '@/components/ui/icons';
 
 /** The toast's open affordance. */
-export const RING_TOAST_ACTION = 'Open';
+const RING_TOAST_ACTION = 'Open';
 /** How long a reminder toast stays (the chime runs about 5 s inside it). */
-export const RING_TOAST_MS = 8_000;
+const RING_TOAST_MS = 8_000;
 
 /** "Reminder: <preview>". Pure. */
 export function ringTitle(preview: string): string {

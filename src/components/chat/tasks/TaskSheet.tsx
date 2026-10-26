@@ -76,16 +76,16 @@ import {
 } from '@/lib/chat/tasks';
 
 export const TASK_SHEET_TITLE = 'Tasks';
-export const SHARE_LABEL = 'Share to chat';
+const SHARE_LABEL = 'Share to chat';
 export const ADD_PLACEHOLDER = 'Add a task';
 export const DISCARD_TITLE = 'Discard unsaved changes?';
-export const SAVE_FAILED = "Couldn't save. Try again.";
+const SAVE_FAILED = "Couldn't save. Try again.";
 /** LoadError's "Couldn't load tasks." */
-export const TASKS_LOAD_THING = 'tasks';
-export const SAVING_LABEL = 'Saving…';
+const TASKS_LOAD_THING = 'tasks';
+const SAVING_LABEL = 'Saving…';
 
 /** "<Name> just saved" (a Save by someone else while this sheet is open). Pure. */
-export function justSavedLabel(name: string): string {
+function justSavedLabel(name: string): string {
   return `${name} just saved`;
 }
 
@@ -98,7 +98,7 @@ interface Notice {
 }
 
 /** The newest batch id by someone else, or null. Pure. */
-export function latestOtherBatch(events: readonly TaskEvent[], me: string): TaskEvent | null {
+function latestOtherBatch(events: readonly TaskEvent[], me: string): TaskEvent | null {
   for (let k = events.length - 1; k >= 0; k -= 1) {
     const e = events[k];
     if (e !== undefined && e.batchId !== null && e.actorId !== null && e.actorId !== me) return e;
@@ -205,7 +205,7 @@ function TasksSkeleton(): ReactElement {
   );
 }
 
-export interface TaskSheetProps {
+interface TaskSheetProps {
   open: boolean;
   onClose: () => void;
   tasks: UseChatTasks;

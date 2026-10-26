@@ -115,7 +115,7 @@ export function approverLabel(
 }
 
 /** The card footer: the state on the left, one action label on the right. */
-export interface CardFooter {
+interface CardFooter {
   state: string;
   action: 'Open' | 'Review';
   /** Accent ink for the state (the viewer is the one being waited on). */

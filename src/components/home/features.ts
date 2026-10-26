@@ -5,7 +5,7 @@ export const FEATURE_KEYS = ['chat', 'plan', 'pipeline', 'assets', 'briefs'] as 
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
-export interface Feature {
+interface Feature {
   key: FeatureKey;
   /** Shown on the card label and the sidebar tile. */
   name: string;

@@ -99,7 +99,7 @@ function stageLabel(stage: string): string {
 }
 
 /** One resolved batch: the visible posts plus approver names and roles by user id. */
-export interface PostCardBatch {
+interface PostCardBatch {
   posts: PostCardRow[];
   names: Map<string, string>;
   roles: Map<string, string>;
@@ -109,7 +109,7 @@ export interface PostCardBatch {
  * The approver role read is capped inside the names read's own 5s budget, so a
  * hung role read degrades to "name only" instead of taking the names down too.
  */
-export const APPROVER_ROLE_CAP_MS = READ_TIMEOUT_MS - 1_000;
+const APPROVER_ROLE_CAP_MS = READ_TIMEOUT_MS - 1_000;
 
 /**
  * ONE workspace_members IN read of the approvers' roles, for the "on behalf of
@@ -185,7 +185,7 @@ export type ThreadCardCache = SharedCardCache<PostCardRow, BriefCardFields>;
  * IN read, in parallel) into `roles`, so a name and its "on behalf of client"
  * suffix land in the same render: the label never flips after first paint.
  */
-export function threadCardReaders(
+function threadCardReaders(
   client: Client,
   workspaceId: string,
   roles: Map<string, string> = new Map(),
@@ -215,7 +215,7 @@ const approverRolesByCache = new WeakMap<ThreadCardCache, Map<string, string>>()
 const NO_ROLES: ReadonlyMap<string, string> = new Map();
 
 /** A thread card cache over the batched readers, with its approver-role map. */
-export function createThreadCardCache(client: Client, workspaceId: string): ThreadCardCache {
+function createThreadCardCache(client: Client, workspaceId: string): ThreadCardCache {
   const roles = new Map<string, string>();
   const cache = createSharedCardCache(threadCardReaders(client, workspaceId, roles));
   approverRolesByCache.set(cache, roles);
@@ -278,7 +278,7 @@ export function SharedCardsProvider(props: {
 }
 
 /** The targets the card retry triggers listen on (window and document, or test fakes). */
-export interface CardRetryTargets {
+interface CardRetryTargets {
   window: Pick<Window, 'addEventListener' | 'removeEventListener'>;
   document: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'>;
 }
@@ -475,7 +475,7 @@ export const PRESIGN_ENABLED =
   env.VITE_ASSET_READ_URL !== undefined && env.VITE_ASSET_READ_URL !== '';
 
 /** Talk-about and thread hooks a thread hands its cards; absent disables both. */
-export interface CardRefActions {
+interface CardRefActions {
   /** Hold on a card, or the sheet's "Talk about": bring the post into the conversation. */
   onTalkAbout?: ((postId: string) => void) | undefined;
   /**
@@ -647,7 +647,7 @@ export function cardTapHandlers(
 export const CARD_HOLD = { thresholdMs: LONG_PRESS_MS, moveTolerancePx: MOVE_CANCEL_PX } as const;
 
 /** A card hold's Talk about, remembered until the finger lifts. */
-export interface TalkAboutHold {
+interface TalkAboutHold {
   /**
    * The hold fired (on its timer). With focusNow (a fine pointer) the composer
    * takes focus right here and the release does nothing more; without it
@@ -708,7 +708,7 @@ export function talkAboutThenFocus(
   };
 }
 
-export function PostCardItem(
+function PostCardItem(
   props: { view: Extract<SharedPostView, { kind: 'post' }> } & CardContext & {
       onTalkAbout?: () => void;
       onTalkAboutFocus?: () => void;

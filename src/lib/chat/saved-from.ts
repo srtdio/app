@@ -29,7 +29,7 @@ export interface SavedSource {
 }
 
 /** What one page's resolve learned: the readable sources and the sender names read. */
-export interface SavedSourcesRead {
+interface SavedSourcesRead {
   sources: SavedSource[];
   profiles: ChatProfile[];
 }
@@ -107,7 +107,7 @@ export type SavedFromLine =
   | { kind: 'unreadable'; label: string };
 
 /** A person's first name: the display name up to its first space. Pure. */
-export function firstName(displayName: string): string {
+function firstName(displayName: string): string {
   const trimmed = displayName.trim();
   const space = trimmed.indexOf(' ');
   return space === -1 ? trimmed : trimmed.slice(0, space);

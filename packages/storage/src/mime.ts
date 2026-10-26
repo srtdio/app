@@ -77,10 +77,6 @@ export function isImageMime(contentType: string): boolean {
   return normalizeMime(contentType).startsWith('image/');
 }
 
-export function isSvgMime(contentType: string): boolean {
-  return normalizeMime(contentType) === 'image/svg+xml';
-}
-
 /** JPEG is the only type whose EXIF we strip in this PR (see exif.ts). */
 export function isJpegMime(contentType: string): boolean {
   const m = normalizeMime(contentType);

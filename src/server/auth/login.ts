@@ -6,7 +6,7 @@ import { mapAuthError } from './errors';
 import { toAuthSession } from './session';
 import { fail, ok, type AuthSession, type Result } from './types';
 
-export interface LoginInput {
+interface LoginInput {
   email: string;
   password: string;
 }

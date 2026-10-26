@@ -199,7 +199,7 @@ export type ActivityDirection = 'newest' | 'oldest';
 /** Snooze kinds accepted by inbox_snooze (p_kind). 'clear' un-snoozes. */
 export type SnoozeKind = '1h' | '4h' | 'tomorrow_9' | 'next_week' | 'clear';
 
-export interface SnoozeOption {
+interface SnoozeOption {
   kind: SnoozeKind;
   label: string;
 }
@@ -408,7 +408,7 @@ export const ACTOR_ROW_EVENTS: ReadonlySet<string> = new Set([
  * the resolver, the asker, the reopener, the ready ping's sender, the uploader,
  * the brief's creator and the brief's closer.
  */
-export const ROW_ACTOR_EVENTS: ReadonlySet<string> = new Set([
+const ROW_ACTOR_EVENTS: ReadonlySet<string> = new Set([
   'comment_resolved',
   'checkpoint_asked',
   'checkpoint_reopened',
@@ -439,13 +439,13 @@ function rowActorId(row: InboxEntryRow, payload: unknown): string | null {
 }
 
 /** The plan event types: entity_type 'plan_item', entity_id the item, payload.plan_id the plan. */
-export const PLAN_EVENTS: ReadonlySet<string> = new Set(['plan_comment', 'plan_review']);
+const PLAN_EVENTS: ReadonlySet<string> = new Set(['plan_comment', 'plan_review']);
 
 /** The entity_type of a plan event row (entity_id is the plan item id). */
 export const PLAN_ITEM_ENTITY = 'plan_item';
 
 /** Whether a row is a plan comment or plan review. */
-export function isPlanEvent(item: Pick<ActivityItem, 'eventType'>): boolean {
+function isPlanEvent(item: Pick<ActivityItem, 'eventType'>): boolean {
   return PLAN_EVENTS.has(item.eventType);
 }
 
@@ -456,14 +456,14 @@ export const UNKNOWN_ACTOR = 'Someone';
 export const SELF_ACTOR = 'You';
 
 /** Read a string array field from an `unknown` jsonb payload; non-strings are dropped. */
-export function payloadStrings(p: unknown, key: string): string[] {
+function payloadStrings(p: unknown, key: string): string[] {
   if (typeof p !== 'object' || p === null) return [];
   const val = (p as Record<string, unknown>)[key];
   return Array.isArray(val) ? val.filter((v): v is string => typeof v === 'string') : [];
 }
 
 /** The entity_type of a chat mention row (entity_id is the channel id). */
-export const CHAT_CHANNEL_ENTITY = 'chat_channel';
+const CHAT_CHANNEL_ENTITY = 'chat_channel';
 
 /** An @mention in a chat message (not a comment): its own line, link and preview. */
 export function isChatMention(item: Pick<ActivityItem, 'eventType' | 'entityType'>): boolean {
@@ -490,7 +490,7 @@ function payloadFlag(p: unknown, key: string): boolean {
  * withdrawn status was changes, else "withdrew slot approval". Null when the
  * row is not a withdrawal. Pure.
  */
-export function planWithdrawalPhrase(
+function planWithdrawalPhrase(
   withdrawn: boolean | null | undefined,
   previous: string | null | undefined,
 ): string | null {
@@ -604,7 +604,7 @@ function chatMentionLine(item: ActivityItem): string {
  * "(team review)"; the client side reads plain. A missing actor degrades to a
  * name-free phrase. Null for any other event type.
  */
-export function planEventLine(
+function planEventLine(
   item: Pick<
     ActivityItem,
     'eventType' | 'actorName' | 'reviewSide' | 'reviewStatus' | 'reviewWithdrawn' | 'reviewPrevious'
@@ -665,7 +665,7 @@ function stagePhrase(toStage: string | null, ref: string | null): string {
  * already shows the post title; `name` false in an expanded row, whose author
  * line already shows the name.
  */
-export interface ActorLineParts {
+interface ActorLineParts {
   title?: boolean;
   name?: boolean;
 }
@@ -996,7 +996,7 @@ function alertHref(item: ActivityItem, alert: AlertInfo): string | null {
 }
 
 /** What a tap on a row does. */
-export interface OpenAction {
+interface OpenAction {
   /** Where it goes; null opens nothing. */
   href: string | null;
   /** Whether the tap marks the row read (a reminder stays until Mark as read). */
@@ -1175,7 +1175,7 @@ export function markAllTargets(
 
 /** One segment of a mention preview: the current user's own @name (self) is set
  *  apart so the card can accent just that run and leave every other name plain. */
-export interface MentionSegment {
+interface MentionSegment {
   text: string;
   self: boolean;
 }
@@ -1221,7 +1221,7 @@ export function unreadCount(items: readonly ActivityItem[], nowMs: number): numb
   );
 }
 
-export interface DigestBucket {
+interface DigestBucket {
   key: 'today' | 'yesterday' | 'earlier';
   label: string;
   /** Threaded groups: a 1-entry group renders solo, a multi-entry group threads. */
@@ -1229,7 +1229,7 @@ export interface DigestBucket {
 }
 
 /** The clock the digest groups by: now, and the workspace timezone (IANA; null uses the device's). */
-export interface DigestClock {
+interface DigestClock {
   nowMs: number;
   tz: string | null;
 }
@@ -1349,7 +1349,7 @@ export interface ActivityCursor {
 }
 
 /** One page request: the chip, the sort direction, and the cursor for a next page. */
-export interface ActivityPageInput {
+interface ActivityPageInput {
   state?: ActivityState;
   direction?: ActivityDirection;
   cursor?: ActivityCursor;
@@ -1403,7 +1403,7 @@ export function mergeFresh(
   });
 }
 
-export type LoadResult = { ok: true; data: ActivityItem[] } | { ok: false; error: string };
+type LoadResult = { ok: true; data: ActivityItem[] } | { ok: false; error: string };
 
 /** One page of inbox rows. The live writer emits minimal payloads, so author and
  * title are resolved by join (see fetchActivityEntries), never read from payload. */
@@ -2075,7 +2075,7 @@ export function markEntryRead(
 }
 
 /** What Retry on a failed scheduled send did. */
-export type RetryOutcome =
+type RetryOutcome =
   | { kind: 'sent' }
   /** Resolved elsewhere (sent, cancelled or edited): the stale entry was marked read. */
   | { kind: 'cleared' }
@@ -2126,7 +2126,7 @@ export function markAllEntriesRead(
 export const MARK_READ_BATCH = 500;
 
 /** A chip whose Mark all read covers every matching row on the server, loaded or not. */
-export type ChipMarkState = 'mentions' | 'briefs' | 'plans';
+type ChipMarkState = 'mentions' | 'briefs' | 'plans';
 
 /** Whether a chip's Mark all read pages through the server (Mentions, Briefs, Plans). Pure. */
 export function marksChipOnServer(state: ActivityState): state is ChipMarkState {
@@ -2239,7 +2239,7 @@ interface UpcomingBase {
 }
 
 /** What buildUpcoming joins in: the batched reads' maps. */
-export interface UpcomingSources {
+interface UpcomingSources {
   channels: ReadonlyMap<string, ChatRowChannel>;
   groupNames: ReadonlyMap<string, string>;
   messages: ReadonlyMap<string, ChatMessagePreview>;
@@ -2317,7 +2317,7 @@ export function buildUpcoming(
 }
 
 /** Upcoming's load result. */
-export type UpcomingResult = { ok: true; data: UpcomingItem[] } | { ok: false; error: string };
+type UpcomingResult = { ok: true; data: UpcomingItem[] } | { ok: false; error: string };
 
 /**
  * Load the Upcoming chip: the viewer's pending reminders and their scheduled
@@ -2373,7 +2373,7 @@ export const UPCOMING_EMPTY = 'Reminders and scheduled messages show up here.';
 export const CANCEL_REMINDER_TITLE = 'Cancel this reminder?';
 
 /** What the scheduled writes need: injected so tests drive them with a recording client. */
-export interface UpcomingWriteDeps {
+interface UpcomingWriteDeps {
   client: Client;
   newTraceId: () => string;
   /** After every write, landed or not: Upcoming reloads. */
@@ -2385,7 +2385,7 @@ export interface UpcomingWriteDeps {
 }
 
 /** The "Scheduled in this chat" sheet's writes (ScheduledListSheet's actions). */
-export interface UpcomingScheduledWrites {
+interface UpcomingScheduledWrites {
   onSendNow: (row: ScheduledRow) => Promise<void>;
   onSaveBody: (row: ScheduledRow, body: string) => Promise<boolean>;
   onRetime: (row: ScheduledRow, sendAt: Date) => Promise<boolean>;

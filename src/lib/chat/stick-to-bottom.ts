@@ -160,7 +160,7 @@ export function newRowsAction(input: {
 }
 
 /** The slice of Window the touch-end listeners use. */
-export interface TouchEndTarget {
+interface TouchEndTarget {
   addEventListener: (type: 'touchend' | 'touchcancel', listener: () => void) => void;
   removeEventListener: (type: 'touchend' | 'touchcancel', listener: () => void) => void;
 }

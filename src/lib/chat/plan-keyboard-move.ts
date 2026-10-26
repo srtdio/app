@@ -100,7 +100,7 @@ export function previewGroups<T extends { id: string }>(
 }
 
 /** What a key does on a focused agency row (laptop). Pure. */
-export type RowKeyIntent = 'pick' | 'drop' | 'cancel' | 'up' | 'down' | 'remove' | null;
+type RowKeyIntent = 'pick' | 'drop' | 'cancel' | 'up' | 'down' | 'remove' | null;
 
 export function rowKeyIntent(key: string, picking: boolean): RowKeyIntent {
   if (key === 'ArrowUp') return 'up';

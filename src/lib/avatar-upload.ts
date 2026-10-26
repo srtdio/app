@@ -7,7 +7,7 @@
 
 import type { Result } from '@srtdio/rpc';
 
-export interface AvatarUploadConfig {
+interface AvatarUploadConfig {
   /** The avatar-upload Worker URL (env.VITE_AVATAR_UPLOAD_URL). */
   endpoint: string;
   /** Fresh Bearer token; null when no session, which the worker rejects. */

@@ -108,7 +108,7 @@ export function OnBehalfApproveView(props: OnBehalfApproveViewProps): ReactEleme
   );
 }
 
-export type OnBehalfApproveSheetProps = Omit<OnBehalfApproveViewProps, 'selected' | 'onSelect'>;
+type OnBehalfApproveSheetProps = Omit<OnBehalfApproveViewProps, 'selected' | 'onSelect'>;
 
 /** The stateful sheet: preselects the first approver each time it opens. */
 export function OnBehalfApproveSheet(props: OnBehalfApproveSheetProps): ReactElement {

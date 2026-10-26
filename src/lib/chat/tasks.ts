@@ -10,7 +10,7 @@
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
 import { abortable } from '@/lib/chat-reads';
-import { civilDay, formatDateTime, formatTime } from '@/lib/time';
+import { formatDateTime } from '@/lib/time';
 
 type Functions = Database['public']['Functions'];
 type TaskRow = Database['public']['Tables']['chat_tasks']['Row'];
@@ -93,7 +93,7 @@ const KIND_SET = new Set<string>([
  * A stored status as the list reads it: 'done' is done; anything else (older
  * rows read before the status rewrite) is to do. Pure.
  */
-export function asStatus(value: string | null | undefined): TaskStatus {
+function asStatus(value: string | null | undefined): TaskStatus {
   return value === 'done' ? 'done' : 'todo';
 }
 
@@ -101,7 +101,7 @@ function asSide(value: string | null | undefined): TaskSide | null {
   return value === 'agency' || value === 'client' ? value : null;
 }
 
-export function asPriority(value: unknown): TaskPriority | null {
+function asPriority(value: unknown): TaskPriority | null {
   const n = typeof value === 'string' && value !== '' ? Number(value) : value;
   return n === 0 || n === 1 || n === 2 ? n : null;
 }
@@ -127,12 +127,12 @@ export function rowToTask(row: TaskRow): ChatTask | null {
 }
 
 /** Whether a task was deleted (soft delete). Pure. */
-export function isDeleted(task: Pick<ChatTask, 'deletedAt'>): boolean {
+function isDeleted(task: Pick<ChatTask, 'deletedAt'>): boolean {
   return task.deletedAt != null;
 }
 
 /** Map an event row; an unknown kind (and the retired due timer's rows) is skipped. Pure. */
-export function rowToTaskEvent(row: TaskEventRow): TaskEvent | null {
+function rowToTaskEvent(row: TaskEventRow): TaskEvent | null {
   if (!KIND_SET.has(row.kind)) return null;
   return {
     id: row.id,
@@ -153,44 +153,16 @@ function epoch(iso: string | null | undefined): number {
 }
 
 // ---------------------------------------------------------------------------
-// Viewer clock (the snapshot stamp, change times), via src/lib/time.ts
-// ---------------------------------------------------------------------------
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** "16 Oct" for a civil date. Pure. */
-export function civilDayLabel(civil: string): string {
-  const [, m, d] = civil.split('-').map(Number);
-  return `${d ?? ''} ${MONTHS[(m ?? 1) - 1] ?? ''}`;
-}
-
-/** An instant's clock on the viewer's clock: "11:05 AM". `timeZone` is for tests. Pure. */
-export function clockLabelFull(iso: string, timeZone?: string): string {
-  const ms = epoch(iso);
-  if (Number.isNaN(ms)) return '';
-  return formatTime(ms, timeZone);
-}
-
-/** An event or change time: "7:30 PM" today, else "12 Oct 7:30 PM". Pure. */
-export function changeTimeLabel(iso: string, nowMs: number, timeZone?: string): string {
-  const ms = epoch(iso);
-  if (Number.isNaN(ms)) return '';
-  const clock = clockLabelFull(iso, timeZone);
-  const day = civilDay(ms, timeZone);
-  return day === civilDay(nowMs, timeZone) ? clock : `${civilDayLabel(day)} ${clock}`;
-}
-
-// ---------------------------------------------------------------------------
 // Order and list helpers
 // ---------------------------------------------------------------------------
 
 /** The list order: by number (the order they were added). Pure. */
-export function compareTasks(a: ChatTask, b: ChatTask): number {
+function compareTasks(a: ChatTask, b: ChatTask): number {
   return a.number - b.number;
 }
 
 /** The live list, by number: never a deleted task. Pure. */
-export function listTasks(tasks: readonly ChatTask[]): ChatTask[] {
+function listTasks(tasks: readonly ChatTask[]): ChatTask[] {
   return tasks.filter((t) => !isDeleted(t)).sort(compareTasks);
 }
 
@@ -199,15 +171,6 @@ export function nextNumberPreview(tasks: readonly Pick<ChatTask, 'number'>[]): n
   let max = 0;
   for (const t of tasks) if (t.number > max) max = t.number;
   return max + 1;
-}
-
-/** Upsert by id (new array, input untouched). Pure. */
-export function upsertTask(tasks: readonly ChatTask[], task: ChatTask): ChatTask[] {
-  const at = tasks.findIndex((t) => t.id === task.id);
-  if (at < 0) return [...tasks, task];
-  const next = [...tasks];
-  next[at] = task;
-  return next;
 }
 
 /** Merge events by id, oldest first (new array). Pure. */
@@ -287,7 +250,7 @@ export function applyChanges(task: ChatTask, changes: TaskChanges): ChatTask {
 }
 
 /** The ids whose draft really differs (edits that change something, and deletes). Pure. */
-export function touchedIds(draft: SheetDraft, byId: ReadonlyMap<string, ChatTask>): Set<string> {
+function touchedIds(draft: SheetDraft, byId: ReadonlyMap<string, ChatTask>): Set<string> {
   const out = new Set<string>();
   for (const [id, edit] of Object.entries(draft.edits)) {
     const task = byId.get(id);
@@ -411,7 +374,7 @@ export interface TaskConflict {
 }
 
 /** Map the RPC's conflicts array; malformed entries are skipped. Pure. */
-export function parseConflicts(raw: unknown): TaskConflict[] {
+function parseConflicts(raw: unknown): TaskConflict[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((c: unknown) => {
     if (c === null || typeof c !== 'object') return [];
@@ -516,7 +479,7 @@ export function liveMerge(input: {
 // ---------------------------------------------------------------------------
 
 /** One edit's before and after, read from an 'edited' event's JSON. */
-export interface EditedValues {
+interface EditedValues {
   old: TaskChanges;
   next: TaskChanges;
 }
@@ -539,7 +502,7 @@ function parseChangeJson(raw: string | null): TaskChanges {
 }
 
 /** The before and after of an 'edited' event (unknown fields dropped). Pure. */
-export function editedValues(event: Pick<TaskEvent, 'oldValue' | 'newValue'>): EditedValues {
+function editedValues(event: Pick<TaskEvent, 'oldValue' | 'newValue'>): EditedValues {
   return { old: parseChangeJson(event.oldValue), next: parseChangeJson(event.newValue) };
 }
 
@@ -553,7 +516,7 @@ export type BatchRow =
   | { kind: 'deleted'; number: number | null; title: string };
 
 /** What a task reference names in a line. */
-export interface TaskRef {
+interface TaskRef {
   number: number | null;
   title: string;
   priority: TaskPriority | null;
@@ -662,11 +625,11 @@ export function editedTasksLabel(name: string): string {
 export const TASKS_SHEET_ONLY = 'list';
 
 /** Older rows (no batch id): consecutive adds by one person this close to the first are one line. */
-export const ADD_BATCH_WINDOW_MS = 10_000;
+const ADD_BATCH_WINDOW_MS = 10_000;
 /** Older rows: consecutive changes by one person this close together collapse... */
-export const COLLAPSE_WINDOW_MS = 2 * 60 * 1000;
+const COLLAPSE_WINDOW_MS = 2 * 60 * 1000;
 /** ...when there are at least this many of them. */
-export const COLLAPSE_MIN = 4;
+const COLLAPSE_MIN = 4;
 
 /**
  * One thread line: one Save (events sharing a batch id), or, for older rows
@@ -824,7 +787,7 @@ export type TaskMark =
   | { kind: 'done' }
   | { kind: 'reopened' };
 
-export interface TaskMarks {
+interface TaskMarks {
   /** Marks by task id (several per task when one Save changed several fields). */
   byTask: ReadonlyMap<string, TaskMark[]>;
   /** The people whose Saves the marks come from (latest first). */
@@ -964,7 +927,7 @@ export function editingLabel(names: readonly string[]): string | null {
 // ---------------------------------------------------------------------------
 
 /** A chat message's length limit (chat_message_send). */
-export const SNAPSHOT_MAX = 5000;
+const SNAPSHOT_MAX = 5000;
 
 function snapshotItem(task: ChatTask): string {
   return `${task.number}. ${task.title} · P${task.priority}`;
@@ -1019,7 +982,7 @@ const EVENT_COLUMNS =
   'id, task_id, channel_id, workspace_id, actor_user_id, kind, old_value, new_value, created_at, batch_id';
 
 /** How many events one read carries (newest first, then put oldest first). */
-export const EVENT_PAGE = 200;
+const EVENT_PAGE = 200;
 
 function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
@@ -1102,10 +1065,10 @@ export async function readTaskEvents(
 // ---------------------------------------------------------------------------
 
 /** A write outcome; the message is the raw error, for logging only. */
-export type TaskWriteResult<T = null> = { ok: true; data: T } | { ok: false; message: string };
+type TaskWriteResult<T = null> = { ok: true; data: T } | { ok: false; message: string };
 
 /** What one Save returns. */
-export interface BatchResult {
+interface BatchResult {
   batchId: string | null;
   createdIds: string[];
   conflicts: TaskConflict[];

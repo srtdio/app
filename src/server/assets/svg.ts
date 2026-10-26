@@ -25,11 +25,3 @@ export function sanitizeSvg(svg: string): string {
     .replace(EVENT_HANDLER_SQ, '')
     .replace(EVENT_HANDLER_BARE, '');
 }
-
-const decoder = new TextDecoder();
-const encoder = new TextEncoder();
-
-/** Decode SVG bytes, sanitize the markup, and re-encode to UTF-8 bytes. */
-export function sanitizeSvgBytes(bytes: Uint8Array): Uint8Array {
-  return encoder.encode(sanitizeSvg(decoder.decode(bytes)));
-}

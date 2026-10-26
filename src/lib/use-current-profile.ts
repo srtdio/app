@@ -36,14 +36,14 @@ export interface CurrentProfile {
   username: string | null;
 }
 
-export interface UseCurrentProfile {
+interface UseCurrentProfile {
   profile: CurrentProfile | null;
   loading: boolean;
   error: boolean;
   refetch: () => void;
 }
 
-export interface ProfileSnapshot {
+interface ProfileSnapshot {
   userId: string | null;
   profile: CurrentProfile | null;
   loading: boolean;

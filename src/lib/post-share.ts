@@ -24,7 +24,7 @@ export interface ResolvedDownload {
 }
 
 /** A ready-to-trigger download: a non-empty URL paired with its file name. */
-export interface DownloadDescriptor {
+interface DownloadDescriptor {
   url: string;
   filename: string;
 }

@@ -150,7 +150,7 @@ export function clearRecents(
 }
 
 /** What a route opens: an item by id, or a post/brief by its number (resolved by the caller). */
-export type RouteOpen =
+type RouteOpen =
   | { type: RecentType; id: string }
   | { type: 'post' | 'brief'; number: number }
   | null;
@@ -288,7 +288,7 @@ export function useRecentRecorder(params: {
 }
 
 /** A group's chat channel id (the server's group__{workspace}__{group} form). Pure. */
-export function groupChannelId(workspaceId: string, groupId: string): string {
+function groupChannelId(workspaceId: string, groupId: string): string {
   return `group__${workspaceId}__${groupId}`;
 }
 

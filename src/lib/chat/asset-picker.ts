@@ -40,12 +40,12 @@ export interface LibraryAsset {
 }
 
 /** Keyset cursor: the (uploaded_at, id) of the last asset shown. */
-export interface AssetCursor {
+interface AssetCursor {
   uploadedAt: string;
   id: string;
 }
 
-export interface AssetPage {
+interface AssetPage {
   rows: LibraryAsset[];
   /** Exact match count on the first page, else null. */
   count: number | null;

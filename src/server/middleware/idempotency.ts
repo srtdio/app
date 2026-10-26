@@ -35,7 +35,7 @@ interface IdempotencyContext {
   traceId: string;
 }
 
-export type Handler = (request: Request, context: IdempotencyContext) => Promise<Response>;
+type Handler = (request: Request, context: IdempotencyContext) => Promise<Response>;
 
 /** Tenancy scope for a key. Both null = a global (unauthenticated) key. */
 export interface IdempotencyScope {
@@ -77,7 +77,7 @@ export interface IdempotencyStore {
   cleanup(now: Date): Promise<number>;
 }
 
-export interface IdempotencyOptions {
+interface IdempotencyOptions {
   /** A shared store (tests, long-lived runtimes). */
   store?: IdempotencyStore;
   /** A per-request store factory; `dispose` runs in a finally block. */

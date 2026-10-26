@@ -13,7 +13,7 @@ export type PlanTier = (typeof PLAN_TIERS)[number];
 
 // Mirrors feature_flags_rollout_percentage_check.
 const ROLLOUT_PERCENTAGES = [0, 10, 25, 50, 100] as const;
-export type RolloutPercentage = (typeof ROLLOUT_PERCENTAGES)[number];
+type RolloutPercentage = (typeof ROLLOUT_PERCENTAGES)[number];
 
 // Mirrors feature_flags_flag_name_check.
 export const FLAG_NAME_PATTERN = /^[a-z][a-z0-9_]{0,99}$/;

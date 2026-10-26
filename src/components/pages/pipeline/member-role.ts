@@ -9,7 +9,7 @@ import type { Client } from '@srtdio/posts';
 /** The role read's lifecycle: unknown while loading, failed, or settled. */
 export type RoleStatus = 'loading' | 'error' | 'ready';
 
-export type MemberRoleRead = { ok: true; role: string | null } | { ok: false };
+type MemberRoleRead = { ok: true; role: string | null } | { ok: false };
 
 /** Read the viewer's active role; a PostgREST error or a throw is `{ ok: false }`. */
 export async function readMemberRole(

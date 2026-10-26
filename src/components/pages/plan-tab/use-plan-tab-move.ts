@@ -37,7 +37,7 @@ import { useUndoableAction } from '@/lib/use-undoable-action';
 type ItemEntry = Extract<CalendarEntry, { kind: 'item' }>;
 
 /** The keep-approval question for one drop. */
-export interface KeepAsk {
+interface KeepAsk {
   title: string;
   body: string;
   entry: ItemEntry;

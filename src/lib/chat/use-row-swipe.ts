@@ -3,10 +3,8 @@
 // cores (unit-tested in node); the Plan screen wires them to its rows, its
 // toast and plan_item_remove. Motion: translateX on the row content only.
 
-import { useRef } from 'react';
-
 /** Movement (px) that decides the axis; the long-press cancels at the same distance. */
-export const ROW_SWIPE_LOCK_PX = 10;
+const ROW_SWIPE_LOCK_PX = 10;
 /** The red Remove action's width (px); the row opens to exactly this. */
 export const ROW_ACTION_PX = 88;
 /** How far the one-time peek slides the first row (px). */
@@ -21,7 +19,7 @@ export const ROW_PEEK_SLIDE_MS = 200;
 export const PLAN_SWIPE_PEEK_KEY = 'sorted:plan-swipe-peek-seen';
 
 /** What a press has become: still deciding, a row swipe, or not ours (a scroll). */
-export type SwipeAxis = 'pending' | 'swipe' | 'none';
+type SwipeAxis = 'pending' | 'swipe' | 'none';
 
 /**
  * The axis lock: under ROW_SWIPE_LOCK_PX of travel the press is pending.
@@ -61,13 +59,13 @@ export function openRowOnSettle(prev: string | null, id: string, open: boolean):
 }
 
 /** The pointer fields the controller reads; React's PointerEvent satisfies it. */
-export interface RowSwipeSample {
+interface RowSwipeSample {
   clientX: number;
   clientY: number;
   pointerId?: number;
 }
 
-export interface RowSwipeOptions {
+interface RowSwipeOptions {
   /** The row is open (the press starts from -ROW_ACTION_PX). */
   isOpen: () => boolean;
   /** False ignores presses (a drag is running, the row is not swipeable). */
@@ -80,7 +78,7 @@ export interface RowSwipeOptions {
   onSettle: (open: boolean) => void;
 }
 
-export interface RowSwipeController {
+interface RowSwipeController {
   handlers: {
     onPointerDown: (event: RowSwipeSample) => void;
     onPointerMove: (event: RowSwipeSample) => void;
@@ -164,26 +162,11 @@ export function createRowSwipeController(opts: RowSwipeOptions): RowSwipeControl
   };
 }
 
-/** One controller per row for its life, always calling the latest options. */
-export function useRowSwipe(opts: RowSwipeOptions): RowSwipeController {
-  const latest = useRef(opts);
-  latest.current = opts;
-  const ref = useRef<RowSwipeController | null>(null);
-  ref.current ??= createRowSwipeController({
-    isOpen: () => latest.current.isOpen(),
-    enabled: () => latest.current.enabled?.() ?? true,
-    onStart: (pointerId) => latest.current.onStart(pointerId),
-    onDrag: (offset) => latest.current.onDrag(offset),
-    onSettle: (open) => latest.current.onSettle(open),
-  });
-  return ref.current;
-}
-
 // ---------------------------------------------------------------------------
 // Remove with Undo: the write waits for the toast
 // ---------------------------------------------------------------------------
 
-export interface DelayedRemoverOptions {
+interface DelayedRemoverOptions {
   /** How long Undo is offered (ms); the write goes out when it ends. */
   delayMs: number;
   /** The write (plan_item_remove); true when it landed. */
@@ -198,7 +181,7 @@ export interface DelayedRemoverOptions {
   clearTimer?: (handle: unknown) => void;
 }
 
-export interface DelayedRemover {
+interface DelayedRemover {
   /** Hide now, send after delayMs; any removal still waiting goes out first. */
   schedule: (id: string) => void;
   /** Cancel the waiting removal (no request); true when there was one. */
@@ -268,7 +251,7 @@ export function createDelayedRemover(opts: DelayedRemoverOptions): DelayedRemove
 }
 
 /** The slices of document and window flushOnLeave listens on. */
-export interface LeaveTargets {
+interface LeaveTargets {
   doc: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'>;
   win: Pick<Window, 'addEventListener' | 'removeEventListener'>;
 }
@@ -336,7 +319,7 @@ export function resetPeekLoadForTests(): void {
   peekShownThisLoad = false;
 }
 
-export interface PlanPeekOptions {
+interface PlanPeekOptions {
   /** A drag, a swipe, a press, a sheet or a menu is active: try again later. */
   blocked: () => boolean;
   /** The first visible swipeable row, or null. */

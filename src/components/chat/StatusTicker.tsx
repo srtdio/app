@@ -55,13 +55,13 @@ import { paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { useModalFocus } from '@/lib/modal-focus';
 
 /** Snap open past this share of the panel's height. */
-export const SNAP_SHARE = 0.4;
+const SNAP_SHARE = 0.4;
 /** A flick faster than this (px/ms) snaps in its direction. */
-export const FLICK_VELOCITY = 0.4;
+const FLICK_VELOCITY = 0.4;
 /** Movement before a press becomes a drag (px). */
 const DRAG_SLOP = 6;
 /** The open and close motion (ms); the panel unmounts after it. */
-export const DRAWER_MS = 220;
+const DRAWER_MS = 220;
 
 const NUMBER_TONE: Record<StatusTone, string> = {
   default: 'text-fg',
@@ -370,7 +370,7 @@ export function StatusTickerBar(props: {
 }
 
 /** Where the drawer was when the chat navigated away (a brief, the Briefs page). */
-export interface DrawerMemory {
+interface DrawerMemory {
   /** The router location key the chat was at when it left. */
   locationKey: string;
   scrollTop: number;
@@ -414,7 +414,7 @@ export function takeDrawerMemory(
 export const POST_OPEN_FAILED = "Couldn't open this post. Try again.";
 
 /** How long a tapped post may wait on its read before the tap gives up (ms). */
-export const POST_TAP_WAIT_MS = READ_TIMEOUT_MS + 1_000;
+const POST_TAP_WAIT_MS = READ_TIMEOUT_MS + 1_000;
 
 /**
  * What a post row tap does with the card cache's snapshot of that post: open

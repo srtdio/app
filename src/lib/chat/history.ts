@@ -59,7 +59,7 @@ export const HISTORY_PAGE_SIZE = 50;
 export const CATCH_UP_LIMIT = 200;
 
 /** Bounded read behind the conversation previews (latest message per channel). */
-export const PREVIEW_SCAN_LIMIT = 200;
+const PREVIEW_SCAN_LIMIT = 200;
 
 type ChatReactionRow = Database['public']['Tables']['chat_reactions']['Row'];
 type ChatReadCursorRow = Database['public']['Tables']['chat_read_cursors']['Row'];
@@ -113,7 +113,7 @@ const oldestByWorkspace = new OldestCache<string>();
  * A channel's oldest created_at, deleted rows included (they still render as
  * tombstones), or null for an empty channel. One ordered LIMIT 1 read, cached.
  */
-export function readChannelOldest(
+function readChannelOldest(
   client: Client,
   channelId: string,
   signal?: AbortSignal,
@@ -195,7 +195,7 @@ export function loadLatestMessages(
 }
 
 /** How long after it settles a page prefetched at the tap can still be joined. */
-export const PREFETCH_JOIN_MS = 2_000;
+const PREFETCH_JOIN_MS = 2_000;
 
 interface Prefetch {
   client: Client;
@@ -326,7 +326,7 @@ export function loadNewerMessages(
  * estimate and the cursor (ceilingNowMs, then the cursor), plus
  * SERVER_NOW_MARGIN_MS; null (no upper bound) before the server clock is known.
  */
-export function catchUpCeiling(cursor: MessageCursor): string | null {
+function catchUpCeiling(cursor: MessageCursor): string | null {
   const now = ceilingNowMs();
   if (now === null) return null;
   const at = Date.parse(cursor.createdAt);

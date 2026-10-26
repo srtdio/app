@@ -45,7 +45,7 @@ const FORMAT_ANY = '';
  * deliverable format but never a 'link': a link is an asset, not a post the
  * agency produces, so it is dropped from the choices here.
  */
-export function briefFormatsFor(platform: PostPlatform): string[] {
+function briefFormatsFor(platform: PostPlatform): string[] {
   return FORMATS_BY_PLATFORM[platform].filter((value) => value !== 'link');
 }
 
@@ -63,7 +63,7 @@ export function briefFormatOptions(platform: PostPlatform | null): SelectOption[
 }
 
 /** The reset-on-open form state: every field cleared, format defaulted to Any. */
-export interface CreateBriefFormState {
+interface CreateBriefFormState {
   title: string;
   objective: string;
   brandRequirements: string;
@@ -188,7 +188,7 @@ function fileCount(count: number): string {
  * picked format or date, a completed attachment, or an upload in flight or
  * failed. Drives the Sheet's discard confirm (X, backdrop, Escape, Back). Pure.
  */
-export function isBriefFormDirty(
+function isBriefFormDirty(
   form: CreateBriefFormState,
   pendingUploads: number,
   failedUploads: number,
@@ -211,7 +211,7 @@ export function isBriefFormDirty(
  * enabled and says so). A failed upload: blocked until it is removed or
  * retried. Pure.
  */
-export function briefUploadGate(
+function briefUploadGate(
   pendingUploads: number,
   failedUploads: number,
 ): { ok: true } | { ok: false; message: string } {
@@ -222,7 +222,7 @@ export function briefUploadGate(
 }
 
 /** The Create button's label: in flight, uploading, or ready. Pure. */
-export function createBriefLabel(submitting: boolean, pendingUploads: number): string {
+function createBriefLabel(submitting: boolean, pendingUploads: number): string {
   if (submitting) return 'Creating…';
   if (pendingUploads > 0) return `Uploading ${fileCount(pendingUploads)}…`;
   return 'Create brief';

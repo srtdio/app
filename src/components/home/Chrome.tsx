@@ -9,7 +9,7 @@ import { Wordmark } from './Wordmark';
 // router on the home bundle, so every link is a plain anchor: on / the sidebar
 // tiles scroll in place, elsewhere they load "/#feature-<key>".
 
-export type HomeSurface = 'home' | 'demo';
+type HomeSurface = 'home' | 'demo';
 
 interface Story {
   badge: string;
@@ -18,7 +18,7 @@ interface Story {
 }
 
 /** Sidebar stories: coming soon, so cards only (no links, no route). */
-export const STORIES: readonly Story[] = [
+const STORIES: readonly Story[] = [
   {
     badge: '7',
     tag: 'Funny story',
@@ -33,7 +33,7 @@ export const STORIES: readonly Story[] = [
 ];
 
 /** A homepage anchor: in place on /, a full load of "/#..." elsewhere. Pure. */
-export function homeHref(surface: HomeSurface, hash: string): string {
+function homeHref(surface: HomeSurface, hash: string): string {
   return surface === 'home' ? hash : `/${hash}`;
 }
 

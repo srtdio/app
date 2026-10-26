@@ -18,7 +18,6 @@ import { civilMondayOf, formatCivilDayHeader, PLAN_WEEK_DAYS } from '@/lib/plan-
 // Copy (the approved lines only)
 // ---------------------------------------------------------------------------
 
-export const PLAN_TAB_TITLE = 'Plan';
 export const MONTH_LABEL = 'Month';
 export const WEEK_LABEL = 'Week';
 export const NEW_PLAN_LABEL = 'New plan';
@@ -27,7 +26,7 @@ export const TODAY_LABEL = 'Today';
 export const ALL_LABEL = 'All';
 export const PLAN_ITEM_LEGEND = "Plan item, in its plan's colour";
 export const LOOSE_POST_LEGEND = 'Post not in a plan';
-export const NO_POST_YET = 'No post yet';
+const NO_POST_YET = 'No post yet';
 
 /** A stage as a status line says it: "In review", else the capitalised stage. Pure. */
 export function stageStatusWord(stage: string): string {
@@ -43,7 +42,7 @@ export function stageStatusWord(stage: string): string {
 export type PlanTone = 'accent' | 'good' | 'warn' | 'parked';
 
 /** The fixed cycle plans take, ordered by start date. */
-export const PLAN_TONE_CYCLE: readonly PlanTone[] = ['accent', 'good', 'warn', 'parked'];
+const PLAN_TONE_CYCLE: readonly PlanTone[] = ['accent', 'good', 'warn', 'parked'];
 
 /**
  * Each tone's classes: the item's soft background and the dot. stage-parked
@@ -89,7 +88,7 @@ export function planTones(
 export type PlanTabView = 'month' | 'week';
 
 /** One cell of the month grid. */
-export interface MonthCell {
+interface MonthCell {
   day: string;
   /** Inside the shown month (out-of-month days are dimmed). */
   inMonth: boolean;
@@ -126,12 +125,12 @@ const MONTH_SHORT = [
 ];
 
 /** The first day of the month holding `day` ("2026-10-01"). Pure. */
-export function monthStartOf(day: string): string {
+function monthStartOf(day: string): string {
   return `${day.slice(0, 7)}-01`;
 }
 
 /** The last day of the month holding `day`. Pure. */
-export function monthEndOf(day: string): string {
+function monthEndOf(day: string): string {
   const [y, m] = day.split('-').map(Number);
   const next =
     m === 12 ? `${(y ?? 1970) + 1}-01-01` : `${y}-${String((m ?? 1) + 1).padStart(2, '0')}-01`;
@@ -301,7 +300,7 @@ export function calendarEntries(input: {
 }
 
 /** Items a month cell shows before "+N more". */
-export const MONTH_CELL_CAP = 3;
+const MONTH_CELL_CAP = 3;
 
 /** A month cell's entries: the first `cap`, and how many more. Pure. */
 export function capEntries<T>(
@@ -358,7 +357,7 @@ export function addOnLabel(day: string): string {
 }
 
 /** Whether a plan's dates (inclusive) hold `day`. Pure. */
-export function planCovers(plan: Pick<PlanRow, 'starts_on' | 'ends_on'>, day: string): boolean {
+function planCovers(plan: Pick<PlanRow, 'starts_on' | 'ends_on'>, day: string): boolean {
   return day >= plan.starts_on && day <= plan.ends_on;
 }
 
@@ -389,9 +388,9 @@ export function canDropOn(entry: CalendarEntry, day: string): boolean {
 // ---------------------------------------------------------------------------
 
 /** The Plan pill's copy. */
-export const PLAN_OK_PILL = 'Plan OK';
-export const PLAN_NOT_OK_PILL = 'Plan Not OK';
-export const PLAN_UNDECIDED_PILL = 'Plan: not decided';
+const PLAN_OK_PILL = 'Plan OK';
+const PLAN_NOT_OK_PILL = 'Plan Not OK';
+const PLAN_UNDECIDED_PILL = 'Plan: not decided';
 
 /**
  * The card's Plan pill: the item's review on the side the plan shows (the
@@ -424,9 +423,9 @@ export function postStageLine(bundle: Pick<PlanBundle, 'postStages'>, item: Plan
 // The phone list
 // ---------------------------------------------------------------------------
 
-export type PlanSectionKey = 'this' | 'next' | 'later' | 'earlier';
+type PlanSectionKey = 'this' | 'next' | 'later' | 'earlier';
 
-export const PLAN_SECTION_LABELS: Readonly<Record<PlanSectionKey, string>> = {
+const PLAN_SECTION_LABELS: Readonly<Record<PlanSectionKey, string>> = {
   this: 'This week',
   next: 'Next week',
   later: 'Later',
@@ -514,8 +513,6 @@ export function planCardMeta(
 // ---------------------------------------------------------------------------
 // Zero state
 // ---------------------------------------------------------------------------
-
-export const CREATE_PLAN_BUTTON = 'Create plan';
 
 /**
  * The zero state: a creator "No plans yet" with Create plan, an approver "No

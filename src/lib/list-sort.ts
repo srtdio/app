@@ -8,7 +8,7 @@ import type { SortOption } from '@/components/ui/SortMenu';
 import { civilDay, isValidTimeZone } from '@/lib/time';
 
 /** The date-keyed sort orders, in menu order. Used by Briefs. */
-export type DateSort = 'newest' | 'oldest' | 'target';
+type DateSort = 'newest' | 'oldest' | 'target';
 
 /** The minimal row shape the date comparators need. */
 export interface DateSortable {
@@ -106,7 +106,7 @@ export const DATE_WINDOW_OPTIONS: { value: DateWindow; label: string }[] = [
  * civil-date bounds for the 'custom' window (each 'YYYY-MM-DD'); null/undefined for
  * the preset windows, or 'custom' with no range yet selected.
  */
-export interface WindowBounds {
+interface WindowBounds {
   now: Date;
   timeZone: string;
   weekStartDay: number;

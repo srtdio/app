@@ -96,7 +96,7 @@ export type ResultGroup =
   | 'Chat';
 
 /** Result groups, in the order they show. */
-export const RESULT_GROUPS: readonly ResultGroup[] = [
+const RESULT_GROUPS: readonly ResultGroup[] = [
   'People',
   'Posts',
   'Briefs',
@@ -110,7 +110,7 @@ export const RESULT_GROUPS: readonly ResultGroup[] = [
 ];
 
 /** The workspace group each kind lands in. */
-export const KIND_GROUP: Record<WorkspaceKind, ResultGroup> = {
+const KIND_GROUP: Record<WorkspaceKind, ResultGroup> = {
   person: 'People',
   post: 'Posts',
   brief: 'Briefs',
@@ -127,7 +127,7 @@ const GROUP_KIND = new Map<ResultGroup, WorkspaceKind>(
 );
 
 /** Rows a group shows before "Show all". */
-export const GROUP_PREVIEW = PER_KIND_PREVIEW;
+const GROUP_PREVIEW = PER_KIND_PREVIEW;
 
 /** The empty-search section. */
 export const RECENT_LABEL = 'Recent';
@@ -198,7 +198,7 @@ function workspaceRow(
  * A chat hit's title: its sender, "Former member" only once a read confirmed
  * they left, and nothing while their name is not known yet. Pure over the registry.
  */
-export function chatSenderTitle(hit: SearchHit, workspaceId: string | null): string {
+function chatSenderTitle(hit: SearchHit, workspaceId: string | null): string {
   if (hit.senderUserId === null) return 'Chat';
   return searchActorName(workspaceId, hit.senderUserId) ?? '';
 }
@@ -312,7 +312,7 @@ const ROW = 'flex items-center px-2 text-base transition-colors active:bg-accent
 /** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
 const ACTIVE_ROW = 'bg-accent-soft text-fg';
 
-export interface PaletteBodyProps {
+interface PaletteBodyProps {
   query: string;
   search: PaletteSearchState;
   sections: PaletteSection[];

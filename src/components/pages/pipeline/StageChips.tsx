@@ -14,7 +14,7 @@ export interface StageChipItem {
   stage?: Stage;
 }
 
-export interface StageChipsProps {
+interface StageChipsProps {
   items: StageChipItem[];
   active: string;
   onChange: (key: string) => void;

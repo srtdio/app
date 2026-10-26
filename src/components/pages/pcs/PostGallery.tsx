@@ -42,7 +42,7 @@ import {
 import { isPostPlatform, type GalleryItem } from '@srtdio/posts';
 
 /** The gesture handlers a tile spreads for long-press + right-click. */
-export interface TileGestures {
+interface TileGestures {
   onPointerDown: (event: ReactPointerEvent) => void;
   onPointerMove: (event: ReactPointerEvent) => void;
   onPointerUp: () => void;
@@ -296,7 +296,7 @@ export function resolveRibbonTileStyle(
 }
 
 /** An item's intrinsic size: stored first, then measured from the decoded image. */
-export function itemDims(
+function itemDims(
   item: GalleryItem,
   measured: MeasuredDimensions,
 ): { w: number; h: number } | null {
@@ -1261,7 +1261,7 @@ interface PostGalleryProps {
 const EMPTY_EDIT: Pick<PostGalleryProps, 'onAddAfter' | 'onRemove'> = {};
 
 /** The page's side of the #26 tools row. */
-export interface GalleryTools {
+interface GalleryTools {
   canEdit: boolean;
   /** Spec B4: an approved post, seen by a creator: the tools row shows a lock. */
   locked?: boolean;

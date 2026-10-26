@@ -93,8 +93,8 @@ function OpenPostThumb(props: { assetVersionId: string | null }) {
   );
 }
 
-export const IN_THIS_CHAT = 'in this chat';
-export const NOT_SHARED_HERE = 'not shared here yet';
+const IN_THIS_CHAT = 'in this chat';
+const NOT_SHARED_HERE = 'not shared here yet';
 
 /**
  * The two text lines of an open post row; target_date is a due date and shows

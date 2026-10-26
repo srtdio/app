@@ -36,7 +36,7 @@ export interface CatchUpLoaders {
  * run stopped at CATCH_UP_MAX_PAGES with more possibly waiting (`capped`), and
  * the latest-page hasMore when the latest page was read instead.
  */
-export type CatchUpOutcome =
+type CatchUpOutcome =
   | {
       ok: true;
       rows: ChatMessageRow[];
@@ -95,7 +95,7 @@ export async function catchUpRows(
  * switch, reopen, Retry) starts a new epoch: a read begun before it can no
  * longer move the cursor. Framework-free.
  */
-export interface ContiguityTracker {
+interface ContiguityTracker {
   /** Forget the cursor with the rows; returns the new epoch. */
   reset: () => number;
   /** The current epoch, taken when a read starts. */
@@ -159,7 +159,7 @@ export function insertedInside(
 /** What started a catch-up; the caller decides what each one reads. */
 export type CatchUpReason = 'connected' | 'visible' | 'online' | 'interval';
 
-export interface CatchUpTriggerDeps {
+interface CatchUpTriggerDeps {
   /** Run one catch-up (the caller guards against overlap). */
   run: (reason: CatchUpReason) => void;
   isVisible: () => boolean;

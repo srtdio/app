@@ -62,13 +62,13 @@ export function emptyStageMessage(stage: Stage): string {
 export const APPROVE_ROLE_BLOCKED = 'Only approvers can approve.';
 
 /** "Review", "Review or Parked", "Approved, Rejected or Parked". Pure. */
-export function joinOr(labels: readonly string[]): string {
+function joinOr(labels: readonly string[]): string {
   if (labels.length <= 1) return labels[0] ?? '';
   return `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`;
 }
 
 /** The stages this role may move a post into from `from`, in transition-map order. */
-export function allowedTargets(role: string | null, from: Stage): Stage[] {
+function allowedTargets(role: string | null, from: Stage): Stage[] {
   return (STAGE_TRANSITIONS[from] as readonly Stage[]).filter((to) => canRoleMove(role, from, to));
 }
 

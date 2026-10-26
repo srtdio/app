@@ -30,10 +30,10 @@ export const REASONS = {
 export type ReasonKey = keyof typeof REASONS;
 export type Reason = (typeof REASONS)[ReasonKey];
 
-export type LinkVerdict = { verdict: 'ok' | 'unsafe'; reasons: Reason[] };
+type LinkVerdict = { verdict: 'ok' | 'unsafe'; reasons: Reason[] };
 
 /** Brands people get phished with, as their bare registrable label. */
-export const BRANDS = [
+const BRANDS = [
   'google',
   'gmail',
   'microsoft',
@@ -347,7 +347,7 @@ const RISKY_EXTENSIONS = [
 const CODE_HOSTS: ReadonlySet<string> = new Set(['github.com', 'gitlab.com', 'bitbucket.org']);
 
 /** Link shorteners resolved server-side ("bit.ly → canva.com"). */
-export const SHORTENERS: ReadonlySet<string> = new Set([
+const SHORTENERS: ReadonlySet<string> = new Set([
   'bit.ly',
   't.co',
   'tinyurl.com',

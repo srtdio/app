@@ -11,7 +11,7 @@ import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/brief
 /** Open/closed are the only brief statuses; the literals are pinned to the
  * @srtdio/briefs filter type so a package rename surfaces here as a type error
  * rather than a silently stale string. */
-export type BriefStatus = NonNullable<ListBriefsFilters['status']>;
+type BriefStatus = NonNullable<ListBriefsFilters['status']>;
 export const BRIEF_STATUS: Record<BriefStatus, BriefStatus> = { open: 'open', closed: 'closed' };
 
 export function isBriefClosed(brief: Brief): boolean {

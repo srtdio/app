@@ -22,7 +22,7 @@ import { cn } from '@/lib/cn';
  * plan is the item screen's own button.) Absent everywhere else, so the
  * pipeline's sheet is unchanged.
  */
-export interface PostSheetPlanRows {
+interface PostSheetPlanRows {
   onMove: () => void;
 }
 export const PostSheetPlanRowsContext = createContext<PostSheetPlanRows | null>(null);
