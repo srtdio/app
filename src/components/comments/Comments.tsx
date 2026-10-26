@@ -1477,8 +1477,9 @@ export function Comments({
     const result = await createComment(supabase, input);
     if (!result.ok && entityType === 'post' && isInvalidMention(result.error)) {
       // A rejected mention (a client tagged on a draft): the composer keeps the
-      // text and files, the toast says why.
-      toast?.show({ title: DRAFT_MENTION_TOAST, tone: 'error' });
+      // text and files, the toast says why (inline only when no toast host).
+      if (toast === null) return { ok: false, error: DRAFT_MENTION_TOAST };
+      toast.show({ title: DRAFT_MENTION_TOAST, tone: 'error' });
       return { ok: false, notified: true };
     }
     if (!result.ok) {

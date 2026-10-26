@@ -3,16 +3,22 @@
 // look (PLAN, the title on up to two lines, the mono date range) with the
 // plan's covers, then a shared plan's bar and "N of M OK", or a Draft's tag
 // and "N items · only your team sees this" ("1 item" for one). A tap opens the plan's own screen (full page). The phone
-// Plan screens themselves are not touched. Tokens only.
+// Plan screens themselves are not touched. Tokens only. While more plans
+// remain (the read's next cursor), Load more ends the list ('Loading' while
+// the page is in flight, the Comments pattern); the cards it appends enter
+// with a translateY only (duration-base, ease-enter).
 
-import type { ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { PlanCardBar, PlanCardTop } from '@/components/chat/PlanCard';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { PLAN_DRAFT_LABEL } from '@/components/chat/plan-card';
 import { Thumbnail } from '@/components/media/Thumbnail';
+import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
+import { cn } from '@/lib/cn';
 import { planCardMeta, planSections } from '@/lib/plan-tab';
+import { usePlanTabMore } from './plan-tab-more';
 
 /** Covers a card shows at most. */
 export const CARD_COVERS = 4;
@@ -30,12 +36,41 @@ export function planCovers(bundle: PlanBundle, thumbs: PlanThumbs): string[] {
   return out;
 }
 
+/**
+ * Cards appended after the first paint (a Load more page): each renders one
+ * frame lowered, then moves to rest. Cards of the first paint never move.
+ * Returns the appended ids and the ones that have entered.
+ */
+function useAppended(ids: readonly string[]): { appended: Set<string>; entered: Set<string> } {
+  const first = useRef<Set<string> | null>(null);
+  if (first.current === null) first.current = new Set(ids);
+  const initial = first.current;
+  const appended = new Set(ids.filter((id) => !initial.has(id)));
+  const [entered, setEntered] = useState<Set<string>>(() => new Set());
+  const waiting = [...appended].filter((id) => !entered.has(id));
+  const key = waiting.join(',');
+  useEffect(() => {
+    if (key === '') return;
+    const raf = requestAnimationFrame(() => {
+      setEntered((prev) => {
+        const next = new Set(prev);
+        for (const id of key.split(',')) next.add(id);
+        return next;
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [key]);
+  return { appended, entered };
+}
+
 export function PlanTabList(props: {
   bundles: readonly PlanBundle[];
   thumbs: PlanThumbs;
   today: string;
   onOpen: (planId: string) => void;
 }): ReactElement {
+  const more = usePlanTabMore();
+  const { appended, entered } = useAppended(props.bundles.map((b) => b.plan.id));
   return (
     <div data-plan-tab-list="" className="flex flex-col gap-5 px-4 pb-8 pt-4">
       {planSections(props.bundles, props.today).map((section) => (
@@ -47,16 +82,43 @@ export function PlanTabList(props: {
           <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
             {section.label}
           </h2>
-          {section.bundles.map((bundle) => (
-            <PlanTabCard
-              key={bundle.plan.id}
-              bundle={bundle}
-              covers={planCovers(bundle, props.thumbs)}
-              onOpen={() => props.onOpen(bundle.plan.id)}
-            />
-          ))}
+          {section.bundles.map((bundle) => {
+            const id = bundle.plan.id;
+            const card = (
+              <PlanTabCard
+                key={id}
+                bundle={bundle}
+                covers={planCovers(bundle, props.thumbs)}
+                onOpen={() => props.onOpen(id)}
+              />
+            );
+            if (!appended.has(id)) return card;
+            return (
+              <div
+                key={id}
+                data-plan-tab-appended=""
+                className={cn(
+                  'flex flex-col transition-transform duration-base ease-enter motion-reduce:transition-none',
+                  entered.has(id) ? 'translate-y-0' : 'translate-y-1',
+                )}
+              >
+                {card}
+              </div>
+            );
+          })}
         </section>
       ))}
+      {more !== null ? (
+        <Button
+          type="button"
+          data-plan-tab-more=""
+          className="self-start"
+          disabled={more.busy}
+          onClick={more.onMore}
+        >
+          {more.busy ? 'Loading' : 'Load more'}
+        </Button>
+      ) : null}
     </div>
   );
 }

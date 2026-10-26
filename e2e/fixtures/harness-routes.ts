@@ -779,9 +779,7 @@ const POSTS_RPC: Record<string, RpcHandler> = {
       const media = (tables.asset_attachments ?? [])
         .filter(
           (a) =>
-            a.entity_type === 'post' &&
-            a.entity_id === post.id &&
-            (a.deleted_at ?? null) === null,
+            a.entity_type === 'post' && a.entity_id === post.id && (a.deleted_at ?? null) === null,
         )
         .sort(
           (a, b) =>

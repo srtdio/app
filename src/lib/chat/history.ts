@@ -51,6 +51,10 @@ import {
 import type { ChatMessageRow, MessageCursor, MessageReaction } from '@/lib/chat/thread';
 import type { ReadCursorRow } from '@/lib/chat/read-receipts';
 import { THREAD_COUNT_ROOT_LIMIT } from '@/lib/chat/thread-rail';
+import { rowToMark, type ChatMark } from '@/lib/chat/marks';
+import { soonestFirst, type ScheduledRow } from '@/lib/chat/scheduled';
+import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
+import type { OpenPostRow } from '../../../packages/posts/src/reads';
 
 /** History page size; also the "has more" probe (a full page means keep paging). */
 export const HISTORY_PAGE_SIZE = 50;
@@ -194,75 +198,10 @@ export function loadLatestMessages(
   return withReadTimeout((signal) => queryLatestMessages(client, channelId, signal));
 }
 
-/** How long after it settles a page prefetched at the tap can still be joined. */
-const PREFETCH_JOIN_MS = 2_000;
-
-interface Prefetch {
-  client: Client;
-  promise: Promise<Result<HistoryPage>>;
-  settledAt: number | null;
-}
-
-/** Latest pages started at a chat tap, by channel (joined by the thread's open). */
-const prefetched = new Map<string, Prefetch>();
-
-function joinablePrefetch(client: Client, channelId: string, now: number): Prefetch | null {
-  const hit = prefetched.get(channelId);
-  if (hit === undefined) return null;
-  if (hit.settledAt !== null && now - hit.settledAt >= PREFETCH_JOIN_MS) {
-    prefetched.delete(channelId);
-    return null;
-  }
-  return hit.client === client ? hit : null;
-}
-
-/**
- * Start a channel's latest page at the tap (bounded at 5s), before the thread
- * mounts: the thread's open joins it instead of reading again. A page already
- * started and still joinable is not read twice.
- */
-export function prefetchLatestMessages(client: Client, channelId: string): void {
-  if (joinablePrefetch(client, channelId, Date.now()) !== null) return;
-  const entry: Prefetch = {
-    client,
-    promise: withReadTimeout((signal) => queryLatestMessages(client, channelId, signal)),
-    settledAt: null,
-  };
-  prefetched.set(channelId, entry);
-  void entry.promise.then(() => {
-    entry.settledAt = Date.now();
-  });
-}
-
-/** Forget every prefetched page and paging floor (sign-out, user or workspace change). */
+/** Forget every paging floor (sign-out, user or workspace change). */
 export function clearMessagePrefetch(): void {
-  prefetched.clear();
   oldestByChannel.clear();
   oldestByWorkspace.clear();
-}
-
-/**
- * The thread's open read of the latest page: the page the tap prefetched when
- * there is one to join, else the read itself (unbounded; `signal` cancels the
- * wait, and the read when it is this call's own).
- */
-export function readLatestMessages(
-  client: Client,
-  channelId: string,
-  signal?: AbortSignal,
-): Promise<Result<HistoryPage>> {
-  const hit = joinablePrefetch(client, channelId, Date.now());
-  if (hit === null) return queryLatestMessages(client, channelId, signal);
-  if (signal === undefined) return hit.promise;
-  if (signal.aborted) return Promise.resolve(fail('loadLatestMessages: aborted'));
-  return new Promise((resolve) => {
-    const onAbort = (): void => resolve(fail('loadLatestMessages: aborted'));
-    signal.addEventListener('abort', onAbort, { once: true });
-    void hit.promise.then((result) => {
-      signal.removeEventListener('abort', onAbort);
-      resolve(result);
-    });
-  });
 }
 
 /** The latest-page read itself (partition-bounded, no timeout); `signal` cancels it. */
@@ -851,4 +790,349 @@ function readWorkspaceOldest(
     const first = ((res.data ?? []) as Pick<ChatMessageRow, 'created_at'>[])[0];
     return { ok: true, data: first !== undefined ? first.created_at : null };
   });
+}
+
+// ---------------------------------------------------------------------------
+// The chat open bundle: one chat_open_bundle call per open
+// ---------------------------------------------------------------------------
+
+type ChatOpenBundleArgs = Database['public']['Functions']['chat_open_bundle']['Args'];
+type ChatMarkRow = Database['public']['Tables']['chat_message_marks']['Row'];
+type JsonValue = ChatMessageRow['removed_files'];
+
+/** Rows one cold open returns at most (the newest; more is has_more). */
+export const OPEN_BUNDLE_PAGE_SIZE = HISTORY_PAGE_SIZE;
+
+/** Rows one catch-up (p_since) open returns at most (more is a gap). */
+export const OPEN_BUNDLE_SINCE_LIMIT = CATCH_UP_LIMIT;
+
+/**
+ * Everything a chat open paints, from one chat_open_bundle call, in the
+ * shapes the store already holds. Plan bundles are never in it (a separate
+ * read, started once this lands).
+ */
+export interface ChatOpenBundle {
+  /** The server's now when the bundle was read. */
+  serverNow: string;
+  /**
+   * The messages, oldest first. Cold open: the latest 50, hasMore strictly
+   * when more exist. Catch-up (p_since): every row at or after p_since, at
+   * most 200; hasMore then means a gap.
+   */
+  page: HistoryPage;
+  /** Quoted and thread root rows not on the page (deleted rows kept). */
+  quoted: ChatMessageRow[];
+  /** Every reaction on the page's rows. */
+  reactions: Array<Pick<ChatReactionRow, 'message_id' | 'emoji' | 'user_id'>>;
+  /** The channel's read cursors and their messages' times (ms). */
+  readPositions: ReadPositionsRead;
+  /** Live replies per page root, within the page's window. */
+  replyCounts: Map<string, ThreadReplyCount>;
+  marks: ChatMark[];
+  /** The viewer's scheduled messages in the chat, soonest first. */
+  scheduled: ScheduledRow[];
+  openPosts: OpenPostRow[];
+  openPostCount: number;
+  /** The workspace's current shared plan ids (ending soonest first). */
+  sharedPlanIds: string[];
+  openBriefs: OpenBriefRow[];
+  openBriefCount: number;
+}
+
+/** A shape problem in the bundle: the whole bundle is refused (all or nothing). */
+class BundleShapeError extends Error {}
+
+function shape(at: string, what: string): never {
+  throw new BundleShapeError(`${at}: ${what}`);
+}
+
+function asRecord(value: unknown, at: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return shape(at, 'not an object');
+  }
+  return value as Record<string, unknown>;
+}
+
+/** A required key: present (null allowed only where the reader allows it). */
+function need(record: Record<string, unknown>, key: string, at: string): unknown {
+  if (!Object.prototype.hasOwnProperty.call(record, key)) return shape(at, `missing ${key}`);
+  return record[key];
+}
+
+function asArray(value: unknown, at: string): unknown[] {
+  if (!Array.isArray(value)) return shape(at, 'not a list');
+  return value;
+}
+
+function asString(value: unknown, at: string): string {
+  if (typeof value !== 'string') return shape(at, 'not a string');
+  return value;
+}
+
+function asStringOrNull(value: unknown, at: string): string | null {
+  return value === null || value === undefined ? null : asString(value, at);
+}
+
+function asNumber(value: unknown, at: string): number {
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  if (typeof n !== 'number' || !Number.isFinite(n)) return shape(at, 'not a number');
+  return n;
+}
+
+function asNumberOrNull(value: unknown, at: string): number | null {
+  return value === null || value === undefined ? null : asNumber(value, at);
+}
+
+function asStringsOrNull(value: unknown, at: string): string[] | null {
+  if (value === null || value === undefined) return null;
+  return asArray(value, at).map((v, i) => asString(v, `${at}[${i}]`));
+}
+
+/** A json column: whatever JSON the row holds (absent reads as null). */
+function asJson(value: unknown): JsonValue {
+  return (value === undefined ? null : value) as JsonValue;
+}
+
+function messageRow(value: unknown, at: string): ChatMessageRow {
+  const o = asRecord(value, at);
+  return {
+    id: asString(need(o, 'id', at), `${at}.id`),
+    channel_id: asString(need(o, 'channel_id', at), `${at}.channel_id`),
+    workspace_id: asString(need(o, 'workspace_id', at), `${at}.workspace_id`),
+    created_at: asString(need(o, 'created_at', at), `${at}.created_at`),
+    sender_user_id: asStringOrNull(o.sender_user_id, `${at}.sender_user_id`),
+    body: asStringOrNull(o.body, `${at}.body`),
+    mentions: asJson(o.mentions),
+    attachment_asset_ids: asStringsOrNull(o.attachment_asset_ids, `${at}.attachment_asset_ids`),
+    shared_post_ids: asStringsOrNull(o.shared_post_ids, `${at}.shared_post_ids`),
+    shared_brief_ids: asStringsOrNull(o.shared_brief_ids, `${at}.shared_brief_ids`),
+    shared_plan_ids: asStringsOrNull(o.shared_plan_ids, `${at}.shared_plan_ids`),
+    reply_to_message_id: asStringOrNull(o.reply_to_message_id, `${at}.reply_to_message_id`),
+    forwarded_from_message_id: asStringOrNull(
+      o.forwarded_from_message_id,
+      `${at}.forwarded_from_message_id`,
+    ),
+    attachment_meta: asJson(o.attachment_meta),
+    agora_event_id: asStringOrNull(o.agora_event_id, `${at}.agora_event_id`),
+    edited_at: asStringOrNull(o.edited_at, `${at}.edited_at`),
+    deleted_at: asStringOrNull(o.deleted_at, `${at}.deleted_at`),
+    thread_root_message_id: asStringOrNull(
+      o.thread_root_message_id,
+      `${at}.thread_root_message_id`,
+    ),
+    removed_files: o.removed_files === undefined || o.removed_files === null ? [] : asJson(o.removed_files),
+  };
+}
+
+function markRow(value: unknown, at: string): ChatMarkRow {
+  const o = asRecord(value, at);
+  return {
+    message_id: asString(need(o, 'message_id', at), `${at}.message_id`),
+    channel_id: asString(need(o, 'channel_id', at), `${at}.channel_id`),
+    workspace_id: asString(need(o, 'workspace_id', at), `${at}.workspace_id`),
+    mark_type: asString(need(o, 'mark_type', at), `${at}.mark_type`),
+    marked_at: asString(need(o, 'marked_at', at), `${at}.marked_at`),
+    marked_by: asStringOrNull(o.marked_by, `${at}.marked_by`),
+    priority: asNumberOrNull(o.priority, `${at}.priority`),
+    resolved_at: asStringOrNull(o.resolved_at, `${at}.resolved_at`),
+    resolved_by: asStringOrNull(o.resolved_by, `${at}.resolved_by`),
+  };
+}
+
+function scheduledRow(value: unknown, at: string): ScheduledRow {
+  const o = asRecord(value, at);
+  return {
+    id: asString(need(o, 'id', at), `${at}.id`),
+    channel_id: asString(need(o, 'channel_id', at), `${at}.channel_id`),
+    workspace_id: asString(need(o, 'workspace_id', at), `${at}.workspace_id`),
+    sender_user_id: asString(need(o, 'sender_user_id', at), `${at}.sender_user_id`),
+    send_at: asString(need(o, 'send_at', at), `${at}.send_at`),
+    status: asString(need(o, 'status', at), `${at}.status`),
+    created_at: asString(need(o, 'created_at', at), `${at}.created_at`),
+    updated_at: asString(need(o, 'updated_at', at), `${at}.updated_at`),
+    body: asStringOrNull(o.body, `${at}.body`),
+    mentions: asJson(o.mentions),
+    attachment_asset_ids: asStringsOrNull(o.attachment_asset_ids, `${at}.attachment_asset_ids`),
+    attachment_meta: asJson(o.attachment_meta),
+    shared_post_ids: asStringsOrNull(o.shared_post_ids, `${at}.shared_post_ids`),
+    shared_brief_ids: asStringsOrNull(o.shared_brief_ids, `${at}.shared_brief_ids`),
+    reply_to_message_id: asStringOrNull(o.reply_to_message_id, `${at}.reply_to_message_id`),
+    failure_reason: asStringOrNull(o.failure_reason, `${at}.failure_reason`),
+    sent_at: asStringOrNull(o.sent_at, `${at}.sent_at`),
+  };
+}
+
+function list<T>(
+  record: Record<string, unknown>,
+  key: string,
+  row: (value: unknown, at: string) => T,
+): T[] {
+  return asArray(need(record, key, 'bundle'), key).map((v, i) => row(v, `${key}[${i}]`));
+}
+
+/**
+ * Map chat_open_bundle's jsonb to the store's shapes, once. Pure. Every key
+ * must be present and well formed: a missing key or a malformed row refuses
+ * the whole bundle (a failed Result), so the open shows its failed-load state
+ * rather than a part read wrong. Only a mark of an unknown type is skipped
+ * (as the marks read does).
+ */
+export function parseChatOpenBundle(data: unknown): Result<ChatOpenBundle> {
+  try {
+    const o = asRecord(data, 'bundle');
+    const serverNow = asString(need(o, 'server_now', 'bundle'), 'server_now');
+    const hasMore = need(o, 'has_more', 'bundle');
+    if (typeof hasMore !== 'boolean') return shape('has_more', 'not a boolean');
+    const rows = list(o, 'messages', messageRow);
+    const quoted = list(o, 'quoted', messageRow);
+    const reactions = list(o, 'reactions', (v, at) => {
+      const r = asRecord(v, at);
+      return {
+        message_id: asString(need(r, 'message_id', at), `${at}.message_id`),
+        emoji: asString(need(r, 'emoji', at), `${at}.emoji`),
+        user_id: asString(need(r, 'user_id', at), `${at}.user_id`),
+      };
+    });
+    const cursors = list(o, 'read_cursors', (v, at): ReadCursorRow => {
+      const r = asRecord(v, at);
+      return {
+        userId: asString(need(r, 'user_id', at), `${at}.user_id`),
+        lastReadMessageId: asString(
+          need(r, 'last_read_message_id', at),
+          `${at}.last_read_message_id`,
+        ),
+        lastReadAt: asString(need(r, 'last_read_at', at), `${at}.last_read_at`),
+        readAt: asStringOrNull(r.read_at, `${at}.read_at`),
+      };
+    });
+    const times = new Map<string, number>();
+    for (const c of list(o, 'cursor_messages', (v, at) => {
+      const r = asRecord(v, at);
+      return {
+        id: asString(need(r, 'id', at), `${at}.id`),
+        createdAt: asString(need(r, 'created_at', at), `${at}.created_at`),
+      };
+    })) {
+      const ms = Date.parse(c.createdAt);
+      if (!Number.isNaN(ms)) times.set(c.id, ms);
+    }
+    const replyCounts = new Map<string, ThreadReplyCount>();
+    for (const c of list(o, 'reply_counts', (v, at) => {
+      const r = asRecord(v, at);
+      return {
+        rootId: asString(need(r, 'root_id', at), `${at}.root_id`),
+        count: asNumber(need(r, 'reply_count', at), `${at}.reply_count`),
+      };
+    })) {
+      replyCounts.set(c.rootId, { count: c.count });
+    }
+    const marks: ChatMark[] = [];
+    for (const row of list(o, 'marks', markRow)) {
+      const mark = rowToMark(row);
+      if (mark !== undefined) marks.push(mark);
+    }
+    const scheduled = soonestFirst(list(o, 'scheduled', scheduledRow));
+    const openPosts = list(o, 'open_posts', (v, at): OpenPostRow => {
+      const r = asRecord(v, at);
+      return {
+        id: asString(need(r, 'id', at), `${at}.id`),
+        number: asNumber(need(r, 'number', at), `${at}.number`),
+        title: asString(need(r, 'title', at), `${at}.title`),
+        format: asString(need(r, 'format', at), `${at}.format`),
+        target_date: asStringOrNull(r.target_date, `${at}.target_date`),
+        stage_entered_at: asString(need(r, 'stage_entered_at', at), `${at}.stage_entered_at`),
+        thumbnailAssetVersionId: asStringOrNull(
+          r.thumbnail_asset_version_id,
+          `${at}.thumbnail_asset_version_id`,
+        ),
+      };
+    });
+    const openPostCount = asNumber(need(o, 'open_post_count', 'bundle'), 'open_post_count');
+    const planIds = need(o, 'shared_plan_ids', 'bundle');
+    // An empty uuid[] may come back as null: no plans.
+    const sharedPlanIds =
+      planIds === null
+        ? []
+        : asArray(planIds, 'shared_plan_ids').map((v, i) => asString(v, `shared_plan_ids[${i}]`));
+    const openBriefs = list(o, 'open_briefs', (v, at): OpenBriefRow => {
+      const r = asRecord(v, at);
+      return {
+        id: asString(need(r, 'id', at), `${at}.id`),
+        number: asNumberOrNull(r.number, `${at}.number`),
+        title: asString(need(r, 'title', at), `${at}.title`),
+        created_at: asString(need(r, 'created_at', at), `${at}.created_at`),
+      };
+    });
+    const openBriefCount = asNumber(need(o, 'open_brief_count', 'bundle'), 'open_brief_count');
+    return {
+      ok: true,
+      data: {
+        serverNow,
+        page: { rows, hasMore },
+        quoted,
+        reactions,
+        readPositions: { rows: cursors, times },
+        replyCounts,
+        marks,
+        scheduled,
+        openPosts,
+        openPostCount,
+        sharedPlanIds,
+        openBriefs,
+        openBriefCount,
+      },
+    };
+  } catch (error) {
+    if (error instanceof BundleShapeError) return fail(`chat_open_bundle: ${error.message}`);
+    return fail(`chat_open_bundle: ${String(error)}`);
+  }
+}
+
+/** What one chat_open_bundle call is asked for. */
+export interface ChatOpenBundleInput {
+  /** uuid v7, minted at the open (the user action). */
+  traceId: string;
+  workspaceId: string;
+  channelId: string;
+  /** Catch-up: every row at or after this created_at (max 200). Absent: the latest 50. */
+  since?: string | null;
+}
+
+/**
+ * One chat_open_bundle call (SECURITY INVOKER: RLS decides every part),
+ * mapped once by parseChatOpenBundle. The proc raises 'workspace_member_only'
+ * when the chat is not visible: a failed Result with that code. Unbounded;
+ * `signal` cancels it. Never throws.
+ */
+export async function readChatOpenBundle(
+  client: Client,
+  input: ChatOpenBundleInput,
+  signal?: AbortSignal,
+): Promise<Result<ChatOpenBundle>> {
+  try {
+    const args: ChatOpenBundleArgs = {
+      p_trace_id: input.traceId,
+      p_workspace_id: input.workspaceId,
+      p_channel_id: input.channelId,
+      ...(input.since !== undefined && input.since !== null ? { p_since: input.since } : {}),
+    };
+    const { data, error } = await abortable(client.rpc('chat_open_bundle', args), signal);
+    if (error) {
+      return {
+        ok: false,
+        error: {
+          code: error.message === 'workspace_member_only' ? 'workspace_member_only' : 'unknown',
+          message: `chat_open_bundle: ${error.message}`,
+        },
+      };
+    }
+    return parseChatOpenBundle(data);
+  } catch (error) {
+    return fail(`chat_open_bundle: ${String(error)}`);
+  }
+}
+
+/** Every plan id shared on these rows, in row order, deduped. Pure. */
+export function rowPlanIds(rows: readonly Pick<ChatMessageRow, 'shared_plan_ids'>[]): string[] {
+  return [...new Set(rows.flatMap((row) => row.shared_plan_ids ?? []))];
 }

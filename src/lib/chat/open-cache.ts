@@ -7,8 +7,14 @@
 // JOIN_WINDOW_MS after it settles; only an open's first round joins, never a
 // refetch (a plan change, a post change, a tab returning).
 //
-// The last settled state of each chat (marks, scheduled rows, the plan card
-// cache with its bundles and draft rows) is remembered. Marks and scheduled
+// An open's reads are ONE chat_open_bundle call (open-bundle.ts), stashed
+// here as 'bundle'; the parts each hook reads first (marks, scheduled rows,
+// cursors, open posts, plan ids, briefs) are stashed beside it, derived from
+// that one call. Plan bundles are never remembered: each open reads its own
+// (PlanCardsProvider), so no bundle from an earlier open is ever painted.
+//
+// The last settled state of each chat (marks, scheduled rows) is
+// remembered. Marks and scheduled
 // rows paint on a reopen only while younger than READ_FRESH_MS (recallFresh):
 // older is absent, and the reopen holds for its own reads as a cold open does
 // (never the old answer, then a change). The ticker counts and open posts are
@@ -20,9 +26,7 @@
 // sign-out that never fired the event still never shows the next user the
 // last one's chats) and on sign-out (the auth state change and the sorted
 // sign-out event, listened to while anything is held). RLS still decides
-// every fresh read. A remembered plan card cache outlives its chat's screen
-// (its reads and retries run on, so a reopen finds them in); eviction and
-// every clear dispose it, its timers included.
+// every fresh read.
 //
 // A chat's messages page is remembered too, and it is the chat's one copy:
 // while a thread shows the chat, the thread owns its rows (attach) and writes
@@ -34,7 +38,6 @@
 import type { Result } from '@srtdio/rpc';
 import type { ScheduledRow } from '@/lib/chat/scheduled';
 import type { ChatMark } from '@/lib/chat/marks';
-import { createPlanCardCache, readPlanBundles, type PlanCardCache } from '@/lib/chat/plans';
 import type { OpenPostsData, OpenPostsView } from '@/lib/chat/use-open-posts';
 import type { StatusReadResults, StatusRoundView } from '@/lib/chat/use-status-counts';
 import {
@@ -52,7 +55,11 @@ import {
   type MessageCursor,
   type ThreadMessage,
 } from '@/lib/chat/thread';
-import { clearMessagePrefetch, type ReadPositionsRead } from '@/lib/chat/history';
+import {
+  clearMessagePrefetch,
+  type ChatOpenBundle,
+  type ReadPositionsRead,
+} from '@/lib/chat/history';
 import { resetViewerSideCache } from '@/lib/chat/viewer-role';
 import { SIGNOUT_EVENT } from '@/lib/events';
 import { READ_FRESH_MS } from '@/lib/session-read';
@@ -77,8 +84,12 @@ export interface ChatKey {
 
 /** The reads an open starts at the tap, by name. */
 export interface OpenReads extends StatusReadResults {
+  /** The open's one chat_open_bundle call; every other name here derives from it on an open. */
+  bundle: Result<ChatOpenBundle>;
   marks: Result<ChatMark[]>;
   openPosts: OpenPostsData;
+  scheduled: Result<ScheduledRow[]>;
+  positions: Result<ReadPositionsRead>;
 }
 
 /** A chat's last settled state. */
@@ -115,7 +126,6 @@ interface Slot {
   /** When each part was last remembered from a read (revise never moves it). */
   memoryAt: Partial<Record<keyof ChatMemory, number>>;
   reads: Map<keyof OpenReads, Stashed>;
-  planCache: PlanCardCache | null;
   /** When this chat was last opened (tap or mount), for the hold and the plan revalidation. */
   openedAt: number | null;
   /** Threads showing this chat now (StrictMode can mount two for a moment). */
@@ -138,8 +148,16 @@ export interface OpenCache {
     part: K,
     maxAgeMs?: number,
   ) => ChatMemory[K] | undefined;
-  /** Stash a read the tap started (replaces one that can no longer be joined). */
-  stash: <K extends keyof OpenReads>(key: ChatKey, name: K, promise: Promise<OpenReads[K]>) => void;
+  /**
+   * Stash a read the tap started (replaces one that can no longer be joined;
+   * with `replace`, any: a Retry's fresh read).
+   */
+  stash: <K extends keyof OpenReads>(
+    key: ChatKey,
+    name: K,
+    promise: Promise<OpenReads[K]>,
+    replace?: boolean,
+  ) => void;
   /** The stashed read while it runs or for JOIN_WINDOW_MS after; null otherwise. */
   join: <K extends keyof OpenReads>(key: ChatKey, name: K) => Promise<OpenReads[K]> | null;
   /**
@@ -150,8 +168,6 @@ export interface OpenCache {
   joinOrStart: <T>(key: ChatKey, name: keyof OpenReads, start: () => Promise<T>) => Promise<T>;
   /** Whether a read of this name can be joined (a tap already started it). */
   joinable: (key: ChatKey, name: keyof OpenReads) => boolean;
-  /** This chat's plan card cache, made once and kept while the chat is remembered. */
-  planCache: (key: ChatKey, make: () => PlanCardCache) => PlanCardCache;
   /** Note an open; true when it is a new one (none within JOIN_WINDOW_MS). */
   opened: (key: ChatKey) => boolean;
   /** When this chat was last opened, or null. */
@@ -177,7 +193,7 @@ export interface OpenCache {
   attach: (key: ChatKey) => { keep: (thread: RememberedThread) => void; release: () => void };
   /** Whether a thread shows this chat now. */
   attached: (key: ChatKey) => boolean;
-  /** Forget everything (each plan cache is disposed). */
+  /** Forget everything. */
   clear: () => void;
   /** Chats held (tests). */
   size: () => number;
@@ -206,7 +222,6 @@ export function createOpenCache(
 
   const clear = (): void => {
     const had = slots.size > 0;
-    for (const slot of slots.values()) slot.planCache?.dispose();
     slots.clear();
     scope = null;
     opts.onClear?.();
@@ -238,7 +253,6 @@ export function createOpenCache(
       memory: {},
       memoryAt: {},
       reads: new Map(),
-      planCache: null,
       openedAt: null,
       owners: 0,
       threadEpoch: 0,
@@ -248,7 +262,6 @@ export function createOpenCache(
     while (slots.size > limit) {
       const oldest = slots.keys().next().value;
       if (oldest === undefined) break;
-      slots.get(oldest)?.planCache?.dispose();
       slots.delete(oldest);
     }
     if (wasEmpty) for (const l of heldListeners) l();
@@ -262,10 +275,11 @@ export function createOpenCache(
     key: ChatKey,
     name: K,
     promise: Promise<OpenReads[K]>,
+    replace = false,
   ): void => {
     const slot = slotOf(key, true);
     const prev = slot.reads.get(name);
-    if (prev !== undefined && live(prev)) return;
+    if (!replace && prev !== undefined && live(prev)) return;
     const entry: Stashed = { promise, settledAt: null };
     slot.reads.set(name, entry);
     const settle = (): void => {
@@ -359,11 +373,6 @@ export function createOpenCache(
     },
     attached(key) {
       return (slots.get(slotKey(key))?.owners ?? 0) > 0;
-    },
-    planCache(key, make) {
-      const slot = slotOf(key, true);
-      slot.planCache ??= make();
-      return slot.planCache;
     },
     opened(key) {
       const slot = slotOf(key, true);
@@ -624,72 +633,32 @@ export function forgetThreadsOutside(
   }
 }
 
-/** A plan card cache over the batched bundle reads (the app's Supabase client). */
-export function makePlanCardCache(): PlanCardCache {
-  return createPlanCardCache((ids, signal) => readPlanBundles(supabase, ids, signal));
-}
-
-/**
- * The chat's plan card cache for an open (made on its first). A fresh open
- * (none within JOIN_WINDOW_MS: the tap's kickoff, else the provider's mount)
- * re-reads every plan it already holds in the background; `fresh` says so.
- */
-export function openChatPlans(
-  key: ChatKey,
-  store: OpenCache = openCache,
-  make: () => PlanCardCache = makePlanCardCache,
-): { cache: PlanCardCache; fresh: boolean } {
-  const cache = store.planCache(key, make);
-  const fresh = store.opened(key);
-  if (fresh) {
-    cache.resume();
-    cache.revalidate();
-  }
-  return { cache, fresh };
-}
-
 /** The reads a tap starts (the app's: ChatConnected; tests pass fakes). */
 export interface OpenKickoffReads {
-  /** Start the latest messages page (history's prefetch; the thread joins it). */
-  messages: (channelId: string) => void;
+  /**
+   * Start (or join) the open's one chat_open_bundle call: the messages page
+   * and every part the open paints (open-bundle.ts).
+   */
+  bundle: (key: ChatKey) => void;
   /** Start (or join) the viewer's side in the workspace. */
   viewerSide: () => void;
-  marks: (channelId: string) => Promise<OpenReads['marks']>;
-  openPosts: (workspaceId: string) => Promise<OpenReads['openPosts']>;
-  /** The workspace's current shared plan ids (the same in every chat). */
-  planIds: (workspaceId: string) => Promise<OpenReads['planIds']>;
-  briefs: (workspaceId: string) => Promise<OpenReads['briefs']>;
-  briefCount: (workspaceId: string) => Promise<OpenReads['briefCount']>;
 }
 
 /**
- * A chat tap: every read the open needs starts now, together, before the
- * thread mounts: the messages page, this channel's marks, the viewer side,
- * the open posts list and count, the open briefs list and count and the
- * workspace's current shared plan ids; the plan bundles start the moment the plan ids are in,
- * through the chat's one plan card cache (a reopen re-reads what it holds).
- * Nothing waits for the messages page. Reads already started for this open
- * are joined, never asked twice.
+ * A chat tap: the open's one bundle call and the viewer side start now,
+ * together, before the thread mounts; the hooks' first rounds join them, so
+ * nothing is asked twice. The open is noted (the first paint's hold counts
+ * from it). The plan bundles are not started here: they start the moment the
+ * chat bundle returns (PlanCardsProvider).
  */
 export function kickoffChatOpen(
   key: ChatKey,
   reads: OpenKickoffReads,
   store: OpenCache = openCache,
-  make: () => PlanCardCache = makePlanCardCache,
 ): void {
-  const { cache } = openChatPlans(key, store, make);
-  // A remembered page paints at once and revalidates itself: no latest page.
-  if (store.recall(key, 'thread') === undefined) reads.messages(key.channelId);
+  store.opened(key);
+  reads.bundle(key);
   reads.viewerSide();
-  void store.joinOrStart(key, 'marks', () => reads.marks(key.channelId));
-  void store.joinOrStart(key, 'openPosts', () => reads.openPosts(key.workspaceId));
-  void store
-    .joinOrStart(key, 'planIds', () => reads.planIds(key.workspaceId))
-    .then((result) => {
-      if (result.ok && result.data.length > 0) cache.request(result.data);
-    });
-  void store.joinOrStart(key, 'briefs', () => reads.briefs(key.workspaceId));
-  void store.joinOrStart(key, 'briefCount', () => reads.briefCount(key.workspaceId));
 }
 
 /** Forget everything: every chat, every stashed read, the viewer sides, the prefetched pages. */

@@ -620,7 +620,9 @@ export async function listPosts(
   };
   const { data, error } = await client.rpc('posts_list', args);
   if (error) return { ok: false, error: transportError(error.message) };
-  const rows = (data ?? []) as unknown as PostsListRow[];
+  // The generated Returns marks every column non-null; the proc's LEFT JOINs and
+  // nullable posts columns make many of them null, as PostsListRow says.
+  const rows: PostsListRow[] = data ?? [];
   return { ok: true, data: rows.map(pipelinePostFromRow) };
 }
 
