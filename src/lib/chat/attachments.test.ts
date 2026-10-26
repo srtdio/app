@@ -122,7 +122,9 @@ describe('uploadChatAttachment', () => {
       fetcher,
     });
 
-    expect(outcome).toEqual({ ok: true, reused: true, versionId: VERSION_ID });
+    // The recorded thumbnail size (if any) comes from this device's local
+    // thumbnail and never holds the upload (attachments.pick-size.test.ts).
+    expect(outcome).toMatchObject({ ok: true, reused: true, versionId: VERSION_ID });
   });
 
   it('fails closed when a success response carries no version id', async () => {

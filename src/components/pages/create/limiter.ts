@@ -1,8 +1,8 @@
 // Run at most `limit` async jobs at a time; the rest wait in pick order. The
 // create sheet uploads up to three files at once with it. Pure (no React).
 
-/** Up to three files upload at once. */
-export const UPLOAD_CONCURRENCY = 3;
+/** Up to three files upload at once (one shared cap with the Assets upload run). */
+export { UPLOAD_CONCURRENCY } from '@/lib/upload-queue';
 
 interface Limiter {
   run<T>(job: () => Promise<T>): Promise<T>;

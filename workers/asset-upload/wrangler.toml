@@ -4,6 +4,8 @@ compatibility_date = "2026-05-16"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
+# The one private Asia-Pacific bucket for workspace files (not a secret).
+SHARED_ASSET_BUCKET = "srtdio-files"
 ALLOWED_ORIGINS = "https://srtd.io,https://srtdio-app.pages.dev"
 
 # Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink

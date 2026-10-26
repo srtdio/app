@@ -95,7 +95,12 @@ vi.mock('@/server/assets', async (importOriginal) => {
     // per-test rendition store (the worker's R2 client is never used).
     storeThumbnailRendition: (_deps: unknown, input: ThumbnailInput) =>
       actual.storeThumbnailRendition(
-        { storage: state.thumbStorage, repository: state.repo, renditions: state.renditions },
+        {
+          storage: state.thumbStorage,
+          repository: state.repo,
+          renditions: state.renditions,
+          sharedBucket: 'srtdio-files',
+        },
         input,
       ),
     runUploadPipeline: async (_deps: unknown, input: Record<string, unknown>) => {
@@ -107,6 +112,7 @@ vi.mock('@/server/assets', async (importOriginal) => {
             storage: new InMemoryStorageClient(),
             repository: state.repo,
             scanner: new actual.NoOpScanner(),
+            sharedBucket: 'srtdio-files',
           },
           input as unknown as UploadInput,
         );
@@ -171,6 +177,7 @@ const env: AssetUploadEnv = {
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
   SUPABASE_SECRET_KEY: 'service-role-key',
+  SHARED_ASSET_BUCKET: 'srtdio-files',
 };
 
 let signingKey: KeyLike;
@@ -1371,6 +1378,21 @@ describe('asset-upload thumbnail part', () => {
     expect(state.thumbStorage.objects.size).toBe(0);
   });
 
+  it('stores original and thumbnail in one request, both under ID-only keys', async () => {
+    state.realPipeline = true;
+    const res = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '2' });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as UploadBody;
+    // The empty workspace moved to the shared bucket on this first upload.
+    expect(state.repo.moves).toHaveLength(1);
+    expect(state.repo.versions[0]?.r2_key).toBe(
+      `ws/${WORKSPACE}/${body.asset.assetId}/${body.asset.versionId}/original`,
+    );
+    const thumbKey = `ws/${WORKSPACE}/${body.asset.assetId}/${body.asset.versionId}/thumbnail`;
+    expect(state.renditions.rows[0]?.r2Key).toBe(thumbKey);
+    expect(state.thumbStorage.get('srtdio-files', thumbKey)?.contentType).toBe('image/jpeg');
+  });
+
   it('a reused upload sent without a thumbnail part still reports the stored one', async () => {
     state.realPipeline = true;
     const first = await postWithThumb({ thumbnail: jpegThumb(400, 566), pageCount: '3' });
@@ -1420,7 +1442,7 @@ describe('resumable (multipart) upload routes', () => {
     return (await res.json()) as { key: string; upload_id: string };
   }
 
-  it('creates an upload under the caller staging prefix with 8 MB parts', async () => {
+  it('creates an upload under uploads/<workspace_id>/<upload_id> with 8 MB parts', async () => {
     state.members.add(`${USER}:${WORKSPACE}`);
     const token = await mintToken(USER);
     const res = await worker.fetch(
@@ -1433,9 +1455,39 @@ describe('resumable (multipart) upload routes', () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as { key: string; part_size: number; part_count: number };
-    expect(body.key.startsWith(`_uploads/${USER}/`)).toBe(true);
+    expect(body.key).toMatch(new RegExp(`^uploads/${WORKSPACE}/[0-9a-f-]{36}$`));
     expect(body.part_size).toBe(PART);
     expect(body.part_count).toBe(3);
+  });
+
+  it('create on an empty workspace moves it once and stages in the shared bucket', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await create(await mintToken(USER), 10);
+    expect(state.repo.moves).toEqual([
+      expect.objectContaining({
+        workspaceId: WORKSPACE,
+        bucket: 'srtdio-files',
+        expectedObjects: 0,
+      }),
+    ]);
+    const [upload] = [...state.r2.uploads.values()];
+    expect(upload?.bucket).toBe('srtdio-files');
+  });
+
+  it('create never makes a bucket: a missing shared bucket is a 500 and nothing staged', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.r2.missingBuckets.add('srtdio-files');
+    const res = await worker.fetch(
+      jsonPost('/multipart/create', await mintToken(USER), {
+        workspace_id: WORKSPACE,
+        size: 10,
+        content_type: 'application/pdf',
+      }),
+      env,
+    );
+    expect(res.status).toBe(500);
+    expect(state.r2.uploads.size).toBe(0);
+    expect(state.r2.buckets.has('srtdio-files')).toBe(false);
   });
 
   it('keeps the 100 MB cap and the type allowlist at create', async () => {
@@ -1474,15 +1526,15 @@ describe('resumable (multipart) upload routes', () => {
     expect(res.status).toBe(403);
   });
 
-  it("refuses another user's staging key", async () => {
+  it("refuses another workspace's staging key", async () => {
     state.members.add(`${USER}:${WORKSPACE}`);
-    state.members.add(`${OTHER_USER}:${WORKSPACE}`);
+    state.members.add(`${OTHER_USER}:${OTHER_WORKSPACE}`);
     const created = await create(await mintToken(USER), 10);
     const res = await worker.fetch(
       partRequest(
         await mintToken(OTHER_USER),
         {
-          workspace_id: WORKSPACE,
+          workspace_id: OTHER_WORKSPACE,
           key: created.key,
           upload_id: created.upload_id,
           part_number: '1',
@@ -1963,5 +2015,265 @@ describe('asset-upload purge routing', () => {
   it.each(['/purge', '/purge-chat'])('POST %s is 401 without a bearer', async (path) => {
     const res = await worker.fetch(jsonPost(path, null, { workspace_id: WORKSPACE }), env);
     expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /thumbnail (attach a thumbnail to a stored version)', () => {
+  const VERSION = '99999999-9999-7999-8999-999999999999';
+  const TRACE = '0192b3c4-d5e6-7f00-8a00-000000000001';
+
+  /** SOI, an SOF0 frame of the given size (3 components), zero padding, EOI. */
+  function frameJpeg(width: number, height: number, padTo = 0): Uint8Array {
+    const head = [
+      0xff,
+      0xd8,
+      0xff,
+      0xc0,
+      0x00,
+      0x11,
+      0x08,
+      (height >> 8) & 0xff,
+      height & 0xff,
+      (width >> 8) & 0xff,
+      width & 0xff,
+      0x03,
+      0x01,
+      0x22,
+      0x00,
+      0x02,
+      0x11,
+      0x01,
+      0x03,
+      0x11,
+      0x01,
+    ];
+    const total = Math.max(padTo, head.length + 2);
+    const out = new Uint8Array(total);
+    out.set(head, 0);
+    out.set([0xff, 0xd9], total - 2);
+    return out;
+  }
+
+  /** Seed a stored pdf (or other) version the thumbnail attaches to. */
+  async function seedVersion(
+    options: {
+      workspaceId?: string;
+      origin?: 'library' | 'chat';
+      uploadedBy?: string;
+      mimeType?: string;
+      kind?: 'pdf' | 'image' | 'presentation';
+    } = {},
+  ): Promise<void> {
+    const workspaceId = options.workspaceId ?? WORKSPACE;
+    const uploadedBy = options.uploadedBy ?? USER;
+    await state.repo.insertAsset({
+      id: ASSET,
+      workspaceId,
+      filename: 'deck.pdf',
+      uploadedBy,
+      origin: options.origin ?? 'library',
+    });
+    await state.repo.insertVersion({
+      id: VERSION,
+      assetId: ASSET,
+      workspaceId,
+      versionNumber: 1,
+      kind: options.kind ?? 'pdf',
+      r2Key: `ws/${workspaceId}/${ASSET}/${VERSION}/original`,
+      mimeType: options.mimeType ?? MIME.pdf,
+      sha256: 'b'.repeat(64),
+      sizeBytes: 10,
+      uploadedBy,
+    });
+    await state.repo.setCurrentVersion(ASSET, VERSION);
+  }
+
+  async function postThumbnail(
+    options: {
+      token?: string | null;
+      workspaceId?: string;
+      versionId?: string;
+      thumbnail?: Uint8Array | string | null;
+      pageCount?: string;
+    } = {},
+  ): Promise<Response> {
+    const token = options.token === undefined ? await mintToken(USER) : options.token;
+    const form = new FormData();
+    form.set('workspace_id', options.workspaceId ?? WORKSPACE);
+    form.set('asset_version_id', options.versionId ?? VERSION);
+    const thumbnail = options.thumbnail === undefined ? frameJpeg(400, 566) : options.thumbnail;
+    if (typeof thumbnail === 'string') {
+      form.set('thumbnail', thumbnail);
+    } else if (thumbnail !== null) {
+      form.set(
+        'thumbnail',
+        new Blob([new Uint8Array(thumbnail)], { type: 'image/jpeg' }),
+        'thumbnail.jpg',
+      );
+    }
+    if (options.pageCount !== undefined) form.set('thumbnail_page_count', options.pageCount);
+    const headers = new Headers({ 'X-Trace-Id': TRACE });
+    if (token !== null) headers.set('Authorization', `Bearer ${token}`);
+    return worker.fetch(
+      new Request('https://worker.test/thumbnail', { method: 'POST', headers, body: form }),
+      env,
+    );
+  }
+
+  function nothingStored(): void {
+    expect(state.renditions.rows).toHaveLength(0);
+    expect(state.thumbStorage.objects.size).toBe(0);
+  }
+
+  it('stores a member thumbnail under the shared layout key and answers its size', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.assetBucket = 'srtdio-files';
+    await seedVersion();
+    const thumb = frameJpeg(400, 566);
+    const res = await postThumbnail({ thumbnail: thumb, pageCount: '3' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Trace-Id')).toBe(TRACE);
+    expect(await res.json()).toEqual({ thumbnail: { width: 400, height: 566, page_count: 3 } });
+
+    const key = `ws/${WORKSPACE}/${ASSET}/${VERSION}/thumbnail`;
+    expect(state.renditions.rows).toHaveLength(1);
+    expect(state.renditions.rows[0]).toMatchObject({
+      assetVersionId: VERSION,
+      workspaceId: WORKSPACE,
+      role: 'thumbnail',
+      r2Key: key,
+      mimeType: 'image/jpeg',
+      width: 400,
+      height: 566,
+    });
+    const object = state.thumbStorage.get('srtdio-files', key);
+    expect(object?.contentType).toBe('image/jpeg');
+    expect(object?.body).toEqual(thumb);
+    // The pipeline is never run: the original is already stored.
+    expect(state.capturedInput).toBeNull();
+  });
+
+  it('keys a legacy-bucket workspace thumbnail the legacy way', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await seedVersion();
+    const res = await postThumbnail();
+    expect(res.status).toBe(200);
+    const key = `pdf/${ASSET}/v1-thumb.jpg`;
+    expect(state.renditions.rows[0]?.r2Key).toBe(key);
+    expect(state.thumbStorage.get('assets-test-ws', key)?.contentType).toBe('image/jpeg');
+  });
+
+  it('is idempotent: a repeat answers the stored rendition and writes nothing new', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.repo.assetBucket = 'srtdio-files';
+    await seedVersion();
+    const first = await postThumbnail({ thumbnail: frameJpeg(400, 566) });
+    expect(first.status).toBe(200);
+    state.thumbStorage.objects.clear();
+
+    const again = await postThumbnail({ thumbnail: frameJpeg(200, 200) });
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ thumbnail: { width: 400, height: 566 } });
+    expect(state.renditions.rows).toHaveLength(1);
+    expect(state.thumbStorage.objects.size).toBe(0);
+  });
+
+  it('a repeat is answered even when the workspace is now full', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await seedVersion();
+    expect((await postThumbnail()).status).toBe(200);
+    usageState.bytes = CAP_BYTES;
+    const again = await postThumbnail();
+    expect(again.status).toBe(200);
+    expect(state.renditions.rows).toHaveLength(1);
+  });
+
+  it('refuses a new thumbnail that would go over the storage cap, storing nothing', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await seedVersion();
+    usageState.bytes = CAP_BYTES;
+    const res = await postThumbnail();
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('workspace_full');
+    nothingStored();
+  });
+
+  it('401 without a bearer token', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await seedVersion();
+    const res = await postThumbnail({ token: null });
+    expect(res.status).toBe(401);
+    nothingStored();
+  });
+
+  it('403 for a caller who is not a member of the workspace', async () => {
+    await seedVersion();
+    const res = await postThumbnail();
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('forbidden');
+    nothingStored();
+  });
+
+  it('404 for a version that belongs to another workspace', async () => {
+    // The caller is a member of both; the version lives in the other one.
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.members.add(`${USER}:${OTHER_WORKSPACE}`);
+    await seedVersion({ workspaceId: OTHER_WORKSPACE });
+    const res = await postThumbnail({ workspaceId: WORKSPACE });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('not_found');
+    nothingStored();
+  });
+
+  it('404 for an unknown version id', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const res = await postThumbnail({ versionId: OTHER_ASSET });
+    expect(res.status).toBe(404);
+    nothingStored();
+  });
+
+  it("404 for another member's chat file; the uploader's own chat file is attached", async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    state.members.add(`${OTHER_USER}:${WORKSPACE}`);
+    await seedVersion({ origin: 'chat', uploadedBy: OTHER_USER });
+    const denied = await postThumbnail();
+    expect(denied.status).toBe(404);
+    nothingStored();
+
+    const own = await postThumbnail({ token: await mintToken(OTHER_USER) });
+    expect(own.status).toBe(200);
+    expect(state.renditions.rows).toHaveLength(1);
+  });
+
+  const invalid: ReadonlyArray<[string, Parameters<typeof postThumbnail>[0], number]> = [
+    ['bad magic bytes', { thumbnail: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]) }, 422],
+    ['a part over 300 KiB', { thumbnail: frameJpeg(100, 100, 300 * 1024 + 1) }, 422],
+    ['a frame wider than 580', { thumbnail: frameJpeg(600, 100) }, 422],
+    ['a frame taller than 1160', { thumbnail: frameJpeg(100, 1200) }, 422],
+    ['an invalid page count', { pageCount: '0' }, 422],
+    ['a text field instead of a file', { thumbnail: 'not-a-file' }, 400],
+    ['no thumbnail part', { thumbnail: null }, 400],
+    ['a malformed version id', { versionId: 'nope' }, 400],
+  ];
+  for (const [label, options, status] of invalid) {
+    it(`refuses ${label} (${status}) without storing anything`, async () => {
+      state.members.add(`${USER}:${WORKSPACE}`);
+      await seedVersion();
+      const res = await postThumbnail(options);
+      expect(res.status).toBe(status);
+      expect(res.headers.get('X-Trace-Id')).toBe(TRACE);
+      nothingStored();
+    });
+  }
+
+  it('refuses a thumbnail for a kind that never has one (pptx), storing nothing', async () => {
+    state.members.add(`${USER}:${WORKSPACE}`);
+    await seedVersion({
+      kind: 'presentation',
+      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    });
+    const res = await postThumbnail();
+    expect(res.status).toBe(422);
+    nothingStored();
   });
 });

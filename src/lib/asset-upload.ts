@@ -1,7 +1,8 @@
 // Client upload module for the Assets library. This is the single source of
 // truth for: what the file picker accepts, the pre-flight size/type checks that
 // run before any bytes leave the device, the POST to the asset-upload Worker,
-// the worker-error -> plain-English copy map, and the sequential run loop.
+// the worker-error -> plain-English copy map, and the run loop (up to three
+// files at once, see upload-queue.ts).
 //
 // The picker `accept` attribute and the pre-check are both derived from the one
 // shared MIME allowlist in @srtdio/storage so they can never drift. Pure helpers
@@ -9,6 +10,7 @@
 // drive it with a mock and the app passes fetchWithTrace.
 
 import { ALLOWED_MIME_TYPES, isAllowedMime } from '@srtdio/storage';
+import { logger } from '@/lib/logger';
 import { reportWorkspaceFull } from '@/lib/storage-full';
 import { TRACE_ID_HEADER } from '@/lib/trace';
 import {
@@ -17,8 +19,15 @@ import {
   sharedThumbnail,
   thumbnailKind,
   THUMBNAIL_TIMEOUT_MS,
+  type Thumbnail,
   type ThumbnailResult,
 } from '@/lib/files/thumbnail';
+import {
+  UPLOAD_CONCURRENCY,
+  bytesToFraction,
+  monotonicProgress,
+  runWithConcurrency,
+} from '@/lib/upload-queue';
 
 // Hard ceiling mirrored from the worker pipeline (MAX_FILE_SIZE_BYTES, 100 MB).
 // The worker rejects strictly greater than this, so the client matches exactly:
@@ -99,7 +108,11 @@ export type UploadOutcome =
       reused: boolean;
       assetId: string;
       assetVersionId?: string;
-      /** Present only when the worker stored a thumbnail rendition. */
+      /**
+       * Present only when the upload's own reply carried the stored thumbnail.
+       * A thumbnail attached after the original is never on the outcome: it
+       * reaches config.onThumbnail instead.
+       */
       thumbnail?: StoredThumbnail;
     }
   | UploadFailure;
@@ -142,6 +155,12 @@ interface UploadConfigBase {
    * one (one attempt per File, also shown on the sending bubble).
    */
   makeThumbnail?: ThumbnailMaker;
+  /**
+   * Called once if a thumbnail is attached after the outcome resolved (POST
+   * /thumbnail landed). The outcome never waits for it; callers that want the
+   * stored rendition's size listen here. Never called for a failed thumbnail.
+   */
+  onThumbnail?: (thumbnail: StoredThumbnail) => void;
   /** Waits between part retries; tests inject an instant one. */
   sleep?: (ms: number) => Promise<void>;
 }
@@ -224,7 +243,7 @@ function xhrSend(
     if (onProgress !== undefined) {
       request.upload.onprogress = (event: ProgressEvent) => {
         if (event.lengthComputable && event.total > 0) {
-          onProgress(Math.min(Math.max(event.loaded / event.total, 0), 1));
+          onProgress(bytesToFraction(event.loaded, event.total));
         }
       };
     }
@@ -283,9 +302,25 @@ function dispatchUploadComplete(workspaceId: string): void {
  * and folder_id) with a Bearer token, over the config's transport (XHR when the
  * caller wants progress). Never throws: a transport failure or a
  * non-OK status becomes { ok: false } with mapped copy. On success returns the
- * asset id and whether the content was deduped (reused).
+ * asset id and whether the content was deduped (reused). A file of one part or
+ * less goes out at once. The outcome resolves as soon as the original is
+ * stored and never waits on the thumbnail: one still being made follows on
+ * POST /thumbnail in the background (config.onThumbnail hears when it lands).
  */
-export async function uploadAssetFile(file: File, config: UploadConfig): Promise<UploadOutcome> {
+export async function uploadAssetFile(
+  file: File,
+  givenConfig: UploadConfig,
+): Promise<UploadOutcome> {
+  // The bar only ever moves forward, even when a request or part is retried.
+  const givenXhr = givenConfig.xhr;
+  const config: UploadConfig =
+    givenXhr?.onProgress !== undefined
+      ? {
+          ...givenConfig,
+          fetcher: undefined,
+          xhr: { ...givenXhr, onProgress: monotonicProgress(givenXhr.onProgress) },
+        }
+      : givenConfig;
   const resumable = file.size > RESUMABLE_PART_SIZE;
   const form = new FormData();
   if (!resumable) form.append('file', file, config.filename);
@@ -297,23 +332,27 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   if (config.folderId != null) {
     form.append('folder_id', config.folderId);
   }
+  // The thumbnail starts now, alongside the original, and never holds it back.
+  // A resumable upload carries it in the complete form only when it is already
+  // made by then; otherwise (and always on the direct POST) it follows on its
+  // own POST /thumbnail once the original is stored.
   const listCopy = thumbnailKind(file.type) === null && isListCopyImage(file.type);
-  if (thumbnailKind(file.type) !== null || listCopy) {
-    const maker = listCopy ? makeImageThumbnail : sharedThumbnail;
-    const thumbnail = await boundedThumbnail(file, config.makeThumbnail ?? maker);
-    if (thumbnail.ok) {
-      form.append('thumbnail', thumbnail.blob, 'thumbnail.jpg');
-      if (thumbnail.pageCount !== undefined) {
-        form.append('thumbnail_page_count', String(thumbnail.pageCount));
-      }
-    }
-  }
+  const wantsThumbnail = thumbnailKind(file.type) !== null || listCopy;
+  const thumbnail: Promise<ThumbnailResult | null> = wantsThumbnail
+    ? boundedThumbnail(
+        file,
+        config.makeThumbnail ?? (listCopy ? makeImageThumbnail : sharedThumbnail),
+      )
+    : Promise.resolve(null);
 
   let response: UploadResponse;
+  // True once the thumbnail rode on the upload itself (resumable complete form).
+  let sentWithUpload = false;
   if (resumable) {
-    const sent = await uploadResumable(file, form, config);
+    const sent = await uploadResumable(file, form, config, thumbnail);
     if (!sent.ok) return sent;
     response = sent.response;
+    sentWithUpload = sent.thumbnailSent;
   } else {
     try {
       response = await postUpload(
@@ -335,15 +374,99 @@ export async function uploadAssetFile(file: File, config: UploadConfig): Promise
   }
   // assetVersionId is the version the gallery add flow pins; include the key only
   // when the worker returned it, so callers that ignore it are unaffected.
-  const thumbnail = thumbnailField(response.body);
+  const storedThumbnail = thumbnailField(response.body);
+  if (
+    wantsThumbnail &&
+    !sentWithUpload &&
+    storedThumbnail === null &&
+    asset.assetVersionId !== null
+  ) {
+    // The original is stored and the outcome goes back now; the thumbnail is
+    // attached in the background and never awaited here.
+    void attachLateThumbnail(config, asset.assetVersionId, thumbnail);
+  }
   dispatchUploadComplete(config.workspaceId);
   return {
     ok: true,
     reused: asset.reused,
     assetId: asset.assetId,
     ...(asset.assetVersionId !== null ? { assetVersionId: asset.assetVersionId } : {}),
-    ...(thumbnail !== null ? { thumbnail } : {}),
+    ...(storedThumbnail !== null ? { thumbnail: storedThumbnail } : {}),
   };
+}
+
+/**
+ * Attach a thumbnail to a version already stored: once the thumbnail is made,
+ * POST it to /thumbnail over the upload's own transport (same Bearer and
+ * X-Trace-Id), then announce the upload again and tell config.onThumbnail.
+ * Runs after the outcome resolved; never throws and never changes the
+ * outcome: a missing thumbnail or a failed post is null (the failure is logged).
+ */
+async function attachLateThumbnail(
+  config: UploadConfig,
+  versionId: string,
+  thumbnail: Promise<ThumbnailResult | null>,
+): Promise<StoredThumbnail | null> {
+  try {
+    const made = await thumbnail;
+    if (made === null || !made.ok) return null;
+    const stored = await postThumbnail(config, versionId, made);
+    if (stored === null) return null;
+    dispatchUploadComplete(config.workspaceId);
+    config.onThumbnail?.(stored);
+    return stored;
+  } catch (error) {
+    logger.warn('asset thumbnail attach failed', {
+      asset_version_id: versionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/** POST {workspace_id, asset_version_id, thumbnail, thumbnail_page_count?} to /thumbnail. Never throws. */
+async function postThumbnail(
+  config: UploadConfig,
+  versionId: string,
+  made: Thumbnail,
+): Promise<StoredThumbnail | null> {
+  const form = new FormData();
+  form.append('workspace_id', config.workspaceId);
+  form.append('asset_version_id', versionId);
+  appendThumbnail(form, made);
+  try {
+    const reply = await send(
+      config,
+      'POST',
+      workerRoute(config.endpoint, '/thumbnail'),
+      form,
+      null,
+    );
+    if (!reply.ok) {
+      logger.warn('asset thumbnail attach refused', {
+        asset_version_id: versionId,
+        status: reply.status,
+        code: errorCode(reply.body),
+      });
+      return null;
+    }
+    return thumbnailField(reply.body);
+  } catch (error) {
+    logger.warn('asset thumbnail attach failed', {
+      asset_version_id: versionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/** Add a made thumbnail (and a PDF's page count) to the upload form; nothing otherwise. */
+function appendThumbnail(form: FormData, thumbnail: ThumbnailResult | null): void {
+  if (thumbnail === null || !thumbnail.ok) return;
+  form.append('thumbnail', thumbnail.blob, 'thumbnail.jpg');
+  if (thumbnail.pageCount !== undefined) {
+    form.append('thumbnail_page_count', String(thumbnail.pageCount));
+  }
 }
 
 /**
@@ -903,24 +1026,38 @@ interface RunHooks {
 }
 
 /**
- * Upload a queue one file at a time (sequential, per the worker contract). A
- * failure does not abort the run: the rest of the queue still uploads and the
- * failure is returned with its copy so the UI can offer an inline retry. The
- * hooks let the caller flip per-file UI state before and after each upload.
+ * Upload a queue with up to {@link UPLOAD_CONCURRENCY} files in flight at once
+ * (each file is its own request, so each reports its own progress). Files
+ * start in queue order. A failure, even a thrown one, does not stop the run:
+ * the rest still upload and the failure is returned with its copy so the UI
+ * can offer an inline retry. The hooks let the caller flip per-file UI state
+ * as each file starts and finishes; the result lists ids in queue order.
  */
 export async function runUploads(
   items: readonly QueueItem[],
   uploadOne: (item: QueueItem) => Promise<UploadOutcome>,
   hooks?: RunHooks,
+  concurrency: number = UPLOAD_CONCURRENCY,
 ): Promise<RunResult> {
-  const result: RunResult = { succeeded: [], failed: [] };
-  for (const item of items) {
+  const outcomes = await runWithConcurrency(items, concurrency, async (item) => {
     hooks?.onStart?.(item.id);
-    const outcome = await uploadOne(item);
+    let outcome: UploadOutcome;
+    try {
+      outcome = await uploadOne(item);
+    } catch {
+      outcome = { ok: false, message: uploadErrorMessage('network') };
+    }
     hooks?.onResult?.(item.id, outcome);
+    return outcome;
+  });
+  const result: RunResult = { succeeded: [], failed: [] };
+  items.forEach((item, index) => {
+    const settled = outcomes[index];
+    const outcome: UploadOutcome =
+      settled?.ok === true ? settled.value : { ok: false, message: uploadErrorMessage('network') };
     if (outcome.ok) result.succeeded.push(item.id);
     else result.failed.push({ id: item.id, message: outcome.message });
-  }
+  });
   return result;
 }
 
@@ -975,16 +1112,19 @@ async function send(
   url: string,
   body: XMLHttpRequestBodyInit | null,
   contentType: string | null,
+  /** This request's own body progress 0..1 (a part's); XHR only. */
+  onRequestProgress?: (fraction: number) => void,
 ): Promise<Reply> {
   const headers: Record<string, string> = { Authorization: `Bearer ${config.token}` };
   if (contentType !== null) headers['content-type'] = contentType;
   if (config.xhr !== undefined) {
-    // Progress is reported by the part loop, not per request.
+    // The file's progress is worked out by the part loop from each part's bytes.
     const { traceId, signal, createRequest } = config.xhr;
     return xhrSend(method, url, headers, body, {
       traceId,
       ...(signal !== undefined ? { signal } : {}),
       ...(createRequest !== undefined ? { createRequest } : {}),
+      ...(onRequestProgress !== undefined ? { onProgress: onRequestProgress } : {}),
     });
   }
   const response = await config.fetcher(url, {
@@ -1064,14 +1204,22 @@ function partsField(body: unknown): Map<number, number> {
 
 /**
  * Upload a file over 8 MB as a resumable multipart upload, then send the
- * complete form (fields + thumbnail, no file part). Never throws: returns the
- * complete reply on success or the failure outcome.
+ * complete form (fields, no file part). The thumbnail is being made while the
+ * parts go up; the complete form carries it only when it is already made, and
+ * never waits for it (thumbnailSent false: the caller attaches it later).
+ * Never throws: returns the complete reply on success or the failure outcome.
  */
 async function uploadResumable(
   file: File,
   form: FormData,
   config: UploadConfig,
-): Promise<{ ok: true; response: UploadResponse } | UploadFailure> {
+  thumbnail: Promise<ThumbnailResult | null>,
+): Promise<{ ok: true; response: UploadResponse; thumbnailSent: boolean } | UploadFailure> {
+  // What the thumbnail settled to so far; no `made` while it is still being made.
+  const settled: { made?: ThumbnailResult | null } = {};
+  void thumbnail.then((made) => {
+    settled.made = made;
+  });
   const route = (path: string): string => workerRoute(config.endpoint, path);
   const onProgress = config.xhr?.onProgress;
   let upload: { key: string; uploadId: string } | null = null;
@@ -1110,6 +1258,7 @@ async function uploadResumable(
     for (let part = 1; part <= total; part += 1) {
       const start = (part - 1) * RESUMABLE_PART_SIZE;
       const chunk = file.slice(start, Math.min(start + RESUMABLE_PART_SIZE, file.size));
+      const sentBefore = done;
       const reply = await withRetries(
         config,
         () =>
@@ -1119,14 +1268,20 @@ async function uploadResumable(
             route(`/multipart/part?${target()}&part_number=${part}`),
             chunk,
             'application/octet-stream',
+            onProgress !== undefined
+              ? (fraction) =>
+                  onProgress(bytesToFraction(sentBefore + fraction * chunk.size, file.size))
+              : undefined,
           ),
         async () => (await storedParts()).get(part) === chunk.size,
       );
       if (!reply.ok) return refused(errorCode(reply.body), file);
       done += chunk.size;
-      onProgress?.(Math.min(done / file.size, 1));
+      onProgress?.(bytesToFraction(done, file.size));
     }
 
+    const thumbnailSent = 'made' in settled;
+    appendThumbnail(form, settled.made ?? null);
     form.append('key', upload.key);
     form.append('upload_id', upload.uploadId);
     form.append('filename', config.filename);
@@ -1134,7 +1289,11 @@ async function uploadResumable(
     const completed = await withRetries(config, () =>
       send(config, 'POST', route('/multipart/complete'), form, null),
     );
-    return { ok: true, response: { ok: completed.ok, body: completed.body } };
+    return {
+      ok: true,
+      response: { ok: completed.ok, body: completed.body },
+      thumbnailSent,
+    };
   } catch (error) {
     if (upload !== null) {
       const { key, uploadId } = upload;

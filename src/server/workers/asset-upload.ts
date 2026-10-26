@@ -8,10 +8,24 @@
 //      workspace_id, runs the upload pipeline, and returns the asset summary.
 //      The acting user is the verified token's `sub` claim only - the body never
 //      carries an uploaded_by id.
-//      An optional `thumbnail` JPEG (pdf/video only, made on the sender's
-//      device) is validated here and stored as the version's thumbnail
-//      rendition; an invalid or failed thumbnail is ignored and never fails
-//      the upload. The response then carries thumbnail {width,height,page_count?}.
+//      An optional `thumbnail` JPEG (pdf, video, docx, xlsx, or a raster
+//      image's list copy; made on the sender's device) rides in the SAME
+//      request as the file and is stored in the same flow, right after the
+//      original, as the version's thumbnail rendition (shared bucket:
+//      ws/<ws>/<asset>/<version>/thumbnail). An invalid or failed thumbnail is
+//      ignored and never fails the upload. The response then carries
+//      thumbnail {width,height,page_count?}.
+// POST  /thumbnail multipart/form-data { workspace_id, asset_version_id,
+//                             thumbnail, thumbnail_page_count? }
+//   -> same auth + membership gate, then attaches the thumbnail to an existing
+//      version of that workspace through the same store as the in-request part
+//      (key from the workspace's bucket layout, asset_renditions insert ON
+//      CONFLICT DO NOTHING). A repeat call for the same version answers the
+//      stored rendition and writes nothing. The client sends a direct upload's
+//      original at once and its thumbnail here once both are ready.
+//      200 {thumbnail:{width,height,page_count?}}; 404 for a version outside
+//      the workspace (or a chat file of another uploader); 422 invalid_image
+//      for a thumbnail that fails validation (nothing stored).
 // GET   ?workspace_id=&asset_id=
 //   -> same auth + membership gate, then returns the current summary scoped to
 //      the workspace (cross-tenant 404).
@@ -45,8 +59,12 @@ import {
   createLinkAsset,
   createSupabaseAssetRepository,
   createSupabaseRenditionStore,
+  checkThumbnail,
+  getVersionSummary,
   storeThumbnailRendition,
+  THUMBNAIL_MAX_BYTES,
   getAssetSummary,
+  resolveUploadTarget,
   renameAsset,
   runUploadPipeline,
   selectScanner,
@@ -55,6 +73,7 @@ import {
   type AssetOrigin,
   type AssetRepository,
   type AssetSummary,
+  type RenditionStore,
   type Result,
   type ThumbnailOutcome,
   type UploadError,
@@ -97,6 +116,12 @@ export interface AssetUploadEnv {
   SUPABASE_PUBLISHABLE_KEY: string;
   VIRUS_SCAN_PROVIDER?: string;
   /**
+   * The one shared R2 bucket (a wrangler [vars] entry). A workspace whose
+   * asset_bucket equals it gets ID-only keys; an empty legacy workspace is
+   * moved to it on its first upload. Never hardcoded in code.
+   */
+  SHARED_ASSET_BUCKET: string;
+  /**
    * Comma-separated list of browser origins allowed to call this Worker
    * cross-origin. Operator sets it as a Worker var/secret; when unset the code
    * falls back to {@link DEFAULT_ALLOWED_ORIGINS}.
@@ -120,6 +145,7 @@ export type UploadResponseCode =
   | 'folder_name_taken'
   | 'workspace_full'
   | 'usage_unavailable'
+  | 'thumbnail_not_stored'
   | 'bad_request'
   | 'unauthorized'
   | 'forbidden'
@@ -142,6 +168,7 @@ const STATUS_BY_CODE: Record<UploadResponseCode, number> = {
   folder_name_taken: 409,
   workspace_full: 413,
   usage_unavailable: 503,
+  thumbnail_not_stored: 409,
   bad_request: 400,
   unauthorized: 401,
   forbidden: 403,
@@ -348,6 +375,7 @@ function buildPipelineRunner(env: AssetUploadEnv): PipelineRunner {
     storage: buildStorage(env),
     repository: buildRepository(env),
     scanner: selectScanner(env.VIRUS_SCAN_PROVIDER),
+    sharedBucket: env.SHARED_ASSET_BUCKET,
   };
   return (input) => runUploadPipeline(deps, input);
 }
@@ -357,6 +385,26 @@ interface ThumbnailBody {
   width: number;
   height: number;
   page_count?: number;
+}
+
+function renditionStore(env: AssetUploadEnv, traceId: string): RenditionStore {
+  return createSupabaseRenditionStore(
+    { SUPABASE_URL: env.SUPABASE_URL, SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY },
+    traceId,
+  );
+}
+
+/** The one set of deps every thumbnail store (in-request part or POST /thumbnail) uses. */
+function thumbnailDeps(
+  env: AssetUploadEnv,
+  traceId: string,
+): Parameters<typeof storeThumbnailRendition>[0] {
+  return {
+    storage: buildStorage(env),
+    repository: buildRepository(env),
+    renditions: renditionStore(env, traceId),
+    sharedBucket: env.SHARED_ASSET_BUCKET,
+  };
 }
 
 /**
@@ -372,10 +420,7 @@ async function existingThumbnail(
   const mime = summary.mimeType.toLowerCase();
   if (mime !== 'application/pdf' && !mime.startsWith('video/')) return null;
   try {
-    const found = await createSupabaseRenditionStore(
-      { SUPABASE_URL: env.SUPABASE_URL, SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY },
-      traceId,
-    ).findRendition(summary.versionId, 'thumbnail');
+    const found = await renditionStore(env, traceId).findRendition(summary.versionId, 'thumbnail');
     if (found === null || found.width === null || found.height === null) return null;
     return { width: found.width, height: found.height };
   } catch (error) {
@@ -410,19 +455,12 @@ async function attachThumbnail(
   }
   try {
     // Refuse to buffer an oversize part: the cap is checked again on the bytes.
-    if (part.size > 300 * 1024) {
+    if (part.size > THUMBNAIL_MAX_BYTES) {
       logger.warn('asset upload thumbnail ignored', { reason: 'size' });
       return null;
     }
     const outcome: ThumbnailOutcome = await storeThumbnailRendition(
-      {
-        storage: buildStorage(env),
-        repository: buildRepository(env),
-        renditions: createSupabaseRenditionStore(
-          { SUPABASE_URL: env.SUPABASE_URL, SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY },
-          input.traceId,
-        ),
-      },
+      thumbnailDeps(env, input.traceId),
       {
         summary: input.summary,
         bytes: new Uint8Array(await part.arrayBuffer()),
@@ -710,11 +748,180 @@ async function handlePost(
   );
 }
 
+/**
+ * POST /thumbnail: attach a sender-made thumbnail to a version already stored
+ * (a direct upload sends its original first and this once both are ready).
+ * Same Bearer auth and membership gate as the upload. Validation runs before
+ * any write, so a refused thumbnail stores nothing; the store itself is the
+ * in-request path's (storeThumbnailRendition), so a repeat is idempotent.
+ */
+async function handleThumbnail(
+  request: Request,
+  env: AssetUploadEnv,
+  traceId: string,
+  acao: string | null,
+): Promise<Response> {
+  const caller = await verifyCaller(request, getSupabaseJwks(env));
+  if (!caller.ok) {
+    return json(
+      401,
+      { error: { code: 'unauthorized', message: caller.error.message } },
+      traceId,
+      acao,
+    );
+  }
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Expected multipart form data.' } },
+      traceId,
+      acao,
+    );
+  }
+  const workspaceId = form.get('workspace_id');
+  const versionId = form.get('asset_version_id');
+  const part = form.get('thumbnail');
+  const pageCountField = form.get('thumbnail_page_count');
+  if (
+    typeof workspaceId !== 'string' ||
+    typeof versionId !== 'string' ||
+    !isUuid(workspaceId) ||
+    !isUuid(versionId)
+  ) {
+    return json(
+      400,
+      {
+        error: { code: 'bad_request', message: 'workspace_id and asset_version_id are required.' },
+      },
+      traceId,
+      acao,
+    );
+  }
+  if (!(part instanceof Blob)) {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Missing thumbnail part.' } },
+      traceId,
+      acao,
+    );
+  }
+  if (pageCountField !== null && typeof pageCountField !== 'string') {
+    return json(
+      400,
+      { error: { code: 'bad_request', message: 'Invalid thumbnail_page_count.' } },
+      traceId,
+      acao,
+    );
+  }
+  // Refuse to buffer an oversize part before anything else is read.
+  if (part.size > THUMBNAIL_MAX_BYTES) {
+    logger.warn('asset thumbnail refused', { reason: 'size', asset_version_id: versionId });
+    return json(
+      422,
+      { error: { code: 'invalid_image', message: 'Invalid thumbnail.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const member = await createSupabaseAssetReadStore(env).isActiveMember({
+    userId: caller.value,
+    workspaceId,
+  });
+  if (!member) {
+    logger.warn('asset thumbnail denied: caller not a workspace member', {
+      workspace_id: workspaceId,
+    });
+    return json(
+      403,
+      { error: { code: 'forbidden', message: 'Not a member of this workspace.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  const summary = await getVersionSummary(buildRepository(env), {
+    workspaceId,
+    versionId,
+    callerId: caller.value,
+  });
+  if (!summary.ok) {
+    return json(STATUS_BY_CODE[summary.error.code], { error: summary.error }, traceId, acao);
+  }
+
+  const bytes = new Uint8Array(await part.arrayBuffer());
+  const checked = checkThumbnail({ summary: summary.value, bytes, pageCountField });
+  if (!checked.ok) {
+    logger.warn('asset thumbnail refused', {
+      reason: checked.reason,
+      asset_version_id: versionId,
+    });
+    return json(
+      422,
+      { error: { code: 'invalid_image', message: 'Invalid thumbnail.' } },
+      traceId,
+      acao,
+    );
+  }
+
+  // The storage cap counts the thumbnail, as it does for the in-request part.
+  // A version that already has one adds nothing, so a repeat is never refused.
+  const deps = thumbnailDeps(env, traceId);
+  const existing = await deps.renditions.findRendition(versionId, 'thumbnail');
+  if (existing === null) {
+    const cap = await checkWorkspaceCap({
+      workspaceId,
+      addBytes: bytes.byteLength,
+      store: createSupabaseUsageStore(env, traceId),
+    });
+    if (!cap.ok) {
+      return json(STATUS_BY_CODE[cap.error.code], { error: cap.error }, traceId, acao);
+    }
+  }
+
+  const outcome = await storeThumbnailRendition(deps, {
+    summary: summary.value,
+    bytes,
+    pageCountField,
+    traceId,
+  });
+  if (!outcome.stored) {
+    logger.warn('asset thumbnail not stored', {
+      reason: outcome.reason,
+      asset_version_id: versionId,
+    });
+    return json(
+      STATUS_BY_CODE.thumbnail_not_stored,
+      { error: { code: 'thumbnail_not_stored', message: 'Thumbnail not stored.' } },
+      traceId,
+      acao,
+    );
+  }
+  logger.info('asset thumbnail attached', { asset_version_id: versionId });
+  const thumbnail: ThumbnailBody = {
+    width: outcome.width,
+    height: outcome.height,
+    ...(outcome.pageCount !== undefined ? { page_count: outcome.pageCount } : {}),
+  };
+  return json(200, { thumbnail }, traceId, acao);
+}
+
 function buildMultipartDeps(env: AssetUploadEnv): MultipartDeps {
   const repository = buildRepository(env);
   return {
     storage: buildStorage(env),
     bucketFor: (workspaceId) => repository.getAssetBucket(workspaceId),
+    uploadBucketFor: async (workspaceId, traceId) =>
+      (
+        await resolveUploadTarget(repository, {
+          workspaceId,
+          sharedBucket: env.SHARED_ASSET_BUCKET,
+          traceId,
+        })
+      ).bucket,
     newId: () => crypto.randomUUID(),
     checkCap: ({ workspaceId, addBytes, traceId }) =>
       checkWorkspaceCap({ workspaceId, addBytes, store: createSupabaseUsageStore(env, traceId) }),
@@ -1644,6 +1851,9 @@ export default {
         }
         if (path === '/multipart/abort') {
           return await handleMultipartAbort(request, env, traceId, acao);
+        }
+        if (path === '/thumbnail') {
+          return await handleThumbnail(request, env, traceId, acao);
         }
         if (path === '/purge') return await handlePurge(request, env, traceId, acao);
         if (path === '/purge-chat') return await handlePurgeChat(request, env, traceId, acao);

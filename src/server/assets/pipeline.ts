@@ -4,9 +4,15 @@
 //   receive -> blocked type (svg, legacy Office) -> MIME allowlist -> size cap ->
 //   magic bytes -> file-safety rules (filename, OLE2, encrypted PDF, Office
 //   package inspection; @srtdio/storage file-safety.ts) -> EXIF strip (images) ->
-//   virus scan -> sha256 -> R2 upload ->
-//   insert asset (new) or asset_version (existing) -> bump current_version_id ->
-//   return summary.
+//   virus scan -> sha256 -> dedup -> resolve the upload target (bucket + key
+//   layout, upload-target.ts) -> mint the version id -> R2 upload under that
+//   id's key -> insert asset (new) and asset_version (with that same id) ->
+//   bump current_version_id -> return summary.
+//
+// Keys: a workspace on the shared bucket gets ID-only keys
+// (ws/<ws>/<asset>/<version>/original); a legacy bucket that already holds
+// files keeps the legacy layout until the move job moves it. An upload never
+// creates a bucket: a missing bucket is logged loudly and fails the upload.
 //
 // Dedup: identical content (same sha256) within a workspace never stores twice.
 // With no assetId, a matching hash returns the existing asset/version untouched,
@@ -21,16 +27,16 @@ import { v7 as uuidv7 } from 'uuid';
 import { stripJpegMetadata } from './exif';
 import type { VirusScanner } from './virus-scan';
 import {
-  buildR2Key,
-  buildThumbnailKey,
   computeSha256,
   inspectUpload,
   isAllowedMime,
   isBlockedMime,
   isJpegMime,
+  isNoSuchBucketError,
   normalizeMime,
   readImageDimensions,
   verifyMagicBytes,
+  type PutObjectInput,
   type StorageClient,
 } from '@srtdio/storage';
 import { logger } from '../logger';
@@ -49,6 +55,12 @@ import {
   type UploadError,
   type UploadInput,
 } from './types';
+import {
+  layoutOfBucket,
+  originalKeyFor,
+  resolveUploadTarget,
+  thumbnailKeyFor,
+} from './upload-target';
 
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
@@ -56,6 +68,33 @@ export interface PipelineDeps {
   storage: StorageClient;
   repository: AssetRepository;
   scanner: VirusScanner;
+  /** env.SHARED_ASSET_BUCKET: the one shared bucket new and moved workspaces use. */
+  sharedBucket: string;
+}
+
+/**
+ * Put an object into an existing bucket. A missing bucket is never created:
+ * it is logged as an error with the trace id and rethrown, so the Worker
+ * answers its usual 500.
+ */
+export async function putIntoExistingBucket(
+  storage: StorageClient,
+  input: PutObjectInput & { workspaceId: string },
+): Promise<void> {
+  const { workspaceId, ...put } = input;
+  try {
+    await storage.putObject(put);
+  } catch (error) {
+    if (isNoSuchBucketError(error)) {
+      logger.error('asset upload target bucket does not exist; uploads never create buckets', {
+        trace_id: input.traceId,
+        workspace_id: workspaceId,
+        bucket: input.bucket,
+        key: input.key,
+      });
+    }
+    throw error;
+  }
 }
 
 /**
@@ -210,9 +249,6 @@ export async function runUploadPipeline(
       });
     }
   }
-  // The bucket is the workspace's stored, permanent name, never derived here.
-  const bucket = await repository.getAssetBucket(input.workspaceId);
-
   // --- Existing-asset path: add a version or return the matching one. ---
   if (existingAssetId !== null) {
     const same = await repository.findVersionByShaForAsset(existingAssetId, sha256);
@@ -240,17 +276,26 @@ export async function runUploadPipeline(
 
     const previousMax = await repository.maxVersionNumber(existingAssetId);
     const versionNumber = previousMax + 1;
+    const target = await resolveUploadTarget(repository, {
+      workspaceId: input.workspaceId,
+      sharedBucket: deps.sharedBucket,
+      traceId: input.traceId,
+    });
+    // The version id exists before any byte is stored: the key is built from
+    // it and the row is inserted with it.
     const versionId = uuidv7();
-    const r2Key = buildR2Key({
-      kind,
+    const r2Key = originalKeyFor(target.layout, {
+      workspaceId: input.workspaceId,
       assetId: existingAssetId,
+      versionId,
       versionNumber,
+      kind,
       filename: input.filename,
     });
 
-    await storage.ensureBucket(bucket, input.traceId);
-    await storage.putObject({
-      bucket,
+    await putIntoExistingBucket(storage, {
+      workspaceId: input.workspaceId,
+      bucket: target.bucket,
       key: r2Key,
       body: sanitized,
       contentType: mimeType,
@@ -326,19 +371,28 @@ export async function runUploadPipeline(
     );
   }
 
+  const target = await resolveUploadTarget(repository, {
+    workspaceId: input.workspaceId,
+    sharedBucket: deps.sharedBucket,
+    traceId: input.traceId,
+  });
+  // Both ids exist before any byte is stored: the key is built from them and
+  // the rows are inserted with them.
   const assetId = uuidv7();
   const versionId = uuidv7();
   const versionNumber = 1;
-  const r2Key = buildR2Key({
-    kind,
+  const r2Key = originalKeyFor(target.layout, {
+    workspaceId: input.workspaceId,
     assetId,
+    versionId,
     versionNumber,
+    kind,
     filename: input.filename,
   });
 
-  await storage.ensureBucket(bucket, input.traceId);
-  await storage.putObject({
-    bucket,
+  await putIntoExistingBucket(storage, {
+    workspaceId: input.workspaceId,
+    bucket: target.bucket,
     key: r2Key,
     body: sanitized,
     contentType: mimeType,
@@ -543,6 +597,40 @@ export async function getAssetSummary(
   });
 }
 
+/**
+ * The summary of one stored-file version, scoped to a workspace, for attaching
+ * a thumbnail after the upload (POST /thumbnail). not_found for an unknown id,
+ * a version of another workspace, a link version, a deleted asset, or a chat
+ * file the caller did not upload (a chat file is its uploader's own; the same
+ * rule keeps chat dedup per uploader). Any origin is accepted otherwise.
+ */
+export async function getVersionSummary(
+  repository: AssetRepository,
+  input: { workspaceId: string; versionId: string; callerId: string },
+): Promise<Result<AssetSummary, UploadError>> {
+  const missing = err<UploadError>({
+    code: 'not_found',
+    message: 'Asset version not found in this workspace.',
+  });
+  const version = await repository.getVersionById(input.workspaceId, input.versionId);
+  if (version === null || !isFileVersionRef(version)) return missing;
+  const asset = await repository.getAsset(input.workspaceId, version.assetId);
+  if (asset === null) return missing;
+  if (asset.origin === 'chat' && asset.uploaded_by !== input.callerId) return missing;
+  return ok({
+    assetId: asset.id,
+    versionId: version.id,
+    versionNumber: version.versionNumber,
+    workspaceId: asset.workspace_id,
+    filename: asset.filename,
+    mimeType: version.mimeType,
+    sizeBytes: version.sizeBytes,
+    sha256: version.sha256,
+    r2Key: version.r2Key,
+    reused: false,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Thumbnail rendition (sender-made JPEG for a pdf/video/office upload, or a
 // raster image's small list copy).
@@ -558,6 +646,8 @@ interface ThumbnailDeps {
   storage: StorageClient;
   repository: AssetRepository;
   renditions: RenditionStore;
+  /** env.SHARED_ASSET_BUCKET. */
+  sharedBucket: string;
 }
 
 export interface ThumbnailInput {
@@ -631,9 +721,11 @@ export function checkThumbnail(
 }
 
 /**
- * Store the sender's thumbnail as the version's 'thumbnail' rendition: R2 put
- * at {kindFolder}/{asset_id}/v{n}-thumb.jpg, then the row (ON CONFLICT DO
- * NOTHING). A deduped upload writes only when the version has none yet. An
+ * Store the sender's thumbnail as the version's 'thumbnail' rendition, in the
+ * same request as the original: R2 put at ws/<ws>/<asset>/<version>/thumbnail
+ * (shared bucket) or the legacy {kindFolder}/{asset_id}/v{n}-thumb.jpg (legacy
+ * bucket), then the row (ON CONFLICT DO NOTHING). A deduped upload writes
+ * only when the version has none yet. An
  * invalid thumbnail is ignored ({stored:false}); a storage or DB fault throws
  * and the caller logs it, the upload itself having already succeeded. An R2
  * object whose row insert then fails stays as an orphan (accepted).
@@ -690,17 +782,22 @@ async function storeCheckedThumbnail(
     return { stored: true, width: existing.width, height: existing.height, ...pageCount };
   }
 
-  const kind = fileKindForMime(normalizeMime(summary.mimeType));
-  const r2Key = buildThumbnailKey({
-    kind,
+  // The pipeline already resolved (and, for an empty workspace, moved) the
+  // target, so the stored bucket is the version's bucket; never move here.
+  const bucket = await deps.repository.getAssetBucket(summary.workspaceId);
+  const r2Key = thumbnailKeyFor(layoutOfBucket(bucket, deps.sharedBucket), {
+    workspaceId: summary.workspaceId,
     assetId: summary.assetId,
+    versionId: summary.versionId,
     versionNumber: summary.versionNumber,
+    kind: fileKindForMime(normalizeMime(summary.mimeType)),
   });
-  // A file literally named "thumb.jpg" keys to the same object: never overwrite it.
+  // Legacy layout: a file literally named "thumb.jpg" keys to the same object.
+  // Never overwrite it.
   if (r2Key === summary.r2Key) return { stored: false, reason: 'key_collision' };
 
-  const bucket = await deps.repository.getAssetBucket(summary.workspaceId);
-  await deps.storage.putObject({
+  await putIntoExistingBucket(deps.storage, {
+    workspaceId: summary.workspaceId,
     bucket,
     key: r2Key,
     body: input.bytes,

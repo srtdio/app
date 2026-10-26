@@ -1,0 +1,60 @@
+name: Storage move
+
+# Started by hand only (Actions -> Storage move -> Run workflow).
+# setup:  creates the srtdio-files bucket (Asia-Pacific) if missing and sets its
+#         lifecycle rules (uploads/ after 1 day, unfinished multipart after 1 day).
+# move:   copies each workspace's files into srtdio-files under ws/ keys,
+#         checks every copy, then switches the workspace in the database
+#         (storage_workspace_move). Re-runs skip what is already copied.
+# verify: checks every database key of moved workspaces exists in srtdio-files
+#         at the recorded size; fails the run on any mismatch.
+# Never deletes anything.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: setup, move or verify
+        required: true
+        type: choice
+        options:
+          - setup
+          - move
+          - verify
+      workspace:
+        description: Workspace id, or all
+        required: true
+        default: all
+        type: string
+
+concurrency:
+  group: storage-move
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Storage move
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          MODE: ${{ inputs.mode }}
+          WORKSPACE: ${{ inputs.workspace }}
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = "setup" ]; then
+            node --experimental-transform-types --no-warnings scripts/storage-move.ts setup
+          else
+            node --experimental-transform-types --no-warnings scripts/storage-move.ts "$MODE" --workspace "$WORKSPACE"
+          fi

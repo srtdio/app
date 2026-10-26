@@ -1,14 +1,13 @@
 // Object storage boundary for R2.
 //
-// One bucket per workspace, created lazily on first upload. The bucket name is a
-// readable, permanent value stored on workspaces.asset_bucket (set by a DB
-// trigger and immutable thereafter); callers resolve it from that column and
-// pass it in - it is never computed from the workspace id here. The pipeline
-// depends only on the StorageClient interface, so tests
-// inject an in-memory implementation and never touch the network. The R2
-// implementation talks to the S3-compatible API with SigV4 signing, using the
-// R2 access-key credentials from env - no service binding, because buckets are
-// created at runtime.
+// Uploads write to the bucket stored on workspaces.asset_bucket: the shared
+// bucket (env SHARED_ASSET_BUCKET) for every new or moved workspace, or a
+// legacy per-workspace bucket until the move job moves it. Callers resolve the
+// bucket and pass it in; an upload never creates a bucket. Object keys come
+// from keys.ts only. The pipeline depends only on the StorageClient interface,
+// so tests inject an in-memory implementation and never touch the network. The
+// R2 implementation talks to the S3-compatible API with SigV4 signing, using
+// the R2 access-key credentials from env.
 //
 // This package is runtime-neutral: it imports nothing app-specific. The traced
 // fetch is supplied by the caller via the constructor so trace propagation is
@@ -23,9 +22,12 @@ export interface PutObjectInput {
   traceId: string;
 }
 
+/**
+ * What the upload path may do to R2. Deliberately has no create-bucket call:
+ * an upload never creates a bucket. A put into a missing bucket throws
+ * {@link NoSuchBucketError}.
+ */
 export interface StorageClient {
-  /** Create the bucket if it does not already exist. Idempotent. */
-  ensureBucket(bucket: string, traceId: string): Promise<void>;
   putObject(input: PutObjectInput): Promise<void>;
   /** True if an object already exists at bucket/key. Lets a resumed run skip re-uploading bytes. */
   objectExists(bucket: string, key: string, traceId: string): Promise<boolean>;
@@ -119,6 +121,23 @@ export interface BucketStorage {
   }): Promise<ObjectPage>;
   /** Delete an empty bucket. Idempotent: a missing bucket is not an error. */
   deleteBucket(bucket: string, traceId: string): Promise<void>;
+}
+
+/** Thrown when R2 answers NoSuchBucket: the target bucket does not exist. */
+export class NoSuchBucketError extends Error {
+  constructor(
+    readonly bucket: string,
+    detail: string,
+  ) {
+    super(`R2 bucket ${bucket} does not exist: ${detail}`);
+    this.name = 'NoSuchBucketError';
+  }
+}
+
+/** True for a {@link NoSuchBucketError} or any R2 error whose text names NoSuchBucket. */
+export function isNoSuchBucketError(error: unknown): boolean {
+  if (error instanceof NoSuchBucketError) return true;
+  return error instanceof Error && /NoSuchBucket/.test(error.message);
 }
 
 /**
@@ -217,51 +236,6 @@ export type TracedFetch = (
   init?: RequestInit,
   traceId?: string,
 ) => Promise<Response>;
-
-/**
- * Folder segment for an asset kind. The bucket is already per-workspace, so the
- * key groups by kind rather than repeating the workspace id. Pluralized for the
- * common media kinds; every other file-bearing kind (audio, pdf, spreadsheet,
- * presentation, ...) falls back to its own kind string. Link kinds never reach
- * this path - they carry no bytes and have no R2 key.
- */
-const KIND_FOLDER: Readonly<Record<string, string>> = {
-  image: 'images',
-  video: 'videos',
-  document: 'docs',
-};
-
-function kindFolder(kind: string): string {
-  return KIND_FOLDER[kind] ?? kind;
-}
-
-/**
- * Object key layout within a workspace bucket: {kindFolder}/{asset_id}/v{n}-{filename}.
- * The filename is sanitized to a safe key segment; the asset id plus version
- * prefix make every key unique per version, so collisions cannot cross assets.
- */
-export function buildR2Key(input: {
-  kind: string;
-  assetId: string;
-  versionNumber: number;
-  filename: string;
-}): string {
-  const safeName = input.filename.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '') || 'file';
-  return `${kindFolder(input.kind)}/${input.assetId}/v${input.versionNumber}-${safeName}`;
-}
-
-/**
- * Object key of a version's thumbnail rendition, next to the version's own
- * bytes: {kindFolder}/{asset_id}/v{n}-thumb.jpg. Additive: buildR2Key is
- * unchanged, so existing keys never move.
- */
-export function buildThumbnailKey(input: {
-  kind: string;
-  assetId: string;
-  versionNumber: number;
-}): string {
-  return `${kindFolder(input.kind)}/${input.assetId}/v${input.versionNumber}-thumb.jpg`;
-}
 
 // ---------------------------------------------------------------------------
 // R2 (S3-compatible) implementation with AWS SigV4 signing.
@@ -363,6 +337,10 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
     this.host = `${env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
   }
 
+  /**
+   * ADMIN ONLY (scripts/copy-workspace-storage.ts). Not on StorageClient, and
+   * never called from an upload: uploads write to an existing bucket only.
+   */
   async ensureBucket(bucket: string, traceId: string): Promise<void> {
     // S3 CreateBucket with an Asia-Pacific location hint, so a new workspace's
     // files are stored close to its (Indian) users. R2 honours a hint only when
@@ -443,6 +421,7 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
     });
     if (!res.ok) {
       const text = await res.text();
+      if (/NoSuchBucket/.test(text)) throw new NoSuchBucketError(input.bucket, text);
       throw new Error(`R2 putObject failed (${res.status}): ${text}`);
     }
   }
@@ -483,6 +462,7 @@ export class R2StorageClient implements StorageClient, MultipartStorage, BucketS
     });
     const text = await res.text();
     if (!res.ok) {
+      if (/NoSuchBucket/.test(text)) throw new NoSuchBucketError(input.bucket, text);
       throw new Error(`R2 createMultipartUpload failed (${res.status}): ${text}`);
     }
     const uploadId = xmlTag(text, 'UploadId');
@@ -850,17 +830,17 @@ export interface StoredObject {
 export class InMemoryStorageClient implements StorageClient {
   readonly buckets = new Set<string>();
   readonly objects = new Map<string, StoredObject>();
+  /** Buckets that do not exist: a put into one throws NoSuchBucketError, like R2. */
+  readonly missingBuckets = new Set<string>();
 
   private id(bucket: string, key: string): string {
     return `${bucket}/${key}`;
   }
 
-  ensureBucket(bucket: string): Promise<void> {
-    this.buckets.add(bucket);
-    return Promise.resolve();
-  }
-
   putObject(input: PutObjectInput): Promise<void> {
+    if (this.missingBuckets.has(input.bucket)) {
+      return Promise.reject(new NoSuchBucketError(input.bucket, 'NoSuchBucket'));
+    }
     this.buckets.add(input.bucket);
     this.objects.set(this.id(input.bucket, input.key), {
       bucket: input.bucket,
@@ -896,6 +876,9 @@ export class InMemoryMultipartStorage
     key: string;
     contentType: string;
   }): Promise<string> {
+    if (this.missingBuckets.has(input.bucket)) {
+      return Promise.reject(new NoSuchBucketError(input.bucket, 'NoSuchBucket'));
+    }
     const uploadId = `upload-${this.nextUpload++}`;
     this.uploads.set(uploadId, {
       bucket: input.bucket,

@@ -260,7 +260,7 @@ export function FileTiles({
               className="absolute inset-x-1.5 bottom-1.5 h-1 overflow-hidden rounded-full bg-panel"
             >
               <span
-                className="block h-full rounded-full bg-accent transition-[width] duration-fast motion-reduce:transition-none"
+                className="block h-full rounded-full bg-accent transition-[width] duration-fast ease-enter motion-reduce:transition-none"
                 style={{ width: `${Math.max(tile.progress, 0.04) * 100}%` }}
               />
             </span>

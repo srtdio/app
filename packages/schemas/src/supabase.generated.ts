@@ -9167,6 +9167,7 @@ export type Database = {
         }
         Returns: string
       }
+      auth_user_id_by_email: { Args: { p_email: string }; Returns: string }
       brand_agency_request: {
         Args: {
           p_agency_email: string
@@ -10184,6 +10185,15 @@ export type Database = {
       }
       storage_workspace_cutover: {
         Args: { p_bucket: string; p_trace_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
+      storage_workspace_move: {
+        Args: {
+          p_bucket: string
+          p_expected_objects: number
+          p_trace_id: string
+          p_workspace_id: string
+        }
         Returns: undefined
       }
       test_session_create: {

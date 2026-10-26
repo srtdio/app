@@ -21,6 +21,7 @@ import { InMemoryStorageClient, computeSha256, type PutObjectInput } from '@srtd
 const WORKSPACE = '11111111-1111-7111-8111-111111111111';
 const USER = '33333333-3333-7333-8333-333333333333';
 const TRACE = '0192f8a0-7d3e-7c4b-9a1f-2b3c4d5e6f70';
+const SHARED = 'srtdio-files';
 
 function deps(): PipelineDeps & {
   storage: InMemoryStorageClient;
@@ -30,6 +31,7 @@ function deps(): PipelineDeps & {
     storage: new InMemoryStorageClient(),
     repository: new InMemoryAssetRepository(),
     scanner: new NoOpScanner(),
+    sharedBucket: SHARED,
   };
 }
 
@@ -273,11 +275,13 @@ function thumbDeps(): {
   storage: InMemoryStorageClient;
   repository: InMemoryAssetRepository;
   renditions: InMemoryRenditionStore;
+  sharedBucket: string;
 } {
   return {
     storage: new InMemoryStorageClient(),
     repository: new InMemoryAssetRepository(),
     renditions: new InMemoryRenditionStore(),
+    sharedBucket: SHARED,
   };
 }
 
@@ -467,7 +471,23 @@ describe('checkThumbnail', () => {
 });
 
 describe('storeThumbnailRendition', () => {
-  it('puts the jpeg at {kindFolder}/{asset}/v{n}-thumb.jpg and inserts one row', async () => {
+  it('on the shared bucket puts the jpeg at ws/<ws>/<asset>/<version>/thumbnail', async () => {
+    const d = thumbDeps();
+    d.repository.assetBuckets.set(WORKSPACE, SHARED);
+    const outcome = await storeThumbnailRendition(
+      d,
+      thumbInput({ summary: summary({ r2Key: `ws/${WORKSPACE}/${ASSET}/${VERSION}/original` }) }),
+    );
+    expect(outcome.stored).toBe(true);
+    const key = `ws/${WORKSPACE}/${ASSET}/${VERSION}/thumbnail`;
+    expect(d.storage.get(SHARED, key)?.contentType).toBe('image/jpeg');
+    expect(d.storage.objects.size).toBe(1);
+    expect(d.renditions.rows[0]?.r2Key).toBe(key);
+    // The thumbnail never triggers a workspace move.
+    expect(d.repository.moves).toHaveLength(0);
+  });
+
+  it('legacy bucket: puts the jpeg at {kindFolder}/{asset}/v{n}-thumb.jpg, one row', async () => {
     const d = thumbDeps();
     const bytes = jpeg(400, 566);
     const outcome = await storeThumbnailRendition(d, thumbInput({ bytes }));
@@ -630,6 +650,7 @@ describe('storeThumbnailRendition', () => {
         storage: new LoggingStorage(),
         repository: new InMemoryAssetRepository(),
         renditions: new LoggingRenditions(),
+        sharedBucket: SHARED,
       },
       thumbInput(),
     );
@@ -733,5 +754,127 @@ describe('storeThumbnailRendition page count', () => {
     d.repository.setVersionPageCount = () => Promise.reject(new Error('db down'));
     const outcome = await storeThumbnailRendition(d, thumbInput());
     expect(outcome).toEqual({ stored: true, width: 400, height: 566, pageCount: 12 });
+  });
+});
+
+describe('runUploadPipeline storage target and keys', () => {
+  const ID_ONLY = new RegExp(
+    `^ws/${WORKSPACE}/[0-9a-f-]{36}/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}/original$`,
+  );
+
+  it('first upload to an empty legacy workspace: moves once with 0, ID-only key', async () => {
+    const d = deps();
+    d.repository.assetBuckets.set(WORKSPACE, 'assets-acme');
+    const res = await runUploadPipeline(d, input({ filename: 'Holiday Photo.png' }));
+    if (!res.ok) throw new Error('expected ok');
+    expect(d.repository.moves).toEqual([
+      { workspaceId: WORKSPACE, bucket: SHARED, expectedObjects: 0, traceId: TRACE },
+    ]);
+    const { assetId, versionId, r2Key } = res.value;
+    expect(r2Key).toBe(`ws/${WORKSPACE}/${assetId}/${versionId}/original`);
+    expect(r2Key).toMatch(ID_ONLY);
+    expect(r2Key).not.toContain('Holiday');
+    expect(d.storage.get(SHARED, r2Key)).toBeDefined();
+    expect(d.storage.get('assets-acme', r2Key)).toBeUndefined();
+  });
+
+  it('a second upload to the moved workspace does not move again', async () => {
+    const d = deps();
+    await runUploadPipeline(d, input({ bytes: pngBytes(10, 10) }));
+    await runUploadPipeline(d, input({ bytes: pngBytes(20, 20) }));
+    expect(d.repository.moves).toHaveLength(1);
+  });
+
+  it('shared workspace: no move, ID-only key in the shared bucket', async () => {
+    const d = deps();
+    d.repository.assetBuckets.set(WORKSPACE, SHARED);
+    const res = await runUploadPipeline(d, input());
+    if (!res.ok) throw new Error('expected ok');
+    expect(d.repository.moves).toHaveLength(0);
+    expect(res.value.r2Key).toMatch(ID_ONLY);
+    expect(d.storage.get(SHARED, res.value.r2Key)).toBeDefined();
+  });
+
+  it('legacy workspace with files: legacy bucket and legacy key layout, no move', async () => {
+    const d = deps();
+    d.repository.assetBuckets.set(WORKSPACE, 'assets-acme');
+    d.repository.renditionKeys.set(WORKSPACE, ['images/x/v1-thumb.jpg']);
+    const res = await runUploadPipeline(d, input({ filename: 'photo.png' }));
+    if (!res.ok) throw new Error('expected ok');
+    expect(d.repository.moves).toHaveLength(0);
+    expect(res.value.r2Key).toBe(`images/${res.value.assetId}/v1-photo.png`);
+    expect(d.storage.get('assets-acme', res.value.r2Key)).toBeDefined();
+  });
+
+  it('object_count_changed on the move: falls back to the legacy layout', async () => {
+    const d = deps();
+    d.repository.assetBuckets.set(WORKSPACE, 'assets-acme');
+    d.repository.moveConflict = { liveCount: 1 };
+    const res = await runUploadPipeline(d, input({ filename: 'photo.png' }));
+    if (!res.ok) throw new Error('expected ok');
+    expect(d.repository.moves).toHaveLength(1);
+    expect(res.value.r2Key).toBe(`images/${res.value.assetId}/v1-photo.png`);
+    expect(d.storage.get('assets-acme', res.value.r2Key)).toBeDefined();
+  });
+
+  it('a new version of an existing asset gets its own ID-only key', async () => {
+    const d = deps();
+    const first = await runUploadPipeline(d, input({ bytes: pngBytes(10, 10) }));
+    if (!first.ok) throw new Error('expected ok');
+    const second = await runUploadPipeline(
+      d,
+      input({ bytes: pngBytes(30, 30), assetId: first.value.assetId }),
+    );
+    if (!second.ok) throw new Error('expected ok');
+    expect(second.value.versionNumber).toBe(2);
+    expect(second.value.r2Key).toBe(
+      `ws/${WORKSPACE}/${first.value.assetId}/${second.value.versionId}/original`,
+    );
+  });
+
+  it('dedup reuses the existing object key and stores nothing new', async () => {
+    const d = deps();
+    const first = await runUploadPipeline(d, input());
+    const again = await runUploadPipeline(d, input({ filename: 'other.png' }));
+    if (!first.ok || !again.ok) throw new Error('expected ok');
+    expect(again.value.reused).toBe(true);
+    expect(again.value.r2Key).toBe(first.value.r2Key);
+    expect(d.storage.objects.size).toBe(1);
+  });
+
+  it('mints the version id before the put and inserts the row with that id', async () => {
+    const order: string[] = [];
+    const putKeys: string[] = [];
+    class LoggingStorage extends InMemoryStorageClient {
+      override putObject(put: PutObjectInput): Promise<void> {
+        order.push('put');
+        putKeys.push(put.key);
+        return super.putObject(put);
+      }
+    }
+    const d = { ...deps(), storage: new LoggingStorage() };
+    const insertVersion = d.repository.insertVersion.bind(d.repository);
+    const insertedIds: string[] = [];
+    d.repository.insertVersion = (version) => {
+      order.push('insert');
+      insertedIds.push(version.id);
+      return insertVersion(version);
+    };
+    const res = await runUploadPipeline(d, input());
+    if (!res.ok) throw new Error('expected ok');
+    expect(order).toEqual(['put', 'insert']);
+    expect(insertedIds).toEqual([res.value.versionId]);
+    expect(putKeys[0]).toBe(`ws/${WORKSPACE}/${res.value.assetId}/${res.value.versionId}/original`);
+    expect(d.repository.versions[0]?.id).toBe(res.value.versionId);
+  });
+
+  it('never creates a bucket: a missing shared bucket fails the upload and writes no row', async () => {
+    const d = deps();
+    d.repository.assetBuckets.set(WORKSPACE, SHARED);
+    d.storage.missingBuckets.add(SHARED);
+    await expect(runUploadPipeline(d, input())).rejects.toThrow('does not exist');
+    expect(d.storage.buckets.size).toBe(0);
+    expect(d.repository.versions).toHaveLength(0);
+    expect(d.repository.assets.size).toBe(0);
   });
 });

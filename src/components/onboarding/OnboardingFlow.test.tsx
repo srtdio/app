@@ -14,6 +14,7 @@ const {
   calls,
   testEnv,
   mockUploadAvatar,
+  mockCleanup,
 } = vi.hoisted(() => ({
   // Stable, as useNewTrace's is in the app.
   newTrace: () => 'trace',
@@ -28,6 +29,8 @@ const {
   /** The env the flow reads; a test sets VITE_AVATAR_UPLOAD_URL to send the photo. */
   testEnv: {} as Record<string, unknown>,
   mockUploadAvatar: vi.fn(),
+  /** The replaced-avatar cleanup the flow fires after a save. */
+  mockCleanup: vi.fn<(oldUrl: string) => Promise<void>>(),
 }));
 
 /** A chainable read: .select().eq()...maybeSingle() answers rows[table]. */
@@ -66,7 +69,11 @@ vi.mock('@/lib/env', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/env')>();
   return { ...actual, env: Object.assign(testEnv, actual.env) };
 });
-vi.mock('@/lib/avatar-upload', () => ({ uploadAvatarFile: mockUploadAvatar }));
+vi.mock('@/lib/avatar-upload', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/avatar-upload')>()),
+  uploadAvatarFile: mockUploadAvatar,
+  makeAvatarCleanup: () => mockCleanup,
+}));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@srtdio/rpc', () => ({ userOnboardingSave: mockSave, usernameAvailable: mockUsername }));
 vi.mock('@/components/induction/induction-data', () => ({
@@ -156,6 +163,8 @@ beforeEach(() => {
   for (const key of Object.keys(rows)) delete rows[key];
   delete testEnv.VITE_AVATAR_UPLOAD_URL;
   mockUploadAvatar.mockReset();
+  mockCleanup.mockReset();
+  mockCleanup.mockResolvedValue(undefined);
   window.localStorage.clear();
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -234,8 +243,8 @@ async function pick(label: string, value: string): Promise<void> {
 }
 
 /** Side (Creator or Approver), then a name with a free username. */
-async function toNameScreen(side: 'Creator' | 'Approver'): Promise<void> {
-  await render({});
+async function toNameScreen(side: 'Creator' | 'Approver', profile?: CurrentProfile): Promise<void> {
+  await render(profile !== undefined ? { profile } : {});
   await click(button(`${side}${side === 'Creator' ? 'We make the posts' : 'We approve them'}`));
   await click(button('Continue'));
   await type(document.querySelector<HTMLInputElement>('#ob-name')!, 'Riya Menon');
@@ -421,6 +430,54 @@ describe('pre-app screens', () => {
       "Couldn't upload your photo. You can add it later in settings.",
     );
     expect(document.body.textContent).toContain('Who makes your posts?');
+  });
+
+  describe('replaced avatar cleanup', () => {
+    const OLD = 'https://cdn.srtd.io/u-1/old.png';
+    const NEW = 'https://cdn.srtd.io/u-1/new.png';
+
+    async function savePhoto(previous: string | null, uploaded: string): Promise<void> {
+      testEnv.VITE_AVATAR_UPLOAD_URL = 'https://avatar.test';
+      mockUploadAvatar.mockResolvedValue({ ok: true, data: { avatarUrl: uploaded } });
+      await toNameScreen('Creator', { ...NEW_PROFILE, avatar_url: previous });
+      await addPhoto();
+      await click(button('Continue'));
+      await click(button('Continue'));
+    }
+
+    it('cleans up the previously saved photo once, after a successful save', async () => {
+      await savePhoto(OLD, NEW);
+      const payload = mockSave.mock.calls[0]?.[1]?.p_payload as Record<string, unknown>;
+      expect(payload.avatar_url).toBe(NEW);
+      expect(mockCleanup).toHaveBeenCalledTimes(1);
+      expect(mockCleanup).toHaveBeenCalledWith(OLD);
+      expect(document.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('does not clean up when the save fails', async () => {
+      mockSave.mockResolvedValue({ ok: false, error: { code: 'unknown', message: 'nope' } });
+      await savePhoto(OLD, NEW);
+      expect(mockSave).toHaveBeenCalledTimes(1);
+      expect(mockCleanup).not.toHaveBeenCalled();
+    });
+
+    it('does not clean up without a previous photo, or when the URL is unchanged', async () => {
+      await savePhoto(null, NEW);
+      expect(mockCleanup).not.toHaveBeenCalled();
+      act(() => root?.unmount());
+      root = null;
+      mockSave.mockClear();
+      await savePhoto(OLD, OLD);
+      expect(mockSave).toHaveBeenCalledTimes(1);
+      expect(mockCleanup).not.toHaveBeenCalled();
+    });
+
+    it('never waits on the cleanup: a pending cleanup does not hold up the save', async () => {
+      mockCleanup.mockReturnValue(new Promise<void>(() => {}));
+      await savePhoto(OLD, NEW);
+      expect(mockCleanup).toHaveBeenCalledTimes(1);
+      expect(onFinish).toHaveBeenCalledWith('/pipeline');
+    });
   });
 
   // W11 fix 4: the job title is optional.

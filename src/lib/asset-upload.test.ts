@@ -28,6 +28,7 @@ import {
   type UploadConfig,
   type UploadCompleteDetail,
   type UploadFetcher,
+  type UploadOutcome,
   UPLOAD_COMPLETE_EVENT,
   xhrPost,
 } from '@/lib/asset-upload';
@@ -261,7 +262,7 @@ describe('uploadAssetFile', () => {
 });
 
 describe('runUploads success path clears the queue', () => {
-  it('uploads sequentially and reports every file succeeded', async () => {
+  it('uploads every file and reports every file succeeded', async () => {
     const fetcher = vi
       .fn()
       .mockImplementation(async () =>
@@ -299,6 +300,95 @@ describe('runUploads success path clears the queue', () => {
 
     expect(result.succeeded).toEqual(['2']);
     expect(result.failed).toEqual([{ id: '1', message: "This file type isn't supported" }]);
+  });
+});
+
+describe('runUploads in parallel (cap 3)', () => {
+  const items = (count: number): QueueItem[] =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `f${i + 1}`,
+      file: fakeFile(`f${i + 1}.png`, 'image/png', 1),
+      filename: `f${i + 1}.png`,
+    }));
+
+  it('never has more than 3 files in flight, and starts each next one as a slot frees', async () => {
+    const waiting = new Map<string, (outcome: UploadOutcome) => void>();
+    let inFlight = 0;
+    let peak = 0;
+    const started: string[] = [];
+    const run = runUploads(
+      items(6),
+      (item) =>
+        new Promise<UploadOutcome>((resolve) => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          waiting.set(item.id, (outcome) => {
+            inFlight -= 1;
+            resolve(outcome);
+          });
+        }),
+      { onStart: (id) => started.push(id) },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toEqual(['f1', 'f2', 'f3']);
+
+    const ok: UploadOutcome = { ok: true, reused: false, assetId: 'a' };
+    for (const id of ['f2', 'f1', 'f3', 'f4', 'f5', 'f6']) {
+      waiting.get(id)?.(ok);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(inFlight).toBeLessThanOrEqual(3);
+    }
+    const result = await run;
+    expect(peak).toBe(3);
+    expect(started).toEqual(['f1', 'f2', 'f3', 'f4', 'f5', 'f6']);
+    // Listed in queue order, not finish order.
+    expect(result.succeeded).toEqual(['f1', 'f2', 'f3', 'f4', 'f5', 'f6']);
+  });
+
+  it('one failing file never stops the others and is marked failed with its copy', async () => {
+    const results: [string, boolean][] = [];
+    const result = await runUploads(
+      items(5),
+      async (item) => {
+        if (item.id === 'f2') return { ok: false, message: 'This file was blocked for safety' };
+        if (item.id === 'f4') throw new Error('unexpected');
+        return { ok: true, reused: false, assetId: item.id };
+      },
+      { onResult: (id, outcome) => results.push([id, outcome.ok]) },
+    );
+    expect(result.succeeded).toEqual(['f1', 'f3', 'f5']);
+    expect(result.failed).toEqual([
+      { id: 'f2', message: 'This file was blocked for safety' },
+      // A thrown upload is a failure with the generic retry copy, never a crash.
+      { id: 'f4', message: "Couldn't upload. Try again." },
+    ]);
+    expect(new Map(results)).toEqual(
+      new Map([
+        ['f1', true],
+        ['f2', false],
+        ['f3', true],
+        ['f4', false],
+        ['f5', true],
+      ]),
+    );
+  });
+
+  it('runs one at a time when asked for a cap of 1', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    await runUploads(
+      items(4),
+      async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        inFlight -= 1;
+        return { ok: true, reused: false, assetId: 'a' };
+      },
+      undefined,
+      1,
+    );
+    expect(peak).toBe(1);
   });
 });
 
@@ -782,6 +872,27 @@ describe('uploadAssetFile over XMLHttpRequest (progress)', () => {
     expect((form.get('file') as File).name).toBe('logo.png');
   });
 
+  it('maps bytes sent to a fraction that only moves forward', async () => {
+    const request = fakeXhr({
+      status: 201,
+      body: { asset: { assetId: 'a-1', versionId: 'v-1', reused: false } },
+      ticks: [
+        [0, 400],
+        [100, 400],
+        [50, 400],
+        [100, 400],
+        [300, 400],
+        [400, 400],
+      ],
+    });
+    const progress: number[] = [];
+    await uploadAssetFile(
+      fakeFile('logo.png', 'image/png', 400),
+      xhrConfig(request, (f) => progress.push(f)),
+    );
+    expect(progress).toEqual([0, 0.25, 0.75, 1]);
+  });
+
   it('a reused (200) response is success with reused: true', async () => {
     const request = fakeXhr({
       status: 200,
@@ -886,14 +997,52 @@ describe('xhrPost honours an AbortSignal (cancelled chat send)', () => {
 describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image list copy)', () => {
   const okBody = { asset: { assetId: 'a-1', versionId: 'v-1', reused: false } };
   const thumbBlob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' });
+  const THUMB_URL = 'https://upload.example.workers.dev/thumbnail';
 
-  function sentForm(fetcher: ReturnType<typeof vi.fn>): FormData {
+  /**
+   * A worker double: the direct POST answers `upload`, POST /thumbnail answers
+   * `thumbnail` (a fresh Response per call; a function may throw or hang).
+   */
+  function routedFetcher(
+    opts: {
+      upload?: () => Promise<Response>;
+      thumbnail?: (init: RequestInit) => Promise<Response>;
+    } = {},
+  ) {
+    return vi.fn(async (input: string, init: RequestInit): Promise<Response> => {
+      if (input === THUMB_URL) {
+        return opts.thumbnail !== undefined
+          ? opts.thumbnail(init)
+          : jsonResponse(200, { thumbnail: { width: 580, height: 751 } });
+      }
+      return opts.upload !== undefined ? opts.upload() : jsonResponse(201, okBody);
+    });
+  }
+
+  type Recorded = { mock: { calls: unknown[][] } };
+
+  function uploadForm(fetcher: Recorded): FormData {
     const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
     return init.body as FormData;
   }
 
-  it('a pdf adds the thumbnail part and its page count', async () => {
-    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+  function thumbnailCall(fetcher: Recorded): [string, RequestInit] | undefined {
+    return (fetcher.mock.calls as [string, RequestInit][]).find(([url]) => url === THUMB_URL);
+  }
+
+  function deferred<T>() {
+    let resolve: (value: T) => void = () => undefined;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  }
+
+  it('a pdf sends the original without the thumbnail, then posts it with its page count', async () => {
+    const fetcher = routedFetcher({
+      thumbnail: async () =>
+        jsonResponse(200, { thumbnail: { width: 580, height: 751, page_count: 12 } }),
+    });
     const makeThumbnail = vi.fn(async () => ({
       ok: true as const,
       blob: thumbBlob,
@@ -901,37 +1050,95 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       height: 751,
       pageCount: 12,
     }));
-    await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+    const onThumbnail = vi.fn();
+    const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
       ...baseConfig(fetcher, 'deck.pdf'),
       makeThumbnail,
+      onThumbnail,
     });
-    const form = sentForm(fetcher);
+
+    const original = uploadForm(fetcher);
+    expect((fetcher.mock.calls[0] as [string, RequestInit])[0]).toBe(
+      'https://upload.example.workers.dev',
+    );
+    expect((original.get('file') as File).name).toBe('deck.pdf');
+    expect(original.get('thumbnail')).toBeNull();
+    expect(original.get('thumbnail_page_count')).toBeNull();
+    // The outcome is the stored original alone: the thumbnail never rides on it.
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+
+    await vi.waitFor(() => expect(onThumbnail).toHaveBeenCalledTimes(1));
+    expect(onThumbnail).toHaveBeenCalledWith({ width: 580, height: 751, pageCount: 12 });
+    const call = thumbnailCall(fetcher);
+    expect(call).toBeDefined();
+    const [, init] = call as [string, RequestInit];
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    const form = init.body as FormData;
+    expect(form.get('workspace_id')).toBe('ws-1');
+    expect(form.get('asset_version_id')).toBe('v-1');
     expect(form.get('thumbnail')).toBeInstanceOf(Blob);
     expect((form.get('thumbnail') as File).name).toBe('thumbnail.jpg');
     expect(form.get('thumbnail_page_count')).toBe('12');
-    // The file part is unchanged.
-    expect((form.get('file') as File).name).toBe('deck.pdf');
+    expect(form.get('file')).toBeNull();
   });
 
-  it('a video adds the thumbnail part with no page count', async () => {
-    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
-    const makeThumbnail = vi.fn(async () => ({
-      ok: true as const,
-      blob: thumbBlob,
-      width: 580,
-      height: 326,
-    }));
-    await uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
+  it('resolves once the original is stored, even while the thumbnail is never made', async () => {
+    const fetcher = routedFetcher();
+    // A deferred thumbnail that is never resolved: the outcome must not wait on it.
+    const pending = deferred<{ ok: true; blob: Blob; width: number; height: number }>();
+    const makeThumbnail = vi.fn(() => pending.promise);
+    const outcome = await uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
       ...baseConfig(fetcher, 'clip.mp4'),
       makeThumbnail,
     });
-    const form = sentForm(fetcher);
-    expect(form.get('thumbnail')).toBeInstanceOf(Blob);
-    expect(form.get('thumbnail_page_count')).toBeNull();
+    expect(makeThumbnail).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(thumbnailCall(fetcher)).toBeUndefined();
   });
 
-  it('an image adds its small list copy as the thumbnail part, no page count', async () => {
-    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+  it('a thumbnail made after the outcome is still posted later', async () => {
+    const fetcher = routedFetcher();
+    const pending = deferred<{ ok: true; blob: Blob; width: number; height: number }>();
+    const onThumbnail = vi.fn();
+    const outcome = await uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
+      ...baseConfig(fetcher, 'clip.mp4'),
+      makeThumbnail: () => pending.promise,
+      onThumbnail,
+    });
+    // Done before the thumbnail exists.
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    expect(uploadForm(fetcher).get('file')).toBeInstanceOf(File);
+    expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
+    expect(thumbnailCall(fetcher)).toBeUndefined();
+
+    pending.resolve({ ok: true, blob: thumbBlob, width: 580, height: 326 });
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
+    const form = (thumbnailCall(fetcher) as [string, RequestInit])[1].body as FormData;
+    expect(form.get('asset_version_id')).toBe('v-1');
+    expect(form.get('thumbnail_page_count')).toBeNull();
+    await vi.waitFor(() => expect(onThumbnail).toHaveBeenCalledWith({ width: 580, height: 751 }));
+  });
+
+  it('posts the thumbnail only after the original is stored', async () => {
+    const stored = deferred<Response>();
+    const fetcher = routedFetcher({ upload: () => stored.promise });
+    const upload = uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      ...baseConfig(fetcher, 'deck.pdf'),
+      makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
+    });
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    // The thumbnail is ready, but there is no version to attach it to yet.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    stored.resolve(jsonResponse(201, okBody));
+    await upload;
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
+  });
+
+  it('an image posts its small list copy, no page count', async () => {
+    const fetcher = routedFetcher();
     const makeThumbnail = vi.fn().mockResolvedValue({
       ok: true,
       blob: new Blob(['x'], { type: 'image/jpeg' }),
@@ -943,8 +1150,11 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       makeThumbnail,
     });
     expect(makeThumbnail).toHaveBeenCalledTimes(1);
-    expect(sentForm(fetcher).get('thumbnail')).toBeInstanceOf(Blob);
-    expect(sentForm(fetcher).get('thumbnail_page_count')).toBeNull();
+    expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
+    const form = (thumbnailCall(fetcher) as [string, RequestInit])[1].body as FormData;
+    expect(form.get('thumbnail')).toBeInstanceOf(Blob);
+    expect(form.get('thumbnail_page_count')).toBeNull();
   });
 
   it.each([
@@ -956,14 +1166,16 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     ],
   ])('%s never makes or sends a thumbnail', async (_label, name, type) => {
-    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+    const fetcher = routedFetcher();
     const makeThumbnail = vi.fn();
     await uploadAssetFile(fakeFile(name, type, 10), {
       ...baseConfig(fetcher, name),
       makeThumbnail,
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(makeThumbnail).not.toHaveBeenCalled();
-    expect(sentForm(fetcher).get('thumbnail')).toBeNull();
+    expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -973,8 +1185,8 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ],
     ['xlsx', 'plan.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  ])('a %s adds the thumbnail part with no page count', async (_label, name, type) => {
-    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+  ])('a %s posts its thumbnail with no page count', async (_label, name, type) => {
+    const fetcher = routedFetcher();
     const makeThumbnail = vi.fn(async () => ({
       ok: true as const,
       blob: thumbBlob,
@@ -986,19 +1198,11 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       makeThumbnail,
     });
     expect(makeThumbnail).toHaveBeenCalledTimes(1);
-    expect(sentForm(fetcher).get('thumbnail')).toBeInstanceOf(Blob);
-    expect(sentForm(fetcher).get('thumbnail_page_count')).toBeNull();
-  });
-
-  it('a docx whose thumbnail fails still uploads, with no thumbnail part', async () => {
-    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
-    const type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    const outcome = await uploadAssetFile(fakeFile('locked.docx', type, 10), {
-      ...baseConfig(fetcher, 'locked.docx'),
-      makeThumbnail: async () => ({ ok: false as const, reason: 'failed' as const }),
-    });
-    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
-    expect(sentForm(fetcher).get('thumbnail')).toBeNull();
+    expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
+    const form = (thumbnailCall(fetcher) as [string, RequestInit])[1].body as FormData;
+    expect(form.get('thumbnail')).toBeInstanceOf(Blob);
+    expect(form.get('thumbnail_page_count')).toBeNull();
   });
 
   it.each([
@@ -1009,32 +1213,154 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
         throw new Error('boom');
       },
     ],
-  ])('%s still uploads the file, with no thumbnail part', async (_label, maker) => {
-    const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+  ])('%s still uploads the file and posts no thumbnail', async (_label, maker) => {
+    const fetcher = routedFetcher();
     const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
       ...baseConfig(fetcher, 'deck.pdf'),
       makeThumbnail: maker,
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
-    expect(sentForm(fetcher).get('thumbnail')).toBeNull();
+    expect(uploadForm(fetcher).get('thumbnail')).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('a maker that hangs never holds the upload past the 4 s cap', async () => {
+  it.each([
+    ['a refused post', async () => jsonResponse(422, { error: { code: 'invalid_image' } })],
+    ['a server fault', async () => jsonResponse(500, { error: { code: 'internal_error' } })],
+    [
+      'a transport failure',
+      async (): Promise<Response> => {
+        throw new TypeError('Failed to fetch');
+      },
+    ],
+  ])('%s on /thumbnail leaves the upload ok, without a thumbnail', async (_label, reply) => {
+    const fetcher = routedFetcher({ thumbnail: reply });
+    const onThumbnail = vi.fn();
+    const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      ...baseConfig(fetcher, 'deck.pdf'),
+      makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
+      onThumbnail,
+    });
+    await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    expect(onThumbnail).not.toHaveBeenCalled();
+  });
+
+  it('a failed original never posts a thumbnail', async () => {
+    const fetcher = routedFetcher({
+      upload: async () => jsonResponse(422, { error: { code: 'virus_detected' } }),
+    });
+    const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      ...baseConfig(fetcher, 'deck.pdf'),
+      makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(outcome).toEqual({ ok: false, message: uploadErrorMessage('virus_detected') });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('a reply that already carries the stored thumbnail posts none', async () => {
+    const fetcher = routedFetcher({
+      upload: async () =>
+        jsonResponse(200, {
+          asset: { assetId: 'a-1', versionId: 'v-1', reused: true },
+          thumbnail: { width: 400, height: 566 },
+        }),
+    });
+    const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      ...baseConfig(fetcher, 'deck.pdf'),
+      makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({ ok: true, thumbnail: { width: 400, height: 566 } });
+  });
+
+  it('posts the thumbnail over XHR with the same Bearer and X-Trace-Id', async () => {
+    const requests: { url: string; headers: Record<string, string>; sent: unknown }[] = [];
+    const createRequest = (): XMLHttpRequest => {
+      const request = fakeXhr({ status: 201, body: okBody });
+      const tracked = { url: '', headers: request.headers, sent: null as unknown };
+      requests.push(tracked);
+      const open = request.open.bind(request);
+      request.open = (method: string, url: string) => {
+        tracked.url = url;
+        open(method, url);
+      };
+      const sendBody = request.send.bind(request);
+      request.send = (body: unknown) => {
+        tracked.sent = body;
+        if (tracked.url === THUMB_URL) {
+          request.status = 200;
+          request.responseText = JSON.stringify({ thumbnail: { width: 580, height: 326 } });
+          request.onload?.();
+          return;
+        }
+        sendBody(body);
+      };
+      return request as unknown as XMLHttpRequest;
+    };
+    const onThumbnail = vi.fn();
+    const outcome = await uploadAssetFile(fakeFile('clip.mp4', 'video/mp4', 10), {
+      endpoint: 'https://upload.example.workers.dev',
+      token: 'tok',
+      workspaceId: 'ws-1',
+      origin: 'chat',
+      filename: 'clip.mp4',
+      makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 580, height: 326 }),
+      onThumbnail,
+      xhr: { traceId: 'trace-1', createRequest },
+    });
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    await vi.waitFor(() => expect(onThumbnail).toHaveBeenCalledWith({ width: 580, height: 326 }));
+    expect(requests.map((r) => r.url)).toEqual(['https://upload.example.workers.dev', THUMB_URL]);
+    expect(requests[1]?.headers).toEqual({ Authorization: 'Bearer tok', 'X-Trace-Id': 'trace-1' });
+    expect((requests[1]?.sent as FormData).get('asset_version_id')).toBe('v-1');
+  });
+
+  it('a maker that hangs never holds the original or the outcome', async () => {
     vi.useFakeTimers();
     try {
-      const fetcher = vi.fn().mockResolvedValue(jsonResponse(201, okBody));
+      const fetcher = routedFetcher();
       const pending = uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
         ...baseConfig(fetcher, 'deck.pdf'),
         makeThumbnail: () => new Promise(() => undefined),
       });
-      await vi.advanceTimersByTimeAsync(3_999);
-      expect(fetcher).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(1);
+      // No timer advanced: the outcome does not wait for the thumbnail cap.
       const outcome = await pending;
-      expect(outcome.ok).toBe(true);
-      expect(sentForm(fetcher).get('thumbnail')).toBeNull();
+      expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      // Past the cap the hung thumbnail is dropped: nothing is posted.
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(fetcher).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('a thumbnail that lands after the outcome announces the upload again', async () => {
+    const target = new EventTarget();
+    vi.stubGlobal('window', target);
+    const seen: string[] = [];
+    target.addEventListener(UPLOAD_COMPLETE_EVENT, (event) => {
+      seen.push((event as CustomEvent<UploadCompleteDetail>).detail.workspaceId);
+    });
+    try {
+      const late = deferred<Response>();
+      const fetcher = routedFetcher({ thumbnail: () => late.promise });
+      const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+        ...baseConfig(fetcher, 'deck.pdf'),
+        makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
+      });
+      expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+      expect(seen).toEqual(['ws-1']);
+      await vi.waitFor(() => expect(thumbnailCall(fetcher)).toBeDefined());
+      late.resolve(jsonResponse(200, { thumbnail: { width: 10, height: 10 } }));
+      await vi.waitFor(() => expect(seen).toEqual(['ws-1', 'ws-1']));
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 

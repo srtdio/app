@@ -5,16 +5,26 @@
 // (the real assembled size) before the parts are assembled.
 //
 // Stateless by design (no table holds upload sessions): the staging object key
-// carries the uploader's user id, `_uploads/{user_id}/{uuid}`, and every call
-// checks the key against the verified caller before touching R2. The client
-// keeps {key, upload_id} and can list the parts R2 already holds to resume from
-// the last finished part after a dropped connection.
+// is `uploads/{workspace_id}/{upload_uuid}` (keys.ts uploadStagingKey), separate
+// from the final key, and every call checks the key belongs to the workspace
+// the verified caller is an active member of before touching R2. R2's own
+// upload_id (unguessable) is needed too. The client keeps {key, upload_id} and
+// can list the parts R2 already holds to resume from the last finished part
+// after a dropped connection. The pipeline then stores the assembled bytes
+// under the version's final key and the staging object is deleted.
+//
+// No call here ever creates a bucket. Create resolves the workspace's upload
+// target (moving an empty legacy workspace to the shared bucket); a missing
+// bucket is logged loudly and fails the call.
 //
 // Parts are a fixed 8 MB (the last one smaller), which R2 requires: every part
 // but the last must be the same size.
 
 import {
+  UPLOAD_STAGING_PREFIX,
   isAllowedMime,
+  isNoSuchBucketError,
+  uploadStagingKey,
   type MultipartStorage,
   type StorageClient,
   type UploadedPart,
@@ -26,8 +36,6 @@ export const MULTIPART_PART_SIZE = 8 * 1024 * 1024;
 
 /** Most parts a file under the cap can need (100 MB / 8 MB, rounded up). */
 export const MULTIPART_MAX_PARTS = Math.ceil(MAX_FILE_SIZE_BYTES / MULTIPART_PART_SIZE);
-
-const STAGING_PREFIX = '_uploads';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
@@ -48,9 +56,14 @@ export interface MultipartError {
 
 export interface MultipartDeps {
   storage: StorageClient & MultipartStorage;
-  /** The workspace's stored R2 bucket (workspaces.asset_bucket). */
+  /** The workspace's stored R2 bucket (workspaces.asset_bucket), where its staging lives. */
   bucketFor(workspaceId: string): Promise<string>;
-  /** Fresh id for a staging key; crypto.randomUUID in the Worker. */
+  /**
+   * The bucket a new upload writes to (resolveUploadTarget in the Worker): may
+   * move an empty legacy workspace to the shared bucket first. Create only.
+   */
+  uploadBucketFor(workspaceId: string, traceId: string): Promise<string>;
+  /** Fresh upload id for a staging key; crypto.randomUUID in the Worker. */
   newId(): string;
   /** The workspace storage cap (checkWorkspaceCap in the Worker). */
   checkCap(input: {
@@ -60,15 +73,15 @@ export interface MultipartDeps {
   }): Promise<Result<null, MultipartError>>;
 }
 
-/** The staging key for one upload by one user. */
-export function stagingKey(userId: string, id: string): string {
-  return `${STAGING_PREFIX}/${userId}/${id}`;
+/** The staging key for one upload into one workspace: uploads/<workspace_id>/<upload_id>. */
+export function stagingKey(workspaceId: string, uploadId: string): string {
+  return uploadStagingKey({ workspaceId, uploadId });
 }
 
-/** True when the key is a staging key minted for this user. */
-export function ownsStagingKey(userId: string, key: string): boolean {
-  if (!new RegExp(`^${UUID}$`, 'i').test(userId)) return false;
-  return new RegExp(`^${STAGING_PREFIX}/${userId}/${UUID}$`, 'i').test(key);
+/** True when the key is a staging key minted for this workspace. */
+export function ownsStagingKey(workspaceId: string, key: string): boolean {
+  if (!new RegExp(`^${UUID}$`, 'i').test(workspaceId)) return false;
+  return new RegExp(`^${UPLOAD_STAGING_PREFIX}${workspaceId}/${UUID}$`, 'i').test(key);
 }
 
 /** How many parts a file of this size uploads as. */
@@ -85,8 +98,8 @@ interface Target {
 }
 
 function checkKey(input: Target): Result<null, MultipartError> {
-  if (!ownsStagingKey(input.userId, input.key)) {
-    return err({ code: 'forbidden', message: 'This upload belongs to someone else.' });
+  if (!ownsStagingKey(input.workspaceId, input.key)) {
+    return err({ code: 'forbidden', message: 'This upload belongs to another workspace.' });
   }
   if (input.uploadId === '' || input.uploadId.length > 1024) {
     return err({ code: 'bad_request', message: 'Invalid upload_id.' });
@@ -129,15 +142,26 @@ export async function createUpload(
     traceId: input.traceId,
   });
   if (!cap.ok) return cap;
-  const bucket = await deps.bucketFor(input.workspaceId);
-  await deps.storage.ensureBucket(bucket, input.traceId);
-  const key = stagingKey(input.userId, deps.newId());
-  const uploadId = await deps.storage.createMultipartUpload({
-    bucket,
-    key,
-    contentType: input.contentType,
-    traceId: input.traceId,
-  });
+  const bucket = await deps.uploadBucketFor(input.workspaceId, input.traceId);
+  const key = stagingKey(input.workspaceId, deps.newId());
+  let uploadId: string;
+  try {
+    uploadId = await deps.storage.createMultipartUpload({
+      bucket,
+      key,
+      contentType: input.contentType,
+      traceId: input.traceId,
+    });
+  } catch (error) {
+    if (isNoSuchBucketError(error)) {
+      logger.error('asset upload target bucket does not exist; uploads never create buckets', {
+        trace_id: input.traceId,
+        workspace_id: input.workspaceId,
+        bucket,
+      });
+    }
+    throw error;
+  }
   return ok({
     key,
     uploadId,

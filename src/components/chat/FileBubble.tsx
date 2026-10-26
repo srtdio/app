@@ -15,7 +15,7 @@
 // the in-app FileViewer: never a new tab or window. A viewer that could not
 // open leaves "Couldn't open. Try again." on the bubble, tap to retry.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { ICON_SIZE, IconPlay } from '@/components/ui/icons';
 import { KindIcon, useStoredThumbnail } from '@/components/ui/FileTile';
@@ -38,7 +38,7 @@ import {
   type MessageAttachment,
 } from '@/lib/chat/attachments';
 import { BUBBLE_NAME_BUDGET, fileKindLabel, middleTruncate } from '@/lib/files/display-name';
-import { sharedThumbnail, thumbnailKind } from '@/lib/files/thumbnail';
+import { sharedThumbnail, THUMBNAIL_TIMEOUT_MS, thumbnailKind } from '@/lib/files/thumbnail';
 
 /**
  * The bubble's width rule as one grid track, minmax(0, 100vw): it asks for a
@@ -138,12 +138,69 @@ interface FileBubbleCardProps {
   failed: boolean;
   onOpen: () => void;
   onImageError?: () => void;
+  /** Bumped to load the thumbnail again (a fresh img element, same box). */
+  thumbAttempt?: number;
+}
+
+/**
+ * The thumbnail image over the placeholder. It stays transparent until it has
+ * loaded, then fades in, so the placeholder (or the last loaded image) shows
+ * until then: no blink when a thumbnail lands or its URL changes. The box
+ * around it is sized by the card, never by the image.
+ */
+export function ThumbImage(props: {
+  src: string;
+  kind: FileKind;
+  dimmed: boolean;
+  onError?: () => void;
+}): ReactElement {
+  const { src } = props;
+  // The last src that finished loading; it stays under a newer one until that loads.
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const markLoaded = useCallback((done: string) => setLoaded(done), []);
+  // A cached image can be complete before React sees its load event.
+  const ref = useCallback(
+    (img: HTMLImageElement | null) => {
+      if (img !== null && img.complete && img.naturalWidth > 0) markLoaded(src);
+    },
+    [src, markLoaded],
+  );
+  const fit = props.kind === 'video' ? 'object-cover' : 'object-cover object-top';
+  const shown = loaded === src;
+  return (
+    <>
+      {loaded !== null && !shown ? (
+        <img
+          src={loaded}
+          alt=""
+          draggable={false}
+          aria-hidden="true"
+          className={cn('absolute inset-0 h-full w-full', fit, props.dimmed && 'opacity-80')}
+        />
+      ) : null}
+      <img
+        ref={ref}
+        src={src}
+        alt=""
+        draggable={false}
+        data-loaded={shown ? 'true' : 'false'}
+        onLoad={() => markLoaded(src)}
+        onError={props.onError}
+        className={cn(
+          'absolute inset-0 h-full w-full transition-opacity duration-fast ease-enter',
+          fit,
+          shown ? (props.dimmed ? 'opacity-80' : 'opacity-100') : 'opacity-0',
+        )}
+      />
+    </>
+  );
 }
 
 /**
  * The bubble's card: hook-free, so tests render every state directly. One
  * button (44px+ tall) that opens the file. The thumbnail box is sized from
- * `ratio` alone, so it is the same height before and after the image loads.
+ * `ratio` alone, so it is the same height before and after the image loads;
+ * the kind placeholder stays under the image until ThumbImage has loaded it.
  */
 export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
   const { kind, ratio, thumbUrl, progress, uploading, failed } = props;
@@ -164,23 +221,21 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           className="relative block w-full overflow-hidden border-b border-border bg-panel-3"
           style={{ aspectRatio: `1 / ${ratio}` }}
         >
+          <span
+            data-file-thumb-placeholder=""
+            className="absolute inset-0 flex items-center justify-center text-fg-3"
+          >
+            <KindIcon kind={kind} size={ICON_SIZE.status} />
+          </span>
           {thumbUrl !== null ? (
-            <img
+            <ThumbImage
+              key={props.thumbAttempt ?? 0}
               src={thumbUrl}
-              alt=""
-              draggable={false}
-              onError={props.onImageError}
-              className={cn(
-                'absolute inset-0 h-full w-full',
-                kind === 'video' ? 'object-cover' : 'object-cover object-top',
-                uploading && 'opacity-80',
-              )}
+              kind={kind}
+              dimmed={uploading}
+              {...(props.onImageError !== undefined ? { onError: props.onImageError } : {})}
             />
-          ) : (
-            <span className="absolute inset-0 flex items-center justify-center text-fg-3">
-              <KindIcon kind={kind} size={ICON_SIZE.status} />
-            </span>
-          )}
+          ) : null}
           {kind === 'video' && thumbUrl !== null ? (
             <span className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-overlay-fg">
               <IconPlay size={ICON_SIZE.nav} />
@@ -250,6 +305,18 @@ export function FileBubble({ attachment, cache, presignEnabled }: FileBubbleProp
     presignEnabled && ratio !== null && localFile === null,
   );
   const [imageFailed, setImageFailed] = useState(false);
+  // A recorded file's thumbnail can land a moment after its message (it is
+  // attached after the original): one failed load is tried once more later,
+  // in the same box with the placeholder showing meanwhile.
+  const [thumbAttempt, setThumbAttempt] = useState(0);
+  useEffect(() => {
+    if (!imageFailed || thumbAttempt > 0 || localFile !== null) return;
+    const timer = setTimeout(() => {
+      setThumbAttempt(1);
+      setImageFailed(false);
+    }, THUMBNAIL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [imageFailed, thumbAttempt, localFile]);
   const [open, setOpen] = useState(false);
   const [openFailed, setOpenFailed] = useState(false);
   const thumbUrl = imageFailed ? null : (localThumb ?? stored.url);
@@ -293,6 +360,7 @@ export function FileBubble({ attachment, cache, presignEnabled }: FileBubbleProp
         failed={openFailed}
         onOpen={onOpen}
         onImageError={() => setImageFailed(true)}
+        thumbAttempt={thumbAttempt}
       />
       {open && source !== null ? (
         <FileViewer

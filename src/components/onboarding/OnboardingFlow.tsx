@@ -47,11 +47,12 @@ import { PlatformMark } from '@/components/ui/PlatformMark';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Select } from '@/components/ui/Select';
 import { Sheet } from '@/components/ui/Sheet';
-import { uploadAvatarFile } from '@/lib/avatar-upload';
+import { fireAvatarCleanup, makeAvatarCleanup, uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
 import { SIGNOUT_EVENT, dispatchSorted } from '@/lib/events';
 import { fetchWithTrace } from '@/lib/fetch';
+import { generateTraceId } from '@/lib/trace';
 import { ONBOARDING_COPY, WELCOME_COPY, fillCopy } from '@/lib/induction-copy';
 import {
   APPROVER_BRAND_STEP,
@@ -262,6 +263,9 @@ export function OnboardingFlow({
   // The uploaded photo's URL, kept so a refresh does not ask for the photo again.
   const [uploadedAvatar, setUploadedAvatar] = useState(draft?.avatarUrl ?? '');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  // The avatar_url the profile row holds: replaced by each successful save that
+  // sends a photo, whose previous object is then cleaned up (fire and forget).
+  const savedAvatar = useRef<string | null>(profile?.avatar_url ?? null);
   // The photo's upload, started when it is applied so it is done (or nearly)
   // by the time the title is saved.
   const photoUpload = useRef<{ file: File; url: Promise<string | null> } | null>(null);
@@ -497,6 +501,14 @@ export function OnboardingFlow({
     return url;
   }
 
+  /** Deletes a replaced avatar object; one fresh trace per call, sent as X-Trace-Id. */
+  const cleanupAvatar = makeAvatarCleanup({
+    endpoint: env.VITE_AVATAR_UPLOAD_URL,
+    getToken: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null,
+    apiKey: env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    fetcher: (input, init) => fetchWithTrace(input, init, generateTraceId()),
+  });
+
   /** The photo (already uploading since it was applied), then the whole profile in one call. */
   async function saveProfile(): Promise<void> {
     setBusy(true);
@@ -532,6 +544,11 @@ export function OnboardingFlow({
       logger.error('onboarding save failed', { error: saved.error.message });
       setError("Couldn't save that. Try again.");
       return;
+    }
+    // The row now holds the new photo: the one it replaced is cleaned up, never awaited.
+    if (avatarUrl !== null) {
+      fireAvatarCleanup(cleanupAvatar, savedAvatar.current, avatarUrl);
+      savedAvatar.current = avatarUrl;
     }
     // Saved: the profile itself now says where to resume, the draft is done.
     draftDone.current = true;

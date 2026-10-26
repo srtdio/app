@@ -29,16 +29,32 @@ interface Pending {
 }
 
 let root: Root | null = null;
-let pending: Pending[] = [];
+let pending: PendingWithProgress[] = [];
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const settle = () => act(async () => wait(60));
 
+interface PendingWithProgress extends Pending {
+  progress: ((fraction: number) => void) | undefined;
+}
+
 function fakeSubmit() {
   return vi.fn(
-    (file: File, _name: string, _folder: string | null, signal?: AbortSignal) =>
+    (
+      file: File,
+      _name: string,
+      _folder: string | null,
+      signal?: AbortSignal,
+      onProgress?: (fraction: number) => void,
+    ) =>
       new Promise<UploadOutcome>((resolve) => {
-        pending.push({ name: file.name, signal, resolve });
+        const entry: PendingWithProgress = {
+          name: file.name,
+          signal,
+          resolve,
+          progress: onProgress,
+        };
+        pending.push(entry);
         // Like the XHR transport: an abort ends the request as a transport failure.
         signal?.addEventListener('abort', () => resolve(NETWORK), { once: true });
       }),
@@ -126,7 +142,8 @@ describe('X6 system Back during an upload', () => {
     const onSubmit = fakeSubmit();
     const { onSummary, onClose } = await mount(onSubmit);
     await startUpload(3);
-    expect(onSubmit).toHaveBeenCalledTimes(1);
+    // Up to three files go up at once.
+    expect(onSubmit).toHaveBeenCalledTimes(3);
     // Every upload lands in the library root: there are no folders.
     expect(onSubmit.mock.calls[0]?.[2]).toBeNull();
     const runSignal = pending[0]?.signal;
@@ -166,12 +183,14 @@ describe('X6 Stop while uploading', () => {
     expect(button('Cancel')).toBeUndefined();
   });
 
-  it('aborts the file in flight, keeps finished ones and starts no more', async () => {
+  it('aborts every file in flight, keeps finished ones and starts no more', async () => {
     const onSubmit = fakeSubmit();
     const { onSummary, onClose } = await mount(onSubmit);
-    await startUpload(3);
+    await startUpload(5);
+    expect(onSubmit).toHaveBeenCalledTimes(3);
     await finish(0);
-    expect(onSubmit).toHaveBeenCalledTimes(2);
+    // A slot freed: the fourth file starts; never more than three at once.
+    expect(onSubmit).toHaveBeenCalledTimes(4);
     const inFlight = pending[1]?.signal;
 
     await act(async () => button('Stop')?.click());
@@ -186,9 +205,9 @@ describe('X6 Stop while uploading', () => {
     await settle();
 
     expect(inFlight?.aborted).toBe(true);
-    expect(onSubmit).toHaveBeenCalledTimes(2);
+    expect(onSubmit).toHaveBeenCalledTimes(4);
     expect(onSummary).toHaveBeenCalledWith({
-      title: 'Upload stopped. 1 of 3 files uploaded.',
+      title: 'Upload stopped. 1 of 5 files uploaded.',
       sticky: false,
     });
     expect(onClose).toHaveBeenCalled();
@@ -209,7 +228,7 @@ describe('X6 the sheet goes away mid-run', () => {
 
     expect(inFlight?.aborted).toBe(true);
     expect(onToast).toHaveBeenCalledWith('Upload stopped. 1 of 3 files uploaded.');
-    expect(onSubmit).toHaveBeenCalledTimes(2);
+    expect(onSubmit).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -235,13 +254,13 @@ describe('X6 stoppableUpload with the unchanged runUploads', () => {
       file: new File(['x'], `${id}.png`, { type: 'image/png' }),
       filename: `${id}.png`,
     }));
-    const outcomes: UploadOutcome[] = [];
+    const outcomes = new Map<string, UploadOutcome>();
     const result = await runUploads(items, upload, {
-      onResult: (_id, outcome) => outcomes.push(outcome),
+      onResult: (id, outcome) => outcomes.set(id, outcome),
     });
     expect(seen).toEqual(['a', 'b']);
     expect(result.succeeded).toEqual(['a']);
-    expect(outcomes.slice(1).every(isStoppedOutcome)).toBe(true);
+    expect(['b', 'c'].every((id) => isStoppedOutcome(outcomes.get(id) ?? OK))).toBe(true);
     expect(STOPPED_MESSAGE).toBe('Not uploaded');
   });
 
@@ -283,5 +302,48 @@ describe('X6 copy for the queue', () => {
         { name: 'big.mov', message: 'Files up to 100MB only' },
       ]),
     ).toBe("2 files weren't added. Files up to 100MB only, in a supported type.");
+  });
+});
+
+describe('per-file progress while files go up in parallel', () => {
+  const bars = () => [...document.querySelectorAll<HTMLElement>('[role="progressbar"]')];
+
+  it('each row shows its own bytes-sent bar; a failure leaves the others going', async () => {
+    const onSubmit = fakeSubmit();
+    const { onSummary } = await mount(onSubmit);
+    await startUpload(3);
+    expect(bars()).toHaveLength(3);
+    expect(bars().map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['0', '0', '0']);
+
+    await act(async () => {
+      pending[0]?.progress?.(0.25);
+      pending[2]?.progress?.(0.6);
+    });
+    expect(bars().map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['25', '0', '60']);
+    // The bar animates its width only.
+    const fill = bars()[2]?.firstElementChild as HTMLElement | null;
+    expect(fill?.style.width).toBe('60%');
+    expect(fill?.className).toContain('transition-[width]');
+    expect(fill?.className).not.toMatch(/translate|transform/);
+
+    // A late, smaller value never moves a bar back.
+    await act(async () => pending[2]?.progress?.(0.4));
+    expect(bars()[1]?.getAttribute('aria-valuenow')).toBe('0');
+    expect(bars()[2]?.getAttribute('aria-valuenow')).toBe('60');
+
+    // The second file fails: it shows the existing failed line and Retry; the others go on.
+    await finish(1, { ok: false, message: 'This file was blocked for safety' });
+    expect(document.body.textContent).toContain('This file was blocked for safety');
+    expect(button('Retry')).toBeDefined();
+    expect(bars()).toHaveLength(2);
+    await act(async () => pending[0]?.progress?.(1));
+    expect(bars()[0]?.getAttribute('aria-valuenow')).toBe('100');
+
+    await finish(0);
+    await finish(2);
+    expect(onSummary).toHaveBeenCalledWith({
+      title: "Uploaded 2 of 3. Couldn't upload 1. Try again.",
+      sticky: true,
+    });
   });
 });

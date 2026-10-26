@@ -36,14 +36,23 @@ function setup(checkError: string | null, mail: MailDomainResult = 'ok') {
   const isDisposableEmail = vi.fn(isDisposableStub);
   const checkMailDomain = vi.fn<(domain: string) => Promise<MailDomainResult>>(async () => mail);
   const createUser = vi.fn(async () => ({ data: { user: { id: 'new-user' } }, error: null }));
-  const listUsers = vi.fn(async () => ({ data: { users: [] }, error: null }));
+  // The one email lookup: auth_user_id_by_email, then the user by id.
+  const adminRpc = vi.fn<(fn: string, args: { p_email: string }) => Promise<unknown>>(async () => ({
+    data: null,
+    error: null,
+  }));
+  const getUserById = vi.fn<(id: string) => Promise<unknown>>(async () => ({
+    data: { user: null },
+    error: null,
+  }));
   const callerRpc = vi.fn(async (fn: string) =>
     fn === 'member_invite_check'
       ? { data: null, error: checkError === null ? null : { message: checkError } }
       : { data: 'invite-1', error: null },
   );
   const admin = {
-    auth: { admin: { createUser, listUsers, generateLink: vi.fn() } },
+    auth: { admin: { createUser, getUserById, generateLink: vi.fn() } },
+    rpc: adminRpc,
     from: vi.fn(),
   };
   const caller = {
@@ -62,7 +71,8 @@ function setup(checkError: string | null, mail: MailDomainResult = 'ok') {
     checkMailDomain,
     isDisposableEmail,
     createUser,
-    listUsers,
+    adminRpc,
+    getUserById,
     callerRpc,
     admin,
   };
@@ -102,7 +112,7 @@ describe('invite-send member_invite_check pre-flight', () => {
       p_email: 'approver@gmail.com',
       p_role: 'client',
     });
-    expect(s.listUsers).not.toHaveBeenCalled();
+    expect(s.adminRpc).not.toHaveBeenCalled();
     expect(s.createUser).not.toHaveBeenCalled();
     expect(s.admin.from).not.toHaveBeenCalled();
     errorSpy.mockRestore();
@@ -134,14 +144,13 @@ describe('invite-send A1: unconfirmed existing accounts', () => {
       data: { user: null },
       error: { message: 'A user with this email address has already been registered' },
     } as never);
-    s.listUsers.mockResolvedValueOnce({
+    s.adminRpc.mockResolvedValueOnce({ data: 'existing-user', error: null });
+    s.getUserById.mockResolvedValueOnce({
       data: {
-        users: [
-          { id: 'existing-user', email: 'approver@brand.com', email_confirmed_at: confirmedAt },
-        ],
+        user: { id: 'existing-user', email: 'approver@brand.com', email_confirmed_at: confirmedAt },
       },
       error: null,
-    } as never);
+    });
     return s;
   }
 
@@ -175,6 +184,73 @@ describe('invite-send A1: unconfirmed existing accounts', () => {
       'member_invite_check',
       'member_invite',
     ]);
+    errorSpy.mockRestore();
+  });
+});
+
+describe('invite-send existing-user lookup', () => {
+  function existing(found: string | null) {
+    const s = setup(null);
+    s.createUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'A user with this email address has already been registered' },
+    } as never);
+    s.adminRpc.mockResolvedValueOnce({ data: found, error: null });
+    if (found !== null) {
+      s.getUserById.mockResolvedValueOnce({
+        data: { user: { id: found, email_confirmed_at: '2026-10-01T00:00:00Z' } },
+        error: null,
+      });
+    }
+    s.admin.from.mockImplementation(() => {
+      throw new Error('stop after member_invite');
+    });
+    return s;
+  }
+
+  it('finds an existing user with ONE auth_user_id_by_email call and no paging', async () => {
+    const s = existing('existing-user');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: 'approver@brand.com', role: 'client' }),
+      s.deps,
+    );
+    expect(s.adminRpc).toHaveBeenCalledTimes(1);
+    expect(s.adminRpc).toHaveBeenCalledWith('auth_user_id_by_email', {
+      p_email: 'approver@brand.com',
+    });
+    expect(s.getUserById).toHaveBeenCalledWith('existing-user');
+    expect(s.callerRpc.mock.calls.map((c) => c[0])).toEqual([
+      'member_invite_check',
+      'member_invite',
+    ]);
+    errorSpy.mockRestore();
+  });
+
+  it('not found: provisioning_failed, no invite row', async () => {
+    const s = existing(null);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: 'approver@brand.com', role: 'client' }),
+      s.deps,
+    );
+    expect(res.status).toBe(500);
+    expect(s.adminRpc).toHaveBeenCalledTimes(1);
+    expect(s.getUserById).not.toHaveBeenCalled();
+    expect(s.callerRpc.mock.calls.map((c) => c[0])).toEqual(['member_invite_check']);
+    errorSpy.mockRestore();
+  });
+
+  it('mixed-case input is looked up lowercased', async () => {
+    const s = existing('existing-user');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await handleInviteSend(
+      request({ workspace_id: WORKSPACE_ID, email: '  Approver@Brand.COM ', role: 'client' }),
+      s.deps,
+    );
+    expect(s.adminRpc).toHaveBeenCalledWith('auth_user_id_by_email', {
+      p_email: 'approver@brand.com',
+    });
     errorSpy.mockRestore();
   });
 });
@@ -422,7 +498,7 @@ describe('invite-send email delivery', () => {
 describe('invite-send email legitimacy checks', () => {
   function expectNothingProvisioned(s: ReturnType<typeof setup>) {
     expect(s.callerRpc).not.toHaveBeenCalled();
-    expect(s.listUsers).not.toHaveBeenCalled();
+    expect(s.adminRpc).not.toHaveBeenCalled();
     expect(s.createUser).not.toHaveBeenCalled();
     expect(s.admin.from).not.toHaveBeenCalled();
   }

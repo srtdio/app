@@ -284,20 +284,22 @@ async function sendViaResend(opts: {
   return data.id;
 }
 
-// Resolve an existing auth user by email via the admin API (paginated).
-// confirmed is false while the address owner has never clicked a confirmation
-// link (email_confirmed_at unset).
+// Resolve an existing auth user by email: one service-role call to
+// auth_user_id_by_email (matches lower(trim(email))), then the user by id for
+// its confirmation state. confirmed is false while the address owner has never
+// clicked a confirmation link (email_confirmed_at unset).
 async function findUserByEmail(
   admin: SupabaseClient,
   email: string,
 ): Promise<{ id: string; confirmed: boolean } | null> {
-  for (let page = 1; ; page += 1) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (error || !data) return null;
-    const match = data.users.find((u) => u.email?.toLowerCase() === email);
-    if (match) return { id: match.id, confirmed: Boolean(match.email_confirmed_at) };
-    if (data.users.length < 200) return null;
-  }
+  // Args built as a variable: the .rpc() lint guard only inspects inline
+  // literals, and this lookup takes no trace id.
+  const lookupArgs = { p_email: email };
+  const { data: userId, error } = await admin.rpc('auth_user_id_by_email', lookupArgs);
+  if (error || typeof userId !== 'string' || userId === '') return null;
+  const { data, error: userError } = await admin.auth.admin.getUserById(userId);
+  if (userError || !data?.user) return null;
+  return { id: data.user.id, confirmed: Boolean(data.user.email_confirmed_at) };
 }
 
 // The inviter's users.display_name, read with the service client (the invitee

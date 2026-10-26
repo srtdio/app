@@ -26,6 +26,8 @@ const OTHER_USER = '55555555-5555-7555-8555-555555555555';
 const OTHER_SCAN = new Uint8Array([0x50, 0x60, 0x70, 0x80]);
 const FOLDER = '88888888-8888-7888-8888-888888888888';
 const TRACE = '0192f8a0-7d3e-7c4b-9a1f-2b3c4d5e6f70';
+/** Stand-in for env.SHARED_ASSET_BUCKET. */
+const SHARED = 'srtdio-files';
 
 /** Seed a live folder into the in-memory repository so an upload can target it. */
 function seedFolder(repo: InMemoryAssetRepository, name: string): void {
@@ -55,6 +57,7 @@ function deps(scanner: VirusScanner = new NoOpScanner()): PipelineDeps & {
     storage: new InMemoryStorageClient(),
     repository: new InMemoryAssetRepository(),
     scanner,
+    sharedBucket: SHARED,
   };
 }
 
@@ -101,9 +104,11 @@ describe('runUploadPipeline', () => {
     const asset = d.repository.assets.get(first.value.assetId);
     expect(asset?.current_version_id).toBe(first.value.versionId);
 
-    // New layout: grouped by kind, no workspace prefix, version-prefixed name.
-    expect(first.value.r2Key).toBe(`images/${first.value.assetId}/v1-photo.jpg`);
-    expect(d.storage.get(d.repository.assetBucket, first.value.r2Key)).toBeDefined();
+    // The empty workspace moved to the shared bucket: ID-only key, no filename.
+    expect(first.value.r2Key).toBe(
+      `ws/${WORKSPACE_A}/${first.value.assetId}/${first.value.versionId}/original`,
+    );
+    expect(d.storage.get(SHARED, first.value.r2Key)).toBeDefined();
   });
 
   it('re-upload of identical content reuses the asset and adds no version', async () => {
@@ -239,7 +244,7 @@ describe('runUploadPipeline', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
 
-    const stored = d.storage.get(d.repository.assetBucket, res.value.r2Key);
+    const stored = d.storage.get(await d.repository.getAssetBucket(WORKSPACE_A), res.value.r2Key);
     const body = stored?.body ?? new Uint8Array();
     expect(hasExifSegment(body)).toBe(false);
     expect(new TextDecoder().decode(body)).not.toContain(GPS_SENTINEL);
@@ -477,7 +482,12 @@ describe('renameAsset', () => {
 
   it('updates only display_name, leaving filename and the version rows untouched', async () => {
     const created = await runUploadPipeline(
-      { storage: new InMemoryStorageClient(), repository: repo, scanner: new NoOpScanner() },
+      {
+        storage: new InMemoryStorageClient(),
+        repository: repo,
+        scanner: new NoOpScanner(),
+        sharedBucket: SHARED,
+      },
       input(),
     );
     expect(created.ok).toBe(true);
@@ -508,7 +518,12 @@ describe('renameAsset', () => {
 
   it('audits display_name with the previous display_name', async () => {
     const created = await runUploadPipeline(
-      { storage: new InMemoryStorageClient(), repository: repo, scanner: new NoOpScanner() },
+      {
+        storage: new InMemoryStorageClient(),
+        repository: repo,
+        scanner: new NoOpScanner(),
+        sharedBucket: SHARED,
+      },
       input(),
     );
     expect(created.ok).toBe(true);
@@ -529,7 +544,12 @@ describe('renameAsset', () => {
     const repository = new InMemoryAssetRepository();
     seedFolder(repository, 'Photos');
     const created = await runUploadPipeline(
-      { storage: new InMemoryStorageClient(), repository, scanner: new NoOpScanner() },
+      {
+        storage: new InMemoryStorageClient(),
+        repository,
+        scanner: new NoOpScanner(),
+        sharedBucket: SHARED,
+      },
       input({ folderId: FOLDER }),
     );
     expect(created.ok).toBe(true);
@@ -550,7 +570,12 @@ describe('renameAsset', () => {
 
   it('writes an asset.rename audit row with the authenticated actor', async () => {
     const created = await runUploadPipeline(
-      { storage: new InMemoryStorageClient(), repository: repo, scanner: new NoOpScanner() },
+      {
+        storage: new InMemoryStorageClient(),
+        repository: repo,
+        scanner: new NoOpScanner(),
+        sharedBucket: SHARED,
+      },
       input(),
     );
     expect(created.ok).toBe(true);

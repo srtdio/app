@@ -6,3 +6,4 @@ export * from './svg';
 export * from './virus-scan';
 export * from './repository';
 export * from './pipeline';
+export * from './upload-target';

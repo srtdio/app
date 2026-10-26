@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   PART_RETRIES,
   RESUMABLE_PART_SIZE,
@@ -7,6 +7,7 @@ import {
   type UploadConfig,
   type UploadFetcher,
 } from '@/lib/asset-upload';
+import type { ThumbnailResult } from '@/lib/files/thumbnail';
 
 const WORKSPACE = '11111111-1111-7111-8111-111111111111';
 const BASE = 'https://upload.test';
@@ -165,5 +166,199 @@ describe('resumable upload', () => {
       Promise.resolve(jsonResponse(413, { error: { code: 'file_too_large', message: 'x' } }));
     const outcome = await uploadAssetFile(bigFile(), config(fetcher));
     expect(outcome).toEqual({ ok: false, message: 'Files up to 100MB only' });
+  });
+});
+
+describe('thumbnail alongside the original', () => {
+  it('starts the thumbnail at once and sends every part without waiting for it', async () => {
+    let finishThumbnail: (result: ThumbnailResult) => void = () => undefined;
+    const makeThumbnail = vi.fn(
+      () =>
+        new Promise<ThumbnailResult>((resolve) => {
+          finishThumbnail = resolve;
+        }),
+    );
+    const worker = fakeWorker();
+    // Whether the thumbnail had started (and not finished) when each part went out.
+    let thumbnailDone = false;
+    const seenAtPart: { started: number; done: boolean }[] = [];
+    const fetcher: UploadFetcher = (input, init) => {
+      if (new URL(input).pathname === '/multipart/part') {
+        seenAtPart.push({ started: makeThumbnail.mock.calls.length, done: thumbnailDone });
+      }
+      return worker.fetcher(input, init);
+    };
+
+    const upload = uploadAssetFile(bigFile(), config(fetcher, { makeThumbnail }));
+    for (let i = 0; i < 50 && seenAtPart.length < 3; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    // All three parts of the original went up while the thumbnail was still being made.
+    expect(seenAtPart).toEqual([
+      { started: 1, done: false },
+      { started: 1, done: false },
+      { started: 1, done: false },
+    ]);
+    // The complete call never waits for it: it goes without the thumbnail.
+    const outcome = await upload;
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a1', assetVersionId: 'v1' });
+    const complete = worker.calls.find((c) => c.path === '/multipart/complete');
+    expect((complete?.body as FormData).get('thumbnail')).toBeNull();
+    expect(worker.calls.map((c) => c.path)).not.toContain('/thumbnail');
+
+    // When it is made it is attached to the stored version on POST /thumbnail.
+    thumbnailDone = true;
+    finishThumbnail({
+      ok: true,
+      blob: new Blob(['jpeg'], { type: 'image/jpeg' }),
+      width: 580,
+      height: 800,
+      pageCount: 4,
+    });
+    await vi.waitFor(() => expect(worker.calls.map((c) => c.path)).toContain('/thumbnail'));
+    const late = worker.calls.find((c) => c.path === '/thumbnail');
+    const form = late?.body as FormData;
+    expect(late?.method).toBe('POST');
+    expect(form.get('asset_version_id')).toBe('v1');
+    expect(form.get('thumbnail')).toBeInstanceOf(Blob);
+    expect(form.get('thumbnail_page_count')).toBe('4');
+  });
+
+  it('a thumbnail made before the parts finish rides on the complete form, no POST /thumbnail', async () => {
+    const worker = fakeWorker();
+    const outcome = await uploadAssetFile(
+      bigFile(),
+      config(worker.fetcher, {
+        makeThumbnail: () =>
+          Promise.resolve({
+            ok: true as const,
+            blob: new Blob(['jpeg'], { type: 'image/jpeg' }),
+            width: 580,
+            height: 800,
+            pageCount: 4,
+          }),
+      }),
+    );
+    expect(outcome.ok).toBe(true);
+    const form = worker.calls.at(-1)?.body as FormData;
+    expect(worker.calls.at(-1)?.path).toBe('/multipart/complete');
+    expect(form.get('thumbnail')).toBeInstanceOf(Blob);
+    expect(form.get('thumbnail_page_count')).toBe('4');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(worker.calls.map((c) => c.path)).not.toContain('/thumbnail');
+  });
+
+  it('a thumbnail that fails never holds up or fails the original', async () => {
+    const worker = fakeWorker();
+    const outcome = await uploadAssetFile(
+      bigFile(),
+      config(worker.fetcher, { makeThumbnail: () => Promise.reject(new Error('decode')) }),
+    );
+    expect(outcome.ok).toBe(true);
+    const form = worker.calls.at(-1)?.body as FormData;
+    expect(form.get('thumbnail')).toBeNull();
+  });
+});
+
+describe('resumable progress per part over XHR', () => {
+  /** A fake XHR worker: each part PUT reports its bytes in halves, then succeeds. */
+  function xhrWorker(failFirstPart2 = false) {
+    let part2Attempts = 0;
+    return (): XMLHttpRequest => {
+      const request = {
+        url: '',
+        status: 0,
+        responseText: '',
+        upload: { onprogress: null as ((event: ProgressEvent) => void) | null },
+        onload: null as (() => void) | null,
+        onerror: null as (() => void) | null,
+        onabort: null as (() => void) | null,
+        ontimeout: null as (() => void) | null,
+        open(_method: string, url: string) {
+          request.url = url;
+        },
+        setRequestHeader() {},
+        abort() {},
+        send(body: unknown) {
+          const path = new URL(request.url).pathname;
+          const reply = (status: number, json: unknown): void => {
+            request.status = status;
+            request.responseText = JSON.stringify(json);
+            request.onload?.();
+          };
+          if (path === '/multipart/create') {
+            reply(201, { key: 'k', upload_id: 'u' });
+          } else if (path === '/multipart/part') {
+            const size = (body as Blob).size;
+            const part = Number(new URL(request.url).searchParams.get('part_number'));
+            const tick = (loaded: number): void =>
+              request.upload.onprogress?.({
+                lengthComputable: true,
+                loaded,
+                total: size,
+              } as ProgressEvent);
+            tick(size / 2);
+            if (part === 2 && failFirstPart2 && part2Attempts === 0) {
+              part2Attempts += 1;
+              request.onerror?.();
+              return;
+            }
+            tick(size);
+            reply(200, { part_number: part });
+          } else if (path === '/multipart/parts') {
+            reply(200, { parts: [] });
+          } else {
+            reply(201, { asset: { assetId: 'a1', versionId: 'v1', reused: false } });
+          }
+        },
+      };
+      return request as unknown as XMLHttpRequest;
+    };
+  }
+
+  function xhrConfig(createRequest: () => XMLHttpRequest, onProgress: (f: number) => void) {
+    return {
+      endpoint: BASE,
+      token: 't',
+      workspaceId: WORKSPACE,
+      origin: 'library' as const,
+      filename: 'big.pdf',
+      makeThumbnail: () => Promise.resolve({ ok: false, reason: 'failed' } as const),
+      sleep: () => Promise.resolve(),
+      xhr: { traceId: 'trace-1', createRequest, onProgress },
+    };
+  }
+
+  it('reports bytes sent inside each part, not only when a part ends', async () => {
+    const progress: number[] = [];
+    const file = bigFile();
+    const outcome = await uploadAssetFile(
+      file,
+      xhrConfig(xhrWorker(), (f) => progress.push(f)),
+    );
+    expect(outcome.ok).toBe(true);
+    const half = RESUMABLE_PART_SIZE / 2;
+    expect(progress).toEqual([
+      half / file.size,
+      RESUMABLE_PART_SIZE / file.size,
+      (RESUMABLE_PART_SIZE + half) / file.size,
+      (RESUMABLE_PART_SIZE * 2) / file.size,
+      (RESUMABLE_PART_SIZE * 2 + 1.5) / file.size,
+      1,
+    ]);
+  });
+
+  it('never moves backward when a part is retried', async () => {
+    const progress: number[] = [];
+    const outcome = await uploadAssetFile(
+      bigFile(),
+      xhrConfig(xhrWorker(true), (f) => progress.push(f)),
+    );
+    expect(outcome.ok).toBe(true);
+    for (let i = 1; i < progress.length; i += 1) {
+      expect(progress[i]).toBeGreaterThan(progress[i - 1] ?? -1);
+    }
+    expect(progress.at(-1)).toBe(1);
   });
 });
