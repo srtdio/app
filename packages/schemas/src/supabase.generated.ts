@@ -10186,6 +10186,15 @@ export type Database = {
         Args: { p_bucket: string; p_trace_id: string; p_workspace_id: string }
         Returns: undefined
       }
+      storage_workspace_move: {
+        Args: {
+          p_bucket: string
+          p_expected_objects: number
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       test_session_create: {
         Args: { p_email: string; p_trace_id: string }
         Returns: Json

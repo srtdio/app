@@ -10,6 +10,10 @@ compatibility_flags = ["nodejs_compat"]
 [triggers]
 crons = ["30 3 * * *"]
 
+[vars]
+# The one private Asia-Pacific bucket for workspace files (not a secret).
+SHARED_ASSET_BUCKET = "srtdio-files"
+
 # Structured logs to stdout; Cloudflare Logpush ships them to the R2 sink
 # srtdio-logs (see docs/cloudflare-logpush-setup.md).
 [observability]
@@ -26,5 +30,3 @@ head_sampling_rate = 1.0
 #   AGORA_APP_ID                    - Agora App ID; pairs with the certificate to sign tokens
 #   AGORA_APP_CERTIFICATE           - Agora App Certificate; REST app-token signing secret
 #   AGORA_CHAT_REST_URL             - Agora Chat REST base URL (host + org + app)
-#   SHARED_ASSET_BUCKET             - optional: the shared asset bucket (keys under ws/<workspace_id>/);
-#                                     unset until that bucket exists, then no workspace matches it
