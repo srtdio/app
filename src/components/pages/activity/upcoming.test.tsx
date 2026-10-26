@@ -408,7 +408,7 @@ describe('the page wiring', () => {
 
   it('Upcoming loads its own rows, never the inbox feed', () => {
     expect(src).toMatch(
-      /if \(state === 'upcoming'\) void loadUpcoming\(\);\s*else void loadActivity\('reset', arrival\);/,
+      /if \(state === 'upcoming'\) void loadUpcoming\(arrival\);\s*else void loadActivity\('reset', arrival\);/,
     );
   });
 
