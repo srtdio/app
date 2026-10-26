@@ -98,6 +98,7 @@ import { env } from '@/lib/env';
 import type { PresignDeps } from '@/lib/asset-presign';
 import { fetchMemberRole, listRootAssetLabels } from '@/lib/assets';
 import { uploadAssetFile, type UploadOutcome } from '@/lib/asset-upload';
+import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 import { useNewTrace } from '@/lib/trace-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useSession } from '@/lib/session-context';
@@ -1366,6 +1367,7 @@ export function PostDetailPage({
         filename: file.name,
         displayName,
         folderId,
+        attachThumbnail: attachLateThumbnail,
         // XHR so the row's bar shows real bytes sent and Stop aborts the
         // request in flight; the transport sets X-Trace-Id itself.
         xhr: {

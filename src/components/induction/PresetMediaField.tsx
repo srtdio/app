@@ -23,6 +23,7 @@ import {
 import { frameFor } from '@/lib/platform-specs';
 import { precheckFile } from '@/lib/asset-upload';
 import { uploadChatAttachment } from '@/lib/chat/attachments';
+import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { INDUCTION_KEYS, UPLOAD_RETRIES, uploadFailedReason, withRetries } from '@/lib/induction';
@@ -69,6 +70,7 @@ async function attemptUpload(input: {
     origin: 'library',
     token: input.token,
     endpoint: input.endpoint,
+    attachThumbnail: attachLateThumbnail,
     xhr: { traceId: input.traceId, onProgress: input.onProgress },
   });
   return result.ok ? { ok: true, value: result.versionId } : { ok: false };

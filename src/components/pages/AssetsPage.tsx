@@ -53,6 +53,7 @@ import {
   type RenameOutcome,
   type UploadOutcome,
 } from '@/lib/asset-upload';
+import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 import { assetDelete, assetDeleteMany } from '@srtdio/rpc';
 import {
   ASSET_SORT_DEFAULT,
@@ -648,6 +649,7 @@ export function AssetsPage() {
         filename: file.name,
         displayName,
         folderId: targetFolderId,
+        attachThumbnail: attachLateThumbnail,
         // XHR so Stop can abort the request in flight (fetchWithTrace takes no
         // signal) and the row's bar shows real bytes sent; the transport sets
         // X-Trace-Id itself.

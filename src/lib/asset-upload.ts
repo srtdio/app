@@ -10,7 +10,6 @@
 // drive it with a mock and the app passes fetchWithTrace.
 
 import { ALLOWED_MIME_TYPES, isAllowedMime } from '@srtdio/storage';
-import { logger } from '@/lib/logger';
 import { reportWorkspaceFull } from '@/lib/storage-full';
 import { TRACE_ID_HEADER } from '@/lib/trace';
 import {
@@ -120,6 +119,16 @@ export type UploadOutcome =
 /** Makes the thumbnail sent with a pdf/video upload or an image's list copy; tests inject a fake. */
 type ThumbnailMaker = (file: File) => Promise<ThumbnailResult>;
 
+/**
+ * Attaches a thumbnail to a version already stored, after the outcome resolved.
+ * Never throws; resolves to the stored rendition, or null when none landed.
+ */
+export type ThumbnailAttacher = (
+  config: UploadConfig,
+  versionId: string,
+  thumbnail: Promise<ThumbnailResult | null>,
+) => Promise<StoredThumbnail | null>;
+
 export type UploadConfig = UploadConfigBase & UploadTransport;
 
 /**
@@ -161,6 +170,14 @@ interface UploadConfigBase {
    * stored rendition's size listen here. Never called for a failed thumbnail.
    */
   onThumbnail?: (thumbnail: StoredThumbnail) => void;
+  /**
+   * Attaches a thumbnail still being made when the original is stored (POST
+   * /thumbnail in the background). Browser callers pass attachLateThumbnail
+   * from asset-thumbnail-attach.ts; it lives there so this module (reached by
+   * Workers through chat/attachments) never imports the browser logger.
+   * Without it no late thumbnail is attached.
+   */
+  attachThumbnail?: ThumbnailAttacher;
   /** Waits between part retries; tests inject an instant one. */
   sleep?: (ms: number) => Promise<void>;
 }
@@ -289,7 +306,7 @@ export interface UploadCompleteDetail {
   workspaceId: string;
 }
 
-function dispatchUploadComplete(workspaceId: string): void {
+export function dispatchUploadComplete(workspaceId: string): void {
   // No window outside the browser (node-run tests): nothing is listening there.
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
@@ -376,6 +393,7 @@ export async function uploadAssetFile(
   // when the worker returned it, so callers that ignore it are unaffected.
   const storedThumbnail = thumbnailField(response.body);
   if (
+    config.attachThumbnail !== undefined &&
     wantsThumbnail &&
     !sentWithUpload &&
     storedThumbnail === null &&
@@ -383,7 +401,7 @@ export async function uploadAssetFile(
   ) {
     // The original is stored and the outcome goes back now; the thumbnail is
     // attached in the background and never awaited here.
-    void attachLateThumbnail(config, asset.assetVersionId, thumbnail);
+    void config.attachThumbnail(config, asset.assetVersionId, thumbnail);
   }
   dispatchUploadComplete(config.workspaceId);
   return {
@@ -396,68 +414,20 @@ export async function uploadAssetFile(
 }
 
 /**
- * Attach a thumbnail to a version already stored: once the thumbnail is made,
- * POST it to /thumbnail over the upload's own transport (same Bearer and
- * X-Trace-Id), then announce the upload again and tell config.onThumbnail.
- * Runs after the outcome resolved; never throws and never changes the
- * outcome: a missing thumbnail or a failed post is null (the failure is logged).
+ * POST {workspace_id, asset_version_id, thumbnail, thumbnail_page_count?} to
+ * /thumbnail over the upload's own transport (same Bearer and X-Trace-Id).
+ * Resolves on any HTTP status; rejects on a transport failure.
  */
-async function attachLateThumbnail(
-  config: UploadConfig,
-  versionId: string,
-  thumbnail: Promise<ThumbnailResult | null>,
-): Promise<StoredThumbnail | null> {
-  try {
-    const made = await thumbnail;
-    if (made === null || !made.ok) return null;
-    const stored = await postThumbnail(config, versionId, made);
-    if (stored === null) return null;
-    dispatchUploadComplete(config.workspaceId);
-    config.onThumbnail?.(stored);
-    return stored;
-  } catch (error) {
-    logger.warn('asset thumbnail attach failed', {
-      asset_version_id: versionId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
-/** POST {workspace_id, asset_version_id, thumbnail, thumbnail_page_count?} to /thumbnail. Never throws. */
-async function postThumbnail(
+export function postThumbnail(
   config: UploadConfig,
   versionId: string,
   made: Thumbnail,
-): Promise<StoredThumbnail | null> {
+): Promise<{ ok: boolean; status: number; body: unknown }> {
   const form = new FormData();
   form.append('workspace_id', config.workspaceId);
   form.append('asset_version_id', versionId);
   appendThumbnail(form, made);
-  try {
-    const reply = await send(
-      config,
-      'POST',
-      workerRoute(config.endpoint, '/thumbnail'),
-      form,
-      null,
-    );
-    if (!reply.ok) {
-      logger.warn('asset thumbnail attach refused', {
-        asset_version_id: versionId,
-        status: reply.status,
-        code: errorCode(reply.body),
-      });
-      return null;
-    }
-    return thumbnailField(reply.body);
-  } catch (error) {
-    logger.warn('asset thumbnail attach failed', {
-      asset_version_id: versionId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
+  return send(config, 'POST', workerRoute(config.endpoint, '/thumbnail'), form, null);
 }
 
 /** Add a made thumbnail (and a PDF's page count) to the upload form; nothing otherwise. */
@@ -497,7 +467,7 @@ function positiveInt(value: unknown): number | null {
 }
 
 /** Read the stored thumbnail ({thumbnail:{width,height,page_count?}}); null when absent or malformed. */
-function thumbnailField(body: unknown): StoredThumbnail | null {
+export function thumbnailField(body: unknown): StoredThumbnail | null {
   if (typeof body !== 'object' || body === null) return null;
   const raw = (body as { thumbnail?: unknown }).thumbnail;
   if (typeof raw !== 'object' || raw === null) return null;
@@ -527,7 +497,8 @@ function refused(code: string, file: File): UploadFailure {
   return { ok: false, message: uploadErrorMessage(code), code };
 }
 
-function errorCode(body: unknown): string {
+/** The worker's error.code, or 'network' when the body carries none. */
+export function errorCode(body: unknown): string {
   if (typeof body === 'object' && body !== null) {
     const error = (body as { error?: unknown }).error;
     if (typeof error === 'object' && error !== null) {

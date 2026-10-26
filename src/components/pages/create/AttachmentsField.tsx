@@ -30,6 +30,7 @@ import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
+import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 import { FileTiles, type PendingTile } from '@/components/pages/create/FileTiles';
 import { RemoveButton } from '@/components/pages/create/RemoveButton';
 import { createLimiter, UPLOAD_CONCURRENCY } from '@/components/pages/create/limiter';
@@ -658,6 +659,7 @@ export function AttachmentsField({
         origin: 'library',
         token,
         endpoint: uploadEndpoint,
+        attachThumbnail: attachLateThumbnail,
         xhr: { traceId: newTrace(), onProgress },
       });
     },

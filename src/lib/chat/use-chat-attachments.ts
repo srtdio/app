@@ -19,6 +19,7 @@ import { env } from '@/lib/env';
 import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import type { AssetOrigin } from '@/lib/asset-upload';
+import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 import {
   CHAT_UPLOAD_FAILED,
   uploadChatAttachment,
@@ -125,6 +126,7 @@ function useAttachments(origin: AssetOrigin): ChatAttachments {
             origin,
             token,
             endpoint,
+            attachThumbnail: attachLateThumbnail,
             xhr: {
               traceId: newTrace(),
               ...(onProgress !== undefined ? { onProgress } : {}),
