@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  dropWorkspaceReads,
   invalidateReads,
+  peekKept,
   peekRead,
   primeRead,
   READ_FRESH_MS,
@@ -68,13 +70,78 @@ describe('sharedRead', () => {
     expect(peekRead('k')).toBeUndefined();
   });
 
-  it('invalidates by prefix and on workspace-data-changed', () => {
+  it('marks stale by prefix and on workspace-data-changed, keeping the value', () => {
     primeRead(readKey('u', 'w', 'a'), 1);
     primeRead(readKey('u', 'v', 'a'), 2);
     invalidateReads(readKey('u', 'w', ''));
     expect(peekRead(readKey('u', 'w', 'a'))).toBeUndefined();
+    expect(peekKept(readKey('u', 'w', 'a'))).toBe(1);
     expect(peekRead(readKey('u', 'v', 'a'))).toBe(2);
     window.dispatchEvent(new CustomEvent(WORKSPACE_DATA_CHANGED_EVENT));
     expect(peekRead(readKey('u', 'v', 'a'))).toBeUndefined();
+    expect(peekKept(readKey('u', 'v', 'a'))).toBe(2);
+  });
+
+  it('a stale key reads again on the next sharedRead', async () => {
+    const load = vi.fn().mockResolvedValueOnce('old').mockResolvedValueOnce('new');
+    await sharedRead('k', load);
+    invalidateReads('k');
+    expect(peekKept('k')).toBe('old');
+    await expect(sharedRead('k', load)).resolves.toBe('new');
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(peekKept('k')).toBe('new');
+  });
+});
+
+describe('peekKept', () => {
+  it('keeps a value past the freshness window', async () => {
+    vi.useFakeTimers();
+    await sharedRead('k', () => Promise.resolve('rows'));
+    vi.advanceTimersByTime(READ_FRESH_MS * 10);
+    expect(peekRead('k')).toBeUndefined();
+    expect(peekKept('k')).toBe('rows');
+  });
+
+  it('keeps the old value while a newer read runs, then takes the new one', async () => {
+    vi.useFakeTimers();
+    await sharedRead('k', () => Promise.resolve('old'));
+    vi.advanceTimersByTime(READ_FRESH_MS + 1);
+    let resolve: (v: string) => void = () => {};
+    const next = sharedRead('k', () => new Promise<string>((r) => (resolve = r)));
+    expect(peekKept('k')).toBe('old');
+    resolve('new');
+    await next;
+    expect(peekKept('k')).toBe('new');
+  });
+
+  it('keeps the old value when the newer read fails or is not ok', async () => {
+    primeRead('k', { ok: true });
+    invalidateReads('k');
+    await expect(sharedRead('k', () => Promise.reject(new Error('x')))).rejects.toThrow('x');
+    expect(peekKept('k')).toEqual({ ok: true });
+    await sharedRead('k', () => Promise.resolve({ ok: false }), { isOk: (v) => v.ok });
+    expect(peekKept('k')).toEqual({ ok: true });
+  });
+
+  it('a primed write updates the kept value', () => {
+    primeRead('k', 'read');
+    primeRead('k', 'written');
+    expect(peekKept('k')).toBe('written');
+  });
+
+  it('signout clears every kept value', () => {
+    primeRead(readKey('u', 'w', 'a'), 1);
+    window.dispatchEvent(new CustomEvent(SIGNOUT_EVENT));
+    expect(peekKept(readKey('u', 'w', 'a'))).toBeUndefined();
+  });
+
+  it('dropWorkspaceReads deletes only that workspace for that user', () => {
+    primeRead(readKey('u', 'w', 'a'), 1);
+    primeRead(readKey('u', 'w2', 'a'), 2);
+    primeRead(readKey('x', 'w', 'a'), 3);
+    dropWorkspaceReads('u', 'w');
+    expect(peekKept(readKey('u', 'w', 'a'))).toBeUndefined();
+    expect(peekKept(readKey('u', 'w2', 'a'))).toBe(2);
+    expect(peekKept(readKey('x', 'w', 'a'))).toBe(3);
   });
 });

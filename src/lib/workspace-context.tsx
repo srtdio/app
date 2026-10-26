@@ -20,6 +20,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { getCurrentTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
 import { primeWorkspacePlatforms } from '@/lib/workspace-context-platform';
+import { dropWorkspaceReads } from '@/lib/session-read';
 import { dispatchInductionRefresh } from '@/lib/induction';
 import { finishInduction } from '@/components/induction/induction-data';
 
@@ -363,15 +364,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const workspaceDeleted = useCallback(
     async (id: string, name: string) => {
       await skipInductionAfterDelete(supabase, newTrace());
+      if (userId !== null) dropWorkspaceReads(userId, id);
       const remaining = workspacesRef.current.filter((row) => row.id !== id);
       setWorkspaces(remaining);
       setActiveId((prev) => nextActiveId(prev === id ? null : prev, remaining));
       setDeletedWorkspace({ name });
     },
-    [newTrace],
+    [newTrace, userId],
   );
 
-  // Another member deleted the active workspace: RLS stops listing it. Re-list
+  // Another member deleted the active workspace (or removed this member): RLS
+  // stops listing it, and its kept session reads are deleted. Re-list
   // quietly when the tab comes back and move to the remaining workspace (or
   // none, the create form). No loading state and no error: a failed read keeps
   // what is shown.
@@ -385,6 +388,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       void listWorkspaces(supabase).then(
         (res) => {
           if (!active || !res.ok || res.data.some((w) => w.id === current)) return;
+          if (userId !== null) dropWorkspaceReads(userId, current);
           setWorkspaces(res.data);
           setActiveId((prev) => nextActiveId(prev === current ? null : prev, res.data));
         },
@@ -398,7 +402,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', recheck);
       document.removeEventListener('visibilitychange', recheck);
     };
-  }, [loaded]);
+  }, [loaded, userId]);
 
   // The listed rows already carry each platform: seed the sheets' lookup.
   useEffect(() => {
