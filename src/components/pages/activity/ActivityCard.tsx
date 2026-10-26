@@ -42,7 +42,6 @@ import {
   isChatMention,
   isWelcome,
   opensNothing,
-  scheduledReceiver,
   segmentSelfMentions,
   upcomingChat,
   upcomingTag,
@@ -51,12 +50,7 @@ import {
   type SnoozeKind,
   type UpcomingItem,
 } from '@/components/pages/activity/data';
-import {
-  ONLY_YOU_LABEL,
-  alertDisplayTime,
-  failureInPlainWords,
-  scheduledFailedLead,
-} from '@/lib/inbox/alerts';
+import { ONLY_YOU_LABEL, alertDisplayTime } from '@/lib/inbox/alerts';
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatRelative } from '@/lib/time';
@@ -418,16 +412,12 @@ function AlertTitle({
   alert: AlertInfo;
   side: ViewerSide;
 }): ReactElement {
-  if (alert.kind === 'failed') {
-    return (
-      <>
-        <span className="text-bad">{scheduledFailedLead(scheduledReceiver(alert))}</span>
-        <span className="font-normal text-fg-2"> {failureInPlainWords(alert.reason)}</span>
-      </>
-    );
-  }
   const line = alertTitle(item, alert, side);
-  return item.eventType === 'task_due' ? <span className="text-bad">{line}</span> : <>{line}</>;
+  return alert.kind === 'failed' || item.eventType === 'task_due' ? (
+    <span className="text-bad">{line}</span>
+  ) : (
+    <>{line}</>
+  );
 }
 
 /**

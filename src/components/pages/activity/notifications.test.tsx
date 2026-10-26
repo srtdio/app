@@ -448,18 +448,24 @@ describe('alert wording (the bell lines on Activity cards)', () => {
     expect(alertTitle(s, { ...s.alert, chatType: 'group' }, 'agency')).toBe(
       'Your scheduled message was sent to Group',
     );
+    // A failed send: the lead is the title, its reason the body (never its preview).
     expect(alertTitle(f, f.alert, 'agency')).toBe(
-      "Couldn't send your scheduled message to Direct message. You're no longer in this chat",
+      "Couldn't send your scheduled message to Direct message.",
     );
     expect(alertTitle(f, { ...f.alert, chatType: 'dm', chatName: 'Priya Shah' }, 'agency')).toBe(
-      "Couldn't send your scheduled message to Priya Shah. You're no longer in this chat",
+      "Couldn't send your scheduled message to Priya Shah.",
     );
     expect(
       alertTitle(f, { ...f.alert, chatType: 'group', chatName: 'Launch crew' }, 'agency'),
-    ).toBe("Couldn't send your scheduled message to Launch crew. You're no longer in this chat");
+    ).toBe("Couldn't send your scheduled message to Launch crew.");
     expect(alertTitle(f, { ...f.alert, chatType: 'notes' }, 'agency')).toBe(
-      "Couldn't send your scheduled message to Personal notes. You're no longer in this chat",
+      "Couldn't send your scheduled message to Personal notes.",
     );
+    expect(alertBody(f.alert)).toBe("You're no longer in this chat");
+    expect(alertBody({ ...f.alert, preview: 'See you at 5' })).toBe(
+      "You're no longer in this chat",
+    );
+    expect(alertBody({ ...s.alert, preview: 'See you at 5' })).toBe('See you at 5');
     expect(alertTitle(p, p.alert, 'client')).toBe('Priya shared Week of 12 Oct with you');
     expect(alertTitle(p, p.alert, 'agency')).toBe('Priya opened Week of 12 Oct for approvers');
     expect(alertTitle(t, t.alert, 'agency')).toBe(`Leo · added ${String.fromCharCode(35)}3 Hook`);
@@ -495,12 +501,31 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
       /class="text-bad">Couldn&#x27;t send your scheduled message to Direct message\.</,
     );
     expect(html).not.toContain('Not sent');
-    expect(html).toContain('no longer in this chat');
+    // The reason is the body line, below the title, exactly once.
+    expect(html).toMatch(
+      /<p class="mt-\[3px\] line-clamp-2 text-base text-fg-2 \[overflow-wrap:anywhere\]">You&#x27;re no longer in this chat<\/p>/,
+    );
+    expect(html.split('no longer in this chat')).toHaveLength(2);
     expect(html).toContain('data-activity-action="retry"');
     expect(html).toContain('data-activity-action="edit"');
     expect(html).toMatch(/class="[^"]*h-11[^"]*"[^>]*data-activity-action="retry"/);
     expect(html).not.toMatch(/role="button"[^>]*data-activity-lead/);
     expect(html).toContain('data-activity-alert-icon="failed"');
+  });
+
+  it('a failed card body is its reason, never the message preview; a sent card keeps it', () => {
+    const f = failed();
+    const s = sent();
+    if (f.alert == null || s.alert == null) throw new Error('fixture');
+    const failedHtml = card([{ ...f, alert: { ...f.alert, preview: 'See you at 5' } }], {
+      onRetry: () => {},
+      onEdit: () => {},
+    });
+    expect(failedHtml).not.toContain('See you at 5');
+    expect(failedHtml.split('no longer in this chat')).toHaveLength(2);
+    const sentHtml = card([{ ...s, alert: { ...s.alert, preview: 'See you at 5' } }]);
+    expect(sentHtml).toContain('See you at 5');
+    expect(sentHtml).not.toContain('no longer in this chat');
   });
 
   it('scheduled sends: the title names the receiver and wraps to two lines', () => {
@@ -776,13 +801,11 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
     const failRow = byId.get('fail');
     if (failRow?.alert == null) throw new Error('fixture');
     expect(alertTitle(failRow, failRow.alert, 'agency')).toBe(
-      "Couldn't send your scheduled message to Launch crew. The message is too long",
+      "Couldn't send your scheduled message to Launch crew.",
     );
-    expect(byId.get('fail')?.alert).toMatchObject({
-      reason: 'exceeds 5000',
-      preview: 'Long one',
-      stale: false,
-    });
+    // The reason comes from the scheduled row; the failed card shows no preview.
+    expect(failRow.alert).toMatchObject({ reason: 'exceeds 5000', preview: null, stale: false });
+    expect(alertBody(failRow.alert)).toBe('The message is too long');
     const moved = byId.get('moved');
     expect(moved?.actorName).toBe('Cy');
     expect(moved?.alert).toMatchObject({ planTitle: 'Launch', itemTitle: 'Carousel' });

@@ -44,6 +44,7 @@ import {
   SCHEDULED_LABEL,
   TASK_ALERT_LABEL,
   alertKindOf,
+  failureInPlainWords,
   isStaleFailed,
   isTaskBatch,
   messagePreview,
@@ -51,8 +52,8 @@ import {
   planFieldsOf,
   readChatMessages,
   readScheduledRows,
+  scheduledFailedLead,
   scheduledPreview,
-  scheduledFailedTitle,
   scheduledSentTitle,
   taskAlertLine,
   taskFieldsOf,
@@ -316,7 +317,7 @@ export interface AlertInfo {
   reason: string | null;
   /** failed: resolved elsewhere (sent, cancelled or edited): Retry clears the entry. */
   stale: boolean;
-  /** The message (reminder, sent) or scheduled body (failed) preview, resolved by the loader. */
+  /** The message preview (reminder, sent), resolved by the loader; a failed send has none. */
   preview: string | null;
   /** plan: the payload's fields, and the plan and item titles the loader resolved. */
   plan?: PlanAlertFields;
@@ -942,7 +943,7 @@ export function alertTopLine(item: Pick<ActivityItem, 'actorName'>, alert: Alert
 /**
  * An alert card's title, in the bell's words: a reminder's message preview;
  * "Your scheduled message was sent to <receiver>"; "Couldn't send your
- * scheduled message to <receiver>. <reason in plain words>"; the plan alert's
+ * scheduled message to <receiver>." (its reason is the body); the plan alert's
  * line (side-aware for plan_opened); the task alert's line. Pure.
  */
 export function alertTitle(
@@ -956,7 +957,7 @@ export function alertTitle(
     case 'sent':
       return scheduledSentTitle(scheduledReceiver(alert));
     case 'failed':
-      return scheduledFailedTitle(scheduledReceiver(alert), alert.reason);
+      return scheduledFailedLead(scheduledReceiver(alert));
     case 'plan':
       return planAlertLine(
         item.eventType,
@@ -971,7 +972,8 @@ export function alertTitle(
 
 /**
  * An alert card's second line: the chat for a reminder or a task alert, the
- * message preview for a scheduled send, the item a plan alert names (never
+ * message preview for a sent scheduled message, a failed send's reason in
+ * plain words (never its preview), the item a plan alert names (never
  * the plan twice), or null when there is none. Pure.
  */
 export function alertBody(alert: AlertInfo): string | null {
@@ -980,8 +982,9 @@ export function alertBody(alert: AlertInfo): string | null {
     case 'task':
       return alertChat(alert);
     case 'sent':
-    case 'failed':
       return alert.preview;
+    case 'failed':
+      return failureInPlainWords(alert.reason);
     case 'plan':
       return alert.itemTitle ?? alert.plan?.itemTitle ?? null;
   }
@@ -1623,7 +1626,6 @@ function stitchAlert(
     alert.preview = messagePreview(message, from.chatNames);
   } else if (alert.kind === 'failed') {
     const row = alert.scheduledId !== null ? from.failed.rows.get(alert.scheduledId) : undefined;
-    alert.preview = scheduledPreview(row, from.chatNames);
     alert.reason = row?.failure_reason ?? alert.reason;
     alert.stale = isStaleFailed(from.failed, alert.scheduledId);
   } else if (alert.plan !== undefined) {
@@ -1961,7 +1963,6 @@ export async function fetchActivityEntries(
     ...batchAuthors.values(),
     ...[...batchBodies.values()].flatMap((body) => parseMentions(body)),
     ...[...chatRes.messages.values()].flatMap((m) => parseMentions(m.body ?? '')),
-    ...[...failedRes.rows.values()].flatMap((r) => parseMentions(r.body ?? '')),
     // A scheduled send's direct chat names its other person.
     ...alerts.flatMap(({ item, alert }) => {
       if (alert.kind !== 'sent' && alert.kind !== 'failed') return [];

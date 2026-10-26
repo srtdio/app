@@ -200,13 +200,14 @@ test('a failed scheduled send: names the receiver, the reason, and Retry sends i
   seedAlerts(network.world);
   await page.goto('/notifications');
   const failed = card(page, 'scheduled_failed');
-  await expect(failed).toContainText(
-    `Couldn't send your scheduled message to ${PEER_NAME}. You're no longer in this chat`,
-    { timeout: 15_000 },
-  );
+  await expect(failed).toContainText(`Couldn't send your scheduled message to ${PEER_NAME}.`, {
+    timeout: 15_000,
+  });
+  await expect(failed).toContainText("You're no longer in this chat");
   await expect(failed).toContainText('Only you got this alert');
   await expect(failed.locator('[data-activity-scope-tag]')).toHaveCount(0);
-  await expect(failed).toContainText(FAILED_BODY);
+  // The reason replaces the message preview on a failed card.
+  await expect(failed).not.toContainText(FAILED_BODY);
   const retry = failed.locator('[data-activity-action="retry"]');
   const edit = failed.locator('[data-activity-action="edit"]');
   await expect(retry).toHaveText('Retry');

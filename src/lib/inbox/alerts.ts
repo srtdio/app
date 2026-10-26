@@ -307,14 +307,9 @@ export function scheduledSentTitle(chat: string): string {
   return `Your scheduled message was sent to ${chat}`;
 }
 
-/** A failed send's lead, before its reason; {chat} is chatDisplayName's. Pure. */
+/** A failed send's title (its reason is the body line); {chat} is chatDisplayName's. Pure. */
 export function scheduledFailedLead(chat: string): string {
   return `Couldn't send your scheduled message to ${chat}.`;
-}
-
-/** A failed scheduled message's title: the lead, then the reason in plain words. Pure. */
-export function scheduledFailedTitle(chat: string, reason: string | null): string {
-  return `${scheduledFailedLead(chat)} ${failureInPlainWords(reason)}`;
 }
 
 /** A failed send's reason in plain words (never the raw proc text). Pure. */

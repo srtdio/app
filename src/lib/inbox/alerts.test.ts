@@ -16,7 +16,6 @@ import {
   readScheduledRows,
   scheduledPreview,
   scheduledFailedLead,
-  scheduledFailedTitle,
   scheduledSentTitle,
   taskAlertLine,
   taskFieldsOf,
@@ -326,28 +325,21 @@ describe('scheduled send titles name the receiver', () => {
     expect(scheduledSentTitle(notes)).toBe('Your scheduled message was sent to Personal notes');
   });
 
-  it('failed: the lead names the receiver, then the reason in plain words', () => {
-    expect(scheduledFailedTitle(dm, 'not a member of this chat')).toBe(
-      "Couldn't send your scheduled message to Priya Shah. You're no longer in this chat",
-    );
-    expect(scheduledFailedTitle(group, null)).toBe(
-      "Couldn't send your scheduled message to Launch crew. Something went wrong when sending",
-    );
-    expect(scheduledFailedTitle(notes, 'exceeds 5000')).toBe(
-      "Couldn't send your scheduled message to Personal notes. The message is too long",
-    );
+  it('failed: the lead names the receiver (its reason is the body line)', () => {
     expect(scheduledFailedLead(dm)).toBe("Couldn't send your scheduled message to Priya Shah.");
+    expect(scheduledFailedLead(group)).toBe("Couldn't send your scheduled message to Launch crew.");
+    expect(scheduledFailedLead(notes)).toBe(
+      "Couldn't send your scheduled message to Personal notes.",
+    );
   });
 
   it('a missing name falls back to chatDisplayName, never the bare word "Chat"', () => {
     expect(scheduledSentTitle(noDmName)).toBe('Your scheduled message was sent to Direct message');
-    expect(scheduledFailedTitle(noGroupName, null)).toBe(
-      "Couldn't send your scheduled message to Group. Something went wrong when sending",
-    );
+    expect(scheduledFailedLead(noGroupName)).toBe("Couldn't send your scheduled message to Group.");
     for (const line of [
       scheduledSentTitle(noDmName),
       scheduledSentTitle(noGroupName),
-      scheduledFailedTitle(noDmName, null),
+      scheduledFailedLead(noDmName),
     ]) {
       expect(line).not.toMatch(/\bChat\b/);
       expect(line).not.toContain('Sent in');
