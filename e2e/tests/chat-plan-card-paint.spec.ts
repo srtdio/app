@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { chromium, devices, expect, test, type Page, type Request } from '@playwright/test';
+import { chromium, devices, expect, test, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   DM_CHANNEL,
@@ -277,99 +277,19 @@ for (const scenario of SCENARIOS) {
 }
 
 // ---------------------------------------------------------------------------
-// The ticker filling in after the card. The card's own reads (plans, items,
-// reviews, draft rows, post stages, the viewer side it shares with the ticker)
-// answer at once; the ticker's other inputs (open posts list and count, open
-// briefs list and count, marks, the channel's shared plan ids) are held and
-// released one by one after the card's first paint; then a catch-up (the
-// browser coming back online) re-reads chat_messages, and a plan-changed event
-// re-reads the plan, 3s later. Per frame and per DOM change the recorder keeps
-// the card element's identity (a remount is a new node), every skeleton, the
-// card's text and on-screen top, the thread list's scrollTop and the ticker
-// slot's state. From the card's first paint on: the same node throughout, no
-// skeleton, no content or position change, no scroll jump.
-
-type TickerInput = 'posts' | 'postCount' | 'briefs' | 'briefCount' | 'marks' | 'planIds';
-
-/** Which held ticker input a request is, or null (answered at once). */
-function tickerInputOf(method: string, url: URL): TickerInput | null {
-  const table = url.pathname.replace('/rest/v1/', '');
-  const p = url.searchParams;
-  if (table === 'posts' && p.get('stage') === 'eq.review') {
-    return method === 'HEAD' ? 'postCount' : 'posts';
-  }
-  if (table === 'briefs' && p.get('status') === 'eq.open') {
-    return method === 'HEAD' ? 'briefCount' : 'briefs';
-  }
-  if (table === 'chat_message_marks') return 'marks';
-  if (table === 'chat_messages' && p.get('select') === 'shared_plan_ids') return 'planIds';
-  return null;
-}
-
-const TICKER_INPUTS: readonly TickerInput[] = [
-  'posts',
-  'postCount',
-  'briefs',
-  'briefCount',
-  'marks',
-  'planIds',
-];
+// The ticker and the card on open. The ticker's inputs (open posts list and
+// count, open briefs list and count, marks, the channel's shared plan ids) come
+// in the same chat_open_bundle as the card's message, so the ticker is filled
+// when the card first paints; then a catch-up (the browser coming back online)
+// re-reads chat_messages, and a plan-changed event re-reads the plan, 3s later.
+// Per frame and per DOM change the recorder keeps the card element's identity
+// (a remount is a new node), every skeleton, the card's text and on-screen top,
+// the thread list's scrollTop and the ticker slot's state. From the card's
+// first paint on: the same node throughout, no skeleton, no content or position
+// change, no scroll jump.
 
 /** The app's OPEN_HOLD_MS: the longest a chat open holds its first paint. */
 const OPEN_HOLD_MS = 1_000;
-
-/** Hold every ticker input until its gate opens (routes over the harness's). */
-async function holdTickerInputs(page: Page): Promise<{
-  /** Open one gate; resolves once every request it held has been answered. */
-  release: (input: TickerInput) => Promise<void>;
-  releaseAll: () => void;
-}> {
-  const opened = new Set<TickerInput>();
-  const waiting = new Map<TickerInput, Array<() => void>>();
-  const heldRequests = new Map<TickerInput, Request[]>();
-  const answered = new Set<Request>();
-  const onAnswered = new Set<() => void>();
-  const settle = (request: Request): void => {
-    answered.add(request);
-    for (const fn of onAnswered) fn();
-  };
-  page.on('requestfinished', settle);
-  page.on('requestfailed', settle);
-  await page.route(/\/rest\/v1\//, async (route) => {
-    const request = route.request();
-    const input = tickerInputOf(request.method(), new URL(request.url()));
-    if (input !== null && !opened.has(input)) {
-      heldRequests.set(input, [...(heldRequests.get(input) ?? []), request]);
-      await new Promise<void>((resolve) => {
-        waiting.set(input, [...(waiting.get(input) ?? []), resolve]);
-      });
-    }
-    await route.fallback();
-  });
-  const open = (input: TickerInput): void => {
-    opened.add(input);
-    for (const resolve of waiting.get(input) ?? []) resolve();
-    waiting.delete(input);
-  };
-  return {
-    release: async (input) => {
-      open(input);
-      const held = heldRequests.get(input) ?? [];
-      await new Promise<void>((resolve) => {
-        const check = (): void => {
-          if (!held.every((r) => answered.has(r))) return;
-          onAnswered.delete(check);
-          resolve();
-        };
-        onAnswered.add(check);
-        check();
-      });
-    },
-    releaseAll: () => {
-      for (const input of TICKER_INPUTS) open(input);
-    },
-  };
-}
 
 /** Two real painted frames (the page clock may be paused): what is committed is on screen. */
 async function twoFrames(page: Page): Promise<void> {
@@ -557,16 +477,9 @@ async function runTickerFill(page: Page): Promise<void> {
   await page.goto('/chat');
   const row = page.getByText(PEER_NAME, { exact: true }).first();
   await row.waitFor({ state: 'visible' });
-  const gates = await holdTickerInputs(page);
-  // The held ticker reads must stay pending until the card has painted, but
-  // the app gives up on a read after its own 5s deadline (READ_TIMEOUT_MS,
-  // the page's timers). On a slow runner the card alone can take 4 to 5s of
-  // wall time to appear, so holding on the wall clock ran into that deadline:
-  // the ticker (correctly) gave up, never filled, and the scenario under test
-  // never happened. So the app's clock stands still from just before the tap
-  // until every held read has been answered, moved on only by the open hold
-  // (so the card paints at the hold's cap, as on a device). Rendering,
-  // network, DOM changes and the recorder's frames run in real time.
+  // The app's clock stands still from just before the tap, moved on only by
+  // the open hold (so the card paints at the hold's cap, as on a device).
+  // Rendering, network, DOM changes and the recorder's frames run in real time.
   await page.clock.install();
   // (A moment ahead: the list is idle, and the clock runs while this travels.)
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
@@ -578,17 +491,11 @@ async function runTickerFill(page: Page): Promise<void> {
     await page.clock.runFor(OPEN_HOLD_MS);
     const card = page.locator(`[data-plan-card="${DRAFT_PLAN_ID}"]`);
     await card.waitFor({ state: 'attached', timeout: 10_000 });
-    // The card is painted while every ticker input is still held.
-    await expect(page.locator('[data-status-item]')).toHaveCount(0);
+    // The ticker's inputs come in the same chat_open_bundle as the card, so
+    // the ticker is filled when the card paints: first paint is final.
+    await expect(page.locator('[data-status-item]')).toHaveCount(3);
     await twoFrames(page);
-    // Then released one by one: each input is answered and painted before
-    // the next opens.
-    const order: TickerInput[] = ['postCount', 'briefs', 'marks', 'posts', 'planIds', 'briefCount'];
-    for (const input of order) {
-      await gates.release(input);
-      await twoFrames(page);
-    }
-    // Nothing is held any more: the app's clock runs again.
+    // The app's clock runs again.
     await page.clock.resume();
     await page.locator('[data-loops-strip="open"]').waitFor({ state: 'visible' });
     // The catch-up after the live connection: chat_messages and the plan again.
@@ -603,7 +510,7 @@ async function runTickerFill(page: Page): Promise<void> {
     await expect.poll(() => reads.plans).toBeGreaterThan(before.plans);
     await page.waitForTimeout(2_000);
   } finally {
-    gates.releaseAll();
+    await page.clock.resume().catch(() => undefined);
   }
   const log = await page.evaluate(() => window.__frameLog);
   if (log === undefined) throw new Error('no frame log');
