@@ -5,7 +5,6 @@
 
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
 import type { Client, Result } from '@srtdio/rpc';
-import { toExternalLinks } from '@/lib/links';
 
 // The same status type BriefCard's BriefStatus is built from. Read off the
 // package here (type only) so this module imports nothing from components and
@@ -241,15 +240,6 @@ export interface BriefsFirstPage {
   next: BriefPageNext;
   /** Each brief's first image (one IN read over the page's ids); never rejects. */
   thumbs: Promise<Result<Map<string, string>>>;
-}
-
-/**
- * Whether the first paint must wait for the thumbnails: true when a loaded
- * brief carries a reference link (its card shows the link only when there is
- * no image, so the card's height depends on the thumbnail). Pure.
- */
-export function briefsPaintNeedsThumbs(briefs: readonly Pick<Brief, 'reference_links'>[]): boolean {
-  return briefs.some((brief) => toExternalLinks(brief.reference_links).length > 0);
 }
 
 /** A thrown thumbnails read, as a failed result (the page never awaits a rejection). */

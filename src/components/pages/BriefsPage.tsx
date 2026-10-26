@@ -33,7 +33,6 @@ import {
 import {
   BRIEF_NOTE_PARAM,
   briefListParams,
-  briefsPaintNeedsThumbs,
   filterBriefsByStatus,
   listBriefsFirstPage,
   listBriefsPage,
@@ -44,7 +43,12 @@ import {
   type BriefPageNext,
 } from '@/lib/brief-list';
 import { countBriefsByFilter } from '@/lib/brief-counts';
-import { dropBriefsReads, readBriefCounts, readBriefsFirstPage } from '@/lib/brief-list-shared';
+import {
+  briefsPaintNeedsThumbs,
+  dropBriefsReads,
+  readBriefCounts,
+  readBriefsFirstPage,
+} from '@/lib/brief-list-shared';
 import { getPrefetchContext } from '@/lib/prefetch-context';
 import { logger } from '@/lib/logger';
 import {

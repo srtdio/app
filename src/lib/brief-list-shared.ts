@@ -3,11 +3,22 @@
 // mount. Kept apart from brief-list.ts, whose pure readers the briefs DB suite
 // imports without the app's client, logger or session state.
 
+import type { Brief } from '@srtdio/briefs';
 import type { Client, Result } from '@srtdio/rpc';
 import { countBriefsByFilter } from '@/lib/brief-counts';
 import { listBriefsFirstPage, type BriefsFirstPage } from '@/lib/brief-list';
+import { toExternalLinks } from '@/lib/links';
 import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
+
+/**
+ * Whether the first paint must wait for the thumbnails: true when a loaded
+ * brief carries a reference link (its card shows the link only when there is
+ * no image, so the card's height depends on the thumbnail). Pure.
+ */
+export function briefsPaintNeedsThumbs(briefs: readonly Pick<Brief, 'reference_links'>[]): boolean {
+  return briefs.some((brief) => toExternalLinks(brief.reference_links).length > 0);
+}
 
 /** The session key prefix of every Briefs list read for this user and workspace. */
 function briefsKeyPrefix(userId: string, workspaceId: string): string {
