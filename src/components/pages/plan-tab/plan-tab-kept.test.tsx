@@ -129,7 +129,9 @@ describe('Plan tab: a return paints the kept read', () => {
     mount();
     expect(loads.every((load) => load.status === 'ready')).toBe(true);
     expect(shown()).toBe(FIRST);
-    // The quiet refresh went to the server (the kept read was past its window).
+    // The quiet refresh went to the server (the kept read was past its window);
+    // the bounded read starts it a microtask later.
+    await act(async () => {});
     expect(h.readPlanTab).toHaveBeenCalledTimes(2);
     await act(async () => answer({ ok: true, data: NEWER }));
     await settle();
