@@ -1,15 +1,26 @@
 // Postgres reads for chat: public.chat_messages is the record and the only
-// history read path (Agora is never read for history). Every read is an
-// RLS-scoped SELECT through the injected client (mirroring src/lib/chat-reads.ts),
-// so these helpers are unit-tested against a recording fake with no database.
+// history read path (Agora is never read for history). Every read is
+// RLS-scoped through the injected client (mirroring src/lib/chat-reads.ts), so
+// these helpers are unit-tested against a recording fake with no database.
+//
+// A chat open is ONE chat_open_bundle RPC (readChatOpenBundle, at the bottom
+// of this file; SECURITY INVOKER, so RLS applies): the latest page, its quoted
+// and thread root rows, its reactions, the channel's read cursors, reply
+// counts, marks, the viewer's scheduled rows, open posts, open briefs and the
+// shared plan ids, in one round trip. With p_since it is also the reopen
+// revalidation (every row from the remembered page's contiguous end). It
+// replaced the separate per-open reads (latest page prefetch, quoted ids,
+// reactions, read positions, marks, open posts, briefs, plan ids). The
+// per-table SELECTs below remain for everything after the open: load older,
+// thread pages, jump, live verification, retry and fallback reads.
 //
 // Pagination is keyset on (created_at, id), the exact order of the
-// chat_messages_channel_created_idx index: the latest page is
+// chat_messages_channel_created_idx index: a latest page is
 // ORDER BY created_at DESC, id DESC LIMIT 50, "load older" continues from the
 // oldest loaded (created_at, id) with a PostgREST or-filter for the compound
-// cursor, and catch-up after a reconnect reads everything newer than the newest
-// loaded pair. Reactions come as one IN query over the loaded ids, never one
-// per message.
+// cursor, and a newer read takes everything after the newest loaded pair.
+// Reactions outside the bundle come as one IN query over the loaded ids, never
+// one per message.
 //
 // Deleted rows: RLS returns them to members with every content column nulled.
 // The reads that feed the thread (latest, older, catch-up, jump, quoted ids)

@@ -15,10 +15,14 @@ vi.mock('jose', async (importOriginal) => {
 
 import worker, {
   canManageGroupAsCaller,
+  createCallerProfileStore,
   handleAvatarUpload,
   MAX_AVATAR_BYTES,
+  ownAvatarKey,
   type AvatarUploadDeps,
   type AvatarUploadEnv,
+  type ProfileAvatarStore,
+  type SavedProfile,
 } from './avatar-upload';
 import { getSupabaseJwks, verifyCaller } from './asset-read';
 import { computeSha256, type PutObjectInput } from '@srtdio/storage';
@@ -46,19 +50,39 @@ const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 let signingKey: KeyLike;
 let pngSha: string;
 
-/** Fake storage that records the single putObject call so the test can assert it. */
+/** Fake storage that records putObject / deleteObject calls in order. */
 class FakeStorage {
   calls: PutObjectInput[] = [];
+  deletes: { bucket: string; key: string; traceId: string }[] = [];
+  /** Shared ordered log across storage and profile fakes. */
+  log: string[] = [];
+  failPut = false;
+  failDelete = false;
   putObject(input: PutObjectInput): Promise<void> {
+    if (this.failPut) return Promise.reject(new Error('r2 put failed'));
+    this.log.push(`put:${input.key}`);
     this.calls.push({ ...input, body: new Uint8Array(input.body) });
+    return Promise.resolve();
+  }
+  deleteObject(bucket: string, key: string, traceId: string): Promise<void> {
+    this.log.push(`delete:${key}`);
+    this.deletes.push({ bucket, key, traceId });
+    if (this.failDelete) return Promise.reject(new Error('r2 delete failed'));
     return Promise.resolve();
   }
 }
 
+/** A caller with no saved avatar: the default, so no cleanup ever runs. */
+const NO_PROFILE: ProfileAvatarStore = {
+  read: () => Promise.resolve(null),
+  saveAvatar: () => Promise.resolve(false),
+};
+
 /** Production-shaped deps: a fake store plus the real verifyCaller/JWKS pair. */
-function deps(storage: FakeStorage): AvatarUploadDeps {
+function deps(storage: FakeStorage, profile: ProfileAvatarStore = NO_PROFILE): AvatarUploadDeps {
   return {
     storage,
+    profile,
     verifyToken: (request) => verifyCaller(request, getSupabaseJwks(env)),
     canManageGroup: () => Promise.resolve(false),
   };
@@ -420,4 +444,251 @@ describe('avatar-upload refuses SVG and OLE2 on every target', () => {
       });
     }
   }
+});
+
+describe('avatar-upload replaces the previous avatar only after the save', () => {
+  const OLD_SHA = 'a'.repeat(64);
+  const oldKey = `${USER}/${OLD_SHA}.png`;
+  const oldUrl = `https://cdn.srtd.io/${oldKey}`;
+
+  /** A profile fake that logs into the storage's shared log so order is visible. */
+  function profileFake(
+    storage: FakeStorage,
+    saved: SavedProfile | null,
+    save: 'ok' | 'refused' | 'throws' = 'ok',
+  ) {
+    const saves: { displayName: string; avatarUrl: string; traceId: string }[] = [];
+    const profile: ProfileAvatarStore = {
+      read: () => {
+        storage.log.push('read');
+        return Promise.resolve(saved);
+      },
+      saveAvatar: (_request, input) => {
+        storage.log.push(`save:${input.avatarUrl}`);
+        saves.push(input);
+        if (save === 'throws') return Promise.reject(new Error('rpc down'));
+        return Promise.resolve(save === 'ok');
+      },
+    };
+    return { profile, saves };
+  }
+
+  it('deletes the old object after the new object is stored and the profile row is saved', async () => {
+    const token = await mintToken(USER);
+    const storage = new FakeStorage();
+    const { profile, saves } = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
+    const res = await handleAvatarUpload(
+      uploadRequest(token, PNG_BYTES),
+      env,
+      deps(storage, profile),
+      'trace-r1',
+      null,
+    );
+    expect(res.status).toBe(200);
+    const newKey = `${USER}/${pngSha}.png`;
+    const newUrl = `https://cdn.srtd.io/${newKey}`;
+    expect(storage.log).toEqual(['read', `put:${newKey}`, `save:${newUrl}`, `delete:${oldKey}`]);
+    expect(storage.deletes).toEqual([{ bucket: 'user-avatars', key: oldKey, traceId: 'trace-r1' }]);
+    expect(saves).toEqual([{ displayName: 'Asha', avatarUrl: newUrl, traceId: 'trace-r1' }]);
+  });
+
+  it('still returns success when deleting the old object fails', async () => {
+    const token = await mintToken(USER);
+    const storage = new FakeStorage();
+    storage.failDelete = true;
+    const { profile } = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
+    const res = await handleAvatarUpload(
+      uploadRequest(token, PNG_BYTES),
+      env,
+      deps(storage, profile),
+      'trace-r2',
+      null,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { avatar_url: string };
+    expect(body.avatar_url).toBe(`https://cdn.srtd.io/${USER}/${pngSha}.png`);
+    expect(storage.deletes).toHaveLength(1);
+  });
+
+  it('deletes nothing when there is no previous avatar', async () => {
+    const token = await mintToken(USER);
+    for (const saved of [null, { displayName: 'Asha', avatarUrl: null }]) {
+      const storage = new FakeStorage();
+      const { profile, saves } = profileFake(storage, saved);
+      const res = await handleAvatarUpload(
+        uploadRequest(token, PNG_BYTES),
+        env,
+        deps(storage, profile),
+        'trace-r3',
+        null,
+      );
+      expect(res.status).toBe(200);
+      expect(saves).toHaveLength(0);
+      expect(storage.deletes).toHaveLength(0);
+    }
+  });
+
+  it('deletes nothing when the new object fails to store', async () => {
+    const token = await mintToken(USER);
+    const storage = new FakeStorage();
+    storage.failPut = true;
+    const { profile, saves } = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
+    await expect(
+      handleAvatarUpload(uploadRequest(token, PNG_BYTES), env, deps(storage, profile), 't', null),
+    ).rejects.toThrow('r2 put failed');
+    expect(saves).toHaveLength(0);
+    expect(storage.deletes).toHaveLength(0);
+  });
+
+  it('deletes nothing when the profile save is refused or throws, and still returns 200', async () => {
+    const token = await mintToken(USER);
+    for (const save of ['refused', 'throws'] as const) {
+      const storage = new FakeStorage();
+      const { profile, saves } = profileFake(
+        storage,
+        { displayName: 'Asha', avatarUrl: oldUrl },
+        save,
+      );
+      const res = await handleAvatarUpload(
+        uploadRequest(token, PNG_BYTES),
+        env,
+        deps(storage, profile),
+        'trace-r5',
+        null,
+      );
+      expect(res.status).toBe(200);
+      expect(saves).toHaveLength(1);
+      expect(storage.deletes).toHaveLength(0);
+    }
+  });
+
+  it('deletes nothing when re-uploading the same bytes (old key equals new key)', async () => {
+    const token = await mintToken(USER);
+    const storage = new FakeStorage();
+    const sameUrl = `https://cdn.srtd.io/${USER}/${pngSha}.png`;
+    const { profile, saves } = profileFake(storage, { displayName: 'Asha', avatarUrl: sameUrl });
+    const res = await handleAvatarUpload(
+      uploadRequest(token, PNG_BYTES),
+      env,
+      deps(storage, profile),
+      'trace-r6',
+      null,
+    );
+    expect(res.status).toBe(200);
+    expect(saves).toHaveLength(0);
+    expect(storage.deletes).toHaveLength(0);
+  });
+
+  it("never deletes another user's object, a group photo, or a foreign URL", async () => {
+    const token = await mintToken(USER);
+    for (const avatarUrl of [
+      `https://cdn.srtd.io/${OTHER_USER}/${OLD_SHA}.png`,
+      `https://cdn.srtd.io/groups/${USER}/${OLD_SHA}.png`,
+      `https://evil.test/${USER}/${OLD_SHA}.png`,
+      `https://cdn.srtd.io/${USER}/../${OTHER_USER}/${OLD_SHA}.png`,
+    ]) {
+      const storage = new FakeStorage();
+      const { profile, saves } = profileFake(storage, { displayName: 'Asha', avatarUrl });
+      const res = await handleAvatarUpload(
+        uploadRequest(token, PNG_BYTES),
+        env,
+        deps(storage, profile),
+        'trace-r7',
+        null,
+      );
+      expect(res.status).toBe(200);
+      expect(saves).toHaveLength(0);
+      expect(storage.deletes).toHaveLength(0);
+    }
+  });
+
+  it('never reads the profile or deletes anything for a group photo', async () => {
+    const token = await mintToken(USER);
+    const storage = new FakeStorage();
+    const { profile } = profileFake(storage, { displayName: 'Asha', avatarUrl: oldUrl });
+    const res = await handleAvatarUpload(
+      uploadRequest(token, PNG_BYTES, {
+        target_kind: 'group',
+        target_id: '55555555-5555-7555-8555-555555555555',
+      }),
+      env,
+      { ...deps(storage, profile), canManageGroup: () => Promise.resolve(true) },
+      'trace-r8',
+      null,
+    );
+    expect(res.status).toBe(200);
+    expect(storage.log.includes('read')).toBe(false);
+    expect(storage.deletes).toHaveLength(0);
+  });
+
+  describe('ownAvatarKey', () => {
+    it("returns the key only for this user's own avatar on the public base", () => {
+      expect(ownAvatarKey(oldUrl, 'https://cdn.srtd.io/', USER)).toBe(oldKey);
+      expect(ownAvatarKey(oldUrl, 'https://cdn.srtd.io', OTHER_USER)).toBeNull();
+      expect(ownAvatarKey(null, 'https://cdn.srtd.io', USER)).toBeNull();
+      expect(ownAvatarKey('', 'https://cdn.srtd.io', USER)).toBeNull();
+      expect(ownAvatarKey(`${oldUrl}?x=1`, 'https://cdn.srtd.io', USER)).toBeNull();
+    });
+  });
+
+  describe('createCallerProfileStore', () => {
+    function callerRequest(apikey: string | null): Request {
+      const headers = new Headers({ Authorization: 'Bearer caller-jwt' });
+      if (apikey !== null) headers.set('apikey', apikey);
+      return new Request('https://worker.test/', { method: 'POST', headers });
+    }
+
+    it('reads and saves as the caller, passing the trace id to user_profile_update', async () => {
+      const seen: { url: string; init: RequestInit }[] = [];
+      const fetcher = (url: string, init: RequestInit): Promise<Response> => {
+        seen.push({ url, init });
+        if (url.includes('/rpc/')) return Promise.resolve(new Response('"id"', { status: 200 }));
+        return Promise.resolve(
+          new Response(JSON.stringify([{ display_name: 'Asha', avatar_url: oldUrl }]), {
+            status: 200,
+          }),
+        );
+      };
+      const store = createCallerProfileStore(
+        { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_x' },
+        fetcher,
+      );
+      const request = callerRequest(null);
+      expect(await store.read(request, USER)).toEqual({ displayName: 'Asha', avatarUrl: oldUrl });
+      expect(
+        await store.saveAvatar(request, { displayName: 'Asha', avatarUrl: 'u', traceId: 'tr' }),
+      ).toBe(true);
+      expect(seen[0]?.url).toContain(`/rest/v1/users?select=display_name,avatar_url&id=eq.${USER}`);
+      const readHeaders = new Headers(seen[0]?.init.headers);
+      expect(readHeaders.get('Authorization')).toBe('Bearer caller-jwt');
+      expect(readHeaders.get('apikey')).toBe('sb_publishable_x');
+      expect(seen[1]?.url).toBe(`${SUPABASE_URL}/rest/v1/rpc/user_profile_update`);
+      expect(JSON.parse(String(seen[1]?.init.body))).toEqual({
+        p_display_name: 'Asha',
+        p_designation: null,
+        p_avatar_url: 'u',
+        p_email_opt_in: null,
+        p_trace_id: 'tr',
+      });
+    });
+
+    it('does nothing without an apikey, and reports a failed save as false', async () => {
+      let calls = 0;
+      const fetcher = (): Promise<Response> => {
+        calls += 1;
+        return Promise.resolve(new Response('{}', { status: 400 }));
+      };
+      const store = createCallerProfileStore({ SUPABASE_URL }, fetcher);
+      expect(await store.read(callerRequest(null), USER)).toBeNull();
+      expect(calls).toBe(0);
+      expect(
+        await store.saveAvatar(callerRequest('sb_publishable_x'), {
+          displayName: 'Asha',
+          avatarUrl: 'u',
+          traceId: 'tr',
+        }),
+      ).toBe(false);
+      expect(calls).toBe(1);
+    });
+  });
 });
