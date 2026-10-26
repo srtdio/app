@@ -64,11 +64,13 @@ import { useSort } from '@/lib/use-sort';
 import { useSession } from '@/lib/session-context';
 import { dispatchPostChanged } from '@/components/chat/post-sheet';
 import {
-  dropPipelinePosts,
-  peekPipelinePosts,
+  keptPipelinePosts,
+  primePipelinePosts,
   readPipelinePosts,
+  stalePipelinePosts,
   PIPELINE_POSTS_LIMIT,
 } from '@/lib/pipeline-posts';
+import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import {
   ROLE_READ_ERROR,
   readMemberRole,
@@ -654,7 +656,7 @@ export interface UndoableMoveDeps extends MovePostDeps {
   postReason?: (postId: string, body: string, traceId: string) => Promise<{ ok: boolean }>;
   /** Mints the move's trace id, shared by the move and its reason comment. */
   newTraceId?: () => string;
-  /** The move landed on the server (the page drops its kept reads and says so). */
+  /** The move landed on the server (the page tells the other surfaces). */
   onLanded?: (postId: string) => void;
 }
 
@@ -763,15 +765,41 @@ export function leavingToPost(pathname: string): boolean {
   return pathname.startsWith('/posts/') || pathname.startsWith('/p/');
 }
 
+/**
+ * The query the board shows: the URL's, or, when the URL names no filter (a
+ * tab return lands on a clean /pipeline), the chip and date filter kept from
+ * this session's last visit. The search is never kept. Pure.
+ */
+export function shownPipelineQuery(
+  params: URLSearchParams,
+  kept: PipelineQuery | null,
+): PipelineQuery {
+  const fromUrl = parsePipelineQuery(params, INITIAL_STAGE);
+  const clean = pipelineQueryParams(fromUrl, INITIAL_STAGE).toString() === '';
+  return clean && kept !== null ? { ...kept, search: '' } : fromUrl;
+}
+
 export function PipelinePage() {
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   // Kanban on laptop (useIsLaptop), the stacked tab feed on phone.
   const isDesktop = useIsLaptop();
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  const viewKey = useCallback(
+    (part: string): string | null =>
+      userId !== null && workspaceId !== null ? keptViewKey(userId, workspaceId, part) : null,
+    [userId, workspaceId],
+  );
   // Stage, search, date window and custom range live in the URL query so Back
   // restores them. Opens on Review when the query names no stage (a stale
-  // ?view=plan link included: only the pipeline's own keys are read).
+  // ?view=plan link included: only the pipeline's own keys are read), or on
+  // the chip and date filter kept from this session's last visit.
   const [params, setParams] = useSearchParams();
-  const query = useMemo(() => parsePipelineQuery(params, INITIAL_STAGE), [params]);
+  const [keptQuery, setKeptQuery] = useKeptState<PipelineQuery | null>(
+    viewKey('pipeline:query'),
+    null,
+  );
+  const query = useMemo(() => shownPipelineQuery(params, keptQuery), [params, keptQuery]);
   const { stage: queryStage, search, dateWindow, customRange } = query;
   // Patches compose through a ref: the sort control's Apply sets the range and
   // the window back to back, before the URL re-renders the page.
@@ -781,9 +809,10 @@ export function PipelinePage() {
     (patch: Partial<PipelineQuery>): void => {
       const next = { ...latestQuery.current, ...patch };
       latestQuery.current = next;
+      setKeptQuery({ ...next, search: '' });
       setParams(pipelineQueryParams(next, INITIAL_STAGE), { replace: true });
     },
-    [setParams],
+    [setParams, setKeptQuery],
   );
   const setStage = useCallback((key: string): void => updateQuery({ stage: key }), [updateQuery]);
   const setSearch = useCallback(
@@ -817,19 +846,19 @@ export function PipelinePage() {
   const timeZone = activeWorkspace?.timezone ?? 'UTC';
   const weekStartDay = activeWorkspace?.week_start_day ?? 1;
 
-  const { session } = useSession();
-  const userId = session?.user.id ?? null;
-  // A tab return inside the freshness window paints the posts this session
-  // already read (src/lib/pipeline-posts.ts) on the first render, with no
-  // request; past the window (or dropped by a change) there are none, and the
-  // board shows its skeleton and reads. Older posts are never painted.
+  // A tab return paints the posts this session last read or wrote
+  // (src/lib/pipeline-posts.ts) on the first render, at any age, then the
+  // mount refreshes them quietly. Only the first visit shows the skeleton.
   const [kept] = useState(() => {
     if (workspaceId === null || userId === null) return undefined;
-    const fresh = peekPipelinePosts(userId, workspaceId);
+    const last = keptPipelinePosts(userId, workspaceId);
     // Seed the cover store from the same rows before the cards render.
-    if (fresh !== undefined) primeCovers(workspaceId, listedCovers(fresh));
-    return fresh;
+    if (last !== undefined) primeCovers(workspaceId, listedCovers(last));
+    return last;
   });
+  // Whether the person has acted on the board since it mounted: a quiet
+  // refresh lands only while they have not.
+  const untouched = useUntouched();
   const [posts, setPosts] = useState<PipelinePost[]>(() => kept ?? []);
   // The workspace `posts` was read for. A switch renders nothing of the old
   // list: until the new read lands the board shows the skeleton.
@@ -892,35 +921,38 @@ export function PipelinePage() {
 
   // One fetch for the whole board (no N+1): listPosts once, grouped in memory.
   // A read that lands after a newer one started (a workspace switch) is dropped.
-  // The mount (`join`) paints posts this session read inside the window with
-  // no request, else joins the read a nav press started; every other load (a
-  // create, Retry, a data change) drops the kept read and asks the server.
+  // The mount (`join`) joins a fresh kept read or the one a nav press started;
+  // when the kept posts already painted it is a quiet refresh: no skeleton, a
+  // failure keeps the kept view, and it lands only while the board is
+  // untouched. Every other load (a create, Retry, a data change) marks the
+  // kept read stale and asks the server.
   const loadPosts = useCallback(
     async (join = false) => {
       if (workspaceId === null) return;
       const seq = ++loadSeq.current;
-      if (userId !== null && !join) dropPipelinePosts(userId, workspaceId);
-      const fresh = join && userId !== null ? peekPipelinePosts(userId, workspaceId) : undefined;
-      let ok = fresh !== undefined;
-      let data: PipelinePost[] = fresh ?? [];
-      if (fresh === undefined) {
-        setPostsLoading(true);
-        // One trace id per load, sent as posts_list's p_trace_id.
-        const traceId = generateTraceId();
-        try {
-          const result =
-            userId === null
-              ? await listPosts(supabase, { workspaceId, limit: PIPELINE_POSTS_LIMIT, traceId })
-              : await readPipelinePosts(supabase, userId, workspaceId, listPosts, traceId);
-          if (result.ok) {
-            ok = true;
-            data = result.data;
-          }
-        } catch {
-          // A transport throw (offline) is the same plain failure as an error Result.
+      if (userId !== null && !join) stalePipelinePosts(userId, workspaceId);
+      const quiet = join && loadedForRef.current === workspaceId;
+      let ok = false;
+      let data: PipelinePost[] = [];
+      if (!quiet) setPostsLoading(true);
+      // One trace id per load, sent as posts_list's p_trace_id.
+      const traceId = generateTraceId();
+      try {
+        const result =
+          userId === null
+            ? await listPosts(supabase, { workspaceId, limit: PIPELINE_POSTS_LIMIT, traceId })
+            : await readPipelinePosts(supabase, userId, workspaceId, listPosts, traceId);
+        if (result.ok) {
+          ok = true;
+          data = result.data;
         }
+      } catch {
+        // A transport throw (offline) is the same plain failure as an error Result.
       }
       if (seq !== loadSeq.current) return;
+      // The kept view stays through a failed or late quiet refresh; the read
+      // that landed is kept for the next visit (src/lib/session-read.ts).
+      if (quiet && (!ok || !untouched())) return;
       // Seed the cover store from the same posts_list call before the cards
       // render, so the board never reads asset_attachments for these posts.
       if (ok) primeCovers(workspaceId, listedCovers(data));
@@ -931,7 +963,7 @@ export function PipelinePage() {
       setPostsFailed(!ok);
       setPostsLoading(false);
     },
-    [workspaceId, userId],
+    [workspaceId, userId, untouched],
   );
 
   // A workspace switch closes the sheets on the old workspace's posts.
@@ -946,36 +978,35 @@ export function PipelinePage() {
   // The sample week landing or clearing under the board: re-read it.
   useWorkspaceDataChanged(() => void loadPosts());
   // Opening a post from the board leaves for a page that can change it (stage,
-  // dates, files) without a post-changed event, so the kept read goes with
-  // it: Back to the board reads the server again rather than paint it.
+  // dates, files) without a post-changed event, so the kept read is marked
+  // stale: Back to the board paints it and refreshes it quietly.
   useEffect(() => {
     if (workspaceId === null || userId === null) return;
     return () => {
-      if (leavingToPost(window.location.pathname)) dropPipelinePosts(userId, workspaceId);
+      if (leavingToPost(window.location.pathname)) stalePipelinePosts(userId, workspaceId);
     };
   }, [workspaceId, userId]);
-  // The board's own writes (an optimistic move, its Undo) change what the
-  // kept read holds: it is dropped with every change, and again once a move
-  // lands on the server.
-  const dropKept = useCallback((): void => {
-    if (workspaceId !== null && userId !== null) dropPipelinePosts(userId, workspaceId);
-  }, [workspaceId, userId]);
-  // A move that landed also tells every other surface that keeps this post
-  // (chat cards, the Plan tab) through the existing post-changed event.
-  const landed = useCallback(
-    (postId: string): void => {
-      dropKept();
-      dispatchPostChanged(window, postId);
-    },
-    [dropKept],
-  );
-  const setPostsAndDrop = useCallback(
+  // The board's own writes (an optimistic move, its Undo, a failed send put
+  // back) replace the kept posts with what the board now shows, for this
+  // workspace's posts only. primeRead is idempotent, so the updater stays safe
+  // to run twice.
+  const setPostsAndKeep = useCallback(
     (updater: (prev: PipelinePost[]) => PipelinePost[]): void => {
-      dropKept();
-      setPosts(updater);
+      setPosts((prev) => {
+        const next = updater(prev);
+        if (workspaceId !== null && userId !== null && loadedForRef.current === workspaceId) {
+          primePipelinePosts(userId, workspaceId, next);
+        }
+        return next;
+      });
     },
-    [dropKept],
+    [workspaceId, userId],
   );
+  // A move that landed tells every other surface that keeps this post (chat
+  // cards, the Plan tab) through the existing post-changed event.
+  const landed = useCallback((postId: string): void => {
+    dispatchPostChanged(window, postId);
+  }, []);
   // Only the active workspace's posts ever render.
   const live = workspaceId !== null && loadedFor === workspaceId;
   const shownPosts = live ? posts : NO_POSTS;
@@ -1133,7 +1164,7 @@ export function PipelinePage() {
           client: supabase,
           posts,
           inFlight: inFlight.current,
-          setPosts: setPostsAndDrop,
+          setPosts: setPostsAndKeep,
           onLanded: landed,
           onClose: () => setMovePostTarget(null),
           toast: push,
@@ -1151,7 +1182,7 @@ export function PipelinePage() {
         options,
       );
     },
-    [posts, push, role, runUndoable, workspaceId, setPostsAndDrop, landed],
+    [posts, push, role, runUndoable, workspaceId, setPostsAndKeep, landed],
   );
 
   // From the move sheet, Reject and Park ask first, and so does Send for review
@@ -1204,6 +1235,8 @@ export function PipelinePage() {
     workspaceId === null || !live || (postsLoading && posts.length === 0 && !postsFailed);
   // No posts at all (not a filter hiding them) once a read has succeeded.
   const pipelineEmpty = !boardLoading && !postsFailed && !postsLoading && shownPosts.length === 0;
+  // Back on the board, the scroll lands where it was once the posts painted.
+  useKeptScroll(viewKey('pipeline:scroll'), !boardLoading && !postsFailed);
 
   return (
     <>

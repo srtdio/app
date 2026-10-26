@@ -228,9 +228,8 @@ export async function listBriefsPage(
 //
 // A nav press starts the rows (and, chained, their thumbnails) and the counts
 // (prefetchBriefsData, src/lib/brief-list-shared.ts); the page's mount joins
-// them by key. Every later reload
-// drops the keys first, and the page drops them when it unmounts, so a kept
-// value only ever bridges one press to its own mount.
+// them by key. Every later reload marks the keys stale first; the last good
+// value stays kept for the session, so a return paints it and refreshes quietly.
 // ---------------------------------------------------------------------------
 
 /** The first page's rows, with their thumbnails' read already running. */

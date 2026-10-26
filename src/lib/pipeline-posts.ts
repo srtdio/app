@@ -1,15 +1,17 @@
 // The Pipeline's posts read, shared within this tab session (in memory only,
 // src/lib/session-read.ts). A nav press on Pipeline starts it
 // (prefetchPipelineData) and the page's mount joins the same request. Coming
-// back to the tab inside the freshness window paints the posts this session
-// already read, with no request; past the window they are absent, so the page
-// shows its skeleton and reads again. Older posts are never painted.
+// back to the tab paints the posts this session last read or wrote
+// (keptPipelinePosts), at any age, then the page refreshes them quietly: inside
+// the freshness window the refresh joins the kept read with no request.
 //
-// The kept read is dropped the moment anything says the posts may differ:
-// a post changed (POST_CHANGED_EVENT, the chat post sheet's writes), a plan
-// changed (PLAN_CHANGED_EVENT: plan edits move posts' dates), the workspace's
-// rows changed (WORKSPACE_DATA_CHANGED_EVENT, dropped by session-read itself),
-// sign-out, and the Pipeline's own writes and reloads (dropPipelinePosts).
+// The kept posts are marked stale (never deleted) the moment anything says
+// they may differ, so the next visit still paints them and reads again: a post
+// changed (POST_CHANGED_EVENT, the chat post sheet's writes), a plan changed
+// (PLAN_CHANGED_EVENT: plan edits move posts' dates), the workspace's rows
+// changed (WORKSPACE_DATA_CHANGED_EVENT, marked by session-read itself), and
+// the Pipeline's reloads and leaving for a post (stalePipelinePosts). The
+// board's own writes replace them (primePipelinePosts). Sign-out deletes them.
 
 import { listPosts, type Client, type PipelinePost } from '@srtdio/posts';
 import type { Result } from '@srtdio/rpc';
@@ -17,7 +19,7 @@ import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { PLAN_CHANGED_EVENT } from '@/lib/chat/plans';
 import { readSharedMemberRole } from '@/lib/member-role';
 import type { PrefetchContext } from '@/lib/prefetch-context';
-import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
+import { invalidateReads, peekKept, primeRead, readKey, sharedRead } from '@/lib/session-read';
 import { generateTraceId } from '@/lib/trace';
 
 /** The board reads the newest posts up to this many (listPosts caps it too). */
@@ -30,8 +32,9 @@ export function pipelinePostsKey(userId: string, workspaceId: string): string {
   return readKey(userId, workspaceId, WHAT);
 }
 
-// Every key this module started, so a change event drops them all whatever
-// user and workspace they belong to (the session reads are keyed user first).
+// Every key this module read or wrote, so a change event marks them all stale
+// whatever user and workspace they belong to (the session reads are keyed user
+// first). Kept for the session: a kept key stays until sign-out.
 const started = new Set<string>();
 
 /**
@@ -64,28 +67,34 @@ export function readPipelinePosts(
 }
 
 /**
- * The posts this session read for the board inside the freshness window, or
- * undefined (never read, still running, failed, dropped or older than the
- * window). Never reads. What the page paints on a tab return.
+ * The posts this session last read or wrote for the board, at any age (stale
+ * or not, also while a newer read runs), or undefined (never read ok). Never
+ * reads. What the page paints on a tab return.
  */
-export function peekPipelinePosts(
-  userId: string,
-  workspaceId: string,
-  nowMs: number = Date.now(),
-): PipelinePost[] | undefined {
-  const kept = peekRead<Result<PipelinePost[]>>(pipelinePostsKey(userId, workspaceId), nowMs);
+export function keptPipelinePosts(userId: string, workspaceId: string): PipelinePost[] | undefined {
+  const kept = peekKept<Result<PipelinePost[]>>(pipelinePostsKey(userId, workspaceId));
   return kept !== undefined && kept.ok ? kept.data : undefined;
 }
 
-/** Forget the board's kept read (a write or a reload on the board). */
-export function dropPipelinePosts(userId: string, workspaceId: string): void {
+/** Keep the board's posts after its own write (a move, its Undo), as a fresh read. */
+export function primePipelinePosts(
+  userId: string,
+  workspaceId: string,
+  posts: PipelinePost[],
+): void {
+  const key = pipelinePostsKey(userId, workspaceId);
+  started.add(key);
+  primeRead<Result<PipelinePost[]>>(key, { ok: true, data: posts });
+}
+
+/** Mark the board's kept posts stale (a reload, leaving for a post): the next read asks again. */
+export function stalePipelinePosts(userId: string, workspaceId: string): void {
   invalidateReads(pipelinePostsKey(userId, workspaceId));
 }
 
-/** Forget every kept board read (a post or plan changed somewhere). */
-export function dropAllPipelinePosts(): void {
+/** Mark every kept board read stale (a post or plan changed somewhere). */
+export function staleAllPipelinePosts(): void {
   for (const key of started) invalidateReads(key);
-  started.clear();
 }
 
 /**
@@ -106,6 +115,6 @@ export function prefetchPipelineData(ctx: PrefetchContext): Promise<void> {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener(POST_CHANGED_EVENT, dropAllPipelinePosts);
-  window.addEventListener(PLAN_CHANGED_EVENT, dropAllPipelinePosts);
+  window.addEventListener(POST_CHANGED_EVENT, staleAllPipelinePosts);
+  window.addEventListener(PLAN_CHANGED_EVENT, staleAllPipelinePosts);
 }

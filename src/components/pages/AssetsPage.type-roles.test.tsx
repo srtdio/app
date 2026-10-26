@@ -9,6 +9,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetsPage } from '@/components/pages/AssetsPage';
+import { resetSessionReads } from '@/lib/session-read';
 import { TAB_EMPTY, humanizeSize, type AssetListItem } from '@/lib/assets';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -135,6 +136,8 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   document.body.innerHTML = '';
+  // The kept list and tab outlive the page; each test starts a fresh session.
+  resetSessionReads();
 });
 
 describe('Assets page type roles', () => {

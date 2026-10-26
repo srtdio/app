@@ -41,6 +41,7 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useSession } from '@/lib/session-context';
 import { useSort } from '@/lib/use-sort';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
+import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import { logger } from '@/lib/logger';
 import { bottomAnchorProps, useBottomInset } from '@/lib/bottom-inset';
 import { cn } from '@/lib/cn';
@@ -62,7 +63,6 @@ import {
   ASSET_TAB_DEFAULT,
   countAssetTabs,
   deleteInBatches,
-  dropAssetsReads,
   displayLabel,
   fetchMemberRole,
   filterAssets,
@@ -73,16 +73,21 @@ import {
   isAssetInUseError,
   splitFreeAssets,
   getAssetItem,
+  keptAssetTabCounts,
+  keptAssetsPage,
   listAssetIds,
   listAssetsPage,
   mergeAssetPages,
   parseAssetTab,
+  primeAssetsPage,
   readAssetTabCounts,
   readAssetsFirstPage,
   removeAssetsById,
   renameAssetInList,
   sortAssets,
+  staleAssetsReads,
   TAB_EMPTY,
+  withKeptTail,
   type AssetListItem,
   type AssetPageNext,
   type AssetSort,
@@ -116,24 +121,43 @@ export function AssetsPage() {
   const newTrace = useNewTrace();
   const userId = session?.user.id ?? null;
 
-  const [items, setItems] = useState<AssetListItem[]>([]);
-  // Loading from the first render: the read starts in an effect, after the
-  // first paint, so a false start would flash "Files show up here." first.
-  const [loading, setLoading] = useState(true);
+  // A return to Assets paints the list (every page loaded) and the tab totals
+  // this session kept, at any age, then the mount refreshes them quietly.
+  const [keptRead] = useState(() =>
+    workspaceId !== null && userId !== null
+      ? {
+          page: keptAssetsPage(userId, workspaceId),
+          counts: keptAssetTabCounts(userId, workspaceId),
+        }
+      : null,
+  );
+  const [items, setItems] = useState<AssetListItem[]>(() => keptRead?.page?.items ?? []);
+  // Loading from the first render (unless the kept list painted): the read
+  // starts in an effect, after the first paint, so a false start would flash
+  // "Files show up here." first.
+  const [loading, setLoading] = useState(keptRead?.page === undefined);
   // A failed read of the files is a page load error: the grid and counts never
   // render from a partial read. The cause is logged.
   const [assetsFailed, setAssetsFailed] = useState(false);
-  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  const [assetsLoaded, setAssetsLoaded] = useState(keptRead?.page !== undefined);
   const [retrying, setRetrying] = useState(false);
   // Keyset paging: where the next page starts, or done. Load more appends it.
-  const [next, setNext] = useState<AssetPageNext>({ done: true });
+  const [next, setNext] = useState<AssetPageNext>(() => keptRead?.page?.next ?? { done: true });
   const [loadingMore, setLoadingMore] = useState(false);
   // Bumped by every first-page load, so a Load more that resolves after a
   // reload (or a workspace switch) never appends onto the fresh list.
   const loadGeneration = useRef(0);
+  // The workspace whose list `items` holds (kept or read), so only a mount
+  // over that workspace's painted list refreshes quietly.
+  const shownFor = useRef<string | null>(keptRead?.page !== undefined ? workspaceId : null);
+  // Whether the person has acted on the page since it mounted: a quiet
+  // refresh lands only while they have not.
+  const untouched = useUntouched();
   // Tab totals from the server (HEAD counts), never from the loaded pages.
   // Null until the first read lands; a failed read keeps the last good counts.
-  const [counts, setCounts] = useState<Record<AssetTab, number> | null>(null);
+  const [counts, setCounts] = useState<Record<AssetTab, number> | null>(
+    () => keptRead?.counts ?? null,
+  );
   const countGeneration = useRef(0);
 
   const [search, setSearch] = useState('');
@@ -180,10 +204,16 @@ export function AssetsPage() {
   const [assetLookupTick, setAssetLookupTick] = useState(0);
 
   // The tab lives in ?type= (default All, unknown is All), so it survives Back
-  // and refresh. Switching only filters the loaded list: no read, instant.
-  const tab = parseAssetTab(searchParams.get('type'));
+  // and refresh; a return with no ?type= lands on the tab kept this session.
+  // Switching only filters the loaded list: no read, instant.
+  const viewKey = (part: string): string | null =>
+    userId !== null && workspaceId !== null ? keptViewKey(userId, workspaceId, part) : null;
+  const [keptTab, setKeptTab] = useKeptState<AssetTab>(viewKey('assets:tab'), ASSET_TAB_DEFAULT);
+  const typeParam = searchParams.get('type');
+  const tab = typeParam === null ? keptTab : parseAssetTab(typeParam);
   const setTab = useCallback(
     (next: AssetTab): void => {
+      setKeptTab(next);
       setSearchParams(
         (prev) => {
           const params = new URLSearchParams(prev);
@@ -194,7 +224,7 @@ export function AssetsPage() {
         { replace: true },
       );
     },
-    [setSearchParams],
+    [setSearchParams, setKeptTab],
   );
 
   // One presign cache for the whole page: bounds concurrency and caches URLs so
@@ -206,13 +236,14 @@ export function AssetsPage() {
   // Every tab's total in one parallel burst of HEAD counts. Runs with every
   // first-page load and after every delete; the latest read wins. The mount
   // (`join`) joins the burst a nav press already started (prefetchAssetsData);
-  // every other run drops that shared read first and asks the server anew.
+  // every other run marks that shared read stale first and asks the server
+  // anew. A `quiet` run (the kept totals painted) lands only while untouched.
   const loadCounts = useCallback(
-    async (join = false) => {
+    async (join = false, quiet = false) => {
       if (workspaceId === null) return;
       countGeneration.current += 1;
       const generation = countGeneration.current;
-      if (userId !== null && !join) dropAssetsReads(userId, workspaceId);
+      if (userId !== null && !join) staleAssetsReads(userId, workspaceId);
       const result =
         userId === null
           ? await countAssetTabs(supabase, workspaceId)
@@ -222,28 +253,58 @@ export function AssetsPage() {
         logger.warn('assets: tab counts read failed', { error: result.error.message });
         return;
       }
+      if (quiet && !untouched()) return;
       setCounts(result.data);
     },
-    [workspaceId, userId],
+    [workspaceId, userId, untouched],
+  );
+
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const nextRef = useRef(next);
+  nextRef.current = next;
+  // The list the page shows after Load more or its own write (a delete, a
+  // rename) is kept for the next visit, for this workspace's list only.
+  // primeAssetsPage is idempotent, so the updater stays safe to run twice.
+  const setItemsAndKeep = useCallback(
+    (update: (prev: AssetListItem[]) => AssetListItem[], page?: AssetPageNext): void => {
+      setItems((prev) => {
+        const list = update(prev);
+        if (userId !== null && workspaceId !== null && shownFor.current === workspaceId) {
+          primeAssetsPage(userId, workspaceId, { items: list, next: page ?? nextRef.current });
+        }
+        return list;
+      });
+    },
+    [userId, workspaceId],
   );
 
   // The first page. Every reload (upload, link, data change, Retry) starts over
   // from the newest page, so the list never mixes a stale tail with fresh rows.
   // The counts reload alongside it, not after it. Only the mount joins the
-  // shared read a nav press started; a reload drops it and reads anew.
+  // shared read a nav press started; a reload marks it stale and reads anew.
+  // When the kept list painted, the mount's read is a quiet refresh: no
+  // skeleton, a failure keeps the kept list, it lands only while untouched,
+  // and the older pages the person loaded stay under it (withKeptTail).
   const loadAssets = useCallback(
     async (join = false) => {
       if (workspaceId === null) return;
-      if (userId !== null && !join) dropAssetsReads(userId, workspaceId);
-      void loadCounts(true);
+      if (userId !== null && !join) staleAssetsReads(userId, workspaceId);
+      const quiet = join && shownFor.current === workspaceId;
+      void loadCounts(true, quiet);
       loadGeneration.current += 1;
       const generation = loadGeneration.current;
-      setLoading(true);
+      if (!quiet) setLoading(true);
       const result =
         userId === null
           ? await listAssetsPage(supabase, workspaceId)
           : await readAssetsFirstPage(supabase, userId, workspaceId, listAssetsPage);
       if (generation !== loadGeneration.current) return;
+      if (quiet && !result.ok) {
+        logger.warn('assets: list refresh failed', { error: result.error.message });
+        return;
+      }
+      if (quiet && !untouched()) return;
       setLoading(false);
       setLoadingMore(false);
       if (!result.ok) {
@@ -252,11 +313,16 @@ export function AssetsPage() {
         return;
       }
       setAssetsFailed(false);
-      setItems(result.data.items);
-      setNext(result.data.next);
+      const page = quiet
+        ? withKeptTail(result.data, { items: itemsRef.current, next: nextRef.current })
+        : result.data;
+      shownFor.current = workspaceId;
+      if (page !== result.data && userId !== null) primeAssetsPage(userId, workspaceId, page);
+      setItems(page.items);
+      setNext(page.next);
       setAssetsLoaded(true);
     },
-    [workspaceId, userId, loadCounts],
+    [workspaceId, userId, loadCounts, untouched],
   );
 
   // The next page, appended with duplicates (by id) dropped. A failure keeps
@@ -273,9 +339,9 @@ export function AssetsPage() {
       showToast?.({ title: LOAD_MORE_FAILED, tone: 'error' });
       return;
     }
-    setItems((prev) => mergeAssetPages(prev, result.data.items));
+    setItemsAndKeep((prev) => mergeAssetPages(prev, result.data.items), result.data.next);
     setNext(result.data.next);
-  }, [workspaceId, next, loadingMore, showToast]);
+  }, [workspaceId, next, loadingMore, showToast, setItemsAndKeep]);
 
   const retryLoad = useCallback(async () => {
     setRetrying(true);
@@ -289,13 +355,6 @@ export function AssetsPage() {
   useEffect(() => {
     void loadAssets(true);
   }, [loadAssets]);
-  // Leaving the page forgets its shared first reads: this page renames and
-  // deletes in place, and other surfaces add files, so a later visit must read
-  // the server again, never paint this visit's list.
-  useEffect(() => {
-    if (workspaceId === null || userId === null) return;
-    return () => dropAssetsReads(userId, workspaceId);
-  }, [workspaceId, userId]);
   useWorkspaceDataChanged(() => {
     void loadAssets();
   });
@@ -448,9 +507,7 @@ export function AssetsPage() {
     // The one-row lookup is still in flight: the tick re-runs this.
     if (item === undefined && pendingAssetLookup.current === asset) return;
     if (item !== undefined && item.kind !== 'link' && !searching && tab !== ASSET_TAB_DEFAULT) {
-      const params = new URLSearchParams(searchParams);
-      params.delete('type');
-      setSearchParams(params, { replace: true });
+      setTab(ASSET_TAB_DEFAULT);
       return;
     }
     openedAssetParam.current = asset;
@@ -473,6 +530,7 @@ export function AssetsPage() {
     setSearchParams,
     openAsset,
     tab,
+    setTab,
     searching,
     next.done,
     workspaceId,
@@ -544,9 +602,6 @@ export function AssetsPage() {
     });
   }, []);
 
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
-
   const deleteItems = useCallback(
     (ids: string[]): void => {
       if (ids.length === 0) return;
@@ -582,7 +637,7 @@ export function AssetsPage() {
             return { ok: true, data: { deleted: targets, kept } };
           });
           const { deleted, kept, failure } = outcome;
-          if (deleted.length > 0) setItems((prev) => removeAssetsById(prev, deleted));
+          if (deleted.length > 0) setItemsAndKeep((prev) => removeAssetsById(prev, deleted));
           unhide(ids);
           void loadCounts();
           if (failure !== null) {
@@ -605,7 +660,7 @@ export function AssetsPage() {
         },
       });
     },
-    [runUndoable, unhide, newTrace, showInUse, push, loadCounts],
+    [runUndoable, unhide, newTrace, showInUse, push, loadCounts, setItemsAndKeep],
   );
 
   const deleteSelected = useCallback((): void => {
@@ -717,11 +772,11 @@ export function AssetsPage() {
         fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
       });
       if (outcome.ok) {
-        setItems((prev) => renameAssetInList(prev, item.id, name.trim()));
+        setItemsAndKeep((prev) => renameAssetInList(prev, item.id, name.trim()));
       }
       return outcome;
     },
-    [uploadEndpoint, workspaceId, newTrace],
+    [uploadEndpoint, workspaceId, newTrace, setItemsAndKeep],
   );
 
   // A card's ⋯ menu (ui/ActionMenu): Open {domain} or Copy link first, Delete
@@ -742,6 +797,8 @@ export function AssetsPage() {
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
+  // Back on Assets, the scroll lands where it was once the files painted.
+  useKeptScroll(viewKey('assets:scroll'), !listLoading && !assetsFailed);
 
   const exitSelectMode = (): void => {
     selectAllGeneration.current += 1;
