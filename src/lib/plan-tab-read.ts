@@ -126,13 +126,7 @@ export function mergePlanTabPages(
   const timeZone = next.timeZone;
   return {
     bundles,
-    posts:
-      range !== null
-        ? loosePosts([...shown.posts, ...next.posts], bundles, range, timeZone)
-        : [...shown.posts, ...next.posts].filter(
-            (p, i, all) =>
-              !plannedPostIds(bundles).has(p.id) && all.findIndex((q) => q.id === p.id) === i,
-          ),
+    posts: loosePosts([...shown.posts, ...next.posts], bundles, range, timeZone),
     thumbs: {
       posts: { ...shown.thumbs.posts, ...next.thumbs.posts },
       concepts: { ...shown.thumbs.concepts, ...next.thumbs.concepts },
