@@ -174,7 +174,7 @@ afterEach(() => {
 });
 
 describe('Comments without sharedCheckpoints (every other host)', () => {
-  it('still reads the checkpoints itself after its list lands', async () => {
+  it('still reads the checkpoints itself, in parallel with its list', async () => {
     h.checkpointRows = [point('p-1', 1)];
     act(() => {
       root?.render(<Comments workspaceId="ws-1" entityType="post" entityId="post-1" />);
