@@ -920,7 +920,8 @@ function messageRow(value: unknown, at: string): ChatMessageRow {
       o.thread_root_message_id,
       `${at}.thread_root_message_id`,
     ),
-    removed_files: o.removed_files === undefined || o.removed_files === null ? [] : asJson(o.removed_files),
+    removed_files:
+      o.removed_files === undefined || o.removed_files === null ? [] : asJson(o.removed_files),
   };
 }
 

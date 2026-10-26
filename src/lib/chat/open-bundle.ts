@@ -111,10 +111,7 @@ export function startChatBundle(
   const traceId = deps.traceId();
   const promise = withReadTimeout(
     (signal) =>
-      deps.read(
-        { traceId, workspaceId: key.workspaceId, channelId: key.channelId, since },
-        signal,
-      ),
+      deps.read({ traceId, workspaceId: key.workspaceId, channelId: key.channelId, since }, signal),
     LATE_READ_GRACE_MS,
   );
   store.stash(key, 'bundle', promise, true);
@@ -125,9 +122,24 @@ export function startChatBundle(
   }
   byChat.set(slotKey(key), since);
   const t = deps.partTimeoutMs;
-  store.stash(key, 'marks', partOf(promise, (b) => b.marks, t), true);
-  store.stash(key, 'scheduled', partOf(promise, (b) => b.scheduled, t), true);
-  store.stash(key, 'positions', partOf(promise, (b) => b.readPositions, t), true);
+  store.stash(
+    key,
+    'marks',
+    partOf(promise, (b) => b.marks, t),
+    true,
+  );
+  store.stash(
+    key,
+    'scheduled',
+    partOf(promise, (b) => b.scheduled, t),
+    true,
+  );
+  store.stash(
+    key,
+    'positions',
+    partOf(promise, (b) => b.readPositions, t),
+    true,
+  );
   const { userId, workspaceId } = key;
   void deps.share<OpenPostsData>(
     userId,

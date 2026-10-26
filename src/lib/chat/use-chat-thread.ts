@@ -956,7 +956,8 @@ export function useChatThread(params: {
     seededRef.current = page;
     // The open's bundle starts now, while the switch renders: every hook of
     // this open (the children's effects run first) joins it, none reads alone.
-    if (memoryKey !== null && channelId !== null) void joinChatBundle(memoryKey, { deps: bundleDeps });
+    if (memoryKey !== null && channelId !== null)
+      void joinChatBundle(memoryKey, { deps: bundleDeps });
     setMessages(opening.messages);
     setLoading(opening.loading);
     setHasMore(opening.hasMore);
@@ -997,7 +998,9 @@ export function useChatThread(params: {
     () =>
       createPositionsShare((forChannel) => {
         const key = chatKey(currentUserId, workspaceId, forChannel);
-        return (key !== null ? memory.join(key, 'positions') : null) ?? loadReadPositions(db, forChannel);
+        return (
+          (key !== null ? memory.join(key, 'positions') : null) ?? loadReadPositions(db, forChannel)
+        );
       }),
     [db, memory, currentUserId, workspaceId],
   );

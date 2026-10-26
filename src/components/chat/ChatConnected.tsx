@@ -1446,30 +1446,28 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     const joined = open && key !== null ? openCache.join(key, 'scheduled') : null;
     void (
       joined ?? withReadTimeout((signal) => readScheduledMessages(supabase, { channelId, signal }))
-    ).then(
-      (result) => {
-        if (!mountedRef.current || seq !== scheduledSeq.current) return;
-        // Remembered only for the user and workspace still open (a late answer
-        // never re-scopes the memory).
-        const current = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
-        if (key !== null && current !== null && result.ok && current.userId === key.userId) {
-          if (current.workspaceId === key.workspaceId) {
-            openCache.remember(key, 'scheduled', result.data);
-          }
+    ).then((result) => {
+      if (!mountedRef.current || seq !== scheduledSeq.current) return;
+      // Remembered only for the user and workspace still open (a late answer
+      // never re-scopes the memory).
+      const current = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
+      if (key !== null && current !== null && result.ok && current.userId === key.userId) {
+        if (current.workspaceId === key.workspaceId) {
+          openCache.remember(key, 'scheduled', result.data);
         }
-        if (!result.ok) {
-          logger.warn('chat: scheduled read failed', {
-            channel_id: channelId,
-            error: result.error.message,
-          });
-        }
-        setScheduled((prev) => ({
-          channelId,
-          rows: result.ok ? result.data : prev.channelId === channelId ? prev.rows : NO_SCHEDULED,
-          settled: true,
-        }));
-      },
-    );
+      }
+      if (!result.ok) {
+        logger.warn('chat: scheduled read failed', {
+          channel_id: channelId,
+          error: result.error.message,
+        });
+      }
+      setScheduled((prev) => ({
+        channelId,
+        rows: result.ok ? result.data : prev.channelId === channelId ? prev.rows : NO_SCHEDULED,
+        settled: true,
+      }));
+    });
   }, []);
   useEffect(() => {
     if (selectedChannelId !== null && !notesOpen) refetchScheduled(selectedChannelId, true);

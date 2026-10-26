@@ -225,7 +225,11 @@ describe('a chat open over its one chat_open_bundle call', () => {
       traceId: () => 'trace-1',
     };
     const key = { userId: ME, workspaceId: WS, channelId: 'c-a' };
-    kickoffChatOpen(key, { bundle: (k) => void joinChatBundle(k, { deps }), viewerSide: () => {} }, store);
+    kickoffChatOpen(
+      key,
+      { bundle: (k) => void joinChatBundle(k, { deps }), viewerSide: () => {} },
+      store,
+    );
     await openChat('c-a', client);
     // One bundle call; the hooks' first rounds made no read of their own.
     expect(asked).toEqual([null]);
