@@ -902,6 +902,7 @@ describe('ActivityCard: merged plan edit time', () => {
           kind: 'plan',
           channelId: null,
           chatName: null,
+          chatType: null,
           scheduledId: null,
           reason: null,
           stale: false,

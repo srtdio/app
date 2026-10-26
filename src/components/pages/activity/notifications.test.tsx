@@ -432,11 +432,40 @@ describe('alert wording (the bell lines on Activity cards)', () => {
     if (s.alert == null || f.alert == null || p.alert == null || t.alert == null) {
       throw new Error('fixture');
     }
-    expect(alertTitle(s, s.alert, 'agency')).toBe('Sent in Chat');
-    expect(alertTitle(s, { ...s.alert, chatName: 'Launch crew' }, 'agency')).toBe(
-      'Sent in Launch crew',
+    // An unread chat: chatDisplayName's fallback, never "Chat".
+    expect(alertTitle(s, s.alert, 'agency')).toBe(
+      'Your scheduled message was sent to Direct message',
     );
-    expect(alertTitle(f, f.alert, 'agency')).toBe("Not sent · You're no longer in this chat");
+    expect(
+      alertTitle(s, { ...s.alert, chatType: 'group', chatName: 'Launch crew' }, 'agency'),
+    ).toBe('Your scheduled message was sent to Launch crew');
+    expect(alertTitle(s, { ...s.alert, chatType: 'dm', chatName: 'Priya Shah' }, 'agency')).toBe(
+      'Your scheduled message was sent to Priya Shah',
+    );
+    expect(alertTitle(s, { ...s.alert, chatType: 'notes' }, 'agency')).toBe(
+      'Your scheduled message was sent to Personal notes',
+    );
+    expect(alertTitle(s, { ...s.alert, chatType: 'group' }, 'agency')).toBe(
+      'Your scheduled message was sent to Group',
+    );
+    // A failed send: the lead is the title, its reason the body (never its preview).
+    expect(alertTitle(f, f.alert, 'agency')).toBe(
+      "Couldn't send your scheduled message to Direct message.",
+    );
+    expect(alertTitle(f, { ...f.alert, chatType: 'dm', chatName: 'Priya Shah' }, 'agency')).toBe(
+      "Couldn't send your scheduled message to Priya Shah.",
+    );
+    expect(
+      alertTitle(f, { ...f.alert, chatType: 'group', chatName: 'Launch crew' }, 'agency'),
+    ).toBe("Couldn't send your scheduled message to Launch crew.");
+    expect(alertTitle(f, { ...f.alert, chatType: 'notes' }, 'agency')).toBe(
+      "Couldn't send your scheduled message to Personal notes.",
+    );
+    expect(alertBody(f.alert)).toBe("You're no longer in this chat");
+    expect(alertBody({ ...f.alert, preview: 'See you at 5' })).toBe(
+      "You're no longer in this chat",
+    );
+    expect(alertBody({ ...s.alert, preview: 'See you at 5' })).toBe('See you at 5');
     expect(alertTitle(p, p.alert, 'client')).toBe('Priya shared Week of 12 Oct with you');
     expect(alertTitle(p, p.alert, 'agency')).toBe('Priya opened Week of 12 Oct for approvers');
     expect(alertTitle(t, t.alert, 'agency')).toBe(`Leo · added ${String.fromCharCode(35)}3 Hook`);
@@ -465,16 +494,95 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     );
   }
 
-  it('a failed send: "Not sent" in bad, the reason, Retry and Edit, and no tap', () => {
+  it('a failed send: the lead in bad, the reason, Retry and Edit, and no tap', () => {
     const html = card([failed()], { onRetry: () => {}, onEdit: () => {} });
     expect(html).toContain('data-activity-event="scheduled_failed"');
-    expect(html).toMatch(/class="text-bad">Not sent</);
-    expect(html).toContain('no longer in this chat');
+    expect(html).toMatch(
+      /class="text-bad">Couldn&#x27;t send your scheduled message to Direct message\.</,
+    );
+    expect(html).not.toContain('Not sent');
+    // The reason is the body line, below the title, exactly once.
+    expect(html).toMatch(
+      /<p class="mt-\[3px\] line-clamp-2 text-base text-fg-2 \[overflow-wrap:anywhere\]">You&#x27;re no longer in this chat<\/p>/,
+    );
+    expect(html.split('no longer in this chat')).toHaveLength(2);
     expect(html).toContain('data-activity-action="retry"');
     expect(html).toContain('data-activity-action="edit"');
     expect(html).toMatch(/class="[^"]*h-11[^"]*"[^>]*data-activity-action="retry"/);
     expect(html).not.toMatch(/role="button"[^>]*data-activity-lead/);
     expect(html).toContain('data-activity-alert-icon="failed"');
+  });
+
+  it('a failed card body is its reason, never the message preview; a sent card keeps it', () => {
+    const f = failed();
+    const s = sent();
+    if (f.alert == null || s.alert == null) throw new Error('fixture');
+    const failedHtml = card([{ ...f, alert: { ...f.alert, preview: 'See you at 5' } }], {
+      onRetry: () => {},
+      onEdit: () => {},
+    });
+    expect(failedHtml).not.toContain('See you at 5');
+    expect(failedHtml.split('no longer in this chat')).toHaveLength(2);
+    const sentHtml = card([{ ...s, alert: { ...s.alert, preview: 'See you at 5' } }]);
+    expect(sentHtml).toContain('See you at 5');
+    expect(sentHtml).not.toContain('no longer in this chat');
+  });
+
+  it('scheduled sends: the title names the receiver and wraps to two lines', () => {
+    const named = (i: ActivityItem): ActivityItem =>
+      i.alert == null ? i : { ...i, alert: { ...i.alert, chatType: 'dm', chatName: 'Priya Shah' } };
+    const sentHtml = card([named(sent())]);
+    const failedHtml = card([named(failed())]);
+    expect(sentHtml).toContain('Your scheduled message was sent to Priya Shah');
+    expect(failedHtml).toContain('Couldn&#x27;t send your scheduled message to Priya Shah.');
+    for (const html of [sentHtml, failedHtml]) {
+      expect(html).toContain(
+        '<p class="text-base font-medium text-fg line-clamp-2 [overflow-wrap:anywhere]">',
+      );
+      expect(html).not.toContain('Sent in');
+      expect(html).not.toMatch(/sent to Chat\b|message to Chat\b/);
+    }
+    // Every other card keeps its single-line title.
+    expect(card([reminder()])).toContain('<p class="text-base font-medium text-fg truncate">');
+  });
+
+  it('scheduled sends never read "Sent in Chat" or name the bare "Chat", read or unread', () => {
+    for (const i of [sent(), failed(), sent({ scope: 'people' }), failed({ scope: 'people' })]) {
+      const html = card([i], { onRetry: () => {}, onEdit: () => {} });
+      expect(html).not.toContain('Sent in Chat');
+      expect(html).not.toMatch(/(sent|message) to Chat\b/);
+    }
+  });
+
+  it('footer: scheduled sends show the privacy chip in place of the scope tag', () => {
+    for (const i of [sent({ scope: 'people' }), failed({ scope: 'people' }), sent(), failed()]) {
+      const html = card([i], { onRetry: () => {}, onEdit: () => {} });
+      expect(html).toContain('data-activity-only-you');
+      expect(html).toContain('Only you got this alert');
+      expect(html).not.toContain('data-activity-scope-tag');
+      expect(html).not.toContain('>People<');
+      expect(html).not.toContain('>Groups<');
+      // The icon is decoration; the text carries the meaning.
+      expect(html).toMatch(/data-activity-only-you=""[^>]*><svg[^>]*aria-hidden="true"/);
+    }
+  });
+
+  it('footer: every other kind keeps its scope tag and has no privacy chip', () => {
+    const others: ActivityItem[] = [
+      reminder(),
+      plan('plan_opened', { scope: 'posts' }),
+      task(),
+      item({ id: 'post', event_type: 'stage_change', scope: 'posts' }),
+      item({ id: 'brief', event_type: 'brief_created', entity_type: 'brief', scope: 'briefs' }),
+      postMention(),
+      chatMention(),
+    ];
+    for (const i of others) {
+      const html = card([i]);
+      expect(html, i.eventType).toContain('data-activity-scope-tag');
+      expect(html, i.eventType).not.toContain('data-activity-only-you');
+      expect(html, i.eventType).not.toContain('Only you got this alert');
+    }
   });
 
   it('a reminder: the card frame, the menu, the unread highlight and its icon', () => {
@@ -643,7 +751,13 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
       inbox_entries: ok(rows),
       chat_channels: ok([
         { channel_id: 'g-chan', channel_type: 'group', entity_id: 'g1' },
-        { channel_id: 'dm-chan', channel_type: 'dm', entity_id: null },
+        {
+          channel_id: 'dm-chan',
+          channel_type: 'dm',
+          entity_id: null,
+          dm_user_a: 'u1',
+          dm_user_b: 'u-priya',
+        },
       ]),
       groups: ok([{ id: 'g1', name: 'Launch crew' }]),
       chat_messages: ok([
@@ -659,6 +773,7 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
       users: ok([
         { id: 'u-ana', display_name: 'Ana', avatar_url: null },
         { id: 'u-cy', display_name: 'Cy', avatar_url: null },
+        { id: 'u-priya', display_name: 'Priya Shah', avatar_url: null },
       ]),
     });
     const res = await fetchActivityEntries(client, 'w1');
@@ -671,12 +786,26 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
     expect(rem?.alert).toMatchObject({ chatName: 'Launch crew', preview: 'Ship the reel' });
     // A message that did not load still reads, never blank.
     expect(byId.get('rem1')?.alert?.preview).toBe('Message');
-    expect(byId.get('sent')?.alert).toMatchObject({ chatName: null, preview: 'See you at 5' });
-    expect(byId.get('fail')?.alert).toMatchObject({
-      reason: 'exceeds 5000',
-      preview: 'Long one',
-      stale: false,
+    // A scheduled send's direct chat names the other person (not the viewer, u1)
+    // from the one batched people read; a group send names the group.
+    const sentRow = byId.get('sent');
+    expect(sentRow?.alert).toMatchObject({
+      chatType: 'dm',
+      chatName: 'Priya Shah',
+      preview: 'See you at 5',
     });
+    if (sentRow?.alert == null) throw new Error('fixture');
+    expect(alertTitle(sentRow, sentRow.alert, 'agency')).toBe(
+      'Your scheduled message was sent to Priya Shah',
+    );
+    const failRow = byId.get('fail');
+    if (failRow?.alert == null) throw new Error('fixture');
+    expect(alertTitle(failRow, failRow.alert, 'agency')).toBe(
+      "Couldn't send your scheduled message to Launch crew.",
+    );
+    // The reason comes from the scheduled row; the failed card shows no preview.
+    expect(failRow.alert).toMatchObject({ reason: 'exceeds 5000', preview: null, stale: false });
+    expect(alertBody(failRow.alert)).toBe('The message is too long');
     const moved = byId.get('moved');
     expect(moved?.actorName).toBe('Cy');
     expect(moved?.alert).toMatchObject({ planTitle: 'Launch', itemTitle: 'Carousel' });
@@ -721,8 +850,12 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
     expect(res.data[0]?.alert).toMatchObject({
       stale: false,
       reason: 'not a member of this chat',
-      preview: 'Scheduled message',
+      preview: null,
     });
+    // The payload's reason still reads as the body line.
+    const alert = res.data[0]?.alert;
+    if (alert == null) throw new Error('fixture');
+    expect(alertBody(alert)).toBe("You're no longer in this chat");
   });
 
   it('a gone failed send (read ok, no row) is stale', async () => {

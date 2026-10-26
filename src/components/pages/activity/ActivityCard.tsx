@@ -15,6 +15,7 @@ import {
   IconChat,
   IconClock,
   IconFile,
+  IconLock,
   IconPlan,
   IconTaskSquare,
   IconTickSingle,
@@ -49,7 +50,7 @@ import {
   type SnoozeKind,
   type UpcomingItem,
 } from '@/components/pages/activity/data';
-import { NOT_SENT_LABEL, alertDisplayTime, failureInPlainWords } from '@/lib/inbox/alerts';
+import { ONLY_YOU_LABEL, alertDisplayTime } from '@/lib/inbox/alerts';
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatRelative } from '@/lib/time';
@@ -398,7 +399,10 @@ function DeletedFilesTile({
   );
 }
 
-/** An alert card's title: a failed send's "Not sent" and a missed due time in bad. */
+/**
+ * An alert card's title: a failed send's lead ("Couldn't send your scheduled
+ * message to <receiver>.") and a missed due time in bad.
+ */
 function AlertTitle({
   item,
   alert,
@@ -408,19 +412,12 @@ function AlertTitle({
   alert: AlertInfo;
   side: ViewerSide;
 }): ReactElement {
-  if (alert.kind === 'failed') {
-    return (
-      <>
-        <span className="text-bad">{NOT_SENT_LABEL}</span>
-        <span className="font-normal text-fg-2">
-          {' · '}
-          {failureInPlainWords(alert.reason)}
-        </span>
-      </>
-    );
-  }
   const line = alertTitle(item, alert, side);
-  return item.eventType === 'task_due' ? <span className="text-bad">{line}</span> : <>{line}</>;
+  return alert.kind === 'failed' || item.eventType === 'task_due' ? (
+    <span className="text-bad">{line}</span>
+  ) : (
+    <>{line}</>
+  );
 }
 
 /**
@@ -489,7 +486,10 @@ export function ActivityCard({
         ? (lead.filenames?.[0] ?? 'Files')
         : activityLine(lead);
   const leadTappable = !opensNothing(lead);
-  const tag = SCOPE_TAG[lead.scope];
+  // A scheduled send's alert went to its sender alone: the footer says so in
+  // place of the scope tag, and its title (it names the receiver) may wrap.
+  const onlyYou = alert !== null && (alert.kind === 'sent' || alert.kind === 'failed');
+  const tag = onlyYou ? undefined : SCOPE_TAG[lead.scope];
   // The header names the newest entry's actor (never an older row's).
   const actorEntry = newestEntry(group) ?? lead;
   const actorName = actorEntry.actorName;
@@ -563,7 +563,12 @@ export function ActivityCard({
               ) : null}
             </div>
 
-            <p className="truncate text-base font-medium text-fg">
+            <p
+              className={cn(
+                'text-base font-medium text-fg',
+                onlyYou ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'truncate',
+              )}
+            >
               {alert !== null ? <AlertTitle item={lead} alert={alert} side={side} /> : title}
             </p>
 
@@ -656,8 +661,20 @@ export function ActivityCard({
             )}
           </span>
           {tag !== undefined ? (
-            <span className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2">
+            <span
+              data-activity-scope-tag=""
+              className="inline-flex h-5 items-center rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2"
+            >
               {tag}
+            </span>
+          ) : null}
+          {onlyYou ? (
+            <span
+              data-activity-only-you=""
+              className="inline-flex h-5 items-center gap-1 rounded-md bg-panel-2 px-2 text-xs font-medium text-fg-2"
+            >
+              <IconLock size={ICON_SIZE.inline} inline />
+              {ONLY_YOU_LABEL}
             </span>
           ) : null}
           {snoozed ? (

@@ -38,7 +38,6 @@ import {
 import {
   CHAT_LABEL,
   MESSAGE_LABEL,
-  NOT_SENT_LABEL,
   PLAN_DELETED_TOAST,
   PLAN_LABEL,
   REMINDER_LABEL,
@@ -53,8 +52,9 @@ import {
   planFieldsOf,
   readChatMessages,
   readScheduledRows,
+  scheduledFailedLead,
   scheduledPreview,
-  sentTitle,
+  scheduledSentTitle,
   taskAlertLine,
   taskFieldsOf,
   type AlertKind,
@@ -64,6 +64,8 @@ import {
   type TaskAlertFields,
 } from '@/lib/inbox/alerts';
 import { TASKS_SHEET_ONLY } from '@/lib/chat/tasks';
+import { chatDisplayName } from '@/lib/chat/chat-name';
+import { dmPeerId } from '@/lib/chat-reads';
 import { ACTION_FAILED_COPY } from '@/lib/chat/reminders';
 import {
   cancelScheduledMessage,
@@ -301,15 +303,21 @@ export interface AlertInfo {
   kind: AlertKind;
   /** Chat rows (reminder, sent, failed, task): the chat (entity_id). */
   channelId: string | null;
-  /** The chat's name for a group; null for a direct chat or an unread one (reads "Chat"). */
+  /**
+   * The chat's name for a group; for a scheduled send (sent, failed) also a
+   * direct chat's other person. Null for an unread one (reads "Chat", or
+   * chatDisplayName's fallback on a scheduled send).
+   */
   chatName: string | null;
+  /** The chat's kind (chat rows), null when the chat read failed. */
+  chatType: 'group' | 'dm' | 'notes' | null;
   /** Scheduled rows: the scheduled message (payload.scheduled_id). */
   scheduledId: string | null;
   /** failed: why it failed (the scheduled row's reason, else the payload's). */
   reason: string | null;
   /** failed: resolved elsewhere (sent, cancelled or edited): Retry clears the entry. */
   stale: boolean;
-  /** The message (reminder, sent) or scheduled body (failed) preview, resolved by the loader. */
+  /** The message preview (reminder, sent), resolved by the loader; a failed send has none. */
   preview: string | null;
   /** plan: the payload's fields, and the plan and item titles the loader resolved. */
   plan?: PlanAlertFields;
@@ -327,6 +335,7 @@ function alertOf(row: InboxEntryRow, payload: unknown): AlertInfo | null {
     kind,
     channelId: row.entity_type === BELL_CHAT_ENTITY ? row.entity_id : null,
     chatName: null,
+    chatType: null,
     scheduledId: payloadStr(payload, 'scheduled_id'),
     reason: kind === 'failed' ? payloadStr(payload, 'reason') : null,
     stale: false,
@@ -903,6 +912,15 @@ function alertChat(alert: AlertInfo): string {
 }
 
 /**
+ * Who a scheduled send went to, as chatDisplayName names the chat: a direct
+ * chat's other person, a group's name, "Personal notes"; its fallbacks
+ * ("Direct message", "Group") when a name did not resolve. Never "Chat". Pure.
+ */
+export function scheduledReceiver(alert: Pick<AlertInfo, 'chatName' | 'chatType'>): string {
+  return chatDisplayName({ channelType: alert.chatType ?? 'dm', title: alert.chatName ?? '' });
+}
+
+/**
  * An alert card's top line, beside the actor's photo: the actor's name (a
  * reminder's message sender, a plan or task change's author), else the
  * alert's label ("Reminder", "Scheduled", "Plan", "Tasks"). Pure.
@@ -924,7 +942,8 @@ export function alertTopLine(item: Pick<ActivityItem, 'actorName'>, alert: Alert
 
 /**
  * An alert card's title, in the bell's words: a reminder's message preview;
- * "Sent in <chat>"; "Not sent · <reason in plain words>"; the plan alert's
+ * "Your scheduled message was sent to <receiver>"; "Couldn't send your
+ * scheduled message to <receiver>." (its reason is the body); the plan alert's
  * line (side-aware for plan_opened); the task alert's line. Pure.
  */
 export function alertTitle(
@@ -936,9 +955,9 @@ export function alertTitle(
     case 'reminder':
       return alert.preview ?? MESSAGE_LABEL;
     case 'sent':
-      return sentTitle(alertChat(alert));
+      return scheduledSentTitle(scheduledReceiver(alert));
     case 'failed':
-      return `${NOT_SENT_LABEL} · ${failureInPlainWords(alert.reason)}`;
+      return scheduledFailedLead(scheduledReceiver(alert));
     case 'plan':
       return planAlertLine(
         item.eventType,
@@ -953,7 +972,8 @@ export function alertTitle(
 
 /**
  * An alert card's second line: the chat for a reminder or a task alert, the
- * message preview for a scheduled send, the item a plan alert names (never
+ * message preview for a sent scheduled message, a failed send's reason in
+ * plain words (never its preview), the item a plan alert names (never
  * the plan twice), or null when there is none. Pure.
  */
 export function alertBody(alert: AlertInfo): string | null {
@@ -962,8 +982,9 @@ export function alertBody(alert: AlertInfo): string | null {
     case 'task':
       return alertChat(alert);
     case 'sent':
-    case 'failed':
       return alert.preview;
+    case 'failed':
+      return failureInPlainWords(alert.reason);
     case 'plan':
       return alert.itemTitle ?? alert.plan?.itemTitle ?? null;
   }
@@ -1435,8 +1456,14 @@ interface FirstImageRow {
 
 /** A chat row's chat: its kind, and the Sorted group id for a group. */
 export interface ChatRowChannel {
+  /** 'dm' also for the Personal notes chat (`notes` tells it apart). */
   type: 'group' | 'dm';
   groupId: string | null;
+  /** The caller's Personal notes chat. */
+  notes?: boolean;
+  /** A direct chat's two people (the other one is its name). */
+  dmUserA?: string | null;
+  dmUserB?: string | null;
 }
 
 /**
@@ -1456,7 +1483,7 @@ async function readChatSources(
     ids.channelIds.length > 0
       ? client
           .from('chat_channels')
-          .select('channel_id, channel_type, entity_id')
+          .select('channel_id, channel_type, entity_id, dm_user_a, dm_user_b')
           .in('channel_id', ids.channelIds)
       : Promise.resolve(null),
     readChatMessages(client, ids.messageIds),
@@ -1465,7 +1492,13 @@ async function readChatSources(
   if (channelsRes !== null && channelsRes.error === null) {
     for (const r of channelsRes.data ?? []) {
       const type = r.channel_type === 'group' ? 'group' : 'dm';
-      channels.set(r.channel_id, { type, groupId: type === 'group' ? r.entity_id : null });
+      channels.set(r.channel_id, {
+        type,
+        groupId: type === 'group' ? r.entity_id : null,
+        notes: r.channel_type === 'notes',
+        dmUserA: r.dm_user_a,
+        dmUserB: r.dm_user_b,
+      });
     }
   }
   return { channels, messages };
@@ -1552,23 +1585,47 @@ interface AlertSources {
   planTitles: ReadonlyMap<string, string>;
   postTitles: ReadonlyMap<string, string>;
   chatNames: NameOf;
+  /** A person's name (the people read above), for a direct chat's other person. */
+  personNameOf: (id: string) => string | null;
+}
+
+/**
+ * A direct chat's other person: whichever of its two people is not the
+ * viewer (the inbox row's owner). Null for a group, notes or an unread chat.
+ * Pure.
+ */
+function dmPeerOf(channel: ChatRowChannel | undefined, viewerId: string): string | null {
+  if (channel === undefined || channel.type !== 'dm' || channel.notes === true) return null;
+  return dmPeerId(
+    { dm_user_a: channel.dmUserA ?? null, dm_user_b: channel.dmUserB ?? null },
+    viewerId,
+  );
 }
 
 /**
  * Fill an alert's resolved fields from the batched reads: its group chat's
- * name, the message or scheduled body preview, a failed send's reason and
+ * name (a scheduled send's direct chat: the other person's), the message or scheduled body preview, a failed send's reason and
  * staleness, a plan alert's plan and item titles. A field whose read failed
  * stays empty and the row still renders.
  */
-function stitchAlert(alert: AlertInfo, messageId: string | null, from: AlertSources): void {
+function stitchAlert(
+  alert: AlertInfo,
+  messageId: string | null,
+  viewerId: string,
+  from: AlertSources,
+): void {
   const channel = alert.channelId !== null ? from.channels.get(alert.channelId) : undefined;
+  alert.chatType = channel === undefined ? null : channel.notes === true ? 'notes' : channel.type;
   alert.chatName = channel?.groupId != null ? (from.groupNames.get(channel.groupId) ?? null) : null;
+  if (alert.kind === 'sent' || alert.kind === 'failed') {
+    const peer = dmPeerOf(channel, viewerId);
+    if (peer !== null) alert.chatName = from.personNameOf(peer);
+  }
   if (alert.kind === 'reminder' || alert.kind === 'sent') {
     const message = messageId !== null ? from.messages.get(messageId) : undefined;
     alert.preview = messagePreview(message, from.chatNames);
   } else if (alert.kind === 'failed') {
     const row = alert.scheduledId !== null ? from.failed.rows.get(alert.scheduledId) : undefined;
-    alert.preview = scheduledPreview(row, from.chatNames);
     alert.reason = row?.failure_reason ?? alert.reason;
     alert.stale = isStaleFailed(from.failed, alert.scheduledId);
   } else if (alert.plan !== undefined) {
@@ -1890,6 +1947,8 @@ export async function fetchActivityEntries(
   // shared name registry: users + workspace_members, one .in() each. A person a
   // successful read found without a current membership reads "Former member";
   // anyone not resolved (a failed read) names nobody, never "Former member".
+  // Whose inbox each row is (the viewer): a direct chat's other person is the one not them.
+  const viewerOf = new Map(rows.map((row) => [row.id, row.user_id]));
   const userIds = unique([
     ...items
       .flatMap((item) =>
@@ -1904,7 +1963,13 @@ export async function fetchActivityEntries(
     ...batchAuthors.values(),
     ...[...batchBodies.values()].flatMap((body) => parseMentions(body)),
     ...[...chatRes.messages.values()].flatMap((m) => parseMentions(m.body ?? '')),
-    ...[...failedRes.rows.values()].flatMap((r) => parseMentions(r.body ?? '')),
+    // A scheduled send's direct chat names its other person.
+    ...alerts.flatMap(({ item, alert }) => {
+      if (alert.kind !== 'sent' && alert.kind !== 'failed') return [];
+      const channel = alert.channelId !== null ? chatRes.channels.get(alert.channelId) : undefined;
+      const peer = dmPeerOf(channel, viewerOf.get(item.id) ?? '');
+      return peer !== null ? [peer] : [];
+    }),
     // A reminder names its message's sender.
     ...alerts.flatMap(({ item, alert }) => {
       const sender =
@@ -1985,7 +2050,7 @@ export async function fetchActivityEntries(
     if (isChatMention(item)) return;
 
     if (item.alert != null) {
-      stitchAlert(item.alert, item.messageId, {
+      stitchAlert(item.alert, item.messageId, rows[idx]?.user_id ?? '', {
         channels: chatRes.channels,
         groupNames,
         messages: chatRes.messages,
@@ -1994,6 +2059,7 @@ export async function fetchActivityEntries(
         planTitles: planRes.planTitles,
         postTitles,
         chatNames,
+        personNameOf: nameOf,
       });
       item.title = null;
       item.format = null;

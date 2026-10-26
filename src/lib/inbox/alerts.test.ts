@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Database } from '@srtdio/schemas';
 import {
+  ONLY_YOU_LABEL,
   PLAN_ALERT_EVENT_TYPES,
   PLAN_DELETED_TOAST,
   alertDisplayTime,
@@ -14,12 +15,14 @@ import {
   readChatMessages,
   readScheduledRows,
   scheduledPreview,
-  sentTitle,
+  scheduledFailedLead,
+  scheduledSentTitle,
   taskAlertLine,
   taskFieldsOf,
   type PlanAlertFields,
 } from '@/lib/inbox/alerts';
 import { mentionToastFrom, splitNewRows } from '@/lib/inbox/inbox-live';
+import { chatDisplayName } from '@/lib/chat/chat-name';
 import type { ScheduledRow } from '@/lib/chat/scheduled';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
@@ -306,7 +309,47 @@ describe('copy', () => {
   it('scheduled preview and the sent line', () => {
     expect(scheduledPreview(scheduledRow(), () => undefined)).toBe('See you at 5');
     expect(scheduledPreview(undefined, () => undefined)).toBe('Scheduled message');
-    expect(sentTitle('Launch crew')).toBe('Sent in Launch crew');
+  });
+});
+
+describe('scheduled send titles name the receiver', () => {
+  const dm = chatDisplayName({ channelType: 'dm', title: 'Priya Shah' });
+  const group = chatDisplayName({ channelType: 'group', title: 'Launch crew' });
+  const notes = chatDisplayName({ channelType: 'notes', title: '' });
+  const noDmName = chatDisplayName({ channelType: 'dm', title: '' });
+  const noGroupName = chatDisplayName({ channelType: 'group', title: '' });
+
+  it('sent: a DM names the other person, a group its name, notes "Personal notes"', () => {
+    expect(scheduledSentTitle(dm)).toBe('Your scheduled message was sent to Priya Shah');
+    expect(scheduledSentTitle(group)).toBe('Your scheduled message was sent to Launch crew');
+    expect(scheduledSentTitle(notes)).toBe('Your scheduled message was sent to Personal notes');
+  });
+
+  it('failed: the lead names the receiver (its reason is the body line)', () => {
+    expect(scheduledFailedLead(dm)).toBe("Couldn't send your scheduled message to Priya Shah.");
+    expect(scheduledFailedLead(group)).toBe("Couldn't send your scheduled message to Launch crew.");
+    expect(scheduledFailedLead(notes)).toBe(
+      "Couldn't send your scheduled message to Personal notes.",
+    );
+  });
+
+  it('a missing name falls back to chatDisplayName, never the bare word "Chat"', () => {
+    expect(scheduledSentTitle(noDmName)).toBe('Your scheduled message was sent to Direct message');
+    expect(scheduledFailedLead(noGroupName)).toBe("Couldn't send your scheduled message to Group.");
+    for (const line of [
+      scheduledSentTitle(noDmName),
+      scheduledSentTitle(noGroupName),
+      scheduledFailedLead(noDmName),
+    ]) {
+      expect(line).not.toMatch(/\bChat\b/);
+      expect(line).not.toContain('Sent in');
+      expect(line).not.toContain('Not sent');
+      expect(line).not.toContain('\u2014');
+    }
+  });
+
+  it('the privacy chip says only the sender got the alert', () => {
+    expect(ONLY_YOU_LABEL).toBe('Only you got this alert');
   });
 });
 
