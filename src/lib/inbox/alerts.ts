@@ -290,18 +290,31 @@ export const REMINDER_LABEL = 'Reminder';
 /** A scheduled send's top line (sent or failed). */
 export const SCHEDULED_LABEL = 'Scheduled';
 
-/** A failed send's line, before its reason. */
-export const NOT_SENT_LABEL = 'Not sent';
-
 /** A plan alert's top line when no actor resolved. */
 export const PLAN_LABEL = 'Plan';
 
 /** A chat row's chat when its name did not resolve (a direct chat, or a failed read). */
 export const CHAT_LABEL = 'Chat';
 
-/** "Sent in <chat>". Pure. */
-export function sentTitle(chatName: string): string {
-  return `Sent in ${chatName}`;
+/**
+ * A scheduled send's footer chip: the alert went to the sender alone (the
+ * message itself went only to its chat).
+ */
+export const ONLY_YOU_LABEL = 'Only you got this alert';
+
+/** A sent scheduled message's title; {chat} is chatDisplayName's. Pure. */
+export function scheduledSentTitle(chat: string): string {
+  return `Your scheduled message was sent to ${chat}`;
+}
+
+/** A failed send's lead, before its reason; {chat} is chatDisplayName's. Pure. */
+export function scheduledFailedLead(chat: string): string {
+  return `Couldn't send your scheduled message to ${chat}.`;
+}
+
+/** A failed scheduled message's title: the lead, then the reason in plain words. Pure. */
+export function scheduledFailedTitle(chat: string, reason: string | null): string {
+  return `${scheduledFailedLead(chat)} ${failureInPlainWords(reason)}`;
 }
 
 /** A failed send's reason in plain words (never the raw proc text). Pure. */

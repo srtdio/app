@@ -193,16 +193,19 @@ test(
   },
 );
 
-test('a failed scheduled send: "Not sent" with the reason, and Retry sends it now', async ({
+test('a failed scheduled send: names the receiver, the reason, and Retry sends it now', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
   seedAlerts(network.world);
   await page.goto('/notifications');
   const failed = card(page, 'scheduled_failed');
-  await expect(failed).toContainText("Not sent · You're no longer in this chat", {
-    timeout: 15_000,
-  });
+  await expect(failed).toContainText(
+    `Couldn't send your scheduled message to ${PEER_NAME}. You're no longer in this chat`,
+    { timeout: 15_000 },
+  );
+  await expect(failed).toContainText('Only you got this alert');
+  await expect(failed.locator('[data-activity-scope-tag]')).toHaveCount(0);
   await expect(failed).toContainText(FAILED_BODY);
   const retry = failed.locator('[data-activity-action="retry"]');
   const edit = failed.locator('[data-activity-action="edit"]');
