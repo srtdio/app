@@ -16,7 +16,10 @@ import {
 // records how it was called. assetDelete must forward the proc name and the
 // args object (carrying p_trace_id) unchanged, and adapt { data, error } into a
 // Result, mirroring the other @srtdio/rpc wrappers.
-function makeClient(result: { data: unknown; error: { message: string } | null }) {
+function makeClient(result: {
+  data: unknown;
+  error: { message: string; details?: string | null } | null;
+}) {
   const rpc = vi.fn(() => Promise.resolve(result));
   const client = { rpc } as unknown as Client;
   return { client, rpc };
@@ -336,5 +339,33 @@ describe('planPostsAdd', () => {
     const { client, rpc } = makeClient({ data: 1, error: null });
     await planPostsAdd(client, { ...base, p_target_date: '2026-10-14' });
     expect(rpc).toHaveBeenCalledWith('plan_posts_add', { ...base, p_target_date: '2026-10-14' });
+  });
+});
+
+describe('invalid_mention', () => {
+  const args = {
+    p_asset_id: '11111111-1111-1111-1111-111111111111',
+    p_trace_id: '22222222-2222-2222-2222-222222222222',
+  };
+
+  it('maps invalid_mention to a domain error and keeps the DETAIL ids', async () => {
+    const { client } = makeClient({
+      data: null,
+      error: { message: 'invalid_mention', details: 'a,b' },
+    });
+    const result = await assetDelete(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'invalid_mention', message: 'invalid_mention', details: 'a,b' },
+    });
+  });
+
+  it('omits details when the proc raised none', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'invalid_mention', details: null } });
+    const result = await assetDelete(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'invalid_mention', message: 'invalid_mention' },
+    });
   });
 });

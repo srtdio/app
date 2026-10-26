@@ -73,6 +73,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - One PR per prompt.
 - Never auto-merge a PR.
 - Schema changes execute via the Supabase MCP only after Shubham approves them.
+- posts_list returns posts columns by name: any new posts column must be added to posts_list in the same migration, plus types regen.
 - Never use `.js` or `.jsx` for application code; `.ts` and `.tsx` only.
 - Never commit secrets.
 - Never push to `main` directly.
