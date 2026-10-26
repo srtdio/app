@@ -784,7 +784,7 @@ describe('ActivityCard: notifications fixes', () => {
 
   it('fix 8: a posts row still shows its "Posts" scope tag', () => {
     const html = renderCard([item({ eventType: 'comment', scope: 'posts' })]);
-    expect(html).toMatch(/text-xs font-medium text-fg-2">Posts</);
+    expect(html).toMatch(/text-xs font-medium bg-panel-2 text-fg-2">Posts</);
   });
 
   it('fix 10: a body line wraps anywhere so a long token never overflows', () => {
