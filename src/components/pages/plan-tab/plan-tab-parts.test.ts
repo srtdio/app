@@ -63,16 +63,23 @@ describe('the phone card covers', () => {
   });
 });
 
-describe('Plan tab memory', () => {
-  it('keeps the newest ranges, drops the oldest, and forgets on request', async () => {
-    const { rememberPlanTab, rememberedPlanTab, forgetPlanTab, PLAN_TAB_MEMORY_MAX } =
-      await import('./use-plan-tab-data');
-    forgetPlanTab();
+describe('Plan tab memory (session reads, freshness window)', () => {
+  it('paints a range read inside the window, never one past it', async () => {
+    const { peekPlanTab, planTabReadKey } = await import('@/lib/plan-tab-shared');
+    const { primeRead, resetSessionReads, READ_FRESH_MS } = await import('@/lib/session-read');
+    resetSessionReads();
     const data = { bundles: [], posts: [], thumbs: { posts: {}, concepts: {} }, anyPlan: false };
-    for (let i = 0; i <= PLAN_TAB_MEMORY_MAX; i += 1) rememberPlanTab(`k${i}`, data);
-    expect(rememberedPlanTab('k0')).toBeUndefined();
-    expect(rememberedPlanTab(`k${PLAN_TAB_MEMORY_MAX}`)).toBe(data);
-    forgetPlanTab();
-    expect(rememberedPlanTab(`k${PLAN_TAB_MEMORY_MAX}`)).toBeUndefined();
+    const args = { workspaceId: 'w1', range: null, timeZone: 'UTC', onlyShared: false };
+    primeRead(planTabReadKey('u1', args), { ok: true, data });
+    expect(peekPlanTab('u1', args)).toBe(data);
+    // Another user, workspace, range, zone or side is another key.
+    expect(peekPlanTab('u2', args)).toBeUndefined();
+    expect(peekPlanTab('u1', { ...args, onlyShared: true })).toBeUndefined();
+    expect(peekPlanTab('u1', { ...args, timeZone: 'Asia/Kolkata' })).toBeUndefined();
+    // Past the window it is absent: the tab shows loading and reads again.
+    expect(peekPlanTab('u1', args, Date.now() + READ_FRESH_MS + 1)).toBeUndefined();
+    // Without a session context nothing is shared.
+    expect(peekPlanTab(null, args)).toBeUndefined();
+    resetSessionReads();
   });
 });

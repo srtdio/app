@@ -33,14 +33,22 @@ import {
 import {
   BRIEF_NOTE_PARAM,
   briefListParams,
+  briefsPaintNeedsThumbs,
+  dropBriefsReads,
   filterBriefsByStatus,
+  listBriefsFirstPage,
   listBriefsPage,
   mergeBriefPages,
   parseBriefFilter,
+  readBriefCounts,
+  readBriefsFirstPage,
+  withBriefThumbnails,
   type BriefFilter,
   type BriefPageNext,
 } from '@/lib/brief-list';
 import { countBriefsByFilter } from '@/lib/brief-counts';
+import { getPrefetchContext } from '@/lib/route-data';
+import { logger } from '@/lib/logger';
 import {
   groupBriefsByDay,
   groupBriefsByTime,
@@ -224,6 +232,9 @@ const GRID_CLASS = 'pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3';
 
 /** How long the search must sit still before the chip counts are re-read. */
 export const BRIEF_COUNTS_SEARCH_DELAY_MS = 250;
+
+/** The longest the first paint waits for the chip counts once the rows are in. */
+export const BRIEF_COUNTS_PAINT_WAIT_MS = 5_000;
 
 /** The Load more failure toast: "Couldn't {action}. {reason}". */
 export const BRIEFS_LOAD_MORE_FAILED = "Couldn't load more briefs. Try again.";
@@ -451,7 +462,9 @@ export function BriefsPage() {
   );
 
   const [briefs, setBriefs] = useState<BriefWithThumbnail[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading from the first render: the read starts in an effect, after the
+  // first paint, so a false start would flash a zero state for a frame.
+  const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   // Keyset paging: where the next page starts, or done. Load more appends it.
   const [next, setNext] = useState<BriefPageNext>({ done: true });
@@ -478,43 +491,105 @@ export function BriefsPage() {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
 
+  // Who the shared first reads are keyed to: the user the shell's nav press
+  // started them for (src/lib/route-data.ts), when it is this workspace. Null:
+  // nothing is shared and the page reads on its own.
+  const sharedUserId = useCallback((): string | null => {
+    const ctx = getPrefetchContext();
+    return ctx !== null && ctx.workspaceId === workspaceId ? ctx.userId : null;
+  }, [workspaceId]);
+
   // Every chip's count for the search, in parallel; only the newest read lands.
+  // The first load (`join`) joins the counts a nav press already started.
   const loadCounts = useCallback(
-    async (forSearch: string) => {
+    async (forSearch: string, join = false) => {
       if (workspaceId === null) return;
       countsGeneration.current += 1;
       const generation = countsGeneration.current;
       countedSearch.current = forSearch;
-      const result = await countBriefsByFilter(supabase, workspaceId, forSearch);
+      const userId = join ? sharedUserId() : null;
+      const result =
+        userId === null
+          ? await countBriefsByFilter(supabase, workspaceId, forSearch)
+          : await readBriefCounts(supabase, userId, workspaceId, forSearch, countBriefsByFilter);
       if (generation !== countsGeneration.current) return;
       setChipCounts(result.ok ? result.data : {});
     },
-    [workspaceId],
+    [workspaceId, sharedUserId],
   );
 
   // The active workspace's newest briefs, one keyset page read on the server by
   // workspace_id, then grouped and filtered in memory over what is loaded. A
   // failure shows LoadError (never the server's text); Retry runs this same
   // read again. Every reload starts over from the newest page.
-  const loadBriefs = useCallback(async () => {
-    if (workspaceId === null) return;
-    // The counts reload on every event the list reloads on, alongside it.
-    void loadCounts(searchRef.current);
-    loadGeneration.current += 1;
-    const generation = loadGeneration.current;
-    setLoading(true);
-    setLoadFailed(false);
-    const result = await listBriefsPage(supabase, workspaceId);
-    if (generation !== loadGeneration.current) return;
-    setLoading(false);
-    setLoadingMore(false);
-    if (!result.ok) {
-      setLoadFailed(true);
-      return;
-    }
-    setBriefs(result.data.items);
-    setNext(result.data.next);
-  }, [workspaceId, loadCounts]);
+  //
+  // The list paints once the rows and the chip counts are both in (read in
+  // parallel), so the chips never gain numbers after the cards. The thumbnails
+  // (a second round: they need the rows' ids) fill each card's fixed tile when
+  // they land, unless a card's height depends on them (briefsPaintNeedsThumbs),
+  // when the paint waits for them as before. Only the mount (`join`) joins the
+  // reads a nav press started; every reload drops them and reads anew.
+  const loadBriefs = useCallback(
+    async (join = false) => {
+      if (workspaceId === null) return;
+      const userId = sharedUserId();
+      if (userId !== null && !join) dropBriefsReads(userId, workspaceId);
+      // The counts reload on every event the list reloads on, alongside it.
+      const counted = loadCounts(searchRef.current, true);
+      loadGeneration.current += 1;
+      const generation = loadGeneration.current;
+      setLoading(true);
+      setLoadFailed(false);
+      // A counts read that never answers holds the paint no longer than the
+      // bound; the chips then take their numbers when it lands.
+      const countsOrBound = Promise.race([
+        counted,
+        new Promise<void>((resolve) => window.setTimeout(resolve, BRIEF_COUNTS_PAINT_WAIT_MS)),
+      ]);
+      const [result] = await Promise.all([
+        userId === null
+          ? listBriefsFirstPage(supabase, workspaceId)
+          : readBriefsFirstPage(supabase, userId, workspaceId, listBriefsFirstPage),
+        countsOrBound,
+      ]);
+      if (generation !== loadGeneration.current) return;
+      if (!result.ok) {
+        setLoading(false);
+        setLoadingMore(false);
+        setLoadFailed(true);
+        return;
+      }
+      const { items, next: page, thumbs } = result.data;
+      if (briefsPaintNeedsThumbs(items)) {
+        const thumbnails = await thumbs;
+        if (generation !== loadGeneration.current) return;
+        setLoading(false);
+        setLoadingMore(false);
+        if (!thumbnails.ok) {
+          setLoadFailed(true);
+          return;
+        }
+        setBriefs(withBriefThumbnails(items, thumbnails.data));
+        setNext(page);
+        return;
+      }
+      setLoading(false);
+      setLoadingMore(false);
+      setBriefs(items);
+      setNext(page);
+      const thumbnails = await thumbs;
+      if (generation !== loadGeneration.current) return;
+      if (!thumbnails.ok) {
+        // The cards keep their icon tiles; nothing else depends on the images.
+        logger.warn('briefs: thumbnails read failed', { error: thumbnails.error.message });
+        return;
+      }
+      if (thumbnails.data.size === 0) return;
+      // Fill only the first page's rows: a Load more page carries its own.
+      setBriefs((prev) => withBriefThumbnails(prev, thumbnails.data));
+    },
+    [workspaceId, loadCounts, sharedUserId],
+  );
 
   // The next page, appended with duplicates (by id) dropped. A failure keeps
   // what is loaded and says so in a toast; the button stays for another try.
@@ -534,8 +609,17 @@ export function BriefsPage() {
   }, [workspaceId, next, loadingMore, showToast]);
 
   useEffect(() => {
-    void loadBriefs();
+    void loadBriefs(true);
   }, [loadBriefs]);
+  // Leaving the page forgets its shared first reads, so a later visit reads the
+  // server again and never paints this visit's list.
+  useEffect(
+    () => () => {
+      const userId = sharedUserId();
+      if (workspaceId !== null && userId !== null) dropBriefsReads(userId, workspaceId);
+    },
+    [workspaceId, sharedUserId],
+  );
   useWorkspaceDataChanged(() => void loadBriefs());
 
   // The search is applied to the loaded rows in memory, but the counts are

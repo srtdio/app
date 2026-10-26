@@ -62,6 +62,13 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useSort } from '@/lib/use-sort';
 import { useSession } from '@/lib/session-context';
+import { dispatchPostChanged } from '@/components/chat/post-sheet';
+import {
+  dropPipelinePosts,
+  peekPipelinePosts,
+  readPipelinePosts,
+  PIPELINE_POSTS_LIMIT,
+} from '@/lib/pipeline-posts';
 import {
   ROLE_READ_ERROR,
   readMemberRole,
@@ -646,6 +653,8 @@ export interface UndoableMoveDeps extends MovePostDeps {
   postReason?: (postId: string, body: string, traceId: string) => Promise<{ ok: boolean }>;
   /** Mints the move's trace id, shared by the move and its reason comment. */
   newTraceId?: () => string;
+  /** The move landed on the server (the page drops its kept reads and says so). */
+  onLanded?: (postId: string) => void;
 }
 
 /**
@@ -713,6 +722,7 @@ export function runUndoableMove(
         return;
       }
       deps.inFlight.delete(postId);
+      deps.onLanded?.(postId);
       // The move landed; a typed reason follows as a comment on the same trace.
       if (reason !== null && deps.postReason !== undefined) {
         let posted = false;
@@ -742,6 +752,14 @@ export interface MovePostDeps {
   toast: (message: string, failure?: MoveToastFailure) => void;
   /** The viewer's workspace role: a move this role may not make never reaches the proc. */
   role: string | null;
+}
+
+/**
+ * Whether a path is a post's page (/posts/:id, or the pretty /p/KEY-N), where
+ * the post can change without a post-changed event. Pure.
+ */
+export function leavingToPost(pathname: string): boolean {
+  return pathname.startsWith('/posts/') || pathname.startsWith('/p/');
 }
 
 export function PipelinePage() {
@@ -798,14 +816,30 @@ export function PipelinePage() {
   const timeZone = activeWorkspace?.timezone ?? 'UTC';
   const weekStartDay = activeWorkspace?.week_start_day ?? 1;
 
-  const [posts, setPosts] = useState<PipelinePost[]>([]);
+  const { session } = useSession();
+  const userId = session?.user.id ?? null;
+  // A tab return inside the freshness window paints the posts this session
+  // already read (src/lib/pipeline-posts.ts) on the first render, with no
+  // request; past the window (or dropped by a change) there are none, and the
+  // board shows its skeleton and reads. Older posts are never painted.
+  const [kept] = useState(() => {
+    if (workspaceId === null || userId === null) return undefined;
+    const fresh = peekPipelinePosts(userId, workspaceId);
+    // Seed the cover store from the same rows before the cards render.
+    if (fresh !== undefined) primeCovers(workspaceId, listedCovers(fresh));
+    return fresh;
+  });
+  const [posts, setPosts] = useState<PipelinePost[]>(() => kept ?? []);
   // The workspace `posts` was read for. A switch renders nothing of the old
   // list: until the new read lands the board shows the skeleton.
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
-  const loadedForRef = useRef<string | null>(null);
+  const [loadedFor, setLoadedFor] = useState<string | null>(() =>
+    kept !== undefined ? workspaceId : null,
+  );
+  const loadedForRef = useRef<string | null>(kept !== undefined ? workspaceId : null);
   const loadSeq = useRef(0);
-  // True from the first render so the empty pipeline never flashes before the read.
-  const [postsLoading, setPostsLoading] = useState(true);
+  // True from the first render so the empty pipeline never flashes before the
+  // read (false only when the kept posts painted).
+  const [postsLoading, setPostsLoading] = useState(kept === undefined);
   // A failed read: the plain LoadError shows; the raw message never reaches the UI.
   const [postsFailed, setPostsFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -837,8 +871,6 @@ export function PipelinePage() {
   const postPreset = useInductionPostPreset();
   // The viewer's role, loaded once from the membership exactly as PCS does: it
   // filters the board's drop targets and the move sheet.
-  const { session } = useSession();
-  const userId = session?.user.id ?? null;
   const [role, setRole] = useState<string | null>(null);
   // Where the role read stands: the move sheet waits while 'loading' and
   // offers Retry on 'error' instead of blaming the role.
@@ -859,32 +891,45 @@ export function PipelinePage() {
 
   // One fetch for the whole board (no N+1): listPosts once, grouped in memory.
   // A read that lands after a newer one started (a workspace switch) is dropped.
-  const loadPosts = useCallback(async () => {
-    if (workspaceId === null) return;
-    const seq = ++loadSeq.current;
-    setPostsLoading(true);
-    let ok = false;
-    let data: PipelinePost[] = [];
-    try {
-      const result = await listPosts(supabase, { workspaceId, limit: 500 });
-      if (result.ok) {
-        ok = true;
-        data = result.data;
+  // The mount (`join`) paints posts this session read inside the window with
+  // no request, else joins the read a nav press started; every other load (a
+  // create, Retry, a data change) drops the kept read and asks the server.
+  const loadPosts = useCallback(
+    async (join = false) => {
+      if (workspaceId === null) return;
+      const seq = ++loadSeq.current;
+      if (userId !== null && !join) dropPipelinePosts(userId, workspaceId);
+      const fresh = join && userId !== null ? peekPipelinePosts(userId, workspaceId) : undefined;
+      let ok = fresh !== undefined;
+      let data: PipelinePost[] = fresh ?? [];
+      if (fresh === undefined) {
+        setPostsLoading(true);
+        try {
+          const result =
+            userId === null
+              ? await listPosts(supabase, { workspaceId, limit: PIPELINE_POSTS_LIMIT })
+              : await readPipelinePosts(supabase, userId, workspaceId, listPosts);
+          if (result.ok) {
+            ok = true;
+            data = result.data;
+          }
+        } catch {
+          // A transport throw (offline) is the same plain failure as an error Result.
+        }
       }
-    } catch {
-      // A transport throw (offline) is the same plain failure as an error Result.
-    }
-    if (seq !== loadSeq.current) return;
-    // Seed the cover store from the same read before the cards render, so the
-    // board never reads asset_attachments a second time for these posts.
-    if (ok) primeCovers(workspaceId, listedCovers(data));
-    if (ok) setPosts(data);
-    else if (loadedForRef.current !== workspaceId) setPosts([]);
-    loadedForRef.current = workspaceId;
-    setLoadedFor(workspaceId);
-    setPostsFailed(!ok);
-    setPostsLoading(false);
-  }, [workspaceId]);
+      if (seq !== loadSeq.current) return;
+      // Seed the cover store from the same read before the cards render, so the
+      // board never reads asset_attachments a second time for these posts.
+      if (ok) primeCovers(workspaceId, listedCovers(data));
+      if (ok) setPosts(data);
+      else if (loadedForRef.current !== workspaceId) setPosts([]);
+      loadedForRef.current = workspaceId;
+      setLoadedFor(workspaceId);
+      setPostsFailed(!ok);
+      setPostsLoading(false);
+    },
+    [workspaceId, userId],
+  );
 
   // A workspace switch closes the sheets on the old workspace's posts.
   useEffect(() => {
@@ -893,10 +938,41 @@ export function PipelinePage() {
   }, [workspaceId]);
 
   useEffect(() => {
-    void loadPosts();
+    void loadPosts(true);
   }, [loadPosts]);
   // The sample week landing or clearing under the board: re-read it.
   useWorkspaceDataChanged(() => void loadPosts());
+  // Opening a post from the board leaves for a page that can change it (stage,
+  // dates, files) without a post-changed event, so the kept read goes with
+  // it: Back to the board reads the server again rather than paint it.
+  useEffect(() => {
+    if (workspaceId === null || userId === null) return;
+    return () => {
+      if (leavingToPost(window.location.pathname)) dropPipelinePosts(userId, workspaceId);
+    };
+  }, [workspaceId, userId]);
+  // The board's own writes (an optimistic move, its Undo) change what the
+  // kept read holds: it is dropped with every change, and again once a move
+  // lands on the server.
+  const dropKept = useCallback((): void => {
+    if (workspaceId !== null && userId !== null) dropPipelinePosts(userId, workspaceId);
+  }, [workspaceId, userId]);
+  // A move that landed also tells every other surface that keeps this post
+  // (chat cards, the Plan tab) through the existing post-changed event.
+  const landed = useCallback(
+    (postId: string): void => {
+      dropKept();
+      dispatchPostChanged(window, postId);
+    },
+    [dropKept],
+  );
+  const setPostsAndDrop = useCallback(
+    (updater: (prev: PipelinePost[]) => PipelinePost[]): void => {
+      dropKept();
+      setPosts(updater);
+    },
+    [dropKept],
+  );
   // Only the active workspace's posts ever render.
   const live = workspaceId !== null && loadedFor === workspaceId;
   const shownPosts = live ? posts : NO_POSTS;
@@ -1054,7 +1130,8 @@ export function PipelinePage() {
           client: supabase,
           posts,
           inFlight: inFlight.current,
-          setPosts,
+          setPosts: setPostsAndDrop,
+          onLanded: landed,
           onClose: () => setMovePostTarget(null),
           toast: push,
           role,
@@ -1071,7 +1148,7 @@ export function PipelinePage() {
         options,
       );
     },
-    [posts, push, role, runUndoable, workspaceId],
+    [posts, push, role, runUndoable, workspaceId, setPostsAndDrop, landed],
   );
 
   // From the move sheet, Reject and Park ask first, and so does Send for review

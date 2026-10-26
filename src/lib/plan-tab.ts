@@ -13,6 +13,7 @@ import { planProgress, reviewStatus, shownReviewSide } from '@/components/chat/p
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { addCivilDays } from '@/lib/list-sort';
 import { civilMondayOf, formatCivilDayHeader, PLAN_WEEK_DAYS } from '@/lib/plan-week';
+import type { PrefetchContext } from '@/lib/route-data';
 
 // ---------------------------------------------------------------------------
 // Copy (the approved lines only)
@@ -541,4 +542,28 @@ export function zeroStateCopy(
  */
 export function onboardingFinished(guide: 'off' | 'intro' | 'step' | 'closing' | null): boolean {
   return guide === null || guide === 'off';
+}
+
+// ---------------------------------------------------------------------------
+// Nav press
+// ---------------------------------------------------------------------------
+
+/**
+ * Nav-press starter (src/lib/route-data.ts): the read the tab's first render
+ * asks for (src/lib/plan-tab-shared.ts), so it runs while the chunk loads and
+ * the tap lands, and the mount joins it. The read modules load lazily, so
+ * this module stays free of reads for its pure importers. Paints nothing;
+ * never throws.
+ */
+export async function prefetchPlanTabData(ctx: PrefetchContext): Promise<void> {
+  try {
+    const [shared, { supabase }, { isLaptopNow }] = await Promise.all([
+      import('@/lib/plan-tab-shared'),
+      import('@/lib/supabase'),
+      import('@/lib/use-is-laptop'),
+    ]);
+    await shared.startPlanTabRead(supabase, ctx, isLaptopNow());
+  } catch {
+    // The tab's own read retries.
+  }
 }

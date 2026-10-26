@@ -46,6 +46,19 @@ vi.mock('@/lib/brief-list', async (importOriginal) => {
       if (!result.ok || !Array.isArray(result.data)) return result;
       return { ok: true, data: { items: result.data, next: { done: true } } };
     },
+    // The first page paints before its thumbnails; here the mocked rows carry
+    // their thumbnails already, so the thumbnails read finds nothing more.
+    listBriefsFirstPage: async (...args: unknown[]) => {
+      const result = (await listBriefs(...args)) as
+        | { ok: true; data: unknown }
+        | { ok: false; error: unknown };
+      if (!result.ok) return result;
+      const page = Array.isArray(result.data)
+        ? { items: result.data, next: { done: true } }
+        : (result.data as { items: unknown[]; next: unknown });
+      const thumbs = Promise.resolve({ ok: true, data: new Map() });
+      return { ok: true, data: { ...page, thumbs } };
+    },
   };
 });
 // Chip counts are server HEAD counts; the page reads them through this module.

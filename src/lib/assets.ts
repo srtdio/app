@@ -3,14 +3,17 @@
 // Reads are plain RLS-scoped SELECTs through the supabase client (policies
 // assets_select_member / asset_versions_select_member / asset_attachments_select_member),
 // mirroring @srtdio/briefs: no proc, no service role, tenant isolation is
-// Postgres' job. listAssetsPage reads one keyset page in two round-trips (assets
-// + their current version embedded, then one IN read of attachments over that
-// page's ids for the live count) so there is no N+1. All shaping below is pure
-// and unit-tested; kinds, labels and counts are derived from the fetched rows,
-// never hardcoded.
+// Postgres' job. listAssetsPage reads one keyset page in ONE request: the
+// assets, their current version and their live attachments (asset_id only, for
+// the count) all embedded, so there is no N+1 and no second round trip. All
+// shaping below is pure and unit-tested; kinds, labels and counts are derived
+// from the fetched rows, never hardcoded.
 
 import { assetRestore, type Client, type DomainError, type Result } from '@srtdio/rpc';
 import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-purge-contracts';
+import type { PrefetchContext } from '@/lib/route-data';
+import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
+import { readSharedMemberRole } from '@/lib/member-role';
 
 /**
  * The version kinds the server records (asset_versions.kind CHECK, live). A
@@ -136,6 +139,11 @@ interface RawAssetRow {
   uploaded_at: string;
   current_version_id: string | null;
   current_version: RawVersion | null;
+  /**
+   * The asset's live attachments (asset_id only), embedded by the list reads
+   * for the count. Absent on rows read without the embed (tests, fixtures).
+   */
+  asset_attachments?: { asset_id: string }[] | null;
 }
 
 // assets.current_version_id and asset_versions.asset_id are two distinct FKs
@@ -145,6 +153,16 @@ const ASSET_SELECT =
   'id, filename, display_name, folder_path, folder_id, tags, uploaded_at, current_version_id, ' +
   'current_version:asset_versions!assets_current_version_id_fkey(' +
   'id, kind, mime_type, size_bytes, width, height, duration_ms, page_count, external_url, r2_key, version_number)';
+
+// The list reads add the asset's attachments (one FK, asset_attachments.asset_id,
+// named anyway so a future FK can never make it ambiguous), filtered below to
+// the same rows the old second IN read counted: live (deleted_at is null) and in
+// this workspace. Rows, not an aggregate: PostgREST aggregates (`(count)`) are
+// disabled on the project (see src/lib/chat/briefs.ts), and asset_id is all the
+// count needs. The parent rows are never filtered by this embed (no !inner), so
+// an asset with no attachments still lists, with [].
+const ATTACHMENTS_EMBED = 'asset_attachments!asset_attachments_asset_id_fkey(asset_id)';
+const ASSET_LIST_SELECT = `${ASSET_SELECT}, ${ATTACHMENTS_EMBED}`;
 
 /**
  * Flatten raw asset rows + a per-asset attachment-count map into the display
@@ -191,6 +209,16 @@ export function countAttachments(rows: { asset_id: string }[]): Map<string, numb
   return counts;
 }
 
+/** Live attachment counts per asset id from the rows' own embedded attachments. Pure. */
+export function embeddedAttachmentCounts(rows: RawAssetRow[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const attached = row.asset_attachments ?? [];
+    if (attached.length > 0) counts.set(row.id, attached.length);
+  }
+  return counts;
+}
+
 /** Rows per library page. */
 export const ASSETS_PAGE_SIZE = 100;
 
@@ -208,7 +236,7 @@ export interface AssetCursor {
 export type AssetPageNext = { done: true } | { done: false; cursor: AssetCursor };
 
 /** One page of the library, newest first. */
-interface AssetPage {
+export interface AssetPage {
   items: AssetListItem[];
   next: AssetPageNext;
 }
@@ -245,35 +273,13 @@ export function mergeAssetPages(
 }
 
 /**
- * Live attachment counts for exactly these assets: ONE IN read per page (never
- * one per asset), workspace-scoped as before. No ids, no round trip.
- */
-async function attachmentCountsFor(
-  client: Client,
-  workspaceId: string,
-  assetIds: string[],
-): Promise<Result<Map<string, number>>> {
-  if (assetIds.length === 0) return { ok: true, data: new Map() };
-  const result = await client
-    .from('asset_attachments')
-    .select('asset_id')
-    .eq('workspace_id', workspaceId)
-    .in('asset_id', assetIds)
-    .is('deleted_at', null);
-  if (result.error) {
-    return { ok: false, error: { code: 'unknown', message: result.error.message } };
-  }
-  return { ok: true, data: countAttachments((result.data ?? []) as { asset_id: string }[]) };
-}
-
-/**
  * One page of a workspace's active assets, newest first (uploaded_at desc, id
- * desc), each flattened with its current version (embedded, so no extra read)
- * and live attachment count (one IN read over the page's ids). Keyset paged:
- * pass the previous page's `next.cursor` for the following page. Reads one row
- * past the page size to learn whether another page exists without an extra
- * request. Two requests per page, never N+1. A transport/PostgREST failure
- * surfaces as { ok: false } rather than a throw.
+ * desc), each flattened with its current version and its live attachment count,
+ * both embedded, so the whole page is ONE request (it was two: the assets, then
+ * an IN read of attachments over the page's ids). Keyset paged: pass the
+ * previous page's `next.cursor` for the following page. Reads one row past the
+ * page size to learn whether another page exists without an extra request. A
+ * transport/PostgREST failure surfaces as { ok: false } rather than a throw.
  */
 export async function listAssetsPage(
   client: Client,
@@ -282,9 +288,11 @@ export async function listAssetsPage(
 ): Promise<Result<AssetPage>> {
   let query = client
     .from('assets')
-    .select(ASSET_SELECT)
+    .select(ASSET_LIST_SELECT)
     .eq('workspace_id', workspaceId)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .eq('asset_attachments.workspace_id', workspaceId)
+    .is('asset_attachments.deleted_at', null);
   if (cursor !== undefined) query = query.or(assetKeysetFilter(cursor));
   const assetsResult = await query
     .order('uploaded_at', { ascending: false })
@@ -296,19 +304,84 @@ export async function listAssetsPage(
 
   const fetched = (assetsResult.data ?? []) as unknown as RawAssetRow[];
   const rows = fetched.slice(0, ASSETS_PAGE_SIZE);
-  const counts = await attachmentCountsFor(
-    client,
-    workspaceId,
-    rows.map((row) => row.id),
-  );
-  if (!counts.ok) return counts;
-
   const last = rows[rows.length - 1];
   const next: AssetPageNext =
     fetched.length > ASSETS_PAGE_SIZE && last !== undefined
       ? { done: false, cursor: { uploadedAt: last.uploaded_at, id: last.id } }
       : { done: true };
-  return { ok: true, data: { items: shapeAssets(rows, counts.data), next } };
+  return { ok: true, data: { items: shapeAssets(rows, embeddedAttachmentCounts(rows)), next } };
+}
+
+// ---------------------------------------------------------------------------
+// Session-shared first reads. A press on the Assets nav item starts the first
+// page and the tab counts (prefetchAssetsData); the page's mount joins those
+// same requests by key instead of asking again. Every later reload (upload,
+// link, delete, data change, Retry) drops the key first and reads anew, and
+// the page drops both keys when it unmounts, so a kept value only ever bridges
+// one press to its own mount: a return to Assets never paints a list from an
+// earlier visit (another surface may have added or removed files since).
+// ---------------------------------------------------------------------------
+
+/** The session key of the first library page. */
+export function assetsFirstPageKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'assets:first-page');
+}
+
+/** The session key of the tab totals. */
+export function assetTabCountsKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'assets:tab-counts');
+}
+
+/**
+ * The first library page, joined with one already running or just settled.
+ * `read` is the page reader (the page passes its own import, so its tests can
+ * stand in for the network); the key, not the reader, is what joins.
+ */
+export function readAssetsFirstPage(
+  client: Client,
+  userId: string,
+  workspaceId: string,
+  read: typeof listAssetsPage = listAssetsPage,
+): Promise<Result<AssetPage>> {
+  const key = assetsFirstPageKey(userId, workspaceId);
+  return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok });
+}
+
+/** Every tab's total, joined with a read already running or just settled. */
+export function readAssetTabCounts(
+  client: Client,
+  userId: string,
+  workspaceId: string,
+  read: typeof countAssetTabs = countAssetTabs,
+): Promise<Result<Record<AssetTab, number>>> {
+  const key = assetTabCountsKey(userId, workspaceId);
+  return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok });
+}
+
+/** Forget the shared first reads (a write, a reload, the page leaving). */
+export function dropAssetsReads(userId: string, workspaceId: string): void {
+  invalidateReads(assetsFirstPageKey(userId, workspaceId));
+  invalidateReads(assetTabCountsKey(userId, workspaceId));
+}
+
+/**
+ * Nav-press starter (src/lib/route-data.ts): the first page, the tab counts
+ * and the viewer's role, so they run while the chunk loads and the tap lands.
+ * Paints nothing; never throws (a failure is swallowed and the page's own
+ * read retries). The client loads lazily so this module stays cheap for the
+ * many components that import only its formatters.
+ */
+export function prefetchAssetsData(ctx: PrefetchContext): Promise<void> {
+  return import('@/lib/supabase').then(
+    ({ supabase }) => {
+      const swallow = (): void => {};
+      readAssetsFirstPage(supabase, ctx.userId, ctx.workspaceId).catch(swallow);
+      readAssetTabCounts(supabase, ctx.userId, ctx.workspaceId).catch(swallow);
+      // The same shared role read the page's fetchMemberRole joins.
+      fetchMemberRole(supabase, ctx.workspaceId, ctx.userId).catch(swallow);
+    },
+    () => undefined,
+  );
 }
 
 /**
@@ -479,9 +552,10 @@ export async function listRootAssetLabels(
 
 /**
  * One active asset of the workspace by id, shaped like a list row: the same
- * select, filters and RLS as {@link listAssetsPage}, narrowed to one id. For a
- * ?asset= deep link to a file beyond the loaded pages. Returns [] when it is not
- * there (deleted, other workspace, hidden by RLS), never null.
+ * select (attachments embedded), filters and RLS as {@link listAssetsPage},
+ * narrowed to one id: one request. For a ?asset= deep link to a file beyond
+ * the loaded pages. Returns [] when it is not there (deleted, other workspace,
+ * hidden by RLS), never null.
  */
 export async function getAssetItem(
   client: Client,
@@ -490,44 +564,35 @@ export async function getAssetItem(
 ): Promise<Result<AssetListItem[]>> {
   const result = await client
     .from('assets')
-    .select(ASSET_SELECT)
+    .select(ASSET_LIST_SELECT)
     .eq('workspace_id', workspaceId)
     .eq('id', assetId)
     .is('deleted_at', null)
+    .eq('asset_attachments.workspace_id', workspaceId)
+    .is('asset_attachments.deleted_at', null)
     .limit(1);
   if (result.error) {
     return { ok: false, error: { code: 'unknown', message: result.error.message } };
   }
   const rows = (result.data ?? []) as unknown as RawAssetRow[];
-  const counts = await attachmentCountsFor(
-    client,
-    workspaceId,
-    rows.map((row) => row.id),
-  );
-  if (!counts.ok) return counts;
-  return { ok: true, data: shapeAssets(rows, counts.data) };
+  return { ok: true, data: shapeAssets(rows, embeddedAttachmentCounts(rows)) };
 }
 
 /**
  * Read the current member's role in a workspace with one RLS-scoped SELECT
  * (workspace_members is readable by members, mirroring the reads above; no proc,
  * no worker round-trip). Returns null when there is no active membership or the
- * read fails, and callers treat null as "no edit rights".
+ * read fails, and callers treat null as "no edit rights". The SELECT is the
+ * session-shared role read (src/lib/member-role.ts), so Assets, Post detail,
+ * Plan and chat opened in the same window ask once between them.
  */
 export async function fetchMemberRole(
   client: Client,
   workspaceId: string,
   userId: string,
 ): Promise<string | null> {
-  const res = await client
-    .from('workspace_members')
-    .select('role')
-    .eq('workspace_id', workspaceId)
-    .eq('user_id', userId)
-    .eq('active', true)
-    .maybeSingle();
-  if (res.error || res.data === null) return null;
-  return (res.data as { role: string | null }).role;
+  const read = await readSharedMemberRole(client, workspaceId, userId);
+  return read.ok ? read.role : null;
 }
 
 /**

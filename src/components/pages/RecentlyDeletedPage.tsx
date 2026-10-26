@@ -167,7 +167,9 @@ export function RecentlyDeletedPage() {
   const isOwner = row !== null && session !== null && row.owner_user_id === session.user.id;
 
   const [items, setItems] = useState<DeletedAssetItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading from the first render: the read starts in an effect, after the
+  // first paint, so a false start would flash the zero state for a frame.
+  const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [busyId, setBusyId] = useState<string | null>(null);

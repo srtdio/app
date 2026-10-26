@@ -5,6 +5,10 @@
 
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
 import type { Client, Result } from '@srtdio/rpc';
+import { countBriefsByFilter } from '@/lib/brief-counts';
+import { toExternalLinks } from '@/lib/links';
+import type { PrefetchContext } from '@/lib/route-data';
+import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
 
 // The same status type BriefCard's BriefStatus is built from. Read off the
 // package here (type only) so this module imports nothing from components and
@@ -136,19 +140,18 @@ async function firstImageByBrief(
   return { ok: true, data: first };
 }
 
-/**
- * One page of a workspace's live briefs, newest first (created_at desc, id
- * desc), each with its card thumbnail. Keyset paged: pass the previous page's
- * `next.cursor` for the following page. The same table, columns, filters and
- * RLS as @srtdio/briefs listBriefs (which pages by offset); this reads one row
- * past the page size to learn whether another page exists, then one IN read for
- * the page's thumbnails. Two requests per page, never N+1.
- */
-export async function listBriefsPage(
+/** The brief rows of one page, without thumbnails yet. */
+interface BriefRowsPage {
+  rows: Brief[];
+  next: BriefPageNext;
+}
+
+/** One keyset page of brief rows (one request): the briefs read of {@link listBriefsPage}. */
+async function listBriefRows(
   client: Client,
   workspaceId: string,
   cursor?: BriefCursor,
-): Promise<Result<BriefPage>> {
+): Promise<Result<BriefRowsPage>> {
   let query = client
     .from('briefs')
     .select('*')
@@ -163,17 +166,46 @@ export async function listBriefsPage(
 
   const fetched: Brief[] = data ?? [];
   const rows = fetched.slice(0, BRIEF_LIST_PAGE_SIZE);
-  const thumbnails = await firstImageByBrief(
-    client,
-    rows.map((brief) => brief.id),
-  );
-  if (!thumbnails.ok) return thumbnails;
-
   const last = rows[rows.length - 1];
   const next: BriefPageNext =
     fetched.length > BRIEF_LIST_PAGE_SIZE && last !== undefined
       ? { done: false, cursor: { createdAt: last.created_at, id: last.id } }
       : { done: true };
+  return { ok: true, data: { rows, next } };
+}
+
+/** Each row with its thumbnail from `thumbs`, or the one it already has. Pure. */
+export function withBriefThumbnails(
+  briefs: readonly BriefWithThumbnail[],
+  thumbs: ReadonlyMap<string, string>,
+): BriefWithThumbnail[] {
+  return briefs.map((brief) => ({
+    ...brief,
+    thumbnailAssetVersionId: thumbs.get(brief.id) ?? brief.thumbnailAssetVersionId,
+  }));
+}
+
+/**
+ * One page of a workspace's live briefs, newest first (created_at desc, id
+ * desc), each with its card thumbnail. Keyset paged: pass the previous page's
+ * `next.cursor` for the following page. The same table, columns, filters and
+ * RLS as @srtdio/briefs listBriefs (which pages by offset); this reads one row
+ * past the page size to learn whether another page exists, then one IN read for
+ * the page's thumbnails. Two requests per page, never N+1.
+ */
+export async function listBriefsPage(
+  client: Client,
+  workspaceId: string,
+  cursor?: BriefCursor,
+): Promise<Result<BriefPage>> {
+  const page = await listBriefRows(client, workspaceId, cursor);
+  if (!page.ok) return page;
+  const { rows, next } = page.data;
+  const thumbnails = await firstImageByBrief(
+    client,
+    rows.map((brief) => brief.id),
+  );
+  if (!thumbnails.ok) return thumbnails;
   return {
     ok: true,
     data: {
@@ -184,4 +216,121 @@ export async function listBriefsPage(
       next,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// First paint. The list paints once the brief rows AND the chip counts are in
+// (both read in parallel, so the chips never gain their numbers after the
+// cards). The thumbnails read needs the rows' ids, so it is a second round;
+// it no longer holds the paint: the page fills each card's fixed 64px tile when
+// it lands (the icon tile and the image tile are the same box, so nothing
+// moves). The one exception is a page with a card whose layout depends on the
+// thumbnail: a brief with no image shows its first reference link in place of
+// nothing, so a card with a reference link could lose that link (and shrink)
+// when its image arrives. When any loaded brief has one, the paint waits for
+// the thumbnails exactly as before.
+//
+// A nav press starts the rows (and, chained, their thumbnails) and the counts
+// (prefetchBriefsData); the page's mount joins them by key. Every later reload
+// drops the keys first, and the page drops them when it unmounts, so a kept
+// value only ever bridges one press to its own mount.
+// ---------------------------------------------------------------------------
+
+/** The first page's rows, with their thumbnails' read already running. */
+export interface BriefsFirstPage {
+  /** The page's briefs; thumbnails are null until `thumbs` lands. */
+  items: BriefWithThumbnail[];
+  next: BriefPageNext;
+  /** Each brief's first image (one IN read over the page's ids); never rejects. */
+  thumbs: Promise<Result<Map<string, string>>>;
+}
+
+/**
+ * Whether the first paint must wait for the thumbnails: true when a loaded
+ * brief carries a reference link (its card shows the link only when there is
+ * no image, so the card's height depends on the thumbnail). Pure.
+ */
+export function briefsPaintNeedsThumbs(
+  briefs: readonly Pick<Brief, 'reference_links'>[],
+): boolean {
+  return briefs.some((brief) => toExternalLinks(brief.reference_links).length > 0);
+}
+
+/** A thrown thumbnails read, as a failed result (the page never awaits a rejection). */
+function thumbsThrew(thrown: unknown): Result<Map<string, string>> {
+  const message = thrown instanceof Error ? thrown.message : 'thumbnails read failed';
+  return { ok: false, error: { code: 'unknown', message } };
+}
+
+/** The first page's rows (one request), with the thumbnails read started on them. */
+export async function listBriefsFirstPage(
+  client: Client,
+  workspaceId: string,
+): Promise<Result<BriefsFirstPage>> {
+  const page = await listBriefRows(client, workspaceId);
+  if (!page.ok) return page;
+  const { rows, next } = page.data;
+  const ids = rows.map((brief) => brief.id);
+  const thumbs = firstImageByBrief(client, ids).catch(thumbsThrew);
+  return {
+    ok: true,
+    data: {
+      items: rows.map((brief) => ({ ...brief, thumbnailAssetVersionId: null })),
+      next,
+      thumbs,
+    },
+  };
+}
+
+/** The session key prefix of every Briefs list read for this user and workspace. */
+function briefsKeyPrefix(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'briefs:');
+}
+
+/**
+ * The first page, joined with one already running or just settled. `read` is
+ * the page reader (the page passes its own import, so its tests can stand in
+ * for the network); the key, not the reader, is what joins.
+ */
+export function readBriefsFirstPage(
+  client: Client,
+  userId: string,
+  workspaceId: string,
+  read: typeof listBriefsFirstPage = listBriefsFirstPage,
+): Promise<Result<BriefsFirstPage>> {
+  const key = `${briefsKeyPrefix(userId, workspaceId)}first-page`;
+  return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok });
+}
+
+/** The chip counts for a search, joined with a read already running or just settled. */
+export function readBriefCounts(
+  client: Client,
+  userId: string,
+  workspaceId: string,
+  search: string,
+  read: typeof countBriefsByFilter = countBriefsByFilter,
+): ReturnType<typeof countBriefsByFilter> {
+  const key = `${briefsKeyPrefix(userId, workspaceId)}counts:${search}`;
+  return sharedRead(key, () => read(client, workspaceId, search), { isOk: (result) => result.ok });
+}
+
+/** Forget every shared Briefs list read (a reload, a create, the page leaving). */
+export function dropBriefsReads(userId: string, workspaceId: string): void {
+  invalidateReads(briefsKeyPrefix(userId, workspaceId));
+}
+
+/**
+ * Nav-press starter (src/lib/route-data.ts): the first page (its thumbnails
+ * chained on) and the unsearched chip counts. Paints nothing; never throws.
+ * The client loads lazily so this module stays cheap for its pure importers.
+ */
+export function prefetchBriefsData(ctx: PrefetchContext): Promise<void> {
+  return import('@/lib/supabase').then(
+    ({ supabase }) => {
+      const swallow = (): void => {};
+      readBriefsFirstPage(supabase, ctx.userId, ctx.workspaceId).catch(swallow);
+      readBriefCounts(supabase, ctx.userId, ctx.workspaceId, '').catch(swallow);
+    },
+    () => undefined,
+  );
 }
