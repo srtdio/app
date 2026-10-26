@@ -741,8 +741,75 @@ const CAPABILITY_RPC: Record<string, RpcHandler> = {
   },
 };
 
+/** An attachment's version: the embedded row the fixtures carry, else the asset_versions table. */
+function attachmentVersion(tables: Tables, link: Row): Row | undefined {
+  const embedded = link.asset_versions;
+  if (embedded !== null && typeof embedded === 'object' && !Array.isArray(embedded)) {
+    return embedded as Row;
+  }
+  return (tables.asset_versions ?? []).find((v) => v.id === link.asset_version_id);
+}
+
+/**
+ * public.posts_list over the fixture tables: the live posts of a workspace
+ * (optional stage and `before` cursor), ordered stage then newest first, capped
+ * at 500, each with its first image (thumbnail) and first photo or video (cover)
+ * in attachment display order. RLS is not emulated.
+ */
+const POSTS_RPC: Record<string, RpcHandler> = {
+  posts_list: (args, tables) => {
+    const limit = Math.min(Math.max(Number(args.p_limit ?? 50), 0), 500);
+    const stage = typeof args.p_stage === 'string' ? args.p_stage : null;
+    const before = typeof args.p_before === 'string' ? args.p_before : null;
+    const posts = (tables.posts ?? [])
+      .filter(
+        (p) =>
+          p.workspace_id === args.p_workspace_id &&
+          (p.deleted_at ?? null) === null &&
+          (stage === null || p.stage === stage) &&
+          (before === null || String(p.created_at) < before),
+      )
+      .sort(
+        (a, b) =>
+          String(a.stage).localeCompare(String(b.stage)) ||
+          String(b.created_at).localeCompare(String(a.created_at)),
+      )
+      .slice(0, limit);
+    return posts.map((post) => {
+      const media = (tables.asset_attachments ?? [])
+        .filter(
+          (a) =>
+            a.entity_type === 'post' &&
+            a.entity_id === post.id &&
+            (a.deleted_at ?? null) === null,
+        )
+        .sort(
+          (a, b) =>
+            Number(a.position ?? 0) - Number(b.position ?? 0) ||
+            String(a.attached_at ?? '').localeCompare(String(b.attached_at ?? '')),
+        )
+        .map((link) => ({ link, version: attachmentVersion(tables, link) }));
+      const mime = (v: Row | undefined): string => String(v?.mime_type ?? '');
+      const image = media.find((m) => mime(m.version).startsWith('image/'));
+      const first = media.find(
+        (m) => mime(m.version).startsWith('image/') || mime(m.version).startsWith('video/'),
+      );
+      return {
+        ...post,
+        thumbnail_asset_version_id: image?.link.asset_version_id ?? null,
+        first_media_asset_version_id: first?.link.asset_version_id ?? null,
+        first_media_kind:
+          first === undefined ? null : mime(first.version).startsWith('image/') ? 'image' : 'video',
+        first_media_width: first?.version?.width ?? null,
+        first_media_height: first?.version?.height ?? null,
+      };
+    });
+  },
+};
+
 const RPC: Record<string, RpcHandler> = {
   ...PLAN_RPC,
+  ...POSTS_RPC,
   ...CAPABILITY_RPC,
   ...TASK_RPC,
   ...ONBOARDING_RPC,

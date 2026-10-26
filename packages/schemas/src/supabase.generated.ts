@@ -16,6 +16,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_badge_counts: {
+        Row: {
+          mentions: number
+          unread: number
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          mentions?: number
+          unread?: number
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          mentions?: number
+          unread?: number
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      activity_badge_snoozed: {
+        Row: {
+          entry_created_at: string
+          entry_id: string
+          is_mention: boolean
+          snoozed_until: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          entry_created_at: string
+          entry_id: string
+          is_mention: boolean
+          snoozed_until: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          entry_created_at?: string
+          entry_id?: string
+          is_mention?: boolean
+          snoozed_until?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       asset_attachments: {
         Row: {
           asset_id: string
@@ -9057,6 +9108,13 @@ export type Database = {
       _post_snapshot: { Args: { p_post_id: string }; Returns: Json }
       _test_accounts_purge: { Args: never; Returns: Json }
       _test_site_origin_ok: { Args: never; Returns: boolean }
+      activity_badge_read: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          mentions: number
+          unread: number
+        }[]
+      }
       annotation_create: {
         Args: {
           p_asset_attachment_id: string
@@ -9128,6 +9186,13 @@ export type Database = {
       brief_reopen: {
         Args: { p_brief_id: string; p_trace_id: string }
         Returns: undefined
+      }
+      capabilities_for_workspace: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          allowed: boolean
+          capability: string
+        }[]
       }
       chat_attachment_readable: {
         Args: { p_asset_version_id: string; p_user_id: string }
@@ -9399,6 +9464,15 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      chat_open_bundle: {
+        Args: {
+          p_channel_id: string
+          p_since?: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       chat_plan_share: {
         Args: {
@@ -9855,6 +9929,20 @@ export type Database = {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: string
       }
+      plan_bundle_read: {
+        Args: {
+          p_before_id?: string
+          p_before_starts_on?: string
+          p_channel_id?: string
+          p_only_shared?: boolean
+          p_plan_ids?: string[]
+          p_range_end?: string
+          p_range_start?: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       plan_concept_add: {
         Args: {
           p_attachment_version_ids: string[]
@@ -10012,9 +10100,60 @@ export type Database = {
         Args: { p_post_id: string; p_snapshot: Json; p_trace_id: string }
         Returns: string
       }
+      posts_list: {
+        Args: {
+          p_before?: string
+          p_limit?: number
+          p_stage?: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          approved_at: string
+          approved_by: string
+          approved_on_behalf_of: string
+          brief_id: string
+          bucket_id: string
+          caption: string
+          created_at: string
+          created_by: string
+          deleted_at: string
+          first_media_asset_version_id: string
+          first_media_height: number
+          first_media_kind: string
+          first_media_width: number
+          format: string
+          id: string
+          legacy_author_name: string
+          number: number
+          origin: string
+          owner_user_id: string
+          platform: string
+          row_version: number
+          stage: string
+          stage_entered_at: string
+          target_date: string
+          thumbnail_asset_version_id: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }[]
+      }
       proc_capability: {
         Args: { p_capability: string; p_workspace_id: string }
         Returns: boolean
+      }
+      ref_resolve: {
+        Args: {
+          p_kind: string
+          p_number: number
+          p_trace_id: string
+          p_workspace_key: string
+        }
+        Returns: {
+          entity_id: string
+          workspace_id: string
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
