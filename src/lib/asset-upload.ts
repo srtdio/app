@@ -356,14 +356,14 @@ export async function uploadAssetFile(
   }
   // assetVersionId is the version the gallery add flow pins; include the key only
   // when the worker returned it, so callers that ignore it are unaffected.
-  const thumbnail = thumbnailField(response.body);
+  const storedThumbnail = thumbnailField(response.body);
   dispatchUploadComplete(config.workspaceId);
   return {
     ok: true,
     reused: asset.reused,
     assetId: asset.assetId,
     ...(asset.assetVersionId !== null ? { assetVersionId: asset.assetVersionId } : {}),
-    ...(thumbnail !== null ? { thumbnail } : {}),
+    ...(storedThumbnail !== null ? { thumbnail: storedThumbnail } : {}),
   };
 }
 
