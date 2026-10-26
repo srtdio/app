@@ -597,6 +597,40 @@ export async function getAssetSummary(
   });
 }
 
+/**
+ * The summary of one stored-file version, scoped to a workspace, for attaching
+ * a thumbnail after the upload (POST /thumbnail). not_found for an unknown id,
+ * a version of another workspace, a link version, a deleted asset, or a chat
+ * file the caller did not upload (a chat file is its uploader's own; the same
+ * rule keeps chat dedup per uploader). Any origin is accepted otherwise.
+ */
+export async function getVersionSummary(
+  repository: AssetRepository,
+  input: { workspaceId: string; versionId: string; callerId: string },
+): Promise<Result<AssetSummary, UploadError>> {
+  const missing = err<UploadError>({
+    code: 'not_found',
+    message: 'Asset version not found in this workspace.',
+  });
+  const version = await repository.getVersionById(input.workspaceId, input.versionId);
+  if (version === null || !isFileVersionRef(version)) return missing;
+  const asset = await repository.getAsset(input.workspaceId, version.assetId);
+  if (asset === null) return missing;
+  if (asset.origin === 'chat' && asset.uploaded_by !== input.callerId) return missing;
+  return ok({
+    assetId: asset.id,
+    versionId: version.id,
+    versionNumber: version.versionNumber,
+    workspaceId: asset.workspace_id,
+    filename: asset.filename,
+    mimeType: version.mimeType,
+    sizeBytes: version.sizeBytes,
+    sha256: version.sha256,
+    r2Key: version.r2Key,
+    reused: false,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Thumbnail rendition (sender-made JPEG for a pdf/video/office upload, or a
 // raster image's small list copy).

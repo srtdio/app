@@ -10,6 +10,7 @@
 // drive it with a mock and the app passes fetchWithTrace.
 
 import { ALLOWED_MIME_TYPES, isAllowedMime } from '@srtdio/storage';
+import { logger } from '@/lib/logger';
 import { reportWorkspaceFull } from '@/lib/storage-full';
 import { TRACE_ID_HEADER } from '@/lib/trace';
 import {
@@ -18,6 +19,7 @@ import {
   sharedThumbnail,
   thumbnailKind,
   THUMBNAIL_TIMEOUT_MS,
+  type Thumbnail,
   type ThumbnailResult,
 } from '@/lib/files/thumbnail';
 import {
@@ -290,7 +292,9 @@ function dispatchUploadComplete(workspaceId: string): void {
  * and folder_id) with a Bearer token, over the config's transport (XHR when the
  * caller wants progress). Never throws: a transport failure or a
  * non-OK status becomes { ok: false } with mapped copy. On success returns the
- * asset id and whether the content was deduped (reused).
+ * asset id and whether the content was deduped (reused). A file of one part or
+ * less goes out at once; its thumbnail (when one is made) follows on POST
+ * /thumbnail and never changes the outcome.
  */
 export async function uploadAssetFile(
   file: File,
@@ -317,9 +321,10 @@ export async function uploadAssetFile(
   if (config.folderId != null) {
     form.append('folder_id', config.folderId);
   }
-  // The thumbnail starts now, alongside the original. A resumable upload sends
-  // its parts while it is made and only waits for it before the complete form;
-  // the direct POST carries it in the same form, so it waits before sending.
+  // The thumbnail starts now, alongside the original, and never holds it back.
+  // A resumable upload sends its parts while it is made and only waits for it
+  // before the complete form; the direct POST sends the original at once and
+  // the thumbnail follows on its own POST /thumbnail once both are done.
   const listCopy = thumbnailKind(file.type) === null && isListCopyImage(file.type);
   const thumbnail: Promise<ThumbnailResult | null> =
     thumbnailKind(file.type) !== null || listCopy
@@ -335,7 +340,6 @@ export async function uploadAssetFile(
     if (!sent.ok) return sent;
     response = sent.response;
   } else {
-    appendThumbnail(form, await thumbnail);
     try {
       response = await postUpload(
         config.endpoint,
@@ -356,7 +360,13 @@ export async function uploadAssetFile(
   }
   // assetVersionId is the version the gallery add flow pins; include the key only
   // when the worker returned it, so callers that ignore it are unaffected.
-  const storedThumbnail = thumbnailField(response.body);
+  let storedThumbnail = thumbnailField(response.body);
+  if (!resumable && storedThumbnail === null && asset.assetVersionId !== null) {
+    // The original is stored. Callers read the thumbnail's size off the
+    // outcome (chat message meta), so wait for it a bounded time; a later
+    // landing still re-announces the upload.
+    storedThumbnail = await lateThumbnail(config, asset.assetVersionId, thumbnail);
+  }
   dispatchUploadComplete(config.workspaceId);
   return {
     ok: true,
@@ -365,6 +375,76 @@ export async function uploadAssetFile(
     ...(asset.assetVersionId !== null ? { assetVersionId: asset.assetVersionId } : {}),
     ...(storedThumbnail !== null ? { thumbnail: storedThumbnail } : {}),
   };
+}
+
+/**
+ * Attach a direct upload's thumbnail to its stored version: once the thumbnail
+ * is made, POST it to /thumbnail over the upload's own transport (same Bearer
+ * and X-Trace-Id). Waits at most THUMBNAIL_TIMEOUT_MS after the original is
+ * stored; past that it goes on in the background and announces the upload
+ * again when it lands. Never throws and never changes the upload's outcome: a
+ * missing thumbnail or a failed post is null (the failure is logged).
+ */
+async function lateThumbnail(
+  config: UploadConfig,
+  versionId: string,
+  thumbnail: Promise<ThumbnailResult | null>,
+): Promise<StoredThumbnail | null> {
+  let timedOut = false;
+  const attached = thumbnail.then(async (made) => {
+    if (made === null || !made.ok) return null;
+    const stored = await postThumbnail(config, versionId, made);
+    if (stored !== null && timedOut) dispatchUploadComplete(config.workspaceId);
+    return stored;
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cap = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      resolve(null);
+    }, THUMBNAIL_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([attached, cap]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** POST {workspace_id, asset_version_id, thumbnail, thumbnail_page_count?} to /thumbnail. Never throws. */
+async function postThumbnail(
+  config: UploadConfig,
+  versionId: string,
+  made: Thumbnail,
+): Promise<StoredThumbnail | null> {
+  const form = new FormData();
+  form.append('workspace_id', config.workspaceId);
+  form.append('asset_version_id', versionId);
+  appendThumbnail(form, made);
+  try {
+    const reply = await send(
+      config,
+      'POST',
+      workerRoute(config.endpoint, '/thumbnail'),
+      form,
+      null,
+    );
+    if (!reply.ok) {
+      logger.warn('asset thumbnail attach refused', {
+        asset_version_id: versionId,
+        status: reply.status,
+        code: errorCode(reply.body),
+      });
+      return null;
+    }
+    return thumbnailField(reply.body);
+  } catch (error) {
+    logger.warn('asset thumbnail attach failed', {
+      asset_version_id: versionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 /** Add a made thumbnail (and a PDF's page count) to the upload form; nothing otherwise. */
