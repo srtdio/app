@@ -1,8 +1,10 @@
 // The thread's plan cards, read in batches: every plan id across the loaded
-// messages (threadCardIds) is asked of ONE cache per chat: the chat's
-// remembered one in open-cache, so a reopen paints its cards at once and
-// re-reads them in the background, and the tap's kickoff feeds it the chat's
-// shared plan ids before the messages are in. It reads the plans, their items
+// messages (threadCardIds) is asked of ONE cache per open. Nothing is
+// remembered from an earlier open (no old bundle is ever painted). The open's
+// first read starts the moment the chat bundle returns (its shared plan ids
+// plus every plan shared on its page) or when a plan card is tapped first,
+// whichever comes first, and never twice for the same ids (plan-fire.ts);
+// until then every card waits at its final size. It reads the plans, their items
 // and their draft rows together, then (once the items are in) the items'
 // reviews and the post items' stages, each a plain select by an id list in
 // chunks of 100 (plans.ts). Cards never read on their own. Failed reads retry
@@ -17,9 +19,20 @@ import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { watchCardRetries } from '@/components/chat/PostCard';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
-import { PLAN_CHANGED_EVENT, planChangedId, type PlanCardCache } from '@/lib/chat/plans';
-import { chatKey, makePlanCardCache, openCache, openChatPlans } from '@/lib/chat/open-cache';
+import {
+  PLAN_CHANGED_EVENT,
+  createPlanCardCache,
+  planChangedId,
+  readPlanBundles,
+  type PlanCardCache,
+} from '@/lib/chat/plans';
+import { chatKey, openCache, type ChatKey } from '@/lib/chat/open-cache';
+import { joinableChatBundle, onChatBundle } from '@/lib/chat/open-bundle';
+import { createPlanFireOnce, type PlanFireOnce } from '@/lib/chat/plan-fire';
+import { rowPlanIds, type ChatOpenBundle } from '@/lib/chat/history';
 import type { ChatMessageRow } from '@/lib/chat/thread';
+import type { Result } from '@srtdio/rpc';
+import { supabase } from '@/lib/supabase';
 
 /** What the Plan screen needs to open from a card. */
 export interface OpenPlanRequest {
@@ -29,7 +42,10 @@ export interface OpenPlanRequest {
 }
 
 interface PlanCardsContextValue {
+  /** The open's cache; its `request` waits for the chat bundle or a tap (plan-fire.ts). */
   cache: PlanCardCache;
+  /** A plan card was tapped: its bundle read starts now if the open still waits. */
+  tapPlans: (ids: readonly string[]) => void;
   /** The open chat's title (the agency's "Shared with"). */
   chatTitle: string;
   openPlan: (request: OpenPlanRequest) => void;
@@ -69,10 +85,47 @@ export function planTitleOf(
   return null;
 }
 
+/** The ids an open's first plan read carries: the bundle's shared plans, then its page's. Pure. */
+export function bundlePlanIds(result: Result<ChatOpenBundle>): string[] {
+  if (!result.ok) return [];
+  return [...new Set([...result.data.sharedPlanIds, ...rowPlanIds(result.data.page.rows)])];
+}
+
+function sameChat(a: ChatKey, b: ChatKey): boolean {
+  return a.userId === b.userId && a.workspaceId === b.workspaceId && a.channelId === b.channelId;
+}
+
+/**
+ * Open the gate when the open's chat bundle settles: the one already
+ * stashed (joined), or the next one heard. A failed bundle opens it with what
+ * the cards asked (the plan cards never break the chat, nor wait on it
+ * forever). Returns the unsubscribe.
+ */
+export function openPlansOnBundle(
+  key: ChatKey,
+  gate: Pick<PlanFireOnce, 'bundleReturned'>,
+  deps: {
+    joinable: (key: ChatKey) => Promise<Result<ChatOpenBundle>> | null;
+    listen: (l: (key: ChatKey, result: Result<ChatOpenBundle>) => void) => () => void;
+  } = { joinable: (k) => joinableChatBundle(k), listen: onChatBundle },
+): () => void {
+  let live = true;
+  const stop = deps.listen((heard, result) => {
+    if (live && sameChat(heard, key)) gate.bundleReturned(bundlePlanIds(result));
+  });
+  void deps.joinable(key)?.then((result) => {
+    if (live) gate.bundleReturned(bundlePlanIds(result));
+  });
+  return () => {
+    live = false;
+    stop();
+  };
+}
+
 export function PlanCardsProvider(props: {
   workspaceId: string | null;
   channelId: string | null;
-  /** The viewer: the cache is the chat's remembered one (kept for reopens) when set. */
+  /** The viewer: with it, the plan reads wait for this open's chat bundle. */
   userId?: string | null;
   planIds: readonly string[];
   chatTitle: string;
@@ -85,32 +138,47 @@ export function PlanCardsProvider(props: {
 }): ReactElement {
   const { workspaceId, channelId } = props;
   const userId = props.userId ?? null;
-  // The chat's remembered cache (made at the tap or here), so a reopen paints
-  // its cards at once; without a viewer, one for this mount.
   const memo = useMemo(
     () => chatKey(userId, workspaceId, channelId),
     [userId, workspaceId, channelId],
   );
-  const cache = useMemo(
+  // One cache per open: made here, disposed when the chat is left. Nothing is
+  // carried from an earlier open.
+  const raw = useMemo(
     () =>
-      memo !== null
-        ? openCache.planCache(memo, makePlanCardCache)
-        : workspaceId !== null && channelId !== null
-          ? makePlanCardCache()
-          : null,
+      workspaceId !== null && channelId !== null
+        ? createPlanCardCache((ids, signal) => readPlanBundles(supabase, ids, signal))
+        : null,
+    // A new open (another viewer, workspace or chat) is a new cache.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [memo, workspaceId, channelId],
   );
-  // StrictMode runs this cleanup and the effect again with the same cache. A
-  // remembered cache is kept (and its reads run on) after the chat closes; a
-  // fresh open of it re-reads what it holds in the background.
+  // The open's fire-once gate: every ask waits for the chat bundle or a tap.
+  const gate = useMemo(
+    () => (raw !== null ? createPlanFireOnce((ids) => raw.request(ids)) : null),
+    [raw],
+  );
+  const cache = useMemo<PlanCardCache | null>(
+    () => (raw !== null && gate !== null ? { ...raw, request: (ids) => gate.request(ids) } : null),
+    [raw, gate],
+  );
+  // StrictMode runs this cleanup and the effect again with the same cache:
+  // resume re-reads what the dispose dropped.
   useEffect(() => {
-    if (cache === null) return;
-    cache.resume();
-    if (memo !== null) openChatPlans(memo);
-    return () => {
-      if (memo === null) cache.dispose();
-    };
-  }, [cache, memo]);
+    if (raw === null) return;
+    raw.resume();
+    if (memo !== null) openCache.opened(memo);
+    return () => raw.dispose();
+  }, [raw, memo]);
+  // No viewer: no chat bundle to wait for, the cards read at once.
+  useEffect(() => {
+    if (gate === null) return;
+    if (memo === null) {
+      gate.bundleReturned([]);
+      return;
+    }
+    return openPlansOnBundle(memo, gate);
+  }, [gate, memo]);
   const key = props.planIds.join(',');
   const idsRef = useRef(props.planIds);
   idsRef.current = props.planIds;
@@ -157,16 +225,17 @@ export function PlanCardsProvider(props: {
   const chatTitle = props.chatTitle;
   const value = useMemo<PlanCardsContextValue | null>(
     () =>
-      cache !== null && channelId !== null
+      cache !== null && gate !== null && channelId !== null
         ? {
             cache,
+            tapPlans: (ids) => gate.tapped(ids),
             chatTitle,
             channelId,
             openPlan: (request) => openRef.current(request),
             addRowHere: (row, traceId) => rowHereRef.current(row, traceId),
           }
         : null,
-    [cache, chatTitle, channelId],
+    [cache, gate, chatTitle, channelId],
   );
   return <PlanCardsContext.Provider value={value}>{props.children}</PlanCardsContext.Provider>;
 }

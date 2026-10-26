@@ -45,6 +45,7 @@ vi.mock('@/components/pages/plan-tab/PlanTabAdd', () => ({ PlanTabAdd: () => nul
 vi.mock('@/components/chat/PlanMoveSheet', () => ({ PlanKeepApprovalSheet: () => null }));
 vi.mock('@/components/media/Thumbnail', () => ({ Thumbnail: () => null }));
 
+import { setPlanTabMore } from '@/components/pages/plan-tab/plan-tab-more';
 import { ToastProvider } from '@/components/ui/toast';
 import { PlanTabPage, entryRoute } from '@/components/pages/PlanTabPage';
 import { civilToday } from '@/lib/plan-week';
@@ -93,6 +94,8 @@ const DATA: PlanTabData = {
   posts: [],
   thumbs: { posts: {}, concepts: {} },
   anyPlan: true,
+  timeZone: 'UTC',
+  nextCursor: null,
 };
 
 function render(): string {
@@ -141,6 +144,27 @@ describe('PlanTabPage', () => {
     expect(html).toContain('data-plan-tab-card="shared"');
     expect(html).not.toContain('data-plan-tab-card="draft"');
     expect(html).not.toContain('data-plan-tab-new');
+  });
+
+  it('phone: Load more ends the list while more plans remain; Loading while busy; none when all are in', () => {
+    Object.assign(env, { desktop: false, side: 'agency', data: DATA });
+    expect(render()).not.toContain('data-plan-tab-more');
+    setPlanTabMore({ busy: false, onMore: () => {} });
+    let html = render();
+    expect(html).toContain('data-plan-tab-more');
+    expect(html).toContain('>Load more</button>');
+    // The control comes after the last card.
+    expect(html.indexOf('data-plan-tab-more')).toBeGreaterThan(
+      html.lastIndexOf('data-plan-tab-card'),
+    );
+    // The shared Button: 44 tall, tokens only.
+    expect(html).toMatch(/<button class="[^"]*min-h-\[44px\][^"]*"[^>]*data-plan-tab-more=""/);
+    setPlanTabMore({ busy: true, onMore: () => {} });
+    html = render();
+    expect(html).toContain('>Loading</button>');
+    expect(html).toContain('data-plan-tab-more="" disabled=""');
+    setPlanTabMore(null);
+    expect(render()).not.toContain('data-plan-tab-more');
   });
 
   it('the zero state: line 2 until onboarding is done; no create button of its own', () => {

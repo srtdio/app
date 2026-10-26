@@ -68,14 +68,25 @@ describe('Plan tab memory (session reads, freshness window)', () => {
     const { peekPlanTab, planTabReadKey } = await import('@/lib/plan-tab-shared');
     const { primeRead, resetSessionReads, READ_FRESH_MS } = await import('@/lib/session-read');
     resetSessionReads();
-    const data = { bundles: [], posts: [], thumbs: { posts: {}, concepts: {} }, anyPlan: false };
-    const args = { workspaceId: 'w1', range: null, timeZone: 'UTC', onlyShared: false };
+    const data = {
+      bundles: [],
+      posts: [],
+      thumbs: { posts: {}, concepts: {} },
+      anyPlan: false,
+      timeZone: 'UTC',
+      nextCursor: null,
+    };
+    const args = { workspaceId: 'w1', range: null, onlyShared: false };
     primeRead(planTabReadKey('u1', args), { ok: true, data });
     expect(peekPlanTab('u1', args)).toBe(data);
-    // Another user, workspace, range, zone or side is another key.
+    // Another user, workspace, range or side is another key (the zone comes
+    // with the read, so it is never part of the key).
     expect(peekPlanTab('u2', args)).toBeUndefined();
     expect(peekPlanTab('u1', { ...args, onlyShared: true })).toBeUndefined();
-    expect(peekPlanTab('u1', { ...args, timeZone: 'Asia/Kolkata' })).toBeUndefined();
+    expect(peekPlanTab('u1', { ...args, workspaceId: 'w2' })).toBeUndefined();
+    expect(
+      peekPlanTab('u1', { ...args, range: { start: '2026-10-01', end: '2026-10-31' } }),
+    ).toBeUndefined();
     // Past the window it is absent: the tab shows loading and reads again.
     expect(peekPlanTab('u1', args, Date.now() + READ_FRESH_MS + 1)).toBeUndefined();
     // Without a session context nothing is shared.

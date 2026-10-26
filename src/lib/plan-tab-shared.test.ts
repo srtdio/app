@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 
-// Plan tab requests: the read waits three rounds (plans, the any-plan probe
-// and the dated posts; then the items with plan_draft_rows in the SAME
-// parallel round; then reviews, post stages and tiles together), a nav press
-// starts it and the mount joins it, and the kept read is dropped when a plan
-// or post changes.
+// Plan tab requests: the read is ONE plan_bundle_read (one round, the zone
+// comes with it: no workspaces read), a nav press starts it and the mount
+// joins it, and the kept read is dropped when a plan or post changes.
 
 vi.mock('@/lib/chat/viewer-role', () => ({
   resolveViewerSide: async () => 'agency',
@@ -26,7 +24,8 @@ type Row = Record<string, unknown>;
 
 const TODAY = civilToday(new Date(), 'UTC');
 
-const TABLES: Record<string, Row[]> = {
+const BUNDLE: Row = {
+  timezone: 'UTC',
   plans: [
     {
       id: 'plan-1',
@@ -38,7 +37,7 @@ const TABLES: Record<string, Row[]> = {
       created_by: null,
     },
   ],
-  plan_items: [
+  items: [
     {
       id: 'item-1',
       plan_id: 'plan-1',
@@ -51,9 +50,16 @@ const TABLES: Record<string, Row[]> = {
       target_date: null,
     },
   ],
-  posts: [{ id: 'post-1', workspace_id: 'ws', title: 'P', stage: 'review', target_date: null }],
-  plan_item_reviews: [],
-  asset_attachments: [],
+  draft_rows: [],
+  next_cursor: null,
+  reviews: [],
+  posts: [{ id: 'post-1', title: 'P', stage: 'review', format: null, target_date: null }],
+  comment_counts: {},
+  thumbs: { posts: {}, concepts: {} },
+  also_in: null,
+  loose_posts: [],
+  any_plan: true,
+  last_sent_at: null,
 };
 
 /**
@@ -75,10 +81,11 @@ function gatedClient() {
     q.limit = () => q;
     q.maybeSingle = () => q;
     q.then = (resolve: (v: unknown) => unknown) =>
-      hold(table, { data: TABLES[table] ?? [], error: null }).then(resolve);
+      hold(table, { data: [], error: null }).then(resolve);
     return q;
   };
-  const rpc = (fn: string) => hold(`rpc:${fn}`, { data: [], error: null });
+  const rpc = (fn: string) =>
+    hold(`rpc:${fn}`, { data: fn === 'plan_bundle_read' ? BUNDLE : [], error: null });
   const client = { from, rpc } as unknown as Client;
 
   // Microtasks, then a macrotask: lazy imports and chained reads have queued.
@@ -105,7 +112,6 @@ function gatedClient() {
 const ARGS: PlanTabReadArgs = {
   workspaceId: 'ws',
   range: visibleRange('month', TODAY),
-  timeZone: 'UTC',
   onlyShared: false,
 };
 
@@ -115,16 +121,14 @@ afterEach(() => {
 });
 
 describe('Plan tab read rounds', () => {
-  it('three rounds, with plan_draft_rows in the items round', async () => {
+  it('one round, one request: plan_bundle_read', async () => {
     const { client, rounds } = gatedClient();
     const read = readSharedPlanTab(client, 'u1', ARGS);
     const seen = await rounds();
     const result = await read;
     expect(result.ok).toBe(true);
-    expect(seen).toHaveLength(3);
-    expect(seen[0]).toEqual(['plans', 'plans', 'posts']);
-    expect(seen[1]).toEqual(['plan_items', 'rpc:plan_draft_rows']);
-    expect(seen[2]).toEqual(['asset_attachments', 'plan_item_reviews', 'posts']);
+    expect(seen).toEqual([['rpc:plan_bundle_read']]);
+    expect(result.ok && result.data.timeZone).toBe('UTC');
   });
 });
 
@@ -144,6 +148,15 @@ describe('Plan tab nav press', () => {
     // The mount added no request at all.
     expect(after).toEqual([]);
     expect(peekPlanTab('u1', ARGS)).toBeDefined();
+  });
+
+  it('a press with no zone known reads no workspaces row (the bundle carries the zone)', async () => {
+    const { client, rounds } = gatedClient();
+    const press = startPlanTabRead(client, { userId: 'u1', workspaceId: 'ws' }, false);
+    const seen = await rounds();
+    await press;
+    expect(seen.flat()).toEqual(['rpc:plan_bundle_read']);
+    expect(peekPlanTab('u1', { ...ARGS, range: null })).toBeDefined();
   });
 
   it('a plan or post change drops the kept read', async () => {
