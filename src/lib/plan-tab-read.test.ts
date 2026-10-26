@@ -1,214 +1,236 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
-import { PLAN_READ_CHUNK } from '@/lib/chat/plans';
-import { PLAN_TAB_PAGE, readPlanTab } from '@/lib/plan-tab-read';
+import { PLAN_BUNDLE_PAGE } from '@/lib/chat/plan-bundle';
+import { mergePlanTabPages, readPlanTab } from '@/lib/plan-tab-read';
 
 type Row = Record<string, unknown>;
 
-interface Call {
-  table: string;
-  filters: string[];
-  range: [number, number] | null;
-  limit: number | null;
-  ins: number;
+interface World {
+  timezone: string;
+  plans: Row[];
+  items: Row[];
+  posts: Row[];
 }
 
-/**
- * A recording PostgREST-ish fake: every awaited query is one request; the
- * table's rows are filtered by eq / is / in and sliced by range or limit.
- */
-function fakeClient(tables: Record<string, Row[]>) {
-  const calls: Call[] = [];
-  const from = vi.fn((table: string) => {
-    const call: Call = { table, filters: [], range: null, limit: null, ins: 0 };
-    let rows = [...(tables[table] ?? [])];
-    const q: Record<string, unknown> = {};
-    q.select = () => q;
-    q.eq = (c: string, v: unknown) => {
-      call.filters.push(`${c}=${String(v)}`);
-      rows = rows.filter((r) => r[c] === v);
-      return q;
-    };
-    q.in = (c: string, vs: unknown[]) => {
-      call.ins = vs.length;
-      rows = rows.filter((r) => vs.includes(r[c]));
-      return q;
-    };
-    for (const m of ['is', 'gte', 'lte', 'order', 'abortSignal']) q[m] = () => q;
-    q.range = (a: number, b: number) => {
-      call.range = [a, b];
-      return q;
-    };
-    q.limit = (n: number) => {
-      call.limit = n;
-      return q;
-    };
-    q.then = (resolve: (v: unknown) => unknown) => {
-      calls.push(call);
-      const page =
-        call.range !== null
-          ? rows.slice(call.range[0], call.range[1] + 1)
-          : call.limit !== null
-            ? rows.slice(0, call.limit)
-            : rows;
-      return Promise.resolve({ data: page, error: null }).then(resolve);
-    };
-    return q;
-  });
-  const rpc = vi.fn(async () => ({ data: [], error: null }));
-  return { client: { from, rpc } as unknown as Client, calls, rpc };
-}
-
-function world(plans: number, itemsPer: number, posts: number): Record<string, Row[]> {
-  const planRows: Row[] = [];
-  const items: Row[] = [];
-  const postRows: Row[] = [];
+/** `plans` plans, one a day back from 25 Oct, each with one post item; `loose` posts on 22 Oct. */
+function world(plans: number, loose: number, timezone = 'UTC'): World {
+  const w: World = { timezone, plans: [], items: [], posts: [] };
   for (let p = 0; p < plans; p += 1) {
-    const id = `plan-${p}`;
-    planRows.push({
+    const day = new Date(Date.UTC(2026, 9, 25 - p)).toISOString().slice(0, 10);
+    const id = `plan-${String(p).padStart(3, '0')}`;
+    w.plans.push({
       id,
       workspace_id: 'ws',
       title: id,
-      starts_on: '2026-10-19',
-      ends_on: '2026-10-25',
+      starts_on: day,
+      ends_on: day,
       audience: p % 2 === 0 ? 'client' : 'team',
       created_by: null,
     });
-    for (let i = 0; i < itemsPer; i += 1) {
-      const postId = i % 2 === 0 ? `post-${p}-${i}` : null;
-      if (postId !== null) {
-        postRows.push({
-          id: postId,
-          workspace_id: 'ws',
-          title: postId,
-          stage: 'review',
-          target_date: '2026-10-21T12:00:00Z',
-        });
-      }
-      items.push({
-        id: `item-${p}-${i}`,
-        plan_id: id,
-        kind: postId !== null ? 'post' : 'concept',
-        position: i,
-        title: postId === null ? 'Concept' : null,
-        description: null,
-        post_id: postId,
-        created_at: '2026-10-01T00:00:00Z',
-        target_date: postId === null ? '2026-10-20' : null,
-      });
-    }
+    w.items.push({
+      id: `item-${p}`,
+      plan_id: id,
+      kind: 'post',
+      position: 0,
+      title: null,
+      description: null,
+      post_id: `post-${p}`,
+      created_at: '2026-10-01T00:00:00Z',
+      target_date: null,
+    });
+    w.posts.push({ id: `post-${p}`, stage: 'review', title: 'P', target_date: `${day}T12:00:00Z` });
   }
-  for (let k = 0; k < posts; k += 1) {
-    postRows.push({
+  for (let k = 0; k < loose; k += 1) {
+    w.posts.push({
       id: `loose-${k}`,
-      workspace_id: 'ws',
-      title: `Loose ${k}`,
       stage: 'review',
+      title: `Loose ${k}`,
       target_date: '2026-10-22T12:00:00Z',
     });
   }
-  return { plans: planRows, plan_items: items, posts: postRows, plan_item_reviews: [] };
+  return w;
 }
 
-const INPUT = {
-  workspaceId: 'ws',
-  range: { start: '2026-10-19', end: '2026-10-25' },
-  timeZone: 'UTC',
-  onlyShared: false,
-};
-
-describe('readPlanTab', () => {
-  it('makes the same number of requests for 2 plans or 40 (no read per plan or item)', async () => {
-    const small = fakeClient(world(2, 2, 1));
-    const large = fakeClient(world(40, 2, 10));
-    const a = await readPlanTab(small.client, INPUT);
-    const b = await readPlanTab(large.client, INPUT);
-    expect(a.ok && b.ok).toBe(true);
-    expect(small.calls.length).toBe(large.calls.length);
-    expect(small.rpc.mock.calls.length).toBe(large.rpc.mock.calls.length);
-    // plans, the any-plan probe, dated posts, items, reviews, posts by id, tiles.
-    expect(large.calls.map((c) => c.table)).toEqual([
-      'plans',
-      'plans',
-      'posts',
-      'plan_items',
-      'plan_item_reviews',
-      'posts',
-      'asset_attachments',
-    ]);
-    for (const call of large.calls) expect(call.ins).toBeLessThanOrEqual(PLAN_READ_CHUNK);
-    if (b.ok) {
-      expect(b.data.bundles).toHaveLength(40);
-      // Posts that are plan items are never loose posts.
-      expect(b.data.posts.map((p) => p.id).every((id) => id.startsWith('loose-'))).toBe(true);
-      expect(b.data.posts).toHaveLength(10);
-      expect(b.data.anyPlan).toBe(true);
-    }
+/** plan_bundle_read in tab mode over the world, as the proc pages it. */
+function fakeClient(w: World) {
+  const calls: Array<Record<string, unknown>> = [];
+  const rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+    calls.push({ fn, ...args });
+    const start = typeof args.p_range_start === 'string' ? args.p_range_start : null;
+    const end = typeof args.p_range_end === 'string' ? args.p_range_end : null;
+    const shared = args.p_only_shared === true;
+    const beforeOn = typeof args.p_before_starts_on === 'string' ? args.p_before_starts_on : null;
+    const beforeId = typeof args.p_before_id === 'string' ? args.p_before_id : null;
+    const key = (p: Row): string => `${String(p.starts_on)}|${String(p.id)}`;
+    const visible = w.plans.filter((p) => !shared || p.audience === 'client');
+    const sel = visible
+      .filter((p) => start === null || (String(p.starts_on) <= String(end) && String(p.ends_on) >= start))
+      .filter((p) => beforeOn === null || key(p) < `${beforeOn}|${String(beforeId)}`)
+      .sort((a, b) => (key(a) < key(b) ? 1 : -1))
+      .slice(0, PLAN_BUNDLE_PAGE + 1);
+    const page = sel.slice(0, PLAN_BUNDLE_PAGE);
+    const last = page[page.length - 1];
+    const ids = new Set(page.map((p) => p.id));
+    const items = w.items.filter((i) => ids.has(i.plan_id));
+    const postIds = new Set(items.map((i) => i.post_id));
+    return {
+      data: {
+        timezone: w.timezone,
+        plans: [...page].sort((a, b) => (key(a) < key(b) ? -1 : 1)),
+        items,
+        draft_rows: [],
+        next_cursor:
+          sel.length > PLAN_BUNDLE_PAGE && last !== undefined
+            ? { starts_on: last.starts_on, id: last.id }
+            : null,
+        reviews: [],
+        posts: w.posts.filter((p) => postIds.has(p.id)),
+        comment_counts: {},
+        thumbs: {
+          posts: Object.fromEntries([...postIds].map((id) => [String(id), `v-${String(id)}`])),
+          concepts: {},
+        },
+        also_in: null,
+        loose_posts:
+          start !== null
+            ? w.posts.filter((p) => String(p.target_date).slice(0, 10) >= '2026-10-01')
+            : [],
+        any_plan: page.length > 0 || (start !== null && visible.length > 0),
+        last_sent_at: null,
+      },
+      error: null,
+    };
   });
+  const from = vi.fn(() => {
+    throw new Error('no table reads');
+  });
+  return { client: { rpc, from } as unknown as Client, calls, rpc, from };
+}
 
-  it('pages a list read at 1000 rows, then reads the next page while one is full', async () => {
-    const fake = fakeClient(world(1, 0, PLAN_TAB_PAGE + 5));
+const RANGE = { start: '2026-10-19', end: '2026-10-25' };
+const INPUT = { workspaceId: 'ws', range: RANGE, onlyShared: false };
+
+describe('readPlanTab (plan_bundle_read, tab mode)', () => {
+  it('one request for a range of up to a page of plans, no table read, no zone read', async () => {
+    const fake = fakeClient(world(5, 2));
     const res = await readPlanTab(fake.client, INPUT);
     expect(res.ok).toBe(true);
-    const postPages = fake.calls.filter((c) => c.table === 'posts' && c.range !== null);
-    expect(postPages.map((c) => c.range)).toEqual([
-      [0, PLAN_TAB_PAGE - 1],
-      [PLAN_TAB_PAGE, 2 * PLAN_TAB_PAGE - 1],
-    ]);
-    if (res.ok) expect(res.data.posts).toHaveLength(PLAN_TAB_PAGE + 5);
-    const planPages = fake.calls.filter((c) => c.table === 'plans' && c.range !== null);
-    expect(planPages).toHaveLength(1);
+    expect(fake.rpc).toHaveBeenCalledTimes(1);
+    expect(fake.from).not.toHaveBeenCalled();
+    expect(fake.calls[0]).toMatchObject({
+      fn: 'plan_bundle_read',
+      p_workspace_id: 'ws',
+      p_range_start: RANGE.start,
+      p_range_end: RANGE.end,
+    });
+    expect(fake.calls[0]).not.toHaveProperty('p_plan_ids');
+    expect(fake.calls[0]).not.toHaveProperty('_trace_id');
+    if (!res.ok) return;
+    // starts_on then id order, whatever order the page came in.
+    const starts = res.data.bundles.map((b) => b.plan.starts_on);
+    expect(starts).toEqual([...starts].sort());
+    // Posts that are plan items are never loose posts.
+    expect(res.data.posts.map((p) => p.id)).toEqual(['loose-0', 'loose-1']);
+    expect(res.data.anyPlan).toBe(true);
+    expect(res.data.nextCursor).toBeNull();
+    expect(res.data.thumbs.posts['post-0']).toBe('v-post-0');
   });
 
-  it('approvers read shared plans only; the phone reads every plan and no posts', async () => {
-    const fake = fakeClient(world(4, 1, 3));
-    const res = await readPlanTab(fake.client, { ...INPUT, range: null, onlyShared: true });
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.data.bundles.map((b) => b.plan.audience)).toEqual(['client', 'client']);
-      expect(res.data.posts).toEqual([]);
+  it('the zone comes from the bundle: a loose post is kept by its day there', async () => {
+    const w = world(1, 0, 'America/Los_Angeles');
+    // 26 Oct 03:00 UTC is 25 Oct in Los Angeles (inside the range), 26 Oct in UTC (outside).
+    w.posts.push({ id: 'late', stage: 'draft', title: 'Late', target_date: '2026-10-26T03:00:00Z' });
+    const fake = fakeClient(w);
+    const res = await readPlanTab(fake.client, INPUT);
+    expect(res.ok && res.data.timeZone).toBe('America/Los_Angeles');
+    expect(res.ok && res.data.posts.map((p) => p.id)).toEqual(['late']);
+    const utc = await readPlanTab(fakeClient({ ...w, timezone: 'UTC' }).client, INPUT);
+    expect(utc.ok && utc.data.posts).toEqual([]);
+  });
+
+  it('a range with more than a page of plans reads on with the cursor (the grid cannot page)', async () => {
+    const w = world(30, 0);
+    for (const p of w.plans) {
+      p.starts_on = '2026-10-19';
+      p.ends_on = '2026-10-25';
     }
-    expect(
-      fake.calls
-        .filter((c) => c.table === 'plans')
-        .every((c) => c.filters.includes('audience=client')),
-    ).toBe(true);
-    expect(fake.calls.some((c) => c.table === 'posts' && c.range !== null)).toBe(false);
+    const fake = fakeClient(w);
+    const res = await readPlanTab(fake.client, INPUT);
+    expect(fake.rpc).toHaveBeenCalledTimes(3);
+    expect(fake.calls[1]).toMatchObject({ p_before_starts_on: '2026-10-19' });
+    expect(res.ok && res.data.bundles).toHaveLength(30);
+    expect(res.ok && res.data.nextCursor).toBeNull();
+  });
+
+  it('the phone list reads one page and hands back the cursor; the cursor becomes the next args', async () => {
+    const fake = fakeClient(world(30, 0));
+    const first = await readPlanTab(fake.client, { ...INPUT, range: null });
+    expect(fake.rpc).toHaveBeenCalledTimes(1);
+    expect(fake.calls[0]).not.toHaveProperty('p_range_start');
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.data.bundles).toHaveLength(PLAN_BUNDLE_PAGE);
+    expect(first.data.posts).toEqual([]);
+    const cursor = first.data.nextCursor;
+    expect(cursor).not.toBeNull();
+    if (cursor === null) return;
+    // The newest 12: plan-000 (25 Oct) back to plan-011.
+    expect(cursor).toEqual({ startsOn: '2026-10-14', id: 'plan-011' });
+    const second = await readPlanTab(fake.client, { ...INPUT, range: null, before: cursor });
+    expect(fake.calls[1]).toMatchObject({
+      p_before_starts_on: '2026-10-14',
+      p_before_id: 'plan-011',
+    });
+    if (!second.ok) return;
+    const merged = mergePlanTabPages(first.data, second.data);
+    expect(merged.bundles).toHaveLength(24);
+    const third = await readPlanTab(fake.client, {
+      ...INPUT,
+      range: null,
+      before: merged.nextCursor,
+    });
+    if (!third.ok) return;
+    const all = mergePlanTabPages(merged, third.data);
+    expect(all.bundles).toHaveLength(30);
+    // The last page: no cursor (the Load more hides).
+    expect(all.nextCursor).toBeNull();
+    const ids = all.bundles.map((b) => b.plan.id);
+    expect(new Set(ids).size).toBe(30);
+    expect(all.bundles.map((b) => b.plan.starts_on)).toEqual(
+      [...all.bundles.map((b) => b.plan.starts_on)].sort(),
+    );
+  });
+
+  it('approvers read shared plans only (p_only_shared)', async () => {
+    const fake = fakeClient(world(4, 0));
+    const res = await readPlanTab(fake.client, { ...INPUT, range: null, onlyShared: true });
+    expect(fake.calls[0]).toMatchObject({ p_only_shared: true });
+    expect(res.ok && res.data.bundles.map((b) => b.plan.audience)).toEqual(['client', 'client']);
   });
 
   it('says when the workspace has no plan at all', async () => {
-    const fake = fakeClient(world(0, 0, 2));
-    const res = await readPlanTab(fake.client, INPUT);
+    const res = await readPlanTab(fakeClient(world(0, 2)).client, INPUT);
     expect(res.ok && res.data.anyPlan).toBe(false);
   });
 
-  it('reads the tiles alongside the reviews, not after them (one round trip less)', async () => {
-    const fake = fakeClient(world(2, 2, 1));
-    const from = fake.client.from as unknown as (t: string) => Record<string, unknown>;
-    let releaseReviews: () => void = () => undefined;
-    const reviewsGate = new Promise<void>((done) => {
-      releaseReviews = done;
-    });
-    const started: string[] = [];
-    (fake.client as unknown as { from: (t: string) => unknown }).from = (table: string) => {
-      const q = from(table);
-      const then = q.then as (resolve: (v: unknown) => unknown) => Promise<unknown>;
-      q.then = (resolve: (v: unknown) => unknown) => {
-        started.push(table);
-        return table === 'plan_item_reviews'
-          ? reviewsGate.then(() => then(resolve))
-          : then(resolve);
-      };
-      return q;
-    };
-    const pending = readPlanTab(fake.client, INPUT);
-    for (let i = 0; i < 20 && !started.includes('asset_attachments'); i += 1) {
-      await new Promise((r) => setTimeout(r, 0));
-    }
-    // The tiles were asked for while the reviews were still out.
-    expect(started).toContain('asset_attachments');
-    releaseReviews();
-    const res = await pending;
-    expect(res.ok).toBe(true);
+  it('a failed read fails (never throws)', async () => {
+    const rpc = vi.fn(async () => ({ data: null, error: { message: 'workspace_member_only' } }));
+    const res = await readPlanTab({ rpc } as unknown as Client, INPUT);
+    expect(!res.ok && res.error.code).toBe('workspace_member_only');
+  });
+});
+
+describe('mergePlanTabPages', () => {
+  it('dedupes by plan id, merges tiles, takes the later cursor', async () => {
+    const fake = fakeClient(world(14, 0));
+    const first = await readPlanTab(fake.client, { ...INPUT, range: null });
+    if (!first.ok) return;
+    const again = mergePlanTabPages(first.data, first.data);
+    expect(again.bundles).toHaveLength(first.data.bundles.length);
+    const later = { ...first.data, nextCursor: null, thumbs: { posts: { x: 'v-x' }, concepts: {} } };
+    const merged = mergePlanTabPages(first.data, later);
+    expect(merged.nextCursor).toBeNull();
+    expect(merged.thumbs.posts.x).toBe('v-x');
+    expect(merged.thumbs.posts['post-0']).toBe('v-post-0');
   });
 });
