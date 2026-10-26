@@ -18,7 +18,7 @@ Grant hardening: TRUNCATE, TRIGGER, REFERENCES and MAINTAIN are revoked from ano
 5. Assets: assets, asset_versions, asset_attachments, folders
 6. People grouping: groups, group_members
 7. Chat (Postgres record): chat_channels, chat_messages, chat_message_marks, chat_message_stars, chat_reactions, chat_read_cursors, chat_unread_counters, chat_sync_events
-8. Inbox and delivery: inbox_entries, email_threads, delivery_attempts, webhook_events, webhook_processing_attempts
+8. Inbox and delivery: inbox_entries, activity_badge_counts, activity_badge_snoozed, email_threads, delivery_attempts, webhook_events, webhook_processing_attempts
 9. Platform ops (Cockpit): audit_log, feature_flags, cockpit_access_log, cockpit_procedure_allowlist, intent_ledger, pending_flows
 10. Enumerations reference
 11. Partitioning reference
@@ -177,6 +177,8 @@ Approver email rule (member_invite, role client): free-mail domains (is_free_mai
 
 PK (workspace_id, role, capability). Fields: allowed default true, updated_at. role in owner/admin/agency/client.
 
+capabilities_for_workspace(p_trace_id, p_workspace_id) RETURNS TABLE (capability text, allowed boolean), SQL STABLE SECURITY INVOKER (search_path='', EXECUTE authenticated only; 20261026120000_speedy_b): the caller's role rows for the workspace while an active member; any other workspace returns no rows.
+
 ### workspace_settings
 
 PK workspace_id. Fields: payload jsonb default {}, updated_at, updated_by nullable FK users.id.
@@ -229,6 +231,11 @@ post_create(p_workspace_id, p_payload, p_trace_id) SECURITY DEFINER (active memb
 
 posts_select_member: active member, not deleted; drafts only for owner/admin/agency. comments and asset_attachments on posts inherit this via EXISTS on posts.
 
+Read procs (20261026120000_speedy_b), SQL STABLE SECURITY INVOKER, search_path='', EXECUTE authenticated only, so RLS applies and another workspace returns no rows:
+
+- posts_list(p_trace_id, p_workspace_id, p_stage default null, p_limit default 50 (0 to 500), p_before timestamptz default null): non-deleted posts newest first, every posts column plus thumbnail_asset_version_id (first image attachment) and first_media_asset_version_id / first_media_kind (image or video) / first_media_width / first_media_height.
+- ref_resolve(p_trace_id, p_workspace_key, p_kind post|brief, p_number) RETURNS TABLE (workspace_id, entity_id): one row per visible workspace with that key; entity_id null when no live entity has that number.
+
 ### post_versions
 
 Immutable edit history. No deleted_at. PK id. Fields: post_id FK, workspace_id FK, version_number, snapshot jsonb, created_by FK users.id SET NULL, legacy_author_name (text, nullable: frozen original v1 author/creator name shown when the live created_by is null, used by the detail pages with an "(ex-member)" fallback), created_at. Unique (post_id, version_number).
@@ -279,7 +286,7 @@ Two primitives: Comments (here) and Chat (section 7). Both are recorded in Postg
 
 Indexes: FTS on body, entity, parent, author. All where deleted_at null. Plus the ledger index comments_entity_ledger_seq_key (unique (entity_id, ledger_seq) where ledger_seq is not null).
 
-comment_create(p_workspace_id, p_entity_type, p_entity_id, p_parent_comment_id, p_body, p_mentions, p_attachment_asset_ids, p_trace_id) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): the only write path to the comments table. One-level threading (a reply to an already-threaded comment is invalid_payload), lands attachment_asset_ids as entity_type='comment' asset_attachments rows, and emits the Activity inbox_entries ('comment' for the audience, urgent 'mention' for mentioned members).
+comment_create(p_workspace_id, p_entity_type, p_entity_id, p_parent_comment_id, p_body, p_mentions, p_attachment_asset_ids, p_trace_id) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): the only write path to the comments table. One-level threading (a reply to an already-threaded comment is invalid_payload), lands attachment_asset_ids as entity_type='comment' asset_attachments rows, and emits the Activity inbox_entries ('comment' for the audience, urgent 'mention' for mentioned members). The post or brief must be in p_workspace_id (invalid_payload otherwise). Every mentioned id (p_mentions plus @[uuid] in the body) must be an active member of the workspace and, on a draft post, owner/admin/agency; otherwise it raises 'invalid_mention' with DETAIL = the offending ids, comma separated, and nothing is written (20261026120000_speedy_b).
 
 comment_resolve(p_comment_id, p_resolved, p_trace_id, p_resolution_note default null) SECURITY DEFINER (search_path='public', EXECUTE to authenticated only): toggles the thread-level resolved state on a root comment (a reply is invalid_payload; a missing or soft-deleted comment is not_found). p_resolved=true stamps resolved_at=now()/resolved_by=auth.uid() only when currently open and emits one 'comment_resolved' active inbox entry per other thread author (role-gated like comment_create); p_resolved=false clears the state (including resolution_note) and is silent (no inbox write). p_resolution_note is trimmed, a blank note becomes null, over 500 chars raises invalid_payload; the note is stored only on a real open-to-resolved transition. Any active workspace member may resolve or reopen.
 
@@ -419,6 +426,7 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 - plan_item_review(p_item_id, p_side, p_status, p_trace_id): upsert a review (never writes posts.stage); team side for owner/admin/agency, client side for an active client on a client plan's concepts and post items (slot approval; a draft post raises post_not_ready, a team plan forbidden_role; a missing or soft-deleted post raises invalid_payload on either side). A status other than waiting writes plan_review inbox rows via _plan_item_notify (team side to owner/admin/agency only), payload {side, status, plan_id}; waiting after approved/changes writes a new withdrawal row {side, status 'waiting', withdrawn true, previous, plan_id} and keeps the earlier one; waiting from waiting/none writes none.
 - plan_item_comment_create(p_item_id, p_body, p_visibility, p_trace_id) returns uuid: any active member; a client only on a client plan and only 'everyone' (forbidden_role otherwise); invalid_payload for a missing item, a bad visibility or an empty or over-5000 body; writes plan_comment inbox rows via _plan_item_notify ('team' to owner/admin/agency only).
 - plan_draft_rows(p_plan_ids) returns table(plan_id, item_id, item_position, post_number, title, target_date): batched read-only helper, STABLE, no p_trace_id, no audit; EXECUTE to authenticated only (not anon). Lists the live post items whose post is stage 'draft' (not deleted) across the given plans. target_date is the post's own posts.target_date (timestamptz, 12:00 workspace zone; read it in the workspace zone), part 2b; before 2b it was plan_items.target_date at UTC midnight. Empty or null list returns nothing; more than 100 ids is invalid_payload. Per plan: not deleted, the caller is an active member of its workspace, and the plan is 'client' or the caller is agency-side; unknown or invisible ids return nothing. So a client sees draft rows in a client plan without posts SELECT on the draft.
+- plan_bundle_read(p_trace_id, p_workspace_id, p_plan_ids default null, p_range_start, p_range_end, p_only_shared default false, p_channel_id, p_before_starts_on, p_before_id) returns jsonb (20261026120000_speedy_b): plpgsql STABLE SECURITY INVOKER (RLS applies), no audit. One round trip for the Plan screen: up to 12 plans per page (keyset on starts_on, id) or the listed ids (max 200) with their items, drafts, loose posts, any_plan and last_sent_at. Raises 'workspace_member_only' when the workspace is not visible to the caller.
 - plan_draft_items(p_plan_id): retired 11 Oct, no EXECUTE for anyone, drop pending. Its target_date is also the item's plan day (plan_items.target_date at UTC midnight).
 - Live only: schema retired holds an unexposed old plan_posts_add pending drop.
 - Internal, no EXECUTE for anyone: _plan_notify(p_plan_id, p_event_type, p_payload) (20261012160000_plan_notify_plumbing): one inbox row per other active member of the plan's workspace, owner/admin/agency always and clients too on a client plan; entity_type plan, entity_id = scope_key = plan id, scope posts, tier active, payload gains plan_id and plan_title (the plan's title at send time), actor_user_id auth.uid(). Used for plan_opened, plan_deleted, plan_date_changed and plan_updated. Part 2b (20261012190000_plan_part_2b, applied after the screens PR merged) restored the body: alerts go out only for plans open to the client (audience client); on a Draft (team) plan only plan_deleted is sent. Before 2b the live body was silent (20261012161000).
@@ -618,6 +626,10 @@ PK (channel_id, user_id). Index chat_unread_counters_user_workspace_idx (user_id
 
 Maintained by trigger chat_messages_unread_counters (AFTER INSERT OR UPDATE OF deleted_at ON chat_messages, FOR EACH ROW, _chat_unread_on_message() SECURITY DEFINER, search_path=''), which calls chat_unread_bump(p_message_id text, p_channel_id text, p_workspace_id uuid, p_sender_id uuid, p_created_at timestamptz) on a new message and chat_unread_decrement(same args) on a delete. Reset by chat_read_cursor_set and chat_channel_clear. All three functions are SECURITY DEFINER (search_path=''), with no EXECUTE for anon or authenticated.
 
+chat_unread_counts(p_workspace_id) RETURNS TABLE (channel_id, unread bigint, last_message_at), plpgsql STABLE SECURITY INVOKER (search_path='', no p_trace_id): rewritten in 20261026120000_speedy_b with the same signature. Reads unread from chat_unread_counters per visible channel; last_message_at is the latest non-deleted message within the last 90 days (to now() + 1 minute, literal bounds so only those partitions open); channels with no message in that window are omitted.
+
+chat_open_bundle(p_trace_id, p_workspace_id, p_channel_id, p_since timestamptz default null) returns jsonb (20261026120000_speedy_b): plpgsql STABLE SECURITY INVOKER (RLS applies), EXECUTE authenticated only. One round trip to open a chat: the latest 50 messages (or up to 200 since p_since), quoted messages, read cursors, shared posts, plans and open briefs with counts. Raises 'workspace_member_only' when the channel is not visible in that workspace.
+
 RLS: chat_unread_counters_select_own (SELECT to authenticated) USING user_id = auth.uid(): own rows only. No write policies. Table grants: authenticated SELECT only; anon none. Writes only via the SECURITY DEFINER functions above.
 
 ### chat_sync_events
@@ -728,6 +740,35 @@ Where inbox entries are shown:
 - plan_comment and plan_review (entity_type plan_item, entity_id = item id, tier active; 20261009205500_plan_item_comments.sql): plan events use scope 'posts', scope_key = plan id.
 - plan_opened, plan_deleted, plan_date_changed and plan_updated (entity_type plan, entity_id = plan id, scope 'posts', scope_key = plan id, tier active; 20261012160000_plan_notify_plumbing.sql, 20261012163000_plan_updated_alerts.sql) via _plan_notify; payload gains plan_id and plan_title. plan_updated payload kind: slot_added, slot_removed, concept_changed, renamed. Since part 2b they are sent only for plans open to the client, except plan_deleted.
 
+### activity_badge_counts
+
+Per user, per workspace Activity badge totals (20261026120000_speedy_b).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| workspace_id | uuid | PK part |
+| user_id | uuid | PK part |
+| unread | integer | not null, default 0: unread, non-deleted, non-snoozed entries |
+| mentions | integer | not null, default 0: the mention subset of unread |
+| updated_at | timestamptz | not null, default now() |
+
+### activity_badge_snoozed
+
+One row per unread, non-deleted snoozed inbox entry, so a snooze that falls due is counted without a write.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| entry_id | uuid | PK part, inbox_entries.id |
+| entry_created_at | timestamptz | PK part, inbox_entries.created_at |
+| workspace_id | uuid | |
+| user_id | uuid | |
+| is_mention | boolean | event_type = 'mention' |
+| snoozed_until | timestamptz | |
+
+Both tables: no FKs, RLS select_own (user_id = auth.uid() and the caller is an active member of workspace_id); authenticated SELECT only, anon none, no write policies. Maintained only by statement triggers inbox_entries_badge_ins / _upd / _del (AFTER INSERT / UPDATE / DELETE ON inbox_entries FOR EACH STATEMENT, transition tables) calling _activity_badge_apply() (SECURITY DEFINER, search_path='', no EXECUTE for anon or authenticated), which takes a per-workspace advisory lock and applies the deltas.
+
+activity_badge_read(p_trace_id, p_workspace_id) RETURNS TABLE (unread int, mentions int), SQL STABLE SECURITY INVOKER (search_path='', EXECUTE authenticated only): always one row, the caller's counts plus snoozed rows now due; 0/0 for a workspace the caller is not in.
+
 ### email_threads
 
 PK id. Fields: workspace_id FK, root_type (brief / post), root_id, message_id ^<(brief|post)-...@srtd.io>$, subject 1 to 998, created_at, last_sent_at nullable. Unique message_id; (workspace_id, root_type, root_id).
@@ -813,4 +854,4 @@ These are dead references from the pre-MVP schema. Harmless (they only widen a C
 - intent_ledger.target_type still lists share_token. share_tokens table is dropped.
 - webhook_events.source lists stripe / resend / linkedin but not agora. To store the Agora chat webhook entry you wanted, this enum likely needs an agora value added.
 
-Counts: 35 base tables + 3 partitioned parents + 9 partition children = 47 relations in public (idempotency_keys, asset_renditions, folders, induction_sample_rows and induction_sample_seeds added since this line was first written). All RLS enabled.
+Counts: 58 base tables + 3 partitioned parents + 99 partition children = 160 relations in public after 20261026120000_speedy_b (asserted by tests/rls/rls-enabled.test.ts). All RLS enabled.

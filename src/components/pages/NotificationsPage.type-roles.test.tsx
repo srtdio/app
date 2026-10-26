@@ -44,7 +44,7 @@ vi.mock('@/lib/chat/viewer-role', async (importOriginal) => ({
 vi.mock('@/lib/use-workspace-data-changed', () => ({ useWorkspaceDataChanged: () => {} }));
 vi.mock('@/lib/inbox/inbox-reads', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/inbox/inbox-reads')>()),
-  fetchUnreadMentionCount: async () => ({ ok: true, data: 0 }),
+  readActivityBadge: async () => ({ ok: true, data: { unread: 0, mentions: 0 } }),
 }));
 vi.mock('@/components/pages/activity/data', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/pages/activity/data')>()),

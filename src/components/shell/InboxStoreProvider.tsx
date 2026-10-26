@@ -60,9 +60,10 @@ import {
 import {
   enrichNewRows,
   fetchInboxSince,
-  fetchInboxUnreadCount,
   fetchNewestInboxAt,
+  readActivityBadge,
 } from '@/lib/inbox/inbox-reads';
+import { generateTraceId } from '@/lib/trace';
 import { readProfiles } from '@/lib/chat-reads';
 import { announceRemindersChanged } from '@/lib/chat/reminders';
 import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
@@ -116,13 +117,19 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     workspaceIdRef.current === ws && userIdRef.current === uid;
 
   // Refetch only the count (CQS: a query, no toast side effect). Used by the change
-  // event and as the first half of each poll tick. A stale tenant's count is dropped.
+  // event and as the first half of each poll tick. One activity_badge_read per
+  // refresh, shared with the Activity page's Mentions count (readActivityBadge).
+  // A stale tenant's count is dropped.
   const refreshCount = (ws: string, uid: string): void => {
     void (async () => {
-      const nowIso = new Date().toISOString();
-      const res = await fetchInboxUnreadCount(supabase, { workspaceId: ws, userId: uid, nowIso });
+      const res = await readActivityBadge(supabase, {
+        userId: uid,
+        workspaceId: ws,
+        traceId: generateTraceId(),
+        refresh: true,
+      });
       if (!stillActive(ws, uid)) return;
-      if (res.ok) setUnreadCount(res.data);
+      if (res.ok) setUnreadCount(res.data.unread);
       else logger.warn('inbox store: count refresh failed', { error: res.error.message });
     })();
   };
