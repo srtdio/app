@@ -1,6 +1,7 @@
 // Nav prefetch: a press on a nav item (pointerdown, touchstart) starts the
 // import() of that route's chunk, so the page code is on its way before the
-// click lands. Code only: import() runs no data fetch, Supabase or Agora call.
+// click lands. The same press starts the route's first reads through
+// src/lib/route-data.ts (data); the import() itself runs no fetch.
 // App.tsx's lazy routes use these same loader functions, so Vite resolves one
 // chunk per page and the route's own lazy load reuses the module already
 // fetched. Once per route per session; a failed prefetch is logged and
