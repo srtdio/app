@@ -75,7 +75,7 @@ function Thumb(props: {
       data-scheduled-thumb=""
       className={cn(
         'relative flex shrink-0 items-center justify-center overflow-hidden bg-panel-3 text-fg-3',
-        props.size === 'strip' ? 'h-7 w-7 rounded-md' : 'h-12 w-12 rounded-md',
+        props.size === 'strip' ? 'h-7 w-7 rounded-lg' : 'h-12 w-12 rounded-lg',
       )}
     >
       {url !== null && !failed ? (
@@ -137,7 +137,7 @@ export function ScheduledAttachments(props: {
           data-scheduled-file=""
           className={cn(
             'flex min-w-0 items-center gap-1.5 text-fg-2',
-            !strip && 'max-w-[85%] rounded-md border border-border bg-panel px-2 py-1.5',
+            !strip && 'max-w-[85%] rounded-lg border border-border bg-panel px-2 py-1.5',
           )}
         >
           <IconFile size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
@@ -200,11 +200,11 @@ export function ScheduleModeStrip(props: { label: string; onStop: () => void }):
     return () => cancelAnimationFrame(raf);
   }, []);
   return (
-    <div className="overflow-hidden rounded-md">
+    <div className="overflow-hidden rounded-lg">
       <div
         data-schedule-mode=""
         className={cn(
-          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 transition-transform duration-[180ms] ease-out motion-reduce:transition-none',
+          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 transition-transform duration-slow ease-enter motion-reduce:transition-none',
           entered ? 'translate-y-0' : 'translate-y-full',
           NO_TOUCH_SELECT,
         )}

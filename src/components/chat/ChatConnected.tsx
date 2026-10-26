@@ -180,6 +180,25 @@ interface SavedState {
 const NO_SAVED: SavedState = { key: '', sources: new Map(), failed: new Set() };
 
 /** The toast when opening a DM from a mention fails; the raw error is only logged. */
+/**
+ * The chat list pane's classes. While the docked plan panel is open the list
+ * is set aside in place (invisible, absolute, never unmounted) so it returns on
+ * close with its scroll, and the thread beside it keeps its own scroll (same
+ * element, it only widens):
+ * - 768 to 891px: the open panel takes the list's room.
+ * - 1180 to 1439px: the thread takes the list's place beside the panel.
+ * From 1440px all three panes show; 892 to 1179px the panel overlays.
+ */
+export function chatListPaneClass(planPanelOpen: boolean): string {
+  return cn(
+    'h-full w-full border-border md:w-72 md:border-r xl:w-[352px]',
+    planPanelOpen &&
+      'max-[891px]:pointer-events-none max-[891px]:invisible max-[891px]:absolute max-[891px]:inset-y-0 max-[891px]:left-0',
+    planPanelOpen &&
+      'min-[1180px]:max-[1439px]:pointer-events-none min-[1180px]:max-[1439px]:invisible min-[1180px]:max-[1439px]:absolute min-[1180px]:max-[1439px]:inset-y-0 min-[1180px]:max-[1439px]:left-0',
+  );
+}
+
 export const MENTION_DM_FAILED = "Couldn't open that chat. Try again.";
 
 /**
@@ -1945,16 +1964,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const surface = (
     <div className="relative flex h-full min-h-0">
       {showList ? (
-        <div
-          className={cn(
-            'h-full w-full border-border md:w-72 md:border-r xl:w-[352px]',
-            // 768 to 891px: the open plan panel takes the list's room; the
-            // list is set aside in place (not unmounted), so it returns on
-            // close with its scroll.
-            planPanelOpen &&
-              'max-[891px]:pointer-events-none max-[891px]:invisible max-[891px]:absolute max-[891px]:inset-y-0 max-[891px]:left-0',
-          )}
-        >
+        <div className={chatListPaneClass(planPanelOpen)}>
           <ChannelList
             channels={roster}
             status={loadStatus}

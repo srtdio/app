@@ -311,7 +311,7 @@ export function SignInPage() {
         {noAccount ? (
           <div
             role="status"
-            className="flex flex-col gap-3 rounded-md bg-warn-soft p-3 text-base text-fg"
+            className="flex flex-col gap-3 rounded-lg bg-warn-soft p-3 text-base text-fg"
           >
             <span>There is no account with this email yet.</span>
             <Link

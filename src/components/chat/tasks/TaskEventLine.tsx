@@ -41,7 +41,7 @@ const PILL =
   'rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-sm font-medium leading-4 text-fg-3';
 // The pill's tap target: a ghost Button (44 tall) around the visual pill.
 const PRESS = cn(
-  'max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'max-w-full',
   NO_TOUCH_SELECT,
 );
 
@@ -165,7 +165,7 @@ function TaskBatch(props: {
             onClick={() => ctx.onOpenTask(TASKS_SHEET_ONLY)}
             onContextMenu={(e) => e.preventDefault()}
             className={cn(
-              'mt-1 self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              'mt-1 self-start',
               NO_TOUCH_SELECT,
             )}
           >

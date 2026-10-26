@@ -46,7 +46,7 @@ export const POST_SORT_DEFAULT: PostSort = 'updated';
 export const POST_SORT_OPTIONS: SortOption<PostSort>[] = [
   { value: 'updated', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },
-  { value: 'target', label: 'Due soonest first' },
+  { value: 'target', label: 'Due date' },
 ];
 
 /** The minimal row shape the post comparators need (id is the stable tiebreaker). */

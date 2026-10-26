@@ -74,7 +74,7 @@ describe('chat thread type roles', () => {
 
   it('the chat-type.ts tokens themselves are unchanged (WhatsApp lock)', () => {
     expect(HEADER_NAME_TYPE.touch).toBe('text-[17px] leading-[22px] font-semibold');
-    expect(HEADER_NAME_TYPE.laptop).toBe('text-[16px] leading-[21px] font-medium');
+    expect(HEADER_NAME_TYPE.laptop).toBe('text-lg font-medium');
     expect(HEADER_LINE_TYPE.touch).toBe('text-[13px] leading-[16px] font-normal');
     expect(BUBBLE_META_TYPE).toBe('text-[11px] leading-[15px] font-normal tabular-nums');
   });

@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
@@ -310,7 +311,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
             <li
               key={slot.id}
               className={cn(
-                'flex flex-col gap-1.5 transition-[opacity,transform] duration-200 ease-out',
+                'flex flex-col gap-1.5 transition-[opacity,transform] duration-slow ease-enter',
                 entered.has(slot.id) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1',
               )}
             >
@@ -429,9 +430,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
       </div>
 
       {error !== null ? (
-        <div role="alert" className="rounded-md border border-bad px-3 py-2 text-base text-bad">
-          {error}
-        </div>
+        <ErrorNote>{error}</ErrorNote>
       ) : null}
 
       {attachEnabled ? (

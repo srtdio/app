@@ -116,7 +116,7 @@ export function dayCells(
           if (!past) onPick(iso);
         }}
         className={cn(
-          'flex h-11 w-11 items-center justify-center rounded-md text-base tabular-nums transition-colors',
+          'flex h-11 w-11 items-center justify-center rounded-lg text-base tabular-nums transition-colors',
           past
             ? 'cursor-default text-fg-3 opacity-50'
             : selected
@@ -201,7 +201,7 @@ export function DatePicker({
         aria-expanded={open}
         {...(label !== undefined ? { 'aria-label': label } : {})}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-md border border-border bg-panel-2 px-3 text-base transition-colors hover:bg-panel-3"
+        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-base transition-colors hover:bg-panel-3"
       >
         <IconCalendar size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
         <span

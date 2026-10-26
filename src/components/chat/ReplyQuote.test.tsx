@@ -72,7 +72,7 @@ describe('ReplyQuoteBox media', () => {
     expect(html).toContain('Photo');
     expect(html).toContain('data-quote-thumb');
     expect(html).toContain('h-9 w-9');
-    expect(html).toContain('rounded-md');
+    expect(html).toContain('rounded-lg');
   });
 
   it('file: file glyph + name with an ellipsis', () => {

@@ -47,7 +47,7 @@ export function NotificationsButton(): ReactElement {
       // A press starts the Activity chunk and its first reads before the tap lands.
       {...activityPrefetchProps()}
       className={cn(
-        'relative shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'relative shrink-0',
         active && 'bg-accent-soft',
       )}
     >

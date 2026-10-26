@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { BriefCard, briefCardLink } from '@/components/pages/BriefCard';
+import { tagClass } from '@/components/ui/Tag';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 
@@ -209,20 +210,28 @@ describe('BriefCard thumbnail tile', () => {
     expect(out).toContain('Closed');
   });
 
-  it('Open is the accent-soft pill with an accent dot', () => {
+  it('Open is the accent Tag, text only', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ status: 'open' }), cache);
     expect(out).toContain('data-brief-status="open"');
-    expect(out).toContain('bg-accent-soft text-accent');
+    expect(out).toContain(tagClass('accent'));
     expect(out).not.toContain('bg-good');
+    expect(out).not.toContain('rounded-full bg-accent');
   });
 
-  it('Closed is the panel-3 pill with a lock', () => {
+  it('Closed is the neutral Tag with no lock', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ status: 'closed' }), cache);
     expect(out).toContain('data-brief-status="closed"');
-    expect(out).toContain('bg-panel-3 text-fg-2');
+    expect(out).toContain(tagClass('neutral'));
     expect(out).not.toContain('bg-accent-soft');
+    expect(out).not.toContain('M16.5 10.5V6.75');
+  });
+
+  it('the due date renders mono with tabular figures', () => {
+    const { cache } = makeCache(null);
+    const out = render(makeBrief({ target_date: '2026-07-01' }), cache);
+    expect(out).toMatch(/data-brief-due="" class="font-mono tabular-nums">Due 1 Jul</);
   });
 
   it('title and objective wrap instead of scrolling sideways', () => {

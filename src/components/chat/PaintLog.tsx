@@ -216,7 +216,7 @@ function useFrameSampler(): void {
 }
 
 const BUTTON =
-  'min-w-[44px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'min-w-[44px] shrink-0';
 
 function PaintLogPanel(): ReactElement {
   const entries = useSyncExternalStore(store.subscribe, store.entries, store.entries);

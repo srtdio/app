@@ -1232,7 +1232,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
       <div
         aria-hidden="true"
         data-viewer-backdrop=""
-        className={cn('absolute inset-0', tone.backdrop)}
+        className={cn('absolute inset-0 backdrop-blur-xl', tone.backdrop)}
         style={{ opacity: backdrop }}
       />
       <div

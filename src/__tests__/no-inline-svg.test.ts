@@ -3,16 +3,14 @@ import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// Icons come from src/components/ui/icons.tsx only. These files draw
-// non-icon graphics (rings, rails, marks, illustrations) and may keep <svg.
+// Icons come from src/components/ui/icons.tsx only. These ui files draw
+// non-icon graphics (rings, marks) and may keep <svg; chat draws none of its own.
 const ROOT = fileURLToPath(new URL('../components/', import.meta.url));
 const ALLOWED = new Set([
   'ui/icons.tsx',
   'ui/format-icon.tsx',
   'ui/PlatformMark.tsx',
-  'chat/UploadRing.tsx',
-  'chat/ThreadRail.tsx',
-  'chat/tasks/TaskGlyph.tsx',
+  'ui/ProgressRing.tsx',
 ]);
 const ALLOWED_DIRS = ['home/'];
 

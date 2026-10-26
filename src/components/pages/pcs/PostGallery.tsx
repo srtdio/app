@@ -985,7 +985,6 @@ export function galleryView({
             onClick={() => {
               if (onDotClick !== undefined) onDotClick(index);
             }}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <span
               className={`h-2 w-2 rounded-full transition-colors ${

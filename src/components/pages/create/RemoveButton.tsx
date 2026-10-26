@@ -24,7 +24,7 @@ export function RemoveButton({
       {/* Pinned to the tap area's top-right corner (IconButton centres its content). */}
       <span
         aria-hidden="true"
-        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
+        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-overlay-fg"
       >
         <IconX size={ICON_SIZE.inline} />
       </span>

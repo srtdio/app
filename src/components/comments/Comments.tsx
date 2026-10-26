@@ -10,6 +10,8 @@ import {
 } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
+import { Textarea } from '@/components/ui/Textarea';
 import { dispatchInductionDid, INDUCTION_KEYS } from '@/lib/induction';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
@@ -226,8 +228,7 @@ export function emptyListText(entityType: CommentEntityType, filter: CommentFilt
  * Reply, Copy). Each is a ghost <Button> (44 tall, 8px radius, 14 / 500); this
  * only keeps the 44px minimum width and the hover that reads on panel-2 rows.
  */
-export const ROW_ACTION_CLASS =
-  'min-w-[44px] hover:bg-panel-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+export const ROW_ACTION_CLASS = 'min-w-[44px] hover:bg-panel-3';
 
 /** The passive (non-interactive) checkbox: the same box, height and padding as
  *  a ghost row-action Button without the hover or focus treatment. */
@@ -687,7 +688,7 @@ export function checkpointBox(checked: boolean, confirmed: boolean): ReactElemen
       aria-hidden
       data-tick={checked ? (confirmed ? 'filled' : 'hollow') : 'open'}
       className={cn(
-        'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border',
+        'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border',
         checked
           ? confirmed
             ? RESOLVED_FILL_CLASS
@@ -2003,11 +2004,10 @@ export function Comments({
   function renderEditor(commentId: string): ReactNode {
     return (
       <div className="mt-2 flex flex-col gap-2">
-        <textarea
+        <Textarea
           value={editBody}
           onChange={(event) => setEditBody(event.target.value)}
           aria-label="Edit comment body"
-          className="w-full px-3 rounded-md border border-border bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[74px] py-2.5 h-auto"
         />
         <div className="flex items-center gap-2">
           <Button
@@ -2206,12 +2206,7 @@ export function Comments({
           ) : null}
 
           {rowError !== null && rowError.id === comment.id ? (
-            <div
-              role="alert"
-              className="mt-2 rounded-md border border-bad px-3 py-2 text-base text-bad"
-            >
-              {rowError.message}
-            </div>
+            <ErrorNote className="mt-2">{rowError.message}</ErrorNote>
           ) : null}
 
           {opts.below}
@@ -2463,7 +2458,7 @@ export function Comments({
       variant={filter === value ? 'secondary' : 'ghost'}
       aria-pressed={filter === value}
       onClick={() => setFilter(value)}
-      className="min-w-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="min-w-[44px]"
     >
       {label}
     </Button>
@@ -2527,10 +2522,7 @@ export function Comments({
       )}
 
       {!loading && !loadError && moreError ? (
-        <div
-          role="alert"
-          className="flex items-center gap-3 rounded-md border border-bad px-3 py-2 text-base text-bad"
-        >
+        <ErrorNote className="flex items-center gap-3">
           <span>Couldn&apos;t load older comments.</span>
           <Button
             variant="ghost"
@@ -2540,7 +2532,7 @@ export function Comments({
           >
             {loadingMore ? 'Loading' : 'Retry'}
           </Button>
-        </div>
+        </ErrorNote>
       ) : null}
 
       {!loading && !loadError && !moreError && hasMore ? (

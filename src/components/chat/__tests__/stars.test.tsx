@@ -289,7 +289,7 @@ describe('bubble meta', () => {
         },
         "light": {
           "meta": "hex ffffff",
-          "peer": "hex 6b6f76",
+          "peer": "hex 686c73",
         },
       }
     `);
@@ -606,7 +606,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
           "border": "hex e6e8eb",
           "fg": "hex 1b1c20",
           "fg-2": "hex 62666d",
-          "fg-3": "hex 6b6f76",
+          "fg-3": "hex 686c73",
           "panel": "hex ffffff",
           "panel-2": "hex f2f3f5",
         },

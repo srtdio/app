@@ -76,7 +76,7 @@ export function PinAnnotationComposer({
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="rounded-md border-l-4 border-annotation-line bg-annotation-bg px-3 py-2 text-base text-fg">
+        <div className="rounded-lg border-l-4 border-annotation-line bg-annotation-bg px-3 py-2 text-base text-fg">
           {context}
         </div>
         <Textarea

@@ -235,7 +235,7 @@ export function Thumbnail({
               onError={original.onError}
               className={cn(
                 'absolute inset-0 h-full w-full object-cover',
-                instant ? null : 'transition-opacity duration-150 motion-reduce:transition-none',
+                instant ? null : 'transition-opacity duration-base motion-reduce:transition-none',
                 originalShown ? 'opacity-100' : 'opacity-0',
               )}
             />

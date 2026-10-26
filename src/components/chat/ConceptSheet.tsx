@@ -16,6 +16,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
@@ -64,8 +66,11 @@ export const EMPTY_CONCEPT: ConceptForm = { title: '', description: '', files: [
 /** Max description length (the proc's limit). */
 const CONCEPT_DESCRIPTION_MAX = 5000;
 
-export const FIELD =
-  'min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-3.5 text-input text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60 md:text-base';
+/**
+ * The plan form fields' own classes on top of ui/Input / ui/Textarea (which own
+ * the field look: border, fill, radius, padding, focus and the 16px phone text).
+ */
+export const FIELD = 'disabled:opacity-60';
 
 /** The hint once the files reach the cap (library picks and uploads together). */
 export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} files.`;
@@ -338,7 +343,7 @@ export function ConceptSheet(props: {
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-md text-fg-3">Title</span>
-            <input
+            <Input
               data-plan-concept-title=""
               value={form.title}
               maxLength={PLAN_TITLE_MAX}
@@ -355,7 +360,7 @@ export function ConceptSheet(props: {
           <div className="flex flex-col gap-1">
             <label className="flex flex-col gap-1">
               <span className="text-md text-fg-3">Description</span>
-              <textarea
+              <Textarea
                 data-plan-concept-description=""
                 value={form.description}
                 maxLength={CONCEPT_DESCRIPTION_MAX}
@@ -366,7 +371,8 @@ export function ConceptSheet(props: {
                   const description = e.target.value;
                   onChange((f) => ({ ...f, description }));
                 }}
-                className={cn(FIELD, 'min-h-[104px] py-2.5 leading-[1.45]')}
+                className={cn(FIELD, 'leading-[1.45]')}
+                style={{ minHeight: '104px' }}
               />
             </label>
             <p
@@ -411,7 +417,7 @@ export function ConceptSheet(props: {
                     <div
                       key={f.versionId}
                       data-plan-concept-file=""
-                      className="relative overflow-hidden rounded-md border border-border bg-panel-2"
+                      className="relative overflow-hidden rounded-lg border border-border bg-panel-2"
                     >
                       <Thumbnail
                         assetVersionId={f.versionId}
@@ -461,7 +467,7 @@ export function ConceptSheet(props: {
                           aria-label={`Retry ${u.file.name}`}
                           disabled={busy}
                           onClick={() => controller.retry(u.id)}
-                          className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                          className="shrink-0"
                         >
                           Retry
                         </Button>

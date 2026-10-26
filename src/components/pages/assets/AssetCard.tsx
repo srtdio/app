@@ -97,7 +97,7 @@ export function AssetCard({
             className={cn(
               'absolute left-3.5 top-3.5 z-10 flex h-4 w-4 items-center justify-center rounded',
               selected
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-accent-fg'
                 : 'border-[1.5px] border-white bg-black/15 ring-1 ring-black/30',
             )}
           >
@@ -143,7 +143,6 @@ export function AssetCard({
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 data-card-menu=""
-                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <IconMore size={ICON_SIZE.control} />
               </IconButton>
@@ -171,7 +170,7 @@ export function CardSelectBox({ name, onPress }: { name: string; onPress: () => 
       label={`Select ${name}`}
       data-card-select=""
       onClick={onPress}
-      className="absolute left-0 top-0 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="absolute left-0 top-0 z-10"
     >
       <span className="h-4 w-4 rounded border-[1.5px] border-white bg-black/15 ring-1 ring-black/30" />
     </IconButton>

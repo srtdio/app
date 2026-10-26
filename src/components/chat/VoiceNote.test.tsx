@@ -764,10 +764,10 @@ describe('first paint', () => {
     );
   });
 
-  it('opens on height only, 180ms ease-out, none under reduced motion', () => {
+  it('opens on height only, slow token with the enter ease, none under reduced motion', () => {
     const html = render('fp-motion');
     expect(html).toContain(
-      'transition-[grid-template-rows] duration-[180ms] ease-out motion-reduce:transition-none',
+      'transition-[grid-template-rows] duration-slow ease-enter motion-reduce:transition-none',
     );
     expect(html).not.toMatch(/data-voice-transcript[^>]*(translate|scale|rotate|opacity)/);
   });

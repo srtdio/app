@@ -1,5 +1,7 @@
-// Guard: every text token clears WCAG AA (4.5:1) on bg and panel in both
-// themes, read straight from the hex tokens in src/index.css.
+// Guard: every text token clears WCAG AA (4.5:1) on bg, panel, panel-2 and
+// panel-3 in both themes, read straight from the hex tokens in src/index.css.
+// The stage inks (review, approved, rejected, parked) count as text: they are
+// the stage chip and dot labels.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -40,8 +42,20 @@ function token(t: Record<string, string>, name: string): string {
   return hex;
 }
 
-const TEXT = ['fg', 'fg-2', 'fg-3', 'accent-text', 'good', 'warn', 'bad'];
-const SURFACES = ['bg', 'panel'];
+const TEXT = [
+  'fg',
+  'fg-2',
+  'fg-3',
+  'accent-text',
+  'good',
+  'warn',
+  'bad',
+  'stage-review',
+  'stage-approved',
+  'stage-rejected',
+  'stage-parked',
+];
+const SURFACES = ['bg', 'panel', 'panel-2', 'panel-3'];
 
 describe.each([':root', '.dark'])('contrast: %s', (selector) => {
   const t = tokens(selector);

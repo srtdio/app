@@ -189,7 +189,6 @@ export function compareVersionsView({
                     variant={active ? 'primary' : 'ghost'}
                     aria-pressed={active}
                     onClick={() => onModeChange(option.value)}
-                    className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     {option.label}
                   </Button>

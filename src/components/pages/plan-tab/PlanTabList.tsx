@@ -16,6 +16,7 @@ import { PLAN_DRAFT_LABEL } from '@/components/chat/plan-card';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { tagClass } from '@/components/ui/Tag';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 import { planCardMeta, planSections } from '@/lib/plan-tab';
@@ -165,7 +166,7 @@ export function PlanTabCard(props: {
             <span
               key={version}
               data-plan-tab-cover=""
-              className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-panel-2"
+              className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-panel-2"
             >
               <Thumbnail
                 assetVersionId={version}
@@ -206,10 +207,7 @@ export function PlanTabCard(props: {
 /** The small Draft tag on a Draft plan (only the team sees it). */
 export function DraftTag(): ReactElement {
   return (
-    <span
-      data-plan-tab-draft=""
-      className="inline-flex h-5 shrink-0 items-center rounded-md bg-warn-soft px-1.5 text-xs font-semibold leading-4 text-warn"
-    >
+    <span data-plan-tab-draft="" className={cn(tagClass('warn'), 'shrink-0')}>
       {PLAN_DRAFT_LABEL}
     </span>
   );

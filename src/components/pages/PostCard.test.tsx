@@ -186,6 +186,8 @@ describe('PostCard thumbnail frame', () => {
       </MemoryRouter>,
     );
     expect(out).toContain('tabular-nums');
+    // Dates render mono, like the chat list times.
+    expect(out).toMatch(/data-post-card-due=""[^>]*class="[^"]*font-mono[^"]*tabular-nums/);
     // The due line reads "Due {d MMM}", day first, no year.
     expect(out).toContain('Due 15 Mar');
     expect(out).toContain('data-post-card-due');

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import {
+  ASSET_SORT_OPTIONS,
   BULK_DELETE_MAX,
   ASSET_KINDS,
   ASSET_TABS,
@@ -713,5 +714,12 @@ describe('deleteAssetsBatch (bounded concurrency)', () => {
     expect(outcome.succeeded).toHaveLength(20);
     expect(outcome.failed).toHaveLength(0);
     expect(peak).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('ASSET_SORT_OPTIONS labels', () => {
+  it('reads Newest first, Name, Size, Type; values unchanged', () => {
+    expect(ASSET_SORT_OPTIONS.map((o) => o.label)).toEqual(['Newest first', 'Name', 'Size', 'Type']);
+    expect(ASSET_SORT_OPTIONS.map((o) => o.value)).toEqual(['recent', 'name', 'size', 'type']);
   });
 });

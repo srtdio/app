@@ -152,11 +152,11 @@ describe('New plan create: one call, never half built', () => {
     expect(src).not.toContain('type="date"');
     expect(pickerSrc).toContain('className="flex w-full min-w-0 flex-col gap-1"');
     expect(pickerSrc).toContain('className={DATE_FIELD}');
+    // The field look (44px, 8px radius, panel-2, focus) comes from ui/Input.
+    expect(pickerSrc).toMatch(/<Input\s+type="date"\s+data-plan-date=\{field\}/);
     expect(DATE_FIELD).toContain(DATE_FIT);
-    expect(DATE_FIELD).toContain(' px-2.5 ');
-    expect(DATE_FIELD).toContain('h-11 min-h-[44px]');
-    expect(DATE_FIELD).toContain('rounded-lg');
-    expect(DATE_FIELD).toContain('bg-panel-2');
+    expect(DATE_FIELD).toContain('font-mono');
+    expect(DATE_FIELD).not.toMatch(/border-border|bg-panel-2|rounded-|\bpx-/);
     expect(DATE_FIT).toContain('appearance-none');
     const html = renderToStaticMarkup(
       <PlanDatesSheet open range={RANGE} onSave={() => {}} onClose={() => {}} />,
@@ -259,7 +259,7 @@ describe('concept sheet: tiles and soft counter', () => {
     expect(html).not.toContain('type="date"');
     expect(html).toMatch(/data-plan-day-none="" aria-pressed="true"/);
     expect(html).toContain('rows="4"');
-    expect(html).toContain('min-h-[104px]');
+    expect(html).toContain('min-height:104px');
     expect(html).toContain(
       'placeholder="What is the concept? The idea, the hook, what approvers will see."',
     );

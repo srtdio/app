@@ -166,7 +166,7 @@ describe('Toast', () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it('renders the error tone on bad-solid with white ink and an alert icon', () => {
+  it('renders the error tone on bad-solid with accent-fg ink and an alert icon', () => {
     const tree = Toast({
       toast: { ...base, title: "Couldn't move the post. Try again.", tone: 'error' },
       onDismiss: () => {},
@@ -176,7 +176,7 @@ describe('Toast', () => {
     expect(root.props.className).toContain('bg-bad-solid');
     expect(root.props.className).not.toContain('good-soft');
     const white = findAll(tree, (el) =>
-      String((el.props as { className?: string }).className ?? '').includes('text-white'),
+      String((el.props as { className?: string }).className ?? '').includes('text-accent-fg'),
     );
     expect(white.length).toBeGreaterThan(0);
   });

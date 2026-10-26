@@ -243,7 +243,7 @@ describe('Thumbnail', () => {
 
 describe('Thumbnail original fade, once per session', () => {
   const FADE =
-    'absolute inset-0 h-full w-full object-cover transition-opacity duration-150 motion-reduce:transition-none opacity-0';
+    'absolute inset-0 h-full w-full object-cover transition-opacity duration-base motion-reduce:transition-none opacity-0';
 
   // A known small copy whose stored lookup comes back missing: the original
   // loads over the small copy, the one path that fades in.
@@ -295,7 +295,7 @@ describe('Thumbnail original fade, once per session', () => {
     await act(async () => {
       first.img.dispatchEvent(new Event('load'));
     });
-    expect(first.img.className).toContain('transition-opacity duration-150');
+    expect(first.img.className).toContain('transition-opacity duration-base');
     expect(first.img.className).toContain('opacity-100');
     first.unmount();
 

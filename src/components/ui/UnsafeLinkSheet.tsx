@@ -182,7 +182,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             className={buttonClass(
               'secondary',
               'default',
-              'w-full !text-[color:var(--warn-ink)] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
+              'w-full data-[unsafe-open-anyway]:text-[color:var(--warn-ink)] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
             )}
           >
             Open anyway

@@ -716,7 +716,9 @@ test('D: a client at 1280 sees no Edit, grip, day chip, remove, menu or hints; O
 });
 
 for (const size of [
-  { width: 1280, height: 800, panel: 440, list: 'clear' },
+  // From 1440px all three panes show; 1180 to 1439px the thread takes the list's place.
+  { width: 1440, height: 900, panel: 440, list: 'clear' },
+  { width: 1280, height: 800, panel: 440, list: 'hidden' },
   { width: 1024, height: 768, panel: 440, list: 'clear' },
   { width: 900, height: 768, panel: 360, list: 'clear' },
   { width: 800, height: 768, panel: 360, list: 'hidden' },

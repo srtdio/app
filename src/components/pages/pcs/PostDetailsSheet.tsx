@@ -300,7 +300,7 @@ export function PostDetailsSheet({
                   type="button"
                   variant="ghost"
                   onClick={() => onChangeTargetDate(null)}
-                  className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="shrink-0"
                 >
                   Clear
                 </Button>
@@ -365,7 +365,7 @@ export function PostDetailsSheet({
           {onCreateBucket !== undefined && newBucketOpen ? (
             <div
               data-new-bucket=""
-              className="mt-1 flex flex-col gap-2 rounded-md border border-border bg-panel-2 p-3"
+              className="mt-1 flex flex-col gap-2 rounded-lg border border-border bg-panel-2 p-3"
             >
               <Input
                 autoFocus

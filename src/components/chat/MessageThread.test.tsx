@@ -948,8 +948,8 @@ describe('MessageBubble keyboard and hover actions', () => {
     expect(cls).toContain('absolute right-0 top-0');
     expect(cls).toContain('group-hover/bubble:opacity-100');
     expect(cls).toContain('focus-visible:opacity-100');
-    // Opacity only, 120ms, none under reduced motion.
-    expect(cls).toContain('transition-opacity duration-[120ms] motion-reduce:transition-none');
+    // Opacity only, duration-fast (120ms), none under reduced motion.
+    expect(cls).toContain('transition-opacity duration-fast motion-reduce:transition-none');
     const [glyph] = withAttr(root, 'data-more-glyph');
     expect(String(glyph?.props.className)).toContain('bg-gradient-to-l');
     const stop = vi.fn();
@@ -1250,13 +1250,13 @@ describe('own-bubble inner content', () => {
       '[&_.text-fg]:text-accent-fg',
       '[&_.text-accent]:text-accent-fg',
       '[&_.text-fg-2]:text-accent-fg',
-      '[&_.text-fg-2]:opacity-80',
-      '[&_.text-fg-3]:opacity-80',
-      '[&_.bg-panel]:bg-white/[.16]',
+      '[&_.text-fg-2]:opacity-90',
+      '[&_.text-fg-3]:opacity-90',
+      '[&_.bg-panel]:bg-black/[.12]',
       // The stage tag on a shared card is bg-panel-2: without this it stays a
       // solid light block under white ink.
-      '[&_.bg-panel-2]:bg-white/[.16]',
-      '[&_.bg-panel-3]:bg-white/[.16]',
+      '[&_.bg-panel-2]:bg-black/[.12]',
+      '[&_.bg-panel-3]:bg-black/[.12]',
       '[&_.bg-accent]:bg-white/70',
     ]) {
       expect(OWN_BUBBLE_CONTENT).toContain(token);

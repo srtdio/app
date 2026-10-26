@@ -68,7 +68,7 @@ export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactEle
       onPointerDown={onPointerDown}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-md text-fg-3 hover:bg-panel-2',
+        'flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-lg text-fg-3 hover:bg-panel-2',
         NO_TOUCH_SELECT,
       )}
     >
@@ -111,7 +111,7 @@ export function PlanRowEditButtons(props: {
         data-plan-row-day-chip=""
         onClick={(event) => props.onDay(event.currentTarget)}
         variant="secondary"
-        className="shrink-0 text-fg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="shrink-0 text-fg-2"
       >
         <IconCalendar size={ICON_SIZE.inline} />
         <span className="font-mono tabular-nums">{props.dayLabel}</span>
@@ -122,7 +122,7 @@ export function PlanRowEditButtons(props: {
         title={REMOVE_LABEL}
         data-plan-row-remove-edit=""
         onClick={props.onRemove}
-        className="-mr-[13px] shrink-0 text-bad hover:bg-bad-soft hover:text-bad focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="-mr-[13px] shrink-0 text-bad hover:bg-bad-soft hover:text-bad"
       >
         <IconTrash size={ICON_SIZE.control} />
       </IconButton>

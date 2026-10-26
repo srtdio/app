@@ -82,10 +82,10 @@ export const POST_CARD_TITLE_TYPE: ChatSize = {
 /** Shared post card meta: 12/16, 400 on both. */
 export const POST_CARD_META_TYPE = 'text-sm font-normal';
 
-/** Thread header name: 17/22/600 touch, 16/21/500 laptop. */
+/** Thread header name: 17/22/600 touch; laptop is the screen header size (lg, 15/20), 500. */
 export const HEADER_NAME_TYPE: ChatSize = {
   touch: 'text-[17px] leading-[22px] font-semibold',
-  laptop: 'text-[16px] leading-[21px] font-medium',
+  laptop: 'text-lg font-medium',
 };
 
 /** Thread header second line: 13/16 touch, 13/20 laptop, 400. */
@@ -173,8 +173,8 @@ export const BUBBLE_MAX: ChatSize = {
   laptop: 'max-w-[65%]',
 };
 
-/** A glyph in the emoji picker grid and its group tabs: 24, no line box. */
-export const EMOJI_GLYPH_TYPE = 'text-[24px] leading-none';
+/** A glyph in the emoji picker grid and its group tabs: the 3xl size (28), no line box. */
+export const EMOJI_GLYPH_TYPE = 'text-3xl leading-none';
 
 /** The emoji picker's search field: 17 touch (never under 16px, no iOS zoom), 14 laptop. */
 export const EMOJI_SEARCH_TYPE: ChatSize = {

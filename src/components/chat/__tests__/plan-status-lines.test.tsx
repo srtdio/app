@@ -248,8 +248,10 @@ describe('the PLAN switch and the decided pill', () => {
     expect(html).toMatch(
       /<button(?=[^>]*aria-pressed="false")(?=[^>]*data-plan-not-ok="")(?=[^>]*class="[^"]*h-11)/,
     );
-    expect(html).toMatch(/data-plan-ok=""[\s\S]*?>OK<\/span><\/button>/);
-    expect(html).toMatch(/data-plan-not-ok=""[\s\S]*?>Not OK<\/span><\/button>/);
+    expect(html).toMatch(/data-plan-ok=""[\s\S]*?<\/svg>OK<\/button>/);
+    expect(html).toMatch(/data-plan-not-ok=""[\s\S]*?<\/svg>Not OK<\/button>/);
+    // The shared Button: no hand-built h-9 visual inside a taller target.
+    expect(html).not.toMatch(/\bh-9\b|group-focus-visible/);
     expect(html).not.toContain('role="checkbox"');
     // Tokens only.
     expect(html).not.toMatch(new RegExp(`${String.fromCharCode(35)}[0-9a-f]{3,6}`, 'i'));
@@ -270,25 +272,27 @@ describe('the PLAN switch and the decided pill', () => {
     expect(no).toContain('aria-pressed="true" data-plan-not-ok=""');
   });
 
-  it('pill: a button with OK or Not OK, solid fills under white text, 44px target', () => {
+  it('pill: the shared Button with OK or Not OK, solid fills under accent-fg text, 44px', () => {
     const ok = renderToStaticMarkup(
       <PlanDecidedPill side="client" title="One" status="approved" onChange={noop} />,
     );
-    expect(ok).toMatch(/^<button type="button"/);
+    expect(ok).toMatch(/^<button class="[^"]*" type="button"/);
     expect(ok).toContain('aria-label="PLAN OK: One"');
     expect(ok).toContain(
       'data-plan-slot="client" data-plan-slot-state="approved" data-plan-control="pill"',
     );
     expect(ok).toContain('h-11');
-    expect(ok).toContain('bg-[var(--good-solid)]');
-    expect(ok).toContain('text-white');
+    expect(ok).toContain('bg-good-solid');
+    expect(ok).toContain('text-accent-fg');
+    expect(ok).not.toMatch(/text-white|\bh-8\b|var\(--good-solid\)/);
     expect(ok).toMatch(/>OK<span aria-hidden="true"/);
     const no = renderToStaticMarkup(
       <PlanDecidedPill side="client" title="One" status="changes" onChange={noop} />,
     );
     expect(no).toContain('aria-label="PLAN Not OK: One"');
     expect(no).toContain('data-plan-slot-state="changes"');
-    expect(no).toContain('bg-[var(--bad-solid)]');
+    expect(no).toContain('bg-bad-solid');
+    expect(no).toContain('text-accent-fg');
     expect(no).toMatch(/>Not OK<span aria-hidden="true"/);
   });
 

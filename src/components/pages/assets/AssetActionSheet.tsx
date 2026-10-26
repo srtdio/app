@@ -1,6 +1,5 @@
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import {
-  IconCopy,
   IconDownload,
   IconEdit,
   IconInfo,
@@ -120,7 +119,7 @@ export function assetMenuItems(item: AssetListItem, deps: AssetMenuDeps): Action
             }
           : { id: 'download', label: 'Download', icon: IconDownload, onSelect: primary };
       case 'copy':
-        return { id: 'copy-link', label: 'Copy link', icon: IconCopy, onSelect: copy };
+        return { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: copy };
       case 'rename':
         return { id: 'rename', label: 'Rename', icon: IconEdit, onSelect: () => onRename?.(item) };
       case 'info':

@@ -28,7 +28,7 @@ export function TestSiteStart(): ReactElement | null {
   }
 
   return (
-    <div className="mb-4 flex flex-col gap-2 rounded-md border border-dashed border-accent p-3">
+    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-dashed border-accent p-3">
       <p className="text-legacy-xs text-fg-2">
         Test site: any new email signs in at once, no link. Test accounts are deleted after 24
         hours.

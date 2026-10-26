@@ -1,9 +1,10 @@
 // The composer's attach button and its tray. The button is a 44x44 circle on
-// the panel showing the paperclip (attach is the paperclip everywhere); while
-// the tray is open it turns accent and shows an X. The tray sits above the
-// composer: a 4-column grid of tiles (Photos, File, Assets, Brief, Post, Draft,
-// Plan, Schedule on touch and laptop alike) that slides on translateY and fades,
-// 180ms, no X and no scale. A tap outside, Escape, or picking a tile closes it.
+// the panel showing a plus (the tray opener); while the tray is open it turns
+// accent and shows an X. The tray sits above the composer: a 4-column grid of
+// tiles (Photos, File, Assets, Brief, Post, Draft, Plan, Schedule on touch and
+// laptop alike) that slides on translateY and fades, duration-slow
+// (DUR_SLOW_MS), no X and no scale. A tap outside, Escape, or picking a tile
+// closes it.
 // Photos / File run the composer's attach paths (the Photos picker still offers
 // Take Photo on phones); Assets opens the library picker; Brief, Post and Draft
 // open the share picker in that mode; Plan opens the New plan screen; Schedule
@@ -20,10 +21,10 @@ import {
   IconCalendarClock,
   IconDraft,
   IconFile,
-  IconPaperclip,
   IconPhoto,
   IconPipeline,
   IconPlan,
+  IconPlus,
   IconX,
 } from '@/components/ui/icons';
 import { isClient } from '@/components/pages/pcs/roles';
@@ -33,9 +34,10 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { DUR_SLOW_MS } from '@/lib/motion';
 
 /** The tray and the plus icon move for this long. */
-const TRAY_MOTION_MS = 180;
+const TRAY_MOTION_MS = DUR_SLOW_MS;
 
 type TileIcon = ComponentType<{ size?: number; className?: string }>;
 
@@ -192,10 +194,9 @@ export function ComposerTray(props: {
         onClick={() => setOpen((o) => !o)}
         // Round secondary, primary while the tray is open; buttonRef returns
         // focus on Escape.
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span aria-hidden="true" data-plus-icon="" className="flex">
-          {open ? <IconX size={ICON_SIZE.control} /> : <IconPaperclip size={ICON_SIZE.control} />}
+          {open ? <IconX size={ICON_SIZE.control} /> : <IconPlus size={ICON_SIZE.control} />}
         </span>
       </Button>
       {rendered ? (
@@ -206,7 +207,7 @@ export function ComposerTray(props: {
           data-tray=""
           data-induction={INDUCTION_KEYS.chatAttachTray}
           className={cn(
-            'absolute inset-x-0 bottom-full z-20 border-t border-border bg-panel px-3 pb-2 pt-3 transition-[opacity,transform] duration-[180ms] ease-out motion-reduce:transition-none',
+            'absolute inset-x-0 bottom-full z-20 border-t border-border bg-panel px-3 pb-2 pt-3 transition-[opacity,transform] duration-slow ease-enter motion-reduce:transition-none',
             shown ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
           )}
         >

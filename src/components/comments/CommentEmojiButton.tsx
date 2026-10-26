@@ -101,7 +101,7 @@ export function CommentEmojiButton(props: {
           setOpen(true);
         }}
         className={cn(
-          'shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
+          'shrink-0 disabled:opacity-50',
           props.className,
         )}
       >

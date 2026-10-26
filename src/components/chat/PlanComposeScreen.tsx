@@ -27,6 +27,7 @@ import type { ReactElement } from 'react';
 import type { PostCardFields } from '@srtdio/posts';
 import { planCreateWithItems } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -87,12 +88,23 @@ import {
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { cn } from '@/lib/cn';
 import { prefersReducedMotion } from '@/lib/use-is-laptop';
+import { DUR_SLOW_MS } from '@/lib/motion';
 import { logger } from '@/lib/logger';
 import { civilDaysBetween, civilToday, formatCivilDayHeader } from '@/lib/plan-week';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 
 export { DATE_FIELD, DATE_FIT } from '@/components/chat/PlanDayPickerSheet';
+
+/**
+ * The missing-day shake's timing: the slow motion token and the enter curve.
+ * Web Animations cannot read var() in `easing`, so the curve is read from the
+ * --ease-enter token at run time (linear if it is ever missing).
+ */
+export function shakeTiming(): KeyframeAnimationOptions {
+  const easing = getComputedStyle(document.documentElement).getPropertyValue('--ease-enter').trim();
+  return easing !== '' ? { duration: DUR_SLOW_MS, easing } : { duration: DUR_SLOW_MS };
+}
 
 /** Every new plan is a Draft (audience team); plan_create_with_items makes it so. */
 export const NEW_PLAN_AUDIENCE = 'team';
@@ -303,7 +315,7 @@ export function PlanComposeScreen(props: {
           { transform: 'translateX(4px)' },
           { transform: 'translateX(0)' },
         ],
-        { duration: 300, easing: 'ease-out' },
+        shakeTiming(),
       );
     }
   };
@@ -483,7 +495,7 @@ export function PlanComposeScreen(props: {
   );
 
   const addClass =
-    'w-full border-dashed border-border-strong text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+    'w-full border-dashed border-border-strong text-accent';
   // Left aligned inside the full-width button (the Button itself centres).
   const addInner = 'flex w-full items-center gap-2';
 
@@ -501,7 +513,7 @@ export function PlanComposeScreen(props: {
       >
         <div className="flex flex-col gap-3.5 p-3">
           <div className="flex flex-col gap-1.5">
-            <input
+            <Input
               id="plan-title"
               data-plan-title=""
               aria-label="Plan name"
@@ -535,7 +547,7 @@ export function PlanComposeScreen(props: {
               variant="link"
               data-plan-dates-change=""
               onClick={() => setDatesOpen(true)}
-              className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="shrink-0"
             >
               Change
             </Button>
@@ -749,7 +761,7 @@ export function ComposeItemRow(props: {
           data-plan-compose-remove=""
           label={`Remove ${item.title}`}
           onClick={props.onRemove}
-          className="-my-1.5 -mr-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="-my-1.5 -mr-1.5 shrink-0"
         >
           <IconX size={ICON_SIZE.control} />
         </IconButton>
@@ -763,7 +775,7 @@ export function ComposeItemRow(props: {
         data-plan-day-button={need ? 'need' : item.day === 'none' ? 'none' : 'day'}
         onClick={props.onDay}
         className={cn(
-          'w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'w-full text-left',
           need ? 'border-warn text-warn' : 'bg-panel-2',
         )}
       >

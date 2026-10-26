@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
+import { ComposerSheet } from '@/components/pages/create/ComposerSheet';
 import { Select, type SelectOption } from '@/components/ui/Select';
 import { DatePicker } from '@/components/ui/DatePicker';
 import {
@@ -221,6 +222,11 @@ function briefUploadGate(
   return { ok: true };
 }
 
+/** The sheet's first field, focused on open (phone and laptop). */
+function briefTitleInput(): HTMLElement | null {
+  return document.getElementById('brief-title');
+}
+
 /** The Create button's label: in flight, uploading, or ready. Pure. */
 function createBriefLabel(submitting: boolean, pendingUploads: number): string {
   if (submitting) return 'Creating…';
@@ -286,20 +292,6 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     }
   }, [uploadNotice, pendingUploads, failedUploads]);
 
-  // The Title takes focus once the sheet has settled its own focus, on phone
-  // and laptop alike, so typing can start at once.
-  useEffect(() => {
-    if (!open) return;
-    let raf = 0;
-    const timer = setTimeout(() => {
-      raf = requestAnimationFrame(() => document.getElementById('brief-title')?.focus());
-    }, 0);
-    return () => {
-      clearTimeout(timer);
-      cancelAnimationFrame(raf);
-    };
-  }, [open]);
-
   const dirty = isBriefFormDirty(form, pendingUploads, failedUploads);
   const formatOptions = briefFormatOptions(workspacePlatform);
 
@@ -353,39 +345,32 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     ) : null;
   }
 
+  // Create sits in the header like New post (ComposerSheet): no footer, and
+  // the X is the way out (it asks first while the sheet holds a change).
+  const headerActions = (
+    <Button
+      variant="primary"
+      className="shrink-0"
+      data-induction={INDUCTION_KEYS.briefSheetCreate}
+      onClick={() => void handleSubmit()}
+      disabled={submitting}
+      aria-busy={submitting}
+    >
+      {createBriefLabel(submitting, pendingUploads)}
+    </Button>
+  );
+
   return (
-    <Sheet
+    <ComposerSheet
       open={open}
       onClose={onClose}
       title="New brief"
+      actions={headerActions}
       dirty={dirty}
       discard={{ title: 'Discard this brief?', message: 'Your brief and files will be lost.' }}
       busy={submitting}
-      busyLabel="Creating…"
-      footer={
-        <>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              if (!submitting) onClose();
-            }}
-            disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <span className="ml-auto">
-            <Button
-              variant="primary"
-              data-induction={INDUCTION_KEYS.briefSheetCreate}
-              onClick={() => void handleSubmit()}
-              disabled={submitting}
-              aria-busy={submitting}
-            >
-              {createBriefLabel(submitting, pendingUploads)}
-            </Button>
-          </span>
-        </>
-      }
+      wide={false}
+      initialFocus={briefTitleInput}
     >
       <div className="flex flex-col gap-4 overflow-x-hidden">
         <Field label="Title" htmlFor="brief-title" required>
@@ -482,12 +467,8 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
           />
         </Field>
 
-        {submitError !== null ? (
-          <div role="alert" className="rounded-md border border-bad px-3 py-2 text-base text-bad">
-            {submitError}
-          </div>
-        ) : null}
+        {submitError !== null ? <ErrorNote>{submitError}</ErrorNote> : null}
       </div>
-    </Sheet>
+    </ComposerSheet>
   );
 }

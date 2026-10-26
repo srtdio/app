@@ -217,7 +217,7 @@ function EmojiButton(props: { entry: EmojiEntry; onPick: (char: string) => void 
       title={props.entry.name}
       onClick={() => props.onPick(props.entry.char)}
       className={cn(
-        'shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'shrink-0',
         EMOJI_GLYPH_TYPE,
       )}
     >
@@ -280,7 +280,7 @@ export function EmojiTabs(props: {
           data-emoji-tab={section.group}
           onClick={() => props.onTab(section.group)}
           className={cn(
-            'shrink-0 opacity-60 aria-selected:bg-panel-3 aria-selected:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'shrink-0 opacity-60 aria-selected:bg-panel-3 aria-selected:opacity-100',
             EMOJI_GLYPH_TYPE,
           )}
         >

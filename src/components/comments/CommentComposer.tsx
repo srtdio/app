@@ -12,6 +12,7 @@ import { linkTypedUsernames } from '@/lib/chat/mentions';
 import { useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { IconButton } from '@/components/ui/IconButton';
 import { MentionInput } from '@/components/comments/MentionInput';
 import type { MentionInputHandle } from '@/components/comments/MentionInput';
@@ -278,9 +279,7 @@ export function CommentComposer({
       </div>
 
       {error !== null ? (
-        <div role="alert" className="rounded-md border border-bad px-3 py-2 text-base text-bad">
-          {error}
-        </div>
+        <ErrorNote>{error}</ErrorNote>
       ) : null}
 
       <input
@@ -317,7 +316,7 @@ export function PendingChip({
           : 'flex items-center gap-2 rounded-lg border border-border bg-panel-2 py-1 pl-1 pr-1'
       }
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-panel-3 text-fg-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3">
         {item.previewUrl !== null ? (
           <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
         ) : (

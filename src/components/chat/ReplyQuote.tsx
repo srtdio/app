@@ -31,7 +31,7 @@ import {
 
 /** The box without its radius: the tappable quote takes PressableRow's. */
 const REPLY_QUOTE_LAYOUT = 'flex min-w-0 gap-2 overflow-hidden bg-panel-3';
-const REPLY_QUOTE_BOX = `${REPLY_QUOTE_LAYOUT} rounded-md`;
+const REPLY_QUOTE_BOX = `${REPLY_QUOTE_LAYOUT} rounded-lg`;
 
 /** The rule and author ink: accent for a reply, warn for the editing bar. */
 type QuoteTone = 'accent' | 'warn';
@@ -100,7 +100,7 @@ function ThumbBox({ src }: { src: string | null }): ReactElement {
   return (
     <span
       data-quote-thumb=""
-      className="my-1 mr-1 h-9 w-9 shrink-0 self-center overflow-hidden rounded-md bg-panel-2"
+      className="my-1 mr-1 h-9 w-9 shrink-0 self-center overflow-hidden rounded-lg bg-panel-2"
     >
       {src !== null ? (
         <img

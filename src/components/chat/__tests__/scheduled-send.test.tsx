@@ -18,6 +18,7 @@ import {
 } from '@/components/chat/Composer';
 import {
   filesLabel,
+  ScheduleFooter,
   ScheduleMenu,
   ScheduleOptions,
   schedulePreview,
@@ -152,6 +153,25 @@ describe('S3: the Schedule options', () => {
     expect(surface).not.toMatch(/translate-|rotate-|scale-/);
     expect(html).toContain('right-3');
     expect(html).toContain('bottom-full');
+    // Popover radius role: 12px.
+    expect(surface).toContain('rounded-xl');
+    expect(surface).toContain('duration-base');
+    expect(surface).not.toMatch(/duration-\[|ease-out/);
+  });
+
+  it('the phone sheet has no footer Cancel; the laptop menu keeps it', () => {
+    const phone = renderToStaticMarkup(<ScheduleFooter />);
+    expect(phone).toContain('data-schedule-zone');
+    expect(phone).not.toContain('Cancel');
+    const laptop = renderToStaticMarkup(<ScheduleFooter onCancel={() => undefined} />);
+    expect(laptop).toContain('Cancel');
+    const menu = renderToStaticMarkup(
+      <ScheduleMenu open onClose={() => undefined} preview={null} onPick={() => undefined} />,
+    );
+    expect(menu).toContain('>Cancel<');
+    const src = source('../ScheduleSheet.tsx');
+    expect(src).toContain('footer={<ScheduleFooter />}');
+    expect(src).toContain('<ScheduleFooter onCancel={props.onClose} />');
   });
 });
 

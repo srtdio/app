@@ -12,6 +12,7 @@ import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ICON_SIZE, IconCalendar, IconPipeline, IconPlus } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineBoard } from '@/components/pages/pipeline/PipelineBoard';
+import { BoardColumns } from '@/components/pages/pipeline/board-columns';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
@@ -420,8 +421,8 @@ function skeletonCard(index: number, ratio: number | null): ReactElement {
 
 /**
  * Card-shaped placeholders while the first read is in flight, in the real
- * view's layout: the kanban columns on the laptop All view, the full-width grid
- * on a laptop stage view, the 2-column grid on a phone. Each card takes the
+ * view's layout: the kanban columns on the laptop All view, the full-width
+ * column stacks on a laptop stage view, the 2-column grid on a phone. Each card takes the
  * workspace platform's frame, so nothing reshapes when the posts land.
  */
 export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): ReactElement {
@@ -456,17 +457,29 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
       </div>
     );
   }
+  if (isDesktop) {
+    // The laptop stage view's column stacks, measured from the board width on
+    // mount, so the first paint matches the cards that land.
+    return (
+      <BoardColumns
+        data-guide-wait=""
+        data-posts-skeleton=""
+        role="status"
+        aria-busy="true"
+        className="px-4 py-4 md:px-6"
+        before={<span className="sr-only">Loading posts</span>}
+      >
+        {Array.from({ length: SKELETON_CARDS }, (_unused, index) => skeletonCard(index, ratio))}
+      </BoardColumns>
+    );
+  }
   return (
     <div
       data-guide-wait=""
       data-posts-skeleton=""
       role="status"
       aria-busy="true"
-      className={
-        isDesktop
-          ? 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 px-4 py-4 md:px-6'
-          : 'grid grid-cols-2 gap-2 px-4 py-4'
-      }
+      className="grid grid-cols-2 gap-2 px-4 py-4"
     >
       <span className="sr-only">Loading posts</span>
       {Array.from({ length: SKELETON_CARDS }, (_unused, index) => skeletonCard(index, ratio))}
@@ -616,7 +629,6 @@ export function undatedHint(label: string, count: number, onShow: () => void): R
         variant="link"
         type="button"
         onClick={onShow}
-        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         Show them
       </Button>

@@ -10,7 +10,7 @@ export const BRIEF_SORT_DEFAULT: BriefSort = 'due';
 
 export const BRIEF_SORT_OPTIONS: SortOption<BriefSort>[] = [
   { value: 'due', label: 'Due date' },
-  { value: 'updated', label: 'Recently updated' },
+  { value: 'updated', label: 'Newest first' },
 ];
 
 /** Heal a persisted value the menu no longer lists back to the default. Pure. */
@@ -28,7 +28,7 @@ interface BriefSortable {
 /**
  * A new array in the chosen order. Due date: soonest first (date-only strings
  * compare as text), briefs with no due date last, ties by most recently
- * updated. Recently updated: newest updated_at first. Never mutates the input.
+ * updated. Newest first: newest updated_at first. Never mutates the input.
  */
 export function sortBriefs<T extends BriefSortable>(items: readonly T[], sort: BriefSort): T[] {
   const byUpdated = (a: T, b: T): number =>

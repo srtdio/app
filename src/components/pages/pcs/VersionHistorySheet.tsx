@@ -135,7 +135,7 @@ export function versionHistorySheet({
           onCompare(fromVersion.id, toVersion.id);
         }
       }}
-      className="w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="w-full"
     >
       {canCompare
         ? `Compare v${fromVersion.versionNumber} and v${toVersion.versionNumber}`
@@ -217,7 +217,7 @@ export function versionHistorySheet({
                 aria-pressed={selected}
                 label={`Select v${version.versionNumber} to compare`}
                 onClick={() => onToggleSelect(version.id)}
-                className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="shrink-0"
               >
                 <span
                   className={cn(

@@ -626,14 +626,14 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
       aria-label="Change photo"
       disabled={props.disabled}
       onClick={props.onPress}
-      className="absolute -bottom-2 -right-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="absolute -bottom-1 -right-1"
     >
       <span
         data-camera-badge=""
         aria-hidden="true"
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-fg ring-4 ring-bg"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg ring-2 ring-bg"
       >
-        <IconCamera size={ICON_SIZE.control} />
+        <IconCamera size={ICON_SIZE.inline} />
       </span>
     </Button>
   );

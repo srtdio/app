@@ -280,8 +280,8 @@ describe('copy', () => {
     expect(failureInPlainWords('attachment not available')).toBe(
       'An attachment is no longer available',
     );
-    expect(failureInPlainWords('XX000 something odd')).toBe('Something went wrong when sending');
-    expect(failureInPlainWords(null)).toBe('Something went wrong when sending');
+    expect(failureInPlainWords('XX000 something odd')).toBe("Couldn't send. Try again.");
+    expect(failureInPlainWords(null)).toBe("Couldn't send. Try again.");
   });
 
   it('message preview: first line, names resolved, else what it carries', () => {

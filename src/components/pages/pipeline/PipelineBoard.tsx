@@ -5,6 +5,7 @@ import { ApproveConfirm, approveTargetDate } from '@/components/ui/ApproveConfir
 import { OnBehalfApproveSheet, type ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
 import { Sheet } from '@/components/ui/Sheet';
 import { PostCard } from '@/components/pages/PostCard';
+import { BoardColumns } from '@/components/pages/pipeline/board-columns';
 import {
   StageDot,
   StageEmpty,
@@ -363,7 +364,7 @@ export function PipelineBoardView({
 }
 
 /**
- * Single-stage view: the one stage's cards as a full-width auto-fill grid, no
+ * Single-stage view: the one stage's cards as full-width column stacks, no
  * column chrome (the active chip already names the stage and count). Flows top
  * to bottom with the page owning vertical scroll; no inner scroll box. Cards are
  * not draggable: the only column on screen is the cards' own stage, so there is
@@ -397,14 +398,12 @@ function SingleStageGrid({
       </div>
     );
   }
+  // N independent column stacks in reading order (card i in column i % N), so
+  // each card is as tall as its own content; N follows the board's width.
   return (
-    <div
-      data-board-grid
-      data-stage={stage}
-      className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 px-4 py-4 md:px-6"
-    >
+    <BoardColumns data-board-grid data-stage={stage} className="px-4 py-4 md:px-6">
       {posts.map((post) => (
-        <div key={post.id} data-post-id={post.id} className="h-full min-w-0 rounded-lg">
+        <div key={post.id} data-post-id={post.id} className="min-w-0 rounded-lg">
           <PostCard
             post={post}
             cache={cache}
@@ -417,6 +416,6 @@ function SingleStageGrid({
           />
         </div>
       ))}
-    </div>
+    </BoardColumns>
   );
 }

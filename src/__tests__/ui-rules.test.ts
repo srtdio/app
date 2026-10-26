@@ -267,3 +267,167 @@ describe('ui rules: one New button', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// Uniformity guards. Same file set as above plus .ts modules (constants such
+// as chat/chat-type.ts carry class strings too).
+function srcFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return srcFiles(path);
+    return /\.tsx?$/.test(name) ? [path] : [];
+  });
+}
+
+const ALL_FILES: { rel: string; src: string }[] = srcFiles(ROOT)
+  .map((path) => ({ path, rel: relative(ROOT, path).split(sep).join('/') }))
+  .filter(
+    ({ rel }) =>
+      !/\.test\.tsx?$/.test(rel) &&
+      !rel.includes('__tests__/') &&
+      !SKIPPED_DIRS.some((dir) => rel.startsWith(dir)),
+  )
+  .map(({ path, rel }) => ({ rel, src: readFileSync(path, 'utf8') }));
+
+function offendersOf(
+  re: RegExp,
+  skip: (rel: string) => boolean,
+  files: { rel: string; src: string }[] = ALL_FILES,
+): string[] {
+  const out: string[] = [];
+  for (const { rel, src } of files) {
+    if (skip(rel)) continue;
+    for (const at of indexesOf(src, re)) out.push(`${rel}:${lineOf(src, at)}`);
+  }
+  return out;
+}
+
+const bySrc = (rel: string): string => ALL_FILES.find((f) => f.rel === rel)?.src ?? '';
+
+describe('ui rules: radius roles', () => {
+  it('no rounded-md outside ui/Tag.tsx (badges are the 6px role)', () => {
+    expect(offendersOf(/\brounded-md\b/, (rel) => rel === 'ui/Tag.tsx')).toEqual([]);
+  });
+});
+
+describe('ui rules: one inline error', () => {
+  it('no hand-built "border-bad px-3 py-2" box outside ui/ErrorNote.tsx', () => {
+    expect(offendersOf(/border-bad px-3 py-2/, (rel) => rel === 'ui/ErrorNote.tsx')).toEqual([]);
+  });
+});
+
+// Text fields that keep their own look: composer bars and borderless inline edits.
+const FIELD_ALLOWLIST = [
+  'chat/Composer.tsx',
+  'chat/tasks/TaskRow.tsx',
+  'chat/tasks/TaskSheet.tsx',
+  'settings/UsernameField.tsx',
+  'pages/settings/MembersInviteForm.tsx',
+  'pages/settings/MembersList.tsx',
+  'pages/PostDetailPage.tsx',
+  'shell/CommandPalette.tsx',
+  'shell/SectionHeader.tsx',
+  'comments/CommentComposer.tsx',
+  'comments/SlotComposer.tsx',
+  'pages/create/AttachmentsField.tsx',
+  'pages/assets/AssetUploadSheet.tsx',
+  'chat/EmojiPicker.tsx',
+  'chat/PaintLog.tsx',
+  'chat/PlanItemScreen.tsx',
+];
+const FIELD_PREFIX_ALLOWLIST = ['ui/', 'onboarding/', 'induction/', 'auth/'];
+const FIELD_LOOK = 'border border-border bg-panel-2';
+
+describe('ui rules: one text field', () => {
+  it('no <input>/<textarea> with the hand-built field look outside ui/ and the allowlist', () => {
+    const offenders: string[] = [];
+    for (const { rel, src } of ALL_FILES) {
+      if (FIELD_ALLOWLIST.includes(rel)) continue;
+      if (FIELD_PREFIX_ALLOWLIST.some((p) => rel.startsWith(p))) continue;
+      for (const start of indexesOf(src, /<(?:input|textarea)\b/)) {
+        const tag = openingTag(src, start);
+        // Resolve className={NAME} constants declared in the same file.
+        const names = [...tag.matchAll(/\b([A-Z][A-Z0-9_]+)\b/g)].map((m) => m[1]);
+        const consts = names
+          .map((n) => new RegExp(`const ${n}\\s*=\\s*([^;]+);`).exec(src)?.[1] ?? '')
+          .join(' ');
+        if (`${tag} ${consts}`.includes(FIELD_LOOK)) offenders.push(`${rel}:${lineOf(src, start)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('ui rules: no white literals', () => {
+  it('no text-white / bg-white without /opacity outside preview/PlatformPreviewPanel.tsx', () => {
+    expect(
+      offendersOf(
+        /\b(?:text|bg)-white(?![\w/-])/,
+        (rel) => rel === 'preview/PlatformPreviewPanel.tsx',
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('ui rules: motion tokens', () => {
+  it('no raw durations or easings in src/components', () => {
+    expect(
+      offendersOf(
+        /\bduration-(?:\d|\[)|\bease-(?:out|in|in-out)\b|\dms ease|easing:\s*'ease/,
+        () => false,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('ui rules: icons live in ui/', () => {
+  it('no <svg outside src/components/ui and src/components/home', () => {
+    expect(offendersOf(/<svg\b/, (rel) => rel.startsWith('ui/'))).toEqual([]);
+  });
+});
+
+describe('ui rules: one focus ring', () => {
+  it.each(['ui/Button.tsx', 'ui/IconButton.tsx', 'ui/Chip.tsx'])(
+    '%s carries the offset accent ring',
+    (rel) => {
+      const src = bySrc(rel);
+      expect(src).toContain('focus-visible:ring-2 focus-visible:ring-accent');
+      expect(src).toContain('focus-visible:ring-offset-2');
+      expect(src).toContain('focus-visible:ring-offset-bg');
+    },
+  );
+});
+
+describe('ui rules: icon meanings', () => {
+  it('ComposerTray opens with IconPlus, not the paper clip', () => {
+    const src = bySrc('chat/ComposerTray.tsx');
+    expect(src).toMatch(/<IconPlus\b/);
+    expect(src).not.toMatch(/\bIconPaperclip\b/);
+  });
+
+  it('IconPhoto (gallery grid) and IconAssets (picture) draw different glyphs', () => {
+    const icons = bySrc('ui/icons.tsx');
+    const body = (name: string): string => {
+      const at = icons.indexOf(`export function ${name}(`);
+      expect(at).toBeGreaterThan(-1);
+      return icons.slice(at, icons.indexOf('\n}', at));
+    };
+    expect(body('IconPhoto')).toContain('Squares2X2Icon');
+    expect(body('IconAssets')).toContain('PhotoIcon');
+    expect(body('IconPhoto')).not.toContain('PhotoIcon');
+  });
+
+  it("every 'copy-link' menu item uses IconLink", () => {
+    const offenders: string[] = [];
+    let seen = 0;
+    for (const { rel, src } of ALL_FILES) {
+      if (rel === 'ui/ActionMenu.tsx') continue;
+      for (const at of indexesOf(src, /id:\s*'copy-link'/)) {
+        seen += 1;
+        const item = src.slice(at, src.indexOf('}', at));
+        if (!/icon:\s*IconLink\b/.test(item)) offenders.push(`${rel}:${lineOf(src, at)}`);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
+});

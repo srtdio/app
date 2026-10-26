@@ -302,7 +302,7 @@ function AvatarCropperImpl(
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         style={{ width: FRAME, height: FRAME, touchAction: 'none' }}
-        className="relative overflow-hidden rounded-md border border-border bg-panel-2"
+        className="relative overflow-hidden rounded-lg border border-border bg-panel-2"
       >
         <canvas
           ref={canvasRef}

@@ -51,7 +51,7 @@ const SHEET_LOAD_FAILED = "Couldn't load";
 const FLOAT_SURFACE_CLASS = 'border border-border bg-panel';
 
 /** Opacity-only fade for the pill and the latest button. */
-const FADE = 'transition-opacity duration-[160ms] motion-reduce:transition-none';
+const FADE = 'transition-opacity duration-base motion-reduce:transition-none';
 
 /** The unread divider row above the first unread message: hairline + "N unread". */
 export function UnreadDivider({ count }: { count: number }): ReactElement {
@@ -97,7 +97,7 @@ export function UnreadPill(props: {
         onContextMenu={(e) => e.preventDefault()}
         // Secondary is the float surface (bg-panel, border-border, text-fg).
         className={cn(
-          'shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'shadow-2xl',
           NO_TOUCH_SELECT,
           props.visible && 'pointer-events-auto',
         )}
@@ -135,7 +135,7 @@ export function LatestButton(props: {
         onClick={props.onTap}
         onContextMenu={(e) => e.preventDefault()}
         className={cn(
-          'shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'shadow-2xl',
           FLOAT_SURFACE_CLASS,
           NO_TOUCH_SELECT,
         )}

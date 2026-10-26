@@ -59,11 +59,18 @@ describe('ConfirmDialog optional message', () => {
     );
   });
 
+  it('a multi-line message keeps one line per newline (whitespace-pre-line)', async () => {
+    const dialog = await mount('First line.\nSecond line.');
+    const body = dialog.querySelector<HTMLParagraphElement>('[data-confirm-message]');
+    expect(body?.textContent).toBe('First line.\nSecond line.');
+    expect(body?.className.split(/\s+/)).toContain('whitespace-pre-line');
+  });
+
   it('an existing caller with a message still renders its body exactly as before', async () => {
     const dialog = await mount('This cannot be undone.');
     const body = dialog.querySelector<HTMLParagraphElement>('[data-confirm-message]');
     expect(body?.tagName).toBe('P');
     expect(body?.textContent).toBe('This cannot be undone.');
-    expect(body?.className).toBe('mt-2 text-base text-fg-2');
+    expect(body?.className).toBe('mt-2 whitespace-pre-line text-base text-fg-2');
   });
 });

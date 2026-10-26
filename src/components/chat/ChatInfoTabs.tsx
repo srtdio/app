@@ -432,7 +432,7 @@ function MediaTile(props: {
 const ROW =
   'flex min-h-[64px] w-full items-center gap-3 border-b border-border py-2 last:border-b-0';
 const ROW_ICON =
-  'flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-panel-2 text-fg-3';
+  'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3';
 
 /** "size · date" under a file name. Pure. */
 function fileMetaLine(item: ChannelAttachmentItem, timeZone?: string): string {
@@ -509,7 +509,7 @@ export function LinkRow(props: {
         <UnsafeLinkText
           url={props.item.url}
           reasons={verdict.reasons}
-          className={cn(ROW, 'w-full rounded-md text-left hover:bg-panel-2')}
+          className={cn(ROW, 'w-full rounded-lg text-left hover:bg-panel-2')}
         >
           <span className={cn(ROW_ICON, 'text-[color:var(--warn-ink)]')}>
             <IconAlertTriangle size={ICON_SIZE.control} />
@@ -530,7 +530,7 @@ export function LinkRow(props: {
         href={props.item.url}
         target="_blank"
         rel="noopener noreferrer"
-        className={cn(ROW, 'rounded-md text-left hover:bg-panel-2')}
+        className={cn(ROW, 'rounded-lg text-left hover:bg-panel-2')}
       >
         <span className={ROW_ICON}>
           <IconLink size={ICON_SIZE.control} />
@@ -554,7 +554,7 @@ export function SeeAllRow(props: { onClick: () => void }): ReactElement {
       type="button"
       data-see-all=""
       onClick={props.onClick}
-      className="w-full text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="w-full text-accent"
     >
       {SEE_ALL_LABEL}
     </Button>

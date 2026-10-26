@@ -97,7 +97,7 @@ export function ThreadViewFrame(props: {
       data-thread-view=""
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute inset-0 z-30 flex flex-col bg-bg transition-opacity duration-150 motion-reduce:transition-none',
+        'absolute inset-0 z-30 flex flex-col bg-bg transition-opacity duration-base motion-reduce:transition-none',
         shown && !closing ? 'opacity-100' : 'opacity-0',
       )}
     >
@@ -119,7 +119,7 @@ export function ThreadViewFrame(props: {
           onClick={close}
           className={cn(
             // FN23: the dismiss is a chevron, like every other chat layer's back.
-            'ml-1 justify-self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'ml-1 justify-self-start',
             NO_TOUCH_SELECT,
           )}
         >

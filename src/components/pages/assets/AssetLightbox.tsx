@@ -7,10 +7,10 @@ import {
   ICON_SIZE,
   IconChevronLeft,
   IconChevronRight,
-  IconCopy,
   IconDownload,
   IconEdit,
   IconInfo,
+  IconLink,
   IconTrash,
   IconX,
 } from '@/components/ui/icons';
@@ -430,7 +430,7 @@ export function AssetLightbox({
           disabled={busy}
           className={barClass}
         >
-          <IconCopy size={ICON_SIZE.control} />
+          <IconLink size={ICON_SIZE.control} />
         </IconButton>
         <IconButton type="button" label="Info" onClick={onInfo} className={barClass}>
           <IconInfo size={ICON_SIZE.control} />

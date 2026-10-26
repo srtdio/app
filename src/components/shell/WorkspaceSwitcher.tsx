@@ -457,7 +457,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                   setFormError(null);
                   setAskingSwitch(true);
                 }}
-                className="w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="w-full"
               >
                 {WORKSPACE_CREATE_COPY.approveInstead}
               </Button>

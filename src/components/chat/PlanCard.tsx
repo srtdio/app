@@ -249,7 +249,7 @@ export function PlanCardBody(props: {
   if (props.view.kind === 'unavailable') {
     return (
       <div data-plan-card="unavailable" className={cn(SHARED_CARD, 'bg-panel-2 text-fg-2')}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-panel-3 text-fg-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
           <IconPlan size={ICON_SIZE.nav} />
         </span>
         <span className="truncate text-base font-medium">{PLAN_DELETED}</span>
@@ -270,7 +270,7 @@ export function PlanCardBody(props: {
               key={chip.label}
               data-plan-chip={chip.tone}
               className={cn(
-                'inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-md border px-2 text-md',
+                'inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-lg border px-2 text-md',
                 chip.tone === 'warn'
                   ? 'border-warn bg-warn-soft text-warn'
                   : 'border-transparent bg-panel-2 text-fg-2',
@@ -298,7 +298,7 @@ export function PlanCardBody(props: {
           data-plan-open=""
           data-induction={INDUCTION_KEYS.briefOpenPlan}
           onClick={props.onOpen}
-          className="flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex-1"
         >
           Open plan
         </Button>
@@ -310,7 +310,7 @@ export function PlanCardBody(props: {
               variant="link"
               data-plan-forward=""
               onClick={props.onForward}
-              className="flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex-1"
             >
               Forward
             </Button>

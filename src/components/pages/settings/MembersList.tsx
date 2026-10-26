@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { IconButton } from '@/components/ui/IconButton';
+import { Tag } from '@/components/ui/Tag';
 import { ICON_SIZE, IconLock, IconMore, IconTrash, IconUser } from '@/components/ui/icons';
 import type { SelectOption } from '@/components/ui/Select';
 import { cn } from '@/lib/cn';
@@ -29,19 +30,11 @@ import type { DerivedMembers, InviteDeliveryStatus, MemberEntry } from './member
 const OWNER_LOCK_TITLE = 'Transfer ownership before the owner can be removed';
 
 function RoleBadge({ role }: { role: string }) {
-  return (
-    <span className="inline-flex items-center rounded-md border border-border bg-panel-2 px-2 py-0.5 text-sm font-medium text-fg-2">
-      {roleLabel(role)}
-    </span>
-  );
+  return <Tag label={roleLabel(role)} tone="neutral" />;
 }
 
 function SelfChip() {
-  return (
-    <span className="inline-flex items-center rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-medium text-accent">
-      You
-    </span>
-  );
+  return <Tag label="You" tone="accent" />;
 }
 
 /** A member row's ⋯ actions. */
@@ -181,14 +174,8 @@ function PendingRowItem({
           <div className="min-w-0 flex-1 self-center">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="min-w-0 truncate text-base font-medium text-fg">{info.email}</span>
-              <span className="inline-flex items-center rounded-md bg-panel-2 px-1.5 py-0.5 text-xs font-medium text-fg-3">
-                Invited
-              </span>
-              {info.undelivered ? (
-                <span className="inline-flex items-center rounded-md bg-bad-soft px-1.5 py-0.5 text-xs font-medium text-bad">
-                  Not delivered
-                </span>
-              ) : null}
+              <Tag label="Invited" tone="neutral" />
+              {info.undelivered ? <Tag label="Not delivered" tone="bad" /> : null}
             </div>
             <div className="truncate text-sm text-fg-3">{inviteRoleLabel(member.role)}</div>
           </div>

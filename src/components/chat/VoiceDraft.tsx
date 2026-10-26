@@ -9,13 +9,10 @@ import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconPause, IconPlay, IconSend, IconTrash } from '@/components/ui/icons';
-import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
 import { BACK_GUARD_STEP_KEY, stepMarkerOf } from '@/lib/chat/use-history-step';
 import { voiceDraftLabel, type VoiceDraft } from '@/lib/chat/voice-draft';
-
-const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /** The draft row's markup. Hook-free (playback state comes in) so it is unit tested. */
 export function voiceDraftView(props: {
@@ -39,7 +36,7 @@ export function voiceDraftView(props: {
         data-voice-draft-play=""
         label={props.playing ? 'Pause voice note' : 'Play voice note'}
         onClick={props.onPlay}
-        className={cn('shrink-0 hover:bg-panel-3', FOCUS_RING)}
+        className="shrink-0 hover:bg-panel-3"
       >
         {props.playing ? (
           <IconPause size={ICON_SIZE.control} />
@@ -54,10 +51,7 @@ export function voiceDraftView(props: {
         label="Delete voice note"
         disabled={props.busy}
         onClick={props.onDelete}
-        className={cn(
-          'shrink-0 text-bad hover:bg-bad-soft hover:text-bad disabled:opacity-50',
-          FOCUS_RING,
-        )}
+        className="shrink-0 text-bad hover:bg-bad-soft hover:text-bad disabled:opacity-50"
       >
         <IconTrash size={ICON_SIZE.control} />
       </IconButton>
@@ -69,7 +63,7 @@ export function voiceDraftView(props: {
         aria-label="Send voice note"
         disabled={props.busy}
         onClick={props.onSend}
-        className={cn('shrink-0', FOCUS_RING)}
+        className="shrink-0"
       >
         <IconSend size={ICON_SIZE.control} />
       </Button>

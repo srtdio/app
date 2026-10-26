@@ -9,7 +9,7 @@
 // the icon change. Callers never push the viewer's own actions, and chat
 // alerts never carry message text (who wrote, not what).
 //
-// The pure rules (titleFor, dotColor) are unit-tested; the controller below only
+// The rules (titleFor, dotColor) are unit-tested; the controller below only
 // wires them to document.title, a canvas-drawn favicon and visibilitychange.
 
 import { tabTitle } from '@/lib/chat/notify-sound';
@@ -25,11 +25,35 @@ export interface TabAlert {
 /** One title step: even steps show the count, odd steps the next event. */
 const ALERT_STEP_MS = 1_400;
 
-/** Icon dot colours: amber for Activity, blue for chat (prototype values). */
+/**
+ * Icon dot colours: amber for Activity, blue for chat. Read at runtime from
+ * the theme's --warn and --accent tokens (so the dot follows the palette);
+ * these prototype values are the fallback only when a token reads empty.
+ */
 export const ALERT_DOT: Readonly<Record<TabAlertKind, string>> = {
   activity: '#C26A00',
   chat: '#2457D6',
 };
+
+/** The CSS variable each dot colour comes from. */
+export const ALERT_DOT_VAR: Readonly<Record<TabAlertKind, string>> = {
+  activity: '--warn',
+  chat: '--accent',
+};
+
+/** Reads one custom property off the document root; '' outside a browser. */
+export type ReadCssVar = (name: string) => string;
+
+function readRootVar(name: string): string {
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return '';
+  return getComputedStyle(document.documentElement).getPropertyValue(name);
+}
+
+/** The dot colour for a kind: its token's current value, else the fallback. */
+export function alertDotColor(kind: TabAlertKind, read: ReadCssVar = readRootVar): string {
+  const value = read(ALERT_DOT_VAR[kind]).trim();
+  return value !== '' ? value : ALERT_DOT[kind];
+}
 
 /** Pure: the title for a step, given the base title and the pending events. */
 export function titleFor(base: string, queue: readonly TabAlert[], step: number): string {
@@ -39,10 +63,13 @@ export function titleFor(base: string, queue: readonly TabAlert[], step: number)
   return event?.text ?? tabTitle(base, queue.length);
 }
 
-/** Pure: the dot colour, from the newest pending event; null when nothing is pending. */
-export function dotColor(queue: readonly TabAlert[]): string | null {
+/** The dot colour, from the newest pending event; null when nothing is pending. */
+export function dotColor(
+  queue: readonly TabAlert[],
+  read: ReadCssVar = readRootVar,
+): string | null {
   const newest = queue[queue.length - 1];
-  return newest !== undefined ? ALERT_DOT[newest.kind] : null;
+  return newest !== undefined ? alertDotColor(newest.kind, read) : null;
 }
 
 /** Pure: the chat alert's words. Never the message text. */

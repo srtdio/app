@@ -138,7 +138,7 @@ describe('chat home sections', () => {
     expect(markup).not.toContain('data-section-label="groups"');
     expect(markup).not.toContain('>Groups<');
     expect(markup).not.toContain('data-section="groups"');
-    expect(markup).toContain(`data-section-label="people" class="${SECTION_LABEL_TYPE} px-1 pt-1"`);
+    expect(markup).toContain(`data-section-label="people" class="${SECTION_LABEL_TYPE} pt-1"`);
   });
 
   it('zero DMs -> no People label', () => {
@@ -146,12 +146,12 @@ describe('chat home sections', () => {
     expect(markup).not.toContain('data-section-label="people"');
     expect(markup).not.toContain('>People<');
     expect(markup).not.toContain('data-section="people"');
-    expect(markup).toContain(`data-section-label="groups" class="${SECTION_LABEL_TYPE} px-1 pt-1"`);
+    expect(markup).toContain(`data-section-label="groups" class="${SECTION_LABEL_TYPE} pt-1"`);
   });
 
   it('second label gets 12px top padding; labels are 12/600 uppercase secondary', () => {
     const markup = html(view([group, dm]));
-    expect(markup).toContain(`data-section-label="people" class="${SECTION_LABEL_TYPE} px-1 pt-3"`);
+    expect(markup).toContain(`data-section-label="people" class="${SECTION_LABEL_TYPE} pt-3"`);
     for (const t of ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']) {
       expect(SECTION_LABEL_TYPE.split(' ')).toContain(t);
     }
@@ -166,7 +166,7 @@ describe('chat home sections', () => {
     const markup = html(view([dm, dm2, { ...dm, channelId: 'c3', title: 'Neha' }]));
     expect(markup).not.toContain('col-span');
     expect(markup).not.toContain('grid-flow');
-    expect(CHAT_HOME_STACK).toBe('flex flex-col gap-2 px-[14px]');
+    expect(CHAT_HOME_STACK).toBe('flex flex-col gap-2 px-4');
   });
 
   it('unread 0 -> no pill, unread 3 -> pill "3"', () => {

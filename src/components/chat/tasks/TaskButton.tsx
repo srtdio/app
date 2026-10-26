@@ -32,7 +32,7 @@ export function TaskButton(props: {
       onClick={props.onOpen}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'relative shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'relative shrink-0',
         NO_TOUCH_SELECT,
       )}
     >

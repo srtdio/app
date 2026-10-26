@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import type { ReactElement } from 'react';
-import { ICON_SIZE, IconBriefs, IconLock } from '@/components/ui/icons';
+import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
+import { tagClass } from '@/components/ui/Tag';
+import { cn } from '@/lib/cn';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Thumbnail } from '@/components/media';
 import { formatDue } from '@/lib/time';
@@ -19,28 +21,19 @@ export function isBriefClosed(brief: Brief): boolean {
 }
 
 /**
- * The one status pill used on the list card, the detail page and the chat brief
- * card, so Open and Closed read the same everywhere. Open: accent-soft fill, an
- * accent dot and "Open". Closed: panel-3 fill, a lock and "Closed". Token
- * classes only, so light and dark follow the theme. Not interactive, no motion.
- * Anything that is not "closed" reads as Open (the only two statuses).
+ * The one status tag used on the list card, the detail page and the chat brief
+ * card, so Open and Closed read the same everywhere. It is a ui/Tag (built from
+ * tagClass so it can carry data-brief-status): Open is the accent tone, Closed
+ * the neutral tone, text only. Not interactive, no motion. Anything that is not
+ * "closed" reads as Open (the only two statuses).
  */
 export function BriefStatusPill({ status }: { status: string }): ReactElement {
   const closed = status === BRIEF_STATUS.closed;
   return (
     <span
       data-brief-status={closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open}
-      className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-sm font-medium ${
-        closed ? 'bg-panel-3 text-fg-2' : 'bg-accent-soft text-accent'
-      }`}
+      className={cn(tagClass(closed ? 'neutral' : 'accent'), 'shrink-0 whitespace-nowrap')}
     >
-      {closed ? (
-        <span aria-hidden="true">
-          <IconLock size={ICON_SIZE.inline} />
-        </span>
-      ) : (
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
-      )}
       {closed ? 'Closed' : 'Open'}
     </span>
   );
@@ -154,7 +147,9 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
 
         {brief.target_date !== null ? (
           <div className="text-sm text-fg-3">
-            <span className="tabular-nums">{briefDueLabel(brief.target_date, timeZone)}</span>
+            <span data-brief-due="" className="font-mono tabular-nums">
+              {briefDueLabel(brief.target_date, timeZone)}
+            </span>
           </div>
         ) : null}
       </div>

@@ -165,11 +165,11 @@ import {
 } from '@/components/chat/chat-type';
 import {
   createSwipeReplyController,
-  SWIPE_SPRING_MS,
   type SwipeFrame,
   type SwipeReplyController,
 } from '@/lib/chat/swipe-reply';
 import type { PresignCache } from '@/lib/asset-presign';
+import { DUR_SLOW_MS } from '@/lib/motion';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import {
   Composer,
@@ -1549,8 +1549,7 @@ export function canRetryFailed(message: Pick<ThreadMessage, 'refusal'>): boolean
 }
 
 /** The failed line's text actions: the shared 44px Button, the bad token for Delete. */
-const FAILED_ACTION_CLASS =
-  'min-w-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+const FAILED_ACTION_CLASS = 'min-w-[44px]';
 
 /**
  * The line under a failed own text send: "Not sent" (announced), then Retry
@@ -1707,19 +1706,21 @@ export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-10 bg-
 /**
  * Own-bubble inner content (reply quote, file chips, shared cards, voice note)
  * restyled for the solid fill without touching the shared child components:
- * ink goes accent-fg (secondary at opacity-80), surfaces a white/16 overlay,
- * the quote rule and played waveform white/70, icons follow currentColor. White
- * is accent-fg's value in both themes. Peer bubbles never get this class. The
- * UploadRing (data-upload-ring) is left alone: it draws on overlay tokens and
- * stays a solid dark circle, never a translucent tile.
+ * ink goes accent-fg (secondary at opacity-90), card surfaces a black/12 overlay
+ * (darker than the fill, so accent-fg ink such as "Waiting on approvers" and the
+ * Review chip text keeps at least 4.5:1 in both themes), the quote rule and
+ * played waveform white/70, icons follow currentColor. White is accent-fg's
+ * value in both themes. Peer bubbles never get this class. The UploadRing
+ * (data-upload-ring) is left alone: it draws on overlay tokens and stays a
+ * solid dark circle, never a translucent tile.
  */
 export const OWN_BUBBLE_CONTENT = cn(
-  '[&_.bg-panel]:bg-white/[.16] [&_.bg-panel-2]:bg-white/[.16] [&_.bg-panel-3]:bg-white/[.16] [&_.border-border]:border-white/[.16]',
+  '[&_.bg-panel]:bg-black/[.12] [&_.bg-panel-2]:bg-black/[.12] [&_.bg-panel-3]:bg-black/[.12] [&_.border-border]:border-white/[.16]',
   '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-white/[.24] [&_a:hover>span]:bg-white/[.24]',
   '[&_.bg-accent]:bg-white/70 [&_.bg-accent.text-accent-fg]:bg-white/[.16] [&_.bg-fg-3]:bg-white/40',
   '[&_.text-fg]:text-accent-fg [&_.text-accent]:text-accent-fg',
-  '[&_.text-fg-2]:text-accent-fg [&_.text-fg-2]:opacity-80',
-  '[&_.text-fg-3]:text-accent-fg [&_.text-fg-3]:opacity-80',
+  '[&_.text-fg-2]:text-accent-fg [&_.text-fg-2]:opacity-90',
+  '[&_.text-fg-3]:text-accent-fg [&_.text-fg-3]:opacity-90',
 );
 
 /** Link ink per side: accent on a peer bubble, accent-fg on the solid own bubble. */
@@ -2009,7 +2010,7 @@ export const FAILED_RETRY_CLASS =
   'absolute right-full top-1/2 mr-1 flex h-11 min-w-[44px] -translate-y-1/2 items-center justify-center text-bad';
 
 /** Hover-only controls fade in on opacity alone, 120ms, and not at all under reduced motion. */
-const HOVER_FADE = 'transition-opacity duration-[120ms] motion-reduce:transition-none';
+const HOVER_FADE = 'transition-opacity duration-fast motion-reduce:transition-none';
 
 /**
  * A row's piece of the rail (none for a left root card no member follows yet,
@@ -2631,7 +2632,7 @@ export function MessageBubble(props: {
           aria-haspopup="menu"
           onClick={onReact}
           className={cn(
-            'shrink-0 self-center text-fg-3 opacity-0 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent group-hover:opacity-100',
+            'shrink-0 self-center text-fg-3 opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
             // An own row's tick passes under the smiley; the page fill keeps the glyph clear.
             rail?.role != null && mine && 'bg-bg',
             HOVER_FADE,
@@ -3335,7 +3336,8 @@ function paintSwipe(
   frame: SwipeFrame,
 ): void {
   const moved = frame.offset > 0;
-  const spring = frame.animate ? `${SWIPE_SPRING_MS}ms ease-out` : '';
+  // Spring-back on the slow motion token (nearest to the gesture's 180ms) and the enter curve.
+  const spring = frame.animate ? `${DUR_SLOW_MS}ms var(--ease-enter)` : '';
   if (bubble !== null) {
     // translateX only; the compositor hint lives only while the finger drags.
     bubble.style.willChange = frame.dragging ? 'transform' : '';

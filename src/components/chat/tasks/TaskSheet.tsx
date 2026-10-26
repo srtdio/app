@@ -180,7 +180,7 @@ function AddRow(props: {
           disabled={props.disabled || text.trim() === ''}
           onMouseDown={(e) => e.preventDefault()}
           className={cn(
-            'min-w-11 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'min-w-11 shrink-0',
             NO_TOUCH_SELECT,
           )}
         >
@@ -196,9 +196,9 @@ function TasksSkeleton(): ReactElement {
     <div data-task-skeleton="" aria-hidden="true" className="flex flex-col gap-3 px-4 py-4">
       {[0, 1, 2, 3].map((k) => (
         <div key={k} className="flex items-center gap-3">
-          <span className="h-4 w-4 shrink-0 animate-pulse rounded-md bg-panel-3" />
-          <span className="h-4 flex-1 animate-pulse rounded-md bg-panel-3" />
-          <span className="h-4 w-8 shrink-0 animate-pulse rounded-md bg-panel-3" />
+          <span className="h-4 w-4 shrink-0 animate-pulse rounded-lg bg-panel-3" />
+          <span className="h-4 flex-1 animate-pulse rounded-lg bg-panel-3" />
+          <span className="h-4 w-8 shrink-0 animate-pulse rounded-lg bg-panel-3" />
         </div>
       ))}
     </div>

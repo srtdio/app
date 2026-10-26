@@ -390,7 +390,7 @@ describe('post flow C: header, count and filters', () => {
     expect(sortRows.map(text)).toEqual([
       'Recently updated',
       'Least recently updated',
-      'Due soonest first',
+      'Due date',
     ]);
     for (const row of sortRows) {
       const className = (row.props as { className: string }).className;

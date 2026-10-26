@@ -12,7 +12,9 @@ vi.mock('@/components/pages/pipeline/PipelineDateRangeCalendar', () => ({
 }));
 
 import {
+  PIPELINE_SORT_OPTIONS,
   PipelineDateControl,
+  PipelineFilterControl,
   PipelineSortControl,
 } from '@/components/pages/pipeline/PipelineSortControl';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
@@ -86,6 +88,53 @@ describe('Pipeline controls buttons', () => {
     expect(html).toContain('<span class="tabular-nums">3</span>');
     expect(html).toContain('<span class="tabular-nums">1</span>');
     expect(html).not.toContain('<span class="tabular-nums">0</span>');
+  });
+
+  it('the stage chip row is not inset: no own left pad or right bleed (the header row pads it)', () => {
+    const html = renderToStaticMarkup(
+      <StageChips items={[{ key: 'all', label: 'All' }]} active="all" onChange={() => {}} />,
+    );
+    const row = /<div[^>]*data-chip-row=""[^>]*>/.exec(html)?.[0] ?? '';
+    const cls = classOf(row);
+    for (const old of ['pl-4', '-mr-4', 'md:pl-6', 'md:-mr-6']) {
+      expect(cls).not.toContain(old);
+    }
+    expect(cls).toEqual(
+      expect.arrayContaining(['flex', 'flex-nowrap', 'gap-2', 'overflow-x-auto', 'pb-1']),
+    );
+  });
+
+  it('the filter-and-sort trigger is a bare IconButton with the sort icon, like SortMenu', () => {
+    const html = renderToStaticMarkup(
+      <PipelineFilterControl
+        order="updated"
+        onOrderChange={() => {}}
+        dateWindow="any"
+        onDateWindowChange={() => {}}
+        customRange={null}
+        onCustomRangeChange={() => {}}
+        weekStartDay={1}
+      />,
+    );
+    const tag = buttonTags(html).find((t) => t.includes('data-filter-control')) ?? '';
+    const cls = classOf(tag);
+    expect(cls).toContain('h-11');
+    expect(cls).toContain('w-11');
+    expect(cls).not.toContain('border');
+    expect(cls).not.toContain('border-border');
+    expect(cls).not.toContain('bg-panel');
+    expect(tag).toContain('aria-label="Filter and sort"');
+    const src = readFileSync(
+      fileURLToPath(new URL('./PipelineSortControl.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toContain('<IconSort size={ICON_SIZE.control} />');
+    expect(src).not.toContain('IconFilterLines');
+    expect(src).not.toContain('secondary outline');
+  });
+
+  it('the due sort row reads "Due date"', () => {
+    expect(PIPELINE_SORT_OPTIONS.find((o) => o.value === 'target')?.label).toBe('Due date');
   });
 
   it('reads the one breakpoint, and its laptop popover closes on Escape and returns focus', () => {

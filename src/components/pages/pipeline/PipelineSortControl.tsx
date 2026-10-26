@@ -19,7 +19,6 @@ import {
   IconCalendar,
   IconCheck,
   IconChevronDown,
-  IconFilterLines,
   IconSort,
 } from '@/components/ui/icons';
 import { useIsLaptop } from '@/lib/use-is-laptop';
@@ -58,7 +57,7 @@ interface PipelineDateControlProps {
 const SORT_LABEL: Record<PostSort, string> = {
   updated: 'Recently updated',
   oldest: 'Least recently updated',
-  target: 'Due soonest first',
+  target: 'Due date',
 };
 
 /** The sort menu rows, in menu order, with the Pipeline's labels. */
@@ -411,15 +410,15 @@ export function PipelineFilterControl({
       data-filter-control=""
       {...(active ? { 'data-active': '' } : {})}
       onClick={() => setOpen((prev) => !prev)}
-      // The shared 44x44 IconButton in the secondary outline (border on panel).
-      className={cn(TRIGGER, 'relative border border-border bg-panel')}
+      // The bare shared 44x44 IconButton, like SortMenu on Briefs and Assets.
+      className={cn(TRIGGER, 'relative')}
     >
-      <IconFilterLines size={ICON_SIZE.control} />
+      <IconSort size={ICON_SIZE.control} />
       {active ? (
         <span
           aria-hidden="true"
           data-filter-dot=""
-          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-panel"
+          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-bg"
         />
       ) : null}
     </IconButton>

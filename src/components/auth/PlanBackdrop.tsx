@@ -147,10 +147,10 @@ function LaptopPlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
       </div>
       <div className="flex shrink-0 items-center gap-3 px-10 py-4">
         <span className="text-xl font-semibold text-fg">{monthLabel}</span>
-        <span className="h-8 w-8 rounded-md bg-panel-2" />
-        <span className="h-8 w-8 rounded-md bg-panel-2" />
+        <span className="h-8 w-8 rounded-lg bg-panel-2" />
+        <span className="h-8 w-8 rounded-lg bg-panel-2" />
         <span className="flex-1" />
-        <span className="h-8 w-36 rounded-md bg-panel-2" />
+        <span className="h-8 w-36 rounded-lg bg-panel-2" />
       </div>
       <div className="mx-10 mb-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
         <div className="grid shrink-0 grid-cols-7 border-b border-border bg-panel-2">
@@ -233,7 +233,7 @@ function PhonePlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
       </div>
       <div className="flex h-24 shrink-0 items-start justify-around border-t border-border bg-panel px-12 pt-4">
         {[0, 1, 2, 3, 4].map((tab) => (
-          <span key={tab} className="h-5 w-5 rounded-md bg-panel-3" />
+          <span key={tab} className="h-5 w-5 rounded-lg bg-panel-3" />
         ))}
       </div>
     </div>

@@ -10,6 +10,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
 import { Textarea } from '@/components/ui/Textarea';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import {
   Comments,
   fetchCheckpoints,
@@ -1636,7 +1637,7 @@ export function PostDetailPage({
       <Link
         data-detail="brief"
         to={briefRoute(post.brief_id)}
-        className="inline-flex min-h-[44px] min-w-0 items-center rounded-md font-medium text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="inline-flex min-h-[44px] min-w-0 items-center rounded-lg font-medium text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <span className="min-w-0 truncate">{fromBriefLabel(briefName)}</span>
       </Link>
@@ -1673,7 +1674,7 @@ export function PostDetailPage({
         data-post-details-edit=""
         label="Post details"
         onClick={() => setShowDetails(true)}
-        className="text-fg-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="text-fg-3"
       >
         <IconCalendar size={ICON_SIZE.control} />
       </IconButton>
@@ -1688,7 +1689,6 @@ export function PostDetailPage({
         variant="secondary"
         data-open-comments-chip=""
         onClick={() => scrollToCommentsSection()}
-        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <IconChat size={ICON_SIZE.inline} />
         {openCommentsLabel(openCount)}
@@ -1870,7 +1870,7 @@ export function PostDetailPage({
                     // 44px floor as the tappable title, with no border (the
                     // ring draws outside the box), so entering edit never
                     // shifts the page.
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-md border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
@@ -2021,12 +2021,7 @@ export function PostDetailPage({
                 </p>
               ) : null}
               {pinError !== null ? (
-                <div
-                  role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-base text-bad"
-                >
-                  {pinError}
-                </div>
+                <ErrorNote className="mt-3">{pinError}</ErrorNote>
               ) : null}
             </section>
           </div>
@@ -2075,7 +2070,7 @@ export function PostDetailPage({
                     variant="ghost"
                     data-caption-edit=""
                     onClick={openCaptionEditor}
-                    className="shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="shrink-0"
                   >
                     <IconEdit size={ICON_SIZE.inline} />
                     Edit
@@ -2139,7 +2134,7 @@ export function PostDetailPage({
                           setCaptionTipOpen(false);
                           dismissCaptionTip(userId);
                         }}
-                        className="ml-auto shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        className="ml-auto shrink-0"
                       >
                         Got it
                       </Button>
@@ -2150,12 +2145,7 @@ export function PostDetailPage({
                 <p className="mt-3 text-base text-fg-2">No caption yet.</p>
               )}
               {annotateError !== null ? (
-                <div
-                  role="alert"
-                  className="mt-3 rounded-md border border-bad px-3 py-2 text-base text-bad"
-                >
-                  {annotateError}
-                </div>
+                <ErrorNote className="mt-3">{annotateError}</ErrorNote>
               ) : null}
             </section>
 

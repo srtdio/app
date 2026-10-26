@@ -10,7 +10,7 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
-import { searchChips, TILE_TIME_TYPE } from '@/components/chat/ChannelList';
+import { searchChips, TILE_TIME_ROW, TILE_TIME_TYPE } from '@/components/chat/ChannelList';
 import { QUICK_REACTIONS } from '@/components/chat/MessageActionMenu';
 import { mentionClass, OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
 import { holdTipView } from '@/components/chat/ThreadHoldTip';
@@ -23,7 +23,7 @@ const read = (rel: string): string =>
 
 describe('chat visual pass', () => {
   it('own-bubble cards remap the panel-2 fill, so the stage tag reads on indigo', () => {
-    expect(OWN_BUBBLE_CONTENT).toContain('[&_.bg-panel-2]:bg-white/[.16]');
+    expect(OWN_BUBBLE_CONTENT).toContain('[&_.bg-panel-2]:bg-black/[.12]');
   });
 
   it('times and dates are mono: bubble time, day pill, list time', () => {
@@ -51,9 +51,8 @@ describe('chat visual pass', () => {
 
   it('the list column is 352px from 1280px (288px below, so the plan panel never covers it) and a tile time stays clear of the ⋯', () => {
     expect(read('../ChatConnected.tsx')).toContain('md:w-72 md:border-r xl:w-[352px]');
-    expect(read('../ChannelList.tsx')).toContain(
-      'data-tile-time="" className="mt-auto flex px-10"',
-    );
+    expect(read('../ChannelList.tsx')).toContain('data-tile-time="" className={TILE_TIME_ROW}');
+    expect(TILE_TIME_ROW).toContain('pr-11');
   });
 
   it('filter chips fade at the trailing edge so a clipped chip reads as more', () => {

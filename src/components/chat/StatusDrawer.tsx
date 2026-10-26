@@ -693,7 +693,7 @@ export function StatusDrawerPanel(props: {
   children: ReactNode;
 }): ReactElement {
   const transition = props.animate
-    ? 'duration-[220ms] ease-out motion-reduce:transition-none'
+    ? cn('duration-slow motion-reduce:transition-none', props.open ? 'ease-enter' : 'ease-exit')
     : 'transition-none';
   return (
     <div

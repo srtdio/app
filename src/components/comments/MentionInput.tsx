@@ -430,7 +430,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         }}
         onBlur={saveSelection}
         onKeyDown={onKeyDown}
-        className="w-full whitespace-pre-wrap break-words rounded-md border border-border bg-panel-2 px-3 py-2.5 text-base text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
+        className="w-full whitespace-pre-wrap break-words rounded-lg border border-border bg-panel-2 px-3 py-2.5 text-base text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
       />
 
       {open ? (

@@ -20,6 +20,7 @@
 import type { ReactElement } from 'react';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { ProgressRing } from '@/components/ui/ProgressRing';
 import { cn } from '@/lib/cn';
 
 type UploadRingVariant = 'voice' | 'image' | 'file';
@@ -55,16 +56,6 @@ export const UPLOAD_RING_X = ICON_SIZE.inline;
 /** The indeterminate arc's share of the ring. */
 const ARC = 0.25;
 
-function circumference(size: number): number {
-  return 2 * Math.PI * ((size - STROKE) / 2);
-}
-
-/** The stroke offset for a progress 0..1 (null: the indeterminate arc). Pure. */
-function ringDashOffset(progress: number | null, size: number = UPLOAD_RING_SIZES.image): number {
-  const shown = progress === null ? ARC : Math.min(Math.max(progress, 0), 1);
-  return circumference(size) * (1 - shown);
-}
-
 /** One grid cell for every layer: they stack without any positioning. */
 const LAYER = '[grid-area:1/1]';
 
@@ -87,7 +78,6 @@ export function UploadRing({
 }): ReactElement {
   const indeterminate = progress === null;
   const size = UPLOAD_RING_SIZES[variant];
-  const radius = (size - STROKE) / 2;
   return (
     <PressableRow
       inline
@@ -110,7 +100,7 @@ export function UploadRing({
         // the ring keeps its overlay ink and its opacity/visibility fade.
         'grid shrink-0 place-items-center text-overlay-fg',
         HIT_CLASS[variant],
-        'transition-[opacity,visibility] duration-150 motion-reduce:transition-none',
+        'transition-[opacity,visibility] duration-base motion-reduce:transition-none',
         hidden ? 'pointer-events-none invisible opacity-0' : 'visible opacity-100',
         className,
       )}
@@ -120,37 +110,18 @@ export function UploadRing({
         data-upload-disc=""
         className={cn(LAYER, RING_CLASS[variant], 'rounded-full bg-overlay opacity-60')}
       />
-      <svg
-        aria-hidden="true"
-        viewBox={`0 0 ${size} ${size}`}
-        className={cn(LAYER, RING_CLASS[variant], '-rotate-90')}
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={STROKE}
-          className="text-overlay-dot"
-        />
-        <circle
-          data-upload-arc=""
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-          strokeDasharray={circumference(size)}
-          strokeDashoffset={ringDashOffset(progress, size)}
-          className={cn(
-            'text-overlay-fg transition-[stroke-dashoffset] duration-150 motion-reduce:transition-none',
-            indeterminate && 'animate-pulse motion-reduce:animate-none',
-          )}
-        />
-      </svg>
+      <ProgressRing
+        progress={progress}
+        size={size}
+        stroke={STROKE}
+        arc={ARC}
+        className={cn(LAYER, RING_CLASS[variant])}
+        trackClass="text-overlay-dot"
+        arcClass={cn(
+          'text-overlay-fg transition-[stroke-dashoffset] duration-base motion-reduce:transition-none',
+          indeterminate && 'animate-pulse motion-reduce:animate-none',
+        )}
+      />
       <IconX size={UPLOAD_RING_X} className={LAYER} />
     </PressableRow>
   );

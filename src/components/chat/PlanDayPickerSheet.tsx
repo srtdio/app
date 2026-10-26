@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/cn';
@@ -145,7 +146,7 @@ export function PlanDayTiles(props: {
           label={NO_DATE_BUTTON}
           selected={props.selected === 'none'}
           size="tap"
-          className="w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="w-full"
         />
       ) : null}
     </div>
@@ -205,12 +206,12 @@ export function PlanDayPickerSheet(props: {
 export const DATE_FIT =
   'block min-w-0 appearance-none [-webkit-appearance:none] [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-calendar-picker-indicator]:m-0';
 
-/** The date inputs: the field look with a slimmer side padding so the date fits at 320px. */
-export const DATE_FIELD = cn(
-  'h-11 min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-2.5 text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60',
-  DATE_FIT,
-  'font-mono text-input md:text-base',
-);
+/**
+ * The date inputs' own classes on top of ui/Input (which owns the field look:
+ * border, fill, radius, padding, focus and the 16px phone text): the WebKit
+ * fit, mono digits and the disabled dim.
+ */
+export const DATE_FIELD = cn(DATE_FIT, 'font-mono disabled:opacity-60');
 
 const PLAN_DATES_TITLE = 'Plan dates';
 const PLAN_DATES_HINT = 'Up to 5 weeks. Items on days you drop go back to "Pick a day".';
@@ -261,7 +262,7 @@ export function PlanDatesSheet(props: {
           ).map(([field, label]) => (
             <label key={field} className="flex w-full min-w-0 flex-col gap-1">
               <span className="text-md text-fg-3">{label}</span>
-              <input
+              <Input
                 type="date"
                 data-plan-date={field}
                 value={draft[field]}

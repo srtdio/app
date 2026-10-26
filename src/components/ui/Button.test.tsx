@@ -78,8 +78,8 @@ describe('Button design system', () => {
     expect(classOf({ variant: 'ghost' })).toContain('text-fg-2 hover:bg-panel-2 hover:text-fg');
     expect(classOf({ variant: 'link' })).toContain('text-accent');
     expect(classOf({ variant: 'link' })).toContain('!px-2');
-    expect(classOf({ variant: 'success' })).toContain('bg-good-solid text-white hover:opacity-90');
-    expect(classOf({ variant: 'danger' })).toContain('bg-bad-solid text-white hover:opacity-90');
+    expect(classOf({ variant: 'success' })).toContain('bg-good-solid text-accent-fg hover:opacity-90');
+    expect(classOf({ variant: 'danger' })).toContain('bg-bad-solid text-accent-fg hover:opacity-90');
   });
 
   it("'default' is an alias of secondary and is the default", () => {
@@ -131,6 +131,43 @@ describe('Chip', () => {
       expect(t).toContain('rounded-lg');
       expect(t).toContain('font-normal');
       expect(t).not.toContain('h-8');
+    }
+  });
+});
+
+describe('focus ring lives on the primitives', () => {
+  const RING = [
+    'focus:outline-none',
+    'focus-visible:ring-2',
+    'focus-visible:ring-accent',
+    // Without the offset the ring vanishes on the accent primary fill.
+    'focus-visible:ring-offset-2',
+    'focus-visible:ring-offset-bg',
+  ];
+  function iconClass(): string {
+    const el = IconButton({ label: 'Close', children: 'x' }) as ReactElement<{
+      className: string;
+    }>;
+    return el.props.className;
+  }
+  function chipClass(): string {
+    const el = Chip({ label: 'All' }) as ReactElement<{ className: string }>;
+    return el.props.className;
+  }
+
+  it('Button (every variant), IconButton and Chip carry the offset accent ring', () => {
+    const classes = [...VARIANTS.map((variant) => classOf({ variant })), iconClass(), chipClass()];
+    for (const cls of classes) {
+      const t = tokens(cls);
+      for (const ring of RING) expect(t).toContain(ring);
+    }
+  });
+
+  it('success and danger ink is the on-colour token, never text-white', () => {
+    for (const variant of ['success', 'danger'] as const) {
+      const t = tokens(classOf({ variant }));
+      expect(t).toContain('text-accent-fg');
+      expect(t).not.toContain('text-white');
     }
   });
 });

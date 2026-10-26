@@ -15,6 +15,7 @@
 
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
 import type { StageAction } from '@/components/pages/pcs/stage-actions';
@@ -124,12 +125,9 @@ function decisionContent(
   return (
     <>
       {error !== null ? (
-        <div
-          role="alert"
-          data-decision-error=""
-          className="mb-2 rounded-md border border-bad px-3 py-2 text-base text-bad"
-        >
-          {error}
+        // The data hook sits on a wrapper: ErrorNote takes no extra props.
+        <div data-decision-error="" className="mb-2">
+          <ErrorNote>{error}</ErrorNote>
         </div>
       ) : null}
       {model === null

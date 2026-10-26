@@ -886,6 +886,8 @@ describe('ActivityCard: notifications fixes', () => {
     const tile = /<div data-activity-welcome-tile=""[^>]*class="([^"]*)"[^>]*>([^<]*)</.exec(html);
     expect(tile?.[1]).toContain(avatarFillFor('Kite'));
     expect(tile?.[1]).toMatch(/bg-avatar-\d/);
+    expect(tile?.[1]).toContain('text-accent-fg');
+    expect(tile?.[1]).not.toMatch(/\btext-white\b/);
     expect(tile?.[2]).toBe('K');
   });
 });

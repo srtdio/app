@@ -52,7 +52,7 @@ export function Chip({
       ref={buttonRef}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border text-base font-normal transition-colors',
+        'inline-flex items-center gap-1.5 rounded-lg border text-base font-normal transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
         sizes[size],
         'border-border text-fg-2 hover:bg-panel-2',
         selected && 'bg-accent-soft text-accent border-accent-line',

@@ -27,9 +27,9 @@
   --fg-rgb: 27 28 32;
   --fg-2: #62666d;
   --fg-2-rgb: 98 102 109;
-  /* fg-3 is meta ink: 4.75:1 on bg, 5.05:1 on panel. */
-  --fg-3: #6b6f76;
-  --fg-3-rgb: 107 111 118;
+  /* fg-3 is meta ink: 4.96:1 on bg, 5.27:1 on panel, 4.51:1 on panel-3. */
+  --fg-3: #686c73;
+  --fg-3-rgb: 104 108 115;
   --accent: #5e6ad2;
   --accent-rgb: 94 106 210;
   /* Accent split by use: accent-text is ink (4.97:1 on bg), accent-fill sits
@@ -59,11 +59,12 @@
   --media-meta-fg: #ffffff;
   /* The dim behind a modal surface (the command palette). */
   --scrim: rgba(20, 22, 30, 0.45);
-  --good: #3e7d54;
-  --good-rgb: 62 125 84;
-  /* warn ink: 4.68:1 on bg. */
-  --warn: #9a6420;
-  --warn-rgb: 154 100 32;
+  /* good and warn ink clear 4.5:1 on panel-3 too (4.55, 4.52). */
+  --good: #3b7750;
+  --good-rgb: 59 119 80;
+  /* warn ink: 4.97:1 on bg. */
+  --warn: #95601f;
+  --warn-rgb: 149 96 31;
   --bad: #c2392b;
   --bad-rgb: 194 57 43;
   /* Solid fills under white text (the Plan OK / Not OK pill): the light values
@@ -92,10 +93,11 @@
   --search-mark-bg: #ffe9b8;
   --search-mark-bg-rgb: 255 233 184;
   --search-mark-fg: #1b1c20;
-  --stage-review: #b45309;
-  --stage-review-rgb: 180 83 9;
-  --stage-approved: #15803d;
-  --stage-approved-rgb: 21 128 61;
+  /* Stage inks clear 4.5:1 on bg, panel, panel-2 and panel-3. */
+  --stage-review: #ae5009;
+  --stage-review-rgb: 174 80 9;
+  --stage-approved: #147c3b;
+  --stage-approved-rgb: 20 124 59;
   --stage-rejected: #b91c1c;
   --stage-rejected-rgb: 185 28 28;
   --stage-parked: #52606d;
@@ -186,10 +188,10 @@
   --fg-3-rgb: 132 138 146;
   --accent: #6f79e3;
   --accent-rgb: 111 121 227;
-  /* accent-text 5.11:1 on bg; accent-fill keeps white ink at 4.70:1 (the
-     brighter #6f79e3 would give only 3.80:1). */
-  --accent-text: #6f79e3;
-  --accent-text-rgb: 111 121 227;
+  /* accent-text 5.60:1 on bg, 4.53:1 on panel-3; accent-fill keeps white ink
+     at 4.70:1 (the brighter #6f79e3 would give only 3.80:1). */
+  --accent-text: #7781e5;
+  --accent-text-rgb: 119 129 229;
   --accent-fill: #5e6ad2;
   --accent-fill-rgb: 94 106 210;
   --accent-hover: #838bec;
@@ -281,7 +283,12 @@
   html,
   body,
   #root {
+    /* 100% is the fallback; 100svh (the small viewport) wins where known. iOS
+       26 Safari shrinks a 100% root with the keyboard and often does not
+       restore it (WebKit bug 297779); the static svh unit never changes with
+       the keyboard. */
     height: 100%;
+    height: 100svh;
     /* Each root layer paints the theme canvas so any band Safari exposes
        (toolbar collapse, rubber-band overscroll) shows var(--bg), not white,
        in both light and dark. */

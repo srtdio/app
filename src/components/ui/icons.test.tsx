@@ -155,3 +155,32 @@ describe('icon set', () => {
     });
   }
 });
+
+describe('non-icon glyphs drawn in the icon file', () => {
+  it('TaskBoxGlyph: To do is an fg-3 outline square, Done an accent square with a panel tick', () => {
+    const todo = renderToStaticMarkup(<Icons.TaskBoxGlyph done={false} size={ICON_SIZE.nav} />);
+    expect(todo).toContain('width="18"');
+    expect(todo).toContain('viewBox="0 0 16 16"');
+    expect(todo).toContain('stroke-width="1.7"');
+    expect(todo).toContain('class="text-fg-3"');
+    expect(todo).toContain('rx="3.6" stroke="currentColor"');
+    const done = renderToStaticMarkup(<Icons.TaskBoxGlyph done size={ICON_SIZE.inline} />);
+    expect(done).toContain('width="16"');
+    expect(done).toContain('class="text-accent"');
+    expect(done).toContain('fill="currentColor"');
+    expect(done).toContain('class="stroke-panel"');
+  });
+
+  it('RailCurveGlyph: a 13px quarter curve, 2px stroke in the stronger border token', () => {
+    const tick = renderToStaticMarkup(
+      <Icons.RailCurveGlyph turn="tick" className="bottom-0 left-0" />,
+    );
+    expect(tick).toContain('d="M1 0A12 12 0 0 0 13 12"');
+    expect(tick).toContain(
+      'class="absolute h-[13px] w-[13px] overflow-visible text-border-strong bottom-0 left-0"',
+    );
+    expect(tick).toContain('stroke-width="2"');
+    const elbow = renderToStaticMarkup(<Icons.RailCurveGlyph turn="elbow" className="left-0 top-0" />);
+    expect(elbow).toContain('d="M13 1A12 12 0 0 0 1 13"');
+  });
+});

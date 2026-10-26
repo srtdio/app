@@ -139,8 +139,15 @@ describe('the sheet by kind', () => {
     expect(sheet('pdf', 'light')).toContain('transform:translateY(0px)');
     for (const file of ['FileViewer.tsx', 'viewers/WordViewer.tsx', 'viewers/SheetViewer.tsx']) {
       const src = readFileSync(join(process.cwd(), 'src/components/ui', file), 'utf8');
-      expect(src).not.toMatch(/translateX|translate3d|rotate\(|backdrop-filter|backdrop-blur/);
+      expect(src).not.toMatch(/translateX|translate3d|rotate\(|backdrop-filter/);
     }
+  });
+
+  it('the backdrop blurs what is behind it (nothing shows through)', () => {
+    const html = sheet('video', 'light');
+    const backdrop = /<div[^>]*data-viewer-backdrop=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(backdrop).toContain('backdrop-blur-xl');
+    expect(backdrop).toContain('bg-overlay');
   });
 
   it('light and dark: the same overlay-token markup, no hex, no dark: variants', () => {

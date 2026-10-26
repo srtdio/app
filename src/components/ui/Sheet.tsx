@@ -164,7 +164,10 @@ export function Sheet({
               {...(busy
                 ? {
                     'aria-disabled': 'true' as const,
-                    className: 'cursor-default !text-fg-3 hover:!bg-transparent active:!scale-100',
+                    // Muted and inert while busy: aria-disabled variants out-rank the
+                    // IconButton's own ink, hover and press classes (no "!").
+                    className:
+                      'cursor-default aria-disabled:text-fg-3 aria-disabled:hover:bg-transparent aria-disabled:active:scale-100',
                   }
                 : {})}
             >

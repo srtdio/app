@@ -92,4 +92,19 @@ describe('SelectionHeader (D8)', () => {
     (cancel?.props.onClick as () => void)();
     expect(onCancel).toHaveBeenCalledOnce();
   });
+
+  it('the count starts on the 16px edge (pl-2 inside the px-2 header row), both layouts', () => {
+    for (const layout of ['touch', 'laptop'] as const) {
+      const header = SelectionHeader({ count: 1, onCancel: vi.fn(), layout });
+      const count = find(header, 'data-selection-count');
+      expect(count?.props.children).toBe('1 selected');
+      expect(String(count?.props.className).split(/\s+/)).toContain('pl-2');
+    }
+  });
+
+  it('Cancel leaves the focus ring to the shared Button', () => {
+    const header = SelectionHeader({ count: 1, onCancel: vi.fn(), layout: 'touch' });
+    const cancel = find(header, 'data-selection-cancel');
+    expect(String(cancel?.props.className)).not.toContain('focus-visible:ring');
+  });
 });

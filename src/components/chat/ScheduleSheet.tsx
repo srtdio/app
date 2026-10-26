@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconCalendarClock, IconChevronRight } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -27,6 +28,7 @@ import {
 } from '@/lib/chat/scheduled';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
+import { DUR_BASE_MS } from '@/lib/motion';
 
 const SCHEDULE_SHEET_TITLE = 'Schedule message';
 export const SCHEDULE_HELPER = 'Any time from 1 minute to 1 year ahead.';
@@ -105,24 +107,24 @@ export function ScheduleOptions(props: OptionsProps): ReactElement {
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
               Date
-              <input
+              <Input
                 type="date"
                 aria-label="Date"
                 value={date}
                 min={dateInputValue(now)}
                 max={dateInputValue(new Date(now.getTime() + MAX_LEAD_MS))}
                 onChange={(event) => setDate(event.target.value)}
-                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-input text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:text-base"
+                className="min-w-0 font-mono"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
               Time
-              <input
+              <Input
                 type="time"
                 aria-label="Time"
                 value={time}
                 onChange={(event) => setTime(event.target.value)}
-                className="h-11 min-w-0 rounded-md border border-border bg-panel-2 px-3 font-mono text-input text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:text-base"
+                className="min-w-0 font-mono"
               />
             </label>
           </div>
@@ -176,15 +178,21 @@ function PresetRow(props: {
   );
 }
 
-function ScheduleFooter(props: { onCancel: () => void }): ReactElement {
+/**
+ * The zone line, plus Cancel on the laptop menu only. The phone sheet has no
+ * footer Cancel: the X in its header closes it.
+ */
+export function ScheduleFooter(props: { onCancel?: (() => void) | undefined }): ReactElement {
   return (
     <>
       <span data-schedule-zone="" className="flex-1 text-sm text-fg-2">
         {zoneLine(new Date())}
       </span>
-      <Button type="button" variant="ghost" onClick={props.onCancel}>
-        Cancel
-      </Button>
+      {props.onCancel !== undefined ? (
+        <Button type="button" variant="ghost" onClick={props.onCancel}>
+          Cancel
+        </Button>
+      ) : null}
     </>
   );
 }
@@ -208,7 +216,7 @@ export function ScheduleSheet(props: {
       open={props.open}
       onClose={props.onClose}
       title={SCHEDULE_SHEET_TITLE}
-      footer={<ScheduleFooter onCancel={props.onClose} />}
+      footer={<ScheduleFooter />}
     >
       <ScheduleOptions key={openings} preview={props.preview} onPick={props.onPick} />
     </Sheet>
@@ -235,7 +243,7 @@ export function ScheduleMenu(props: {
       return () => cancelAnimationFrame(raf);
     }
     setShown(false);
-    const timer = setTimeout(() => setRendered(false), 150);
+    const timer = setTimeout(() => setRendered(false), DUR_BASE_MS);
     return () => clearTimeout(timer);
   }, [props.open]);
   const onClose = props.onClose;
@@ -269,8 +277,8 @@ export function ScheduleMenu(props: {
       aria-label={SCHEDULE_SHEET_TITLE}
       data-schedule-menu=""
       className={cn(
-        'absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-lg border border-border-strong bg-panel shadow-2xl transition-opacity duration-[150ms] ease-out motion-reduce:transition-none',
-        shown ? 'opacity-100' : 'opacity-0',
+        'absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border border-border-strong bg-panel shadow-2xl transition-opacity duration-base motion-reduce:transition-none',
+        shown ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
       )}
     >
       <h2 className="px-4 pb-1 pt-3 text-lg font-semibold text-fg">{SCHEDULE_SHEET_TITLE}</h2>
