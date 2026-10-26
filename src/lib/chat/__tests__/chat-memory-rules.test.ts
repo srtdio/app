@@ -207,7 +207,8 @@ describe('(b) forgotten on sign-out and on a workspace switch', () => {
     // entering it already dropped w1; leaving w1 now leaves the new open be.
     const other: ChatKey = { userId: 'u1', workspaceId: 'w2', channelId: 'c9' };
     store.remember(other, 'scheduled', []);
-    expect(store.recall(KEY, 'thread')).toBeUndefined();
+    // (A recall of KEY here would enter w1 again; count instead.)
+    expect(store.size()).toBe(1);
     leaveChatScope({ userId: 'u1', workspaceId: 'w1' }, { userId: 'u1', workspaceId: 'w2' }, store);
     expect(store.recall(other, 'scheduled')).toEqual([]);
   });
