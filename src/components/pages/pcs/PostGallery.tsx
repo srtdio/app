@@ -29,7 +29,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { DropZone } from '@/components/ui/DropZone';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { PresignCache, PresignDeps } from '@/lib/asset-presign';
-import { frameFor, type Frame } from '@/lib/platform-specs';
+import { frameFor, PLATFORM_SPECS, type Frame } from '@/lib/platform-specs';
 import { galleryItemMedia } from '@/components/media/PlatformFrame';
 import {
   cutPercent,
@@ -39,7 +39,7 @@ import {
   type FrameMap,
   type PinDot,
 } from '@/components/pages/pcs/pin-annotations';
-import type { GalleryItem } from '@srtdio/posts';
+import { isPostPlatform, type GalleryItem } from '@srtdio/posts';
 
 /** The gesture handlers a tile spreads for long-press + right-click. */
 interface TileGestures {
@@ -340,6 +340,16 @@ export function slideMap(item: GalleryItem, measured: MeasuredDimensions, frame:
 }
 
 /**
+ * The platform's one-line note for the first slide's kind (YouTube Shorts with
+ * an image: "Shorts are video only."), the same line the preview panel shows.
+ */
+export function frameKindNote(platform: string, items: readonly GalleryItem[]): string | null {
+  const first = items[0];
+  if (first === undefined || !isImage(first) || !isPostPlatform(platform)) return null;
+  return PLATFORM_SPECS[platform].imageUnsupported ?? null;
+}
+
+/**
  * How much of a slide the platform frame cuts, as a whole percent: 0 with no
  * frame, a banded frame (nothing is cut), or a slide that is not an image. It
  * only decides the warning line under the picture; the post screen never crops.
@@ -479,6 +489,8 @@ interface GalleryViewProps {
    * picture whole. It only decides the warning line under the picture.
    */
   frame?: Frame | null;
+  /** The platform's one-line note under the picture (Shorts with an image). */
+  frameNote?: string | null;
   /** The platform's display name, for the warning line. */
   platformLabel?: string;
   /** The warning line's "See preview": opens the platform Preview panel. */
@@ -882,6 +894,7 @@ export function galleryView({
   measuredDimensions = {},
   onMeasure,
   frame = null,
+  frameNote = null,
   platformLabel = '',
   onSeePreview,
   pinsFor,
@@ -1098,6 +1111,11 @@ export function galleryView({
             </Button>
           ) : null}
         </div>
+      ) : null}
+      {frameNote !== null ? (
+        <p data-frame-note className="mt-1 text-base text-fg-2">
+          {frameNote}
+        </p>
       ) : null}
       {toolbar ?? pinControls(active, pinArmedIndex, onArmPin, onDisarmPin)}
     </div>
@@ -1520,6 +1538,8 @@ export function PostGallery({
         measuredDimensions,
         onMeasure: columns === 4 ? handleMeasure : undefined,
         frame: postFrame,
+        frameNote:
+          postFrame !== null && frame !== undefined ? frameKindNote(frame.platform, items) : null,
         platformLabel: frame?.platformLabel ?? '',
         onSeePreview,
         pinsFor,

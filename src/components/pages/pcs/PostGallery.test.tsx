@@ -6,6 +6,7 @@ import {
   galleryFrame,
   galleryFrameRatio,
   frameCut,
+  frameKindNote,
   framePins,
   intrinsicSize,
   nearestTileIndex,
@@ -663,6 +664,10 @@ describe('the post screen shows every picture whole', () => {
     elements(tree).find(
       (el) => (el.props as Record<string, unknown>)['data-frame-cut'] !== undefined,
     );
+  const noteOf = (tree: ReactNode) =>
+    elements(tree).find(
+      (el) => (el.props as Record<string, unknown>)['data-frame-note'] !== undefined,
+    );
   const lineText = (tree: ReactNode): string | undefined =>
     elements(lineOf(tree))
       .map((el) => (el.props as { children?: ReactNode }).children)
@@ -848,6 +853,52 @@ describe('the post screen shows every picture whole', () => {
     const boxes = tileBoxes(tree);
     expect(elements(boxes[0]).some((el) => label(el) === 'Pin 1')).toBe(true);
     expect(elements(boxes[1]).some((el) => label(el) === 'Pin 2')).toBe(true);
+  });
+
+  it('YouTube Shorts with an image shows the same note as the panel', () => {
+    const items = [{ ...item(1), width: 1920, height: 1080 }];
+    expect(frameKindNote('youtube_shorts', items)).toBe('Shorts are video only.');
+    expect(frameKindNote('tiktok', items)).toBeNull();
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      frame: galleryFrame('youtube_shorts', 'short', items, {}),
+      frameNote: frameKindNote('youtube_shorts', items),
+      platformLabel: 'YouTube Shorts',
+    });
+    const note = noteOf(tree);
+    expect((note?.props as { children: string }).children).toBe('Shorts are video only.');
+    expect(className(note!)).toBe('mt-1 text-base text-fg-2');
+    // The picture is still the whole image in the unframed ribbon.
+    expect(tileBoxes(tree)).toHaveLength(1);
+  });
+
+  it('the platform note and the cut line show together, neither hiding the other', () => {
+    const items = [tall(0)];
+    const onSeePreview = vi.fn();
+    const frame = galleryFrame('linkedin', 'single_image', items, {});
+    const tree = galleryView({
+      items,
+      cache,
+      presignEnabled: true,
+      onOpen: () => {},
+      frame,
+      frameNote: 'Shorts are video only.',
+      platformLabel: 'LinkedIn',
+      onSeePreview,
+    });
+    const n = frameCut(items[0], {}, frame);
+    expect(n).toBeGreaterThan(0);
+    expect(lineText(tree)).toBe(`LinkedIn cuts ${n}% of this.`);
+    expect((noteOf(tree)?.props as { children: string }).children).toBe('Shorts are video only.');
+    // The cut line comes first, then the note.
+    const all = elements(tree);
+    expect(all.indexOf(lineOf(tree)!)).toBeLessThan(all.indexOf(noteOf(tree)!));
+    const button = elements(lineOf(tree)).find((el) => el.type === Button)!;
+    (button.props as { onClick: () => void }).onClick();
+    expect(onSeePreview).toHaveBeenCalledOnce();
   });
 
   it('text formats have no frame', () => {
