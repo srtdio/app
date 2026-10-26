@@ -51,18 +51,11 @@ interface PipelineDateControlProps {
 }
 
 /**
- * The Pipeline's sort labels. Both update orders say what they sort by (the
- * post's last update), not just a direction.
+ * The sort menu rows, in menu order. Labels come straight from list-sort
+ * (Newest first, Oldest first, Due date), the shared sort wording.
  */
-const SORT_LABEL: Record<PostSort, string> = {
-  updated: 'Recently updated',
-  oldest: 'Least recently updated',
-  target: 'Due date',
-};
-
-/** The sort menu rows, in menu order, with the Pipeline's labels. */
 export const PIPELINE_SORT_OPTIONS: readonly { value: PostSort; label: string }[] =
-  POST_SORT_OPTIONS.map((option) => ({ value: option.value, label: SORT_LABEL[option.value] }));
+  POST_SORT_OPTIONS;
 
 const MONTHS_SHORT = [
   'Jan',

@@ -645,7 +645,7 @@ describe('persisted sort sanitization (fix 1)', () => {
 
   it('passes a still-listed value through untouched', () => {
     expect(sanitizePostSort('updated')).toBe('updated');
-    // 'oldest' is listed again ("Least recently updated").
+    // 'oldest' is listed again ("Oldest first").
     expect(sanitizePostSort('oldest')).toBe('oldest');
     expect(sanitizePostSort('target')).toBe('target');
   });
@@ -728,7 +728,7 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
     expect(menuRows(body()).map(rowLabel)).not.toContain('This week');
   });
 
-  it('Sort lists Recently updated, Least recently updated and Due date and fires onOrderChange', () => {
+  it('Sort lists Newest first, Oldest first and Due date and fires onOrderChange', () => {
     let picked: string | null = null;
     const rows = menuRows(
       body({
@@ -737,7 +737,7 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
         },
       }),
     );
-    expect(rows.map(rowLabel)).toEqual(['Recently updated', 'Least recently updated', 'Due date']);
+    expect(rows.map(rowLabel)).toEqual(['Newest first', 'Oldest first', 'Due date']);
     (rows[1]!.props as { onClick: () => void }).onClick();
     expect(picked).toBe('oldest');
     (rows[2]!.props as { onClick: () => void }).onClick();
@@ -792,9 +792,7 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
         order = o;
       },
     });
-    const oldest = menuRows(shell(sortTree).body).find(
-      (r) => rowLabel(r) === 'Least recently updated',
-    )!;
+    const oldest = menuRows(shell(sortTree).body).find((r) => rowLabel(r) === 'Oldest first')!;
     (oldest.props as { onClick: () => void }).onClick();
     expect(order).toBe('oldest');
     expect(hookState.calls[0]).toEqual([false]);
@@ -1162,9 +1160,9 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
     const labels = menuRows(body).map(rowLabel);
     expect(labels).toContain('This week');
     expect(labels).toContain('Custom…');
-    expect(labels).toContain('Recently updated');
+    expect(labels).toContain('Newest first');
     expect(labels).toContain('Due date');
-    expect(labels.indexOf('Custom…')).toBeLessThan(labels.indexOf('Recently updated'));
+    expect(labels.indexOf('Custom…')).toBeLessThan(labels.indexOf('Newest first'));
     const menus = findAll(body, (el) => (el.props as { role?: string }).role === 'menu').map(
       (el) => (el.props as { 'aria-label': string })['aria-label'],
     );
@@ -1176,7 +1174,7 @@ describe('PipelineFilterControl: one icon button, one sheet holding due date and
     const onDateWindowChange = vi.fn();
     const { body } = shell(control({ onOrderChange, onDateWindowChange }));
     const rows = menuRows(body);
-    const oldest = rows.find((r) => rowLabel(r) === 'Least recently updated')!;
+    const oldest = rows.find((r) => rowLabel(r) === 'Oldest first')!;
     (oldest.props as { onClick: () => void }).onClick();
     expect(onOrderChange).toHaveBeenCalledWith('oldest');
     const week = rows.find((r) => rowLabel(r) === 'This week')!;
