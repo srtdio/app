@@ -15,7 +15,7 @@ import { roleLabel } from '@/components/pages/settings/members-data';
 import { ALL_MENTION, ALL_MENTION_LINE, type MentionMember } from '@/lib/chat/mentions';
 
 /** The accessible name of the picker's list. */
-export const MENTION_PICKER_LABEL = 'Mention someone';
+const MENTION_PICKER_LABEL = 'Mention someone';
 
 /** Step the active row with Up / Down, wrapping at both ends. Pure. */
 export function stepActive(active: number, count: number, key: 'ArrowUp' | 'ArrowDown'): number {
@@ -24,7 +24,7 @@ export function stepActive(active: number, count: number, key: 'ArrowUp' | 'Arro
   return (next + count) % count;
 }
 
-export interface MentionPickerProps {
+interface MentionPickerProps {
   members: readonly MentionMember[];
   /** The row Enter / Tab would pick. */
   active: number;

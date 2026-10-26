@@ -35,11 +35,11 @@ type Functions = Database['public']['Functions'];
 export type ScheduledRow = Database['public']['Tables']['chat_scheduled_messages']['Row'];
 
 /** The earliest a message may be scheduled ahead of now. */
-export const MIN_LEAD_MS = 60_000;
+const MIN_LEAD_MS = 60_000;
 /** The latest a message may be scheduled ahead of now (the proc's 365 days). */
 export const MAX_LEAD_MS = 365 * 24 * 60 * 60 * 1000;
 /** Presets send at this local hour. */
-export const PRESET_HOUR = 9;
+const PRESET_HOUR = 9;
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -85,7 +85,7 @@ export function formatClock(date: Date): string {
 }
 
 /** "Wed 7 Oct" (plus the year when it differs from now's). Pure. */
-export function formatDay(date: Date, now: Date): string {
+function formatDay(date: Date, now: Date): string {
   const base = `${WEEKDAYS[date.getDay()]} ${date.getDate()} ${MONTHS[date.getMonth()]}`;
   return date.getFullYear() === now.getFullYear() ? base : `${base} ${date.getFullYear()}`;
 }
@@ -154,8 +154,8 @@ export function fromInputs(date: string, time: string): Date | null {
 
 export { shortZoneName } from '@/lib/time';
 
-export const SCHEDULE_RANGE_COPY = 'Pick a time at least 1 minute from now';
-export const SCHEDULE_LIMIT_COPY = 'You already have 100 scheduled messages';
+const SCHEDULE_RANGE_COPY = 'Pick a time at least 1 minute from now';
+const SCHEDULE_LIMIT_COPY = 'You already have 100 scheduled messages';
 export const SCHEDULE_FAILED_COPY = "Couldn't schedule. Try again.";
 /** A picked file did not upload: nothing was scheduled. */
 export const SCHEDULE_UPLOAD_FAILED_COPY = "Couldn't upload. Try again.";
@@ -200,7 +200,7 @@ export function soonestFirst(rows: readonly ScheduledRow[]): ScheduledRow[] {
 /** Window event after any successful scheduled write; detail names the chat. */
 export const SCHEDULED_CHANGED_EVENT = 'sorted:scheduled-changed';
 
-export interface ScheduledChangedDetail {
+interface ScheduledChangedDetail {
   channelId: string;
 }
 
@@ -254,7 +254,7 @@ export interface ScheduleFile {
   versionId: string | null;
 }
 
-export type ScheduleUploadOutcome =
+type ScheduleUploadOutcome =
   | { ok: true; attachments: MessageAttachment[] }
   | { ok: false; aborted: true }
   | { ok: false; aborted: false; failedKeys: string[] };
@@ -306,7 +306,7 @@ export async function uploadScheduleFiles(input: {
   };
 }
 
-export type ScheduleWithFilesOutcome<T> =
+type ScheduleWithFilesOutcome<T> =
   | { kind: 'written'; result: T }
   | { kind: 'aborted' }
   | { kind: 'upload-failed'; failedKeys: string[] };
@@ -452,7 +452,7 @@ async function runProc<T>(
   }
 }
 
-export interface ScheduleParams {
+interface ScheduleParams {
   client: Client;
   /** Client-generated id (newMessageId); the sent message keeps it. */
   id: string;
@@ -508,7 +508,7 @@ export function scheduleMessage(
   );
 }
 
-export interface ScheduledUpdateParams {
+interface ScheduledUpdateParams {
   client: Client;
   id: string;
   sendAt: Date;
@@ -541,7 +541,7 @@ export function updateScheduledMessage(
   );
 }
 
-export interface ScheduledIdParams {
+interface ScheduledIdParams {
   client: Client;
   id: string;
   traceId: string;

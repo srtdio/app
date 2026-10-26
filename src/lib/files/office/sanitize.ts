@@ -41,7 +41,7 @@ const ALLOWED_TAGS = [
 const ALLOWED_ATTR = ['class', 'colspan', 'rowspan', 'src', 'alt', 'width', 'height'];
 
 /** The only URLs that survive: inline raster pictures. */
-export const SAFE_IMAGE_URL = /^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i;
+const SAFE_IMAGE_URL = /^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i;
 
 const FORBID_TAGS = [
   'script',
@@ -153,7 +153,7 @@ export function safeColor(value: string, fallback: string): string {
   return /^(?:#[0-9a-f]{3,8}|rgba?\([0-9., %]+\))$/i.test(v) ? v : fallback;
 }
 
-export interface SrcdocOptions {
+interface SrcdocOptions {
   /** Sanitized HTML, one string per page. */
   pages: string[];
   /** Page surface colour (the PDF viewer's paper token). */

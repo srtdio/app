@@ -9,7 +9,7 @@ import { ABSENT_SKIP_MS } from '@/lib/induction';
 import { viewportSize } from '@/lib/use-is-laptop';
 
 /** How long the first step after a load waits for its control before going back to an earlier one on screen. */
-export const RESUME_BACK_MS = 700;
+const RESUME_BACK_MS = 700;
 import { fieldValue, inChrome, textFieldOf } from './guide-dom';
 
 function targetNode(event: Event): Node | undefined {
@@ -41,9 +41,9 @@ export interface CompletionInput {
 }
 
 /** How long after a tap the DOM may confirm it; after that the step stays. */
-export const TAP_CONFIRM_MS = 4000;
+const TAP_CONFIRM_MS = 4000;
 
-export interface Seen {
+interface Seen {
   key: string;
   done: boolean;
   /** This step's own control has been on screen at least once. */
@@ -150,13 +150,12 @@ export function useStepCompletion(input: CompletionInput, onComplete: () => void
 }
 
 const GUARDED_EVENTS = ['pointerdown', 'mousedown', 'click'] as const;
-export const NUDGE_MS = 300;
 
 /** Whether an event came from the person; injectable so tests can mark synthetic taps as theirs. */
 export const eventTrust = { isTrusted: (event: Event): boolean => event.isTrusted };
 
 /** Regions besides the control that take taps: the next control (field steps), the control's form. */
-export interface GuardAllowed {
+interface GuardAllowed {
   next: HTMLElement | undefined;
   form: HTMLElement | undefined;
 }
@@ -264,7 +263,7 @@ export function useElementSize(
 }
 
 /** How long after the last keystroke the entry hand may show. */
-export const TYPING_PAUSE_MS = 900;
+const TYPING_PAUSE_MS = 900;
 
 /**
  * True while the person is typing (a keystroke in the last TYPING_PAUSE_MS),
@@ -292,7 +291,7 @@ export function useTypingNow(pauseMs: number = TYPING_PAUSE_MS): boolean {
 export const APP_TYPING_PAUSE_MS = 1500;
 
 /** The longest a step waits for the page behind it before it points anyway. */
-export const PHOTOS_WAIT_CAP_MS = 5000;
+const PHOTOS_WAIT_CAP_MS = 5000;
 
 /**
  * Something on screen is still arriving: a photo not yet painted, a list still
@@ -339,7 +338,7 @@ export function usePhotosSettled(stepKey: string): boolean {
 }
 
 /** A gap in the dim shorter than this stays dimmed: no bright flash between steps. */
-export const DIM_HOLD_MS = 600;
+const DIM_HOLD_MS = 600;
 
 let lastDimAt = 0;
 

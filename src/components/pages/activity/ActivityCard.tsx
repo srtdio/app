@@ -166,7 +166,7 @@ const SCOPE_TAG: Record<string, string> = {
 };
 
 /** The welcome row's top line. */
-export const WELCOME_LABEL = 'Welcome';
+const WELCOME_LABEL = 'Welcome';
 
 /** "1 point" / "N points". UI vocabulary: the DB stores these as checkpoints. */
 function pointsPhrase(n: number): string {
@@ -223,7 +223,7 @@ function actorLine(item: ActivityItem, who: string | null): string {
 }
 
 /** The newest entry of a group, whatever the sort direction (ties keep the first). */
-export function newestEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
+function newestEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
   let newest: ActivityItem | undefined;
   let newestMs = Number.NEGATIVE_INFINITY;
   for (const entry of group) {
@@ -306,7 +306,7 @@ function IconTile({ kind, children }: { kind: string; children: ReactNode }): Re
  * body (a brief title, a filename) clamped to 3 lines at the bottom. Fills its box;
  * the caller supplies the square and the panel-3 background.
  */
-export function TextTile({
+function TextTile({
   eyebrow,
   icon,
   body,

@@ -48,7 +48,7 @@ function currentIds(data: Pick<WorkspaceMembersData, 'rows'>): Set<string> {
  * is held, marked with current membership, and the ids the cache cannot answer
  * (no profile held: never a member here, or a profile RLS hid). Pure.
  */
-export function mentionProfilesFromMembers(
+function mentionProfilesFromMembers(
   data: Pick<WorkspaceMembersData, 'rows' | 'profiles'>,
   userIds: readonly string[],
 ): { profiles: MentionProfile[]; missing: string[] } {
@@ -78,7 +78,7 @@ export function mentionProfilesFromMembers(
  * out (readChatMembers leaves it out too); a current member whose profile is
  * not held is `missing` (read it). Pure.
  */
-export function chatMembersFromMembers(
+function chatMembersFromMembers(
   data: Pick<WorkspaceMembersData, 'rows' | 'profiles'>,
   userIds: readonly string[],
 ): { members: ChatMember[]; missing: string[] } {

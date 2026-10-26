@@ -23,7 +23,7 @@ import {
 import { cn } from '@/lib/cn';
 
 /** Pointer travel (px) on the grip before the row lifts. */
-export const GRIP_LIFT_PX = 4;
+const GRIP_LIFT_PX = 4;
 
 /**
  * The 28x44 drag handle (edit mode). Always shown, muted; a mouse or a finger

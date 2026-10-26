@@ -14,7 +14,7 @@ import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 export const CHUNK_RELOAD_KEY = 'sorted:chunk-reload';
 
 /** How long the stale check waits for the HEAD response before giving up. */
-export const STALE_PROBE_TIMEOUT_MS = 3000;
+const STALE_PROBE_TIMEOUT_MS = 3000;
 
 export interface ChunkReloadDeps {
   /** A getter because touching window.sessionStorage itself can throw. */

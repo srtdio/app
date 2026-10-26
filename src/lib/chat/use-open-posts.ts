@@ -166,7 +166,7 @@ export interface UseOpenPosts extends OpenPostsView {
 }
 
 /** What the hook holds: the round's workspace and key and the view shown. */
-export interface OpenPostsState {
+interface OpenPostsState {
   workspaceId: string;
   key: string;
   view: OpenPostsView;

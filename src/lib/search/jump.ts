@@ -11,9 +11,9 @@ import { normalizeQuery, queryWords } from '@/lib/chat/search';
 import { entryUsr } from '@/lib/chat/use-history-step';
 
 /** The searched words a destination colours. */
-export const SEARCH_TERM_PARAM = 'q';
+const SEARCH_TERM_PARAM = 'q';
 /** A target id the destination's own params do not carry (a plan item in its plan). */
-export const JUMP_TARGET_PARAM = 'at';
+const JUMP_TARGET_PARAM = 'at';
 
 /** A path with the searched words (and, optionally, a target) added. No query: unchanged. Pure. */
 export function withSearchJump(
@@ -31,12 +31,12 @@ export function withSearchJump(
 }
 
 /** What a destination takes from the url: the words to colour and the generic target. Pure. */
-export interface SearchJump {
+interface SearchJump {
   words: readonly string[];
   targetId: string | null;
 }
 
-export const NO_SEARCH_JUMP: SearchJump = { words: [], targetId: null };
+const NO_SEARCH_JUMP: SearchJump = { words: [], targetId: null };
 
 /** The jump a url carries (words empty and target null without one). Pure. */
 export function readSearchJump(params: URLSearchParams): SearchJump {

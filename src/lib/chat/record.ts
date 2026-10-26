@@ -131,7 +131,7 @@ export async function sendMessageRecord(params: SendRecordParams): Promise<SendR
   }
 }
 
-export interface EditRecordParams {
+interface EditRecordParams {
   client: Client;
   channelId: string;
   messageId: string;
@@ -147,7 +147,7 @@ export interface EditRecordParams {
   timeoutMs?: number;
 }
 
-export type EditRecordResult = SendRecordResult;
+type EditRecordResult = SendRecordResult;
 
 /**
  * Edit the body of an own message via chat_message_edit with an abort timeout.
@@ -241,7 +241,7 @@ async function voidProc<
   }
 }
 
-export interface ReactionRecordParams {
+interface ReactionRecordParams {
   client: Client;
   channelId: string;
   messageId: string;
@@ -269,7 +269,7 @@ export function removeReactionRecord(params: ReactionRecordParams): Promise<Writ
   });
 }
 
-export interface ReadCursorParams {
+interface ReadCursorParams {
   client: Client;
   channelId: string;
   messageId: string;
@@ -290,7 +290,7 @@ export type MarkType = 'commitment' | 'decision' | 'pending';
 /** Pending priority: 1 (P1), 2 (P2), or null (unranked). */
 export type MarkPriority = 1 | 2 | null;
 
-export interface MarkSetParams {
+interface MarkSetParams {
   client: Client;
   channelId: string;
   messageId: string;
@@ -320,7 +320,7 @@ export function setMarkRecord(params: MarkSetParams): Promise<WriteResult> {
   return voidProc(params.client, 'chat_mark_set', args as Functions['chat_mark_set']['Args']);
 }
 
-export interface MarkResolveParams {
+interface MarkResolveParams {
   client: Client;
   channelId: string;
   messageId: string;
@@ -346,7 +346,7 @@ export function reopenMarkRecord(params: MarkResolveParams): Promise<WriteResult
 }
 
 /** The proc's per-call cap on chat_message_delete ids. */
-export const DELETE_CHUNK_SIZE = 100;
+const DELETE_CHUNK_SIZE = 100;
 
 /** Split ids into consecutive chunks of at most `size` (order kept). */
 export function chunkIds(ids: readonly string[], size: number = DELETE_CHUNK_SIZE): string[][] {
@@ -355,7 +355,7 @@ export function chunkIds(ids: readonly string[], size: number = DELETE_CHUNK_SIZ
   return chunks;
 }
 
-export interface DeleteMessagesParams {
+interface DeleteMessagesParams {
   client: Client;
   channelId: string;
   messageIds: readonly string[];
@@ -365,7 +365,7 @@ export interface DeleteMessagesParams {
 }
 
 /** Deleted ids so far, plus the proc's message when a chunk failed. */
-export type DeleteMessagesResult =
+type DeleteMessagesResult =
   | { ok: true; deleted: string[] }
   | { ok: false; deleted: string[]; message: string };
 
@@ -391,7 +391,7 @@ export async function deleteMessagesRecord(
   return { ok: true, deleted };
 }
 
-export interface ClearChannelParams {
+interface ClearChannelParams {
   client: Client;
   channelId: string;
   traceId: string;
@@ -434,7 +434,7 @@ export interface RemoveFileTarget {
   assetId: string;
 }
 
-export interface RemoveFilesParams {
+interface RemoveFilesParams {
   client: Client;
   channelId: string;
   files: readonly RemoveFileTarget[];
@@ -444,7 +444,7 @@ export interface RemoveFilesParams {
 }
 
 /** Removed files so far, plus the proc's message when a chunk failed. */
-export type RemoveFilesResult =
+type RemoveFilesResult =
   | { ok: true; removed: RemoveFileTarget[] }
   | { ok: false; removed: RemoveFileTarget[]; message: string };
 

@@ -45,7 +45,7 @@ export const PNG_1X1 = Uint8Array.from(
   (c) => c.charCodeAt(0),
 );
 
-export interface DocxFixture {
+interface DocxFixture {
   /** Inner XML of <w:body>. */
   body: string;
   /** Extra word/_rels/document.xml.rels relationships. */
@@ -89,7 +89,7 @@ export function p(text: string, style?: string): string {
   return `<w:p>${pPr}<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 }
 
-export interface SheetFixture {
+interface SheetFixture {
   name: string;
   state?: 'hidden' | 'veryHidden';
   /** Inner XML of <worksheet> (cols, sheetData, mergeCells...). */

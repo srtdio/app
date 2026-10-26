@@ -51,7 +51,7 @@ function isFileVersionKind(kind: string): kind is FileVersionKind {
 }
 
 /** A stored-file version: bytes live in R2, so the byte columns are all set. */
-export interface FileVersionRef {
+interface FileVersionRef {
   id: string;
   assetId: string;
   versionNumber: number;
@@ -391,7 +391,7 @@ function toVersionRef(row: AssetVersionRow): VersionRef {
 const VERSION_COLS =
   'id,asset_id,version_number,kind,external_url,sha256,r2_key,mime_type,size_bytes';
 
-export interface SupabaseAssetEnv {
+interface SupabaseAssetEnv {
   SUPABASE_URL: string;
   SUPABASE_SECRET_KEY: string;
 }
@@ -800,7 +800,7 @@ export function createSupabaseAssetRepository(env: SupabaseAssetEnv): AssetRepos
 // In-memory implementation for tests.
 // ---------------------------------------------------------------------------
 
-export interface AuditRecord extends AuditEntry {
+interface AuditRecord extends AuditEntry {
   outcome: 'success';
 }
 

@@ -16,7 +16,7 @@ import type { PipelinePost, Stage } from '@srtdio/posts';
 /** The moves that ask first from the Pipeline. */
 export type ConfirmTarget = 'rejected' | 'parked' | 'review';
 
-export interface StageConfirmCopy {
+interface StageConfirmCopy {
   title: string;
   body: string | null;
   confirmLabel: string;
@@ -69,7 +69,7 @@ export function needsConfirm(from: Stage, to: Stage, fromSheet: boolean): to is 
   return fromSheet && from === 'draft' && to === 'review';
 }
 
-export interface StageMoveConfirmProps {
+interface StageMoveConfirmProps {
   /** The post and target waiting on a confirm; null renders it closed. */
   pending: { post: PipelinePost; to: ConfirmTarget } | null;
   creatorFirstName: string | null;
@@ -105,7 +105,7 @@ export function StageMoveConfirm(props: StageMoveConfirmProps): ReactElement | n
   );
 }
 
-export interface StageMoveConfirmViewProps extends StageMoveConfirmProps {
+interface StageMoveConfirmViewProps extends StageMoveConfirmProps {
   open: boolean;
   shown: { post: PipelinePost; to: ConfirmTarget } | null;
   reason: string;

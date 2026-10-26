@@ -109,7 +109,7 @@ export async function readIsPlatformOperator(client: Client, userId: string): Pr
   return res.data !== null;
 }
 
-export interface BootstrapResult {
+interface BootstrapResult {
   workspaces: WorkspaceRow[];
   error: string | null;
 }
@@ -228,7 +228,7 @@ interface WorkspaceContextValue {
 }
 
 /** The workspace fields workspace_update may change. */
-export type WorkspacePatch = Partial<Pick<WorkspaceRow, 'name' | 'logo_url' | 'timezone'>>;
+type WorkspacePatch = Partial<Pick<WorkspaceRow, 'name' | 'logo_url' | 'timezone'>>;
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 

@@ -14,7 +14,7 @@ import { POST_CHANGED_EVENT, firstName } from '@/components/chat/post-card';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 
 /** The actions that ask first, then move the post. */
-export type ConfirmKind = 'approve' | 'reject' | 'send_review';
+type ConfirmKind = 'approve' | 'reject' | 'send_review';
 
 /**
  * The agency's quiet line on a post in review: "Waiting on approvers since 20
@@ -48,7 +48,7 @@ export function postSubject(title: string | null | undefined): string {
 }
 
 /** The confirm block's question and its consequence line. */
-export interface ConfirmCopy {
+interface ConfirmCopy {
   question: string;
   detail: string;
   confirmLabel: string;
@@ -123,7 +123,7 @@ export function durationLabel(ms: number | null): string {
 }
 
 /** The minimal gallery item shape the strip reads. */
-export interface StripItem {
+interface StripItem {
   kind: string;
   mimeType: string | null;
   durationMs: number | null;
@@ -158,7 +158,7 @@ export function stageTagLabel(stage: string): string {
 }
 
 /** One key/value row under the title (Stage renders its Tag, so it is not here). */
-export interface DetailRow {
+interface DetailRow {
   key: 'target' | 'format' | 'approved';
   label: string;
   value: string;

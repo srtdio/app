@@ -37,17 +37,17 @@ import { useSession } from '@/lib/session-context';
 import { useCurrentProfile, type CurrentProfile } from '@/lib/use-current-profile';
 
 /** What a save does to the photo: leave it, replace it, or clear it. */
-export type PhotoChange = { kind: 'keep' } | { kind: 'set'; url: string } | { kind: 'clear' };
+type PhotoChange = { kind: 'keep' } | { kind: 'set'; url: string } | { kind: 'clear' };
 
 /** p_avatar_url for a change: NULL keeps the current photo, '' clears it. Pure. */
-export function avatarArg(change: PhotoChange): string | null {
+function avatarArg(change: PhotoChange): string | null {
   if (change.kind === 'keep') return null;
   if (change.kind === 'clear') return '';
   return change.url;
 }
 
 /** The user_profile_update args for one save. Pure. */
-export function profileUpdateArgs(input: {
+function profileUpdateArgs(input: {
   displayName: string;
   designation: string;
   emailOptIn: boolean;
@@ -107,7 +107,7 @@ export async function submitProfileChange(deps: {
 }
 
 /** The saved fields a photo-only change writes back unchanged. */
-export type SavedFields = Pick<CurrentProfile, 'display_name' | 'designation' | 'email_opt_in'>;
+type SavedFields = Pick<CurrentProfile, 'display_name' | 'designation' | 'email_opt_in'>;
 
 /**
  * Use photo: crop, upload, then save with the SAVED fields (never unsaved form
@@ -230,7 +230,7 @@ export function canRemovePhoto(avatarUrl: string | null, view: PhotoView): boole
 }
 
 /** The text fields and which of them the user has typed into. */
-export interface TextFields {
+interface TextFields {
   name: string;
   designation: string;
   nameEdited: boolean;

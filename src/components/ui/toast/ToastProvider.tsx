@@ -27,7 +27,7 @@ const TOAST_KEYFRAMES =
   '@keyframes sorted-toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(0.5rem)}}';
 
 /** A toast plus its closing-phase flag. Kept local so ToastModel stays minimal. */
-export interface ManagedToast extends ToastModel {
+interface ManagedToast extends ToastModel {
   /** True once dismiss() starts the exit; the card unmounts after EXIT_MS. */
   leaving: boolean;
 }
@@ -38,7 +38,7 @@ export interface ManagedToast extends ToastModel {
  * fake timers (mirrors createLongPressController). State is in memory only;
  * nothing touches localStorage/sessionStorage.
  */
-export interface ToastStore extends ToastApi {
+interface ToastStore extends ToastApi {
   /** End a toast as accepted (its X or timer): onExpire once, then dismiss. */
   expire: (id: string) => void;
   /** Press a toast's action: run it, then dismiss; onExpire never runs. */

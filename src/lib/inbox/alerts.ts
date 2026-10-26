@@ -162,7 +162,7 @@ export function taskFieldsOf(row: Pick<InboxEntryRow, 'payload'>): TaskAlertFiel
 export const PLAN_DELETED_TOAST = 'This plan was deleted';
 
 /** What a plan alert's line names, resolved by the caller (actor, plan and item). */
-export interface PlanAlertNames {
+interface PlanAlertNames {
   who: string | null;
   plan: string | null;
   item: string | null;
@@ -345,7 +345,7 @@ export function scheduledPreview(row: ScheduledRow | undefined, nameOf: NameOf):
 // ---------------------------------------------------------------------------
 
 /** The most ids one IN read carries. */
-export const IN_CHUNK = 100;
+const IN_CHUNK = 100;
 
 /** Split ids into IN-sized chunks. Pure. */
 export function chunked(ids: readonly string[], size: number = IN_CHUNK): string[][] {

@@ -62,7 +62,7 @@ export interface ConceptForm {
 export const EMPTY_CONCEPT: ConceptForm = { title: '', description: '', files: [], date: '' };
 
 /** Max description length (the proc's limit). */
-export const CONCEPT_DESCRIPTION_MAX = 5000;
+const CONCEPT_DESCRIPTION_MAX = 5000;
 
 export const FIELD =
   'min-h-[44px] w-full rounded-lg border border-border bg-panel-2 px-3.5 text-input text-fg placeholder:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60 md:text-base';
@@ -122,7 +122,7 @@ export function useConceptFilesRead(
 }
 
 /** The description's placeholder. */
-export const CONCEPT_DESCRIPTION_PLACEHOLDER =
+const CONCEPT_DESCRIPTION_PLACEHOLDER =
   'What is the concept? The idea, the hook, what approvers will see.';
 
 /** The tiles' selection for a form date: '' is No date; a day outside the plan selects none. Pure. */

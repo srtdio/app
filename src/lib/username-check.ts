@@ -9,7 +9,7 @@ import { usernameAvailable } from '@srtdio/rpc';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 
-export type UsernameCheck = 'free' | 'taken' | 'error';
+type UsernameCheck = 'free' | 'taken' | 'error';
 
 /** Ask once; null when the server gave no answer. */
 async function askOnce(value: string, traceId: string): Promise<boolean | null> {

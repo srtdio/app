@@ -14,7 +14,7 @@ export const PRESENCE_EVENT_HANDLER_ID = 'chat-presence';
 export const PRESENCE_SUBSCRIBE_EXPIRY_SECONDS = 604800; // 7 days
 
 /** Peer presence as the header sees it. `lastTimeMs` is epoch ms or null. */
-export interface PresenceState {
+interface PresenceState {
   online: boolean;
   lastTimeMs: number | null;
 }

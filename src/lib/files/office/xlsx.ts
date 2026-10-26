@@ -49,7 +49,7 @@ const MERGE_WORK_CAP = 4_000_000;
  * stays within one entry per shown cell however many merges a file declares.
  * Overlapping (malformed) merges after the first are dropped. Pure.
  */
-export function keepMerges(merges: SheetMerge[], rows: number, cols: number): SheetMerge[] {
+function keepMerges(merges: SheetMerge[], rows: number, cols: number): SheetMerge[] {
   const taken = new Uint8Array(Math.max(rows * cols, 0));
   const out: SheetMerge[] = [];
   let work = 0;
@@ -76,7 +76,7 @@ export function keepMerges(merges: SheetMerge[], rows: number, cols: number): Sh
 const STOP = new Error('stop');
 
 /** "A" -> 0, "AB" -> 27; -1 when not letters. Pure. */
-export function columnIndex(letters: string): number {
+function columnIndex(letters: string): number {
   let n = 0;
   for (const ch of letters.toUpperCase()) {
     const code = ch.charCodeAt(0);
@@ -86,20 +86,8 @@ export function columnIndex(letters: string): number {
   return n - 1;
 }
 
-/** 0 -> "A", 27 -> "AB". Pure. */
-export function columnLetters(index: number): string {
-  let n = index + 1;
-  let out = '';
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    out = String.fromCharCode(65 + rem) + out;
-    n = Math.floor((n - 1) / 26);
-  }
-  return out;
-}
-
 /** "C12" -> { r: 11, c: 2 }, or null. Pure. */
-export function parseRef(ref: string): { r: number; c: number } | null {
+function parseRef(ref: string): { r: number; c: number } | null {
   const m = /^\$?([A-Za-z]{1,3})\$?([0-9]{1,7})$/.exec(ref.trim());
   if (m === null || m[1] === undefined || m[2] === undefined) return null;
   const c = columnIndex(m[1]);

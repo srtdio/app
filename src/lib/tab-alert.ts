@@ -23,7 +23,7 @@ export interface TabAlert {
 }
 
 /** One title step: even steps show the count, odd steps the next event. */
-export const ALERT_STEP_MS = 1_400;
+const ALERT_STEP_MS = 1_400;
 
 /** Icon dot colours: amber for Activity, blue for chat (prototype values). */
 export const ALERT_DOT: Readonly<Record<TabAlertKind, string>> = {
@@ -133,7 +133,7 @@ function render(): void {
 }
 
 /** Stop alerting: restore the title and icon. Safe to call any time. */
-export function clearTabAlert(): void {
+function clearTabAlert(): void {
   if (timer !== null) window.clearInterval(timer);
   timer = null;
   queue = [];

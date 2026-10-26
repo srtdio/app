@@ -25,7 +25,7 @@ export type CoverLookup = (postId: string) => CardFirstMedia | null | undefined;
 
 export const COVER_TTL_MS = 5 * 60_000;
 
-export interface CoverEntry {
+interface CoverEntry {
   cover: CardFirstMedia | null;
   at: number;
 }

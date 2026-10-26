@@ -37,7 +37,7 @@ import {
   type PreviewMedia,
 } from '@/components/preview/preview-math';
 
-export type PreviewMediaKind = PreviewMedia | 'document' | 'none';
+type PreviewMediaKind = PreviewMedia | 'document' | 'none';
 
 /** What the first gallery item is, for the preview. */
 export function previewMediaKind(item: GalleryItem | null): PreviewMediaKind {

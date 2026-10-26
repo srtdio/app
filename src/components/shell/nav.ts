@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { IconAssets, IconBriefs, IconChat, IconPipeline, IconPlan } from '@/components/ui/icons';
 
-export interface NavItem {
+interface NavItem {
   to: string;
   label: string;
   Icon: ComponentType<{ size?: number; className?: string }>;

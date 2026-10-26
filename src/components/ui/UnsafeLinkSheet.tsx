@@ -18,7 +18,7 @@ import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { DUR_BASE_MS } from '@/lib/motion';
 
-export interface UnsafeLinkSheetProps {
+interface UnsafeLinkSheetProps {
   open: boolean;
   url: string;
   reasons: readonly string[];

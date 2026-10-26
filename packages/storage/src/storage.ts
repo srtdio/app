@@ -218,8 +218,6 @@ export type TracedFetch = (
   traceId?: string,
 ) => Promise<Response>;
 
-export const AVATAR_BUCKET = 'user-avatars';
-
 /**
  * Folder segment for an asset kind. The bucket is already per-workspace, so the
  * key groups by kind rather than repeating the workspace id. Pluralized for the

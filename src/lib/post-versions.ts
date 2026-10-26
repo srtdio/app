@@ -23,7 +23,7 @@ export interface PostVersionView {
 }
 
 /** What the read-only old-version view renders: nothing else is versioned. */
-export interface ParsedSnapshot {
+interface ParsedSnapshot {
   caption: string | null;
   /** Ordered asset_version_id strings; [] for legacy/malformed snapshots. */
   galleryVersionIds: string[];

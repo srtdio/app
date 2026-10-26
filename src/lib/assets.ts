@@ -208,7 +208,7 @@ export interface AssetCursor {
 export type AssetPageNext = { done: true } | { done: false; cursor: AssetCursor };
 
 /** One page of the library, newest first. */
-export interface AssetPage {
+interface AssetPage {
   items: AssetListItem[];
   next: AssetPageNext;
 }
@@ -573,7 +573,7 @@ export function canBulkDelete(count: number): boolean {
 }
 
 /** Outcome of a bulk delete: the ids that succeeded and the ones that failed. */
-export interface BatchDeleteOutcome {
+interface BatchDeleteOutcome {
   succeeded: string[];
   failed: { id: string; message: string }[];
 }
@@ -632,7 +632,7 @@ export interface BatchStepResult {
 }
 
 /** Where a batched bulk delete ended. */
-export interface BatchedDeleteOutcome {
+interface BatchedDeleteOutcome {
   /** Every id the server deleted, across the batches that succeeded. */
   deleted: string[];
   /** Ids skipped because they are in use (the step's own pre-check). */
@@ -755,7 +755,7 @@ export function sortAssets(items: AssetListItem[], sort: AssetSort): AssetListIt
 }
 
 /** What an image card's tile should render: a loading shimmer, the image, or a fallback. */
-export type ImageTileState = 'shimmer' | 'image' | 'fallback';
+type ImageTileState = 'shimmer' | 'image' | 'fallback';
 
 /**
  * Decide the image tile state from the presign lifecycle. A presign-or-load
@@ -1024,13 +1024,6 @@ export async function purgeAssets(config: PurgeConfig): Promise<Result<PurgeResp
 // then one read per parent table), never one per asset.
 // ---------------------------------------------------------------------------
 
-/** The delete confirm body, under "Delete <name>?". */
-export const DELETE_CONFIRM_MESSAGE =
-  'It moves to Recently deleted and is gone for good after 31 days. It keeps using storage until then, unless the owner empties it earlier.';
-
-/** What a delete call came back with, for the confirm surfaces. */
-export type AssetDeleteOutcome = 'deleted' | 'in_use' | 'failed';
-
 /** Whether a delete proc failed because the file is still attached somewhere live. */
 export function isAssetInUseError(error: { message: string }): boolean {
   return error.message === 'asset_in_use';
@@ -1044,7 +1037,7 @@ export interface AssetParent {
   href: string;
 }
 
-export interface AssetInUse {
+interface AssetInUse {
   assetId: string;
   parent: AssetParent;
 }

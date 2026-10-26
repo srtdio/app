@@ -38,9 +38,9 @@ export type RosterKind = 'created' | 'renamed' | 'photo' | 'members';
 const ROSTER_KINDS: readonly RosterKind[] = ['created', 'renamed', 'photo', 'members'];
 
 /** A roster send (and a roster reload) that has not answered by now counts as failed. */
-export const ROSTER_TIMEOUT_MS = 5_000;
+const ROSTER_TIMEOUT_MS = 5_000;
 /** Roster commands arriving this close together share one reload. */
-export const ROSTER_DEBOUNCE_MS = 500;
+const ROSTER_DEBOUNCE_MS = 500;
 
 /** The ext of a roster command. */
 export function rosterExt(channelId: string, kind: RosterKind): Record<string, unknown> {
@@ -336,7 +336,7 @@ export function createRosterReloader(params: {
 }
 
 /** A verified message for a chat not in the roster yet, held for a re-read (max total). */
-export const HELD_MAX_MS = 10_000;
+const HELD_MAX_MS = 10_000;
 
 /**
  * Messages held for a roster re-read. Each is tagged with how many re-reads
@@ -427,13 +427,13 @@ export function reloadedFor(
 }
 
 /** What the open chat does after a roster reload. */
-export type OpenChannelStep =
+type OpenChannelStep =
   | { kind: 'keep' }
   | { kind: 'update'; channel: ChannelSummary }
   | { kind: 'close' };
 
 /** Whether a roster row changed anything the open chat shows or routes by. Pure. */
-export function summaryChanged(a: ChannelSummary, b: ChannelSummary): boolean {
+function summaryChanged(a: ChannelSummary, b: ChannelSummary): boolean {
   return (
     a.title !== b.title ||
     a.avatarUrl !== b.avatarUrl ||

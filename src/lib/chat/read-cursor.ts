@@ -9,7 +9,7 @@ export const READ_CURSOR_DEBOUNCE_MS = 1_000;
 /** chat_unread_counts is re-read this long after the last incoming live message. */
 export const UNREAD_REFRESH_DEBOUNCE_MS = 2_000;
 
-export interface Debouncer<T> {
+interface Debouncer<T> {
   /** Schedule `fn` with the latest value; an earlier pending call is replaced. */
   schedule: (value: T) => void;
   /** Drop the pending call, if any. */

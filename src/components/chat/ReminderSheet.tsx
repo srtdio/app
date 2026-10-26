@@ -34,11 +34,11 @@ import {
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
-export const REMINDER_SHEET_TITLE = 'Remind me';
+const REMINDER_SHEET_TITLE = 'Remind me';
 /** The sheet's title while a reminder is pending (change mode). */
 export const REMINDER_CHANGE_TITLE = 'Reminder';
 export const CANCEL_REMINDER_LABEL = 'Cancel reminder';
-export const REMINDER_HELPER = 'Any time from 1 minute to 1 year ahead.';
+const REMINDER_HELPER = 'Any time from 1 minute to 1 year ahead.';
 
 /** A preset row's right text: "3:20 PM" today, else "Sun 4 Oct, 9:00 AM". Pure. */
 export function presetDetail(preset: ReminderPreset, now: Date): string {

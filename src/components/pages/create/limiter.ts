@@ -4,7 +4,7 @@
 /** Up to three files upload at once. */
 export const UPLOAD_CONCURRENCY = 3;
 
-export interface Limiter {
+interface Limiter {
   run<T>(job: () => Promise<T>): Promise<T>;
 }
 

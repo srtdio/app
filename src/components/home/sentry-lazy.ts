@@ -6,7 +6,7 @@ type SentryModule = typeof import('@/lib/sentry');
 
 let loading: Promise<SentryModule> | null = null;
 
-export function loadSentry(): Promise<SentryModule> {
+function loadSentry(): Promise<SentryModule> {
   loading ??= import('@/lib/sentry').then((mod) => {
     mod.initSentry();
     return mod;

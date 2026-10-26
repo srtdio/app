@@ -24,10 +24,10 @@ import { readPostCards, type PostCardRow } from '../../../packages/posts/src/rea
 export type PostRefPost = Pick<PostCardRow, 'id' | 'number' | 'title' | 'thumbnailAssetVersionId'>;
 
 /** A post in the batch: its row, null when not visible, undefined while unknown. */
-export type PostRefLookup = (postId: string) => PostCardRow | null | undefined;
+type PostRefLookup = (postId: string) => PostCardRow | null | undefined;
 
 /** One thread's chip batch: a memo of resolved posts and the reads that fill it. */
-export interface ChipBatch {
+interface ChipBatch {
   get: PostRefLookup;
   /** A read for the post has finished or timed out at least once. */
   attempted: (postId: string) => boolean;
@@ -89,7 +89,7 @@ export function createChipBatch(
 }
 
 /** What the thread reads from its chip batch. */
-export interface ChipLookup {
+interface ChipLookup {
   postRef: PostRefLookup;
   /** The post is resolved (a row or null) or a read for it has been attempted. */
   chipSettled: (postId: string) => boolean;

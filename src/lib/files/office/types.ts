@@ -27,8 +27,6 @@ export const THUMB_GRID_ROWS = 8;
 export const THUMB_GRID_COLS = 5;
 export const THUMB_CELL_CHARS = 40;
 
-export type OfficeKind = 'docx' | 'xlsx';
-
 /** A Word document as escaped HTML (sanitized again on the main thread before srcdoc). */
 export interface DocxView {
   kind: 'docx';

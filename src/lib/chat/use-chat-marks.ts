@@ -46,7 +46,7 @@ import {
 import { sendSignal, type TypingConnection } from '@/lib/chat/typing';
 import type { ChatConnection } from '@/lib/chat/types';
 
-export interface UseChatMarks {
+interface UseChatMarks {
   /** Every mark of the open channel keyed by message id (resolved included). */
   marks: Map<string, ChatMark>;
   /**

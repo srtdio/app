@@ -157,7 +157,7 @@ export function createNotesEnsurer(
 }
 
 /** Wait for an ensure at most this long before the thread shows its Retry. */
-export const NOTES_OPEN_WAIT_MS = 5_000;
+const NOTES_OPEN_WAIT_MS = 5_000;
 
 /** Race an ensure against the open wait; a timeout is a failure. Never throws. */
 export async function waitForNotes(

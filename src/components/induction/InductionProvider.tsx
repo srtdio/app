@@ -2,7 +2,7 @@
 // what the guide shows (resolveGuide over induction_state and the workspace
 // facts), the screens it can open (the default group, the post), the copy
 // context, and the moves (to a step, Start, Done). Pages read the active step
-// through useInductionStepId and the post sheet's preset through
+// through the provider and the post sheet's preset through
 // useInductionPostPreset; both are safe without a provider (tests, screens
 // outside the shell).
 
@@ -87,12 +87,6 @@ export function useInduction(): InductionContextValue | null {
   return useContext(InductionContext);
 }
 
-/** The active step's id, or '' when no step is up. */
-export function useInductionStepId(): string {
-  const ctx = useContext(InductionContext);
-  return ctx !== null && ctx.resolution.kind === 'step' ? ctx.resolution.step.id : '';
-}
-
 /** The post sheet preset while a first post step is up; undefined otherwise. */
 export function useInductionPostPreset(): PostSheetPreset | undefined {
   return useContext(InductionContext)?.postPreset;
@@ -101,7 +95,7 @@ export function useInductionPostPreset(): PostSheetPreset | undefined {
 const OFF: Resolution = { kind: 'off' };
 
 /** "<Brand> - <Platform>" split into its two halves. */
-export function splitWorkspaceLabel(label: string): { brand: string; platform: string } {
+function splitWorkspaceLabel(label: string): { brand: string; platform: string } {
   const at = label.lastIndexOf(' - ');
   if (at < 0) return { brand: label.trim(), platform: '' };
   return { brand: label.slice(0, at).trim(), platform: label.slice(at + 3).trim() };
@@ -233,7 +227,7 @@ function useSampleSeed(input: { on: boolean; workspaceId: string | null }): void
 }
 
 /** On <html> while the sample week is being seeded. */
-export const SEEDING_ATTR = 'data-guide-seeding';
+const SEEDING_ATTR = 'data-guide-seeding';
 
 const STARTED_KEY = 'srtdio.induction.lookAroundStartedAt';
 

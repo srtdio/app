@@ -36,7 +36,7 @@ export const CARD_READ_TRIES = 3;
  * card already on screen with no other trigger still reaches its answer or
  * "Couldn't load" (about 3 x 10s at most), never a skeleton forever.
  */
-export const CARD_RETRY_DELAY_MS = READ_TIMEOUT_MS;
+const CARD_RETRY_DELAY_MS = READ_TIMEOUT_MS;
 
 /** The batched readers the cache runs; the app binds the existing readers. */
 export interface SharedCardReaders<P, B> {
@@ -52,7 +52,7 @@ export interface SharedCardReaders<P, B> {
   approverIds: (posts: readonly P[]) => string[];
 }
 
-export interface SharedCardCacheOptions {
+interface SharedCardCacheOptions {
   /** Runs a flush after the current tick; defaults to queueMicrotask. */
   schedule?: (flush: () => void) => void;
   timeoutMs?: number;

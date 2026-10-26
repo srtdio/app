@@ -31,7 +31,7 @@ import {
 } from '@/lib/chat/scheduled';
 import { ScheduledAttachments } from '@/components/chat/ScheduledStrip';
 
-export const SCHEDULED_LIST_TITLE = 'Scheduled in this chat';
+const SCHEDULED_LIST_TITLE = 'Scheduled in this chat';
 /** FN23: the card's action reads "Don't send", so the message is never confused with a dismiss. */
 export const CANCEL_CONFIRM_TITLE = "Don't send this message?";
 export const DONT_SEND_LABEL = "Don't send";
@@ -48,7 +48,7 @@ export function scheduledPreviewText(row: ScheduledRow, nameOf: NameOf): string 
 }
 
 /** Whether a row carries photos or files. Pure. */
-export function rowHasAttachments(row: Pick<ScheduledRow, 'attachment_asset_ids'>): boolean {
+function rowHasAttachments(row: Pick<ScheduledRow, 'attachment_asset_ids'>): boolean {
   return (row.attachment_asset_ids ?? []).length > 0;
 }
 
@@ -66,7 +66,7 @@ export function canEditScheduled(row: ScheduledRow): boolean {
   return (row.body ?? '').trim() !== '' || rowHasAttachments(row);
 }
 
-export interface ScheduledListActions {
+interface ScheduledListActions {
   onSendNow: (row: ScheduledRow) => Promise<void>;
   /** Save a new body (serialized, tokens kept) at the row's current time. */
   onSaveBody: (row: ScheduledRow, body: string) => Promise<boolean>;

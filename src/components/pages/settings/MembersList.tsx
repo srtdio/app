@@ -45,7 +45,7 @@ function SelfChip() {
 }
 
 /** A member row's ⋯ actions. */
-export interface MemberActions {
+interface MemberActions {
   /** Opens the role sheet; offered only where the role can change. */
   onChangeRole: (member: MemberEntry) => void;
   /** Starts the remove confirm (irreversible: ConfirmDialog). */

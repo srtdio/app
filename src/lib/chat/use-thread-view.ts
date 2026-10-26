@@ -30,7 +30,7 @@ import {
 import { setOlderPageFailed, threadOlderKey } from '@/lib/chat/older-page-status';
 
 /** The reads the view makes; injected in tests. */
-export interface ThreadViewReads {
+interface ThreadViewReads {
   loadRoot: (rootId: string) => Promise<Result<ChatMessageRow[]>>;
   loadPage: (
     channelId: string,
@@ -41,7 +41,7 @@ export interface ThreadViewReads {
 }
 
 /** What one open thread holds: its root and the replies it read itself. */
-export interface ThreadViewState {
+interface ThreadViewState {
   rootId: string;
   root: ThreadMessage;
   /** Replies read by the view (oldest first), before the loaded rows are laid over. */
@@ -81,7 +81,7 @@ async function withReactions(
   return mergeReactions(rows, result.data);
 }
 
-export interface UseThreadView {
+interface UseThreadView {
   view: ThreadViewState | null;
   loadingOlder: boolean;
   /**

@@ -12,7 +12,7 @@ import { DOCK_GAP, type Rect } from '@/lib/induction';
 import { CHROME_ATTR } from './guide-dom';
 
 /** Above page content and Sheet (z-50); below toasts (z-60/70) and the lightbox (z-80). */
-export const GUIDE_Z = 'z-[55]';
+const GUIDE_Z = 'z-[55]';
 
 /**
  * The guide tokens (src/index.css): amber fill and ink, the deep fill, the light
@@ -100,7 +100,7 @@ export function GuideBox({ rect, radius }: { rect: Rect; radius: number }): Reac
 }
 
 /** The fingertip's spot inside the 40px hand. */
-export const HAND_TIP = { x: 17, y: 1 };
+const HAND_TIP = { x: 17, y: 1 };
 const HAND_SIZE = 40;
 const RIPPLE = 28;
 
@@ -177,7 +177,7 @@ export interface BarCopy {
   aria: { bar: string; progress: string; back: string };
 }
 
-export interface BarActions {
+interface BarActions {
   /** undefined hides Back. */
   onBack: (() => void) | undefined;
   /** undefined hides the optional step's secondary chip. */
@@ -321,7 +321,7 @@ function BarButtons({ copy, actions }: { copy: BarCopy; actions: BarActions }): 
   );
 }
 
-export interface CardCopy {
+interface CardCopy {
   eyebrow: string;
   title: string;
   body: string;

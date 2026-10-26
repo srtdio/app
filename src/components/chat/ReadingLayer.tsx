@@ -39,7 +39,7 @@ import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
 /** A sheet read that failed or timed out. */
-export const SHEET_LOAD_FAILED = "Couldn't load";
+const SHEET_LOAD_FAILED = "Couldn't load";
 
 /**
  * The floating surface for the jump pill and the scroll-to-latest button: the
@@ -48,7 +48,7 @@ export const SHEET_LOAD_FAILED = "Couldn't load";
  * scroll container left the message area unpainted, showing stale composer
  * tiles.
  */
-export const FLOAT_SURFACE_CLASS = 'border border-border bg-panel';
+const FLOAT_SURFACE_CLASS = 'border border-border bg-panel';
 
 /** Opacity-only fade for the pill and the latest button. */
 const FADE = 'transition-opacity duration-[160ms] motion-reduce:transition-none';
@@ -231,11 +231,7 @@ function readByWithMono(label: string): ReactElement {
 }
 
 /** A list row's avatar (the shared Avatar, row role): the photo, else initials. */
-export function SheetAvatar(props: {
-  name: string;
-  src: string | null;
-  dimmed?: boolean;
-}): ReactElement {
+function SheetAvatar(props: { name: string; src: string | null; dimmed?: boolean }): ReactElement {
   return (
     <span aria-hidden="true" className={cn('flex shrink-0', props.dimmed === true && 'opacity-50')}>
       <Avatar

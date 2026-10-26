@@ -31,7 +31,7 @@ export const NOTHING_OPEN_LINE = NOTHING_OPEN;
 export const SECTION_ROWS = 5;
 
 /** The cap a bar count shows above (the drawer keeps the real number). */
-export const BAR_CAP = 99;
+const BAR_CAP = 99;
 
 /** A count as the bar shows it: "99+" over the cap. Pure. */
 export function capCount(n: number): string {

@@ -96,7 +96,7 @@ export interface RemovableFile extends RemoveFileTarget {
 }
 
 /** Voice notes go only by Delete. */
-export function isVoiceMime(mime: string): boolean {
+function isVoiceMime(mime: string): boolean {
   return mime.startsWith('audio/');
 }
 
@@ -122,7 +122,7 @@ export function canRemoveFile(
 }
 
 /** The attachments of a message the viewer may remove. Pure. */
-export function removableAttachments(
+function removableAttachments(
   message: Pick<ThreadMessage, 'id' | 'senderUserId' | 'deleted' | 'attachments' | 'state'>,
   viewerId: string,
   marks: MarkedLookup,
@@ -155,7 +155,7 @@ export function canRemoveSingleFile(
 // ---------------------------------------------------------------------------
 // The flow: record -> purge -> signal.
 
-export interface RemoveFilesDeps {
+interface RemoveFilesDeps {
   client: Client;
   /** POST /purge-chat for the removed asset ids (see purgeChatFiles). */
   purgeChat?: (assetIds: string[]) => Promise<PurgeChatOutcome>;

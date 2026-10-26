@@ -28,7 +28,7 @@ export interface OpenPlanRequest {
   senderName: string;
 }
 
-export interface PlanCardsContextValue {
+interface PlanCardsContextValue {
   cache: PlanCardCache;
   /** The open chat's title (the agency's "Shared with"). */
   chatTitle: string;

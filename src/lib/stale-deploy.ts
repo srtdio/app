@@ -18,7 +18,7 @@ export const RELOAD_PARAM = '_r';
 const STYLESHEET_WAIT_MS = 3000;
 
 /** Which stylesheet to wait for and which custom property proves it applied. */
-export interface StylesheetTarget {
+interface StylesheetTarget {
   selector: string;
   token: string;
 }
@@ -56,7 +56,7 @@ export interface StaleDeployDeps {
 }
 
 // Resolves once the stylesheet has loaded or failed, or after timeoutMs.
-export function waitForStylesheet(
+function waitForStylesheet(
   link: StylesheetLink | null,
   isDocumentComplete: boolean,
   timeoutMs: number,

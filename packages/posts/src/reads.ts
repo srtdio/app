@@ -129,7 +129,7 @@ export interface PostPickerCursor {
   id: string;
 }
 
-export interface PostPickerFilter {
+interface PostPickerFilter {
   /** Workspace to scope to; RLS confines reads to the caller's workspaces. */
   workspaceId: string;
   /** Exact stage filter. */
@@ -146,7 +146,7 @@ export interface PostPickerFilter {
   number?: number;
 }
 
-export interface ListPostsForPickerPageInput extends PostPickerFilter {
+interface ListPostsForPickerPageInput extends PostPickerFilter {
   /** Return rows strictly after this cursor in (created_at desc, id desc) order. */
   cursor?: PostPickerCursor;
   /** Page size. Defaults to {@link POSTS_PAGE_SIZE}, capped at {@link POSTS_PAGE_SIZE_MAX}. */
@@ -155,7 +155,7 @@ export interface ListPostsForPickerPageInput extends PostPickerFilter {
   withCount?: boolean;
 }
 
-export interface PostPickerPage {
+interface PostPickerPage {
   rows: PostPickerPageRow[];
   /** Exact match count when requested, else null. */
   count: number | null;
@@ -315,7 +315,7 @@ function transportError(message: string): DomainError {
 // pinned version's mime_type embedded via an inner join (so only image-backed
 // attachments survive). The aliased select is wider than the generated row type
 // can express, so callers cast through `unknown`.
-export interface FirstImageRow {
+interface FirstImageRow {
   entity_id: string;
   asset_version_id: string;
   asset_versions: { mime_type: string | null } | null;
@@ -371,7 +371,7 @@ function firstImageFromRows(rows: readonly FirstImageRow[]): Map<string, string>
 
 // One row of the card's batched media read: a FirstImageRow whose embedded
 // version also carries its stored size (null for uploads that predate it).
-export interface CardMediaRow extends FirstImageRow {
+interface CardMediaRow extends FirstImageRow {
   asset_versions: { mime_type: string | null; width: number | null; height: number | null } | null;
 }
 

@@ -18,7 +18,7 @@ import { domainBrandWord } from './members-data';
  * (workspace_update refuses name with invalid_payload) and there is no
  * workspace logo at launch, so none of those is ever sent.
  */
-export interface WorkspaceUpdatePayload {
+interface WorkspaceUpdatePayload {
   timezone: string;
 }
 

@@ -47,7 +47,7 @@ export function notifyHistoryHeadline(viewerIsClient: boolean): string {
 
 /** The record view: the newest send prominent, the rest as earlier history.
  *  Null when nothing has been sent, so the block renders nothing. */
-export interface NotificationView {
+interface NotificationView {
   headline: string;
   latest: NotificationRow;
   earlier: NotificationRow[];

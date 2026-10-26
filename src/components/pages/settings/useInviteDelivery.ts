@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
 import { deliveryByMember } from './members-data';
 import type { InviteDeliveryStatus } from './members-data';
 
-export interface InviteDeliveryState {
+interface InviteDeliveryState {
   /** Pending invite member_id -> latest invite email status. */
   delivery: Map<string, InviteDeliveryStatus>;
   refetch: () => void;

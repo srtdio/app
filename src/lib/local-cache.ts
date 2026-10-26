@@ -13,11 +13,11 @@ import type {
 import { SIGNOUT_EVENT } from '@/lib/events';
 
 /** Most entries a cache keeps; the newest win. */
-export const LOCAL_CACHE_MAX_ENTRIES = 600;
+const LOCAL_CACHE_MAX_ENTRIES = 600;
 
-export const THUMB_URLS_KEY = 'sorted:thumb-urls:v1';
+const THUMB_URLS_KEY = 'sorted:thumb-urls:v1';
 export const POST_COVERS_KEY = 'sorted:post-covers:v1';
-export const LINK_KEY_KEY = 'sorted:file-link-key:v1';
+const LINK_KEY_KEY = 'sorted:file-link-key:v1';
 
 function storage(): Storage | null {
   try {
@@ -74,7 +74,7 @@ export function writeEntries<T>(key: string, entries: ReadonlyArray<readonly [st
 }
 
 /** Wipe every device cache this module owns. */
-export function clearLocalCaches(): void {
+function clearLocalCaches(): void {
   const store = storage();
   if (store === null) return;
   try {
@@ -117,7 +117,7 @@ export const localThumbnailUrlStore: ThumbnailUrlStore = {
 };
 
 /** Parse a stored link key; anything malformed is no key. Pure. */
-export function parseLinkKey(raw: string | null): StoredLinkKey | null {
+function parseLinkKey(raw: string | null): StoredLinkKey | null {
   if (raw === null) return null;
   try {
     const parsed: unknown = JSON.parse(raw);

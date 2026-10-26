@@ -326,9 +326,9 @@ export async function runSend(deps: SendFlowDeps, input: SendInput): Promise<Sen
 }
 
 /** The longest wait between two attempts. */
-export const RETRY_CAP_MS = 30_000;
+const RETRY_CAP_MS = 30_000;
 /** Waits between attempts after a transient failure; the last one repeats with no end. */
-export const RETRY_DELAYS_MS: readonly number[] = [2_000, 4_000, 8_000, 16_000, RETRY_CAP_MS];
+const RETRY_DELAYS_MS: readonly number[] = [2_000, 4_000, 8_000, 16_000, RETRY_CAP_MS];
 
 /** The wait before the next attempt after `failures` consecutive failures (>= 1). */
 export function retryDelayMs(failures: number): number {
@@ -342,7 +342,7 @@ export const UPLOAD_STALL_MS = 30_000;
 export const UPLOAD_RESPONSE_WAIT_MS = 120_000;
 
 /** The slice of an XMLHttpRequest the stall watch needs. */
-export interface StallWatchable {
+interface StallWatchable {
   upload: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
   addEventListener: (type: string, listener: () => void) => void;
   removeEventListener: (type: string, listener: () => void) => void;

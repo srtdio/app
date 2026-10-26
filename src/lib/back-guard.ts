@@ -21,14 +21,14 @@ import {
 
 export { BACK_GUARD_STEP_KEY };
 
-export interface BackGuardOptions {
+interface BackGuardOptions {
   /** Guard while true (the sheet is open with unsaved input, or a save is in flight). */
   active: boolean;
   /** Back was pressed while active: the screen stayed; open the confirm. */
   onBack: () => void;
 }
 
-export interface BackGuardControl {
+interface BackGuardControl {
   /** Drop the guard now (right before a confirmed close). Safe to call twice. */
   release: () => void;
 }

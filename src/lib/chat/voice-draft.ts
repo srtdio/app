@@ -32,7 +32,7 @@ export interface VoiceDraft {
 }
 
 /** The IndexedDB entry id prefix of a voice draft. */
-export const VOICE_DRAFT_PREFIX = 'voice-draft:';
+const VOICE_DRAFT_PREFIX = 'voice-draft:';
 
 export function voiceDraftEntryId(channelId: string): string {
   return `${VOICE_DRAFT_PREFIX}${channelId}`;
@@ -44,7 +44,7 @@ export function isVoiceDraftEntryId(entryId: string): boolean {
 }
 
 /** Whether a recording is long enough to keep (the send path's own rule). Pure. */
-export function keepsAsDraft(rec: Pick<RecordingResult, 'blob' | 'durationMs'> | null): boolean {
+function keepsAsDraft(rec: Pick<RecordingResult, 'blob' | 'durationMs'> | null): boolean {
   return rec !== null && rec.blob.size > 0 && rec.durationMs >= MIN_VOICE_NOTE_MS;
 }
 

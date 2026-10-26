@@ -18,7 +18,7 @@ export const ROW_HEIGHT = 28;
 /** Row numbers column width in px. */
 const ROW_HEAD_WIDTH = 48;
 /** Above this many rows only a window near the viewport renders. */
-export const VIRTUALIZE_AFTER = 200;
+const VIRTUALIZE_AFTER = 200;
 const OVERSCAN = 20;
 
 /** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */

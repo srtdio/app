@@ -11,7 +11,7 @@ import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
-export const TASK_BUTTON_LABEL = 'Tasks';
+const TASK_BUTTON_LABEL = 'Tasks';
 
 export function TaskButton(props: {
   unseen: boolean;

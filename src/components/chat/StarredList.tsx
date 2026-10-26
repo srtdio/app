@@ -55,10 +55,10 @@ import {
 import { ModalPanel } from '@/components/chat/ModalPanel';
 
 /** Typing settles this long before a narrowed list is read. */
-export const STARRED_DEBOUNCE_MS = 250;
+const STARRED_DEBOUNCE_MS = 250;
 
 /** One page read: the chat filter, the text, the cursor. */
-export type StarredPageFetch = (request: {
+type StarredPageFetch = (request: {
   channelId: string | null;
   query: string | null;
   before: StarredCursor | null;
@@ -106,7 +106,7 @@ export function useStarToggle(): (
  * again (merged in, never shortening) after every accepted star. A stale
  * answer is dropped.
  */
-export function useStarredFeed(params: {
+function useStarredFeed(params: {
   store: StarStore | null;
   channelId: string | null;
   query: string;
@@ -346,7 +346,7 @@ export function StarredEmpty(): ReactElement {
 /** Skeleton cards while the first page loads. */
 const LOADING_ROWS = 3;
 
-export interface StarredListProps {
+interface StarredListProps {
   /** One chat's stars, or null for every chat. */
   channelId: string | null;
   /** The search box text; 2+ characters narrow the list. */

@@ -51,8 +51,6 @@ describe('briefs are read-only: no update surface', () => {
 
   it('no brief-update edge function route exists', () => {
     const functionsDir = resolve(__dirname, '../../supabase/functions');
-    expect(existsSync(resolve(functionsDir, 'brief-create/index.ts'))).toBe(true);
-    expect(existsSync(resolve(functionsDir, 'brief-close/index.ts'))).toBe(true);
     expect(existsSync(resolve(functionsDir, 'brief-update'))).toBe(false);
     expect(existsSync(resolve(functionsDir, 'brief-edit'))).toBe(false);
   });

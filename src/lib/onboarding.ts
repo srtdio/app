@@ -8,10 +8,10 @@ import type { CopyContext } from './induction-model';
 import { ROUTE_SCRIPTS } from './induction-routes';
 
 /** Mirrors users_username_format in the 20261014140000 migration. */
-export const USERNAME_PATTERN = /^[a-z0-9._]{1,20}$/;
+const USERNAME_PATTERN = /^[a-z0-9._]{1,20}$/;
 
 /** Mirrors the reserved list in username_available / user_onboarding_save. */
-export const RESERVED_USERNAMES: readonly string[] = [
+const RESERVED_USERNAMES: readonly string[] = [
   'admin',
   'support',
   'sorted',
@@ -41,7 +41,7 @@ export function normalizeUsernameInput(value: string): string {
     .slice(0, 20);
 }
 
-export type UsernameFormat = 'empty' | 'invalid' | 'reserved' | 'ok';
+type UsernameFormat = 'empty' | 'invalid' | 'reserved' | 'ok';
 
 export function usernameFormat(value: string): UsernameFormat {
   if (value.length === 0) return 'empty';

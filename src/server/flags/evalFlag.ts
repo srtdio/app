@@ -28,7 +28,7 @@ type FlagRow = Pick<
 
 const SELECT = 'workspace_id, flag_name, category, enabled, rollout_percentage, tier_min';
 
-export interface EvalFlagInput {
+interface EvalFlagInput {
   /** Authenticated (non-service-role) client; evaluation runs under its RLS context. */
   client: SupabaseClient<Database>;
   flagName: string;

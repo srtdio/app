@@ -19,11 +19,6 @@ export function primeWorkspacePlatforms(
   for (const row of rows) platforms.set(row.id, toPostPlatform(row.platform));
 }
 
-/** Forget every cached platform (tests). */
-export function resetWorkspacePlatforms(): void {
-  platforms.clear();
-}
-
 /**
  * The platform of a workspace, or null while it resolves (and with no
  * workspace). Pass null to skip the read (e.g. while a sheet is closed).

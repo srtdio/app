@@ -52,6 +52,12 @@ export default defineConfig({
       ],
     },
   },
+  // fflate is reached only from the office Worker (src/lib/files/office/zip.ts),
+  // which the dep scan does not follow. Found late, it re-optimizes and reloads
+  // every open page, failing whichever spec runs beside the first office open.
+  optimizeDeps: {
+    include: ['fflate'],
+  },
   server: {
     fs: { allow: [repoRoot] },
   },

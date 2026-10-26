@@ -6,8 +6,8 @@
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 
-export const TEST_SITE_HOST = 'test.srtdio-app.pages.dev';
-export const TEST_EMAIL_DOMAIN = 'test.srtd.io';
+const TEST_SITE_HOST = 'test.srtdio-app.pages.dev';
+const TEST_EMAIL_DOMAIN = 'test.srtd.io';
 
 export function isTestSite(
   host: string = typeof window === 'undefined' ? '' : window.location.hostname,
@@ -52,7 +52,7 @@ export async function startTestSession(email: string | null): Promise<string | n
 
 const INVITEES_KEY = 'srtdio.test.invitees';
 
-export interface TestInvitee {
+interface TestInvitee {
   email: string;
   at: number;
 }

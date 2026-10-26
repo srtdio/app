@@ -2,7 +2,7 @@
 // confirm copy when an attached file does not match. Never blocks; the person
 // keeps or removes the file. Pure so it unit-tests without a DOM.
 
-export type FileKind = 'image' | 'video' | 'document' | 'other';
+type FileKind = 'image' | 'video' | 'document' | 'other';
 
 /** The kind of an attached file, from its MIME type. */
 export function fileKindOf(mime: string): FileKind {

@@ -72,7 +72,7 @@ import {
  * Fixed decorative levels (percent): the fallback for a note without peaks
  * (older notes, older clients), resampled to the bar count like real peaks.
  */
-export const WAVEFORM_BARS: readonly number[] = [
+const WAVEFORM_BARS: readonly number[] = [
   35, 60, 45, 80, 55, 70, 40, 90, 50, 65, 30, 75, 48, 85, 42, 68, 38, 72, 52, 58,
 ];
 
@@ -241,7 +241,7 @@ export interface VoiceFailure {
 }
 
 /** The element-side moves the recovery makes; the component backs it with the <audio>. */
-export interface VoicePlayer {
+interface VoicePlayer {
   /** The url set on the element, null before one is. */
   readonly applied: string | null;
   /** The element's playback position in seconds. */
@@ -526,10 +526,10 @@ export function createPlaybackRegistry(): {
 }
 
 /** The app-wide registry: one voice note plays at a time. */
-export const voicePlayback = createPlaybackRegistry();
+const voicePlayback = createPlaybackRegistry();
 
 /** Whether a waveform bar sits inside the played-so-far share (progress 0-100). */
-export function barPlayed(index: number, progress: number, count = VOICE_BAR_COUNT): boolean {
+function barPlayed(index: number, progress: number, count = VOICE_BAR_COUNT): boolean {
   return progress > 0 && ((index + 0.5) / count) * 100 <= progress;
 }
 
@@ -587,7 +587,7 @@ export const WAVE_SEEK_LOCK_PX = 8;
  * A touch on the wave: 'pending' until it decides; 'seek' (a horizontal drag);
  * 'hold' (the bubble's long-press owns it); 'none' (moved, but neither).
  */
-export type WaveTouchPhase = 'pending' | 'seek' | 'hold' | 'none';
+type WaveTouchPhase = 'pending' | 'seek' | 'hold' | 'none';
 
 /**
  * Where a pending touch on the wave stands, WhatsApp style: a horizontal move
@@ -608,7 +608,7 @@ export function waveTouchPhase(
 }
 
 /** The Transcribe button's state in row 2. */
-export type TranscribeLinkState = 'transcribe' | 'pending' | 'hide' | 'show' | 'failed';
+type TranscribeLinkState = 'transcribe' | 'pending' | 'hide' | 'show' | 'failed';
 
 /** The link state for a transcript view. Pure. */
 export function transcribeLinkState(view: TranscriptView): TranscribeLinkState {
@@ -786,11 +786,10 @@ function TranscriptDrop(props: {
 }
 
 /** The voice ring's place: absolutely centred inside the (relative, 44px) play slot. */
-export const VOICE_RING_POSITION =
-  'absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2';
+const VOICE_RING_POSITION = 'absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2';
 
 /** An own note's upload: the ring (active) or, once done, play in its place. */
-export interface VoiceUpload {
+interface VoiceUpload {
   /** True while the file still uploads: the X shows, the wave is a flat line. */
   active: boolean;
   /** Upload progress 0..1; null while unknown (the ring spins). */

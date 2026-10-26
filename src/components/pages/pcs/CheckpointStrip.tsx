@@ -44,7 +44,7 @@ export type SharedCheckpointRow = CheckpointChipRow & Pick<CommentRow, 'deleted_
 
 /** The chips from the host's shared read: live checkpoints only, the chip
  *  columns only (the same rows the strip's own read selects). Pure. */
-export function chipRowsFrom(rows: readonly SharedCheckpointRow[]): CheckpointChipRow[] {
+function chipRowsFrom(rows: readonly SharedCheckpointRow[]): CheckpointChipRow[] {
   return rows
     .filter((row) => row.deleted_at === null && row.ledger_seq !== null)
     .map((row) => ({
@@ -79,7 +79,7 @@ export function checkpointCounts(
  * is set. The DB's accepted_at stays as it is but never shows as a third state;
  * an agency reopen (resolved_at back to null) drops a chip straight to 'open'.
  */
-export type ChipState = 'open' | 'resolved';
+type ChipState = 'open' | 'resolved';
 export function chipState(row: Pick<CheckpointChipRow, 'resolved_at'>): ChipState {
   return row.resolved_at === null ? 'open' : 'resolved';
 }
@@ -139,7 +139,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
 export const STRIP_SURFACE_CLASS = 'bg-panel-2';
 
 /** Overlay the comments list's live state onto the strip's own read. Pure. */
-export function withLiveState(
+function withLiveState(
   rows: readonly CheckpointChipRow[],
   live: ReadonlyMap<string, LiveCheckpoint> | null,
 ): CheckpointChipRow[] {

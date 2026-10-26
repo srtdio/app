@@ -105,7 +105,7 @@ export function deleteSelectionBlock(
  * message leaves the 30 minute window (Delete and its reason re-compute
  * then), or null when none is still inside it. Pure.
  */
-export function nextSelectionBoundaryMs(
+function nextSelectionBoundaryMs(
   selected: ReadonlySet<string>,
   messages: readonly ThreadMessage[],
   nowMs: number,
@@ -236,7 +236,7 @@ export function forwardPreviewText(source: ThreadMessage): string {
   });
 }
 
-export type ForwardRunResult<T> = { ok: true } | { ok: false; failed: T; message: string };
+type ForwardRunResult<T> = { ok: true } | { ok: false; failed: T; message: string };
 
 /**
  * Forward sequentially: for each chat, each message in order. The first failed

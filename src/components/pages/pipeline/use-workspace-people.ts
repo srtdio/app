@@ -17,7 +17,7 @@ import { isClient } from '@/components/pages/pcs/roles';
 import { firstNameOf } from '@/components/pages/pipeline/card-status';
 import { toApproverOptions, type ApproverOption } from '@/components/ui/OnBehalfApproveSheet';
 
-export interface WorkspacePeople {
+interface WorkspacePeople {
   approverFirstNames: string[];
   /** Active members' display names by user id. */
   names: ReadonlyMap<string, string>;
@@ -31,7 +31,7 @@ export interface WorkspacePeople {
 const EMPTY: WorkspacePeople = { approverFirstNames: [], names: new Map(), approvers: [] };
 
 /** Members as people: approvers' first names in member order plus every name. Pure. */
-export function toWorkspacePeople(
+function toWorkspacePeople(
   members: readonly { user_id: string; role: string | null; active: boolean }[],
   profiles: readonly { userId: string; displayName: string | null }[],
 ): WorkspacePeople {

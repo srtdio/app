@@ -18,11 +18,11 @@ import {
 } from '@/lib/chat/notes';
 
 /** The session's one ensurer: every Chat home mount shares its answers. */
-export const notesEnsurer: NotesEnsurer = createNotesEnsurer((workspaceId) =>
+const notesEnsurer: NotesEnsurer = createNotesEnsurer((workspaceId) =>
   ensureNotesChannel(supabase, { workspaceId }),
 );
 
-export interface UseNotes {
+interface UseNotes {
   summary: ChannelSummary;
   /** Where this workspace's ensure stands (the open thread waits on 'pending'). */
   status: EnsureState;

@@ -7,7 +7,7 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 
-export interface LoadErrorProps {
+interface LoadErrorProps {
   /** What failed to load, in the sentence: "posts", "this brief", "the chat list". */
   title: string;
   onRetry: () => void;

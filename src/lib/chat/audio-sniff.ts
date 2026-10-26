@@ -12,7 +12,7 @@
 import { baseMime, recordingFileName } from '@/lib/chat/use-audio-recorder';
 
 /** How many header bytes are read (and, on a refusal, logged). */
-export const HEADER_BYTES = 12;
+const HEADER_BYTES = 12;
 
 const EBML = [0x1a, 0x45, 0xdf, 0xa3] as const;
 const FTYP = [0x66, 0x74, 0x79, 0x70] as const;
@@ -50,7 +50,7 @@ export function headerHex(header: Uint8Array): string {
 }
 
 /** What a recording is sent as: the File's type and its matching name. */
-export interface VoiceFileType {
+interface VoiceFileType {
   type: string;
   name: string;
 }

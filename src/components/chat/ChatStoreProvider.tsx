@@ -148,7 +148,7 @@ import type {
 import { clearVoiceDrafts, isVoiceDraftEntryId } from '@/lib/chat/voice-draft';
 
 /** The store plus the actions the chat UI uses to keep it in step. */
-export interface ChatStoreContextValue {
+interface ChatStoreContextValue {
   state: ChatStoreState;
   /** The list's load status for the current workspace; rows render only when 'ready'. */
   loadStatus: ChatLoadStatus;
@@ -198,7 +198,7 @@ export interface ChatStoreContextValue {
 }
 
 /** One committed live message from someone else: its chat and created_at. */
-export type LiveIncomingListener = (message: {
+type LiveIncomingListener = (message: {
   channelId: string;
   createdAt: string;
   /** The chat's kind and list title (DM peer or group name), when the list knows it. */
@@ -280,7 +280,7 @@ export function useCancelUpload(): ((channelId: string, id: string) => boolean) 
 }
 
 /** Sign-out: no draft, emoji recent or voice transcript outlives the session. */
-export function clearChatDeviceData(): void {
+function clearChatDeviceData(): void {
   clearAllDrafts();
   clearEmojiRecents();
   clearVoiceTranscripts();
@@ -326,7 +326,7 @@ interface HeldIncoming {
  * Live events reach a remembered chat that no thread shows (open-cache's
  * router): the shared verifier names a live text's row, an edit re-reads its row.
  */
-export function rememberedLiveDeps(userId: string, workspaceId: string): RememberedLiveDeps {
+function rememberedLiveDeps(userId: string, workspaceId: string): RememberedLiveDeps {
   return {
     userId,
     workspaceId,
@@ -371,11 +371,7 @@ export function incomingRowAction(input: {
 }
 
 /** Remember a live message id; true when it was already seen. Bounded FIFO. */
-export function rememberSeen(
-  seen: Set<string>,
-  id: string,
-  limit: number = SEEN_IDS_LIMIT,
-): boolean {
+function rememberSeen(seen: Set<string>, id: string, limit: number = SEEN_IDS_LIMIT): boolean {
   if (seen.has(id)) return true;
   seen.add(id);
   if (seen.size > limit) {
@@ -386,7 +382,7 @@ export function rememberSeen(
 }
 
 /** What handling a tombstone signal touches, injected so the order is unit-tested. */
-export interface DeletedSignalDeps {
+interface DeletedSignalDeps {
   /** The channels whose list line shows one of the ids (store.channelsShowingDeleted). */
   channelsShowing: (messageIds: readonly string[]) => string[];
   /** One batched preview read (the existing reader), applied to just these channels. */
@@ -414,7 +410,7 @@ export function handleMessagesDeleted(
 }
 
 /** What routing a global command needs, injected so the trust check is unit-tested. */
-export interface GlobalCmdDeps {
+interface GlobalCmdDeps {
   /** One batched read of the named rows (loadMessagesByIds). */
   loadByIds: (messageIds: readonly string[]) => Promise<Result<ChatMessageRow[]>>;
   /** The ids whose rows are tombstones on record. */
@@ -636,7 +632,7 @@ export async function editedPreviewLine(
 }
 
 /** A message's list line: mentions as "@Name" in its body, else what it carries. */
-export function previewLineFor(content: PreviewContent, workspaceId: string | null): string {
+function previewLineFor(content: PreviewContent, workspaceId: string | null): string {
   return store.previewText({ ...content, body: previewMentionText(content.body, workspaceId) });
 }
 

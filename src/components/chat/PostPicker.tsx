@@ -98,7 +98,7 @@ import {
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 
 /** Search debounce, in milliseconds. */
-export const SEARCH_DEBOUNCE_MS = 200;
+const SEARCH_DEBOUNCE_MS = 200;
 
 interface PostPickerProps {
   open: boolean;
@@ -130,14 +130,14 @@ interface PostPickerProps {
 }
 
 /** The sheet title per mode. */
-export const PICKER_TITLES: Record<Exclude<PickerMode, 'inline'>, string> = {
+const PICKER_TITLES: Record<Exclude<PickerMode, 'inline'>, string> = {
   posts: 'Share a post',
   drafts: 'Share a draft',
   briefs: 'Share a brief',
 };
 
 /** The default view's data: the sections plus the older-approved count. */
-export interface PickerSectionsData {
+interface PickerSectionsData {
   sections: Array<PickerSection<PostPickerPageRow>>;
   olderApprovedCount: number;
 }
@@ -146,7 +146,7 @@ export interface PickerSectionsData {
 export const POSTS_LOAD_FAILED = "Couldn't load posts. Try again.";
 
 /** The picker's error line when the briefs read fails; the raw text is only logged. */
-export const BRIEFS_LOAD_FAILED = "Couldn't load briefs. Try again.";
+const BRIEFS_LOAD_FAILED = "Couldn't load briefs. Try again.";
 
 /** The briefs tab's error line for a read: fixed copy on failure (raw text logged), else null. */
 export function briefsLoadError(
@@ -158,7 +158,7 @@ export function briefsLoadError(
 }
 
 /** The modes that read posts. */
-export type PostListMode = Exclude<PickerMode, 'briefs'>;
+type PostListMode = Exclude<PickerMode, 'briefs'>;
 
 const EMPTY_SECTIONS: PickerSectionsData = { sections: [], olderApprovedCount: 0 };
 
@@ -311,9 +311,9 @@ function postRowClass(active: boolean): string {
 // ---------------------------------------------------------------------------
 
 /** A warm list younger than this paints on open; older ones wait for the read. */
-export const WARM_TTL_MS = 2 * 60_000;
+const WARM_TTL_MS = 2 * 60_000;
 /** Rows whose covers a warm-up reads and downloads ahead: about one screen. */
-export const WARM_COVER_ROWS = 8;
+const WARM_COVER_ROWS = 8;
 
 const roleMemo = new Map<string, string | null>();
 const roleInflight = new Map<string, Promise<string | null>>();

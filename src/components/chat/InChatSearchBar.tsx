@@ -53,7 +53,7 @@ export function closeInChatSearch(deps: {
   deps.onClose();
 }
 
-export interface InChatSearchBarProps {
+interface InChatSearchBarProps {
   workspaceId: string | null;
   channelId: string;
   /** The query the bar opens on ('' from the header icon). */

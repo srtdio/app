@@ -148,7 +148,7 @@ function noCallout(event: { preventDefault: () => void }): void {
   event.preventDefault();
 }
 
-export interface SearchResultsProps {
+interface SearchResultsProps {
   /** The text in the search box (2+ trimmed chars, or any with a chip, while this shows). */
   query: string;
   /** The active filter chip; absent or null without one. */

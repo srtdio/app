@@ -106,7 +106,7 @@ function preventDefault(event: { preventDefault: () => void }): void {
 }
 
 /** A thread chip's two parts: the post title and its reply count. */
-export interface ThreadChipLabel {
+interface ThreadChipLabel {
   title: string;
   count: string | null;
 }

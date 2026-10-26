@@ -14,7 +14,7 @@ import {
 } from '@/lib/chat/presence';
 import { toAgoraUsername } from '@/lib/chat/agora-identity';
 
-export interface UseChatPresence {
+interface UseChatPresence {
   available: boolean;
   online: boolean;
   lastTimeMs: number | null;

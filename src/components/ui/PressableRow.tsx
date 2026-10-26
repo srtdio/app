@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/cn';
 
-export interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Ref to the rendered <button>; a plain prop so PressableRow stays a callable function. */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
   /** Shrink to content (w-auto) for inline edit triggers instead of filling the row. */

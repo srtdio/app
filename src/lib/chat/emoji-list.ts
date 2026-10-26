@@ -5,7 +5,7 @@
 // storage only loses the recents row.
 
 /** One group of the grid. */
-export interface EmojiListGroup {
+interface EmojiListGroup {
   name: string;
   emoji: readonly string[];
 }

@@ -229,7 +229,7 @@ export function spreadRows(
  * asked for, so a fake can answer each bounded window (and the paging floor
  * probe) with only the rows that window really holds.
  */
-export interface WindowState {
+interface WindowState {
   range: Array<[string, string]>;
   order: Array<{ column: string; ascending: boolean }>;
   limit: number | null;

@@ -91,7 +91,7 @@ function decode(ctx: DecodeContext, data: ArrayBuffer): Promise<DecodedAudio> {
   });
 }
 
-export interface VoicePeaksDeps {
+interface VoicePeaksDeps {
   createContext?: () => DecodeContext | null;
   timeoutMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;

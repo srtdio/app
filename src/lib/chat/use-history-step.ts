@@ -397,7 +397,7 @@ export function hasPreviousEntry(state: unknown): boolean {
 }
 
 /** What a layer's hook hands back. */
-export interface HistoryStepControl {
+interface HistoryStepControl {
   /** Keep the entry (the layer is leaving by a navigation); see HistoryStep.detach. */
   detach: () => void;
 }
@@ -489,7 +489,7 @@ export function isStepEntry(state: unknown): boolean {
 }
 
 /** What a chat entry remembers about the entry below it (React Router's location state). */
-export interface ChatEntryState {
+interface ChatEntryState {
   /** The chat was pushed from the bare chat list (no chat open, no layer). */
   chatBelow: 'list';
 }

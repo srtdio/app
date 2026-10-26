@@ -18,7 +18,7 @@ export interface PinDot {
   y: number;
 }
 
-export interface PinData {
+interface PinData {
   /** Dots keyed by asset_attachment_id, so the overlay matches them to a slide. */
   pinsByAttachment: Record<string, PinDot[]>;
   /** Per-comment chips for every pin (stale included), merged into the caption map. */
@@ -188,7 +188,7 @@ export function frameToOriginal(
   return { x: map.win.x + clamp(bx) * map.win.w, y: map.win.y + clamp(by) * map.win.h };
 }
 
-export type PinEdge = 'left' | 'right' | 'top' | 'bottom';
+type PinEdge = 'left' | 'right' | 'top' | 'bottom';
 
 /**
  * A stored pin (relative to the original) placed on the frame. Inside the

@@ -79,7 +79,7 @@ export function withFormer(
 }
 
 /** One run of a body: plain text, or a mention token's user id. */
-export type BodySegment = { kind: 'text'; text: string } | { kind: 'mention'; userId: string };
+type BodySegment = { kind: 'text'; text: string } | { kind: 'mention'; userId: string };
 
 /** What a person who is not a current member of the workspace reads as. */
 export const FORMER_MEMBER = 'Former member';
@@ -472,7 +472,7 @@ interface MentionRegistry {
 }
 
 /** A person's full name (users.display_name) and photo, as the people surfaces show them. */
-export interface PersonEntry {
+interface PersonEntry {
   name: string;
   avatarUrl: string | null;
 }

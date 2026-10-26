@@ -105,7 +105,7 @@ export type UploadOutcome =
   | UploadFailure;
 
 /** Makes the thumbnail sent with a pdf/video upload or an image's list copy; tests inject a fake. */
-export type ThumbnailMaker = (file: File) => Promise<ThumbnailResult>;
+type ThumbnailMaker = (file: File) => Promise<ThumbnailResult>;
 
 export type UploadConfig = UploadConfigBase & UploadTransport;
 
@@ -561,7 +561,7 @@ function folderErrorMessage(code: string): string {
   }
 }
 
-export type FolderCreateOutcome =
+type FolderCreateOutcome =
   | { ok: true; folder: { id: string; name: string; parentId: string | null } }
   | { ok: false; message: string };
 
@@ -625,7 +625,7 @@ function folderField(body: unknown): { id: string; name: string; parentId: strin
   return { id: f.id, name: f.name, parentId: typeof f.parent_id === 'string' ? f.parent_id : null };
 }
 
-export type FolderRenameOutcome =
+type FolderRenameOutcome =
   | { ok: true; folder: { id: string; name: string; parentId: string | null } }
   | { ok: false; nameTaken: boolean; message: string };
 
@@ -706,7 +706,7 @@ export async function renameFolderRequest(
   return { ok: true, folder };
 }
 
-export type FolderDeleteOutcome = { ok: true } | { ok: false; message: string };
+type FolderDeleteOutcome = { ok: true } | { ok: false; message: string };
 
 export interface DeleteFolderConfig {
   /** The asset-upload worker base URL; the /folders/delete route is POSTed beneath it. */
@@ -753,7 +753,7 @@ export async function deleteFolderRequest(
   return { ok: true };
 }
 
-export type MoveAssetsOutcome = { ok: true; moved: number } | { ok: false; message: string };
+type MoveAssetsOutcome = { ok: true; moved: number } | { ok: false; message: string };
 
 export interface MoveAssetsConfig {
   /** The asset-upload worker base URL; the /folders/move route is POSTed beneath it. */
@@ -892,12 +892,12 @@ export interface QueueItem {
   displayName?: string | null;
 }
 
-export interface RunResult {
+interface RunResult {
   succeeded: string[];
   failed: { id: string; message: string }[];
 }
 
-export interface RunHooks {
+interface RunHooks {
   onStart?: (id: string) => void;
   onResult?: (id: string, outcome: UploadOutcome) => void;
 }

@@ -21,7 +21,7 @@ export interface AttachmentMenuItem {
   onSelect: () => void;
 }
 
-export interface AttachmentMenuHandlers {
+interface AttachmentMenuHandlers {
   onPickPhoto: () => void;
   onPickFile: () => void;
   onSharePost: () => void;

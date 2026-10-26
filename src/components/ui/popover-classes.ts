@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
  * panel and the attachment menu. Motion is opacity + scale only (no
  * translation), entering on ease-enter and leaving on ease-exit.
  */
-export const POPOVER_PANEL =
+const POPOVER_PANEL =
   'rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl transition-[opacity,transform] duration-fast';
 
 /** The panel classes for the entered (shown) or exiting (hidden) phase. */

@@ -16,7 +16,7 @@ export class XmlError extends Error {
 
 export type XmlAttrs = Readonly<Record<string, string>>;
 
-export interface XmlHandler {
+interface XmlHandler {
   open(name: string, attrs: XmlAttrs, selfClosing: boolean): void;
   close(name: string): void;
   text(text: string): void;

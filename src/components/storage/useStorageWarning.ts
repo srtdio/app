@@ -18,7 +18,7 @@ import {
   type StorageUsage,
 } from './storage-usage';
 
-export interface StorageWarningState {
+interface StorageWarningState {
   /** The reading, or null when unknown or failed. */
   usage: StorageUsage | null;
   dismissed: boolean;

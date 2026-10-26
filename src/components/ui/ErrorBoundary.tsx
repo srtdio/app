@@ -8,7 +8,7 @@ import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { captureException } from '@/lib/sentry';
 
-export interface ErrorBoundaryProps {
+interface ErrorBoundaryProps {
   /** Names the boundary in the Sentry report ("chat-attachment", "file-viewer"). */
   name: string;
   /** What renders in place of the children after they threw. */

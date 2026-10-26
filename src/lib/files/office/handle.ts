@@ -28,7 +28,7 @@ const MIME_KIND: Readonly<Record<string, PackageKind>> = {
 const OLE2_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
 
 /** True for an OLE2 compound file (how Office wraps an encrypted OOXML file). Pure. */
-export function isOle2(bytes: Uint8Array): boolean {
+function isOle2(bytes: Uint8Array): boolean {
   return OLE2_MAGIC.every((b, i) => bytes[i] === b);
 }
 

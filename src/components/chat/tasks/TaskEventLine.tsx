@@ -35,7 +35,7 @@ export interface TaskLineContext {
   onOpenTask: (taskId: string) => void;
 }
 
-export const OPEN_TASKS_LABEL = 'Open tasks';
+const OPEN_TASKS_LABEL = 'Open tasks';
 
 const PILL =
   'rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-sm font-medium leading-4 text-fg-3';
@@ -46,7 +46,7 @@ const PRESS = cn(
 );
 
 /** One older change's pill (no batch id). */
-export function TaskEventPill(props: { event: TaskEvent; ctx: TaskLineContext }): ReactElement {
+function TaskEventPill(props: { event: TaskEvent; ctx: TaskLineContext }): ReactElement {
   const { event, ctx } = props;
   const ref = taskRefOf(ctx.tasksById.get(event.taskId));
   const actor = event.actorId !== null ? ctx.nameOf(event.actorId) : null;

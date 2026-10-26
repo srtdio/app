@@ -18,7 +18,7 @@ import { PRESIGN_ENABLED, firstFrameSrc, sharedCardPresignCache } from '@/compon
 import type { CardFirstMedia } from '../../../packages/posts/src/reads';
 
 /** A post's cover: its first photo or video, null for none, undefined while unknown. */
-export type PostCoverState = CardFirstMedia | null | undefined;
+type PostCoverState = CardFirstMedia | null | undefined;
 
 /** The 48px rounded box every chat post list row uses for its picture. */
 export const POST_COVER_BOX =

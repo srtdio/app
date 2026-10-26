@@ -117,7 +117,7 @@ export const SENT_AGAIN_TOAST = 'Sent for review again';
 export const APPROVE_ON_BEHALF_LABEL = 'Approve on their behalf';
 
 /** The Park row's line in the ⋯ menu. */
-export const PARK_ROW_SUB = 'Keeps it aside. You can send it for review later.';
+const PARK_ROW_SUB = 'Keeps it aside. You can send it for review later.';
 
 /**
  * Flow B 33: the confirm before "Send for review again" while comments are
@@ -261,7 +261,7 @@ export function StageReasonConfirm(props: {
  * (agency side): in review the one "Send for review again"; elsewhere "Send
  * for review" when that move is legal. Pure.
  */
-export function decisionModelFor(args: {
+function decisionModelFor(args: {
   stage: Stage;
   role: string | null;
   /** True while "Send for review again" is in flight (the one disabled state). */
@@ -302,7 +302,7 @@ export function decisionModelFor(args: {
  * "Approve on their behalf" opens the approver picker; Reject and Park open
  * their reason confirms. Approvers get none (their moves are in the row). Pure.
  */
-export function decisionMoveRows(args: {
+function decisionMoveRows(args: {
   stage: Stage;
   role: string | null;
   onPick: (to: Stage) => void;
@@ -367,7 +367,7 @@ export function postDecisionLabels(
  * included): the count the Post detail chip reads, for a surface without the
  * live comment list. A failed read counts 0 (the send never blocks).
  */
-export async function countOpenThreads(workspaceId: string, postId: string): Promise<number> {
+async function countOpenThreads(workspaceId: string, postId: string): Promise<number> {
   try {
     const { count, error } = await supabase
       .from('comments')
@@ -385,7 +385,7 @@ export async function countOpenThreads(workspaceId: string, postId: string): Pro
   }
 }
 
-export interface PostDecisionsInput {
+interface PostDecisionsInput {
   postId: string | undefined;
   /** The stage the server last reported; null until the post has loaded. */
   stage: Stage | null;
@@ -414,7 +414,7 @@ export interface PostDecisionsInput {
   onCommentsChanged?: () => void;
 }
 
-export interface PostDecisions {
+interface PostDecisions {
   /** The stage to show: the optimistic one while a move is pending, else the server's. */
   stage: Stage | null;
   model: DecisionModel | null;

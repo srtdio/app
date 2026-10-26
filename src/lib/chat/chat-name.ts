@@ -5,10 +5,10 @@ import type { ChannelSummary } from '@/lib/chat-reads';
 import { NOTES_TITLE } from '@/lib/chat/notes';
 
 /** The fallback when a group's row has no name yet. */
-export const GROUP_NAME_FALLBACK = 'Group';
+const GROUP_NAME_FALLBACK = 'Group';
 
 /** The fallback when a direct message's other person has no profile row. */
-export const DM_NAME_FALLBACK = 'Direct message';
+const DM_NAME_FALLBACK = 'Direct message';
 
 /**
  * A chat's display name. Pure.

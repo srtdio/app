@@ -42,7 +42,7 @@ const NAME_MAX = 80;
 type Mode = 'list' | 'create' | 'confirm';
 
 /** The dialog title per step. */
-export function switcherTitle(mode: Mode): string {
+function switcherTitle(mode: Mode): string {
   if (mode === 'list') return 'Switch workspace';
   if (mode === 'create') return 'Create workspace';
   return 'One platform per workspace';
@@ -52,7 +52,7 @@ export function switcherTitle(mode: Mode): string {
  * The workspace_create payload: brand name, the browser's timezone and the
  * platform picked on the create step. Pure so the payload is unit-tested.
  */
-export function workspaceCreatePayload(input: {
+function workspaceCreatePayload(input: {
   name: string;
   platform: PostPlatform;
   timezone: string;

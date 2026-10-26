@@ -32,7 +32,7 @@ import {
 } from '@/lib/chat/types';
 
 /** First retry delay; each consecutive failure doubles it up to the cap. */
-export const BACKOFF_BASE_MS = 1_000;
+const BACKOFF_BASE_MS = 1_000;
 /** Longest wait between two attempts. */
 export const BACKOFF_CAP_MS = 30_000;
 /**
@@ -40,15 +40,15 @@ export const BACKOFF_CAP_MS = 30_000;
  * 1.3.1 status.d.ts: WEBIM_CONNCTION_USER_LOGIN_ANOTHER_DEVICE = 206,
  * WEBIM_CONNCTION_USER_KICKED_BY_OTHER_DEVICE = 217).
  */
-export const KICKED_ERROR_TYPES: readonly number[] = [206, 217];
+const KICKED_ERROR_TYPES: readonly number[] = [206, 217];
 
 /** How long a gap may last before the status flips to 'reconnecting'. */
 export const RECONNECT_GRACE_MS = 1_500;
 /** A cached token is reused only while it has more than this left before expiry. */
-export const TOKEN_REUSE_MARGIN_MS = 5 * 60_000;
+const TOKEN_REUSE_MARGIN_MS = 5 * 60_000;
 
 /** Whether an SDK error/disconnect reason is a multi-login kick. */
-export function isKickReason(error: { type?: unknown } | undefined): boolean {
+function isKickReason(error: { type?: unknown } | undefined): boolean {
   return (
     error !== undefined && typeof error.type === 'number' && KICKED_ERROR_TYPES.includes(error.type)
   );
@@ -61,7 +61,7 @@ export function backoffDelayMs(failures: number): number {
 }
 
 /** A subscriber to every incoming text message, regardless of the open thread. */
-export type GlobalMessageHandler = (message: AgoraChat.TextMsgBody) => void;
+type GlobalMessageHandler = (message: AgoraChat.TextMsgBody) => void;
 
 // Always-on fan-out for incoming text. The foundation handler (added below on
 // every connection) feeds this registry so the live store can track unread for
@@ -85,7 +85,7 @@ function dispatchGlobalMessage(message: AgoraChat.TextMsgBody): void {
 }
 
 /** A subscriber to every incoming command message, regardless of the open thread. */
-export type GlobalCmdHandler = (message: AgoraChat.CmdMsgBody) => void;
+type GlobalCmdHandler = (message: AgoraChat.CmdMsgBody) => void;
 
 // Always-on fan-out for incoming commands (delete, edit, read, ...), mirroring
 // the text fan-out above, so the store sees a signal for any channel.
@@ -123,7 +123,7 @@ export interface RunChatConnectionParams {
 }
 
 /** What the hook holds: stop everything, or attempt again right now (also after a kick). */
-export interface ChatConnectionHandle {
+interface ChatConnectionHandle {
   teardown: () => void;
   retry: () => void;
 }

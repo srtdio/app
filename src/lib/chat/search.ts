@@ -24,12 +24,12 @@ import { civilDay, formatTime } from '@/lib/time';
 import { generateTraceId } from '@/lib/trace';
 
 type SearchFn = Database['public']['Functions']['chat_message_search'];
-export type SearchArgs = SearchFn['Args'];
+type SearchArgs = SearchFn['Args'];
 type SearchRow = SearchFn['Returns'][number];
 
 /** Shortest and longest trimmed query the server searches (else zero rows). */
 export const SEARCH_MIN_CHARS = 2;
-export const SEARCH_MAX_CHARS = 100;
+const SEARCH_MAX_CHARS = 100;
 /** One page of hits. */
 export const SEARCH_PAGE_SIZE = 30;
 /** Typing settles this long before a search goes out. */
@@ -63,7 +63,7 @@ export function searchReady(raw: string, kind: SearchKind | null): boolean {
  * The p_query a call carries: the query when it is long enough, else '' when a
  * chip is set (the chip alone lists the newest matches). Pure.
  */
-export function effectiveQuery(raw: string, kind: SearchKind | null): string {
+function effectiveQuery(raw: string, kind: SearchKind | null): string {
   const q = normalizeQuery(raw);
   return kind !== null && !searchQueryReady(q) ? '' : q;
 }
@@ -423,7 +423,7 @@ export function queryWords(raw: string): string[] {
 const WORD = /[\p{L}\p{M}\p{N}]+/gu;
 
 /** One run of text: matched (a word starting with a query word) or not. */
-export interface MatchRun {
+interface MatchRun {
   text: string;
   hit: boolean;
 }
@@ -452,7 +452,7 @@ export function matchRuns(text: string, words: readonly string[]): MatchRun[] {
 /** Characters kept before the first match when the snippet is cut. */
 const SNIPPET_LEAD = 24;
 /** The snippet's longest run (two lines of a result row, with room to spare). */
-export const SNIPPET_MAX = 140;
+const SNIPPET_MAX = 140;
 const ELLIPSIS = '…';
 
 /**

@@ -134,7 +134,7 @@ export function VoiceDraftBar(props: {
   );
 }
 
-export const STOP_RECORDING_TITLE = 'Stop recording?';
+const STOP_RECORDING_TITLE = 'Stop recording?';
 export const STOP_RECORDING_KEEP = 'Keep recording';
 export const STOP_RECORDING_SAVE = 'Save as draft';
 export const STOP_RECORDING_DISCARD = 'Discard';

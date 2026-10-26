@@ -220,14 +220,6 @@ export function commentResolve(
   return callProc(client, 'comment_resolve', args);
 }
 
-export type CommentDeleteArgs = ProcArgs<'comment_delete'>;
-export function commentDelete(
-  client: Client,
-  args: CommentDeleteArgs,
-): Promise<Result<ProcReturns<'comment_delete'>>> {
-  return callProc(client, 'comment_delete', args);
-}
-
 export type CheckpointAcceptArgs = ProcArgs<'checkpoint_accept'>;
 export function checkpointAccept(
   client: Client,
@@ -349,27 +341,11 @@ export function usernameSet(
   return callProc(client, 'username_set', args);
 }
 
-export type MemberJoinGroupSetArgs = ProcArgs<'member_join_group_set'>;
-export function memberJoinGroupSet(
-  client: Client,
-  args: MemberJoinGroupSetArgs,
-): Promise<Result<ProcReturns<'member_join_group_set'>>> {
-  return callProc(client, 'member_join_group_set', args);
-}
-
 // Plans in chat (migrations 20261009110000_plans_core, 20261009163000_chat_plan_share,
 // 20261009205500_plan_item_comments, 20261011011500_plan_drafts_in_client_plans).
 // Every write proc takes p_trace_id; plan_draft_rows is a read-only, batched
 // helper (no trace id, no audit) listing the draft post rows of up to 100
 // plans. plan_draft_items is retired (no EXECUTE) and has no wrapper.
-
-export type PlanCreateArgs = ProcArgs<'plan_create'>;
-export function planCreate(
-  client: Client,
-  args: PlanCreateArgs,
-): Promise<Result<ProcReturns<'plan_create'>>> {
-  return callProc(client, 'plan_create', args);
-}
 
 /** One concept for plan_create_with_items, in screen order. */
 export interface PlanCreateConcept {
@@ -524,14 +500,6 @@ export function planSave(
     p_ops: args.p_ops as unknown as Json,
     p_trace_id: args.p_trace_id,
   });
-}
-
-export type PlanItemsReorderArgs = ProcArgs<'plan_items_reorder'>;
-export function planItemsReorder(
-  client: Client,
-  args: PlanItemsReorderArgs,
-): Promise<Result<ProcReturns<'plan_items_reorder'>>> {
-  return callProc(client, 'plan_items_reorder', args);
 }
 
 /**

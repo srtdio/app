@@ -12,10 +12,10 @@ type CardFields = Pick<ThreadMessage, 'sharedPostIds'>;
 type RefFields = Pick<ThreadMessage, 'id' | 'sharedPostIds' | 'reply' | 'parentSharedPostIds'>;
 
 /** Post ids of a card message, keyed by its message id. */
-export type ParentIndex = ReadonlyMap<string, readonly string[]>;
+type ParentIndex = ReadonlyMap<string, readonly string[]>;
 
 /** The chip a message carries: the card message it replies to and that card's post. */
-export interface ChipTarget {
+interface ChipTarget {
   cardMessageId: string;
   postId: string;
 }
@@ -68,7 +68,7 @@ export function newestCardFor<T extends Pick<ThreadMessage, 'id' | 'sharedPostId
 }
 
 /** A share waiting for its card message: the post, the ids and the newest time loaded when it was sent. */
-export interface ExpectedCard {
+interface ExpectedCard {
   postId: string;
   known: ReadonlySet<string>;
   /** The newest loaded message time when the share was sent; the card orders after it. */
@@ -108,7 +108,7 @@ export function newCardFor<
 export const EXPECT_CARD_MS = 30_000;
 
 /** The one share a thread waits on to turn its card into the About. */
-export interface CardExpectation {
+interface CardExpectation {
   /**
    * Wait for the card of a share about to be sent. False (and nothing waited
    * on) when the thread cannot send; the caller tells the user.
@@ -163,7 +163,7 @@ export function createCardExpectation(
 }
 
 /** A reply read from a row whose quote (and its parent's post ids) is not resolved yet. */
-export function isUnhydratedReply(row: Pick<ThreadMessage, 'reply'>): boolean {
+function isUnhydratedReply(row: Pick<ThreadMessage, 'reply'>): boolean {
   return row.reply !== null && row.reply.preview === '';
 }
 
@@ -195,7 +195,7 @@ export interface PageGate {
   last: readonly GateFields[];
 }
 
-export interface RowReadiness {
+interface RowReadiness {
   parentIndex: ParentIndex;
   /** The chip post is in the batch (a row or null) or its read was attempted. */
   chipSettled: (postId: string) => boolean;

@@ -35,23 +35,15 @@ import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 /** The tray and the plus icon move for this long. */
-export const TRAY_MOTION_MS = 180;
+const TRAY_MOTION_MS = 180;
 
 type TileIcon = ComponentType<{ size?: number; className?: string }>;
 
 /** Every tray tile id, in display order. */
-export type TrayTileId =
-  | 'photos'
-  | 'file'
-  | 'assets'
-  | 'brief'
-  | 'post'
-  | 'draft'
-  | 'plan'
-  | 'schedule';
+type TrayTileId = 'photos' | 'file' | 'assets' | 'brief' | 'post' | 'draft' | 'plan' | 'schedule';
 
 /** One tray tile. A disabled tile renders faded, has no tap action and says why. */
-export interface TrayTile {
+interface TrayTile {
   id: TrayTileId;
   label: string;
   Icon: TileIcon;
@@ -67,7 +59,7 @@ export const DRAFT_UNAVAILABLE_LABEL = 'Draft, not available in chats with appro
 export const PLAN_UNAVAILABLE_LABEL = 'Plan, only creators can share a plan';
 
 /** The Plan tile's accessible name in Personal notes (a plan is shared into a chat). */
-export const PLAN_NOTES_LABEL = 'Plan, not available in Personal notes';
+const PLAN_NOTES_LABEL = 'Plan, not available in Personal notes';
 
 /**
  * Whether the open chat has a client among its other active members: null

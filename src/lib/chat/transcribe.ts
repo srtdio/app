@@ -11,7 +11,7 @@ export const TRANSCRIBE_TIMEOUT_MS = 20_000;
 
 export type TranscribeResult = { ok: true; transcript: string } | { ok: false; message: string };
 
-export interface TranscribeParams {
+interface TranscribeParams {
   /** The voice note's presigned R2 GET URL. */
   url: string;
   endpoint: string;

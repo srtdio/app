@@ -35,7 +35,7 @@ import {
   type TaskPriority,
 } from '@/lib/chat/tasks';
 
-export const NOT_SAVED = 'Not saved';
+const NOT_SAVED = 'Not saved';
 
 const P_TAG: Record<TaskPriority, string> = {
   0: 'bg-bad-soft text-bad',
@@ -50,7 +50,7 @@ const MENU_PAD = 4;
 const EDGE = 8;
 
 /** Where the menu goes for a chip at `rect` in a viewport of `vw` x `vh`. Pure. */
-export function placeMenu(
+function placeMenu(
   rect: { top: number; bottom: number; left: number; right: number },
   vw: number,
   vh: number,

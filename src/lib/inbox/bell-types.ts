@@ -30,7 +30,7 @@ export const BELL_PLAN_EVENT_TYPES = [
   'plan_comment',
 ] as const satisfies readonly InboxEventTypeValue[];
 
-export type BellPlanEventType = (typeof BELL_PLAN_EVENT_TYPES)[number];
+type BellPlanEventType = (typeof BELL_PLAN_EVENT_TYPES)[number];
 
 /** The chat task list's alerts: a change by someone else, and a missed due time. */
 export const BELL_TASK_EVENT_TYPES = [
@@ -38,7 +38,7 @@ export const BELL_TASK_EVENT_TYPES = [
   'task_due',
 ] as const satisfies readonly InboxEventTypeValue[];
 
-export type BellTaskEventType = (typeof BELL_TASK_EVENT_TYPES)[number];
+type BellTaskEventType = (typeof BELL_TASK_EVENT_TYPES)[number];
 
 const BELL_TASK = new Set<string>(BELL_TASK_EVENT_TYPES);
 
@@ -95,7 +95,7 @@ const BELL_ONLY_LIST = `(${BELL_ONLY_EVENT_TYPES.join(',')})`;
 export const NOT_CHAT_MENTION_OR = `event_type.neq.${BELL_MENTION_EVENT},entity_type.is.null,entity_type.neq.${BELL_CHAT_ENTITY}`;
 
 /** The two filter methods the helper below adds (a PostgREST filter builder). */
-export interface BellFilterable<Q> {
+interface BellFilterable<Q> {
   not(column: 'event_type', operator: 'in', value: string): Q;
   or(filters: string): Q;
 }
@@ -133,7 +133,7 @@ export function chatTaskHref(channelId: string, taskId: string): string {
  * A task alert opens through the chat's message link: its "message id" is
  * this prefix plus the task id, which chatMessageHref turns into `&task=`.
  */
-export const TASK_LINK_PREFIX = 'task:';
+const TASK_LINK_PREFIX = 'task:';
 
 /** The link token a task alert hands the message link. Pure. */
 export function taskLinkToken(taskId: string): string {

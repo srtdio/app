@@ -89,7 +89,7 @@ const STRIP_RAIL = 'relative -mx-[18px] -mt-4 flex justify-center bg-panel-3';
  * The strip's platform frame: the post's platform + format and its first slide
  * (stored size when known), so it matches the post page. Pure.
  */
-export function stripFrame(
+function stripFrame(
   platform: string,
   format: string,
   first: GalleryItem | undefined,
@@ -503,7 +503,7 @@ export function sideRole(side: ViewerSide): string | null {
 // ---------------------------------------------------------------------------
 // The stateful sheet
 
-export interface PostSheetProps {
+interface PostSheetProps {
   open: boolean;
   onClose: () => void;
   view: PostView;

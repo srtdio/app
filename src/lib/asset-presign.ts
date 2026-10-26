@@ -70,17 +70,17 @@ const LINK_KEY_RENEW_BEFORE_MS = 24 * 60 * 60 * 1000;
 const LINK_KEY_RETRY_PAUSE_MS = 60_000;
 
 /** True when a stored link key still has more than a day to run. Pure. */
-export function isFreshLinkKey(key: StoredLinkKey | null, nowMs: number): key is StoredLinkKey {
+function isFreshLinkKey(key: StoredLinkKey | null, nowMs: number): key is StoredLinkKey {
   return key !== null && key.expiresAt - nowMs > LINK_KEY_RENEW_BEFORE_MS;
 }
 
 /** The link-key endpoint next to the asset-read endpoint. Pure. */
-export function linkKeyEndpoint(endpoint: string): string {
+function linkKeyEndpoint(endpoint: string): string {
   return `${endpoint.replace(/\/+$/, '')}/link-key`;
 }
 
 /** A fast file URL. Pure. */
-export function fileLinkUrl(input: {
+function fileLinkUrl(input: {
   fileBase: string;
   assetVersionId: string;
   kind: 'thumb' | 'full';
@@ -93,7 +93,7 @@ export function fileLinkUrl(input: {
 }
 
 /** Mint the day's link key from asset-read. Throws PresignError on any failure. */
-export async function requestLinkKey(deps: PresignDeps): Promise<StoredLinkKey> {
+async function requestLinkKey(deps: PresignDeps): Promise<StoredLinkKey> {
   if (deps.endpoint === null || deps.endpoint === '') {
     throw new PresignError('Asset read endpoint is not configured.', 'unconfigured');
   }

@@ -28,7 +28,7 @@ import {
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
-export const SCHEDULE_SHEET_TITLE = 'Schedule message';
+const SCHEDULE_SHEET_TITLE = 'Schedule message';
 export const SCHEDULE_HELPER = 'Any time from 1 minute to 1 year ahead.';
 
 /** "1 photo", "3 photos", "2 files", "2 photos, 1 file"; '' for none. Pure. */

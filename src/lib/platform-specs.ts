@@ -188,7 +188,7 @@ export const PLATFORM_SPECS: Readonly<Record<PostPlatform, PlatformSpec>> = {
  * carousel and thread land on the platform's default image size; video lands on
  * the platform's default video size.
  */
-export const FORMAT_DEFAULT_SIZE: Readonly<
+const FORMAT_DEFAULT_SIZE: Readonly<
   Record<PostFormat, { media: 'image' | 'video'; size: string } | null>
 > = {
   text: null,

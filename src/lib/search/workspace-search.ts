@@ -24,8 +24,8 @@ import { generateTraceId } from '@/lib/trace';
 
 type GroupedFn = Database['public']['Functions']['workspace_search_grouped'];
 type CountsFn = Database['public']['Functions']['workspace_search_counts'];
-export type GroupedArgs = GroupedFn['Args'];
-export type CountsArgs = CountsFn['Args'];
+type GroupedArgs = GroupedFn['Args'];
+type CountsArgs = CountsFn['Args'];
 type GroupedRow = GroupedFn['Returns'][number];
 type CountsRow = CountsFn['Returns'][number];
 

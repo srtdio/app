@@ -103,7 +103,7 @@ export async function loadChannelMarks(
   return { ok: true, data: marks };
 }
 
-export type MarkLookup = { found: true; mark: ChatMark } | { found: false };
+type MarkLookup = { found: true; mark: ChatMark } | { found: false };
 
 /** One mark row by message id, after a live mark signal. */
 export async function loadMarkByMessageId(
@@ -129,7 +129,7 @@ export function upsertMark(marks: Map<string, ChatMark>, mark: ChatMark): Map<st
 }
 
 /** The mark types in menu order. */
-export const MARK_TYPES: readonly MarkType[] = ['commitment', 'decision', 'pending'];
+const MARK_TYPES: readonly MarkType[] = ['commitment', 'decision', 'pending'];
 
 /** Each mark type's display name. */
 export const TYPE_LABEL: Record<MarkType, string> = {
@@ -265,7 +265,7 @@ export function markStripLabel(counts: MarkCounts): string {
 }
 
 /** Which side the open-loops wording speaks to; 'unknown' reads neutral. */
-export type LoopsSide = 'agency' | 'client' | 'unknown';
+type LoopsSide = 'agency' | 'client' | 'unknown';
 
 /** The strip line and sheet heading for posts in review, per side. */
 export function openPostsPart(count: number, side: LoopsSide): string {
@@ -292,7 +292,7 @@ export const MARK_TABS: ReadonlyArray<{ key: MarkTab; label: string }> = [
 ];
 
 /** Epoch ms used for ordering: the marked message's time, else marked_at. */
-export type MarkTimeOf = (mark: ChatMark) => number;
+type MarkTimeOf = (mark: ChatMark) => number;
 
 function epoch(iso: string | null): number {
   if (iso === null) return 0;
@@ -336,7 +336,7 @@ export function resolverName(
 }
 
 /** Longest body snippet a sheet row shows. */
-export const MARK_ROW_SNIPPET = 80;
+const MARK_ROW_SNIPPET = 80;
 
 /** A row's line: the first 80 chars of the body, else the shared card title, else a label. */
 export function markRowText(
@@ -401,7 +401,7 @@ export function deleteConfirmTitle(count: number): string {
 }
 
 /** Older pages jump-to loads before giving up. */
-export const JUMP_MAX_PAGES = 10;
+const JUMP_MAX_PAGES = 10;
 
 export type FindOlderOutcome = 'found' | 'not_found' | 'exhausted' | 'error';
 
@@ -438,7 +438,7 @@ export async function findInOlderPages(params: {
 export const MARKS_EVENT_HANDLER_ID = 'chat-marks';
 
 /** The connection slice the marks subscription needs. */
-export type MarksConnection = Pick<ChatConnection, 'addEventHandler' | 'removeEventHandler'>;
+type MarksConnection = Pick<ChatConnection, 'addEventHandler' | 'removeEventHandler'>;
 
 /** Subscribe to live mark signals; returns the teardown. */
 export function subscribeMarkEvents(

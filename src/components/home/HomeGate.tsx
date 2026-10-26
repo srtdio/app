@@ -5,7 +5,7 @@ import { useSession } from '@/lib/session-context';
 // Lazy so the app bundle never carries the homepage, its styles or its fonts.
 const HomePage = lazy(() => import('./HomePage'));
 
-export type HomeRoute = 'loading' | 'app' | 'home';
+type HomeRoute = 'loading' | 'app' | 'home';
 
 /** Pure: what / shows for a given session state. */
 export function homeRouteFor(state: { loading: boolean; signedIn: boolean }): HomeRoute {

@@ -16,9 +16,9 @@ import { useBottomInset } from '@/lib/bottom-inset';
 import { viewportSize } from '@/lib/use-is-laptop';
 
 /** The URL parameter that turns the log on (1) or off (0). */
-export const PAINT_LOG_PARAM = 'paintlog';
+const PAINT_LOG_PARAM = 'paintlog';
 /** Entries kept; the oldest go first. */
-export const PAINT_LOG_LIMIT = 1_000;
+const PAINT_LOG_LIMIT = 1_000;
 const STORAGE_KEY = 'sorted:paintlog';
 
 /** Whether the log is on for this URL and the tab's stored choice. Pure. */
@@ -29,13 +29,13 @@ export function paintLogWanted(search: string, stored: string | null): boolean {
   return stored === '1';
 }
 
-export interface PaintLogEntry {
+interface PaintLogEntry {
   /** performance.now() in ms. */
   at: number;
   what: string;
 }
 
-export interface PaintLogStore {
+interface PaintLogStore {
   enabled: () => boolean;
   push: (what: string) => void;
   /** The entries, oldest first (a new array after each change). */

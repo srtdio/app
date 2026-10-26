@@ -23,7 +23,7 @@ function isolate(event: MouseEvent): void {
 }
 
 /** A snooze row's label: "Snooze 1 hour", "Snooze next week". Pure. */
-export function snoozeLabel(option: { label: string }): string {
+function snoozeLabel(option: { label: string }): string {
   const first = option.label.charAt(0);
   const rest = /[A-Z]/.test(first) ? first.toLowerCase() + option.label.slice(1) : option.label;
   return `Snooze ${rest}`;

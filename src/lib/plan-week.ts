@@ -146,7 +146,7 @@ export function civilNoonInZoneIso(civil: string, timeZone: string): string {
   return new Date(wallNoon - zoneOffsetMs(first, zone)).toISOString();
 }
 
-export interface WeekBoundsInput {
+interface WeekBoundsInput {
   /** The instant "today" is read from; supplied by the caller, never read here. */
   now: Date;
   /** The workspace IANA zone; a blank or unknown value degrades to UTC. */
@@ -157,7 +157,7 @@ export interface WeekBoundsInput {
   offset: number;
 }
 
-export interface PlanWeekBounds {
+interface PlanWeekBounds {
   /** First civil day of the week, 'YYYY-MM-DD'. */
   start: string;
   /** Last civil day of the week, INCLUSIVE ('YYYY-MM-DD'). */
@@ -195,7 +195,7 @@ export function weekLabel(start: string, offset: number): string {
   return formatCivilShort(start);
 }
 
-export interface DayGrouping<T> {
+interface DayGrouping<T> {
   /** One bucket per day in `days`, always present (empty days included). */
   byDay: Record<string, T[]>;
   /** Posts with no usable target date; shown above the week, never dropped. */
@@ -294,7 +294,7 @@ export function civilDaysBetween(start: string, end: string): string[] {
 }
 
 /** Plans longer than this many days get a week header per Mon-start week. */
-export const PLAN_WEEK_HEADER_AFTER_DAYS = 7;
+const PLAN_WEEK_HEADER_AFTER_DAYS = 7;
 
 /** Whether a plan's list shows week headers: more than 7 days. Pure. */
 export function planShowsWeeks(startsOn: string, endsOn: string): boolean {

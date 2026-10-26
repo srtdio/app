@@ -20,7 +20,7 @@ export function sanitizeBriefSort(value: string): BriefSort {
     : BRIEF_SORT_DEFAULT;
 }
 
-export interface BriefSortable {
+interface BriefSortable {
   target_date: string | null;
   updated_at: string;
 }

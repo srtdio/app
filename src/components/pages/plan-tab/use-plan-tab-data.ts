@@ -47,7 +47,7 @@ export function forgetPlanTab(): void {
   memory.clear();
 }
 
-export type PlanTabLoad =
+type PlanTabLoad =
   | { status: 'loading'; data: null }
   | { status: 'failed'; data: null }
   | { status: 'ready'; data: PlanTabData };

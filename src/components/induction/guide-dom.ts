@@ -20,7 +20,7 @@ function shown(el: Element): boolean {
   return window.getComputedStyle(el).visibility !== 'hidden';
 }
 
-export type Found = { found: false } | { found: true; el: HTMLElement; key: InductionKey };
+type Found = { found: false } | { found: true; el: HTMLElement; key: InductionKey };
 
 /**
  * Narrows one key to the element whose attribute holds a value: the review
@@ -49,7 +49,7 @@ function findKey(
 }
 
 /** The first shown control for the keys, in key order, narrowed by any qualifier. */
-export function findTarget(keys: readonly InductionKey[], qualifiers: Qualifiers = {}): Found {
+function findTarget(keys: readonly InductionKey[], qualifiers: Qualifiers = {}): Found {
   for (const key of keys) {
     const el = findKey(key, qualifiers[key]);
     if (el !== undefined) return { found: true, el, key };
@@ -57,7 +57,7 @@ export function findTarget(keys: readonly InductionKey[], qualifiers: Qualifiers
   return { found: false };
 }
 
-export type OpenDialog = { open: false } | { open: true; el: HTMLElement };
+type OpenDialog = { open: false } | { open: true; el: HTMLElement };
 
 /** The top-most open modal sheet or dialog (portals append, so the last one). */
 export function topDialog(): OpenDialog {
@@ -69,7 +69,7 @@ export function topDialog(): OpenDialog {
 }
 
 /** Whether an open modal sheet or dialog that does not hold the control covers it. */
-export function isCovered(el: HTMLElement): boolean {
+function isCovered(el: HTMLElement): boolean {
   const dialog = topDialog();
   return dialog.open && !dialog.el.contains(el);
 }
