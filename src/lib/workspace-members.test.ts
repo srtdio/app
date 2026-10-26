@@ -38,6 +38,7 @@ import {
   type WorkspaceMembersState,
 } from '@/lib/workspace-members';
 import { SIGNOUT_EVENT, WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
+import { resetSessionReads } from '@/lib/session-read';
 
 function row(userId: string, extra: Partial<WorkspaceMemberRow> = {}): WorkspaceMemberRow {
   return {
@@ -104,6 +105,8 @@ beforeEach(() => {
   h.listMembers.mockImplementation(async () => ({ ok: true, data: ROWS }));
   h.readProfiles.mockImplementation(async () => ({ ok: true, data: PROFILES }));
   resetWorkspaceMembersCache();
+  // Each read is also a session read: none is kept between tests.
+  resetSessionReads();
   seen.length = 0;
 });
 

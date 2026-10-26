@@ -41,12 +41,16 @@ import {
   ACTIVITY_PAGE_SIZE,
   EMPTY_LINES,
   activityPageKey,
+  editKeptActivityPages,
   invalidateActivityReads,
+  keepUpcoming,
   mentionCountKey,
   peekActivityPage,
   peekMentionCount,
+  peekUpcoming,
   sharedActivityPage,
   sharedMentionCount,
+  upcomingKey,
   type LoadResult,
   LOADING_NOTIFICATIONS,
   REFRESH_FAILED,
@@ -88,6 +92,7 @@ import { generateTraceId } from '@/lib/trace';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
+import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import { useCurrentProfile } from '@/lib/use-current-profile';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
@@ -208,23 +213,29 @@ export function NotificationsPage() {
       ? mentionHandle({ displayName: profile.display_name, username: profile.username })
       : null;
 
-  const [state, setState] = useState<ActivityState>('all');
+  // A return lands on the same chip and scroll (src/lib/kept-view.ts).
+  const keptKey = (what: string): string | null =>
+    userId !== null && workspaceId !== null
+      ? keptViewKey(userId, workspaceId, `activity:${what}`)
+      : null;
+  const [state, setState] = useKeptState<ActivityState>(keptKey('chip'), 'all');
   const { value: sort, setValue: setSort } = useSort<ActivityDirection>('activity', 'newest');
+  const untouched = useUntouched();
 
-  // Page one of All as the bell press (or a visit within the window) read it,
-  // when fresh: the first frame is the list. Else the first frame is the
-  // loading line, never the zero state (loading starts true: the load runs
-  // in an effect, after the first paint).
+  // The chip's page one as the bell press or an earlier visit this session
+  // read it: the first frame is the list, refreshed quietly behind it. Else
+  // the first frame is the loading line, never the zero state (loading starts
+  // true: the load runs in an effect, after the first paint).
   const [items, setItems] = useState<ActivityItem[]>(() =>
     userId !== null && workspaceId !== null
-      ? (peekActivityPage(activityPageKey(userId, workspaceId, 'all', sort)) ?? [])
+      ? (peekActivityPage(activityPageKey(userId, workspaceId, state, sort)) ?? [])
       : [],
   );
   const [loading, setLoading] = useState(
     () =>
       userId === null ||
       workspaceId === null ||
-      peekActivityPage(activityPageKey(userId, workspaceId, 'all', sort)) === undefined,
+      peekActivityPage(activityPageKey(userId, workspaceId, state, sort)) === undefined,
   );
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -271,33 +282,33 @@ export function NotificationsPage() {
   // workspace moved on) is dropped. A failure with rows on screen keeps them and
   // toasts; only a first load with nothing on screen shows the error box.
   // Page one is the chip's shared session read (activity/data.ts): a chip
-  // switch (or the mount) within the window paints the held page with no
-  // request; a refresh (a retry, a failed write, workspace data) reads anew; a
-  // merge follows an inbox change, which already dropped the held pages.
+  // switch (or the mount) paints the kept page at once and refreshes quietly
+  // behind it (no request while it is fresh); the refresh behind the arrival
+  // paint (`arrival`) is applied only while the person has not touched the
+  // screen, else held for the next visit. A refresh (a retry, a failed write,
+  // workspace data) reads anew; a merge follows an inbox change, which already
+  // marked the kept pages stale.
   const loadActivity = useCallback(
-    async (mode: LoadMode = 'refresh') => {
+    async (mode: LoadMode = 'refresh', arrival = false) => {
       if (workspaceId === null) return;
       if (mode !== 'merge') activitySeqRef.current += 1;
       const seq = activitySeqRef.current;
       const key = userId !== null ? activityPageKey(userId, workspaceId, state, sort) : null;
       if (mode === 'refresh' && key !== null) invalidateActivityReads(key);
+      // The kept page painted by this reset; its refresh is quiet.
+      const held = mode === 'reset' && key !== null ? peekActivityPage(key) : undefined;
       if (mode === 'reset') {
-        setItems([]);
-        setHasMore(false);
+        setItems(held ?? []);
+        setHasMore(held !== undefined && held.length === ACTIVITY_PAGE_SIZE);
         setEntering(new Set());
         loadingMoreRef.current = false;
         setLoadingMore(false);
-        const held = key !== null ? peekActivityPage(key) : undefined;
-        if (held !== undefined) {
-          setNowMs(Date.now());
-          setLoading(false);
-          setError(false);
-          setItems(held);
-          setHasMore(held.length === ACTIVITY_PAGE_SIZE);
-          return;
-        }
       }
-      if (mode !== 'merge') {
+      if (held !== undefined) {
+        setNowMs(Date.now());
+        setLoading(false);
+        setError(false);
+      } else if (mode !== 'merge') {
         setLoading(true);
         setError(false);
       }
@@ -312,11 +323,14 @@ export function NotificationsPage() {
       if (mode !== 'merge') setLoading(false);
       if (!result.ok) {
         logger.warn('notifications: load failed', { error: result.error });
-        if (mode === 'merge') return;
+        // A failed quiet refresh keeps the kept page, silently.
+        if (mode === 'merge' || held !== undefined) return;
         if (itemsRef.current.length > 0) push(REFRESH_FAILED);
         else setError(true);
         return;
       }
+      // A quiet refresh behind the arrival paint never moves what the person touched.
+      if (held !== undefined && arrival && !untouched()) return;
       if (mode === 'merge') {
         const known = new Set(itemsRef.current.map((item) => item.id));
         const added = result.data.filter((item) => !known.has(item.id));
@@ -328,7 +342,7 @@ export function NotificationsPage() {
       setItems(result.data);
       setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
     },
-    [workspaceId, userId, state, sort, push],
+    [workspaceId, userId, state, sort, push, untouched],
   );
 
   // Hold the topmost visible card still when a merge adds cards above it.
@@ -401,36 +415,69 @@ export function NotificationsPage() {
   // reminders, soonest first (fetchUpcoming). Never inbox rows: they never
   // count toward the unread badge and Mark all read never touches them. A
   // reload that fails keeps the rows on screen; only a first load shows the error.
-  const [upcoming, setUpcoming] = useState<UpcomingItem[]>([]);
-  const [upcomingLoaded, setUpcomingLoaded] = useState(false);
+  // The rows an earlier visit this session read paint at once; the arrival's
+  // reload follows the feed's quiet rule.
+  const keptUpcoming = (): UpcomingItem[] | undefined =>
+    userId !== null && workspaceId !== null
+      ? peekUpcoming(upcomingKey(userId, workspaceId))
+      : undefined;
+  const [upcoming, setUpcoming] = useState<UpcomingItem[]>(() => keptUpcoming() ?? []);
+  const [upcomingLoaded, setUpcomingLoaded] = useState(() => keptUpcoming() !== undefined);
   const [upcomingError, setUpcomingError] = useState(false);
   // Rows a cancel is removing, hidden at once until the reload drops them.
   const [hiddenUpcoming, setHiddenUpcoming] = useState<ReadonlySet<string>>(new Set());
   const upcomingSeqRef = useRef(0);
-  const upcomingLoadedRef = useRef(false);
-  const loadUpcoming = useCallback(async () => {
-    if (workspaceId === null) return;
+  const upcomingLoadedRef = useRef(upcomingLoaded);
+  const loadUpcoming = useCallback(
+    async (arrival = false) => {
+      if (workspaceId === null) return;
+      upcomingSeqRef.current += 1;
+      const seq = upcomingSeqRef.current;
+      const result = await fetchUpcoming(supabase, workspaceId);
+      if (seq !== upcomingSeqRef.current) return;
+      setNowMs(Date.now());
+      if (!result.ok) {
+        logger.warn('notifications: upcoming load failed', { error: result.error });
+        if (!upcomingLoadedRef.current) setUpcomingError(true);
+        return;
+      }
+      if (userId !== null) keepUpcoming(upcomingKey(userId, workspaceId), result.data);
+      if (arrival && upcomingLoadedRef.current && !untouched()) return;
+      upcomingLoadedRef.current = true;
+      setUpcomingLoaded(true);
+      setUpcomingError(false);
+      setUpcoming(result.data);
+      const present = new Set(result.data.map((item) => item.id));
+      setHiddenUpcoming((prev) => new Set([...prev].filter((id) => present.has(id))));
+    },
+    [workspaceId, userId, untouched],
+  );
+
+  // Reset Upcoming when the active workspace changes, before that workspace's
+  // first load below starts (the chip follows its own kept key). The feed's
+  // own 'reset' load (loadActivity changes with the workspace) clears the old
+  // workspace's rows first and drops its in-flight loads; bumping the feed's
+  // sequence here too would drop that new load.
+  const shownWorkspaceRef = useRef(workspaceId);
+  useEffect(() => {
+    if (shownWorkspaceRef.current === workspaceId) return;
+    shownWorkspaceRef.current = workspaceId;
     upcomingSeqRef.current += 1;
-    const seq = upcomingSeqRef.current;
-    const result = await fetchUpcoming(supabase, workspaceId);
-    if (seq !== upcomingSeqRef.current) return;
-    setNowMs(Date.now());
-    if (!result.ok) {
-      logger.warn('notifications: upcoming load failed', { error: result.error });
-      if (!upcomingLoadedRef.current) setUpcomingError(true);
-      return;
-    }
-    upcomingLoadedRef.current = true;
-    setUpcomingLoaded(true);
+    upcomingLoadedRef.current = false;
+    setUpcoming([]);
+    setUpcomingLoaded(false);
     setUpcomingError(false);
-    setUpcoming(result.data);
-    const present = new Set(result.data.map((item) => item.id));
-    setHiddenUpcoming((prev) => new Set([...prev].filter((id) => present.has(id))));
+    setHiddenUpcoming(new Set());
   }, [workspaceId]);
 
+  // The first load of this mount is the arrival (the identity of the first
+  // loadActivity: a chip, sort or workspace change makes a new one).
+  const arrivalLoadRef = useRef<typeof loadActivity | null>(null);
   useEffect(() => {
-    if (state === 'upcoming') void loadUpcoming();
-    else void loadActivity('reset');
+    arrivalLoadRef.current ??= loadActivity;
+    const arrival = arrivalLoadRef.current === loadActivity;
+    if (state === 'upcoming') void loadUpcoming(arrival);
+    else void loadActivity('reset', arrival);
   }, [state, loadActivity, loadUpcoming]);
 
   // New rows found by the shell's poll: fold page one in (no duplicates, no
@@ -499,20 +546,6 @@ export function NotificationsPage() {
     void loadMentionCount();
   });
 
-  // Reset filters and Upcoming when the active workspace changes. The feed's
-  // own 'reset' load (loadActivity changes with the workspace) clears the old
-  // workspace's rows first and drops its in-flight loads; bumping the sequence
-  // here too would drop that new load.
-  useEffect(() => {
-    setState('all');
-    upcomingSeqRef.current += 1;
-    upcomingLoadedRef.current = false;
-    setUpcoming([]);
-    setUpcomingLoaded(false);
-    setUpcomingError(false);
-    setHiddenUpcoming(new Set());
-  }, [workspaceId]);
-
   const buckets = useMemo(
     () => groupDigest(filterByState(items, state, nowMs), sort, { nowMs, tz }),
     [items, state, sort, nowMs, tz],
@@ -520,25 +553,42 @@ export function NotificationsPage() {
 
   const totalUnread = useMemo(() => unreadCount(items, nowMs), [items, nowMs]);
 
+  // An own write lands at once, on screen and in every kept chip page, so a
+  // return paints it.
+  const editItems = useCallback(
+    (edit: (items: ActivityItem[]) => ActivityItem[]) => {
+      setItems(edit);
+      if (userId !== null && workspaceId !== null) {
+        editKeptActivityPages(userId, workspaceId, edit);
+      }
+    },
+    [userId, workspaceId],
+  );
+
   // Mark one entry read in place, optimistically (read-state is best-effort).
-  const markReadLocal = useCallback((id: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id && item.readAt === null
-          ? { ...item, readAt: new Date().toISOString() }
-          : item,
-      ),
-    );
-  }, []);
+  const markReadLocal = useCallback(
+    (id: string) => {
+      const stamp = new Date().toISOString();
+      editItems((prev) =>
+        prev.map((item) =>
+          item.id === id && item.readAt === null ? { ...item, readAt: stamp } : item,
+        ),
+      );
+    },
+    [editItems],
+  );
 
   // Put rows a failed save had marked back to unread (only those still carrying its stamp).
-  const revertRead = useCallback((ids: ReadonlySet<string>, stamp: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        ids.has(item.id) && item.readAt === stamp ? { ...item, readAt: null } : item,
-      ),
-    );
-  }, []);
+  const revertRead = useCallback(
+    (ids: ReadonlySet<string>, stamp: string) => {
+      editItems((prev) =>
+        prev.map((item) =>
+          ids.has(item.id) && item.readAt === stamp ? { ...item, readAt: null } : item,
+        ),
+      );
+    },
+    [editItems],
+  );
 
   // Mark entries read at once (optimistic, one trace) and save them together.
   // Only the rows whose save failed go back to unread, with the fixed toast; any
@@ -548,7 +598,7 @@ export function NotificationsPage() {
       if (workspaceId === null || entries.length === 0) return;
       const ids = new Set(entries.map((entry) => entry.id));
       const stamp = new Date().toISOString();
-      setItems((prev) =>
+      editItems((prev) =>
         prev.map((item) =>
           ids.has(item.id) && item.readAt === null ? { ...item, readAt: stamp } : item,
         ),
@@ -574,7 +624,7 @@ export function NotificationsPage() {
         }
       });
     },
-    [workspaceId, newTrace, revertRead, toast, loadMentionCount],
+    [workspaceId, newTrace, editItems, revertRead, toast, loadMentionCount],
   );
 
   // Open one entry by its tap rule (openAction): mark it read (optimistic, and
@@ -638,7 +688,7 @@ export function NotificationsPage() {
     if (marksChipOnServer(state)) {
       const ids = new Set(targets.map((item) => item.id));
       const stamp = new Date().toISOString();
-      setItems((prev) =>
+      editItems((prev) =>
         prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)),
       );
       const traceId = newTrace();
@@ -662,7 +712,9 @@ export function NotificationsPage() {
     }
     const ids = new Set(targets.map((item) => item.id));
     const stamp = new Date().toISOString();
-    setItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)));
+    editItems((prev) =>
+      prev.map((item) => (ids.has(item.id) ? { ...item, readAt: stamp } : item)),
+    );
     const traceId = newTrace();
     void markAllEntriesRead(supabase, workspaceId, traceId).then((result) => {
       if (!result.ok) {
@@ -687,6 +739,7 @@ export function NotificationsPage() {
     loadMentionCount,
     loadActivity,
     markEntriesRead,
+    editItems,
     revertRead,
   ]);
 
@@ -702,11 +755,11 @@ export function NotificationsPage() {
       if (workspaceId === null) return;
       const previous = item.snoozedUntil;
       const next = optimisticSnoozeUntil(kind, Date.now());
-      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: next } : i)));
+      editItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: next } : i)));
       const traceId = newTrace();
       void snoozeEntry(supabase, item, workspaceId, kind, traceId).then((result) => {
         if (!result.ok) {
-          setItems((prev) =>
+          editItems((prev) =>
             prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: previous } : i)),
           );
           logger.warn('notifications: snooze failed', {
@@ -719,7 +772,7 @@ export function NotificationsPage() {
         window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
       });
     },
-    [workspaceId, newTrace, push],
+    [workspaceId, newTrace, editItems, push],
   );
 
   // A failed scheduled send's Retry: send it now (the proc clears the entry),
@@ -874,6 +927,7 @@ export function NotificationsPage() {
   }, [reminderEdit, cancelUpcoming, toast]);
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  useKeptScroll(keptKey('scroll'), state === 'upcoming' ? upcomingLoaded : !listLoading);
 
   return (
     <>

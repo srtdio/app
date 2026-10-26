@@ -11,6 +11,8 @@
 // at all shows the zero state (line 2 only until onboarding is done), with no
 // create button of its own: the top bar's New plan is the one.
 // Approvers see shared plans only, and never Create, drag or the day menu.
+// A return to the tab lands on the same Month | Week, the same range and the
+// same scroll (src/lib/kept-view.ts), over the range's kept read.
 
 import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -26,6 +28,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan, IconPlus } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ComposeRange } from '@/lib/chat/plans';
+import { keptViewKey, useKeptScroll, useKeptState } from '@/lib/kept-view';
 import { safeTimeZone } from '@/lib/time';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import {
@@ -41,6 +44,7 @@ import {
   type PlanTabView,
 } from '@/lib/plan-tab';
 import { civilToday } from '@/lib/plan-week';
+import { useSession } from '@/lib/session-context';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace } from '@/lib/workspace-context';
 import { PlanCalendar } from './plan-tab/PlanCalendar';
@@ -63,8 +67,13 @@ export function PlanTabPage(): ReactElement {
   const { side, ready } = useViewerSide(workspaceId);
   const onboarded = onboardingFinished(useInduction()?.resolution.kind ?? null);
   const today = civilToday(new Date(), timeZone);
-  const [view, setView] = useState<PlanTabView>('month');
-  const [anchor, setAnchor] = useState(today);
+  const userId = useSession().session?.user.id ?? null;
+  const keptKey = (what: string): string | null =>
+    userId !== null && workspaceId !== null
+      ? keptViewKey(userId, workspaceId, `plan-tab:${what}`)
+      : null;
+  const [view, setView] = useKeptState<PlanTabView>(keptKey('view'), 'month');
+  const [anchor, setAnchor] = useKeptState(keptKey('anchor'), today);
   // The New plan screen: closed (null) or open with its dates (undefined: this week).
   const [compose, setCompose] = useState<{ range: ComposeRange | undefined } | null>(null);
   const [addTo, setAddTo] = useState<AddTarget | null>(null);
@@ -76,6 +85,7 @@ export function PlanTabPage(): ReactElement {
     enabled: ready,
   });
   const data = load.status === 'ready' ? load.data : null;
+  useKeptScroll(keptKey('scroll'), data !== null);
   const more = useMemo(
     () => (data !== null && data.nextCursor !== null ? { busy: moreBusy, onMore: loadMore } : null),
     [data, moreBusy, loadMore],

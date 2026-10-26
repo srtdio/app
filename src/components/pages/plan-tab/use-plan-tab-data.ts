@@ -1,13 +1,16 @@
 // The Plan tab's data: one readPlanTab per range (bounded at 5s), shared
 // within this tab session (src/lib/plan-tab-shared.ts): a nav press starts the
-// first range's read and the mount joins it. A range read inside the freshness
-// window paints at once with no request (coming back to the tab, or to a week
-// or month just seen); past the window it is absent, so the tab clears to
-// loading (the grid keeps its size) and reads. Older data is never painted.
-// The workspace-data-changed signal and any plan write (PLAN_CHANGED_EVENT)
-// drop the kept reads and re-read in the background, keeping what is shown
-// until the new data lands. A failed background re-read keeps the data; a
-// failed first read shows the failed state with Retry.
+// first range's read and the mount joins it. A range read this session paints
+// at once (coming back to the tab, or to a week or month already seen) and
+// refreshes quietly behind it (no request while it is fresh); only a range
+// never read clears to loading (the grid keeps its size). The refresh behind
+// the tab's arrival paint is applied only while the person has not touched,
+// scrolled or typed since arriving (src/lib/kept-view.ts); a later one is held
+// (the session keeps it for the next visit). The workspace-data-changed signal
+// and any plan write (PLAN_CHANGED_EVENT) mark the kept reads stale and re-read
+// in the background, keeping what is shown until the new data lands. A failed
+// background re-read keeps the data; a failed first read shows the failed
+// state with Retry.
 //
 // Every read is one page of plans (12, src/lib/plan-tab-read.ts), on the
 // phone (no range) and on the laptop (the range) alike. While the shown data
@@ -24,10 +27,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
 import { READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
 import { PLAN_CHANGED_EVENT } from '@/lib/chat/plans';
+import { useUntouched } from '@/lib/kept-view';
 import { logger } from '@/lib/logger';
 import { mergePlanTabPages, readPlanTab, type PlanTabData } from '@/lib/plan-tab-read';
 import {
-  dropPlanTabReads,
+  invalidatePlanTabReads,
   peekPlanTab,
   readSharedPlanTab,
   type PlanTabReadArgs,
@@ -106,7 +110,18 @@ export function usePlanTabData(input: {
   const start = input.range?.start ?? null;
   const end = input.range?.end ?? null;
   const active = enabled && workspaceId !== null;
-  const [load, setLoad] = useState<PlanTabLoad>({ status: 'loading', data: null });
+  // A return paints the kept read on its first frame, before the read effect runs.
+  const [load, setLoad] = useState<PlanTabLoad>(() => {
+    const kept =
+      active && workspaceId !== null
+        ? peekPlanTab(sharedUserId(workspaceId), {
+            workspaceId,
+            range: start !== null && end !== null ? { start, end } : null,
+            onlyShared,
+          })
+        : undefined;
+    return kept !== undefined ? { status: 'ready', data: kept } : { status: 'loading', data: null };
+  });
   const [moreBusy, setMoreBusy] = useState(false);
   const seq = useRef(0);
   // Pages shown (1 until a Load more lands; back to 1 on a first read).
@@ -114,6 +129,9 @@ export function usePlanTabData(input: {
   const loadRef = useRef(load);
   loadRef.current = load;
   const moreInFlight = useRef(false);
+  // What this mount first read (the arrival); a range read after it is an ask.
+  const arrivalArgs = useRef<PlanTabReadArgs | null>(null);
+  const untouched = useUntouched();
 
   const args = useMemo<PlanTabReadArgs | null>(
     () =>
@@ -133,17 +151,18 @@ export function usePlanTabData(input: {
       seq.current += 1;
       const mine = seq.current;
       const userId = sharedUserId(args.workspaceId);
+      arrivalArgs.current ??= args;
+      const arrival = !background && args === arrivalArgs.current;
+      // The kept range painted on this read; its refresh is quiet.
+      const kept = background ? undefined : peekPlanTab(userId, args);
       if (background) {
-        // Something changed: no kept read may answer for it.
-        dropPlanTabReads();
+        // Something changed: no fresh read may answer for it.
+        invalidatePlanTabReads();
       } else {
         pages.current = 1;
-        const kept = peekPlanTab(userId, args);
-        if (kept !== undefined) {
-          setLoad({ status: 'ready', data: kept });
-          return;
-        }
-        setLoad({ status: 'loading', data: null });
+        setLoad(
+          kept !== undefined ? { status: 'ready', data: kept } : { status: 'loading', data: null },
+        );
       }
       let result = await readSharedPlanTab(supabase, userId, args);
       // A background re-read reads the pages the viewer loaded, one request
@@ -156,6 +175,8 @@ export function usePlanTabData(input: {
       }
       if (mine !== seq.current) return;
       if (result.ok) {
+        // A quiet refresh behind the arrival paint never moves what the person touched.
+        if (arrival && kept !== undefined && !untouched()) return;
         setLoad({ status: 'ready', data: result.data });
         return;
       }
@@ -166,7 +187,7 @@ export function usePlanTabData(input: {
       // A failed background re-read keeps what is shown.
       setLoad((prev) => (prev.status === 'ready' ? prev : { status: 'failed', data: null }));
     },
-    [args],
+    [args, untouched],
   );
 
   const more = useCallback(async (): Promise<void> => {
@@ -205,11 +226,11 @@ export function usePlanTabData(input: {
     return () => window.removeEventListener(PLAN_CHANGED_EVENT, onPlan);
   }, [reload]);
   // Opening a post from the calendar leaves for a page that can change it
-  // without a post-changed event: the kept reads go with it, so Back reads
-  // the server again rather than paint them.
+  // without a post-changed event: the kept reads are marked stale, so Back
+  // paints them and reads the server again behind them.
   useEffect(
     () => () => {
-      if (leavingToPost(window.location.pathname)) dropPlanTabReads();
+      if (leavingToPost(window.location.pathname)) invalidatePlanTabReads();
     },
     [],
   );

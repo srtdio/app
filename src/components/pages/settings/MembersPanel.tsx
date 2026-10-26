@@ -2,9 +2,12 @@
 // gates every action affordance to owner/admin, and drives the remove-member,
 // cancel-invite, edit-invite and role-change flows through the existing Sheet +
 // ConfirmDialog. The invite form stays at the top and refetches the list on a
-// successful send.
+// successful send. A return to the panel paints the list this session last
+// read while the shared cache loads again (no "Loading members"); the new list
+// lands while the person has not touched the screen, else the kept one stays
+// (src/lib/kept-view.ts). The panel's own changes always land.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { memberRemove } from '@srtdio/rpc';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/toast';
@@ -14,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
+import { useUntouched } from '@/lib/kept-view';
 import {
   MembersInviteForm,
   getInviteRoleOptions,
@@ -37,7 +41,8 @@ import {
   memberRemoveErrorMessage,
 } from './members-data';
 import type { MemberEntry } from './members-data';
-import { useWorkspaceMembers } from '@/lib/workspace-members';
+import { keptWorkspaceMembers, useWorkspaceMembers } from '@/lib/workspace-members';
+import type { WorkspaceMembersData } from '@/lib/workspace-members';
 import { useInviteDelivery } from './useInviteDelivery';
 
 export function MembersPanel() {
@@ -45,22 +50,41 @@ export function MembersPanel() {
   const { session } = useSession();
   const newTrace = useNewTrace();
   const toast = useToast();
-  const {
-    loading,
-    error,
-    rows,
-    profiles,
-    refetch: refetchMembers,
-  } = useWorkspaceMembers(workspaceId);
+  const currentUserId = session?.user.id ?? null;
+  const live = useWorkspaceMembers(workspaceId);
+  const untouched = useUntouched();
+  // The list kept from an earlier visit this session, shown until a good new
+  // list (not the one the cache held on arrival) lands untouched, the
+  // workspace changes or the panel writes.
+  const [arrival] = useState(() => ({
+    live,
+    list:
+      currentUserId !== null && workspaceId !== null
+        ? (keptWorkspaceMembers(currentUserId, workspaceId) ?? null)
+        : null,
+  }));
+  const held = useRef<{ workspaceId: string | null; list: WorkspaceMembersData } | null>(
+    arrival.list !== null ? { workspaceId, list: arrival.list } : null,
+  );
+  const wrote = useRef(false);
+  const landed = !live.loading && live.error === null && live !== arrival.live;
+  if (
+    held.current !== null &&
+    (held.current.workspaceId !== workspaceId || wrote.current || (landed && untouched()))
+  ) {
+    held.current = null;
+  }
+  const { loading, error, rows, profiles } = held.current?.list ?? live;
+  const refetchMembers = live.refetch;
   const { delivery, refetch: refetchDelivery } = useInviteDelivery(workspaceId);
   // After a remove, a cancelled or edited invite, a role change or a fresh
   // invite: the shared members list re-reads for every screen, plus the pills.
   const refetch = useCallback(() => {
+    wrote.current = true;
     refetchMembers();
     refetchDelivery();
   }, [refetchMembers, refetchDelivery]);
 
-  const currentUserId = session?.user.id ?? null;
   const selfEmail = session?.user.email ?? null;
 
   const derived = useMemo(

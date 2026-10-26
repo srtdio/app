@@ -32,6 +32,7 @@ import {
   resetWorkspaceMembersCache,
   useWorkspaceMembers,
 } from '@/lib/workspace-members';
+import { resetSessionReads } from '@/lib/session-read';
 
 const ROWS = [
   { user_id: 'u-owner', role: 'owner', active: true, removed_at: null },
@@ -84,6 +85,8 @@ beforeEach(() => {
   h.listMembers.mockImplementation(async () => ({ ok: true, data: ROWS }));
   h.readProfiles.mockImplementation(async () => ({ ok: true, data: PROFILES }));
   resetWorkspaceMembersCache();
+  // Each read is also a session read: none is kept between tests.
+  resetSessionReads();
   approvers.length = 0;
   people.length = 0;
 });

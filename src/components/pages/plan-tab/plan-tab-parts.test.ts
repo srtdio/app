@@ -63,8 +63,8 @@ describe('the phone card covers', () => {
   });
 });
 
-describe('Plan tab memory (session reads, freshness window)', () => {
-  it('paints a range read inside the window, never one past it', async () => {
+describe('Plan tab memory (session reads, kept for the session)', () => {
+  it('paints a range read this session at any age, per user, workspace, range and side', async () => {
     const { peekPlanTab, planTabReadKey } = await import('@/lib/plan-tab-shared');
     const { primeRead, resetSessionReads, READ_FRESH_MS } = await import('@/lib/session-read');
     resetSessionReads();
@@ -87,8 +87,11 @@ describe('Plan tab memory (session reads, freshness window)', () => {
     expect(
       peekPlanTab('u1', { ...args, range: { start: '2026-10-01', end: '2026-10-31' } }),
     ).toBeUndefined();
-    // Past the window it is absent: the tab shows loading and reads again.
-    expect(peekPlanTab('u1', args, Date.now() + READ_FRESH_MS + 1)).toBeUndefined();
+    // Past the window it still paints (the tab refreshes quietly behind it).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + READ_FRESH_MS + 1);
+    expect(peekPlanTab('u1', args)).toBe(data);
+    vi.useRealTimers();
     // Without a session context nothing is shared.
     expect(peekPlanTab(null, args)).toBeUndefined();
     resetSessionReads();

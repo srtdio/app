@@ -3,14 +3,15 @@ import type { Client } from '@srtdio/rpc';
 
 // Plan tab requests: the read is ONE plan_bundle_read (one round, the zone
 // comes with it: no workspaces read), a nav press starts it and the mount
-// joins it, and the kept read is dropped when a plan or post changes.
+// joins it, and a plan or post change marks the kept read stale (it still
+// paints; the next read goes to the server).
 
 vi.mock('@/lib/chat/viewer-role', () => ({
   resolveViewerSide: async () => 'agency',
 }));
 
 import {
-  dropPlanTabReads,
+  invalidatePlanTabReads,
   peekPlanTab,
   readSharedPlanTab,
   startPlanTabRead,
@@ -117,7 +118,6 @@ const ARGS: PlanTabReadArgs = {
 
 afterEach(() => {
   resetSessionReads();
-  dropPlanTabReads();
 });
 
 describe('Plan tab read rounds', () => {
@@ -159,13 +159,16 @@ describe('Plan tab nav press', () => {
     expect(peekPlanTab('u1', { ...ARGS, range: null })).toBeDefined();
   });
 
-  it('a plan or post change drops the kept read', async () => {
+  it('a plan or post change marks the kept read stale: it still paints, the next read asks', async () => {
     const { client, rounds } = gatedClient();
     const read = readSharedPlanTab(client, 'u1', ARGS);
     await rounds();
     await read;
     expect(peekPlanTab('u1', ARGS)).toBeDefined();
-    dropPlanTabReads();
-    expect(peekPlanTab('u1', ARGS)).toBeUndefined();
+    invalidatePlanTabReads();
+    expect(peekPlanTab('u1', ARGS)).toBeDefined();
+    const again = readSharedPlanTab(client, 'u1', ARGS);
+    expect(await rounds()).toEqual([['rpc:plan_bundle_read']]);
+    expect((await again).ok).toBe(true);
   });
 });
