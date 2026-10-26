@@ -361,7 +361,10 @@ describe('invalid_mention', () => {
   });
 
   it('omits details when the proc raised none', async () => {
-    const { client } = makeClient({ data: null, error: { message: 'invalid_mention', details: null } });
+    const { client } = makeClient({
+      data: null,
+      error: { message: 'invalid_mention', details: null },
+    });
     const result = await assetDelete(client, args);
     expect(result).toEqual({
       ok: false,
