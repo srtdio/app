@@ -34,6 +34,7 @@ import { settleOpenPosts, type OpenPostsData } from '@/lib/chat/use-open-posts';
 import { settleStatusRound, type StatusRound } from '@/lib/chat/use-status-counts';
 import type { PlanCardCache } from '@/lib/chat/plans';
 import type { ChatMark } from '@/lib/chat/marks';
+import { READ_FRESH_MS } from '@/lib/session-read';
 
 const A: ChatKey = { userId: 'u1', workspaceId: 'w1', channelId: 'c1' };
 const B: ChatKey = { userId: 'u1', workspaceId: 'w1', channelId: 'c2' };
@@ -375,5 +376,42 @@ describe('the messages page started at the tap', () => {
     const result = await readLatestMessages(client, 'c9', abort.signal);
     expect(result.ok).toBe(false);
     clearMessagePrefetch();
+  });
+});
+
+describe('recallFresh: an old answer is never painted', () => {
+  const MARKS = { marks: new Map<string, ChatMark>(), markedMessages: new Map() };
+
+  it('a part is recalled fresh within READ_FRESH_MS, absent after it', () => {
+    let t = 1_000;
+    const cache = createOpenCache({ now: () => t });
+    cache.remember(A, 'marks', MARKS);
+    cache.remember(A, 'scheduled', []);
+    expect(cache.recallFresh(A, 'marks')).toBe(MARKS);
+    t += READ_FRESH_MS;
+    expect(cache.recallFresh(A, 'marks')).toBe(MARKS);
+    t += 1;
+    expect(cache.recallFresh(A, 'marks')).toBeUndefined();
+    expect(cache.recallFresh(A, 'scheduled')).toBeUndefined();
+    // Still held (a new read replaces it); only painting it is refused.
+    expect(cache.recall(A, 'marks')).toBe(MARKS);
+  });
+
+  it('a live revise never makes a part fresher; a new read does', () => {
+    let t = 1_000;
+    const cache = createOpenCache({ now: () => t });
+    cache.remember(A, 'marks', MARKS);
+    t += READ_FRESH_MS + 1;
+    cache.revise(A, 'marks', (value) => ({ ...value, markedMessages: new Map() }));
+    expect(cache.recallFresh(A, 'marks')).toBeUndefined();
+    cache.remember(A, 'marks', MARKS);
+    expect(cache.recallFresh(A, 'marks')).toBe(MARKS);
+  });
+
+  it('a forgotten part is absent', () => {
+    const cache = createOpenCache();
+    cache.remember(A, 'scheduled', []);
+    cache.forget(A, 'scheduled');
+    expect(cache.recallFresh(A, 'scheduled')).toBeUndefined();
   });
 });

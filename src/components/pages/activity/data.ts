@@ -86,6 +86,9 @@ import {
   type TimeBounds,
 } from '@/lib/chat/bounded-window';
 import { readInboxOldest } from '@/lib/inbox/inbox-oldest';
+import { INBOX_CHANGED_EVENT } from '@/lib/events';
+import { invalidateReads, peekRead, readKey, sharedRead } from '@/lib/session-read';
+import type { PrefetchContext } from '@/lib/route-data';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -1403,7 +1406,7 @@ export function mergeFresh(
   });
 }
 
-type LoadResult = { ok: true; data: ActivityItem[] } | { ok: false; error: string };
+export type LoadResult = { ok: true; data: ActivityItem[] } | { ok: false; error: string };
 
 /** One page of inbox rows. The live writer emits minimal payloads, so author and
  * title are resolved by join (see fetchActivityEntries), never read from payload. */
@@ -1745,34 +1748,43 @@ export async function fetchActivityEntries(
   // post items' ids). An alert reads only the titles its payload lacks.
   const planEvents = items.filter(isPlanEvent);
   const planAlerts = alerts.flatMap(({ alert }) => (alert.plan !== undefined ? [alert.plan] : []));
-  const [chatRes, failedRes, planRes] = await Promise.all([
-    readChatSources(client, { channelIds, messageIds }),
-    readScheduledRows(client, failedIds),
-    readPlanSources(client, {
-      itemIds: unique([
-        ...planEvents.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
-        ...planAlerts.flatMap((f) => (f.itemTitle === null && f.itemId !== null ? [f.itemId] : [])),
-      ]),
-      planIds: unique([
-        ...planEvents.flatMap((i) => (i.planId != null ? [i.planId] : [])),
-        ...planAlerts.flatMap((f) => (f.planTitle === null && f.planId !== null ? [f.planId] : [])),
-      ]),
-      commentIds: unique(
-        planEvents.flatMap((i) =>
-          i.eventType === 'plan_comment' && i.commentId !== null ? [i.commentId] : [],
-        ),
+  // Every join starts at once: the chat, failed-send and plan reads alongside
+  // the comments, briefs, first-image and batch reads (none needs another's
+  // answer). Only the posts read waits, for the plan reads alone: a post item
+  // names its post there, and the one posts read covers both.
+  const chatSources = readChatSources(client, { channelIds, messageIds });
+  const failedSources = readScheduledRows(client, failedIds);
+  const planSources = readPlanSources(client, {
+    itemIds: unique([
+      ...planEvents.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
+      ...planAlerts.flatMap((f) => (f.itemTitle === null && f.itemId !== null ? [f.itemId] : [])),
+    ]),
+    planIds: unique([
+      ...planEvents.flatMap((i) => (i.planId != null ? [i.planId] : [])),
+      ...planAlerts.flatMap((f) => (f.planTitle === null && f.planId !== null ? [f.planId] : [])),
+    ]),
+    commentIds: unique(
+      planEvents.flatMap((i) =>
+        i.eventType === 'plan_comment' && i.commentId !== null ? [i.commentId] : [],
       ),
-    }),
-  ]);
+    ),
+  });
   // A post item's title is its post's (and a plan alert may name its post
   // directly): folded into the one posts read.
-  const planPostIds = unique([
-    ...[...planRes.items.values()].flatMap((info) =>
-      info.kind === 'post' && info.postId !== null ? [info.postId] : [],
-    ),
-    ...planAlerts.flatMap((f) => (f.itemTitle === null && f.postId !== null ? [f.postId] : [])),
-  ]);
-  const postReadIds = unique([...postIds, ...planPostIds]);
+  const postsRead = planSources.then(async (planRes) => {
+    const planPostIds = unique([
+      ...[...planRes.items.values()].flatMap((info) =>
+        info.kind === 'post' && info.postId !== null ? [info.postId] : [],
+      ),
+      ...planAlerts.flatMap((f) => (f.itemTitle === null && f.postId !== null ? [f.postId] : [])),
+    ]);
+    const postReadIds = unique([...postIds, ...planPostIds]);
+    if (postReadIds.length === 0) return null;
+    return await client
+      .from('posts')
+      .select('id, title, format, caption, number')
+      .in('id', postReadIds);
+  });
 
   // WAVE 1: resolve comment authors and entity titles. Each sub-query is fired
   // only when it has ids; a failed one yields an empty map (never fails the feed).
@@ -1780,13 +1792,23 @@ export async function fetchActivityEntries(
   // (asset_attachments, image-mime inner join, position then attached_at order),
   // run once over the distinct post ids on the page (no N+1); a failure degrades
   // every thumbnailAssetVersionId to null rather than failing the feed.
-  const [commentsRes, postsRes, briefsRes, firstImagesRes, batchCommentsRes] = await Promise.all([
+  const [
+    chatRes,
+    failedRes,
+    planRes,
+    commentsRes,
+    postsRes,
+    briefsRes,
+    firstImagesRes,
+    batchCommentsRes,
+  ] = await Promise.all([
+    chatSources,
+    failedSources,
+    planSources,
     commentIds.length > 0
       ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
       : Promise.resolve(null),
-    postReadIds.length > 0
-      ? client.from('posts').select('id, title, format, caption, number').in('id', postReadIds)
-      : Promise.resolve(null),
+    postsRead,
     briefIds.length > 0
       ? client.from('briefs').select('id, title, number').in('id', briefIds)
       : Promise.resolve(null),
@@ -2450,4 +2472,121 @@ export function createUpcomingScheduledWrites(deps: UpcomingWriteDeps): Upcoming
         }),
       ),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Session-shared reads: page one per chip, and the Mentions count
+// ---------------------------------------------------------------------------
+//
+// Page one of each inbox chip (and sort) and the unread-mention count are
+// shared session reads (src/lib/session-read.ts): in memory only, keyed by
+// user and workspace, joined while running and for READ_FRESH_MS after a good
+// read. The bell press starts the All page and the count (prefetchActivityData),
+// so the page's mount joins them; switching back to a chip within the window
+// paints its page without a request. Any inbox change (the shell's poll, a mark
+// read, a snooze, Mark all read: INBOX_CHANGED_EVENT) drops them all before the
+// page's own listener reloads, so a reload never joins an answer the change
+// made old; older than the window is absent (the page loads, never paints it).
+// Upcoming is not an inbox slice (scheduled messages and reminders change
+// outside these events): it always reads.
+
+/** The keys made this session (the inbox change event drops exactly these). */
+const activityKeys = new Set<string>();
+
+/** The session read key of a chip's page one in a sort. */
+export function activityPageKey(
+  userId: string,
+  workspaceId: string,
+  state: ActivityState,
+  direction: ActivityDirection,
+): string {
+  return readKey(userId, workspaceId, `activity-page:${state}:${direction}`);
+}
+
+/** The session read key of the unread-mention count. */
+export function mentionCountKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'activity-mention-count');
+}
+
+/** Join the page read for `key` while it runs or is fresh, else start `load` (a failure is never kept). */
+export function sharedActivityPage(
+  key: string,
+  load: () => Promise<LoadResult>,
+): Promise<LoadResult> {
+  activityKeys.add(key);
+  return sharedRead(key, load, { isOk: (result) => result.ok });
+}
+
+/** Join the count read for `key` while it runs or is fresh, else start `load`. */
+export function sharedMentionCount(
+  key: string,
+  load: () => Promise<Result<number>>,
+): Promise<Result<number>> {
+  activityKeys.add(key);
+  return sharedRead(key, load, { isOk: (result) => result.ok });
+}
+
+/** A fresh good page one for `key`, or undefined (never reads). */
+export function peekActivityPage(key: string): ActivityItem[] | undefined {
+  const held = peekRead<LoadResult>(key);
+  return held !== undefined && held.ok ? held.data : undefined;
+}
+
+/** A fresh good unread-mention count, or undefined (never reads). */
+export function peekMentionCount(key: string): number | undefined {
+  const held = peekRead<Result<number>>(key);
+  return held !== undefined && held.ok ? held.data : undefined;
+}
+
+/** Drop one shared Activity read (`key`) or all of them (the inbox changed). */
+export function invalidateActivityReads(key?: string): void {
+  for (const k of key !== undefined ? [key] : [...activityKeys]) {
+    invalidateReads(k);
+    activityKeys.delete(k);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(INBOX_CHANGED_EVENT, () => invalidateActivityReads());
+}
+
+/** The viewer's stored Activity sort (use-sort.ts's key for 'activity'), else newest. */
+function storedActivitySort(): ActivityDirection {
+  try {
+    return window.localStorage.getItem('sorted:sort:activity') === 'oldest' ? 'oldest' : 'newest';
+  } catch {
+    return 'newest';
+  }
+}
+
+/**
+ * The bell press: start Activity's first reads (page one of All in the
+ * viewer's sort, and the unread-mention count) through the keys the page's
+ * mount joins. Cheap, never throws, paints nothing; a failure is the page's to
+ * retry. The client and the count read load with import() (the client is the
+ * shell's; the count's module imports this one).
+ */
+export function prefetchActivityData(ctx: PrefetchContext): void {
+  try {
+    const direction = storedActivitySort();
+    void Promise.all([import('@/lib/supabase'), import('@/lib/inbox/inbox-reads')])
+      .then(([{ supabase }, reads]) => {
+        void sharedActivityPage(
+          activityPageKey(ctx.userId, ctx.workspaceId, 'all', direction),
+          () => fetchActivityEntries(supabase, ctx.workspaceId, { state: 'all', direction }),
+        ).catch(() => undefined);
+        void sharedMentionCount(mentionCountKey(ctx.userId, ctx.workspaceId), () =>
+          reads.fetchUnreadMentionCount(supabase, {
+            workspaceId: ctx.workspaceId,
+            userId: ctx.userId,
+            nowIso: new Date().toISOString(),
+          }),
+        ).catch(() => undefined);
+      })
+      .catch((err: unknown) => {
+        logger.warn('activity prefetch failed', { error: String(err) });
+      });
+  } catch (err: unknown) {
+    logger.warn('activity prefetch failed', { error: String(err) });
+  }
 }

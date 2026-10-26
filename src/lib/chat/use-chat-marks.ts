@@ -196,9 +196,12 @@ export function useChatMarks(params: {
         const next = new Map(prev);
         for (const row of result.data) next.set(row.id, rowToThreadMessage(row, currentUserId));
         const memo = chatKey(currentUserId, workspaceRef.current, forChannel);
-        const remembered = memo !== null ? openCache.recall(memo, 'marks') : undefined;
-        if (memo !== null && remembered !== undefined) {
-          openCache.remember(memo, 'marks', { marks: remembered.marks, markedMessages: next });
+        // In place: the marked rows filling in never make the marks fresher.
+        if (memo !== null) {
+          openCache.revise(memo, 'marks', (remembered) => ({
+            marks: remembered.marks,
+            markedMessages: next,
+          }));
         }
         return next;
       });
@@ -259,10 +262,11 @@ export function useChatMarks(params: {
   );
 
   useEffect(() => {
-    // A chat opened before in this session shows its last marks at once; the
-    // open's read revalidates them.
+    // A chat opened before in this session shows its last marks at once only
+    // while they are fresh (read within READ_FRESH_MS); older ones are never
+    // painted: the open waits for its read as a cold open does.
     const memo = chatKey(currentUserId, workspaceRef.current, channelId);
-    const remembered = memo !== null ? openCache.recall(memo, 'marks') : undefined;
+    const remembered = memo !== null ? openCache.recallFresh(memo, 'marks') : undefined;
     setMarks(remembered?.marks ?? new Map());
     setMarkedMessages(remembered?.markedMessages ?? new Map());
     setLoadedFor(remembered !== undefined ? channelId : null);

@@ -215,7 +215,11 @@ import { ChatStatus } from '@/components/chat/StatusTicker';
 import { planProgress, todayInZone } from '@/components/chat/plan-card';
 import { briefRoute } from '@/lib/chat/briefs';
 import { useOpenPosts, type UseOpenPosts } from '@/lib/chat/use-open-posts';
-import { useStatusCounts, type UseStatusCounts } from '@/lib/chat/use-status-counts';
+import {
+  peekStatusRound,
+  useStatusCounts,
+  type UseStatusCounts,
+} from '@/lib/chat/use-status-counts';
 import { chatKey, openCache, OPEN_HOLD_MS } from '@/lib/chat/open-cache';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
@@ -5488,12 +5492,12 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     return tapped !== null && now - tapped < OPEN_HOLD_MS ? tapped : now;
   });
   const [openHoldDone, setOpenHoldDone] = useState(false);
-  // A reopen: the ticker's last settled state is remembered, so it paints at
-  // once (never the inert slot) while the page loads.
-  const [tickerRemembered] = useState(() => {
-    const key = chatKey(props.currentUserId, workspaceId, channelId);
-    return key !== null && openCache.recall(key, 'status') !== undefined;
-  });
+  // The ticker's reads are fresh shared reads (this chat's or another's within
+  // the window), so it paints at once (never the inert slot) while the page
+  // loads. Older than the window they are not held: it waits as a cold open.
+  const [tickerRemembered] = useState(
+    () => peekStatusRound(props.currentUserId, workspaceId, channelId ?? null) !== undefined,
+  );
   const pageCards = useMemo(() => threadCardIds(props.messages), [props.messages]);
   const pagePlanIds = pageCards.planIds;
   const openPartsSettled = openHoldSettled({

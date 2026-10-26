@@ -7,7 +7,12 @@ import { cn } from '@/lib/cn';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import { chatDisplayName } from '@/lib/chat/chat-name';
-import { readGroupMemberIdsShared, readMentionProfilesShared } from '@/lib/chat/open-members';
+import {
+  readGroupMemberIdsShared,
+  readMentionProfilesShared,
+  startChatMembers,
+} from '@/lib/chat/open-members';
+import { peekWorkspaceMembers } from '@/lib/workspace-members';
 import {
   READ_TIMEOUT_MS,
   withReadTimeout,
@@ -44,8 +49,8 @@ import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
 import { prefetchLatestMessages } from '@/lib/chat/history';
 import { loadChannelMarks } from '@/lib/chat/marks';
-import { fetchOpenPosts } from '@/lib/chat/use-open-posts';
-import { startStatusReads } from '@/lib/chat/use-status-counts';
+import { sharedOpenPosts } from '@/lib/chat/use-open-posts';
+import { sharedStatusRead, startStatusReads } from '@/lib/chat/use-status-counts';
 import { resolveViewerSide } from '@/lib/chat/viewer-role';
 import { createStarStore, StarStoreContext, useChannelStars } from '@/lib/chat/stars';
 import { useChatTyping } from '@/lib/chat/use-chat-typing';
@@ -152,15 +157,23 @@ export function startChatOpen(userId: string, workspaceId: string, channelId: st
   const key = chatKey(userId, workspaceId, channelId);
   if (key === null) return;
   const status = startStatusReads(supabase, { workspaceId, channelId });
+  // The five workspace-wide reads are the workspace's shared session reads:
+  // a tap on chat B right after A joins A's (fresh) reads, never asks again.
   kickoffChatOpen(key, {
     messages: (id) => prefetchLatestMessages(supabase, id),
     viewerSide: () => void resolveViewerSide(supabase, workspaceId, userId),
     marks: (id) => withReadTimeout((signal) => loadChannelMarks(supabase, id, signal)),
-    openPosts: (ws) => fetchOpenPosts(supabase, ws),
-    planIds: status.planIds,
-    briefs: status.briefs,
-    briefCount: status.briefCount,
+    openPosts: (ws) => sharedOpenPosts(supabase, userId, ws),
+    planIds: (ws) => sharedStatusRead(userId, ws, 'planIds', status.planIds),
+    briefs: (ws) => sharedStatusRead(userId, ws, 'briefs', status.briefs),
+    briefCount: (ws) => sharedStatusRead(userId, ws, 'briefCount', status.briefCount),
   });
+  // The members the names and the pickers answer from, in parallel with the
+  // page (joined by them, and by the next chat's open, while fresh). A warm
+  // app members cache answers instead: nothing is read.
+  if (peekWorkspaceMembers(userId, workspaceId) === null) {
+    void startChatMembers(supabase, userId, workspaceId);
+  }
 }
 
 const NO_TYPING: string[] = [];
@@ -1223,13 +1236,14 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
         : { store: starStore, ids: new Set([...ids, selectedChannelId]) };
     });
   }, [stars.settled, selectedChannelId, starStore]);
-  // A remembered chat's marks as last settled, for its first frame (the
-  // marks hook sets the same ones in its effect, then revalidates).
+  // A remembered chat's marks as last settled, for its first frame, only while
+  // fresh (the marks hook sets the same ones in its effect, then revalidates;
+  // older ones are never painted).
   const marksLoaded = marks.loaded;
   const rememberedMarks = useMemo(() => {
     if (!rememberedOpen || marksLoaded) return undefined;
     const key = chatKey(currentUserId, workspaceId, selectedChannelId);
-    return key !== null ? openCache.recall(key, 'marks') : undefined;
+    return key !== null ? openCache.recallFresh(key, 'marks') : undefined;
   }, [rememberedOpen, marksLoaded, currentUserId, workspaceId, selectedChannelId]);
   const starsSettled =
     stars.settled ||
@@ -1476,11 +1490,12 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [selectedChannelId, refetchScheduled, notesOpen]);
   // A remembered chat's scheduled rows as last read, for its first frame
-  // (until this open's own state for it is set).
+  // (until this open's own state for it is set), only while fresh: older rows
+  // are never painted, the open waits for its read as a cold open does.
   const rememberedScheduled = useMemo(() => {
     if (!rememberedOpen) return undefined;
     const key = chatKey(currentUserId, workspaceId, selectedChannelId);
-    return key !== null ? openCache.recall(key, 'scheduled') : undefined;
+    return key !== null ? openCache.recallFresh(key, 'scheduled') : undefined;
   }, [rememberedOpen, currentUserId, workspaceId, selectedChannelId]);
   const scheduledOwn = scheduled.settled && scheduled.channelId === selectedChannelId;
   // Notes never schedule: nothing to read, nothing to wait for.

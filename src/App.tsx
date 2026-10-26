@@ -15,6 +15,7 @@ import {
   loadNotifications,
   loadPipeline,
   loadPlan,
+  loadPlanBeside,
   loadPlanTab,
   loadPostDetail,
   loadPostRefResolver,
@@ -45,10 +46,7 @@ const SettingsPage = lazyRoute(loadSettings, (m) => m.SettingsPage);
 const HelpPage = lazyRoute(loadHelp, (m) => m.HelpPage);
 const NotificationsPage = lazyRoute(loadNotifications, (m) => m.NotificationsPage);
 const PlanTabPage = lazyRoute(loadPlanTab, (m) => m.PlanTabPage);
-const PlanBesideLayout = lazyRoute(
-  () => import('@/components/pages/PlanBesideLayout'),
-  (m) => m.PlanBesideLayout,
-);
+const PlanBesideLayout = lazyRoute(loadPlanBeside, (m) => m.PlanBesideLayout);
 const PlanPage = lazyRoute(loadPlan, (m) => m.PlanPage);
 const ActivityRedirect = lazyRoute(
   () => import('@/components/shell/ActivityRedirect'),

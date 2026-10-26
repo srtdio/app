@@ -7,9 +7,13 @@
 // JOIN_WINDOW_MS after it settles; only an open's first round joins, never a
 // refetch (a plan change, a post change, a tab returning).
 //
-// The last settled state of each chat (marks, ticker counts, scheduled rows,
-// the plan card cache with its bundles and draft rows) is remembered so a
-// reopen paints it at once and then revalidates in the background. Memory is
+// The last settled state of each chat (marks, scheduled rows, the plan card
+// cache with its bundles and draft rows) is remembered. Marks and scheduled
+// rows paint on a reopen only while younger than READ_FRESH_MS (recallFresh):
+// older is absent, and the reopen holds for its own reads as a cold open does
+// (never the old answer, then a change). The ticker counts and open posts are
+// not kept here: they are the workspace's shared session reads
+// (workspace-reads.ts), joined by every chat while fresh. Memory is
 // keyed by user id, workspace id and channel id, capped at OPEN_CACHE_LIMIT
 // chats (least recently used goes first), never persisted, and cleared in
 // full when the user or the workspace changes (checked on every access, so a
@@ -51,6 +55,7 @@ import {
 import { clearMessagePrefetch, type ReadPositionsRead } from '@/lib/chat/history';
 import { resetViewerSideCache } from '@/lib/chat/viewer-role';
 import { SIGNOUT_EVENT } from '@/lib/events';
+import { READ_FRESH_MS } from '@/lib/session-read';
 import { supabase } from '@/lib/supabase';
 
 /** Chats remembered per session (least recently opened goes first). */
@@ -107,6 +112,8 @@ interface Stashed {
 
 interface Slot {
   memory: Partial<ChatMemory>;
+  /** When each part was last remembered from a read (revise never moves it). */
+  memoryAt: Partial<Record<keyof ChatMemory, number>>;
   reads: Map<keyof OpenReads, Stashed>;
   planCache: PlanCardCache | null;
   /** When this chat was last opened (tap or mount), for the hold and the plan revalidation. */
@@ -122,6 +129,15 @@ export interface OpenCache {
   remember: <K extends keyof ChatMemory>(key: ChatKey, part: K, value: ChatMemory[K]) => void;
   /** A part of a chat's last settled state, or undefined. */
   recall: <K extends keyof ChatMemory>(key: ChatKey, part: K) => ChatMemory[K] | undefined;
+  /**
+   * A part only while it was remembered at most `maxAgeMs` ago (default
+   * READ_FRESH_MS), else undefined: an older answer is never painted.
+   */
+  recallFresh: <K extends keyof ChatMemory>(
+    key: ChatKey,
+    part: K,
+    maxAgeMs?: number,
+  ) => ChatMemory[K] | undefined;
   /** Stash a read the tap started (replaces one that can no longer be joined). */
   stash: <K extends keyof OpenReads>(key: ChatKey, name: K, promise: Promise<OpenReads[K]>) => void;
   /** The stashed read while it runs or for JOIN_WINDOW_MS after; null otherwise. */
@@ -220,6 +236,7 @@ export function createOpenCache(
     if (!make) return undefined;
     slot = {
       memory: {},
+      memoryAt: {},
       reads: new Map(),
       planCache: null,
       openedAt: null,
@@ -265,10 +282,18 @@ export function createOpenCache(
 
   return {
     remember(key, part, value) {
-      slotOf(key, true).memory[part] = value;
+      const slot = slotOf(key, true);
+      slot.memory[part] = value;
+      slot.memoryAt[part] = now();
     },
     recall(key, part) {
       return slotOf(key, false)?.memory[part];
+    },
+    recallFresh(key, part, maxAgeMs = READ_FRESH_MS) {
+      const slot = slotOf(key, false);
+      const at = slot?.memoryAt[part];
+      if (slot === undefined || at === undefined || now() - at > maxAgeMs) return undefined;
+      return slot.memory[part];
     },
     stash,
     join,
@@ -300,6 +325,7 @@ export function createOpenCache(
       const slot = slots.get(slotKey(key));
       if (slot === undefined) return;
       delete slot.memory[part];
+      delete slot.memoryAt[part];
       if (part === 'thread') slot.threadEpoch += 1;
     },
     holding<K extends keyof ChatMemory>(part: K) {

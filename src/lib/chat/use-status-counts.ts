@@ -17,6 +17,12 @@
 // single-flight (a trigger mid-round runs exactly one more). Plans shared live
 // into the loaded thread are added from its messages (the bar's filter still
 // keeps only current shared ones).
+//
+// The three reads are workspace-wide (the same in every chat), so with the
+// viewer known each is one shared session read (workspace-reads.ts): chat B
+// opened right after A joins A's reads and paints them in its first frame.
+// Older than the window is absent (B loads and holds as a cold open does); a
+// plan or post change drops them before this hook's refetch reads again.
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
@@ -32,7 +38,7 @@ import {
   type PlanBundle,
   type PlanCardCache,
 } from '@/lib/chat/plans';
-import { chatKey, openCache, type ChatKey } from '@/lib/chat/open-cache';
+import { peekChatRead, resultOk, sharedChatRead } from '@/lib/chat/workspace-reads';
 import { currentPlanWindow } from '@/lib/chat/status-bar';
 import { supabase } from '@/lib/supabase';
 import { WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
@@ -191,6 +197,47 @@ export function startStatusReads(
     briefCount: () =>
       withReadTimeout((signal) => reads.briefCount(client, key.workspaceId, signal)),
   };
+}
+
+/**
+ * One of the round's reads as the workspace's shared session read for this
+ * viewer: joined while it runs and while fresh; a failed read is never kept.
+ * The tap's kickoff and the hook's rounds both go through here.
+ */
+export function sharedStatusRead<K extends keyof StatusReadResults>(
+  userId: string,
+  workspaceId: string,
+  name: K,
+  start: () => Promise<StatusReadResults[K]>,
+): Promise<StatusReadResults[K]> {
+  return sharedChatRead<StatusReadResults[K]>(userId, workspaceId, name, start, resultOk);
+}
+
+/**
+ * The round as the fresh shared reads hold it (every read settled ok within
+ * the window), else undefined: then nothing is shown until the round settles.
+ * No channel: no plan read, as {@link fetchStatusRound}. Never reads.
+ */
+export function peekStatusRound(
+  userId: string | null | undefined,
+  workspaceId: string | null,
+  channelId: string | null,
+): StatusRound | undefined {
+  if (!userId || workspaceId === null) return undefined;
+  const noPlans: StatusReadResults['planIds'] = { ok: true, data: [] };
+  const planIds =
+    channelId !== null
+      ? peekChatRead<StatusReadResults['planIds']>(userId, workspaceId, 'planIds')
+      : noPlans;
+  const briefs = peekChatRead<StatusReadResults['briefs']>(userId, workspaceId, 'briefs');
+  const briefCount = peekChatRead<StatusReadResults['briefCount']>(
+    userId,
+    workspaceId,
+    'briefCount',
+  );
+  if (planIds === undefined || briefs === undefined || briefCount === undefined) return undefined;
+  if (!planIds.ok || !briefs.ok || !briefCount.ok) return undefined;
+  return { planIds: planIds.data, briefs: briefs.data, briefCount: briefCount.data };
 }
 
 /** One round, every read in parallel and bounded at 5s. Never throws. */
@@ -359,15 +406,16 @@ function parseKey(key: string): { workspaceId: string; channelId: string | null 
  * The ticker's plans and briefs for the open chat. `livePlanIds` are the plan
  * ids on the loaded thread's messages (a live share of a current shared plan
  * shows without a round).
- * With `userId` the chat's last settled view shows at once (the open's round
- * revalidates it; a same-data round changes nothing) and the open's first
- * round joins the reads the tap started (kickoffChatOpen).
+ * With `userId` every round's reads are the workspace's shared reads: fresh
+ * ones (another chat's, or the tap's kickoff) show at once and are joined,
+ * never asked again; older than the window they are not shown (the round
+ * loads).
  */
 export function useStatusCounts(params: {
   workspaceId: string | null;
   channelId: string | null;
   livePlanIds?: readonly string[];
-  /** The viewer (the chat memory's key); absent: no memory, no join. */
+  /** The viewer (the shared reads' key); absent: every round reads on its own. */
   userId?: string | null;
   client?: Client;
   reads?: StatusReads;
@@ -379,18 +427,13 @@ export function useStatusCounts(params: {
   const key = params.workspaceId !== null ? keyOf(params.workspaceId, params.channelId) : null;
   const keyRef = useRef(key);
   keyRef.current = key;
-  const memoKey = chatKey(params.userId, params.workspaceId, params.channelId);
-  const memoRef = useRef<ChatKey | null>(memoKey);
-  memoRef.current = memoKey;
-  const [state, setState] = useState<{ key: string; view: StatusRoundView } | null>(() => {
-    const remembered = memoKey !== null ? openCache.recall(memoKey, 'status') : undefined;
-    return remembered !== undefined && key !== null ? { key, view: remembered } : null;
-  });
+  const userId = params.userId ?? null;
+  const userRef = useRef(userId);
+  userRef.current = userId;
+  const [state, setState] = useState<{ key: string; view: StatusRoundView } | null>(null);
   const runnerRef = useRef<ReturnType<typeof createRoundRunner<string, StatusRound>> | null>(null);
   const readsRef = useRef(reads);
   readsRef.current = reads;
-  // The next round is an open's first: it joins the tap's reads.
-  const openRoundRef = useRef(false);
   // The plan cache the ids go to the moment they are in (set below).
   const cacheRef = useRef<PlanCardCache | null>(null);
 
@@ -398,29 +441,17 @@ export function useStatusCounts(params: {
     const runner = createRoundRunner<string, StatusRound>({
       fetch: (k) => {
         const where = parseKey(k);
-        const memo = memoRef.current;
-        const open =
-          openRoundRef.current &&
-          memo !== null &&
-          memo.workspaceId === where.workspaceId &&
-          memo.channelId === where.channelId;
-        openRoundRef.current = false;
+        const viewer = userRef.current;
         return fetchStatusRound(client, where, readsRef.current, {
-          ...(open ? { join: (name, start) => openCache.joinOrStart(memo, name, start) } : {}),
+          ...(viewer
+            ? { join: (name, start) => sharedStatusRead(viewer, where.workspaceId, name, start) }
+            : {}),
           onPlanIds: (ids) => {
             if (keyRef.current === k) cacheRef.current?.request(ids);
           },
         });
       },
-      onSettle: (k, data) =>
-        setState((prev) => {
-          const next = settleStatusRound(prev, k, data);
-          const memo = memoRef.current;
-          if (memo !== null && keyOf(memo.workspaceId, memo.channelId) === k) {
-            openCache.remember(memo, 'status', next.view);
-          }
-          return next;
-        }),
+      onSettle: (k, data) => setState((prev) => settleStatusRound(prev, k, data)),
       now: () => Date.now(),
     });
     runnerRef.current = runner;
@@ -448,7 +479,6 @@ export function useStatusCounts(params: {
 
   useEffect(() => {
     if (key === null) return;
-    openRoundRef.current = true;
     runnerRef.current?.request(key);
   }, [key, client]);
 
@@ -473,7 +503,18 @@ export function useStatusCounts(params: {
   const version = cache?.version ?? NO_VERSION;
   useSyncExternalStore(cache?.subscribe ?? NO_SUBSCRIBE, version, version);
 
-  const view = state !== null && state.key === key ? state.view : null;
+  // This chat's round has not settled here yet: the fresh shared reads (the
+  // tap's, another chat's) are the answer it will join, so they show now.
+  const fresh =
+    state !== null && state.key === key
+      ? null
+      : peekStatusRound(userId, params.workspaceId, params.channelId);
+  const view =
+    state !== null && state.key === key
+      ? state.view
+      : fresh !== undefined && fresh !== null
+        ? mergeStatusRound(null, fresh)
+        : null;
   const roundIds = view?.planIds ?? NO_IDS;
   const live = params.livePlanIds ?? NO_IDS;
   const idKey = [...new Set([...roundIds, ...live])].sort().join(',');
