@@ -59,7 +59,8 @@ function fail<T>(message: string): Result<T> {
 /** Bundles in the tab's order: starts_on, then id. Pure. */
 function byStart(a: PlanBundle, b: PlanBundle): number {
   return (
-    a.plan.starts_on.localeCompare(b.plan.starts_on) || (a.plan.id < b.plan.id ? -1 : a.plan.id > b.plan.id ? 1 : 0)
+    a.plan.starts_on.localeCompare(b.plan.starts_on) ||
+    (a.plan.id < b.plan.id ? -1 : a.plan.id > b.plan.id ? 1 : 0)
   );
 }
 

@@ -126,8 +126,7 @@ function parsePlan(row: Obj): PlanRow | null {
 function parseItem(row: Obj): PlanItemRow | null {
   const id = str(row.id);
   const planId = str(row.plan_id);
-  const kind: PlanItemKind | null =
-    row.kind === 'concept' || row.kind === 'post' ? row.kind : null;
+  const kind: PlanItemKind | null = row.kind === 'concept' || row.kind === 'post' ? row.kind : null;
   if (id === null || planId === null || kind === null) return null;
   const item: PlanItemRow = {
     id,

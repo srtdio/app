@@ -114,6 +114,61 @@ test('phone: the Plan tab lists plans in sections and a tap opens the plan @them
   expectClean(network);
 });
 
+test('phone: Load more ends the list while older plans remain, then appends them @theme', async ({
+  page,
+}) => {
+  test.skip((page.viewportSize()?.width ?? 0) >= 768, 'phone only');
+  const network = await installHarnessNetwork(page);
+  seedPlanTab(network.world, { sender: ME });
+  // 14 older shared plans, a week apart: with the two of this week that is 16,
+  // so the first page (12, newest starts_on first) leaves 4 for Load more.
+  const template = (network.world.tables.plans ?? []).find((p) => p.id === TAB_SHARED_PLAN_ID);
+  const older = Array.from({ length: 14 }, (_, k) => {
+    const starts = civilPlus(MONDAY, -7 * (k + 1));
+    return {
+      ...template,
+      id: `0190fa00-0000-7000-8000-${String(k).padStart(12, '0')}`,
+      title: `Older plan ${k + 1}`,
+      starts_on: starts,
+      ends_on: civilPlus(starts, 6),
+    };
+  });
+  (network.world.tables.plans ??= []).push(...older);
+  await openTab(page);
+
+  const list = page.locator('[data-plan-tab-list]');
+  const more = list.locator('[data-plan-tab-more]');
+  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(12);
+  await expect(more).toHaveText('Load more');
+  expectMinTouchTarget(await more.boundingBox());
+  const firstCall = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
+  expect(firstCall).toHaveLength(1);
+  expect(firstCall[0]?.args.p_before_starts_on).toBeUndefined();
+
+  await shootBoth(page, 'plan-tab-phone-load-more', async () => {
+    await expect(page.locator('[data-plan-tab-more]')).toBeVisible({ timeout: 15_000 });
+  });
+
+  const before = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read').length;
+  await more.click();
+  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(16);
+  // The last page: the control is gone.
+  await expect(more).toHaveCount(0);
+  const calls = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
+  expect(calls).toHaveLength(before + 1);
+  const page2 = calls[calls.length - 1]?.args;
+  // The cursor is the first page's last plan: the 12th newest (this week's
+  // two, then the 10 newest older ones).
+  expect(page2?.p_before_starts_on).toBe(civilPlus(MONDAY, -7 * 10));
+  expect(page2?.p_before_id).toBe(older[9]?.id);
+  // Every plan once (no duplicates by id).
+  const ids = await list
+    .locator('[data-plan-tab-card]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-plan-tab-card')));
+  expect(new Set(ids).size).toBe(16);
+  expectClean(network);
+});
+
 test('the Plan tab: every visible button is at least a 44x44 touch target @desktop', async ({
   page,
 }) => {

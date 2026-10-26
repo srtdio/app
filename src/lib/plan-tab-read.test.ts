@@ -64,7 +64,9 @@ function fakeClient(w: World) {
     const key = (p: Row): string => `${String(p.starts_on)}|${String(p.id)}`;
     const visible = w.plans.filter((p) => !shared || p.audience === 'client');
     const sel = visible
-      .filter((p) => start === null || (String(p.starts_on) <= String(end) && String(p.ends_on) >= start))
+      .filter(
+        (p) => start === null || (String(p.starts_on) <= String(end) && String(p.ends_on) >= start),
+      )
       .filter((p) => beforeOn === null || key(p) < `${beforeOn}|${String(beforeId)}`)
       .sort((a, b) => (key(a) < key(b) ? 1 : -1))
       .slice(0, PLAN_BUNDLE_PAGE + 1);
@@ -139,7 +141,12 @@ describe('readPlanTab (plan_bundle_read, tab mode)', () => {
   it('the zone comes from the bundle: a loose post is kept by its day there', async () => {
     const w = world(1, 0, 'America/Los_Angeles');
     // 26 Oct 03:00 UTC is 25 Oct in Los Angeles (inside the range), 26 Oct in UTC (outside).
-    w.posts.push({ id: 'late', stage: 'draft', title: 'Late', target_date: '2026-10-26T03:00:00Z' });
+    w.posts.push({
+      id: 'late',
+      stage: 'draft',
+      title: 'Late',
+      target_date: '2026-10-26T03:00:00Z',
+    });
     const fake = fakeClient(w);
     const res = await readPlanTab(fake.client, INPUT);
     expect(res.ok && res.data.timeZone).toBe('America/Los_Angeles');
@@ -227,7 +234,11 @@ describe('mergePlanTabPages', () => {
     if (!first.ok) return;
     const again = mergePlanTabPages(first.data, first.data);
     expect(again.bundles).toHaveLength(first.data.bundles.length);
-    const later = { ...first.data, nextCursor: null, thumbs: { posts: { x: 'v-x' }, concepts: {} } };
+    const later = {
+      ...first.data,
+      nextCursor: null,
+      thumbs: { posts: { x: 'v-x' }, concepts: {} },
+    };
     const merged = mergePlanTabPages(first.data, later);
     expect(merged.nextCursor).toBeNull();
     expect(merged.thumbs.posts.x).toBe('v-x');

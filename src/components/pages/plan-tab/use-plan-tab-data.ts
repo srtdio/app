@@ -176,7 +176,10 @@ export function usePlanTabData(input: {
   }, [args]);
 
   const canMore =
-    args !== null && args.range === null && load.status === 'ready' && load.data.nextCursor !== null;
+    args !== null &&
+    args.range === null &&
+    load.status === 'ready' &&
+    load.data.nextCursor !== null;
   useEffect(() => {
     setPlanTabMore(canMore ? { busy: moreBusy, onMore: () => void loadMore() } : null);
   }, [canMore, moreBusy, loadMore]);

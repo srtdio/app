@@ -20,7 +20,7 @@ import {
 // progress, Forward and height) per frame and per DOM change, from mount until
 // settled. The only allowed sequence is skeleton (the card's own height), then
 // one card that never changes, never drops back to a skeleton and never
-// remounts. Covers a client plan with a draft row (plan_draft_rows returns 1),
+// remounts. Covers a client plan with a draft row (plan_bundle_read carries 1 draft row),
 // a Draft plan, and a slow plan read. Runs on the config's WebKit
 // projects (dark and light) and, where a local Chromium is installed, in
 // Chromium with the same iPhone viewport and the project's colour scheme.
@@ -174,19 +174,15 @@ const SCENARIOS: Scenario[] = [
 ];
 
 /**
- * Whether a request is a plan bundle read's first select (GET plans), not the
- * ticker's list of the workspace's current shared plans (audience=eq.client).
+ * Whether a request is a plan bundle read: plan_bundle_read by id (the cards'
+ * one call; the ticker's list of current shared plans is a separate GET).
  */
 function isBundlePlansRead(request: { method(): string; url(): string }): boolean {
   const url = new URL(request.url());
-  return (
-    request.method() === 'GET' &&
-    url.pathname === '/rest/v1/plans' &&
-    url.searchParams.get('audience') !== 'eq.client'
-  );
+  return request.method() === 'POST' && url.pathname === '/rest/v1/rpc/plan_bundle_read';
 }
 
-/** The plans GETs the page made (the bundle read's first select). */
+/** The plan_bundle_read calls the page made. */
 function countPlanReads(page: Page): () => number {
   let n = 0;
   page.on('request', (request) => {
@@ -203,7 +199,7 @@ async function run(page: Page, scenario: Scenario): Promise<void> {
   await page.goto('/chat');
   const row = page.getByText(PEER_NAME, { exact: true }).first();
   await row.waitFor({ state: 'visible' });
-  const gate = scenario.slowMs !== undefined ? network.holdTable('plans') : null;
+  const gate = scenario.slowMs !== undefined ? network.holdRpc('plan_bundle_read') : null;
   await row.click();
   // The hold is timed from the held request, not from the thread's paint: on a
   // loaded runner the two can be seconds apart, and the read's own 5s timeout
@@ -231,11 +227,12 @@ async function run(page: Page, scenario: Scenario): Promise<void> {
   console.log(`[${scenario.name}] ${JSON.stringify(seq)}`);
   expectOnePaint(seq, scenario.planId);
   // One batched bundle read per plan per open: the card and the ticker share it.
-  expect(planReads(), 'one plans read per open').toBe(1);
+  expect(planReads(), 'one plan_bundle_read per open').toBe(1);
+  // The draft rows come inside the bundle read: never a call of their own.
   expect(
     network.rpcCalls.filter((c) => c.name === 'plan_draft_rows'),
-    'one plan_draft_rows per open',
-  ).toHaveLength(1);
+    'no separate plan_draft_rows',
+  ).toHaveLength(0);
   // A background re-read with the same data (a plan-changed event) changes nothing.
   await page.evaluate(
     (planId) =>
@@ -548,8 +545,8 @@ async function runTickerFill(page: Page): Promise<void> {
   const reads = { history: 0, plans: 0 };
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (request.method() !== 'GET') return;
     if (isBundlePlansRead(request)) reads.plans += 1;
+    if (request.method() !== 'GET') return;
     if (
       url.pathname === '/rest/v1/chat_messages' &&
       url.searchParams.get('select') !== 'shared_plan_ids'

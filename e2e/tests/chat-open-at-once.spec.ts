@@ -270,11 +270,18 @@ function expectClean(network: HarnessNetwork): void {
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
 }
 
-/** Count GET reads of a REST table (or the ticker's current shared plan ids select). */
+/**
+ * Count GET reads of a REST table (or the ticker's current shared plan ids
+ * select); the plan bundle read (POST rpc/plan_bundle_read) counts as 'plans'.
+ */
 function countReads(page: Page): (name: string) => number {
   const counts = new Map<string, number>();
   page.on('request', (request) => {
     const url = new URL(request.url());
+    if (request.method() === 'POST' && url.pathname === '/rest/v1/rpc/plan_bundle_read') {
+      counts.set('plans', (counts.get('plans') ?? 0) + 1);
+      return;
+    }
     if (request.method() !== 'GET' || !url.pathname.startsWith('/rest/v1/')) return;
     const table = url.pathname.replace('/rest/v1/', '');
     // The ticker's list of the workspace's current shared plans is its own
@@ -404,10 +411,16 @@ async function runAtOnce(page: Page): Promise<void> {
   expect(log.cardNodes).toBe(1);
   expect(log.scrollJumps).toBe(0);
   // One read each per open (no read waits on, or repeats, another).
-  for (const name of ['plans', 'plan_items', 'plan_item_reviews', 'current_plan_ids']) {
-    expect(reads(name), `${name} reads`).toBe(1);
+  // The plan bundle read is one plan_bundle_read (plans, items, reviews and
+  // draft rows together); the ticker's current plan ids are their own read.
+  expect(reads('plans'), 'plans reads').toBe(1);
+  // The current shared plan ids come inside the chat's one chat_open_bundle call.
+  expect(reads('current_plan_ids'), 'current_plan_ids reads').toBe(0);
+  expect(network.rpcCalls.filter((c) => c.name === 'chat_open_bundle')).toHaveLength(1);
+  for (const name of ['plan_items', 'plan_item_reviews']) {
+    expect(reads(name), `${name} reads`).toBe(0);
   }
-  expect(network.rpcCalls.filter((c) => c.name === 'plan_draft_rows')).toHaveLength(1);
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_draft_rows')).toHaveLength(0);
   expectClean(network);
 }
 
@@ -415,7 +428,9 @@ async function runAtOnce(page: Page): Promise<void> {
 async function runOneLate(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
   seedPlanChat(network);
-  await delaySupabaseReads(page, (name) => (name === 'plans' ? 2_000 : realisticDelay(name)));
+  await delaySupabaseReads(page, (name) =>
+    name === 'rpc plan_bundle_read' ? 2_000 : realisticDelay(name),
+  );
   await recordOpen(page);
   await page.goto('/chat');
   await page.getByText(PEER_NAME, { exact: true }).first().waitFor();
@@ -462,7 +477,7 @@ async function runReopen(page: Page): Promise<void> {
   if (plan === undefined) throw new Error('no plan');
   plan.title = NEW_TITLE;
   // The revalidation answers after the messages: the change lands on screen.
-  delays.setDelay((name) => (name === 'plans' ? 2_500 : realisticDelay(name)));
+  delays.setDelay((name) => (name === 'rpc plan_bundle_read' ? 2_500 : realisticDelay(name)));
   await page.waitForTimeout(2_500);
   const plansBefore = reads('plans');
   const nodesBefore = (await logOf(page)).cardNodes;
@@ -476,15 +491,16 @@ async function runReopen(page: Page): Promise<void> {
   report('reopen', { ...partTimes(frames), frames: show(frames) });
   const firstPaint = frames.findIndex((f) => f.msgs);
   const first = frames[firstPaint];
-  // The remembered card and ticker paint with the messages: never a card
-  // skeleton, never the inert ticker once the thread is up.
-  expect(first?.card, show(frames).join('\n')).toBe(`${DRAFT_PLAN_ID}:${DRAFT_PLAN_TITLE}`);
-  expect(first?.ticker ?? '').toMatch(/^open:/);
-  expect(first?.badges ?? 0).toBeGreaterThan(0);
-  expect(frames.some((f) => f.card === 'skel')).toBe(false);
-  expect(frames.slice(firstPaint).every((f) => f.ticker.startsWith('open:'))).toBe(true);
-  // The background re-read brought the new title in place: one card node, no move.
+  expect(first?.badges ?? 0, show(frames).join('\n')).toBeGreaterThan(0);
+  // No plan bundle is remembered from the earlier open: the card waits at its
+  // final size (skeleton) for this open's read and never paints the old title.
+  expect(
+    frames.some((f) => f.card === `${DRAFT_PLAN_ID}:${DRAFT_PLAN_TITLE}`),
+    'a stale bundle is never painted',
+  ).toBe(false);
+  // This open's read brought the new title in place: one card node, no move.
   expect(frames[frames.length - 1]?.card).toBe(`${DRAFT_PLAN_ID}:${NEW_TITLE}`);
+  expect(frames[frames.length - 1]?.ticker ?? '').toMatch(/^open:/);
   expect(log.cardNodes - nodesBefore, 'the reopened card mounts once').toBe(1);
   expect(log.cardMoves).toBe(0);
   expect(log.scrollJumps).toBe(0);

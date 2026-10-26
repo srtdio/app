@@ -120,13 +120,12 @@ describe('concept photos (item 2)', () => {
     });
   });
 
-  it('one asset_attachments read covers posts and concepts (no per-row fetch)', () => {
+  it('the screen read carries the post and concept tiles (no per-row fetch)', () => {
     const plans = readRoot('src/lib/chat/plans.ts');
-    expect(plans).toContain('readPlanThumbs(client, postIds, conceptIds, signal)');
+    // The Plan screen's one plan_bundle_read returns thumbs{posts,concepts}.
+    expect(plans).toContain('thumbs: read.thumbs.posts,');
+    expect(plans).toContain('conceptThumbs: read.thumbs.concepts,');
     expect(plans).toContain(".in('entity_type', ['post', 'plan_item'])");
-    expect(plans).toContain(
-      "const conceptIds = bundle.items.flatMap((i) => (i.kind === 'concept' ? [i.id] : []));",
-    );
     const screen = read('PlanScreen.tsx');
     expect(screen).not.toMatch(/readItemFiles\(/);
   });

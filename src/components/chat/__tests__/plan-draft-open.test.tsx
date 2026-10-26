@@ -446,29 +446,34 @@ describe('item 6: Approved by', () => {
       "const REVIEW_COLUMNS = 'item_id, side, status, reviewed_by, reviewed_at';",
     );
     const names: string[][] = [];
-    const tables: Record<string, unknown[]> = {
+    // One plan_bundle_read answers the screen (the plan, items, reviews, posts).
+    const answer = {
+      timezone: 'Asia/Kolkata',
       plans: [bundle('client').plan],
-      plan_items: [
+      items: [
         { ...bundle('client').items[0], plan_id: 'plan' },
         { ...bundle('client').items[1], plan_id: 'plan' },
       ],
-      plan_item_reviews: bundle('client').reviews,
+      draft_rows: [],
+      next_cursor: null,
+      reviews: bundle('client').reviews,
       posts: [{ id: 'post1', stage: 'review', title: 'Carousel', target_date: null }],
+      comment_counts: {},
+      thumbs: { posts: {}, concepts: {} },
+      also_in: {},
+      loose_posts: [],
+      any_plan: true,
+      last_sent_at: null,
     };
-    const from = (table: string): unknown => {
-      const q: Record<string, unknown> = {};
-      for (const m of ['select', 'in', 'is', 'eq', 'order', 'limit', 'gte', 'abortSignal']) {
-        q[m] = () => q;
-      }
-      q.then = (resolve: (v: unknown) => unknown) =>
-        Promise.resolve({ data: tables[table] ?? [], error: null }).then(resolve);
-      return q;
-    };
+    const rpcs: string[] = [];
     const client = {
-      from,
-      rpc: async () => ({ data: [], error: null }),
+      rpc: async (fn: string) => {
+        rpcs.push(fn);
+        return { data: answer, error: null };
+      },
     } as unknown as Parameters<typeof readPlanScreen>[0];
     const result = await readPlanScreen(client, 'plan', undefined, {
+      workspaceId: 'ws',
       timeZone: 'Asia/Kolkata',
       approvers: approverIds,
       readNames: async (ids) => {
@@ -476,6 +481,7 @@ describe('item 6: Approved by', () => {
         return { ok: true, data: ids.map((userId) => ({ userId, displayName: 'Riya Shah' })) };
       },
     });
+    expect(rpcs).toEqual(['plan_bundle_read']);
     expect(names).toEqual([['u-client']]);
     expect(result.ok && result.data.names).toEqual({ 'u-client': 'Riya Shah' });
   });

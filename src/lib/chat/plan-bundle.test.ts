@@ -262,7 +262,10 @@ describe('readPlanBundleRpc', () => {
   });
 
   it("'workspace_member_only' keeps its code; other errors are unknown", async () => {
-    const refused = vi.fn(async () => ({ data: null, error: { message: 'workspace_member_only' } }));
+    const refused = vi.fn(async () => ({
+      data: null,
+      error: { message: 'workspace_member_only' },
+    }));
     const a = await readPlanBundleRpc({ rpc: refused } as unknown as Client, {
       workspaceId: 'ws',
     });
