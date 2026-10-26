@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ALLOWED_MIME_TYPES } from '@srtdio/storage';
+import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 import {
   MAX_UPLOAD_BYTES,
   UPLOAD_ACCEPT,
@@ -51,6 +52,8 @@ const baseConfig = (fetcher: UploadFetcher, filename = 'file.png'): UploadConfig
   origin: 'library',
   filename,
   fetcher,
+  // Every browser caller passes the browser-only attacher; tests do the same.
+  attachThumbnail: attachLateThumbnail,
 });
 
 describe('UPLOAD_ACCEPT', () => {
@@ -1311,6 +1314,7 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
       filename: 'clip.mp4',
       makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 580, height: 326 }),
       onThumbnail,
+      attachThumbnail: attachLateThumbnail,
       xhr: { traceId: 'trace-1', createRequest },
     });
     expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
@@ -1318,6 +1322,22 @@ describe('uploadAssetFile: sender-side thumbnail (pdf, video, docx, xlsx, image 
     expect(requests.map((r) => r.url)).toEqual(['https://upload.example.workers.dev', THUMB_URL]);
     expect(requests[1]?.headers).toEqual({ Authorization: 'Bearer tok', 'X-Trace-Id': 'trace-1' });
     expect((requests[1]?.sent as FormData).get('asset_version_id')).toBe('v-1');
+  });
+
+  it('without an attacher (a Worker-side caller) no late thumbnail is posted', async () => {
+    const fetcher = routedFetcher();
+    const outcome = await uploadAssetFile(fakeFile('deck.pdf', 'application/pdf', 10), {
+      endpoint: 'https://upload.example.workers.dev',
+      token: 'tok',
+      workspaceId: 'ws-1',
+      origin: 'library',
+      filename: 'deck.pdf',
+      fetcher,
+      makeThumbnail: async () => ({ ok: true as const, blob: thumbBlob, width: 10, height: 10 }),
+    });
+    expect(outcome).toEqual({ ok: true, reused: false, assetId: 'a-1', assetVersionId: 'v-1' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(thumbnailCall(fetcher)).toBeUndefined();
   });
 
   it('a maker that hangs never holds the original or the outcome', async () => {

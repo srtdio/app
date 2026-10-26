@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ThumbnailResult } from '@/lib/files/thumbnail';
+import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 
 // The local thumbnail (the one the sending bubble shows and the upload
 // attaches) is controlled here: it may be made, failed or still pending.
@@ -39,6 +40,7 @@ function params(file: File, versionId: string, onThumb?: () => void): ChatUpload
     origin: 'chat',
     token: 'tok',
     endpoint: 'https://upload',
+    attachThumbnail: attachLateThumbnail,
     fetcher: vi.fn(async (input: string) => {
       if (input === THUMB_URL) {
         onThumb?.();

@@ -19,6 +19,7 @@ import {
   uploadErrorMessage,
   UPLOAD_ACCEPT,
   type Precheck,
+  type ThumbnailAttacher,
   type UploadTransport,
 } from '@/lib/asset-upload';
 import { parsePeaks } from '@/lib/chat/waveform-peaks';
@@ -632,6 +633,12 @@ export type ChatUploadParams = {
   origin: AssetOrigin;
   token: string;
   endpoint: string;
+  /**
+   * Attaches a thumbnail still being made when the original lands. Browser
+   * callers pass attachLateThumbnail (asset-thumbnail-attach.ts); this module
+   * is also bundled into Workers, so it never imports that browser-only file.
+   */
+  attachThumbnail?: ThumbnailAttacher;
 } & UploadTransport;
 
 /**
@@ -729,6 +736,7 @@ export async function uploadChatAttachment(
     workspaceId: params.workspaceId,
     origin: params.origin,
     filename: params.file.name,
+    ...(params.attachThumbnail !== undefined ? { attachThumbnail: params.attachThumbnail } : {}),
   };
   const outcome = await uploadAssetFile(
     params.file,

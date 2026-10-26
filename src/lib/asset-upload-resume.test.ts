@@ -8,6 +8,7 @@ import {
   type UploadFetcher,
 } from '@/lib/asset-upload';
 import type { ThumbnailResult } from '@/lib/files/thumbnail';
+import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 
 const WORKSPACE = '11111111-1111-7111-8111-111111111111';
 const BASE = 'https://upload.test';
@@ -92,6 +93,7 @@ function config(fetcher: UploadFetcher, extra: Partial<UploadConfig> = {}): Uplo
     fetcher,
     makeThumbnail: () => Promise.resolve({ ok: false, reason: 'failed' }),
     sleep: () => Promise.resolve(),
+    attachThumbnail: attachLateThumbnail,
     ...extra,
   } as UploadConfig;
 }
