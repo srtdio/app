@@ -864,9 +864,7 @@ describe('runUploadPipeline storage target and keys', () => {
     if (!res.ok) throw new Error('expected ok');
     expect(order).toEqual(['put', 'insert']);
     expect(insertedIds).toEqual([res.value.versionId]);
-    expect(putKeys[0]).toBe(
-      `ws/${WORKSPACE}/${res.value.assetId}/${res.value.versionId}/original`,
-    );
+    expect(putKeys[0]).toBe(`ws/${WORKSPACE}/${res.value.assetId}/${res.value.versionId}/original`);
     expect(d.repository.versions[0]?.id).toBe(res.value.versionId);
   });
 

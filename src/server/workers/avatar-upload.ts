@@ -40,6 +40,7 @@ import {
   R2StorageClient,
   computeSha256,
   verifyMagicBytes,
+  type MultipartStorage,
   type StorageClient,
 } from '@srtdio/storage';
 import { extractTraceId } from '@/server/trace';
@@ -122,7 +123,7 @@ const STATUS_BY_CODE: Record<AvatarResponseCode, number> = {
  */
 export interface AvatarUploadDeps {
   /** Stores the avatar bytes, and deletes the replaced one after the save. */
-  storage: Pick<StorageClient, 'putObject' | 'deleteObject'>;
+  storage: Pick<StorageClient, 'putObject'> & Pick<MultipartStorage, 'deleteObject'>;
   /** The caller's own profile, read and saved AS the caller. */
   profile: ProfileAvatarStore;
   /** Verifies the Bearer token and returns the caller's `sub`, or an error. */

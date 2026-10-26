@@ -60,7 +60,9 @@ describe('newKeyFor', () => {
 
   it('keeps ws/ and induction-sample/ keys', () => {
     expect(newKeyFor(version(VERSION, 'ws/a/b/c/original'))).toBe('ws/a/b/c/original');
-    expect(newKeyFor(rendition(RENDITION, 'induction-sample/x.jpg'))).toBe('induction-sample/x.jpg');
+    expect(newKeyFor(rendition(RENDITION, 'induction-sample/x.jpg'))).toBe(
+      'induction-sample/x.jpg',
+    );
   });
 });
 
@@ -75,7 +77,9 @@ describe('countCheck and parseCountChanged', () => {
   it('reports a changed count', () =>
     expect(countCheck(3, 4)).toEqual({ ok: false, expected: 3, live: 4 }));
   it('reads the live count from the PostgREST error', () => {
-    expect(parseCountChanged({ code: 'P0001', message: 'object_count_changed', details: '7' })).toBe(7);
+    expect(
+      parseCountChanged({ code: 'P0001', message: 'object_count_changed', details: '7' }),
+    ).toBe(7);
     expect(parseCountChanged({ message: 'workspace not found', details: null })).toBeNull();
     expect(parseCountChanged(null)).toBeNull();
   });
@@ -86,7 +90,10 @@ describe('parseOptions', () => {
     expect(parseOptions(['setup'])).toEqual({ mode: 'setup', workspace: 'all' });
     expect(parseOptions(['move', '--all'])).toEqual({ mode: 'move', workspace: 'all' });
     expect(parseOptions(['verify', '--workspace', WS])).toEqual({ mode: 'verify', workspace: WS });
-    expect(parseOptions(['move', '--workspace', 'all'])).toEqual({ mode: 'move', workspace: 'all' });
+    expect(parseOptions(['move', '--workspace', 'all'])).toEqual({
+      mode: 'move',
+      workspace: 'all',
+    });
   });
   it('rejects bad input', () => {
     expect(() => parseOptions(['delete', '--all'])).toThrow();
@@ -105,7 +112,8 @@ describe('uuidv7', () => {
 /** In-memory buckets and DB. Records every storage call; offers no delete. */
 function world(objects: DbObject[], buckets: Record<string, Record<string, number>>) {
   const store = new Map<string, Map<string, number>>();
-  for (const [name, keys] of Object.entries(buckets)) store.set(name, new Map(Object.entries(keys)));
+  for (const [name, keys] of Object.entries(buckets))
+    store.set(name, new Map(Object.entries(keys)));
   const calls: string[] = [];
   const rows = [...objects];
   const rpcCalls: number[] = [];
@@ -202,7 +210,9 @@ describe('moveWithRetry', () => {
   });
 
   it('on object_count_changed re-lists, copies the new object and succeeds', async () => {
-    const w = world([version(VERSION, 'gbl/a.png')], { [OLD]: { 'gbl/a.png': 10, 'gbl/b.png': 7 } });
+    const w = world([version(VERSION, 'gbl/a.png')], {
+      [OLD]: { 'gbl/a.png': 10, 'gbl/b.png': 7 },
+    });
     let first = true;
     w.setRpc((expected) => {
       if (first) {
@@ -275,9 +285,13 @@ describe('R2 client', () => {
         trace: traceId,
       });
       if (init.method === 'HEAD') {
-        return Promise.resolve(new Response(null, { status: 200, headers: { 'content-length': '10' } }));
+        return Promise.resolve(
+          new Response(null, { status: 200, headers: { 'content-length': '10' } }),
+        );
       }
-      return Promise.resolve(new Response('<CopyObjectResult></CopyObjectResult>', { status: 200 }));
+      return Promise.resolve(
+        new Response('<CopyObjectResult></CopyObjectResult>', { status: 200 }),
+      );
     });
     expect(await r2.headObject(OLD, 'gbl/a b.png', 't1')).toBe(10);
     await r2.copyObject({
@@ -289,7 +303,9 @@ describe('R2 client', () => {
     });
     expect(seen.map((s) => s.method)).toEqual(['HEAD', 'PUT']);
     expect(seen.some((s) => s.method === 'DELETE')).toBe(false);
-    expect(seen[1]?.url).toBe('https://acct.r2.cloudflarestorage.com/srtdio-files/ws/x/y/z/original');
+    expect(seen[1]?.url).toBe(
+      'https://acct.r2.cloudflarestorage.com/srtdio-files/ws/x/y/z/original',
+    );
     expect(seen[1]?.copySource).toBe('/assets-gbl-apac/gbl/a%20b.png');
     expect(seen.every((s) => s.trace === 't1')).toBe(true);
   });
@@ -304,7 +320,13 @@ describe('R2 client', () => {
       Promise.resolve(new Response('<Error><Code>InternalError</Code></Error>', { status: 200 })),
     );
     await expect(
-      r2.copyObject({ sourceBucket: OLD, sourceKey: 'a', targetBucket: TARGET, targetKey: 'b', traceId: 't' }),
+      r2.copyObject({
+        sourceBucket: OLD,
+        sourceKey: 'a',
+        targetBucket: TARGET,
+        targetKey: 'b',
+        traceId: 't',
+      }),
     ).rejects.toThrow();
   });
 

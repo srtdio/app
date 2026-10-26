@@ -371,11 +371,7 @@ export async function verifyWorkspace(
 // HEAD and PUT are ever sent.
 // ---------------------------------------------------------------------------
 
-export type TracedFetch = (
-  input: string,
-  init: RequestInit,
-  traceId: string,
-) => Promise<Response>;
+export type TracedFetch = (input: string, init: RequestInit, traceId: string) => Promise<Response>;
 
 const enc = new TextEncoder();
 
@@ -447,7 +443,8 @@ export class R2 {
     if (!res.ok) throw new Error(`R2 HEAD ${bucket}/${key} failed (${res.status})`);
     const header = res.headers.get('content-length');
     const length = header === null ? Number.NaN : Number(header);
-    if (!Number.isInteger(length) || length < 0) throw new Error(`R2 HEAD ${bucket}/${key}: no Content-Length`);
+    if (!Number.isInteger(length) || length < 0)
+      throw new Error(`R2 HEAD ${bucket}/${key}: no Content-Length`);
     return length;
   }
 
@@ -467,12 +464,18 @@ export class R2 {
     });
     const text = await res.text();
     if (!res.ok || /<Error>/.test(text)) {
-      throw new Error(`R2 copy ${input.sourceKey} -> ${input.targetKey} failed (${res.status}): ${text}`);
+      throw new Error(
+        `R2 copy ${input.sourceKey} -> ${input.targetKey} failed (${res.status}): ${text}`,
+      );
     }
   }
 
   async bucketExists(bucket: string, traceId: string): Promise<boolean> {
-    const res = await this.signedFetch({ method: 'HEAD', path: `/${encodeSegment(bucket)}`, traceId });
+    const res = await this.signedFetch({
+      method: 'HEAD',
+      path: `/${encodeSegment(bucket)}`,
+      traceId,
+    });
     return res.ok;
   }
 
@@ -563,7 +566,8 @@ export class R2 {
       'x-amz-date': full,
       'content-type': req.contentType ?? 'application/octet-stream',
     });
-    for (const [n, v] of [...(req.amzHeaders ?? []), ...(req.extraHeaders ?? [])]) headers.set(n, v);
+    for (const [n, v] of [...(req.amzHeaders ?? []), ...(req.extraHeaders ?? [])])
+      headers.set(n, v);
     const init: RequestInit =
       req.method === 'PUT'
         ? { method: req.method, headers, body: body as BodyInit }
@@ -629,7 +633,10 @@ export class Db {
       { method: 'GET', headers: this.headers() },
       traceId,
     );
-    if (!res.ok) throw new Error(`Supabase GET ${path.split('?')[0] ?? path} failed (${res.status}): ${await res.text()}`);
+    if (!res.ok)
+      throw new Error(
+        `Supabase GET ${path.split('?')[0] ?? path} failed (${res.status}): ${await res.text()}`,
+      );
     return (await res.json()) as T[];
   }
 
@@ -765,7 +772,9 @@ export async function setup(
 
   const s3 = await r2.putLifecycle(bucket, lifecycleXml(), traceId);
   if (s3.ok) {
-    lines.push('- lifecycle: uploads/ deleted after 1 day; unfinished multipart aborted after 1 day');
+    lines.push(
+      '- lifecycle: uploads/ deleted after 1 day; unfinished multipart aborted after 1 day',
+    );
     return lines;
   }
   const s3Text = await s3.text();
@@ -844,7 +853,13 @@ const tracedFetch: TracedFetch = (input, init, traceId) => {
   return globalThis.fetch(input, { ...init, headers });
 };
 
-function line(r: { workspaceId: string; copied: number; skipped: number; verified: number; moved: boolean }): string {
+function line(r: {
+  workspaceId: string;
+  copied: number;
+  skipped: number;
+  verified: number;
+  moved: boolean;
+}): string {
   return (
     `${r.workspaceId} copied=${r.copied} skipped=${r.skipped} verified=${r.verified} ` +
     `moved=${r.moved ? 'yes' : 'no'}`
@@ -874,7 +889,11 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  const db = new Db(env('SUPABASE_URL').replace(/\/+$/, ''), env('SUPABASE_SECRET_KEY'), tracedFetch);
+  const db = new Db(
+    env('SUPABASE_URL').replace(/\/+$/, ''),
+    env('SUPABASE_SECRET_KEY'),
+    tracedFetch,
+  );
   const runTrace = uuidv7();
   const workspaces = await db.workspaces(options.workspace, runTrace);
   if (options.workspace !== 'all' && workspaces.length === 0) {
