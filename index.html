@@ -80,6 +80,10 @@
       html.pre-dark {
         background-color: #0c0d10; /* --bg dark, src/index.css .dark */
       }
+      html.pre-dark body,
+      html.pre-dark #root {
+        background-color: #0c0d10; /* --bg dark, src/index.css .dark; dark until initTheme adds .dark */
+      }
       html.boot-app #root[data-prerender='home'] {
         display: none;
       }

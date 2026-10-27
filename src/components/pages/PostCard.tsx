@@ -356,6 +356,12 @@ export function PostCard({
       {...(hasMenu
         ? {
             ...gesture.handlers,
+            // A hold released with no click left its click guard set: a new
+            // press is never the tail of that hold. Capture, so menu rows
+            // (whose wrapper stops pointerdown) clear it too.
+            onPointerDownCapture: () => {
+              gesture.consumeClickSuppression();
+            },
             // The click that trails a long-press never reaches Open post.
             onClickCapture: (event: MouseEvent) => {
               if (gesture.consumeClickSuppression()) {
