@@ -2,6 +2,10 @@
 # applied before asset matching, so it wins over dist/index.html, which stays
 # the empty app shell. Every other path with no file of its own falls through
 # to Pages' SPA fallback (no top-level 404.html), which serves /index.html.
+# Under /assets/ the closest 404.html (public/assets/404.html) answers a
+# missing file with a real 404, so a stale chunk fails as a module load, not
+# as HTML (scripts/carry-assets.ts keeps recent old files). Never add a
+# top-level 404.html: it would turn off the SPA fallback site-wide.
 # A "/* /index.html 200" line would be ignored by Pages as an infinite loop.
 # Rules are matched top to bottom; the /pricing redirects sit above the rewrite.
 /pricing / 301
