@@ -17,14 +17,15 @@ interface SidePanelProps {
 
 /** The laptop side panel's one width. */
 export const SIDE_PANEL_WIDTH_CLASS = 'w-[380px]';
+const SIDE_PANEL_WIDTH_PX = '380px';
 
 // Exit length; mirrors --dur-base so the panel stays mounted through its slide out.
 const EXIT_MS = DUR_BASE_MS;
 
 /**
- * A laptop right side panel: 380px wide, the full height of the row it sits
- * in (under the top bar), a flex sibling of the page so the page beside it
- * shrinks and stays usable. Nothing dims and focus is not trapped (it is not
+ * A laptop right side panel: 380px wide, fixed under the top bar to the
+ * bottom of the screen; while it is on screen it sets --side-panel-w, which
+ * the page pads by, so the page beside it shrinks and stays usable. Nothing dims and focus is not trapped (it is not
  * a dialog). Title left, X right; Esc closes and returns focus to whatever
  * had it when the panel opened. Motion: translateX only. Phone uses Sheet.
  */
@@ -50,6 +51,14 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
     return () => clearTimeout(timer);
   }, [open]);
 
+  // While on screen the page makes room: main pads by --side-panel-w (AppLayout).
+  useEffect(() => {
+    if (!rendered) return;
+    const root = document.documentElement;
+    root.style.setProperty('--side-panel-w', SIDE_PANEL_WIDTH_PX);
+    return () => root.style.removeProperty('--side-panel-w');
+  }, [rendered]);
+
   // Focus lands in the panel once it is on screen.
   useEffect(() => {
     if (open && rendered) panelRef.current?.focus({ preventScroll: true });
@@ -66,7 +75,8 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
       tabIndex={-1}
       data-side-panel=""
       className={cn(
-        'relative h-full shrink-0 overflow-hidden border-l border-border bg-panel focus:outline-none',
+        // Fixed under the 56px top bar, right edge; the page pads by its width.
+        'fixed bottom-0 right-0 top-14 z-20 overflow-hidden border-l border-border bg-panel focus:outline-none',
         SIDE_PANEL_WIDTH_CLASS,
       )}
     >

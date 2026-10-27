@@ -79,7 +79,9 @@ export function shellChrome(threadOpen: boolean): {
     topbarClassName: threadOpen ? 'hidden md:contents' : 'contents',
     showBottomTabs: !threadOpen,
     mainClassName: cn(
-      'flex-1 overflow-y-auto overflow-x-hidden',
+      // --side-panel-w is set only while ui/SidePanel is on screen (laptop);
+      // unset it is 0, so the page is unchanged for everyone else.
+      'flex-1 overflow-y-auto overflow-x-hidden md:pr-[var(--side-panel-w,0px)]',
       threadOpen ? 'pb-0' : 'pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-0',
     ),
   };
@@ -438,19 +440,17 @@ function AppLayoutBody() {
               <StorageWarningBanner />
               {/* Keyed by workspace: a switch remounts the route, so the new workspace
                   paints its own kept view or skeleton and nothing of the old one stays. */}
-              {/* main and, for the operator on laptop, the Cockpit panel beside it
-                  (the page shrinks, nothing dims). The row is always here, so the
-                  Outlet never remounts when the flag resolves. */}
-              <div className="flex min-h-0 flex-1">
-                <main className={chrome.mainClassName}>
-                  {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
-                </main>
-                {isPlatformOperator ? (
-                  <Suspense fallback={null}>
-                    <CockpitPanel />
-                  </Suspense>
-                ) : null}
-              </div>
+              <main className={chrome.mainClassName}>
+                {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
+              </main>
+              {/* The operator's Cockpit panel: fixed under the top bar on laptop
+                  (main makes room through --side-panel-w), a Sheet on phone.
+                  Nothing renders here for anyone else. */}
+              {isPlatformOperator ? (
+                <Suspense fallback={null}>
+                  <CockpitPanel />
+                </Suspense>
+              ) : null}
             </div>
             {chrome.showBottomTabs ? <BottomTabs /> : null}
             <ToastViewport />

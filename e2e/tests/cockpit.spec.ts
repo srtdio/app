@@ -69,7 +69,6 @@ test('the operator opens the panel, walks every tab, and closes it @theme @deskt
   const network = await installHarnessNetwork(page, { operator: true, cockpitLevel: 'red' });
   await page.goto('/pipeline');
   await expect(dot(page)).toBeVisible({ timeout: 15_000 });
-  const mainBefore = await page.locator('main').boundingBox();
   await dot(page).click();
 
   const surface = isLaptop(page)
@@ -83,8 +82,14 @@ test('the operator opens the panel, walks every tab, and closes it @theme @deskt
 
   if (isLaptop(page)) {
     // Beside the page: the page shrinks and stays usable, nothing dims.
-    const mainAfter = await page.locator('main').boundingBox();
-    expect((mainAfter?.width ?? 0) < (mainBefore?.width ?? 0)).toBe(true);
+    // The page's content box ends where the panel begins.
+    const contentRight = await page
+      .locator('main')
+      .evaluate(
+        (el) => el.getBoundingClientRect().right - parseFloat(getComputedStyle(el).paddingRight),
+      );
+    const panelLeft = (await surface.boundingBox())?.x ?? 0;
+    expect(contentRight).toBeLessThanOrEqual(panelLeft + 1);
     await expect(page.locator('.bg-scrim')).toHaveCount(0);
     await expect(
       page.getByRole('button', { name: 'Open post Monday carousel' }).first(),

@@ -123,9 +123,11 @@ describe('AppLayout Cockpit gate', () => {
     expect(source).not.toContain('readIsPlatformOperator');
   });
 
-  it('keeps <main> in a row that is always rendered, so the Outlet never remounts', () => {
-    expect(source).toContain(
-      '<div className="flex min-h-0 flex-1">\n                <main className={chrome.mainClassName}>',
-    );
+  it('leaves <main> where it was: a direct child of the column, no wrapper', () => {
+    expect(source).not.toContain('flex min-h-0 flex-1');
+    expect(source).toMatch(/<\/main>\s*\{\/\* The operator's Cockpit panel/);
+    for (const threadOpen of [false, true]) {
+      expect(shellChrome(threadOpen).mainClassName).toContain('md:pr-[var(--side-panel-w,0px)]');
+    }
   });
 });
