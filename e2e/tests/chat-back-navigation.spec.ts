@@ -71,19 +71,21 @@ test('Pipeline: every button is 44 tall with an 8px radius or round', async ({ p
 });
 
 test(
-  'Pipeline tab bar: the five Heroicons tab icons are 20px, the active one in accent',
+  'Pipeline tab bar: five 20px pill icons and the 22px Chat circle, the active one in accent',
   { tag: '@theme' },
   async ({ page }) => {
     await installHarnessNetwork(page);
     await page.goto('/pipeline');
+    // The floating pill (Pipeline, Briefs, Assets, Plan, Activity), then Chat.
     const tabs = page.locator('nav[data-undo-anchor] a');
-    await expect(tabs).toHaveCount(5);
+    await expect(tabs).toHaveCount(6);
     const icons = tabs.locator('svg').first();
     await expect(icons).toBeVisible();
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 6; i += 1) {
+      const size = i === 5 ? 22 : 20;
       const box = await tabs.nth(i).locator('svg').first().boundingBox();
-      expect(box?.width).toBeCloseTo(20, 0);
-      expect(box?.height).toBeCloseTo(20, 0);
+      expect(box?.width).toBeCloseTo(size, 0);
+      expect(box?.height).toBeCloseTo(size, 0);
     }
     // The accent token's resolved colour, read from a probe in this theme.
     const accent = await page.evaluate(() => {

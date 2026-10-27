@@ -123,10 +123,35 @@ describe('Topbar create menu', () => {
   });
 });
 
-describe('Notifications lives in the top bar on every main screen', () => {
+describe('Notifications lives in the top bar on laptop (the phone tab bar holds it below md)', () => {
   it('mounts the Notifications button once beside search and the account menu', () => {
     const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
     expect(findAll(tree, (el) => el.type === NotificationsButton)).toHaveLength(1);
+  });
+
+  it('hides the button below md with CSS only and shows it md and up', () => {
+    const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
+    const [wrapper] = findAll(
+      tree,
+      (el) => (el.props as Record<string, unknown>)['data-topbar-activity'] !== undefined,
+    );
+    expect(wrapper).toBeDefined();
+    if (wrapper === undefined) return;
+    expect(className(wrapper).split(' ')).toEqual(['hidden', 'md:inline-flex']);
+    const child = (wrapper.props as { children?: ReactNode }).children;
+    expect(isElement(child) && child.type === NotificationsButton).toBe(true);
+  });
+
+  it('phone order: Search sits directly left of the account menu once Activity is hidden', () => {
+    const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
+    const order = findAll(
+      tree,
+      (el) =>
+        (el.props as { label?: string }).label === 'Search' ||
+        (el.props as { label?: string }).label === 'Account menu' ||
+        (el.props as Record<string, unknown>)['data-topbar-activity'] !== undefined,
+    ).map((el) => (el.props as { label?: string }).label ?? 'activity');
+    expect(order).toEqual(['Search', 'activity', 'Account menu']);
   });
 
   it('leaves the button out while there is no workspace yet', () => {

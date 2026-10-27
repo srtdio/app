@@ -82,7 +82,7 @@ export function shellChrome(threadOpen: boolean): {
       // --side-panel-w is set only while ui/SidePanel is on screen (laptop);
       // unset it is 0, so the page is unchanged for everyone else.
       'flex-1 overflow-y-auto overflow-x-hidden md:pr-[var(--side-panel-w,0px)]',
-      threadOpen ? 'pb-0' : 'pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-0',
+      threadOpen ? 'pb-0' : 'pb-[calc(84px+env(safe-area-inset-bottom))] md:pb-0',
     ),
   };
 }

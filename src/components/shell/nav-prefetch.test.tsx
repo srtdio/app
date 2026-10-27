@@ -33,6 +33,9 @@ vi.mock('@/components/chat/ChatStoreProvider', () => ({
   useChatStore: () => ({ state: {} }),
 }));
 vi.mock('@/lib/chat/chat-store', () => ({ selectTotalUnread: () => 0 }));
+vi.mock('@/components/shell/InboxStoreProvider', () => ({
+  useInboxStore: () => ({ unreadCount: 0 }),
+}));
 
 import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Sidebar } from '@/components/shell/Sidebar';
@@ -161,6 +164,13 @@ describe('nav press prefetch', () => {
     press(pipeline, 'touchstart');
     press(pipeline, 'pointerdown');
     expect(loaders.pipeline).toHaveBeenCalledTimes(1);
+  });
+
+  it('BottomTabs: a press on the Activity tab starts the Activity chunk and its first reads', () => {
+    const container = render(<BottomTabs />);
+    press(link(container, '/notifications'), 'touchstart');
+    expect(loaders.notifications).toHaveBeenCalledTimes(1);
+    expect(routeData).toHaveBeenCalledWith('/notifications');
   });
 });
 
