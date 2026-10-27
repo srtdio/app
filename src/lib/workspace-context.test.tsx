@@ -42,7 +42,8 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { SessionProvider, useSession } from '@/lib/session-context';
-import { WorkspaceProvider, useWorkspace } from '@/lib/workspace-context';
+import { WorkspaceProvider, useWorkspace, workspacesReadKey } from '@/lib/workspace-context';
+import { peekKept, primeRead, readKey, resetSessionReads } from '@/lib/session-read';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -60,6 +61,7 @@ interface Snapshot {
   error: string | null;
   ids: string[];
   token: string | null;
+  active: string | null;
 }
 
 const history: Snapshot[] = [];
@@ -75,6 +77,7 @@ function Probe() {
     error: w.error,
     ids: w.workspaces.map((r) => r.id),
     token: s?.access_token ?? null,
+    active: w.workspaceId,
   });
   return null;
 }
@@ -111,6 +114,7 @@ async function emit(event: AuthChangeEvent, next: Session | null): Promise<void>
 const last = (): Snapshot => history[history.length - 1] as Snapshot;
 
 beforeEach(() => {
+  resetSessionReads();
   history.length = 0;
   refresh = null;
   auth.listener = null;
@@ -187,5 +191,44 @@ describe('WorkspaceProvider across auth events', () => {
     listWorkspaces.mockResolvedValue({ ok: false, error: { message: 'network down' } });
     await mount();
     expect(last()).toMatchObject({ loading: false, loaded: false, error: 'network down', ids: [] });
+  });
+});
+
+describe('WorkspaceProvider from the device cache (cold open)', () => {
+  it('paints the saved list at once, without waiting for the network', async () => {
+    primeRead(workspacesReadKey('u1'), [ws('ws-1'), ws('ws-2')]);
+    listWorkspaces.mockReturnValue(new Promise(() => undefined));
+    await mount();
+    const firstSignedIn = history.find((h) => h.token !== null);
+    expect(firstSignedIn).toMatchObject({ loaded: true, ids: ['ws-1', 'ws-2'], active: 'ws-1' });
+    expect(last()).toMatchObject({ loading: true, loaded: true, error: null });
+  });
+
+  it('a fresh list without the saved active workspace drops its reads and moves to the next row', async () => {
+    primeRead(workspacesReadKey('u1'), [ws('ws-1'), ws('ws-2')]);
+    primeRead(readKey('u1', 'ws-1', 'pipeline-posts'), ['kept']);
+    primeRead(readKey('u1', 'ws-2', 'pipeline-posts'), ['other']);
+    listWorkspaces.mockResolvedValue({ ok: true, data: [ws('ws-2')] });
+    await mount();
+    expect(last()).toMatchObject({ loading: false, loaded: true, ids: ['ws-2'], active: 'ws-2' });
+    expect(peekKept(readKey('u1', 'ws-1', 'pipeline-posts'))).toBeUndefined();
+    expect(peekKept(readKey('u1', 'ws-2', 'pipeline-posts'))).toEqual(['other']);
+    expect(peekKept(workspacesReadKey('u1'))).toEqual([ws('ws-2')]);
+  });
+
+  it('a failed fresh list keeps the saved rows on screen', async () => {
+    primeRead(workspacesReadKey('u1'), [ws('ws-1')]);
+    listWorkspaces.mockResolvedValue({ ok: false, error: { message: 'down' } });
+    await mount();
+    expect(last()).toMatchObject({ loading: false, loaded: true, error: null, ids: ['ws-1'] });
+  });
+
+  it('an account switch wipes the previous user before anything is seeded', async () => {
+    await mount();
+    expect(peekKept(workspacesReadKey('u1'))).toEqual([ws('ws-1')]);
+    listWorkspaces.mockResolvedValue({ ok: true, data: [ws('ws-9')] });
+    await emit('SIGNED_IN', session('u2', 't9'));
+    expect(peekKept(workspacesReadKey('u1'))).toBeUndefined();
+    expect(last()).toMatchObject({ loaded: true, ids: ['ws-9'] });
   });
 });

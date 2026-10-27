@@ -36,11 +36,13 @@ import {
   authEndsSnapshot,
   getProfileSnapshot,
   loadProfile,
+  profileReadKey,
   profileViewFor,
   resetProfileStore,
   subscribeProfile,
   type CurrentProfile,
 } from '@/lib/use-current-profile';
+import { primeRead, resetSessionReads } from '@/lib/session-read';
 
 function row(name: string, avatar: string | null = null): CurrentProfile {
   return {
@@ -59,6 +61,7 @@ async function flush(): Promise<void> {
 
 beforeEach(() => {
   reads.length = 0;
+  resetSessionReads();
   resetProfileStore(null);
 });
 
@@ -301,5 +304,39 @@ describe('stale results (F8)', () => {
     reads[0]?.resolve({ data: row('A old'), error: null });
     await flush();
     expect(getProfileSnapshot().profile?.display_name).toBe('A new');
+  });
+});
+
+describe('device cache (cold open)', () => {
+  it('a saved row is the first snapshot (not loading) and the first read still runs and replaces it', async () => {
+    primeRead(profileReadKey('u-1'), row('Saved'));
+    void loadProfile('u-1');
+    expect(getProfileSnapshot()).toEqual({
+      userId: 'u-1',
+      profile: row('Saved'),
+      loading: false,
+      error: false,
+    });
+    expect(reads).toHaveLength(1);
+    reads[0]?.resolve({ data: row('Fresh'), error: null });
+    await flush();
+    expect(getProfileSnapshot().profile).toEqual(row('Fresh'));
+    // Settled: another mount reads nothing.
+    void loadProfile('u-1');
+    expect(reads).toHaveLength(1);
+  });
+
+  it('a failed first read keeps the saved row (fail open)', async () => {
+    primeRead(profileReadKey('u-1'), row('Saved'));
+    void loadProfile('u-1');
+    reads[0]?.resolve({ data: null, error: { message: 'down' } });
+    await flush();
+    expect(getProfileSnapshot()).toMatchObject({ profile: row('Saved'), error: true });
+  });
+
+  it('another user never sees the saved row', () => {
+    primeRead(profileReadKey('u-1'), row('Saved'));
+    void loadProfile('u-2');
+    expect(getProfileSnapshot()).toMatchObject({ userId: 'u-2', profile: null, loading: true });
   });
 });

@@ -107,11 +107,11 @@ const ROWS = [{ id: 'ws-1', name: 'Acme', platform: 'linkedin' }];
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
-function render(next: WorkspaceState): void {
+function render(next: WorkspaceState, path = '/posts/p1'): void {
   state.current = next;
   act(() => {
     root?.render(
-      <MemoryRouter initialEntries={['/posts/p1']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/posts/:postId" element={<RoutedPage />} />
@@ -210,5 +210,22 @@ describe('AppLayout across workspace re-lists', () => {
     expect(text()).not.toBe('Loading');
     expect(mounts.count).toBe(1);
     expect(draftValue()).toBe('keep me too');
+  });
+});
+
+describe('AppLayout from the device cache (cold open)', () => {
+  it('paints the shell and the page on the first render while the fresh list loads', () => {
+    render({ loading: true, loaded: true, error: null, workspaces: ROWS });
+    expect(text()).not.toBe('Loading');
+    expect(text()).toContain('comment row one');
+    expect(mounts.count).toBe(1);
+    // The fresh list lands: updated in place, never remounted.
+    render({ loading: false, loaded: true, error: null, workspaces: ROWS });
+    expect(mounts.count).toBe(1);
+  });
+
+  it('holds the page for a ?w= deep link to another workspace until the fresh list decides', () => {
+    render({ loading: true, loaded: true, error: null, workspaces: ROWS }, '/posts/p1?w=ws-2');
+    expect(mounts.count).toBe(0);
   });
 });

@@ -1,5 +1,4 @@
-// Reads shared within this tab session, in memory only (never localStorage or
-// IndexedDB). A keyed read started anywhere (a nav press, a card press, a
+// Reads shared within this tab session. A keyed read started anywhere (a nav press, a card press, a
 // mount) is joined by every caller with the same key while it runs and, once
 // it settles, while it is fresh (younger than its window and not marked
 // stale). A failed read is never kept, so the next caller retries.
@@ -12,11 +11,20 @@
 // everything (resetSessionReads) and losing a workspace deletes its keys
 // (dropWorkspaceReads).
 //
+// Kept values are also saved on this device (src/lib/device-cache.ts,
+// IndexedDB, never localStorage): every ok settle and primeRead is saved, and
+// a cold open seeds the saved values back as kept but stale
+// (hydrateSessionReads), so peekKept paints them at once and the first
+// sharedRead still reads fresh. Signout and an account switch wipe the device
+// copy too; losing a workspace drops its saved keys; invalidateReads leaves
+// them (the kept value is still what the next visit paints).
+//
 // Keys always carry the user id and workspace id first
 // (`${userId}:${workspaceId}:<what>`), so one person's rows are never served
 // to another and RLS still decides every read that actually runs.
 
 import { SIGNOUT_EVENT, WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
+import * as deviceCache from '@/lib/device-cache';
 
 /** Default freshness window for a settled read. */
 export const READ_FRESH_MS = 30_000;
@@ -81,6 +89,7 @@ export function sharedRead<T>(
           entry.settledAt = Date.now();
           entry.value = value;
           entry.kept = { value };
+          deviceCache.put(key, value);
         } else {
           prior();
         }
@@ -124,6 +133,7 @@ export function primeRead<T>(key: string, value: T, freshMs: number = READ_FRESH
     freshMs,
     stale: false,
   });
+  deviceCache.put(key, value);
 }
 
 /**
@@ -142,12 +152,93 @@ export function dropWorkspaceReads(userId: string, workspaceId: string): void {
   for (const key of [...entries.keys()]) {
     if (key.startsWith(prefix)) entries.delete(key);
   }
+  void deviceCache.drop(prefix);
 }
 
-/** Drop everything (signout; tests). */
+/**
+ * Keep only the reads of `workspaceIds` for this user (a fresh workspace list
+ * landed): every other workspace's reads are deleted, here and on the device.
+ * User-level keys (empty workspace id) stay.
+ */
+export function retainWorkspaceReads(userId: string, workspaceIds: readonly string[]): void {
+  const keep = new Set(workspaceIds);
+  const lost = new Set<string>();
+  for (const key of entries.keys()) {
+    const parsed = deviceCache.parseKey(key);
+    if (parsed === null || parsed.userId !== userId || parsed.workspaceId === null) continue;
+    if (!keep.has(parsed.workspaceId)) lost.add(parsed.workspaceId);
+  }
+  for (const id of deviceCache.savedWorkspaceIds(userId)) {
+    if (!keep.has(id)) lost.add(id);
+  }
+  for (const id of lost) dropWorkspaceReads(userId, id);
+}
+
+// The user whose values this tab holds (seeded at boot or signed in), for the
+// account-switch wipe.
+let heldUserId: string | null = null;
+const hydratedListeners = new Set<() => void>();
+let hydratedFor: string | null = null;
+
+/**
+ * Seed this user's saved values (device cache) as kept but stale: peekKept
+ * paints them, the first sharedRead still reads. A key this tab already holds
+ * is never overwritten. Started at boot, in parallel with the boot imports;
+ * nothing waits on it. Never throws.
+ */
+export async function hydrateSessionReads(userId: string): Promise<void> {
+  heldUserId = userId;
+  const started = generation;
+  const saved = await deviceCache.hydrate(userId);
+  if (started !== generation || heldUserId !== userId) return;
+  for (const [key, value] of saved) {
+    if (entries.has(key)) continue;
+    entries.set(key, {
+      promise: Promise.resolve(value),
+      settledAt: 0,
+      value,
+      kept: { value },
+      freshMs: READ_FRESH_MS,
+      stale: true,
+    });
+  }
+  hydratedFor = userId;
+  for (const listener of [...hydratedListeners]) listener();
+}
+
+/** The user whose saved values were seeded, or null (none yet, or wiped since). */
+export function hydratedUserId(): string | null {
+  return hydratedFor;
+}
+
+/** Call `listener` once the device cache has seeded (late hydrate). Returns unsubscribe. */
+export function onSessionReadsHydrated(listener: () => void): () => void {
+  hydratedListeners.add(listener);
+  return () => hydratedListeners.delete(listener);
+}
+
+/**
+ * An auth event: a sign-in as a different user than the one this tab holds
+ * wipes everything first (memory and device); a sign-out wipes too (paths
+ * that sign out without SIGNOUT_EVENT).
+ */
+export function noteAuthUser(event: string, userId: string | null): void {
+  if (event === 'SIGNED_OUT') {
+    resetSessionReads();
+    return;
+  }
+  if (userId === null) return;
+  if (heldUserId !== null && heldUserId !== userId) resetSessionReads();
+  heldUserId = userId;
+}
+
+/** Drop everything, here and on the device (signout; account switch; tests). */
 export function resetSessionReads(): void {
   generation += 1;
   entries.clear();
+  heldUserId = null;
+  hydratedFor = null;
+  void deviceCache.wipe();
 }
 
 if (typeof window !== 'undefined') {

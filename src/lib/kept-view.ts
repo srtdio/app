@@ -1,9 +1,10 @@
 // Kept views: a screen read this session paints its last view at once when the
 // person comes back, then refreshes quietly (src/lib/session-read.ts keeps the
-// rows). This module keeps the rest of the view in memory only, per screen key
+// rows). This module keeps the rest of the view, per screen key
 // (`${userId}:${workspaceId}:view:<screen>`): the scroll position and the
-// chosen chip, tab or filter. It lives in the session reads, so signout and
-// losing the workspace clear it with them.
+// chosen chip, tab or filter. It lives in the session reads, so it is saved
+// on the device and comes back on a cold open with them (src/lib/device-cache.ts),
+// and signout, an account switch and losing the workspace clear it with them.
 //
 // A quiet refresh is applied only while the person has not touched, scrolled
 // or typed on the screen since arriving (useUntouched). A refresh that lands
