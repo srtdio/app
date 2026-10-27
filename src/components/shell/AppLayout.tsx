@@ -33,6 +33,7 @@ import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
 import { setPrefetchContext } from '@/lib/prefetch-context';
 import { routeChunksLoaded, whenRouteChunksSettle } from '@/lib/chunk-reload';
+import { useReloadOnNavigateWhenStale } from '@/lib/app-version';
 import { SessionLoading } from '@/components/auth/RouteGuards';
 import { MarksPanel } from '@/components/dev/MarksPanel';
 
@@ -112,6 +113,8 @@ function AppLayoutBody() {
   } = useCurrentProfile();
   const [searchParams, setSearchParams] = useSearchParams();
   const { pathname, search } = useLocation();
+  // A newer deploy is live: the next route change loads it (src/lib/app-version.ts).
+  useReloadOnNavigateWhenStale();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const chrome = shellChrome(isThreadRoute(pathname, searchParams) || isDetailRoute(pathname));

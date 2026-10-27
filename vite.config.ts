@@ -37,12 +37,29 @@ const VENDOR_CHUNKS: ReadonlyArray<readonly [string, RegExp]> = [
   ['vendor-zod', /[\\/]node_modules[\\/]zod[\\/]/],
 ];
 
+// dist/version.json names the build (src/lib/app-version.ts polls it so an
+// open tab moves to a new deploy on its next navigation). Emitted only when CI
+// sets VITE_APP_VERSION; local builds and dev have no version and no check.
+const appVersion = process.env.VITE_APP_VERSION ?? '';
+const versionFile: PluginOption = {
+  name: 'srtd-version-file',
+  apply: 'build',
+  generateBundle() {
+    if (appVersion === '') return;
+    this.emitFile({
+      type: 'asset',
+      fileName: 'version.json',
+      source: `${JSON.stringify({ version: appVersion })}\n`,
+    });
+  },
+};
+
 function vendorChunk(id: string): string | undefined {
   return VENDOR_CHUNKS.find(([, pattern]) => pattern.test(id))?.[0];
 }
 
 export default defineConfig({
-  plugins: [react(), ...sentryPlugins],
+  plugins: [react(), versionFile, ...sentryPlugins],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

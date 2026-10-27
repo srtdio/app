@@ -27,6 +27,8 @@ jobs:
           VITE_SENTRY_DSN_FRONTEND: ${{ secrets.SENTRY_DSN_FRONTEND }}
           VITE_SENTRY_ENVIRONMENT: production
           VITE_SENTRY_RELEASE: ${{ github.sha }}
+          # Stamps the build and dist/version.json (src/lib/app-version.ts).
+          VITE_APP_VERSION: ${{ github.sha }}
           VITE_ASSET_READ_URL: ${{ vars.VITE_ASSET_READ_URL }}
           VITE_ASSET_UPLOAD_URL: ${{ vars.VITE_ASSET_UPLOAD_URL }}
           VITE_AVATAR_UPLOAD_URL: ${{ vars.VITE_AVATAR_UPLOAD_URL }}
@@ -48,6 +50,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           pnpm wrangler pages project create srtdio-app --production-branch main || echo "Project may already exist, continuing"
+      # Keeps the last 14 days of hashed /assets/* files from the live site in
+      # dist/, so tabs opened before this deploy can still load their chunks.
+      - name: Carry recent assets
+        run: node --experimental-strip-types --no-warnings scripts/carry-assets.ts
+        env:
+          SITE_URL: https://srtd.io
       - name: Deploy to Cloudflare Pages
         run: pnpm wrangler pages deploy dist --project-name srtdio-app --branch main
         env:

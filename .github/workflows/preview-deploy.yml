@@ -72,6 +72,8 @@ jobs:
           # value fails env validation and blanks every page past the homepage.
           VITE_SENTRY_ENVIRONMENT: development
           VITE_SENTRY_RELEASE: ${{ github.event.pull_request.head.sha }}
+          # Stamps the build and dist/version.json (src/lib/app-version.ts).
+          VITE_APP_VERSION: ${{ github.event.pull_request.head.sha }}
           VITE_ASSET_READ_URL: ${{ env.PREVIEW_VITE_ASSET_READ_URL || vars.VITE_ASSET_READ_URL }}
           VITE_ASSET_UPLOAD_URL: ${{ env.PREVIEW_VITE_ASSET_UPLOAD_URL || vars.VITE_ASSET_UPLOAD_URL }}
           VITE_AVATAR_UPLOAD_URL: ${{ env.PREVIEW_VITE_AVATAR_UPLOAD_URL || vars.VITE_AVATAR_UPLOAD_URL }}
@@ -81,6 +83,12 @@ jobs:
           VITE_SITE_MEDIA_URL: ${{ vars.VITE_SITE_MEDIA_URL }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           CI: true
+      # Keeps the last 14 days of hashed /assets/* files from the live site in
+      # dist/, so tabs opened before this deploy can still load their chunks.
+      - name: Carry recent assets
+        run: node --experimental-strip-types --no-warnings scripts/carry-assets.ts
+        env:
+          SITE_URL: https://test.srtdio-app.pages.dev
       - name: Deploy preview to Cloudflare Pages
         run: pnpm wrangler pages deploy dist --project-name srtdio-app --branch "$PREVIEW_BRANCH"
         env:
