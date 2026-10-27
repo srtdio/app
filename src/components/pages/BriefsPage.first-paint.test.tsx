@@ -29,9 +29,10 @@ if (typeof window.matchMedia !== 'function') {
 type Counts = Result<{ all: number; open: number; closed: number }>;
 type Thumbs = Result<Map<string, string>>;
 
-const { firstPage, countBriefs, gates } = vi.hoisted(() => ({
+const { firstPage, countBriefs, gates, hooks } = vi.hoisted(() => ({
   firstPage: vi.fn(),
   countBriefs: vi.fn(),
+  hooks: {} as { dataChanged?: () => void },
   gates: {} as {
     counts?: (value: Counts) => void;
     thumbs?: (value: Thumbs) => void;
@@ -62,7 +63,16 @@ vi.mock('@/lib/workspace-context', () => ({
 vi.mock('@/lib/workspace-context-capability', () => ({
   useWorkspaceCapability: (key: string) => key === 'brief.create',
 }));
-vi.mock('@/lib/use-workspace-data-changed', () => ({ useWorkspaceDataChanged: () => {} }));
+vi.mock('@/lib/use-workspace-data-changed', () => ({
+  useWorkspaceDataChanged: (cb: () => void) => {
+    hooks.dataChanged = cb;
+  },
+}));
+// A short thumbnails ceiling so the timeout path runs on real timers.
+vi.mock('@/lib/chat-reads', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, READ_TIMEOUT_MS: 30 };
+});
 vi.mock('@/components/pages/CreateBriefSheet', () => ({ CreateBriefSheet: () => null }));
 
 function brief(id: string, over: Partial<BriefWithThumbnail> = {}): BriefWithThumbnail {
@@ -182,5 +192,68 @@ describe('Briefs first paint', () => {
     await tick();
     expect(skeleton()).toBeNull();
     expect(cards()).toBe(2);
+  });
+
+  it('a reference-link page whose thumbnails fail still paints the rows', async () => {
+    firstPage.mockResolvedValue(
+      pageOf([brief('b1', { reference_links: ['https://example.com/ref'] }), brief('b2')]),
+    );
+    await mount();
+    await act(async () => gates.counts?.({ ok: true, data: { all: 2, open: 2, closed: 0 } }));
+    await act(async () =>
+      gates.thumbs?.({ ok: false, error: { code: 'x', message: 'boom' } } as unknown as Thumbs),
+    );
+    await tick();
+    expect(skeleton()).toBeNull();
+    expect(cards()).toBe(2);
+    expect(document.querySelectorAll('[data-brief-tile="icon"]').length).toBe(2);
+    expect(document.body.textContent).not.toContain("Couldn't");
+  });
+
+  it('a reference-link page paints without thumbnails at the ceiling; late ones fill in', async () => {
+    firstPage.mockResolvedValue(
+      pageOf([brief('b1', { reference_links: ['https://example.com/ref'] }), brief('b2')]),
+    );
+    await mount();
+    await act(async () => gates.counts?.({ ok: true, data: { all: 2, open: 2, closed: 0 } }));
+    await tick();
+    expect(cards()).toBe(0);
+    await act(async () => new Promise((r) => setTimeout(r, 60)));
+    expect(skeleton()).toBeNull();
+    expect(cards()).toBe(2);
+    expect(document.querySelectorAll('[data-brief-tile="icon"]').length).toBe(2);
+
+    await act(async () => gates.thumbs?.({ ok: true, data: new Map([['b2', 'v2']]) }));
+    await tick();
+    expect(cards()).toBe(2);
+    expect(document.querySelectorAll('[data-brief-tile="icon"]').length).toBe(1);
+  });
+
+  it('late thumbnails from an older load generation are dropped', async () => {
+    firstPage.mockResolvedValueOnce(
+      pageOf([brief('b1', { reference_links: ['https://example.com/ref'] }), brief('b2')]),
+    );
+    await mount();
+    await act(async () => gates.counts?.({ ok: true, data: { all: 2, open: 2, closed: 0 } }));
+    await act(async () => new Promise((r) => setTimeout(r, 60)));
+    expect(cards()).toBe(2);
+    const staleThumbs = gates.thumbs;
+
+    // A reload starts a new generation, which paints its own rows.
+    firstPage.mockResolvedValueOnce(
+      pageOf([brief('b1', { reference_links: ['https://example.com/ref'] }), brief('b2')]),
+    );
+    await act(async () => hooks.dataChanged?.());
+    await tick();
+    await act(async () => gates.counts?.({ ok: true, data: { all: 2, open: 2, closed: 0 } }));
+    await act(async () => gates.thumbs?.({ ok: true, data: new Map() }));
+    await tick();
+    expect(cards()).toBe(2);
+    expect(document.querySelectorAll('[data-brief-tile="icon"]').length).toBe(2);
+
+    // The first load's thumbnails land late: not applied.
+    await act(async () => staleThumbs?.({ ok: true, data: new Map([['b1', 'v1']]) }));
+    await tick();
+    expect(document.querySelectorAll('[data-brief-tile="icon"]').length).toBe(2);
   });
 });

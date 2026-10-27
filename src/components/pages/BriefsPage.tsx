@@ -58,6 +58,7 @@ import {
 import { getPrefetchContext } from '@/lib/prefetch-context';
 import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import { logger } from '@/lib/logger';
+import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import {
   groupBriefsByDay,
   groupBriefsByTime,
@@ -656,18 +657,33 @@ export function BriefsPage() {
       const { items, next: page, thumbs } = result.data;
       shownFor.current = workspaceId;
       if (briefsPaintNeedsThumbs(items)) {
-        const thumbnails = await thumbs;
-        mark('briefs:thumbs-in');
+        // A link card's height depends on its thumbnail, so the paint waits for
+        // it, but never past READ_TIMEOUT_MS. A late or failed read paints the
+        // rows without thumbnails; it never fails the list.
+        let timer = 0;
+        const raced = await Promise.race([
+          thumbs.then((value) => ({ value })),
+          new Promise<null>((resolve) => {
+            timer = window.setTimeout(() => resolve(null), READ_TIMEOUT_MS);
+          }),
+        ]);
+        window.clearTimeout(timer);
         if (generation !== loadGeneration.current) return;
-        setLoading(false);
-        setLoadingMore(false);
-        if (!thumbnails.ok) {
-          setLoadFailed(true);
+        if (raced !== null) {
+          mark('briefs:thumbs-in');
+          setLoading(false);
+          setLoadingMore(false);
+          if (!raced.value.ok) {
+            logger.warn('briefs: thumbnails read failed', { error: raced.value.error.message });
+            setBriefsAndKeep(() => items, page);
+          } else {
+            setBriefsAndKeep(() => withBriefThumbnails(items, raced.value.data), page);
+          }
+          setNext(page);
           return;
         }
-        setBriefsAndKeep(() => withBriefThumbnails(items, thumbnails.data), page);
-        setNext(page);
-        return;
+        // Timed out: paint the rows now; the thumbnails apply below if they land
+        // while this load is still current.
       }
       setLoading(false);
       setLoadingMore(false);

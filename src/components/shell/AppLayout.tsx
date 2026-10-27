@@ -402,7 +402,11 @@ function AppLayoutBody() {
               </div>
               {/* Its own sibling above main: showing it never remounts the Outlet. */}
               <StorageWarningBanner />
-              <main className={chrome.mainClassName}>{switchPending ? null : <Outlet />}</main>
+              {/* Keyed by workspace: a switch remounts the route, so the new workspace
+                  paints its own kept view or skeleton and nothing of the old one stays. */}
+              <main className={chrome.mainClassName}>
+                {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
+              </main>
             </div>
             {chrome.showBottomTabs ? <BottomTabs /> : null}
             <ToastViewport />
