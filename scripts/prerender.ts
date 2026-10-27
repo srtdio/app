@@ -3,8 +3,10 @@
 // one virtual entry with Vite, renders each route in src/components/home/
 // seo-routes.ts with react-dom/server, and writes real HTML into dist/:
 //
-//   dist/index.html                 empty app shell, untouched: Pages serves it
-//                                   for every path with no file (SPA fallback)
+//   dist/index.html                 empty app shell: Pages serves it for every
+//                                   path with no file (SPA fallback). Its #root
+//                                   stays empty; it gains the app stylesheet and
+//                                   modulepreloads for the App chunk graph
 //   dist/prerender/home.html        "/" (public/_redirects rewrites / to it)
 //   dist/demo.html                  /demo
 //   dist/legal/<policy>.html        /legal/privacy-policy, /legal/terms-and-conditions
@@ -16,9 +18,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import react from '@vitejs/plugin-react';
-import { build, type Plugin } from 'vite';
-import viteConfig from '../vite.config.ts';
+import type { Plugin } from 'vite';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 // `--dist <dir>` prerenders another build output (the e2e first-paint specs
@@ -63,7 +63,11 @@ interface ManifestChunk {
   css?: string[];
   imports?: string[];
 }
-type Manifest = Record<string, ManifestChunk>;
+export type Manifest = Record<string, ManifestChunk>;
+
+const SHELL_TITLE = '<title>Sorted</title>';
+const APP_ENTRY = 'src/App.tsx';
+const APP_STYLESHEET = 'src/index.css';
 
 function fail(message: string): never {
   process.stderr.write(`prerender: ${message}\n`);
@@ -89,6 +93,52 @@ function stylesheetsFor(manifest: Manifest, key: string, seen = new Set<string>(
   return [...new Set([...nested, ...own])];
 }
 
+/** The App chunk and every chunk it statically imports, as root paths, deduped. */
+function staticChunksFor(manifest: Manifest, key: string, seen = new Set<string>()): string[] {
+  if (seen.has(key)) return [];
+  seen.add(key);
+  const chunk = manifest[key];
+  if (chunk === undefined) throw new Error(`manifest has no entry for ${key}`);
+  const nested = (chunk.imports ?? []).flatMap((child) => staticChunksFor(manifest, child, seen));
+  return [...new Set([`/${chunk.file}`, ...nested])];
+}
+
+/**
+ * The SPA fallback shell with the app's first requests announced in the HTML:
+ * the src/index.css stylesheet before <title> (after the inline canvas <style>
+ * and theme script, so neither waits on it) and a modulepreload for the App
+ * chunk and its static imports before </head>. Shell and route chunks are left
+ * to the runtime (they differ per path and session). Anything the HTML already
+ * links or loads (Vite's own modulepreloads, the entry script) is skipped, so a
+ * second run returns the same HTML.
+ */
+export function injectAppPreloads(shell: string, manifest: Manifest): string {
+  const titleAt = shell.indexOf(SHELL_TITLE);
+  const styleEnd = shell.indexOf('</style>');
+  const headEnd = shell.indexOf('</head>');
+  if (styleEnd < 0 || titleAt < styleEnd || headEnd < titleAt) {
+    throw new Error('shell needs an inline <style>, then <title>Sorted</title>, then </head>');
+  }
+  const present = new Set(
+    [...shell.matchAll(/<(?:link|script)\b[^>]*?\s(?:href|src)="([^"]+)"/g)].map((m) => m[1]),
+  );
+  const cssChunk = manifest[APP_STYLESHEET];
+  if (cssChunk === undefined) throw new Error(`manifest has no entry for ${APP_STYLESHEET}`);
+  const css = `/${cssChunk.file}`;
+  const stylesheet = present.has(css) ? '' : `<link rel="stylesheet" href="${css}">\n    `;
+  const preloads = staticChunksFor(manifest, APP_ENTRY)
+    .filter((href) => !present.has(href))
+    .map((href) => `  <link rel="modulepreload" crossorigin href="${href}">\n  `)
+    .join('');
+  return (
+    shell.slice(0, titleAt) +
+    stylesheet +
+    shell.slice(titleAt, headEnd) +
+    preloads +
+    shell.slice(headEnd)
+  );
+}
+
 /** Visible text of an HTML fragment: tags, scripts and styles stripped. */
 function visibleText(html: string): string {
   return html
@@ -108,6 +158,10 @@ async function main(): Promise<void> {
   const template = readFileSync(shellPath, 'utf8');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest;
 
+  // Loaded here, not at the top, so the unit test imports injectAppPreloads alone.
+  const { build } = await import('vite');
+  const { default: react } = await import('@vitejs/plugin-react');
+  const { default: viteConfig } = await import('../vite.config.ts');
   await build({
     configFile: false,
     logLevel: 'warn',
@@ -149,15 +203,21 @@ async function main(): Promise<void> {
   const lastmod = new Date().toISOString().slice(0, 10);
   writeFileSync(join(dist, 'sitemap.xml'), mod.sitemapXml(lastmod));
 
-  // The shell must stay empty: app routes and unknown paths get it.
-  if (readFileSync(shellPath, 'utf8') !== template || !template.includes('<div id="root"></div>')) {
+  // App routes and unknown paths get the shell: preloads added, #root empty.
+  const shell = injectAppPreloads(template, manifest);
+  writeFileSync(shellPath, shell);
+  if (readFileSync(shellPath, 'utf8') !== shell || !shell.includes('<div id="root"></div>')) {
     fail('dist/index.html is no longer the empty shell');
   }
+  process.stdout.write(`prerender: app preloads -> ${shellPath}\n`);
   // The manifest was only for this script; it is not published.
   rmSync(join(dist, '.vite'), { recursive: true, force: true });
   rmSync(ssrOut, { recursive: true, force: true });
 }
 
-main().catch((err: unknown) =>
-  fail(err instanceof Error ? (err.stack ?? err.message) : String(err)),
-);
+// Run only as the build step, not when the unit test imports this file.
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err: unknown) =>
+    fail(err instanceof Error ? (err.stack ?? err.message) : String(err)),
+  );
+}

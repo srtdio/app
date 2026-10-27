@@ -1,7 +1,7 @@
 import { mark } from '@/lib/perf-marks';
 import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { resolveNext, withNext } from '@/components/auth/SignInPage';
+import { resolveNext, withNext } from '@/components/auth/next-param';
 import { useSession } from '@/lib/session-context';
 
 /**

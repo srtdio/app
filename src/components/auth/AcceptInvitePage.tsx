@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { ExpiredLinkView } from '@/components/auth/AuthCallbackPage';
 import { AuthShell } from '@/components/auth/AuthShell';
-import { withNext } from '@/components/auth/SignInPage';
+import { withNext } from '@/components/auth/next-param';
 import { Button, buttonClass } from '@/components/ui/Button';
 import { dispatchSorted, SIGNOUT_EVENT } from '@/lib/events';
 import { RECOVERY_COPY } from '@/lib/induction-copy';
