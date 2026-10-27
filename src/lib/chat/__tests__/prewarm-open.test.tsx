@@ -365,7 +365,7 @@ const FUTURE_SCHEDULED = {
   reply_to_message_id: null,
   send_at: '2026-10-25T18:00:00.000Z',
   sent_at: null,
-  status: 'pending',
+  status: 'scheduled',
   failure_reason: null,
   created_at: '2026-10-25T11:00:00.000Z',
   updated_at: '2026-10-25T11:00:00.000Z',
