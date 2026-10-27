@@ -673,11 +673,13 @@ export function BriefsPage() {
           mark('briefs:thumbs-in');
           setLoading(false);
           setLoadingMore(false);
-          if (!raced.value.ok) {
-            logger.warn('briefs: thumbnails read failed', { error: raced.value.error.message });
+          const thumbnails = raced.value;
+          if (!thumbnails.ok) {
+            logger.warn('briefs: thumbnails read failed', { error: thumbnails.error.message });
             setBriefsAndKeep(() => items, page);
           } else {
-            setBriefsAndKeep(() => withBriefThumbnails(items, raced.value.data), page);
+            const map = thumbnails.data;
+            setBriefsAndKeep(() => withBriefThumbnails(items, map), page);
           }
           setNext(page);
           return;
