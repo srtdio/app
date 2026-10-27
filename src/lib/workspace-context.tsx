@@ -21,7 +21,14 @@ import { useNewTrace } from '@/lib/trace-context';
 import { getCurrentTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
 import { primeWorkspacePlatforms } from '@/lib/workspace-context-platform';
-import { dropWorkspaceReads } from '@/lib/session-read';
+import {
+  dropWorkspaceReads,
+  onSessionReadsHydrated,
+  peekKept,
+  primeRead,
+  readKey,
+  retainWorkspaceReads,
+} from '@/lib/session-read';
 import { dispatchInductionRefresh } from '@/lib/induction';
 import { finishInduction } from '@/components/induction/induction-data';
 
@@ -169,6 +176,30 @@ export function nextActiveId(prev: string | null, rows: readonly WorkspaceRow[])
   return prev !== null && rows.some((w) => w.id === prev) ? prev : (rows[0]?.id ?? null);
 }
 
+/** The user-level session-read key of the workspace list (saved on the device). */
+export function workspacesReadKey(userId: string): string {
+  return readKey(userId, '', 'shell:workspaces');
+}
+
+/** The workspace list this device saved for `userId`, when it has rows. Never reads. */
+export function cachedWorkspaces(userId: string | null): WorkspaceRow[] | null {
+  if (userId === null) return null;
+  const rows = peekKept<WorkspaceRow[]>(workspacesReadKey(userId));
+  return Array.isArray(rows) && rows.length > 0 ? rows : null;
+}
+
+/**
+ * A fresh list landed: keep it for the next cold open and delete every saved
+ * read of a workspace it no longer lists (removed or deleted).
+ */
+function keepFreshList(userId: string, rows: WorkspaceRow[]): void {
+  primeRead(workspacesReadKey(userId), rows);
+  retainWorkspaceReads(
+    userId,
+    rows.map((w) => w.id),
+  );
+}
+
 /**
  * Induction is per user (user_private.induction_done_at), so stamping it done
  * once a workspace is deleted is what makes the create that follows skip it:
@@ -190,6 +221,8 @@ async function skipInductionAfterDelete(client: Client, traceId: string): Promis
  * one platform, so a single active workspace drives every tenant-scoped read.
  * Resolved once on mount via bootstrapWorkspaces; the active id lives in React
  * state only (no localStorage, no hardcoding) and defaults to the first row.
+ * On a cold open the list this device saved (src/lib/device-cache.ts) paints
+ * the shell at once (loaded, still loading); the fresh list replaces it.
  */
 interface WorkspaceContextValue {
   workspaceId: string | null;
@@ -264,6 +297,29 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     workspacesRef.current = workspaces;
     activeIdRef.current = activeId;
   }, [workspaces, activeId]);
+  // The user whose saved list is shown while the fresh one loads (null: none).
+  const [cacheFor, setCacheFor] = useState<string | null>(null);
+  const cacheForRef = useRef(cacheFor);
+  cacheForRef.current = cacheFor;
+  const loadedRef = useRef(loaded);
+  loadedRef.current = loaded;
+
+  // Paint from the device in the same render the user appears in: the shell
+  // gate never shows a loader frame for a list this device already has.
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  if (userId === null && seededFor !== null) setSeededFor(null);
+  if (userId !== null && seededFor !== userId) {
+    setSeededFor(userId);
+    const cached = cachedWorkspaces(userId);
+    if (cached !== null) {
+      mark('device-cache:workspaces');
+      setWorkspaces(cached);
+      setActiveId(nextActiveId(null, cached));
+      setLoaded(true);
+      setLoading(true);
+      setCacheFor(userId);
+    }
+  }
 
   // Exemption from the one-workspace rule, read once per user under RLS.
   useEffect(() => {
@@ -291,21 +347,42 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const current = sessionRef.current;
     if (userId === null || current === null) return;
     let active = true;
+    const fromCache = cacheForRef.current === userId;
     setLoading(true);
-    setLoaded(false);
+    if (!fromCache) setLoaded(false);
     setError(null);
+
+    // The device cache seeded after the first render (a slow hydrate): paint
+    // its list if the fresh one has not landed yet.
+    const offHydrated = onSessionReadsHydrated(() => {
+      if (!active || loadedRef.current) return;
+      const cached = cachedWorkspaces(userId);
+      if (cached === null) return;
+      mark('device-cache:workspaces');
+      setWorkspaces(cached);
+      setActiveId((prev) => nextActiveId(prev, cached));
+      setLoaded(true);
+      setCacheFor(userId);
+    });
 
     bootstrapWorkspaces(supabase, current, bootstrapGuard, newTrace)
       .then((res) => {
         if (!active) return;
-        if (res.error !== null) {
+        const shownFromCache = cacheForRef.current === userId;
+        setCacheFor(null);
+        if (res.error !== null && shownFromCache) {
+          // The saved list is on screen: keep it, as a failed re-list does.
+          logger.error('workspace bootstrap failed', { error: res.error });
+        } else if (res.error !== null) {
           setError(res.error);
           setWorkspaces([]);
           setActiveId(null);
         } else {
+          keepFreshList(userId, res.workspaces);
           setWorkspaces(res.workspaces);
           // Default to the first row (the freshly created one when bootstrapped),
-          // keeping any prior selection still present in the refreshed list.
+          // keeping any prior selection still present in the refreshed list
+          // (a saved workspace no longer listed moves to the next row).
           setActiveId((prev) => nextActiveId(prev, res.workspaces));
           setLoaded(true);
         }
@@ -314,14 +391,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       .catch((err: unknown) => {
         if (!active) return;
         logger.error('workspace bootstrap failed', { error: String(err) });
-        setError(String(err));
-        setWorkspaces([]);
-        setActiveId(null);
+        const shownFromCache = cacheForRef.current === userId;
+        setCacheFor(null);
+        if (!shownFromCache) {
+          setError(String(err));
+          setWorkspaces([]);
+          setActiveId(null);
+        }
         setLoading(false);
       });
 
     return () => {
       active = false;
+      offHydrated();
     };
   }, [userId, newTrace]);
 
@@ -346,6 +428,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           trace_id: getCurrentTraceId(),
         });
       } else {
+        keepFreshList(current.user.id, res.workspaces);
         setWorkspaces(res.workspaces);
         setActiveId((prev) => nextActiveId(prev, res.workspaces));
       }
@@ -359,9 +442,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [newTrace]);
 
-  const applyWorkspacePatch = useCallback((id: string, patch: WorkspacePatch) => {
-    setWorkspaces((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
-  }, []);
+  const applyWorkspacePatch = useCallback(
+    (id: string, patch: WorkspacePatch) => {
+      setWorkspaces((rows) => {
+        const next = rows.map((row) => (row.id === id ? { ...row, ...patch } : row));
+        // Own writes update the saved list too.
+        if (userId !== null) primeRead(workspacesReadKey(userId), next);
+        return next;
+      });
+    },
+    [userId],
+  );
 
   const clearDeletedWorkspace = useCallback(() => setDeletedWorkspace(null), []);
 
@@ -370,6 +461,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       await skipInductionAfterDelete(supabase, newTrace());
       if (userId !== null) dropWorkspaceReads(userId, id);
       const remaining = workspacesRef.current.filter((row) => row.id !== id);
+      if (userId !== null) primeRead(workspacesReadKey(userId), remaining);
       setWorkspaces(remaining);
       setActiveId((prev) => nextActiveId(prev === id ? null : prev, remaining));
       setDeletedWorkspace({ name });
@@ -392,7 +484,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       mark('workspace:recheck');
       void listWorkspaces(supabase).then(
         (res) => {
-          if (!active || !res.ok || res.data.some((w) => w.id === current)) return;
+          if (!active || !res.ok) return;
+          if (userId !== null) keepFreshList(userId, res.data);
+          if (res.data.some((w) => w.id === current)) return;
           if (userId !== null) dropWorkspaceReads(userId, current);
           setWorkspaces(res.data);
           setActiveId((prev) => nextActiveId(prev === current ? null : prev, res.data));

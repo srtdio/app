@@ -28,6 +28,7 @@ vi.mock('@/lib/supabase', () => {
   return { supabase: { from: () => query } };
 });
 
+import { resetSessionReads } from '@/lib/session-read';
 import {
   nextActiveId,
   useWorkspace,
@@ -63,6 +64,7 @@ async function render(): Promise<void> {
 }
 
 afterEach(() => {
+  resetSessionReads();
   act(() => root?.unmount());
   root = null;
   ctx = null;

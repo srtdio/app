@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   dropWorkspaceReads,
+  hydrateSessionReads,
+  hydratedUserId,
   invalidateReads,
+  noteAuthUser,
+  retainWorkspaceReads,
   peekKept,
   peekRead,
   primeRead,
@@ -12,6 +16,13 @@ import {
   sharedRead,
 } from '@/lib/session-read';
 import { SIGNOUT_EVENT, WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
+import {
+  appVersion,
+  flushDeviceCache,
+  setDeviceCacheBackend,
+  type CacheBackend,
+  type CacheRecord,
+} from '@/lib/device-cache';
 
 afterEach(() => {
   resetSessionReads();
@@ -143,5 +154,133 @@ describe('peekKept', () => {
     expect(peekKept(readKey('u', 'w', 'a'))).toBeUndefined();
     expect(peekKept(readKey('u', 'w2', 'a'))).toBe(2);
     expect(peekKept(readKey('x', 'w', 'a'))).toBe(3);
+  });
+});
+
+/** An in-memory stand-in for IndexedDB. */
+function memoryBackend(): CacheBackend & { rows: Map<string, CacheRecord> } {
+  const rows = new Map<string, CacheRecord>();
+  return {
+    rows,
+    getAll: async () => [...rows.values()],
+    putMany: async (records) => {
+      for (const r of records) rows.set(r.key, r);
+    },
+    deleteKeys: async (keys) => {
+      for (const k of keys) rows.delete(k);
+    },
+    deletePrefix: async (prefix) => {
+      for (const k of [...rows.keys()]) if (k.startsWith(prefix)) rows.delete(k);
+    },
+    clear: async () => rows.clear(),
+  };
+}
+
+function saved(key: string, value: unknown): CacheRecord {
+  const [userId = '', workspaceId = ''] = key.split(':');
+  return {
+    key,
+    value,
+    savedAt: Date.now(),
+    userId,
+    workspaceId: workspaceId === '' ? null : workspaceId,
+    appVersion: appVersion(),
+    size: 1,
+  };
+}
+
+describe('device cache', () => {
+  let mem: ReturnType<typeof memoryBackend>;
+  const key = readKey('u', 'w', 'posts');
+
+  beforeEach(() => {
+    mem = memoryBackend();
+    setDeviceCacheBackend(mem);
+  });
+
+  afterEach(() => {
+    setDeviceCacheBackend(null);
+  });
+
+  it('hydrated values are kept but stale: peekKept paints them, the first sharedRead reads', async () => {
+    mem.rows.set(key, saved(key, ['row']));
+    await hydrateSessionReads('u');
+    expect(hydratedUserId()).toBe('u');
+    expect(peekKept(key)).toEqual(['row']);
+    expect(peekRead(key)).toBeUndefined();
+    const load = vi.fn(() => Promise.resolve(['fresh']));
+    await expect(sharedRead(key, load)).resolves.toEqual(['fresh']);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(peekKept(key)).toEqual(['fresh']);
+  });
+
+  it('never overwrites a value this tab already holds', async () => {
+    mem.rows.set(key, saved(key, 'saved'));
+    primeRead(key, 'live');
+    await hydrateSessionReads('u');
+    expect(peekKept(key)).toBe('live');
+  });
+
+  it('an ok settle and a primed write are saved; a failure is not', async () => {
+    await sharedRead(key, () => Promise.resolve('read'));
+    primeRead(readKey('u', 'w', 'view:chip'), 'all');
+    await sharedRead(readKey('u', 'w', 'bad'), () => Promise.resolve({ ok: false }), {
+      isOk: (v) => v.ok,
+    });
+    await flushDeviceCache();
+    expect(mem.rows.get(key)?.value).toBe('read');
+    expect(mem.rows.get(readKey('u', 'w', 'view:chip'))?.value).toBe('all');
+    expect(mem.rows.has(readKey('u', 'w', 'bad'))).toBe(false);
+  });
+
+  it('invalidateReads keeps the saved value', async () => {
+    primeRead(key, 'v');
+    await flushDeviceCache();
+    invalidateReads('');
+    await flushDeviceCache();
+    expect(mem.rows.get(key)?.value).toBe('v');
+  });
+
+  it('signout wipes the device copy', async () => {
+    primeRead(key, 'v');
+    await flushDeviceCache();
+    window.dispatchEvent(new CustomEvent(SIGNOUT_EVENT));
+    await flushDeviceCache();
+    expect(mem.rows.size).toBe(0);
+  });
+
+  it('a SIGNED_OUT auth event wipes (sign-out paths without SIGNOUT_EVENT)', async () => {
+    primeRead(key, 'v');
+    await flushDeviceCache();
+    noteAuthUser('SIGNED_OUT', null);
+    await flushDeviceCache();
+    expect(peekKept(key)).toBeUndefined();
+    expect(mem.rows.size).toBe(0);
+  });
+
+  it('a sign-in as a different user wipes before anything is seeded', async () => {
+    mem.rows.set(key, saved(key, 'u-row'));
+    await hydrateSessionReads('u');
+    noteAuthUser('SIGNED_IN', 'u');
+    expect(peekKept(key)).toBe('u-row');
+    noteAuthUser('SIGNED_IN', 'other');
+    await flushDeviceCache();
+    expect(peekKept(key)).toBeUndefined();
+    expect(mem.rows.size).toBe(0);
+  });
+
+  it('workspace loss drops that workspace here and on the device', async () => {
+    primeRead(readKey('u', 'w', 'a'), 1);
+    primeRead(readKey('u', 'w2', 'a'), 2);
+    primeRead(readKey('u', '', 'shell:workspaces'), []);
+    await flushDeviceCache();
+    retainWorkspaceReads('u', ['w2']);
+    await flushDeviceCache();
+    expect(peekKept(readKey('u', 'w', 'a'))).toBeUndefined();
+    expect(peekKept(readKey('u', 'w2', 'a'))).toBe(2);
+    expect([...mem.rows.keys()].sort()).toEqual([
+      readKey('u', '', 'shell:workspaces'),
+      readKey('u', 'w2', 'a'),
+    ]);
   });
 });

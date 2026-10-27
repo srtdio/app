@@ -20,6 +20,10 @@
 // the Supabase auth state change (the same source session-context uses), not
 // from the sorted:signout request, so tapping Sign out never swaps the app for
 // "Loading" and a failed sign-out cannot leave it stuck.
+//
+// On a cold open the row this device saved (src/lib/device-cache.ts, through
+// the session reads) is the first snapshot (not loading), so the shell paints
+// at once; the first read still runs and replaces it quietly.
 
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
@@ -27,6 +31,7 @@ import { supabase } from '@/lib/supabase';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { useSession } from '@/lib/session-context';
 import { logger } from '@/lib/logger';
+import { onSessionReadsHydrated, peekKept, primeRead, readKey } from '@/lib/session-read';
 
 export interface CurrentProfile {
   display_name: string;
@@ -60,6 +65,20 @@ let queued = false;
 /** Sequence number of the newest read; only its result is applied. */
 let latestSeq = 0;
 const listeners = new Set<() => void>();
+/** The user whose first read has settled (ok or failed); null before it. */
+let readSettledFor: string | null = null;
+
+/** The user-level session-read key of the profile row (saved on the device). */
+export function profileReadKey(userId: string): string {
+  return readKey(userId, '', 'shell:profile');
+}
+
+/** A snapshot for `userId` before any read: the saved row (not loading) when there is one. */
+function firstSnapshot(userId: string): ProfileSnapshot {
+  const saved = peekKept<CurrentProfile>(profileReadKey(userId));
+  if (saved === undefined) return { ...EMPTY, userId };
+  return { userId, profile: saved, loading: false, error: false };
+}
 
 function publish(next: ProfileSnapshot): void {
   snapshot = next;
@@ -98,10 +117,12 @@ function startRead(userId: string): Promise<void> {
     // A newer read started, or the user changed (or signed out) mid-read: drop
     // the stale result.
     if (seq !== latestSeq || snapshot.userId !== userId) return;
+    readSettledFor = userId;
     if (failed) {
       // Keep the last good row; flag the failure the same way as before.
       publish({ userId, profile: snapshot.profile, loading: false, error: true });
     } else {
+      if (data !== null) primeRead(profileReadKey(userId), data);
       publish({ userId, profile: data, loading: false, error: false });
     }
   });
@@ -122,7 +143,10 @@ export function resetProfileStore(userId: string | null = null): void {
   inflight = null;
   queued = false;
   latestSeq += 1;
-  publish(userId === null ? EMPTY : { ...EMPTY, userId });
+  readSettledFor = null;
+  const next = userId === null ? EMPTY : firstSnapshot(userId);
+  if (!next.loading) mark('device-cache:profile');
+  publish(next);
 }
 
 /**
@@ -138,7 +162,8 @@ export function loadProfile(userId: string, force = false): Promise<void> {
     if (force) queued = true;
     return inflight;
   }
-  if (!force && !snapshot.loading) return Promise.resolve();
+  // A saved row is shown without a read having settled: the first read still runs.
+  if (!force && readSettledFor === userId) return Promise.resolve();
   inflight = startRead(userId);
   return inflight;
 }
@@ -171,8 +196,18 @@ function onAuthChange(event: AuthChangeEvent, session: Session | null): void {
   inflight = null;
   queued = false;
   latestSeq += 1;
+  readSettledFor = null;
   snapshot = EMPTY;
 }
+
+// The device cache seeded after the store was set up (a slow hydrate): show
+// the saved row while the first read is still on its way.
+onSessionReadsHydrated(() => {
+  const { userId } = snapshot;
+  if (userId === null || !snapshot.loading || readSettledFor === userId) return;
+  const next = firstSnapshot(userId);
+  if (!next.loading) publish(next);
+});
 
 let authSubscription: { unsubscribe: () => void } | null = null;
 
@@ -219,6 +254,11 @@ export function useCurrentProfile(): UseCurrentProfile {
     if (userId !== null) void loadProfile(userId, true);
   }, [userId]);
 
-  const view = profileViewFor(snap, userId);
+  // Before the store has switched to this user (its effect runs after this
+  // render), the row this device saved for them already paints.
+  const view =
+    userId !== null && snap.userId !== userId
+      ? firstSnapshot(userId)
+      : profileViewFor(snap, userId);
   return { profile: view.profile, loading: view.loading, error: view.error, refetch };
 }

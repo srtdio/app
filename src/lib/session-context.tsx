@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { SIGNOUT_EVENT } from '@/lib/events';
 import { logger } from '@/lib/logger';
 import { noteAuthToken } from '@/lib/chat/bounded-window';
+import { noteAuthUser } from '@/lib/session-read';
 
 /**
  * Decide the next session from an onAuthStateChange event. A null `nextSession`
@@ -62,6 +63,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then(({ data }) => {
         if (!active) return;
         mark('session:resolved');
+        noteAuthUser('INITIAL_SESSION', data.session?.user.id ?? null);
         setSession(data.session);
         setLoading(false);
       })
@@ -75,6 +77,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
       mark(`auth:event:${event}`);
       noteAuthToken(event, nextSession?.access_token);
+      // Before any consumer renders: a different user (account switch) or a
+      // sign-out from any path wipes the kept and device-saved screens.
+      noteAuthUser(event, nextSession?.user.id ?? null);
       setSession((current) => resolveSession(event, nextSession, current));
       setLoading(false);
     });

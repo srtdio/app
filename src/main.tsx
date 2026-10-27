@@ -50,7 +50,20 @@ async function bootApp(root: HTMLElement): Promise<void> {
   mark('boot:app:start');
   // Sentry loads after first render; until then uncaught errors are kept here.
   captureEarlyErrors();
-  if (hasStoredSession(localStorageKeys)) startBootChunks(window.location.pathname);
+  if (hasStoredSession(localStorageKeys)) {
+    startBootChunks(window.location.pathname);
+    // The saved screens (IndexedDB) load in parallel with the imports below;
+    // nothing waits on them. Ready before the first render, they paint it.
+    void import('@/lib/device-cache')
+      .then(({ storedSessionUserId }) => {
+        const userId = storedSessionUserId();
+        if (userId === null) return undefined;
+        return import('@/lib/session-read').then(({ hydrateSessionReads }) =>
+          hydrateSessionReads(userId),
+        );
+      })
+      .catch(() => undefined);
+  }
   // index.css is requested first so its <link> keeps today's cascade order.
   // Each import is destructured where it is made so Rollup can still
   // tree-shake the modules. Sentry is not here: scheduleSentry loads it after

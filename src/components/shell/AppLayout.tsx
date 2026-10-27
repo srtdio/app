@@ -75,6 +75,10 @@ export function shellChrome(threadOpen: boolean): {
   };
 }
 
+// The first shell paint of this page load; still loading there means it
+// painted from the device cache.
+let firstShellPainted = false;
+
 // One ToastProvider for every branch below: a toast fired as the shell swaps
 // branches (e.g. "<name> deleted for good" as the last workspace goes, through
 // the induction read's blank frame) survives the swap.
@@ -193,13 +197,14 @@ function AppLayoutBody() {
   // While a deep-link workspace switch is pending (the target exists but is not
   // yet active), hold the Outlet so the entity never mounts under the wrong
   // tenant for a frame; the switch + strip above resolve it on the next render.
+  // A shell painted from the device cache is still loading: a ?w= for another
+  // workspace holds the Outlet until the fresh list decides.
   const wParam = searchParams.get('w');
   const switchPending =
-    !loading &&
     wParam !== null &&
     wParam !== '' &&
-    workspaces.some((x) => x.id === wParam) &&
-    wParam !== workspaceId;
+    wParam !== workspaceId &&
+    (loading ? loaded : workspaces.some((x) => x.id === wParam));
 
   // The palette's recents: this is the one place opens are recorded.
   useRecentRecorder({
@@ -374,6 +379,13 @@ function AppLayoutBody() {
   // The first page's chunk is still on its way: keep the boot loader up
   // rather than paint the shell around a second loader in main.
   if (!firstRouteReady) return <SessionLoading />;
+
+  // The shell paints from the list and profile this device saved, before the
+  // network answers (the fresh ones replace them in place).
+  if (!firstShellPainted) {
+    firstShellPainted = true;
+    if (loading) mark('device-cache:shell-from-cache');
+  }
 
   // ChatStoreProvider sits inside AppLayout's ToastProvider (it fires toasts) and the router
   // (toast presses navigate), and wraps the whole shell so the always-on chat
