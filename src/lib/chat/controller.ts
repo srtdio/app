@@ -21,6 +21,7 @@
 // drops it). After a wake or an SDK reconnecting/offline event the status stays
 // as is for RECONNECT_GRACE_MS; 'reconnecting' reports only if still not live.
 
+import { mark } from '@/lib/perf-marks';
 import type { AgoraChat } from 'agora-chat';
 import { logger } from '@/lib/logger';
 import {
@@ -238,6 +239,7 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
   const onConnected = (conn: ChatConnection): void => {
     if (cancelled || kicked || connection !== conn || live) return;
     live = true;
+    mark('chat:agora:connected');
     everConnected = true;
     failures = 0;
     unreachable = false;
@@ -279,6 +281,7 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
     try {
       const result = await getToken();
       if (cancelled || kicked) return;
+      mark('chat:agora:token');
       if (!result.ok) {
         unreachable = result.reason === 'auth' || result.reason === 'network';
         logger.warn('chat: token fetch failed', { reason: result.reason, failures: failures + 1 });
@@ -337,6 +340,7 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
         },
       });
 
+      mark('chat:agora:open');
       try {
         await conn.open({ user: result.agora_username, accessToken: result.token });
       } catch (error) {

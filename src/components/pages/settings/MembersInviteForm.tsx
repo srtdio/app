@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useRef, useState } from 'react';
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from 'react';
 import { z } from 'zod';
@@ -579,6 +580,7 @@ export function MembersInviteForm({
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    mark('invite:send:tap');
     event.preventDefault();
     if (submitting) return;
     const list = draft.trim() === '' ? rows : addToList(draft);
@@ -612,6 +614,7 @@ export function MembersInviteForm({
         }),
       })),
     );
+    mark('invite:send:end');
 
     const needsDomain = results.some(
       ({ result }) => !result.ok && result.code === 'client_domain_mismatch',

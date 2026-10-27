@@ -28,6 +28,7 @@
 // rows and writes them back when it leaves; while closed, live events land
 // on the remembered rows through the same apply functions used here.
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
@@ -946,6 +947,7 @@ export function useChatThread(params: {
       reads: readsRef.current,
     };
     setShownChannel(channelId);
+    mark('chat:thread:switch');
     const page = memoryKey !== null ? memory.recall(memoryKey, 'thread') : undefined;
     const opening = openingState({
       channelId,
@@ -1196,6 +1198,7 @@ export function useChatThread(params: {
           : prev,
       );
       settledOpen();
+      mark('chat:bundle:applied');
     };
     const failOpen = (message: string): void => {
       logger.error('chat: history load failed', { channel_id: channelId, error: message });
@@ -1406,6 +1409,7 @@ export function useChatThread(params: {
     // The open's one cursors read (the DM seen ticks join it).
     const read = positionsShare.take(channelId, 'reads') ?? loadReadPositions(db, channelId);
     void read.then((result) => {
+      mark('chat:positions:end');
       if (cancelled) return;
       const gate = openReadRef.current;
       gate.settled = true;
@@ -1668,6 +1672,7 @@ export function useChatThread(params: {
     const previous = previousStatusRef.current;
     previousStatusRef.current = status;
     if (status !== 'connected' || previous === 'connected') return;
+    mark('chat:catchup:connected');
     catchUpRef.current('connected');
   }, [status]);
 

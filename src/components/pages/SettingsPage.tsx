@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHead } from '@/components/shell/PageHead';
@@ -45,6 +46,7 @@ export function SettingsPage() {
   );
   // One usage read for the Storage row and the Storage panel.
   const { usage } = useStorageWarning();
+  mark('settings:mount');
 
   return (
     <>

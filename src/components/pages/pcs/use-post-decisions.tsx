@@ -16,6 +16,7 @@
 // the stage_transition proc), so a button the server would refuse never shows;
 // a move a person cannot make is hidden, never disabled.
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -546,11 +547,13 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     setTransitioning(true);
     setActionError(null);
     setApproveError(null);
+    mark('decision:rpc:start');
     const result = await stageTransition(supabase, {
       p_post_id: id,
       p_to_stage: to,
       p_trace_id: newTrace(),
     });
+    mark('decision:rpc:end');
     if (!stillHere(id)) return result.ok;
     if (!result.ok) {
       setTransitioning(false);
@@ -568,6 +571,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     // surface's refresh runs silently behind it (Post detail's load(true) never
     // shows the skeleton); its new server stage then replaces this one. The
     // confirm still waits for the RPC itself: no optimistic approve.
+    mark('decision:optimistic');
     setOptimisticStage(to);
     setTransitioning(false);
     refreshInBackground();
@@ -646,6 +650,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     setReasonTarget(null);
     setReasonDraft('');
     setActionError(null);
+    mark('decision:optimistic');
     setOptimisticStage(to);
     runUndoable({
       label: copy.undoLabel,
@@ -658,11 +663,13 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
           postTitle,
           reason,
           transition: async () => {
+            mark('decision:rpc:start');
             const result = await stageTransition(supabase, {
               p_post_id: id,
               p_to_stage: to,
               p_trace_id: traceId,
             });
+            mark('decision:rpc:end');
             return result.ok ? { ok: true } : { ok: false, error: result.error };
           },
           postReason: (body) => postReason(id, body, traceId),
@@ -743,6 +750,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     const id = postIdRef.current;
     if (id === undefined) return;
     if (optimisticStage !== null) flushUndoable();
+    mark(`decision:tap:${to}`);
     setActionError(null);
     setApproveError(null);
     if (stageReasonConfirm(to) !== null) {

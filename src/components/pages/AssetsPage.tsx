@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -244,10 +245,12 @@ export function AssetsPage() {
       countGeneration.current += 1;
       const generation = countGeneration.current;
       if (userId !== null && !join) staleAssetsReads(userId, workspaceId);
+      mark('assets:counts-start');
       const result =
         userId === null
           ? await countAssetTabs(supabase, workspaceId)
           : await readAssetTabCounts(supabase, userId, workspaceId, countAssetTabs);
+      mark('assets:counts-in');
       if (generation !== countGeneration.current) return;
       if (!result.ok) {
         logger.warn('assets: tab counts read failed', { error: result.error.message });
@@ -299,6 +302,7 @@ export function AssetsPage() {
         userId === null
           ? await listAssetsPage(supabase, workspaceId)
           : await readAssetsFirstPage(supabase, userId, workspaceId, listAssetsPage);
+      mark('assets:rows-in');
       if (generation !== loadGeneration.current) return;
       if (quiet && !result.ok) {
         logger.warn('assets: list refresh failed', { error: result.error.message });
@@ -353,6 +357,7 @@ export function AssetsPage() {
   }, [loadAssets]);
 
   useEffect(() => {
+    mark('assets:mount');
     void loadAssets(true);
   }, [loadAssets]);
   useWorkspaceDataChanged(() => {
@@ -605,7 +610,9 @@ export function AssetsPage() {
   const deleteItems = useCallback(
     (ids: string[]): void => {
       if (ids.length === 0) return;
+      mark('asset:delete:tap');
       setPendingDelete((prev) => new Set([...prev, ...ids]));
+      mark('asset:delete:hidden');
       runUndoable({
         label: deleteToastLabel(ids.length),
         revert: () => unhide(ids),
@@ -636,6 +643,7 @@ export function AssetsPage() {
             }
             return { ok: true, data: { deleted: targets, kept } };
           });
+          mark('asset:delete:rpc:end');
           const { deleted, kept, failure } = outcome;
           if (deleted.length > 0) setItemsAndKeep((prev) => removeAssetsById(prev, deleted));
           unhide(ids);
@@ -796,6 +804,7 @@ export function AssetsPage() {
   );
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  if (!listLoading && !assetsFailed) mark('assets:paint');
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
   // Back on Assets, the scroll lands where it was once the files painted.
   useKeptScroll(viewKey('assets:scroll'), !listLoading && !assetsFailed);

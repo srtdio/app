@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import {
   createContext,
   useCallback,
@@ -133,7 +134,9 @@ export async function bootstrapWorkspaces(
   guard: { current: boolean },
   newTrace: () => string,
 ): Promise<BootstrapResult> {
+  mark('ws:list:start');
   const listed = await listWorkspaces(client);
+  mark('ws:list:end');
   if (!listed.ok) return { workspaces: [], error: listed.error.message };
   if (listed.data.length > 0) return { workspaces: listed.data, error: null };
 
@@ -269,6 +272,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let active = true;
     readIsPlatformOperator(supabase, userId).then(
       (next) => {
+        mark('operator:end');
         if (active) setIsOperator(next);
       },
       (err: unknown) => {
@@ -385,6 +389,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState !== 'visible') return;
       const current = activeIdRef.current;
       if (current === null) return;
+      mark('workspace:recheck');
       void listWorkspaces(supabase).then(
         (res) => {
           if (!active || !res.ok || res.data.some((w) => w.id === current)) return;

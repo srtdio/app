@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -426,6 +427,7 @@ function skeletonCard(index: number, ratio: number | null): ReactElement {
  * workspace platform's frame, so nothing reshapes when the posts land.
  */
 export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): ReactElement {
+  mark('pipeline:skeleton');
   const ratio = view.ratio ?? null;
   const columns = view.columns ?? SKELETON_COLUMNS;
   if (isDesktop && view.kanban === true) {
@@ -555,6 +557,7 @@ export function visibleStage(stage: string, role: string | null): string {
  * branch is unit-tested by walking the element.
  */
 export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
+  mark('pipeline:cards');
   if (props.isDesktop) {
     return (
       <PipelineBoard
@@ -707,6 +710,7 @@ export function runUndoableMove(
   const retryMove = (): void => runUndoableMove(deps, postId, toStage, reason, options);
   const onBehalfOf = toStage === 'approved' ? options.onBehalfOf : undefined;
   deps.inFlight.add(postId);
+  mark('decision:optimistic');
   setStage(toStage);
   deps.onClose();
   deps.run({
@@ -714,12 +718,14 @@ export function runUndoableMove(
     commit: async () => {
       const traceId = deps.newTraceId?.();
       try {
+        mark('decision:rpc:start');
         const result = await stageTransition(deps.client, {
           postId,
           toStage,
           ...(traceId !== undefined ? { traceId } : {}),
           ...(onBehalfOf !== undefined && onBehalfOf !== '' ? { onBehalfOf } : {}),
         });
+        mark('decision:rpc:end');
         if (!result.ok) {
           revert();
           const copy = moveErrorCopy(result.error);
@@ -862,6 +868,8 @@ export function PipelinePage() {
     const last = keptPipelinePosts(userId, workspaceId);
     // Seed the cover store from the same rows before the cards render.
     if (last !== undefined) primeCovers(workspaceId, listedCovers(last));
+    if (last !== undefined) mark('pipeline:kept-paint');
+    if (last !== undefined) mark('post:close:board-paint');
     return last;
   });
   // Whether the person has acted on the board since it mounted: a quiet
@@ -946,6 +954,7 @@ export function PipelinePage() {
       // One trace id per load, sent as posts_list's p_trace_id.
       const traceId = generateTraceId();
       try {
+        mark('pipeline:posts:start');
         const result =
           userId === null
             ? await listPosts(supabase, { workspaceId, limit: PIPELINE_POSTS_LIMIT, traceId })
@@ -957,6 +966,7 @@ export function PipelinePage() {
       } catch {
         // A transport throw (offline) is the same plain failure as an error Result.
       }
+      mark('pipeline:posts:end');
       if (seq !== loadSeq.current) return;
       // The kept view stays through a failed or late quiet refresh; the read
       // that landed is kept for the next visit (src/lib/session-read.ts).
@@ -970,6 +980,7 @@ export function PipelinePage() {
       setLoadedFor(workspaceId);
       setPostsFailed(!ok);
       setPostsLoading(false);
+      mark('pipeline:posts:applied');
     },
     [workspaceId, userId, untouched],
   );
@@ -981,6 +992,7 @@ export function PipelinePage() {
   }, [workspaceId]);
 
   useEffect(() => {
+    mark('pipeline:mount');
     void loadPosts(true);
   }, [loadPosts]);
   // The sample week landing or clearing under the board: re-read it.
@@ -1033,7 +1045,9 @@ export function PipelinePage() {
     }
     let cancelled = false;
     setRoleStatus('loading');
+    mark('pipeline:role:start');
     void readMemberRole(supabase, workspaceId, userId).then((read) => {
+      mark('pipeline:role:end');
       if (cancelled) return;
       if (read.ok) {
         setRole(read.role);

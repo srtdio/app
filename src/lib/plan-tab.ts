@@ -7,6 +7,7 @@
 // drafts, Create, drag and the empty-day menu from approvers. No React, no
 // reads, so every rule is unit-tested directly.
 
+import { mark } from '@/lib/perf-marks';
 import type { PlanBundle, PlanItemRow, PlanRow } from '@/lib/chat/plans';
 import { planItemDayInZone } from '@/lib/chat/plans';
 import { planProgress, reviewStatus, shownReviewSide } from '@/components/chat/plan-card';
@@ -557,6 +558,7 @@ export function onboardingFinished(guide: 'off' | 'intro' | 'step' | 'closing' |
  */
 export async function prefetchPlanTabData(ctx: PrefetchContext): Promise<void> {
   try {
+    mark('plan-tab:prefetch');
     const [shared, { supabase }, { isLaptopNow }] = await Promise.all([
       import('@/lib/plan-tab-shared'),
       import('@/lib/supabase'),

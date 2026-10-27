@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -241,6 +242,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
   }
 
   function selectWorkspace(id: string): void {
+    mark('workspace:switch');
     setActiveWorkspaceId(id);
     close();
   }

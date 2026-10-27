@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties, ComponentType, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -136,6 +137,8 @@ export function ActionMenu({
   const open = openProp ?? openState;
 
   function setOpen(next: boolean): void {
+    if (next) mark('menu:open');
+    if (!next) mark('menu:close');
     if (openProp === undefined) setOpenState(next);
     onOpenChange?.(next);
   }

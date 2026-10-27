@@ -5,6 +5,7 @@
 // brief-list.ts, whose pure readers the briefs DB suite imports without the
 // app's client, logger or session state.
 
+import { mark } from '@/lib/perf-marks';
 import type { Brief, BriefWithThumbnail } from '@srtdio/briefs';
 import type { Client, Result } from '@srtdio/rpc';
 import { countBriefsByFilter } from '@/lib/brief-counts';
@@ -126,6 +127,7 @@ export function withKeptBriefsTail(fresh: KeptBriefs, kept: KeptBriefs): KeptBri
  * The client loads lazily so this module stays cheap for its pure importers.
  */
 export function prefetchBriefsData(ctx: PrefetchContext): Promise<void> {
+  mark('briefs:prefetch');
   return import('@/lib/supabase').then(
     ({ supabase }) => {
       const swallow = (): void => {};

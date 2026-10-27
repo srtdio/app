@@ -31,6 +31,7 @@
 // RLS stays the only boundary: the cache was read under the same user and
 // workspace (its key), and nothing here widens a read.
 
+import { mark } from '@/lib/perf-marks';
 import type { Client, Result } from '@srtdio/rpc';
 import { listMembers } from '@srtdio/workspace';
 import {
@@ -137,6 +138,7 @@ export function startChatMembers(
   userId: string,
   workspaceId: string,
 ): Promise<WorkspaceMembersData> {
+  mark('chat:members:start');
   return sharedRead(
     chatMembersKey(userId, workspaceId),
     () =>
@@ -168,6 +170,7 @@ async function heldMembers(
   const held = peekMembers(userId, workspaceId);
   if (held !== null || userId === '' || workspaceId === '') return held;
   const loaded = await startChatMembers(client, userId, workspaceId);
+  mark('chat:members:end');
   return loaded.error === null ? loaded : null;
 }
 

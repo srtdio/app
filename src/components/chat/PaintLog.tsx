@@ -5,7 +5,9 @@
 // panel lists, with millisecond timestamps (performance.now), each plan card
 // mount, unmount, skeleton and render, each ticker state change, every scroll
 // the thread makes itself, and, sampled after each frame, every thread scroll
-// and plan card move, with a Copy button for sending the log. Tokens only.
+// and plan card move, with a Copy button for sending the log. Under it, the
+// performance marks (src/lib/perf-marks.ts) in ms since timeOrigin, refreshed
+// every 500 ms while the panel is open, with their own Copy. Tokens only.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement } from 'react';
@@ -14,12 +16,15 @@ import { Button } from '@/components/ui/Button';
 import { copyText } from '@/lib/clipboard';
 import { useBottomInset } from '@/lib/bottom-inset';
 import { viewportSize } from '@/lib/use-is-laptop';
+import { readMarks } from '@/lib/perf-marks';
 
 /** The URL parameter that turns the log on (1) or off (0). */
 const PAINT_LOG_PARAM = 'paintlog';
 /** Entries kept; the oldest go first. */
 const PAINT_LOG_LIMIT = 1_000;
 const STORAGE_KEY = 'sorted:paintlog';
+/** How often the marks list re-reads while the panel is open. */
+const MARKS_REFRESH_MS = 500;
 
 /** Whether the log is on for this URL and the tab's stored choice. Pure. */
 export function paintLogWanted(search: string, stored: string | null): boolean {
@@ -82,6 +87,11 @@ export function formatPaintLog(
   header: readonly string[],
 ): string {
   return [...header, ...entries.map((e) => `${e.at.toFixed(1)} ${e.what}`)].join('\n');
+}
+
+/** The copied marks: one "name\tms" line per mark. Pure. */
+export function formatMarks(marks: readonly { name: string; ms: number }[]): string {
+  return marks.map((m) => `${m.name}\t${m.ms.toFixed(1)}`).join('\n');
 }
 
 function readEnabled(): boolean {
@@ -225,6 +235,17 @@ function PaintLogPanel(): ReactElement {
   // Above every marked bottom bar (tab bar, composer), never over them.
   const inset = useBottomInset();
   useFrameSampler();
+  const [marks, setMarks] = useState(readMarks);
+  useEffect(() => {
+    if (!open) return;
+    setMarks(readMarks());
+    const timer = window.setInterval(() => setMarks(readMarks()), MARKS_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [open]);
+  // copyText wraps the clipboard in its own try/catch and never rejects; no toast.
+  const onCopyMarks = (): void => {
+    void copyText(formatMarks(readMarks()));
+  };
   // The newest line stays in view while the panel is open.
   useEffect(() => {
     const list = listRef.current;
@@ -281,6 +302,32 @@ function PaintLogPanel(): ReactElement {
             </li>
           ))}
         </ol>
+      ) : null}
+      {open ? (
+        <div data-perf-marks="" className="flex flex-col border-t border-border">
+          <div className="flex shrink-0 items-center gap-1 px-2">
+            <span className="flex-1 truncate text-sm font-semibold text-fg-2">
+              {`Marks (${marks.length})`}
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              data-perf-marks-copy=""
+              onClick={onCopyMarks}
+              className={BUTTON}
+            >
+              Copy
+            </Button>
+          </div>
+          <ol className="max-h-[20vh] overflow-y-auto px-2 pb-2 font-mono text-xs leading-4 tabular-nums">
+            {marks.map((m, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="min-w-0 flex-1 break-all">{m.name}</span>
+                <span className="shrink-0 text-fg-3">{m.ms.toFixed(1)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
       ) : null}
     </div>
   );

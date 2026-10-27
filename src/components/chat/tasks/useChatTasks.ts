@@ -22,6 +22,7 @@
 // close. Receivers keep each sender for EDITING_TTL_MS after the last one.
 // Nothing is stored; a failed send is only logged.
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AgoraChat } from 'agora-chat';
 import type { Client } from '@srtdio/rpc';
@@ -324,6 +325,7 @@ export function useChatTasks(params: {
         readChannelTasks(db, forChannel),
         readTaskEvents(db, forChannel),
       ]);
+      mark('chat:tasks:loaded');
       if (channelRef.current !== forChannel) return false;
       if (!tasks.ok || !events.ok) {
         logger.warn('chat: tasks load failed', {

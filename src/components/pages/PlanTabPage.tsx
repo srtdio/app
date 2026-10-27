@@ -14,6 +14,7 @@
 // A return to the tab lands on the same Month | Week, the same range and the
 // same scroll (src/lib/kept-view.ts), over the range's kept read.
 
+import { mark } from '@/lib/perf-marks';
 import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -62,9 +63,11 @@ export function entryRoute(entry: CalendarEntry): string {
 export function PlanTabPage(): ReactElement {
   const desktop = useIsLaptop();
   const navigate = useNavigate();
+  mark('plan-tab:mount');
   const { workspaceId, workspaces } = useWorkspace();
   const timeZone = safeTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
   const { side, ready } = useViewerSide(workspaceId);
+  if (ready) mark('plan-tab:side');
   const onboarded = onboardingFinished(useInduction()?.resolution.kind ?? null);
   const today = civilToday(new Date(), timeZone);
   const userId = useSession().session?.user.id ?? null;
@@ -137,6 +140,7 @@ export function PlanTabPage(): ReactElement {
     />
   );
 
+  if (data !== null && !zero) mark('plan-tab:paint');
   let body: ReactElement;
   if (load.status === 'failed') {
     body = <ScreenFailed onRetry={retry} />;

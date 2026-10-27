@@ -7,6 +7,7 @@
 // lands while the person has not touched the screen, else the kept one stays
 // (src/lib/kept-view.ts). The panel's own changes always land.
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { memberRemove } from '@srtdio/rpc';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -75,6 +76,7 @@ export function MembersPanel() {
     held.current = null;
   }
   const { loading, error, rows, profiles } = held.current?.list ?? live;
+  if (!loading && error === null) mark('members:paint');
   const refetchMembers = live.refetch;
   const { delivery, refetch: refetchDelivery } = useInviteDelivery(workspaceId);
   // After a remove, a cancelled or edited invite, a role change or a fresh
@@ -156,11 +158,13 @@ export function MembersPanel() {
   }
 
   async function performRemove(member: MemberEntry): Promise<void> {
+    mark('member:remove:tap');
     setRemoving(true);
     const result = await memberRemove(supabase, {
       p_member_id: member.id,
       p_trace_id: newTrace(),
     });
+    mark('member:remove:end');
     setRemoving(false);
     if (result.ok) {
       setConfirmFor(null);

@@ -7,6 +7,7 @@
 // like the Activity page's own loader, and names people through the shared name
 // registry (people-names.ts): full name, or "Former member".
 
+import { mark } from '@/lib/perf-marks';
 import { withTraceHeader, type Client, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { mapEntry } from '@/components/pages/activity/data';
@@ -68,6 +69,7 @@ export async function fetchActivityBadge(
     p_trace_id: params.traceId,
     p_workspace_id: params.workspaceId,
   };
+  mark('badge:start');
   try {
     const res = await withTraceHeader(client.rpc('activity_badge_read', args), args.p_trace_id);
     if (res.error) return fail(`fetchActivityBadge: ${res.error.message}`);

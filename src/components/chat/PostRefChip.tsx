@@ -8,6 +8,7 @@
 // the message keeps its plain quote. Tokens only; the own bubble's overrides
 // (OWN_BUBBLE_CONTENT) restyle the chip the way they restyle the quote.
 
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
@@ -66,6 +67,7 @@ export function createChipBatch(
       const window = new Promise<'timeout'>((resolve) => {
         setTimeout(() => resolve('timeout'), timeoutMs);
       });
+      mark('chat:chips:start');
       const read = load(fresh).then(
         (result): PostCardRow[] | 'failed' => (result.ok ? result.data : 'failed'),
         (): 'failed' => 'failed',
@@ -75,6 +77,7 @@ export function createChipBatch(
         first === 'failed' ? window : first,
       );
       return outcome.then((result) => {
+        mark('chat:chips:end');
         for (const id of fresh) attempted.add(id);
         if (result === 'timeout') {
           // Back to unknown; a late result, if any, is dropped.

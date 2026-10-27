@@ -25,6 +25,7 @@
 // the browser reuses what it downloaded. If the key cannot be had, every call
 // falls back to the per-file presign path below, unchanged.
 
+import { mark } from '@/lib/perf-marks';
 import { staticAsset } from '@/lib/static-assets';
 
 /** A successfully minted URL with its absolute expiry in epoch milliseconds. */
@@ -508,8 +509,10 @@ export class PresignCache {
     if (Date.now() < this.linkKeyRetryAt) {
       return Promise.reject(new PresignError('Link key paused after a failure.', 'request_failed'));
     }
+    mark('linkkey:start');
     const promise = requestLinkKey(this.deps)
       .then((key) => {
+        mark('linkkey:end');
         this.linkKey = key;
         this.linkKeyRetryAt = 0;
         this.deps.linkKeyStore?.save(key);
@@ -540,6 +543,7 @@ export class PresignCache {
       await new Promise<void>((resolve) => this.waiters.push(resolve));
     }
     this.active += 1;
+    mark('presign:slot');
     try {
       return await fn();
     } finally {

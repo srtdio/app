@@ -48,6 +48,7 @@
 // ones who left (without any mention when that re-read fails): never a failed
 // bubble for it.
 
+import { mark } from '@/lib/perf-marks';
 import type { SendRecordResult } from '@/lib/chat/record';
 import {
   outboxDropChannel,
@@ -288,6 +289,7 @@ export async function runSend(deps: SendFlowDeps, input: SendInput): Promise<Sen
       errorClass: classifyRecordFailure(recorded),
     };
   }
+  mark('chat:send:recorded');
   const message = rowToThreadMessage(recorded.row, input.currentUserId, input.local);
   deps.onRecorded?.(message);
 
@@ -318,6 +320,7 @@ export async function runSend(deps: SendFlowDeps, input: SendInput): Promise<Sen
     publish,
     deps.publishTimeoutMs ?? LIVE_PUBLISH_TIMEOUT_MS,
   );
+  mark('chat:send:published');
   if (!published.ok) {
     deps.onLiveWarning({ trace_id: input.traceId, message_id: input.id, error: published.error });
     return { ok: true, message, livePublished: false };
@@ -713,6 +716,7 @@ export function createOutboxSender(deps: OutboxSenderDeps, initial: Outbox = {})
       };
       // The request runs: the ring shows real progress from here.
       publish({ ...target, local: { ...local, uploading: true } }, false);
+      mark('chat:upload:start');
       let result: ChatAttachmentUpload;
       try {
         result = await upload(
@@ -724,6 +728,7 @@ export function createOutboxSender(deps: OutboxSenderDeps, initial: Outbox = {})
       } catch (error) {
         result = { ok: false, message: String(error) };
       }
+      mark('chat:upload:end');
       // Cancelled mid-upload: whatever came back is ignored.
       if (signal.aborted) return { ok: true, entry: null };
       if (!result.ok) {
@@ -887,6 +892,7 @@ export function createOutboxSender(deps: OutboxSenderDeps, initial: Outbox = {})
     entries: (channelId) => selectOutbox(outbox, channelId),
     enqueue: (channelId, entry) => {
       if (disposed) return;
+      mark('chat:send:outbox');
       commit(outboxPut(outbox, channelId, entry));
       pump(channelId);
     },
@@ -907,6 +913,7 @@ export function createOutboxSender(deps: OutboxSenderDeps, initial: Outbox = {})
     },
     settle: (channelId, id) => {
       if (disposed) return;
+      mark('chat:send:settled');
       const wasHead = headOf(selectOutbox(outbox, channelId))?.id === id;
       const lane = lanes.get(channelId);
       // A pending upload of this send (a Delete on a failed one, or a

@@ -16,6 +16,7 @@
 // the create steps and the readers are injected, so the contract is
 // unit-tested directly.
 
+import { mark } from '@/lib/perf-marks';
 import type {
   Client,
   PlanConceptAddArgs,
@@ -327,6 +328,7 @@ export async function readPlanBundles(
         readPlanBundleRpc(client, { workspaceId: workspace, planIds: chunk }, signal),
       ),
     );
+    mark('chat:plans:end');
     const out = new Map<string, PlanBundle>();
     for (const read of reads) {
       if (!read.ok) return read;
@@ -1362,6 +1364,7 @@ export async function readPlanScreen(
     const workspaceId = opts.workspaceId ?? getPrefetchContext()?.workspaceId;
     if (workspaceId === undefined) return fail('plan_bundle_read: no workspace');
     const channelId = opts.sentInChannelId;
+    mark('plan:bundle:start');
     const read = await readPlanBundleRpc(
       client,
       {
@@ -1371,6 +1374,7 @@ export async function readPlanScreen(
       },
       signal,
     );
+    mark('plan:bundle:end');
     if (!read.ok) return read;
     return await planScreenOfRead(read.data, planId, signal, opts);
   } catch (error) {
@@ -1396,6 +1400,7 @@ export async function planScreenOfRead(
     approvers.length > 0 && readNames !== undefined
       ? await readNames(approvers, signal)
       : { ok: true, data: [] };
+  mark('plan:names');
   const nameMap: Record<string, string> = {};
   if (names.ok) for (const row of names.data) nameMap[row.userId] = row.displayName;
   const own = new Set(bundle.items.map((i) => i.id));

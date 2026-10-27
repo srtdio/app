@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import {
@@ -53,6 +54,7 @@ async function bootApp(root: HTMLElement): Promise<void> {
   // not read here) means the signed-in shell is next: start its chunk and the
   // current route's chunk now, in parallel with the app chunk and getSession,
   // instead of after the session resolves. Code only, no data.
+  mark('boot:app:start');
   if (hasStoredSession(localStorageKeys)) startBootChunks(window.location.pathname);
   // index.css is requested first so its <link> keeps today's cascade order.
   // Each import is destructured where it is made so Rollup can still
@@ -68,6 +70,7 @@ async function bootApp(root: HTMLElement): Promise<void> {
       import('@/lib/viewport-lock').then(({ initViewportLock }) => initViewportLock),
       import('@/lib/logger').then(({ logger }) => logger),
     ]);
+  mark('boot:app:imports');
 
   initSentry();
   initTheme();
@@ -78,8 +81,10 @@ async function bootApp(root: HTMLElement): Promise<void> {
   const shouldRender = await runStaleDeployGuard(
     browserStaleDeployDeps(APP_STYLESHEET, (message, context) => logger.warn(message, context)),
   );
+  mark('boot:app:cssguard');
   if (!shouldRender) return;
 
+  mark('boot:app:render');
   createRoot(root).render(
     <StrictMode>
       <ErrorBoundary fallback={<ErrorFallback />}>
@@ -93,6 +98,7 @@ async function bootApp(root: HTMLElement): Promise<void> {
 
 async function bootHome(root: HTMLElement): Promise<void> {
   const { HomeEntry, scheduleSentry } = await import('@/components/home/HomeEntry');
+  mark('boot:home:chunk');
   const shouldRender = await runStaleDeployGuard(browserStaleDeployDeps(HOME_STYLESHEET, lazyWarn));
   if (!shouldRender) return;
 
@@ -104,6 +110,7 @@ async function bootHome(root: HTMLElement): Promise<void> {
   // Built pages arrive prerendered (scripts/prerender.ts): hydrate that markup
   // in place. A mismatch (the /demo calendar's "today" after the build date)
   // makes React re-render on the client; it is logged once, not thrown.
+  mark('boot:home:hydrate');
   if (root.hasChildNodes()) {
     let reported = false;
     hydrateRoot(root, page, {
@@ -129,6 +136,7 @@ const guest = isGuestHome({
   storageKeys: localStorageKeys,
 });
 
+mark('boot:path');
 if (guest || isHomeBundlePath(window.location.pathname)) {
   bootHome(rootElement).catch(recoverFromFailedBoot);
 } else {

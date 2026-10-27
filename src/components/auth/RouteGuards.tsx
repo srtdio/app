@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { resolveNext, withNext } from '@/components/auth/SignInPage';
@@ -71,6 +72,7 @@ export function RequireAuth() {
   const { session, loading } = useSession();
   const location = useLocation();
   if (loading) return <SessionLoading />;
+  mark('guard:auth');
   if (session || isPublicInviteVisit(location)) return <Outlet />;
   return (
     <Navigate
@@ -100,6 +102,7 @@ export function RequireGuest() {
     }
   }, [switching, loading, session, navigate, location.pathname, location.search]);
   if (loading) return <SessionLoading />;
+  mark('guard:guest');
   if (!session || switching) return <Outlet />;
   const to = guestDestination(searchParams.get('next'), location.state);
   return <Navigate to={to} replace />;

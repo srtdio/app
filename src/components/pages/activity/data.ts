@@ -10,6 +10,7 @@
 // does not touch the network is a pure, unit-tested function so the page stays
 // thin.
 
+import { mark } from '@/lib/perf-marks';
 import type { Client, Result } from '@srtdio/rpc';
 import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '@srtdio/rpc';
 import type { Database, InboxEventTypeValue, Json } from '@srtdio/schemas';
@@ -1723,6 +1724,7 @@ export async function fetchActivityEntries(
     bounds: TimeBounds,
     limit: number,
   ): Promise<Result<InboxEntryRow[]>> => {
+    mark('activity:inbox-window');
     const base = client
       .from('inbox_entries')
       .select(SELECT_COLS)
@@ -1897,6 +1899,7 @@ export async function fetchActivityEntries(
           .order('ledger_seq', { ascending: true })
       : Promise.resolve(null),
   ]);
+  mark('activity:wave1');
 
   const commentAuthors = new Map<string, string>();
   const commentBodies = new Map<string, string>();
@@ -1996,6 +1999,7 @@ export async function fetchActivityEntries(
     resolvePeople(client, workspaceId, userIds),
     readGroupNames(client, groupIds),
   ]);
+  mark('activity:wave2');
   const nameOf = (id: string): string | null => personName(workspaceId, id) ?? null;
   // What a mention inside a body reads as: "@username", or "Former member".
   const mentionOf = (body: string): string => resolvePersonMentionText(body, workspaceId);
@@ -2677,6 +2681,7 @@ function storedActivitySort(): ActivityDirection {
  */
 export function prefetchActivityData(ctx: PrefetchContext): void {
   try {
+    mark('activity:prefetch');
     const direction = storedActivitySort();
     void Promise.all([import('@/lib/supabase'), import('@/lib/inbox/inbox-reads')])
       .then(([{ supabase }, reads]) => {

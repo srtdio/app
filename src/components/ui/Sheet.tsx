@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -67,6 +68,7 @@ export function Sheet({
 
   useEffect(() => {
     if (open) {
+      mark('sheet:open');
       setRendered(true);
       const raf = requestAnimationFrame(() => setEntered(true));
       return () => cancelAnimationFrame(raf);
@@ -115,6 +117,8 @@ export function Sheet({
     },
   });
 
+  if (open && !rendered) mark(`sheet:open:${title}`);
+  if (!open && entered) mark(`sheet:close:${title}`);
   if (!rendered) {
     return null;
   }

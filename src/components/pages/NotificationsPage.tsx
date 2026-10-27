@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import { useNavigate } from 'react-router-dom';
@@ -317,7 +318,9 @@ export function NotificationsPage() {
           state,
           direction: sort,
         });
+      mark('activity:page1:start');
       const result = key !== null ? await sharedActivityPage(key, read) : await read();
+      mark('activity:page1:end');
       if (seq !== activitySeqRef.current) return;
       setNowMs(Date.now());
       if (mode !== 'merge') setLoading(false);
@@ -433,7 +436,9 @@ export function NotificationsPage() {
       if (workspaceId === null) return;
       upcomingSeqRef.current += 1;
       const seq = upcomingSeqRef.current;
+      mark('upcoming:start');
       const result = await fetchUpcoming(supabase, workspaceId);
+      mark('upcoming:end');
       if (seq !== upcomingSeqRef.current) return;
       setNowMs(Date.now());
       if (!result.ok) {
@@ -474,6 +479,7 @@ export function NotificationsPage() {
   // loadActivity: a chip, sort or workspace change makes a new one).
   const arrivalLoadRef = useRef<typeof loadActivity | null>(null);
   useEffect(() => {
+    mark('activity:mount');
     arrivalLoadRef.current ??= loadActivity;
     const arrival = arrivalLoadRef.current === loadActivity;
     if (state === 'upcoming') void loadUpcoming(arrival);
@@ -925,6 +931,7 @@ export function NotificationsPage() {
   }, [reminderEdit, cancelUpcoming, toast]);
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
+  if (!listLoading) mark('activity:paint');
   useKeptScroll(keptKey('scroll'), state === 'upcoming' ? upcomingLoaded : !listLoading);
 
   return (

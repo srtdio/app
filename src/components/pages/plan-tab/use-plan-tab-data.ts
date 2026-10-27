@@ -23,6 +23,7 @@
 // or a first read starts again at one page. A failed Load more keeps what is
 // shown and the control (tap again).
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Client, Result } from '@srtdio/rpc';
 import { READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
@@ -164,7 +165,9 @@ export function usePlanTabData(input: {
           kept !== undefined ? { status: 'ready', data: kept } : { status: 'loading', data: null },
         );
       }
+      mark('plan-tab:read:start');
       let result = await readSharedPlanTab(supabase, userId, args);
+      mark('plan-tab:read:end');
       // A background re-read reads the pages the viewer loaded, one request
       // each (bounded by their Load more taps), never further.
       for (let page = 1; result.ok && page < pages.current; page += 1) {

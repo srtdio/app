@@ -8,6 +8,7 @@
 // through onSubmit, and the panel mints one trace per action and writes through
 // the SECURITY DEFINER createComment wrapper.
 
+import { mark } from '@/lib/perf-marks';
 import { linkTypedUsernames } from '@/lib/chat/mentions';
 import { useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -192,6 +193,7 @@ export function CommentComposer({
 
   async function submit(): Promise<void> {
     if (!canSubmit) return;
+    mark('comment:send:tap');
     setSubmitting(true);
     setError(null);
     // A typed "@username" of a current member becomes a real mention too.

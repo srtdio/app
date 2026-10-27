@@ -14,6 +14,7 @@
 // characters; 1 character is ignored). Framework-light so every rule is unit
 // tested with no DOM and no database.
 
+import { mark } from '@/lib/perf-marks';
 import {
   createContext,
   useCallback,
@@ -361,6 +362,7 @@ export function createChannelStarsLoader(deps: {
           error: result.error.message,
         });
       // Settled either way: a failed read paints with what was known.
+      mark('chat:stars:end');
       deps.onSettled(channelId);
     },
   };

@@ -13,6 +13,7 @@
 // the Pipeline's reloads and leaving for a post (stalePipelinePosts). The
 // board's own writes replace them (primePipelinePosts). Sign-out deletes them.
 
+import { mark } from '@/lib/perf-marks';
 import { listPosts, type Client, type PipelinePost } from '@srtdio/posts';
 import type { Result } from '@srtdio/rpc';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
@@ -104,6 +105,7 @@ export function staleAllPipelinePosts(): void {
  * loads lazily so this module stays cheap to import.
  */
 export function prefetchPipelineData(ctx: PrefetchContext): Promise<void> {
+  mark('pipeline:prefetch');
   return import('@/lib/supabase').then(
     ({ supabase }) => {
       const swallow = (): void => {};

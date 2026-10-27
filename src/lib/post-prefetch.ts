@@ -15,6 +15,7 @@
 // workspace-data-changed drop everything (session-read). RLS decides every
 // read that actually runs.
 
+import { mark } from '@/lib/perf-marks';
 import type { Client } from '@srtdio/rpc';
 import { getPost, getPostGallery } from '@srtdio/posts';
 import type { GalleryItem, PostDetail, Result } from '@srtdio/posts';
@@ -101,6 +102,7 @@ function swallow(what: string): (err: unknown) => void {
  */
 export function prefetchPostOpen(postId: string, deps: PostOpenDeps = defaultDeps): void {
   try {
+    mark('post:press');
     const ctx = deps.context();
     if (ctx === null) return;
     for (const loader of deps.loaders) void loader().catch(swallow('chunk'));

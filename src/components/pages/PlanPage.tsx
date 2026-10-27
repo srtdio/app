@@ -15,6 +15,7 @@
 // remount. A plan opened from a plan replaces that entry, so Close is always
 // one step back to the page. Phone: the plan alone, full page, as before.
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import {
@@ -107,6 +108,7 @@ export function PlanPage(props: { fallback: string }): ReactElement {
   }, [here, desktop, navType, navigate]);
   const shown = pendingRef.current !== null ? new URL(pendingRef.current, 'http://x') : null;
   const planId = shown !== null ? (shown.pathname.split('/')[2] ?? '') : params.planId;
+  mark('plan:open');
   const itemId = (shown?.searchParams ?? search).get('item');
   const commentId = (shown?.searchParams ?? search).get('comment');
   // A search jump (the shared jump params): the item to scroll to and the words

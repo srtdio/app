@@ -21,6 +21,7 @@
 // from the sorted:signout request, so tapping Sign out never swaps the app for
 // "Loading" and a failed sign-out cannot leave it stuck.
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -66,6 +67,7 @@ function publish(next: ProfileSnapshot): void {
 }
 
 function readProfile(userId: string): Promise<{ data: CurrentProfile | null; failed: boolean }> {
+  mark('profile:start');
   return Promise.resolve(
     supabase
       .from('users')
@@ -74,6 +76,7 @@ function readProfile(userId: string): Promise<{ data: CurrentProfile | null; fai
       .maybeSingle(),
   ).then(
     ({ data, error: queryError }) => {
+      mark('profile:end');
       if (queryError) {
         logger.error('useCurrentProfile load failed', { error: queryError.message });
       }
@@ -81,6 +84,7 @@ function readProfile(userId: string): Promise<{ data: CurrentProfile | null; fai
       return { data: data as CurrentProfile, failed: false };
     },
     (thrown: unknown) => {
+      mark('profile:end');
       logger.error('useCurrentProfile load failed', { error: String(thrown) });
       return { data: null, failed: true };
     },

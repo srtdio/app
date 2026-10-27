@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -556,6 +557,7 @@ export function BriefsPage() {
         userId === null
           ? await countBriefsByFilter(supabase, workspaceId, forSearch)
           : await readBriefCounts(supabase, userId, workspaceId, forSearch, countBriefsByFilter);
+      mark('briefs:counts-in');
       if (generation !== countsGeneration.current) return;
       if (quiet && (!result.ok || !untouched())) return;
       setChipCounts(result.ok ? result.data : {});
@@ -624,10 +626,12 @@ export function BriefsPage() {
           : readBriefsFirstPage(supabase, userId, workspaceId, listBriefsFirstPage),
         countsOrBound,
       ]);
+      mark('briefs:rows-in');
       if (generation !== loadGeneration.current) return;
       if (quiet) {
         if (!result.ok) return;
         const thumbnails = await result.data.thumbs;
+        mark('briefs:thumbs-in');
         if (generation !== loadGeneration.current || !thumbnails.ok) return;
         const rows = withBriefThumbnails(result.data.items, thumbnails.data);
         const fresh = withKeptBriefsTail(
@@ -640,6 +644,7 @@ export function BriefsPage() {
         }
         setBriefsAndKeep(() => fresh.items, fresh.next);
         setNext(fresh.next);
+        mark('briefs:quiet-applied');
         return;
       }
       if (!result.ok) {
@@ -652,6 +657,7 @@ export function BriefsPage() {
       shownFor.current = workspaceId;
       if (briefsPaintNeedsThumbs(items)) {
         const thumbnails = await thumbs;
+        mark('briefs:thumbs-in');
         if (generation !== loadGeneration.current) return;
         setLoading(false);
         setLoadingMore(false);
@@ -668,6 +674,7 @@ export function BriefsPage() {
       setBriefsAndKeep(() => items, page);
       setNext(page);
       const thumbnails = await thumbs;
+      mark('briefs:thumbs-in');
       if (generation !== loadGeneration.current) return;
       if (!thumbnails.ok) {
         // The cards keep their icon tiles; nothing else depends on the images.
@@ -699,6 +706,7 @@ export function BriefsPage() {
   }, [workspaceId, next, loadingMore, showToast, setBriefsAndKeep]);
 
   useEffect(() => {
+    mark('briefs:mount');
     void loadBriefs(true);
   }, [loadBriefs]);
   useWorkspaceDataChanged(() => void loadBriefs());
@@ -765,6 +773,7 @@ export function BriefsPage() {
   }
 
   const listLoading = workspaceId === null || (loading && briefs.length === 0);
+  if (!listLoading && !loadFailed) mark('briefs:paint');
   // Back on Briefs, the scroll lands where it was once the cards painted.
   useKeptScroll(viewKey('briefs:scroll'), !listLoading && !loadFailed);
 

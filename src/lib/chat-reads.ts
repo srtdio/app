@@ -11,6 +11,7 @@
 // Display resolution is BATCHED: one IN-clause read for every group name and
 // one IN-clause read for every DM peer profile, never one read per channel.
 
+import { mark } from '@/lib/perf-marks';
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 
@@ -290,6 +291,7 @@ export async function listChannelSummaries(
   }, registryTimeoutMs);
   if (!channelsRes.ok) return channelsRes;
   const channels = channelsRes.data;
+  mark('chat:roster:registry');
 
   const groupIds = unique(
     channels.filter((c) => c.channel_type === 'group').map((c) => c.entity_id),
@@ -303,6 +305,7 @@ export async function listChannelSummaries(
     trip((s) => readUsers(client, peerIds, s)),
     trip((s) => readMemberRoles(client, params.workspaceId, peerIds, s)),
   ]);
+  mark('chat:roster:stage2');
   if (!groupsRes.ok) return groupsRes;
   if (!rolesRes.ok) return rolesRes;
   // The DM peers' names are a name read: its failure never fails the list

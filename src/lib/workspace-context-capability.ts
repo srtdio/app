@@ -10,6 +10,7 @@
 // capability the set does not name is not allowed. A failed read is never
 // cached, so the next ask retries.
 
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useState } from 'react';
 import type { Database } from '@srtdio/schemas';
 import { withTraceHeader } from '@srtdio/rpc';
@@ -93,6 +94,7 @@ export function readWorkspaceCapabilities(
   if (hit !== undefined) return Promise.resolve(hit);
   const running = inflight.get(key);
   if (running !== undefined) return running;
+  mark('capabilities:start');
   const epoch = cacheEpoch;
   const args: Functions['capabilities_for_workspace']['Args'] = {
     p_trace_id: generateTraceId(),

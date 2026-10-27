@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import {
   Fragment,
   memo,
@@ -5977,12 +5978,14 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     if (openHoldDone) return;
     if (!pageLoading && !openHeld) {
       paintLog(`open hold released, all settled, ${Date.now() - openAt}ms after the tap`);
+      mark('chat:hold:release');
       setOpenHoldDone(true);
       return;
     }
     const timer = setTimeout(
       () => {
         paintLog(`open hold capped at ${OPEN_HOLD_MS}ms (page ${pageLoading ? 'loading' : 'in'})`);
+        mark('chat:hold:cap');
         setOpenHoldDone(true);
       },
       Math.max(0, openAt + OPEN_HOLD_MS - Date.now()),

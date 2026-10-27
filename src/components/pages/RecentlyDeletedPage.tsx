@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -181,6 +182,7 @@ export function RecentlyDeletedPage() {
     setLoading(true);
     setFailed(false);
     const result = await listDeletedAssets(supabase, workspaceId);
+    mark('deleted:rows-in');
     setLoading(false);
     setNow(Date.now());
     if (!result.ok) {
@@ -193,15 +195,18 @@ export function RecentlyDeletedPage() {
 
   useEffect(() => {
     setItems([]);
+    mark('deleted:mount');
     setConfirm(null);
     void load();
   }, [load]);
 
   const restore = useCallback(
     async (item: DeletedAssetItem): Promise<void> => {
+      mark('asset:restore:tap');
       setBusyId(item.id);
       try {
         const result = await restoreAsset(supabase, item.id, newTrace());
+        mark('asset:restore:end');
         if (!result.ok) {
           push(RESTORE_FAILED, true);
           return;

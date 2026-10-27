@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   FormEvent,
@@ -637,6 +638,7 @@ export function dispatchSend(
   },
 ): boolean {
   try {
+    mark('chat:send:tap');
     onSend(draft.text, draft.attachments, draft.sharedPostIds, draft.reply, draft.sharedBriefIds);
     return true;
   } catch (error) {

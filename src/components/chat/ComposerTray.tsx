@@ -12,6 +12,7 @@
 // chat with no client, Plan only for an agency-side viewer: otherwise (or while
 // either is unknown) they render faded and disabled from the first frame. Tokens only, so light and dark stay at parity.
 
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 import {
@@ -145,6 +146,7 @@ export function ComposerTray(props: {
 
   useEffect(() => {
     if (open) {
+      mark('chat:tray:open');
       setRendered(true);
       const raf = requestAnimationFrame(() => setShown(true));
       return () => cancelAnimationFrame(raf);
