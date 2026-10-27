@@ -37,6 +37,8 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/toast';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
+import { DUR_SLOW_MS } from '@/lib/motion';
+import { prefersReducedMotion } from '@/lib/use-is-laptop';
 import { ICON_SIZE, IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
@@ -702,8 +704,20 @@ export function PlanItemScreen(props: {
   const highlightId = props.highlightCommentId ?? null;
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const commentsRef = useRef<HTMLElement>(null);
+  // The phone page slides in (duration-slow): the link lands once it is at
+  // rest. A timer, not transitionend, so a missed event never strands the link.
+  // Ceiling: DUR_SLOW_MS plus two frames; the only hold on this path.
+  const [slidIn, setSlidIn] = useState(false);
+  useEffect(() => {
+    if (!props.open) {
+      setSlidIn(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlidIn(true), prefersReducedMotion() ? 0 : SLIDE_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [props.open]);
   useFocusTarget({
-    targetId: props.open && item.kind !== 'post' ? highlightId : null,
+    targetId: props.open && slidIn && item.kind !== 'post' ? highlightId : null,
     findElement: (id) =>
       commentsRef.current?.querySelector<HTMLElement>(`[data-plan-comment-id="${id}"]`) ?? null,
     absent: read.status === 'ready' && !shown.some((c) => c.id === highlightId),
@@ -1118,6 +1132,9 @@ function ItemMedia(props: {
     </div>
   );
 }
+
+/** When the item page's slide in (duration-slow, started a frame after open) is at rest. */
+const SLIDE_SETTLE_MS = DUR_SLOW_MS + 50;
 
 /** How long a deep-linked comment stays highlighted. */
 const HIGHLIGHT_MS = 2400;
