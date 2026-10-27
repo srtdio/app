@@ -8472,6 +8472,27 @@ export type Database = {
           },
         ]
       }
+      user_active_days: {
+        Row: {
+          country_code: string | null
+          day: string
+          first_seen_at: string
+          user_id: string
+        }
+        Insert: {
+          country_code?: string | null
+          day: string
+          first_seen_at?: string
+          user_id: string
+        }
+        Update: {
+          country_code?: string | null
+          day?: string
+          first_seen_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_private: {
         Row: {
           age_range: string | null
@@ -9930,6 +9951,7 @@ export type Database = {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: string
       }
+      ops_user_summary: { Args: { p_days: number }; Returns: Json }
       plan_bundle_read: {
         Args: {
           p_before_id?: string
@@ -10199,6 +10221,10 @@ export type Database = {
       test_session_create: {
         Args: { p_email: string; p_trace_id: string }
         Returns: Json
+      }
+      user_active_day_mark: {
+        Args: { p_country: string; p_trace_id: string }
+        Returns: undefined
       }
       user_onboarding_save: {
         Args: { p_payload: Json; p_trace_id: string }
