@@ -747,10 +747,10 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
   // it was tapped). FN10: while a reject / park Undo window runs the buttons
   // stay enabled, and a pick flushes that pending commit first.
   function pick(to: Stage): void {
-    mark(`decision:tap:${to}`);
     const id = postIdRef.current;
     if (id === undefined) return;
     if (optimisticStage !== null) flushUndoable();
+    mark(`decision:tap:${to}`);
     setActionError(null);
     setApproveError(null);
     if (stageReasonConfirm(to) !== null) {
