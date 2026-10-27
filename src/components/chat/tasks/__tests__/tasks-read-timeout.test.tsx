@@ -39,7 +39,17 @@ function client(opts: { hangEvents: boolean }, signals: AbortSignal[]): Client {
   const from = (table: string): unknown => {
     if (table === 'chat_tasks' || opts.hangEvents) return hungBuilder(signals);
     const builder: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'in', 'gt', 'lt', 'order', 'limit', 'abortSignal']) {
+    for (const method of [
+      'select',
+      'eq',
+      'is',
+      'in',
+      'gt',
+      'lt',
+      'order',
+      'limit',
+      'abortSignal',
+    ]) {
       builder[method] = () => builder;
     }
     builder.then = (resolve: (v: unknown) => unknown) =>
@@ -84,7 +94,17 @@ afterEach(() => {
 function slowClient(ms: number): Client {
   const from = (): unknown => {
     const builder: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'is', 'in', 'gt', 'lt', 'order', 'limit', 'abortSignal']) {
+    for (const method of [
+      'select',
+      'eq',
+      'is',
+      'in',
+      'gt',
+      'lt',
+      'order',
+      'limit',
+      'abortSignal',
+    ]) {
       builder[method] = () => builder;
     }
     builder.then = (resolve: (v: unknown) => unknown) =>

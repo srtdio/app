@@ -123,7 +123,10 @@ function client(answers: Array<readonly ChatMessageRow[] | 'fail'>): {
     const answer = answers[Math.min(calls, answers.length - 1)] ?? 'fail';
     calls += 1;
     if (answer === 'fail') {
-      return Promise.resolve({ data: null, error: { code: 'unknown', message: 'Failed to fetch' } });
+      return Promise.resolve({
+        data: null,
+        error: { code: 'unknown', message: 'Failed to fetch' },
+      });
     }
     return Promise.resolve({ data: bundleOf(answer), error: null });
   };
