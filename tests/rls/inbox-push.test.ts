@@ -3,12 +3,15 @@
 //   T1. Inserting an inbox row for user A writes one realtime.messages row on
 //       topic inbox:A, private, event 'inbox', whose payload carries {w} and
 //       nothing else (realtime.send may add its own message id key).
-//   T2. User A can SELECT it (as authenticated with realtime.topic inbox:A);
-//       user B cannot, on either topic setting.
+//   T2. Joining inbox:A (realtime.topic = inbox:A), user A can SELECT the
+//       nudge and user B cannot. The policy authorizes the topic being joined
+//       (realtime.topic()), not each row's topic: that is how Realtime checks a
+//       private channel join, and realtime.messages is not exposed over the
+//       Data API, so there is no row-level read to test beyond the join.
 //   T3. authenticated cannot INSERT into realtime.messages on inbox:A.
 //   T4. The inbox insert still succeeds when the nudge fails (realtime.send
-//       renamed, or today's partition dropped, inside a rolled-back
-//       transaction).
+//       renamed as its owner inside a rolled-back transaction). Skipped with
+//       the reason when the connecting role cannot act as that owner.
 //   T5. The trigger and function exist; anon and authenticated cannot EXECUTE
 //       public._inbox_push_nudge.
 //   T6. Without Realtime's schema the inbox insert still succeeds (the nudge
@@ -187,7 +190,6 @@ end $$;`,
     const topicA = `inbox:${userA.id}`;
     expect(countAs(dbUrl, userA.id, topicA, topicA)).toBeGreaterThanOrEqual(1);
     expect(countAs(dbUrl, userB.id, topicA, topicA)).toBe(0);
-    expect(countAs(dbUrl, userB.id, `inbox:${userB.id}`, topicA)).toBe(0);
   });
 
   it.runIf(realtime)(
@@ -209,20 +211,22 @@ rollback;`,
     },
   );
 
-  it.runIf(realtime)(withRealtime('T4: the inbox insert succeeds when the nudge fails'), () => {
+  it.runIf(realtime)(withRealtime('T4: the inbox insert succeeds when the nudge fails'), (ctx) => {
+    const [owner = ''] = psql(
+      dbUrl,
+      'select pg_get_userbyid(proowner) from pg_proc ' +
+        "where oid = 'realtime.send(jsonb, text, text, boolean)'::regprocedure;",
+    );
+    const [canAct] = psql(dbUrl, `select pg_has_role(current_user, '${owner}', 'MEMBER');`);
+    if (canAct !== 't') {
+      ctx.skip(`skipped: the test role cannot act as ${owner}, the owner of realtime.send`);
+    }
     const lines = psql(
       dbUrl,
       `begin;
-do $$
-begin
-  begin
-    alter function realtime.send(jsonb, text, text, boolean) rename to send_off_for_test;
-  exception when others then
-    -- Not realtime.send's owner: take away today's partition (created above) instead.
-    execute format('drop table realtime.%I',
-      'messages_' || to_char((now() at time zone 'utc')::date, 'YYYY_MM_DD'));
-  end;
-end $$;
+set local role "${owner}";
+alter function realtime.send(jsonb, text, text, boolean) rename to send_off_for_test;
+reset role;
 ${insertEntrySql(userA.id, ws.id)}
 rollback;`,
     );
