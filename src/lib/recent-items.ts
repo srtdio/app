@@ -314,15 +314,15 @@ export async function recordRouteOpen(params: {
   nowMs: number;
   /** The open's trace id, sent as p_trace_id; a fresh uuid_v7 when absent. */
   traceId?: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const open = recentFromRoute(params.pathname, params.search, params);
-  if (open === null) return;
+  if (open === null) return false;
   if ('id' in open) {
     recordRecent(params.storage, params.userId, params.workspaceId, open, params.nowMs);
-    return;
+    return true;
   }
   // recentFromRoute only returns a number for this workspace's own key.
-  if (params.workspaceKey === null) return;
+  if (params.workspaceKey === null) return false;
   try {
     const res = await resolveEntityRef(params.client, {
       traceId: params.traceId ?? generateTraceId(),
@@ -330,10 +330,10 @@ export async function recordRouteOpen(params: {
       kind: open.type,
       number: open.number,
     });
-    if (!res.ok || res.data.entityId === null) return;
+    if (!res.ok || res.data.entityId === null) return false;
     // The key names this workspace (recentFromRoute checked); a different id
     // back means the key moved, so the open is not recorded here.
-    if (res.data.workspaceId !== params.workspaceId) return;
+    if (res.data.workspaceId !== params.workspaceId) return false;
     recordRecent(
       params.storage,
       params.userId,
@@ -341,8 +341,10 @@ export async function recordRouteOpen(params: {
       { type: open.type, id: res.data.entityId },
       params.nowMs,
     );
+    return true;
   } catch {
     // An unresolved link is simply not recorded.
+    return false;
   }
 }
 
@@ -390,7 +392,8 @@ export function useRecentRecorder(params: {
   useEffect(() => {
     if (paused || workspaceId === null || userId === null) return;
     // Recording is sync for id routes; the title warm-up is debounced into
-    // idle time, so neither blocks navigation or paint.
+    // idle time, so neither blocks navigation or paint. A route that records
+    // nothing schedules no warm-up.
     void recordRouteOpen({
       client,
       storage: deviceStorage(),
@@ -400,7 +403,9 @@ export function useRecentRecorder(params: {
       workspaceKey,
       userId,
       nowMs: Date.now(),
-    }).then(() => warmer.current?.schedule());
+    }).then((recorded) => {
+      if (recorded) warmer.current?.schedule();
+    });
   }, [client, pathname, search, workspaceId, workspaceKey, userId, paused]);
 }
 
@@ -687,11 +692,27 @@ export interface TitleWarmer {
   dispose: () => void;
 }
 
+// Recents a warm-up asked for and did not get back (deleted, no access, or
+// untitled) while their type's read succeeded, per user and workspace: never
+// asked again this page session. A title the session refresh or a later open
+// writes still shows (the item then has a title and is not asked anyway).
+const titleMissing = new Set<string>();
+
+function missingKey(userId: string, workspaceId: string, item: RecentItem): string {
+  return `${recentKey(userId, workspaceId)}\n${recentItemKey(item)}`;
+}
+
+/** For tests: forget which recents came back without a title. */
+export function resetTitleMisses(): void {
+  titleMissing.clear();
+}
+
 /**
  * The recorder's title warm-up: after a record, wait WARM_DEBOUNCE_MS (each
  * new record restarts the wait), then in idle time read the titles of every
  * stored item that has none, one batched .in() per type present, and write
- * them into storage. Never one read per item; never on the paint path.
+ * them into storage. Never one read per item; never on the paint path. An
+ * item a read did not return is remembered for the session and not asked again.
  */
 export function createTitleWarmer(params: {
   client: Client;
@@ -707,19 +728,28 @@ export function createTitleWarmer(params: {
   let cancelIdle: (() => void) | null = null;
   let controller: AbortController | null = null;
   let disposed = false;
+  const toAsk = (storage: RecentStorage | null): RecentItem[] => {
+    const missing = (i: RecentItem): boolean =>
+      titleMissing.has(missingKey(params.userId, params.workspaceId, i));
+    return readRecents(storage, params.userId, params.workspaceId).filter(
+      (i) => !hasCachedTitle(i) && !missing(i),
+    );
+  };
 
   const run = (): void => {
     cancelIdle = null;
     const storage = storageOf();
-    const uncached = readRecents(storage, params.userId, params.workspaceId).filter(
-      (i) => !hasCachedTitle(i),
-    );
+    const uncached = toAsk(storage);
     if (uncached.length === 0 || controller !== null) return;
     const c = new AbortController();
     controller = c;
     void readRecentTitles({ ...params, items: uncached, signal: c.signal })
       .then((titles) => {
         if (c.signal.aborted || disposed) return;
+        for (const item of uncached) {
+          if (titles.failed.has(item.type) || titles.found.has(recentItemKey(item))) continue;
+          titleMissing.add(missingKey(params.userId, params.workspaceId, item));
+        }
         writeRecentTitles(storage, params.userId, params.workspaceId, uncached, titles, false);
       })
       .finally(() => {
@@ -730,10 +760,7 @@ export function createTitleWarmer(params: {
   return {
     schedule: () => {
       if (disposed) return;
-      const uncached = readRecents(storageOf(), params.userId, params.workspaceId).some(
-        (i) => !hasCachedTitle(i),
-      );
-      if (!uncached) return;
+      if (toAsk(storageOf()).length === 0) return;
       if (timer !== null) clearTimeout(timer);
       cancelIdle?.();
       cancelIdle = null;

@@ -33,6 +33,7 @@ import { rowToThreadMessage, type ChatMessageRow } from '@/lib/chat/thread';
 import { generateTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
+import { onWake } from '@/lib/wake-read';
 
 type StarSetArgs = Database['public']['Functions']['chat_message_star_set']['Args'];
 type StarredListFn = Database['public']['Functions']['chat_message_starred_list'];
@@ -342,37 +343,66 @@ export function useIsStarred(messageId: string): boolean {
  * render that drops the thread's skeleton already paints every star. A load
  * superseded by a newer one (or a channel switch) is dropped.
  */
+/** The least time between two star re-reads of one chat (a wake, a catch-up). */
+export const STARS_RELOAD_GAP_MS = 5_000;
+
 export function createChannelStarsLoader(deps: {
   store: StarStore;
   read: (channelId: string) => Promise<Result<string[]>>;
   onSettled: (channelId: string) => void;
   current: () => string | null;
-}): { load: (channelId: string) => Promise<void> } {
+  now?: () => number;
+}): {
+  load: (channelId: string) => Promise<void>;
+  /**
+   * A re-read (a wake, a catch-up): skipped while a read of this chat is out
+   * or one of it started under STARS_RELOAD_GAP_MS ago.
+   */
+  reload: (channelId: string) => Promise<void>;
+} {
+  const now = deps.now ?? (() => Date.now());
   let seq = 0;
+  let last: { channelId: string; startedAt: number; out: boolean } | null = null;
+  const load = async (channelId: string): Promise<void> => {
+    seq += 1;
+    const mine = seq;
+    const started = { channelId, startedAt: now(), out: true };
+    last = started;
+    const result = await deps.read(channelId);
+    started.out = false;
+    if (mine !== seq || deps.current() !== channelId) return;
+    if (result.ok) deps.store.setChannel(channelId, result.data);
+    else
+      logger.warn('chat: stars load failed', {
+        channel_id: channelId,
+        error: result.error.message,
+      });
+    // Settled either way: a failed read paints with what was known.
+    mark('chat:stars:end');
+    deps.onSettled(channelId);
+  };
   return {
-    load: async (channelId) => {
-      seq += 1;
-      const mine = seq;
-      const result = await deps.read(channelId);
-      if (mine !== seq || deps.current() !== channelId) return;
-      if (result.ok) deps.store.setChannel(channelId, result.data);
-      else
-        logger.warn('chat: stars load failed', {
-          channel_id: channelId,
-          error: result.error.message,
-        });
-      // Settled either way: a failed read paints with what was known.
-      mark('chat:stars:end');
-      deps.onSettled(channelId);
+    load,
+    reload: (channelId) => {
+      const prev = last;
+      if (
+        prev !== null &&
+        prev.channelId === channelId &&
+        (prev.out || now() - prev.startedAt < STARS_RELOAD_GAP_MS)
+      ) {
+        return Promise.resolve();
+      }
+      return load(channelId);
     },
   };
 }
 
 /**
  * The open channel's starred ids: read when the channel opens (the thread
- * holds its first paint until this settles, ok or not), and again on window
- * focus, the tab turning visible and every catch-up (`refetch`). A failed or
- * hung read settles after 5s with what was known.
+ * holds its first paint until this settles, ok or not), and again on a wake
+ * (focus and the tab turning visible share one handler) and every catch-up
+ * (`refetch`), at most once per STARS_RELOAD_GAP_MS and never beside a read
+ * still out. A failed or hung read settles after 5s with what was known.
  */
 export function useChannelStars(params: {
   store: StarStore;
@@ -385,7 +415,7 @@ export function useChannelStars(params: {
   const [settledFor, setSettledFor] = useState<string | null>(null);
   const channelRef = useRef(channelId);
   channelRef.current = channelId;
-  const { load } = useMemo(
+  const { load, reload } = useMemo(
     () =>
       createChannelStarsLoader({
         store,
@@ -403,21 +433,13 @@ export function useChannelStars(params: {
   useEffect(() => {
     if (channelId === null) return;
     const forChannel = channelId;
-    const again = (): void => {
-      if (document.visibilityState === 'visible') void load(forChannel);
-    };
-    window.addEventListener('focus', again);
-    document.addEventListener('visibilitychange', again);
-    return () => {
-      window.removeEventListener('focus', again);
-      document.removeEventListener('visibilitychange', again);
-    };
-  }, [channelId, load]);
+    return onWake(() => void reload(forChannel));
+  }, [channelId, reload]);
 
   const refetch = useCallback(() => {
     const forChannel = channelRef.current;
-    if (forChannel !== null) void load(forChannel);
-  }, [load]);
+    if (forChannel !== null) void reload(forChannel);
+  }, [reload]);
 
   return { settled: channelId !== null && settledFor === channelId, refetch };
 }

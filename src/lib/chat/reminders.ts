@@ -105,8 +105,25 @@ export const RING_GRACE_MS = 60_000;
 /** The longest single timeout; a later reminder re-arms from there (setTimeout caps near 24.8 days). */
 export const MAX_TIMER_MS = 60 * MINUTE_MS;
 
+/**
+ * What the ring and the chat's Remind me read of a reminder: the row's id, its
+ * message and chat (the toast's link, the menu's lookup, a cancel), its time
+ * and the two stamps that say it is still pending.
+ */
+export type PendingReminder = Pick<
+  ReminderRow,
+  'id' | 'message_id' | 'channel_id' | 'remind_at' | 'fired_at' | 'cancelled_at'
+>;
+
+/** The select list behind PendingReminder (and nothing more). */
+export const PENDING_REMINDER_COLUMNS =
+  'id, message_id, channel_id, remind_at, fired_at, cancelled_at';
+
+/** What the ring's scheduling reads of a row. */
+type RingRow = Pick<ReminderRow, 'id' | 'remind_at' | 'fired_at' | 'cancelled_at'>;
+
 /** Pending (neither fired nor cancelled) rows, soonest first. Pure. */
-function pendingSoonestFirst(rows: readonly ReminderRow[]): ReminderRow[] {
+function pendingSoonestFirst<R extends RingRow>(rows: readonly R[]): R[] {
   return rows
     .filter((r) => r.fired_at === null && r.cancelled_at === null)
     .sort((a, b) => Date.parse(a.remind_at) - Date.parse(b.remind_at));
@@ -116,11 +133,11 @@ function pendingSoonestFirst(rows: readonly ReminderRow[]): ReminderRow[] {
  * The next reminder the ring should fire: the soonest pending one not yet rung
  * on this device and due no earlier than RING_GRACE_MS ago. Null when none. Pure.
  */
-export function nextToRing(
-  rows: readonly ReminderRow[],
+export function nextToRing<R extends RingRow>(
+  rows: readonly R[],
   nowMs: number,
   rung: ReadonlySet<string>,
-): ReminderRow | null {
+): R | null {
   for (const row of pendingSoonestFirst(rows)) {
     const at = Date.parse(row.remind_at);
     if (Number.isNaN(at) || rung.has(row.id)) continue;
@@ -140,11 +157,11 @@ export function ringDelayMs(remindAtMs: number, nowMs: number): number {
  * again from the new moment. Returns the cancel, which the caller runs before
  * arming again and on unmount.
  */
-export function armRing(input: {
-  rows: readonly ReminderRow[];
+export function armRing<R extends RingRow>(input: {
+  rows: readonly R[];
   now: () => number;
   rung: ReadonlySet<string>;
-  onRing: (row: ReminderRow) => void;
+  onRing: (row: R) => void;
   onRearm: () => void;
 }): () => void {
   const nowMs = input.now();
@@ -188,9 +205,10 @@ export function missedCount(
 export const REMINDERS_CHANGED_EVENT = 'sorted:reminders-changed';
 
 /**
- * Ask every reminder reader (the ring, the chat's Remind me) to reload: after a
- * reminder is set, moved or cancelled on this device, after one rings, and on
- * the shell's inbox poll tick (a reminder set on another device).
+ * Ask every reminder reader (the ring, the chat's Remind me, Activity's
+ * Upcoming) to reload: after a reminder is set, moved or cancelled on this
+ * device, after one rings, and when the shell's inbox poll tick found new rows
+ * (a reminder that fired, or one set on another device).
  */
 export function announceRemindersChanged(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(REMINDERS_CHANGED_EVENT));
@@ -309,6 +327,86 @@ export async function readPendingReminders(
   } catch (error) {
     return { ok: false, error: { code: 'unknown', message: String(error) } };
   }
+}
+
+/**
+ * The caller's pending reminders in a workspace, soonest first, with only the
+ * PendingReminder columns. RLS returns only the caller's own rows. Never throws.
+ */
+export async function readPendingReminderTimes(
+  client: Client,
+  params: { workspaceId: string; signal?: AbortSignal },
+): Promise<Result<PendingReminder[]>> {
+  try {
+    const query = client
+      .from('chat_message_reminders')
+      .select(PENDING_REMINDER_COLUMNS)
+      .eq('workspace_id', params.workspaceId)
+      .is('fired_at', null)
+      .is('cancelled_at', null)
+      .order('remind_at', { ascending: true })
+      .limit(UPCOMING_PAGE);
+    const { data, error } = await abortable(query, params.signal);
+    if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
+    return { ok: true, data: pendingSoonestFirst((data ?? []) as PendingReminder[]) };
+  } catch (error) {
+    return { ok: false, error: { code: 'unknown', message: String(error) } };
+  }
+}
+
+// The one pending-reminders read the ring and the chat's Remind me share: the
+// last read for this user and workspace answers every caller until something
+// says the reminders may have changed (a cause: the tab turning visible, a
+// REMINDERS_CHANGED_EVENT). Both readers hear the same Event object, so one
+// cause starts one read, and the second reader joins it. A failed read is not
+// kept (the next caller reads again).
+interface SharedPending {
+  userId: string;
+  workspaceId: string;
+  generation: number;
+  read: Promise<Result<PendingReminder[]>>;
+}
+let sharedPending: SharedPending | null = null;
+let generation = 0;
+let lastCause: Event | null = null;
+
+/**
+ * The shared pending reminders. `cause`: the event that asked (visibility or
+ * reminders changed); a cause not seen before starts a new read, one already
+ * seen (the other reader's listener) joins it. No cause (a mount) takes the
+ * last read when there is one.
+ */
+export function readSharedPendingReminders(
+  client: Client,
+  params: { userId: string; workspaceId: string; cause?: Event },
+): Promise<Result<PendingReminder[]>> {
+  const { userId, workspaceId, cause } = params;
+  if (cause !== undefined && cause !== lastCause) {
+    lastCause = cause;
+    generation += 1;
+  }
+  const held = sharedPending;
+  if (
+    held !== null &&
+    held.userId === userId &&
+    held.workspaceId === workspaceId &&
+    held.generation === generation
+  ) {
+    return held.read;
+  }
+  const dropFailed = (res: Result<PendingReminder[]>): Result<PendingReminder[]> => {
+    if (!res.ok && sharedPending?.read === read) sharedPending = null;
+    return res;
+  };
+  const read = readPendingReminderTimes(client, { workspaceId }).then(dropFailed);
+  sharedPending = { userId, workspaceId, generation, read };
+  return read;
+}
+
+/** Forget the shared read (tests; sign-out drops it by user). */
+export function resetSharedPendingReminders(): void {
+  sharedPending = null;
+  lastCause = null;
 }
 
 /** How many missed 'reminder' rows one open reads. */

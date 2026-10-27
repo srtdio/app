@@ -4,7 +4,9 @@
 // - Loads the user's pending reminders (and their message previews, one IN
 //   read each) on mount, when the tab becomes visible and whenever the pending
 //   reminders may have changed (REMINDERS_CHANGED_EVENT: a reminder set, moved
-//   or cancelled on this device, and the shell's inbox poll tick).
+//   or cancelled on this device, and an inbox poll tick that found new rows).
+//   The reminders read is the one the chat's Remind me shares
+//   (readSharedPendingReminders): one read per cause for both.
 // - Arms ONE timeout for the next due reminder. On the minute it shows the
 //   toast "Reminder: <preview>" (tap opens the chat at that message) and plays
 //   the chime three times over about 5 s; tapping or dismissing the toast
@@ -31,12 +33,12 @@ import {
   missedCopy,
   missedCount,
   readLastSeen,
-  readPendingReminders,
   readRung,
+  readSharedPendingReminders,
   readUnreadRemindersSince,
   writeLastSeen,
   writeRung,
-  type ReminderRow,
+  type PendingReminder,
 } from '@/lib/chat/reminders';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import { ACTIVITY_PATH } from '@/lib/inbox/inbox-live';
@@ -78,7 +80,7 @@ export function ReminderRing(props: { workspaceId: string; userId: string }): nu
     let disposed = false;
     const chime: Chime = createChime();
     const rung = new Set(readRung(userId));
-    let rows: ReminderRow[] = [];
+    let rows: PendingReminder[] = [];
     let messages = new Map<string, ChatMessagePreview>();
     let names = new Map<string, string>();
     let cancelTimer: () => void = () => {};
@@ -121,7 +123,7 @@ export function ReminderRing(props: { workspaceId: string; userId: string }): nu
       });
     };
 
-    const ring = (row: ReminderRow): void => {
+    const ring = (row: PendingReminder): void => {
       if (disposed) return;
       rung.add(row.id);
       writeRung(userId, [...rung]);
@@ -145,10 +147,14 @@ export function ReminderRing(props: { workspaceId: string; userId: string }): nu
       announceRemindersChanged();
     };
 
-    const load = async (): Promise<void> => {
+    const load = async (cause?: Event): Promise<void> => {
       loadSeq += 1;
       const seq = loadSeq;
-      const res = await readPendingReminders(supabase, { workspaceId });
+      const res = await readSharedPendingReminders(supabase, {
+        userId,
+        workspaceId,
+        ...(cause !== undefined ? { cause } : {}),
+      });
       if (disposed || seq !== loadSeq) return;
       if (!res.ok) {
         logger.warn('reminder ring: reminders read failed', { error: res.error.message });
@@ -210,16 +216,16 @@ export function ReminderRing(props: { workspaceId: string; userId: string }): nu
       const now = Date.now();
       writeLastSeen(userId, now);
     };
-    const onVisibility = (): void => {
+    const onVisibility = (event: Event): void => {
       if (document.visibilityState === 'visible') {
         void checkMissed();
-        void load();
+        void load(event);
       } else {
         markSeen();
       }
     };
     const onPageHide = (): void => markSeen();
-    const onRemindersChanged = (): void => void load();
+    const onRemindersChanged = (event: Event): void => void load(event);
 
     void checkMissed();
     void load();

@@ -25,9 +25,9 @@
 //
 // TOASTS: the rows the bell used to own (bell-types.ts) never word the activity
 // toast. A new chat mention toasts "<name> mentioned you" with Open instead,
-// and every tick asks the reminder readers to reload. ReminderRing (the
-// reminder ring, chime and missed-on-open toast) is mounted here so it runs on
-// every page from app start.
+// and a tick that found new rows asks the reminder readers to reload.
+// ReminderRing (the reminder ring, chime and missed-on-open toast) is mounted
+// here so it runs on every page from app start.
 //
 // OWN ROWS: since 20261018140000 every action also writes the actor one
 // already-read row of their own (inbox_self_entry). Those are history, not news:
@@ -195,6 +195,9 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     highWaterRef.current = summary.nextHighWaterMs;
     if (summary.newRows.length > 0) {
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT, { detail: POLL_CHANGE_SOURCE }));
+      // New rows (a reminder that fired, one set on another device): the
+      // reminder readers reload. A tick that found nothing asks nothing.
+      announceRemindersChanged();
     }
     const fresh = unseenRows(summary.newRows, toastedRef.current);
     const { activity, chatMentions } = splitNewRows(fresh);
@@ -250,7 +253,6 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     const uid = userIdRef.current;
     if (ws === null || uid === null || inFlightRef.current) return;
     refreshCount(ws, uid);
-    announceRemindersChanged();
     inFlightRef.current = true;
     void pollNew(ws, uid).finally(() => {
       inFlightRef.current = false;

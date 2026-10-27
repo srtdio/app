@@ -33,7 +33,9 @@
 // when the tab hides too, so closing the app keeps the chat on screen. The
 // top chats are pre-warmed at idle (prewarmChats): the open's bundle read,
 // folded as an open folds it and kept as the page the open would leave
-// behind, so the first tap reopens with no skeleton.
+// behind, so the first tap reopens with no skeleton. A tap within
+// PREWARM_FRESH_MS of the pre-warm takes its bundle as the open's own and
+// skips the revalidation (open-bundle.ts, openedFromPrewarm).
 
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -62,7 +64,12 @@ import {
   type ReadPositionsRead,
   type HistoryPage,
 } from '@/lib/chat/history';
-import { joinChatBundle, startChatBundle, type ChatBundleDeps } from '@/lib/chat/open-bundle';
+import {
+  joinChatBundle,
+  openedFromPrewarm,
+  startChatBundle,
+  type ChatBundleDeps,
+} from '@/lib/chat/open-bundle';
 import { sharedChatRead } from '@/lib/chat/workspace-reads';
 import {
   browserCatchUpTriggers,
@@ -620,7 +627,9 @@ export interface PrewarmDeps {
  * Pre-warm the top chats (most recent first) after the list painted: for at
  * most PREWARM_LIMIT of them with no remembered page, the open's bundle read
  * runs and its page is kept as an open would leave it (attach, keep,
- * release), so the first tap reopens from it with no skeleton. Never notes
+ * release), so the first tap reopens from it with no skeleton; within
+ * PREWARM_FRESH_MS that tap also takes the bundle as its own (open-bundle.ts:
+ * no bundle, re-read or reactions read at the tap). Never notes
  * an open (no opened(), no open hold), never touches a chat a thread shows or
  * a tap already started, and does nothing under Save-Data. Never throws.
  */
@@ -649,6 +658,9 @@ export async function prewarmChats(keys: readonly ChatKey[], deps: PrewarmDeps):
       const owner = store.attach(key);
       owner.keep(page);
       owner.release();
+      // The bundle stays beside the page: a tap within PREWARM_FRESH_MS opens
+      // from it (its marks, scheduled rows, cursors and posts too), no re-read.
+      store.notePrewarm(key, result.data);
       return true;
     }),
   );
@@ -1378,6 +1390,12 @@ export function useChatThread(params: {
         });
       }
       if (peerUserId !== null) void attachPeerCursor(channelId, peerUserId);
+      // The open took the pre-warm's bundle (within PREWARM_FRESH_MS): this
+      // page is that bundle plus every live event since, so nothing is re-read.
+      if (openedFromPrewarm(key, memory)) {
+        mark('chat:reopen:prewarmed');
+        return;
+      }
       const reactionsFrom = reactionTouchesRef.current.seq;
       void revalidateRemembered(
         {

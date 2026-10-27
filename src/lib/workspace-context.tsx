@@ -31,6 +31,7 @@ import {
 } from '@/lib/session-read';
 import { dispatchInductionRefresh } from '@/lib/induction';
 import { finishInduction } from '@/components/induction/induction-data';
+import { onWake } from '@/lib/wake-read';
 
 /** A workspace row, as returned by the RLS-scoped listWorkspaces select. */
 export type WorkspaceRow = Database['public']['Tables']['workspaces']['Row'];
@@ -275,6 +276,12 @@ interface WorkspaceContextValue {
   workspaceDeleted: (id: string, name: string) => Promise<void>;
 }
 
+/**
+ * The least time between two wake rechecks: focus and visibilitychange fire
+ * together on a wake, and a fast answer must not let the second one re-read.
+ */
+export const RECHECK_GAP_MS = 2_000;
+
 /** The workspace fields workspace_update may change. */
 type WorkspacePatch = Partial<Pick<WorkspaceRow, 'name' | 'logo_url' | 'timezone'>>;
 
@@ -316,6 +323,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   cacheForRef.current = cacheFor;
   const loadedRef = useRef(loaded);
   loadedRef.current = loaded;
+  // The boot bootstrap still out (null: none): a wake recheck waits for it,
+  // since its list is the fresh one.
+  const bootRef = useRef<object | null>(null);
 
   // Paint from the device in the same render the user appears in: the shell
   // gate never shows a loader frame for a list this device already has.
@@ -378,8 +388,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setCacheFor(userId);
     });
 
+    const run = {};
+    bootRef.current = run;
+    const settled = (): void => {
+      if (bootRef.current === run) bootRef.current = null;
+    };
     bootstrapWorkspaces(supabase, current, bootstrapGuard, newTrace)
       .then((res) => {
+        settled();
         if (!active) return;
         const shownFromCache = cacheForRef.current === userId;
         setCacheFor(null);
@@ -402,6 +418,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       })
       .catch((err: unknown) => {
+        settled();
         if (!active) return;
         logger.error('workspace bootstrap failed', { error: String(err) });
         const shownFromCache = cacheForRef.current === userId;
@@ -488,16 +505,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // stops listing it, and its kept session reads are deleted. Re-list
   // quietly when the tab comes back and move to the remaining workspace (or
   // none, the create form). No loading state and no error: a failed read keeps
-  // what is shown.
+  // what is shown. One read per wake: focus and visibilitychange share one
+  // handler, a recheck still out (or one started under RECHECK_GAP_MS ago)
+  // skips, and so does a wake while the boot bootstrap is still out.
   useEffect(() => {
     if (!loaded) return;
     let active = true;
-    function recheck(): void {
-      if (document.visibilityState !== 'visible') return;
+    const recheck = (): Promise<void> | undefined => {
       const current = activeIdRef.current;
-      if (current === null) return;
+      if (current === null) return undefined;
       mark('workspace:recheck');
-      void listWorkspaces(supabase).then(
+      return listWorkspaces(supabase).then(
         (res) => {
           if (!active || !res.ok) return;
           if (userId !== null) keepFreshList(userId, res.data);
@@ -508,13 +526,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         },
         (err: unknown) => logger.warn('workspace recheck failed', { error: String(err) }),
       );
-    }
-    window.addEventListener('focus', recheck);
-    document.addEventListener('visibilitychange', recheck);
+    };
+    const off = onWake(recheck, {
+      minGapMs: RECHECK_GAP_MS,
+      blocked: () => bootRef.current !== null,
+    });
     return () => {
       active = false;
-      window.removeEventListener('focus', recheck);
-      document.removeEventListener('visibilitychange', recheck);
+      off();
     };
   }, [loaded, userId]);
 
