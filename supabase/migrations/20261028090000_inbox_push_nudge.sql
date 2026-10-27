@@ -18,5 +18,14 @@ end;
 $$;
 revoke all on function public._inbox_push_nudge() from public, anon, authenticated;
 create trigger inbox_entries_push_ins after insert on public.inbox_entries referencing new table as new_rows for each statement execute function public._inbox_push_nudge();
-create policy inbox_push_receive_own on realtime.messages for select to authenticated using (realtime.messages.extension = 'broadcast' and realtime.topic() = 'inbox:' || (select auth.uid())::text);
+-- The policy only where Realtime's schema exists: local test stacks start with
+-- the realtime service excluded (packages/test-utils/supabase-exclude.ts).
+do $$
+begin
+  if to_regclass('realtime.messages') is not null and to_regprocedure('realtime.topic()') is not null then
+    execute $p$create policy inbox_push_receive_own on realtime.messages for select to authenticated using (realtime.messages.extension = 'broadcast' and realtime.topic() = 'inbox:' || (select auth.uid())::text)$p$;
+  else
+    raise notice 'realtime not present, policy skipped';
+  end if;
+end $$;
 -- rollback: drop trigger inbox_entries_push_ins on public.inbox_entries; drop function public._inbox_push_nudge(); drop policy inbox_push_receive_own on realtime.messages;
