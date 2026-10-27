@@ -71,10 +71,13 @@ import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { useMentionCandidates } from '@/lib/workspace-members';
 import type { MentionCandidate } from '@/lib/workspace-members';
 import {
+  authorProfiles,
+  backfillProfiles,
   resolveMentionHandle,
   resolveName,
   type CommentProfile,
 } from '@/components/comments/commentProfiles';
+import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import {
   deserializeMentions,
   knownMentionName,
@@ -1386,43 +1389,87 @@ export function Comments({
   // A search jump's words: coloured in every comment body until the screen unmounts.
   const searchWords = useContext(SearchWordsContext);
 
-  // Resolve author + mention names in one batched read through the shared name
-  // registry (users + workspace_members, one .in() each): a current member reads
-  // their full name (@username in a mention), anyone else "Former member". The
-  // attempted set dedupes ids; a failed read clears them so the next pass retries.
-  const attemptedProfiles = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const needed: string[] = [];
+  // Every author and @mention id the loaded rows name.
+  const peopleIds = useMemo(() => {
+    const ids = new Set<string>();
     for (const comment of merged) {
-      for (const id of [comment.author_user_id, ...parseMentions(comment.body)]) {
-        if (!attemptedProfiles.current.has(id)) {
-          attemptedProfiles.current.add(id);
-          needed.push(id);
-        }
-      }
+      for (const id of [comment.author_user_id, ...parseMentions(comment.body)]) ids.add(id);
+    }
+    return ids;
+  }, [merged]);
+
+  // The shared name registry's answer for one id; undefined while it is unknown.
+  const registryProfile = useCallback(
+    (id: string): CommentProfile | undefined => {
+      const name = personName(workspaceId, id);
+      if (name === undefined) return undefined;
+      return {
+        displayName: name,
+        avatarUrl: personAvatar(workspaceId, id),
+        username: name === FORMER_MEMBER ? null : (knownMentionName(workspaceId, id) ?? null),
+      };
+    },
+    [workspaceId],
+  );
+
+  // What every row paints from, held data only, ready in the same render as
+  // the rows: current members (the mention candidates) first, then the local
+  // map, backfilled from the registry for any id it already knows (a read that
+  // landed after its effect was cleaned up still counts). No network here.
+  const known = useMemo(() => {
+    const filled = backfillProfiles(peopleIds, profiles, registryProfile);
+    const local = filled.size > 0 ? new Map([...profiles, ...filled]) : profiles;
+    return authorProfiles(candidates, local);
+  }, [peopleIds, profiles, candidates, registryProfile]);
+
+  // Resolve the ids no current member covers (former members, mentions of
+  // people gone) in one batched read through the shared name registry
+  // (users + workspace_members, one .in() each): anyone without a current
+  // membership reads "Former member". An id stays attempted only while its read
+  // is in flight or its result was kept: a result dropped by cleanup un-marks
+  // its ids and re-runs (the registry then answers with no network); a failed
+  // read clears them and retries once after READ_TIMEOUT_MS.
+  const attemptedProfiles = useRef<Set<string>>(new Set());
+  const [namesPass, setNamesPass] = useState(0);
+  const namesRetryUsed = useRef(false);
+  const namesRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (namesRetryTimer.current !== null) clearTimeout(namesRetryTimer.current);
+    },
+    [],
+  );
+  useEffect(() => {
+    const members = new Set(candidates.filter((c) => c.name !== '').map((c) => c.id));
+    const needed: string[] = [];
+    for (const id of peopleIds) {
+      if (members.has(id) || attemptedProfiles.current.has(id)) continue;
+      attemptedProfiles.current.add(id);
+      needed.push(id);
     }
     if (needed.length === 0) return;
     let active = true;
     void resolvePeople(supabase, workspaceId, needed).then((ok) => {
-      if (!ok) for (const id of needed) attemptedProfiles.current.delete(id);
-      const fetched = new Map<string, CommentProfile>();
-      for (const id of needed) {
-        const name = personName(workspaceId, id);
-        if (name === undefined) continue;
-        fetched.set(id, {
-          displayName: name,
-          avatarUrl: personAvatar(workspaceId, id),
-          username: name === FORMER_MEMBER ? null : (knownMentionName(workspaceId, id) ?? null),
-        });
+      if (!ok || !active) for (const id of needed) attemptedProfiles.current.delete(id);
+      if (!mounted.current) return;
+      if (!ok && !namesRetryUsed.current) {
+        namesRetryUsed.current = true;
+        namesRetryTimer.current = setTimeout(() => {
+          namesRetryTimer.current = null;
+          if (mounted.current) setNamesPass((n) => n + 1);
+        }, READ_TIMEOUT_MS);
       }
-      if (active && fetched.size > 0) {
-        setProfiles((prev) => new Map([...prev, ...fetched]));
+      if (!active) {
+        if (ok) setNamesPass((n) => n + 1);
+        return;
       }
+      const fetched = backfillProfiles(needed, new Map(), registryProfile);
+      if (fetched.size > 0) setProfiles((prev) => new Map([...prev, ...fetched]));
     });
     return () => {
       active = false;
     };
-  }, [merged, workspaceId]);
+  }, [peopleIds, candidates, workspaceId, registryProfile, namesPass]);
 
   // Resolve attachment mimes in one batched read (image vs file dispatch).
   const attemptedMime = useRef<Set<string>>(new Set());
@@ -1448,18 +1495,30 @@ export function Comments({
     };
   }, [merged]);
 
-  const nameOf = useCallback((id: string): string | null => resolveName(profiles, id), [profiles]);
+  const nameOf = useCallback((id: string): string | null => resolveName(known, id), [known]);
   // Mentions inside a body read as @username; author lines keep the full name.
   const handleOf = useCallback(
-    (id: string): string | null => resolveMentionHandle(profiles, id),
-    [profiles],
+    (id: string): string | null => resolveMentionHandle(known, id),
+    [known],
   );
-  // Author avatar URL from the SAME profiles map the card already holds; no new
-  // query. Absent member -> null, so the card keeps its initials fallback.
+  // Author avatar URL from the SAME held data as the name; no new query.
+  // Unknown -> null, so the card keeps its initials fallback.
   const avatarOf = useCallback(
-    (id: string): string | null => profiles.get(id)?.avatarUrl ?? null,
-    [profiles],
+    (id: string): string | null => known.get(id)?.avatarUrl ?? null,
+    [known],
   );
+
+  // comments:names-ready: the first frame where every loaded author has a name.
+  const namesReadyMarked = useRef(false);
+  useEffect(() => {
+    if (namesReadyMarked.current || loading || merged.length === 0) return;
+    const allNamed = merged.every(
+      (c) => c.legacy_author_name !== null || resolveName(known, c.author_user_id) !== null,
+    );
+    if (!allNamed) return;
+    namesReadyMarked.current = true;
+    mark('comments:names-ready');
+  }, [loading, merged, known]);
 
   async function handleCreate(
     body: string,
