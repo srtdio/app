@@ -63,6 +63,7 @@ describe('alert rules -> dot colour', () => {
     expect(worstLevel(alerts)).toBe('red');
     expect(alerts[0]?.level).toBe('red');
     expect(alerts[0]?.tab).toBe('logs');
+    expect(alerts[0]?.title).toBe('Failing: resend-webhook');
     expect(alerts[1]).toMatchObject({ level: 'amber', tab: 'email' });
   });
 });

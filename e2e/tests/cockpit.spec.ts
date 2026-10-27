@@ -78,7 +78,7 @@ test('the operator opens the panel, walks every tab, and closes it @theme @deskt
   await expect(surface).toBeVisible();
   await expect(surface).toContainText('Live');
   await expect(surface.locator('[data-cockpit-stamp]')).toHaveText(/^\d{2}:\d{2}:\d{2}$/);
-  await expect(surface).toContainText('invite-send is failing');
+  await expect(surface).toContainText('Failing: invite-send');
   expect(network.cockpitCalls).toContain('?mode=full&tab=needs&open=1');
 
   if (isLaptop(page)) {

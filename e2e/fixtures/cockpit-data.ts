@@ -11,7 +11,7 @@ const RED_ALERTS = [
   {
     id: 'fn:invite-send',
     level: 'red',
-    title: 'invite-send is failing',
+    title: 'Failing: invite-send',
     meta: '4 failures in the last hour',
     tab: 'logs',
   },

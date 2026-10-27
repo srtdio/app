@@ -817,7 +817,7 @@ for (const dark of [false, true]) {
     only: 'laptop',
     dark,
     url: '/pipeline',
-    steps: (page) => openCockpit(page, 'red', null, 'invite-send is failing'),
+    steps: (page) => openCockpit(page, 'red', null, 'Failing: invite-send'),
   });
   SCREENS.push({
     name: `cockpit-panel-users${suffix}`,

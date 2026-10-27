@@ -72,7 +72,7 @@ export function buildAlerts(input: RuleInput): Alert[] {
       alerts.push({
         id: `fn:${name}`,
         level: 'red',
-        title: `${name} is failing`,
+        title: `Failing: ${name}`,
         meta: `${plural(count, 'failure', 'failures')} in the last hour`,
         tab: 'logs',
       });
