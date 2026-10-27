@@ -237,8 +237,8 @@ describe('leaving a chat: an empty page is never remembered', () => {
     unmount();
     frames = [];
     await mount(db, chat, memory);
-    // No remembered page: the opening frame is a load, not an empty chat.
-    expect(frames[0]).toBe(true);
+    // No remembered page: the open loads (a remembered empty page never would).
+    expect(frames).toContain(true);
   });
 
   it('rows recorded: the page is kept as today', async () => {

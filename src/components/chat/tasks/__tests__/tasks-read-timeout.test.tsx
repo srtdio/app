@@ -59,10 +59,13 @@ function client(opts: { hangEvents: boolean }, signals: AbortSignal[]): Client {
   return { from, rpc: () => new Promise(() => {}) } as unknown as Client;
 }
 
-function Probe(props: { db: Client }): ReactElement {
+// The hook remembers each chat's list at module level: one channel per test.
+let seq = 0;
+
+function Probe(props: { db: Client; channelId: string }): ReactElement {
   const [profiles] = useState(() => new Map());
   latest = useChatTasks({
-    channelId: 'c-hung',
+    channelId: props.channelId,
     currentUserId: 'u1',
     target: null,
     profiles,
@@ -75,7 +78,9 @@ function show(db: Client): void {
   const host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
-  act(() => root?.render(<Probe db={db} />));
+  seq += 1;
+  const channelId = `c-hung-${seq}`;
+  act(() => root?.render(<Probe db={db} channelId={channelId} />));
 }
 
 beforeEach(() => {
