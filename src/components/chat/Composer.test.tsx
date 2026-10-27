@@ -865,7 +865,7 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     const onSend = vi.fn();
     let text = 'hello';
     t.press();
-    t.handlers.onPointerUp?.();
+    t.hold.handlers.onPointerUp();
     // The click: a tap is never swallowed, so the form submits once.
     if (!t.hold.consumeClickSuppression()) {
       const taken = dispatchSend(onSend, {
@@ -888,8 +888,10 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     const body = source.slice(source.indexOf('  function send(draft: LinkCardDraft)'));
     const fn = body.slice(0, body.indexOf('\n  }\n') + 4);
     expect(fn).toContain("setText('');");
-    // The Send button spreads the composed press handlers (hold included).
-    expect(source).toContain('{...sendPress}');
+    // The Send button spreads the hold handlers, then the composed press.
+    expect(source).toContain(
+      '{...(holdToSchedule ? sendHold.handlers : {})}\n                    {...sendPress}',
+    );
     expect(source).toContain('hold: holdToSchedule ? sendHold.handlers : null');
     t.hold.dispose();
   });
@@ -911,7 +913,7 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
       expect(t.press().prevented).toBe(true);
       vi.advanceTimersByTime(LONG_PRESS_MS + 10);
       expect(t.onLongPress).toHaveBeenCalledTimes(1);
-      t.handlers.onPointerUp?.();
+      t.hold.handlers.onPointerUp();
       if (!t.hold.consumeClickSuppression()) onSend();
       expect(onSend).not.toHaveBeenCalled();
       t.hold.dispose();

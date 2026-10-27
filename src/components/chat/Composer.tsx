@@ -1053,17 +1053,15 @@ interface SendPressEvent {
   preventDefault: () => void;
 }
 
-/** The hold-to-schedule handlers a Send press composes with (useLongPress handlers). */
-interface SendHoldHandlers {
+/** The hold-to-schedule press a Send press composes with (useLongPress handlers). */
+interface SendHoldPress {
   onPointerDown: (event: SendPressEvent) => void;
-  onPointerMove: (event: SendPressEvent) => void;
-  onPointerUp: () => void;
-  onPointerCancel: () => void;
 }
 
-type SendPressHandlers = Partial<SendHoldHandlers> & {
+interface SendPressHandlers {
+  onPointerDown?: (event: SendPressEvent) => void;
   onMouseDown?: (event: SendPressEvent) => void;
-};
+}
 
 /** The slice of the textarea the refocus needs (a test fake satisfies it). */
 interface FocusArea {
@@ -1080,24 +1078,23 @@ export function keepsComposerFocus(area: unknown, active: unknown): boolean {
  * Phone: a press on Send keeps the textarea focused, so the keyboard never
  * starts closing (and the composer never moves) before the click lands; one
  * tap sends. Only when the textarea has focus: a press with the keyboard down
- * never opens it. The hold-to-schedule handlers always run as before. Laptop
- * gets the hold handlers only (focus unchanged).
+ * never opens it. Spread after the hold handlers: its pointerdown still
+ * starts the hold. Laptop gets nothing (focus unchanged).
  */
 export function sendPressHandlers(input: {
   enabled: boolean;
   textarea: () => unknown;
   activeElement: () => unknown;
-  hold: SendHoldHandlers | null;
+  hold: SendHoldPress | null;
   onPress: (keptFocus: boolean) => void;
 }): SendPressHandlers {
-  if (!input.enabled) return input.hold ?? {};
+  if (!input.enabled) return {};
   function keep(event: SendPressEvent): boolean {
     const kept = keepsComposerFocus(input.textarea(), input.activeElement());
     if (kept) event.preventDefault();
     return kept;
   }
   return {
-    ...input.hold,
     onPointerDown(event) {
       input.onPress(keep(event));
       input.hold?.onPointerDown(event);
@@ -2355,15 +2352,13 @@ export function Composer(props: ComposerProps): ReactElement {
                       holdToSchedule && NO_TOUCH_SELECT,
                     )}
                     disabled={!canSend || (scheduling && !schedulable)}
+                    {...(holdToSchedule ? sendHold.handlers : {})}
                     {...sendPress}
                     onClick={(event) => {
                       const keptAtPress = sendKeptFocusRef.current;
                       sendKeptFocusRef.current = false;
-                      if (sendHold.consumeClickSuppression()) {
-                        event.preventDefault();
-                        return;
-                      }
-                      if (layout === 'touch') {
+                      if (sendHold.consumeClickSuppression()) event.preventDefault();
+                      else if (layout === 'touch') {
                         refocusComposer(textareaRef.current, keptAtPress, document.activeElement);
                       }
                     }}
