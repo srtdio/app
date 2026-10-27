@@ -67,3 +67,48 @@ export function resolveMentionHandle(
     ? profile.username
     : profile.displayName;
 }
+
+/** The slice of a current member the panel reads (a MentionCandidate). */
+export interface MemberProfileSource {
+  id: string;
+  name: string;
+  username: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * The author lookup the panel renders from, held data only (no read):
+ * current members (the mention candidates) first, then the panel's own map
+ * (former members, mentions of people gone). A member whose profile has not
+ * loaded (empty name) falls through to the map.
+ */
+export function authorProfiles(
+  members: readonly MemberProfileSource[],
+  profiles: ReadonlyMap<string, CommentProfile>,
+): Map<string, CommentProfile> {
+  const out = new Map(profiles);
+  for (const member of members) {
+    if (member.name === '') continue;
+    out.set(member.id, {
+      displayName: member.name,
+      avatarUrl: member.avatarUrl,
+      username: member.username,
+    });
+  }
+  return out;
+}
+
+/** Ids among `ids` that `profiles` lacks and `lookup` already knows (registry backfill). */
+export function backfillProfiles(
+  ids: Iterable<string>,
+  profiles: ReadonlyMap<string, CommentProfile>,
+  lookup: (id: string) => CommentProfile | undefined,
+): Map<string, CommentProfile> {
+  const filled = new Map<string, CommentProfile>();
+  for (const id of ids) {
+    if (profiles.has(id) || filled.has(id)) continue;
+    const profile = lookup(id);
+    if (profile !== undefined) filled.set(id, profile);
+  }
+  return filled;
+}
