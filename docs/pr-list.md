@@ -276,3 +276,4 @@ Every frontend PR ships with an explicit light AND dark mode parity check. 44x44
 - Phase order holds: backend, then ETL, then frontend. No interleaving.
 - Critical-surface PRs (auth, RLS, ETL, comments, stage transitions, PCS, post lifecycle, billing, cutover) require E2E tests in scope.
 - Internal team (Hinglish Agency) is the beta cohort throughout build.
+| - | Boot bundle and HTML preloads: resolveNext, withNext and safeNextPath move to src/components/auth/next-param.ts (imports nothing), so RouteGuards imports no page and SignInPage, SignUpPage, AuthShell, PlanBackdrop and their imports leave the signed-in boot set. scripts/prerender.ts now writes the SPA fallback dist/index.html with the app stylesheet link (before the title) and modulepreloads for the App chunk and its static imports; "/", /demo and legal pages unchanged. No behaviour change; no visual baselines change. | none |

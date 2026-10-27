@@ -9,32 +9,12 @@ import { emailFieldError, linkErrorMessage } from '@/components/auth/SignUpPage'
 import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
 import { supabase } from '@/lib/supabase';
 import { prefetchShellWhenIdle } from '@/lib/chunk-reload';
+import { resolveNext, safeNextPath } from '@/components/auth/next-param';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
 /** localStorage key holding the ?next= destination while a magic link is in flight. */
 export const NEXT_STORAGE_KEY = 'srtd.auth.next';
-
-/**
- * Open-redirect guard for ?next=. Only an in-app path is allowed: it must start
- * with a single '/', never '//' (protocol-relative), never a backslash (browsers
- * read a leading slash plus backslash as '//') and never a control or whitespace
- * character (browsers strip tabs and newlines, so a slash, tab, slash prefix
- * would become '//').
- * Anything else, absolute URLs included, returns '' (no destination).
- */
-export function safeNextPath(raw: string | null | undefined): string {
-  if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//')) return '';
-  // eslint-disable-next-line no-control-regex
-  if (/[\\\s\u0000-\u001f\u007f]/.test(raw)) return '';
-  return raw;
-}
-
-/** A path with a safe destination appended as ?next=; the path alone when there is none. */
-export function withNext(path: string, next: string): string {
-  const safe = safeNextPath(next);
-  return safe === '' ? path : `${path}?next=${encodeURIComponent(safe)}`;
-}
 
 /** The slice of Storage the next helpers use, so tests pass a plain fake. */
 export interface NextStore {
@@ -90,18 +70,6 @@ export function forgetNext(store: NextStore = browserStore()): void {
   } catch {
     // Nothing to clean up when storage is unavailable.
   }
-}
-
-/** RequireAuth hands the blocked location over as router state { from }. */
-function stateFrom(state: unknown): string {
-  if (typeof state !== 'object' || state === null || !('from' in state)) return '';
-  const from = (state as { from: unknown }).from;
-  return typeof from === 'string' ? from : '';
-}
-
-/** The sign-in destination: a safe ?next= first, then RequireAuth's { from } state. */
-export function resolveNext(queryNext: string | null, state: unknown): string {
-  return safeNextPath(queryNext) || safeNextPath(stateFrom(state));
 }
 
 /**

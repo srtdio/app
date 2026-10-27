@@ -4,12 +4,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { Button, buttonClass } from '@/components/ui/Button';
-import {
-  forgetNext,
-  readRememberedNext,
-  safeNextPath,
-  withNext,
-} from '@/components/auth/SignInPage';
+import { forgetNext, readRememberedNext } from '@/components/auth/SignInPage';
+import { safeNextPath, withNext } from '@/components/auth/next-param';
 import { RECOVERY_COPY, SIGNUP_CALLBACK_COPY } from '@/lib/induction-copy';
 import { supabase } from '@/lib/supabase';
 
