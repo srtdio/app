@@ -24,7 +24,10 @@ function watchCockpitChunks(page: Page): string[] {
   return seen;
 }
 
-const activity = (page: Page) => page.locator('[data-notifications-button]');
+// Activity: the top bar's button on laptop; on phone the floating tab bar's tab
+// (the top bar hides its button below md).
+const activity = (page: Page) =>
+  page.locator(isLaptop(page) ? 'header [data-notifications-button]' : 'nav [data-activity-tab]');
 const dot = (page: Page) => page.locator('[data-cockpit-dot]');
 
 test('a normal user: no dot, no cockpit chunk, no ops-cockpit request @theme @desktop', async ({
@@ -54,9 +57,15 @@ test('the operator: dot left of Activity, grey then coloured by the idle status 
   await page.goto('/pipeline');
   await expect(dot(page)).toBeVisible({ timeout: 15_000 });
   expectMinTouchTarget(await dot(page).boundingBox());
+  // Laptop: left of Activity. Phone: Activity is in the tab bar, so the dot is
+  // the top bar's last control before the account avatar.
   const dotBox = await dot(page).boundingBox();
-  const activityBox = await activity(page).boundingBox();
-  expect((dotBox?.x ?? 0) < (activityBox?.x ?? 0)).toBe(true);
+  const nextBox = await (
+    isLaptop(page)
+      ? activity(page)
+      : page.getByRole('button', { name: 'Account menu', exact: true })
+  ).boundingBox();
+  expect((dotBox?.x ?? 0) < (nextBox?.x ?? 0)).toBe(true);
   await expect(dot(page)).toHaveAttribute('data-cockpit-dot', 'red', { timeout: 10_000 });
   await expect(dot(page)).toHaveAttribute('aria-label', 'Cockpit: needs you');
   expect(network.cockpitCalls[0]).toBe('?mode=status');

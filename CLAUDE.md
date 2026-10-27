@@ -102,6 +102,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Inline errors: ui/ErrorNote only. Small labels (stage, status, role, draft): ui/Tag only.
 - Shadows: cards none; menus/popovers/sheets/dialogs shadow-2xl; dragged items shadow-lg; tokens for toast, auth card, spotlight.
 - A panel beside the page is ui/SidePanel only (laptop via useIsLaptop, 380px, translateX, nothing dims, Esc closes); phone shows the same content in a Sheet (guard: cockpit/side-panel-rule.test.ts).
+- Phone nav: floating pill (Pipeline, Briefs, Assets, Plan, Activity) plus separate Chat circle, 12px from sides and bottom; only the active tab shows its label.
 - Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".
 - Icon sizes come from ICON_SIZE in ui/icons.tsx.
 - Words: Activity (never Notifications), file (the tab is Assets), Due date, stages Draft/Review/Approved/Parked/Rejected. Format, chat and workspace names come from their src/lib functions only.

@@ -3,13 +3,13 @@ import { PRIMARY_NAV } from '@/components/shell/nav';
 import { IconPlan } from '@/components/ui/icons';
 
 describe('PRIMARY_NAV', () => {
-  it('reads Pipeline, Briefs, Assets, Chat, Plan: Activity is gone (Notifications is the top bar button)', () => {
+  it('reads Pipeline, Briefs, Assets, Plan, Chat: Activity is not a nav item (top bar on laptop, pill on phone)', () => {
     expect(PRIMARY_NAV.map((item) => item.label)).toEqual([
       'Pipeline',
       'Briefs',
       'Assets',
-      'Chat',
       'Plan',
+      'Chat',
     ]);
     expect(PRIMARY_NAV.map((item) => item.to)).not.toContain('/activity');
   });

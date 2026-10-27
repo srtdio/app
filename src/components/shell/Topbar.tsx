@@ -91,8 +91,14 @@ export function Topbar({
           </IconButton>
         )}
         {cockpitSlot}
-        {/* Activity on every main screen (its one mount), with the unread count. */}
-        {workspaceName !== null && onCreateWorkspace === undefined ? <NotificationsButton /> : null}
+        {/* Activity on every main laptop screen, with the unread count. Phone shows
+            it in the floating tab bar instead: CSS hides it below md (no JS width
+            check, no flash), so Search sits beside the avatar there. */}
+        {workspaceName !== null && onCreateWorkspace === undefined ? (
+          <span data-topbar-activity="" className="hidden md:inline-flex">
+            <NotificationsButton />
+          </span>
+        ) : null}
 
         {/* A press starts the Settings chunk and the members read it shows. */}
         <IconButton

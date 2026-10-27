@@ -130,18 +130,20 @@ async function holdBubble(page: Page, text: string): Promise<void> {
 }
 
 test(
-  'the top bar button and merged badge open Notifications; the chips; light and dark',
+  'the phone tab bar Activity tab and merged badge open Notifications; the chips; light and dark',
   { tag: '@theme' },
   async ({ page }, testInfo) => {
     const network = await installHarnessNetwork(page);
     seedAlerts(network.world);
 
-    // The button sits in the top bar; its badge counts every unread row: the
-    // seeded chat mention, the plan alert and the failed send.
+    // On phone Activity is the last tab in the floating pill (the top bar's
+    // button is laptop only); its badge counts every unread row: the seeded
+    // chat mention, the plan alert and the failed send.
     await page.goto('/chat');
-    const button = page.locator('header [data-notifications-button]');
+    const button = page.locator('nav [data-activity-tab]');
     await button.waitFor({ state: 'visible', timeout: 15_000 });
     await expect(button).toHaveCount(1);
+    await expect(page.locator('header [data-notifications-button]')).toBeHidden();
     expectMinTouchTarget(await button.boundingBox());
     await expect(button).toHaveText('3');
     await expect(button).toHaveAttribute('aria-label', 'Activity, 3 unread');
@@ -331,7 +333,7 @@ test('a reminder fires while the app is open: toast; its card opens the chat at 
   });
 
   await page.goto('/chat');
-  await page.locator('header [data-notifications-button]').waitFor({ state: 'visible' });
+  await page.locator('nav [data-activity-tab]').waitFor({ state: 'visible' });
   await page.waitForTimeout(500);
   await page.clock.fastForward(2 * 60_000);
   await expect(page.getByText(`Reminder: ${String(dm.body)}`)).toBeVisible();
@@ -349,7 +351,7 @@ test('a reminder fires while the app is open: toast; its card opens the chat at 
     created_at: remindAt.toISOString(),
   });
 
-  await page.locator('header [data-notifications-button]').click();
+  await page.locator('nav [data-activity-tab]').click();
   await expect(page).toHaveURL(/\/notifications$/);
   const reminder = card(page, 'reminder');
   await expect(reminder).toContainText(String(dm.body));
@@ -405,7 +407,7 @@ test('Upcoming: a pending reminder and a scheduled message, soonest first; never
   });
 
   await page.goto('/notifications');
-  const button = page.locator('header [data-notifications-button]');
+  const button = page.locator('nav [data-activity-tab]');
   await button.waitFor({ state: 'visible', timeout: 15_000 });
   // Neither is an inbox row: the badge counts only the fixture's one chat mention.
   await expect(button).toHaveAttribute('aria-label', 'Activity, 1 unread');
@@ -598,6 +600,70 @@ test(
 
     const meta = mention.locator('[data-activity-time]').first();
     expect((await typeOf(meta)).size).toBe('12px');
+    expectClean(network);
+  },
+);
+
+test(
+  'Activity: floating tab bar on phone, top bar on laptop @desktop',
+  { tag: '@theme' },
+  async ({ page }) => {
+    const network = await installHarnessNetwork(page);
+    seedAlerts(network.world);
+    await page.goto('/pipeline');
+    const viewport = page.viewportSize();
+    if (viewport === null) throw new Error('no viewport');
+    const header = page.locator('header [data-notifications-button]');
+    const tab = page.locator('nav [data-activity-tab]');
+    if (viewport.width >= 768) {
+      await expect(header).toBeVisible({ timeout: 15_000 });
+      await expect(tab).toBeHidden();
+      await expect(page.locator('[data-tab-pill]')).toBeHidden();
+      expectClean(network);
+      return;
+    }
+    await expect(tab).toBeVisible({ timeout: 15_000 });
+    await expect(header).toBeHidden();
+    // Search sits directly left of the avatar once Activity is out of the top bar.
+    const search = await page
+      .locator('header')
+      .getByRole('button', { name: 'Search' })
+      .boundingBox();
+    const avatar = await page.getByRole('button', { name: 'Account menu' }).boundingBox();
+    if (search === null || avatar === null) throw new Error('top bar not laid out');
+    expect(avatar.x - (search.x + search.width)).toBeLessThanOrEqual(8);
+
+    // The row floats 12px from both sides and the bottom (no home indicator inset here).
+    const row = await page.locator('nav[data-undo-anchor]').boundingBox();
+    const pill = await page.locator('[data-tab-pill]').boundingBox();
+    const chat = await page.locator('[data-chat-tab]').boundingBox();
+    if (row === null || pill === null || chat === null) throw new Error('tab bar not laid out');
+    expect(row.x).toBeCloseTo(12, 0);
+    expect(viewport.width - (row.x + row.width)).toBeCloseTo(12, 0);
+    expect(viewport.height - (row.y + row.height)).toBeCloseTo(12, 0);
+    expect(pill.height).toBeCloseTo(60, 0);
+    expect(chat.width).toBeCloseTo(60, 0);
+    expect(chat.height).toBeCloseTo(60, 0);
+    expect(chat.x - (pill.x + pill.width)).toBeCloseTo(8, 0);
+    for (const link of await page.locator('[data-tab-pill] a').all()) {
+      expectMinTouchTarget(await link.boundingBox());
+    }
+    // Only the active tab (Pipeline) shows its label, on one line.
+    const active = page.locator('[data-tab-pill] a[aria-current="page"]');
+    await expect(active).toHaveText('Pipeline');
+    expect((await active.boundingBox())?.height).toBeCloseTo(44, 0);
+
+    // The tab opens Activity and takes the label.
+    await tab.click();
+    await expect(page).toHaveURL(/\/notifications$/);
+    await expect(tab).toHaveAttribute('aria-current', 'page');
+    await expect(tab).toContainText('Activity');
+    await expect(page.locator('[data-tab-pill] a', { hasText: 'Pipeline' })).toHaveCount(0);
+
+    // Chat: the circle opens the normal chat page.
+    await page.locator('[data-chat-tab]').click();
+    await expect(page).toHaveURL(/\/chat$/);
+    await expect(page.locator('[data-chat-tab]')).toHaveAttribute('aria-current', 'page');
     expectClean(network);
   },
 );

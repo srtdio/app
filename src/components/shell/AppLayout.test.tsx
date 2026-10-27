@@ -44,7 +44,7 @@ describe('AppLayout chat thread chrome', () => {
     const chrome = at('/chat?channel=x');
     expect(chrome.topbarClassName.split(' ')).toContain('hidden');
     expect(chrome.showBottomTabs).toBe(false);
-    expect(chrome.mainClassName).not.toContain('pb-[calc(56px');
+    expect(chrome.mainClassName).not.toContain('pb-[calc(84px');
   });
 
   it('/chat?channel=x keeps the Topbar at md and up', () => {
@@ -56,7 +56,7 @@ describe('AppLayout chat thread chrome', () => {
       const chrome = at(url);
       expect(chrome.topbarClassName).toBe('contents');
       expect(chrome.showBottomTabs).toBe(true);
-      expect(chrome.mainClassName).toContain('pb-[calc(56px+env(safe-area-inset-bottom))]');
+      expect(chrome.mainClassName).toContain('pb-[calc(84px+env(safe-area-inset-bottom))]');
       expect(chrome.mainClassName).toContain('md:pb-0');
     }
   });
