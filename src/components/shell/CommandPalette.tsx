@@ -57,6 +57,7 @@ import {
   removeRecents,
   whenIdle,
   writeRecentTitles,
+  WARM_DEBOUNCE_MS,
   RECENT_SHOWN,
   RECENT_TYPE_LABEL,
   type RecentEntry,
@@ -171,7 +172,8 @@ function heldBack(scope: string, item: RecentItem): boolean {
   const key = recentItemKey(item);
   return clearHolds.some(
     (h) =>
-      h.scope === scope && h.items.some((c) => recentItemKey(c) === key && c.openedAt >= item.openedAt),
+      h.scope === scope &&
+      h.items.some((c) => recentItemKey(c) === key && c.openedAt >= item.openedAt),
   );
 }
 
@@ -715,25 +717,30 @@ export function CommandPalette({
     };
   }, [open, workspaceId, workspaceKey, userId, storedRecents]);
 
-  // Freshness: once per session per workspace, after paint and in idle time,
-  // re-read every stored title into storage (one batched read per type).
-  // Storage only; closing or switching workspace aborts it.
+  // Freshness: once per session per workspace, WARM_DEBOUNCE_MS after paint and
+  // in idle time, re-read every stored title into storage (one batched read
+  // per type). Storage only; closing or switching workspace aborts it.
   useEffect(() => {
     if (!open || workspaceId === null || userId === null) return;
     if (recentsRefreshed(userId, workspaceId)) return;
     const controller = new AbortController();
-    const cancel = whenIdle(() => {
-      void refreshRecentTitles({
-        client: supabase,
-        storage: deviceStorage(),
-        workspaceId,
-        workspaceKey,
-        userId,
-        signal: controller.signal,
+    let cancelIdle = (): void => {};
+    // Past the open's own work (typing starts a search), then idle time.
+    const timer = setTimeout(() => {
+      cancelIdle = whenIdle(() => {
+        void refreshRecentTitles({
+          client: supabase,
+          storage: deviceStorage(),
+          workspaceId,
+          workspaceKey,
+          userId,
+          signal: controller.signal,
+        });
       });
-    });
+    }, WARM_DEBOUNCE_MS);
     return () => {
-      cancel();
+      clearTimeout(timer);
+      cancelIdle();
       controller.abort();
     };
   }, [open, workspaceId, workspaceKey, userId]);

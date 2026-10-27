@@ -1,11 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 import {
+  cachedEntries,
   clearRecents,
+  createTitleWarmer,
   loadRecentEntries,
+  recentsRefreshed,
+  refreshRecentTitles,
+  removeRecent,
+  removeRecents,
+  resetRecentsRefresh,
+  writeRecentTitles,
+  WARM_DEBOUNCE_MS,
   readRecents,
   recentFromRoute,
   recentKey,
@@ -53,7 +62,7 @@ function blockedStorage(): RecentStorage {
 }
 
 describe('recents storage', () => {
-  it('stores only {type, id, openedAt}, newest first, de-duplicated, max 20', () => {
+  it('stores only {type, id, openedAt} until titles are cached, newest first, de-duplicated, max 20', () => {
     const s = memoryStorage();
     for (let i = 0; i < 25; i += 1) recordRecent(s, ME, WS, { type: 'post', id: `p${i}` }, i);
     recordRecent(s, ME, WS, { type: 'post', id: 'p20' }, 100);
@@ -63,6 +72,71 @@ describe('recents storage', () => {
     expect(items.filter((i) => i.id === 'p20')).toHaveLength(1);
     const raw = JSON.parse(s.getItem(recentKey(ME, WS)) ?? '[]') as Array<Record<string, unknown>>;
     for (const row of raw) expect(Object.keys(row).sort()).toEqual(['id', 'openedAt', 'type']);
+  });
+
+  it('old items without a title still parse; a cached title and target round-trip', () => {
+    const s = memoryStorage();
+    s.setItem(
+      recentKey(ME, WS),
+      JSON.stringify([
+        { type: 'post', id: 'p1', openedAt: 2 },
+        { type: 'group', id: 'g1', openedAt: 1, title: 'Launch crew', target: { path: '/chat' } },
+        // A broken cache entry is not an item.
+        { type: 'post', id: 'bad', openedAt: 0, title: 7 },
+      ]),
+    );
+    const items = readRecents(s, ME, WS);
+    expect(items).toEqual([
+      { type: 'post', id: 'p1', openedAt: 2 },
+      { type: 'group', id: 'g1', openedAt: 1, title: 'Launch crew', target: { path: '/chat' } },
+    ]);
+    writeRecentTitles(
+      s,
+      ME,
+      WS,
+      [{ type: 'post', id: 'p1' }],
+      {
+        found: new Map([['post:p1', { title: 'Monday carousel', target: { path: '/p/gbl-1' } }]]),
+        failed: new Set(),
+      },
+      false,
+    );
+    expect(readRecents(s, ME, WS)[0]).toEqual({
+      type: 'post',
+      id: 'p1',
+      openedAt: 2,
+      title: 'Monday carousel',
+      target: { path: '/p/gbl-1' },
+    });
+    // A reopen keeps the cache; nothing beyond the five fields is stored.
+    recordRecent(s, ME, WS, { type: 'post', id: 'p1' }, 9);
+    expect(readRecents(s, ME, WS)[0]).toMatchObject({ openedAt: 9, title: 'Monday carousel' });
+    const raw = JSON.parse(s.getItem(recentKey(ME, WS)) ?? '[]') as Array<Record<string, unknown>>;
+    for (const row of raw) {
+      for (const key of Object.keys(row)) {
+        expect(['type', 'id', 'openedAt', 'title', 'target']).toContain(key);
+      }
+    }
+    expect(cachedEntries(readRecents(s, ME, WS)).map((e) => e.title)).toEqual([
+      'Monday carousel',
+      'Launch crew',
+    ]);
+  });
+
+  it('removeRecent and removeRecents remove only the listed items; a later open survives', () => {
+    const s = memoryStorage();
+    recordRecent(s, ME, WS, { type: 'post', id: 'p1' }, 1);
+    recordRecent(s, ME, WS, { type: 'post', id: 'p2' }, 2);
+    recordRecent(s, ME, WS, { type: 'brief', id: 'p2' }, 3);
+    removeRecent(s, ME, WS, { type: 'post', id: 'p2' });
+    expect(readRecents(s, ME, WS).map((i) => `${i.type}:${i.id}`)).toEqual(['brief:p2', 'post:p1']);
+    // Clear all holds the list it cleared; p1 is opened again before the commit.
+    const cleared = readRecents(s, ME, WS);
+    recordRecent(s, ME, WS, { type: 'post', id: 'p1' }, 10);
+    recordRecent(s, ME, WS, { type: 'plan', id: 'pl9' }, 11);
+    removeRecents(s, ME, WS, cleared);
+    expect(readRecents(s, ME, WS).map((i) => `${i.type}:${i.id}`)).toEqual(['plan:pl9', 'post:p1']);
+    expect(() => removeRecents(null, ME, WS, cleared)).not.toThrow();
   });
 
   it('is scoped per user and workspace: a second account on this device sees none', () => {
@@ -334,5 +408,154 @@ describe('loadRecentEntries', () => {
       ],
     });
     expect(entries).toEqual([]);
+  });
+});
+
+/** A fake PostgREST that records every .in() read; rows by table. */
+function recordingClient(tables: Record<string, Array<Record<string, unknown>>>) {
+  const calls: Array<{ table: string; ids: string[] }> = [];
+  const from = vi.fn((table: string) => {
+    let ids: string[] = [];
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      is: () => chain,
+      in: (_col: string, values: string[]) => {
+        ids = values;
+        calls.push({ table, ids: values });
+        return chain;
+      },
+      then: (resolve: (v: unknown) => void) =>
+        resolve({
+          data: (tables[table] ?? []).filter((r) => ids.includes(String(r.id))),
+          error: null,
+        }),
+    };
+    return chain;
+  });
+  return { client: { from } as unknown as Client, calls };
+}
+
+async function flush(): Promise<void> {
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+}
+
+describe('title warm-up', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('batches several records into one read per type, debounced, and caches the titles', async () => {
+    const s = memoryStorage();
+    const { client, calls } = recordingClient({
+      posts: [
+        { id: 'p1', title: 'Monday carousel', number: 1 },
+        { id: 'p2', title: 'Tuesday reel', number: 2 },
+      ],
+      groups: [{ id: 'g1', name: 'Launch crew' }],
+    });
+    const warmer = createTitleWarmer({
+      client,
+      workspaceId: WS,
+      workspaceKey: 'GBL',
+      userId: ME,
+      storage: () => s,
+      idle: (run) => {
+        run();
+        return () => {};
+      },
+    });
+    recordRecent(s, ME, WS, { type: 'post', id: 'p1' }, 1);
+    warmer.schedule();
+    vi.advanceTimersByTime(WARM_DEBOUNCE_MS - 100);
+    recordRecent(s, ME, WS, { type: 'group', id: 'g1' }, 2);
+    warmer.schedule();
+    recordRecent(s, ME, WS, { type: 'post', id: 'p2' }, 3);
+    warmer.schedule();
+    vi.advanceTimersByTime(WARM_DEBOUNCE_MS - 1);
+    expect(calls).toEqual([]);
+    vi.advanceTimersByTime(1);
+    await flush();
+    expect(calls.map((c) => c.table).sort()).toEqual(['groups', 'posts']);
+    expect(calls.find((c) => c.table === 'posts')?.ids.sort()).toEqual(['p1', 'p2']);
+    expect(readRecents(s, ME, WS).map((i) => i.title)).toEqual([
+      'Tuesday reel',
+      'Launch crew',
+      'Monday carousel',
+    ]);
+    // Everything is cached: a later schedule reads nothing.
+    warmer.schedule();
+    vi.advanceTimersByTime(WARM_DEBOUNCE_MS);
+    await flush();
+    expect(calls).toHaveLength(2);
+    warmer.dispose();
+  });
+});
+
+describe('session refresh', () => {
+  beforeEach(() => resetRecentsRefresh());
+
+  it('runs once per session, updates titles, drops what is not returned', async () => {
+    const s = memoryStorage();
+    s.setItem(
+      recentKey(ME, WS),
+      JSON.stringify([
+        { type: 'post', id: 'p1', openedAt: 3, title: 'Old title', target: { path: '/p/gbl-1' } },
+        { type: 'post', id: 'p-gone', openedAt: 2, title: 'Gone', target: { path: '/p/gbl-2' } },
+        { type: 'group', id: 'g1', openedAt: 1, title: 'Crew', target: { path: '/chat' } },
+      ]),
+    );
+    const snapshot = readRecents(s, ME, WS);
+    const { client, calls } = recordingClient({
+      posts: [{ id: 'p1', title: 'New title', number: 1 }],
+      groups: [{ id: 'g1', name: 'Launch crew' }],
+    });
+    const params = { client, storage: s, workspaceId: WS, workspaceKey: 'GBL', userId: ME };
+    expect(recentsRefreshed(ME, WS)).toBe(false);
+    await refreshRecentTitles(params);
+    expect(calls.map((c) => c.table).sort()).toEqual(['groups', 'posts']);
+    expect(readRecents(s, ME, WS).map((i) => [i.id, i.title])).toEqual([
+      ['p1', 'New title'],
+      ['g1', 'Launch crew'],
+    ]);
+    // Rows already drawn come from the open's snapshot: the refresh never touches them.
+    expect(cachedEntries(snapshot).map((e) => e.title)).toEqual(['Old title', 'Gone', 'Crew']);
+    expect(recentsRefreshed(ME, WS)).toBe(true);
+    await refreshRecentTitles(params);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('a failed read drops nothing of that type; an aborted pass runs again next time', async () => {
+    const s = memoryStorage();
+    s.setItem(
+      recentKey(ME, WS),
+      JSON.stringify([
+        { type: 'post', id: 'p1', openedAt: 1, title: 'Kept', target: { path: '/p/gbl-1' } },
+      ]),
+    );
+    const from = vi.fn(() => {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        is: () => chain,
+        in: () => chain,
+        then: (resolve: (v: unknown) => void) => resolve({ data: null, error: { message: 'x' } }),
+      };
+      return chain;
+    });
+    const base = {
+      client: { from } as unknown as Client,
+      storage: s,
+      workspaceId: WS,
+      workspaceKey: 'GBL',
+      userId: ME,
+    };
+    await refreshRecentTitles(base);
+    expect(readRecents(s, ME, WS)).toHaveLength(1);
+    resetRecentsRefresh();
+    const controller = new AbortController();
+    controller.abort();
+    await refreshRecentTitles({ ...base, signal: controller.signal });
+    expect(recentsRefreshed(ME, WS)).toBe(false);
+    expect(readRecents(s, ME, WS)).toHaveLength(1);
   });
 });

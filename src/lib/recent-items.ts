@@ -102,7 +102,8 @@ function storedShape(item: RecentItem): RecentItem {
   const out: RecentItem = { type: item.type, id: item.id, openedAt: item.openedAt };
   if (item.title !== undefined && item.title !== '' && item.target !== undefined) {
     out.title = item.title;
-    out.target = 'path' in item.target ? { path: item.target.path } : { person: item.target.person };
+    out.target =
+      'path' in item.target ? { path: item.target.path } : { person: item.target.person };
   }
   return out;
 }
