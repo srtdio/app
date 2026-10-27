@@ -776,7 +776,13 @@ async function cockpitDot(page: Page, level: 'green' | 'red'): Promise<void> {
   await waitFor([page.locator(`[data-cockpit-dot="${level}"]`)], `cockpit dot ${level}`);
 }
 
-async function openCockpit(page: Page, level: 'green' | 'red', tab: string | null, text: string) {
+async function openCockpit(
+  page: Page,
+  level: 'green' | 'red',
+  tab: string | null,
+  text: string,
+  tabsAtEnd = false,
+) {
   await cockpitDot(page, level);
   await page.locator('[data-cockpit-dot]').click();
   const surface = isLaptop(page)
@@ -788,6 +794,24 @@ async function openCockpit(page: Page, level: 'green' | 'red', tab: string | nul
     [surface.getByRole('tabpanel').getByText(text).first()],
     `cockpit ${tab ?? 'needs'}`,
   );
+  // The tab row scrolls sideways. Clicking a chip past its edge lets Playwright
+  // scroll it into view, and how far depends on the attempt: the first lands the
+  // chip flush with the row's edge, a retry (the sheet still sliding up) aligns
+  // differently and shows the row's end padding. Pin the row to its end so the
+  // last tab's shot is the same on every run.
+  if (tabsAtEnd) {
+    await surface.getByRole('tablist', { name: 'Cockpit' }).evaluate((row) => {
+      row.scrollLeft = row.scrollWidth - row.clientWidth;
+    });
+    await page.waitForFunction(
+      () => {
+        const row = document.querySelector('[role="tablist"][aria-label="Cockpit"]');
+        return row !== null && row.scrollLeft >= row.scrollWidth - row.clientWidth - 1;
+      },
+      undefined,
+      { timeout: 5_000 },
+    );
+  }
 }
 
 for (const level of ['green', 'red'] as const) {
@@ -843,7 +867,7 @@ SCREENS.push({
   operator: 'green',
   only: 'phone',
   url: '/pipeline',
-  steps: (page) => openCockpit(page, 'green', 'Traffic', 'Home to sign-up'),
+  steps: (page) => openCockpit(page, 'green', 'Traffic', 'Home to sign-up', true),
 });
 
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
