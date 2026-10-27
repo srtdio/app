@@ -195,6 +195,25 @@ async function openPaletteFrom(page: Page): Promise<void> {
   await waitFor([page.getByRole('dialog', { name: 'Command palette' })], 'command palette');
 }
 
+/** Ten palette recents with cached titles, on this device for ME in the workspace. */
+async function seedPaletteRecents(
+  _network: HarnessNetwork,
+  page: Page,
+  now: number,
+): Promise<void> {
+  const items = Array.from({ length: 10 }, (_, i) => ({
+    type: 'post',
+    id: `visual-recent-${i + 1}`,
+    openedAt: now - i * 60_000,
+    title: ['Diwali launch reel', 'Monday carousel', 'Autumn range teaser'][i % 3] + ` ${i + 1}`,
+    target: { path: `/posts/visual-recent-${i + 1}` },
+  }));
+  await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [
+    `sorted:recent:${ME}:${WORKSPACE_ID}`,
+    JSON.stringify(items),
+  ] as const);
+}
+
 /** A client plan (one concept with a library photo, one post) carded into the DM by ME. */
 function seedChatPlan(network: HarnessNetwork): void {
   (network.world.tables.assets ??= []).push({
@@ -413,6 +432,29 @@ const SCREENS: Screen[] = [
     steps: async (page) => openChat(page, GROUP_NAME),
   },
   { name: 'command-palette', seed: creator, url: '/chat', steps: openPaletteFrom },
+  {
+    // Recent from the device: more than 8, so "Show all (N)" shows.
+    name: 'command-palette-recents',
+    seed: creator,
+    prepare: seedPaletteRecents,
+    url: '/chat',
+    steps: async (page) => {
+      await openPaletteFrom(page);
+      await waitFor([page.getByText('Show all (10)')], 'recents');
+    },
+  },
+  {
+    // Clear all: the zero line under the Undo strip.
+    name: 'command-palette-recents-cleared',
+    seed: creator,
+    prepare: seedPaletteRecents,
+    url: '/chat',
+    steps: async (page) => {
+      await openPaletteFrom(page);
+      await tap([page.locator('[data-palette-clear-recents]')], 'Clear all');
+      await waitFor([page.getByText('Things you open show up here.')], 'recents zero line');
+    },
+  },
   {
     name: 'command-palette-search-empty',
     seed: creator,

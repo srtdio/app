@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 
 // The unit env is `node` with no DOM, so CommandPalette is invoked as a plain
@@ -21,10 +21,41 @@ vi.mock('react', async (importOriginal) => {
 });
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }));
-vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+
+// Every touch of the Supabase client is recorded: the empty-search open must make none.
+const spy = vi.hoisted(() => ({
+  clientCalls: [] as string[],
+  toasts: [] as Array<Record<string, unknown>>,
+}));
+vi.mock('@/lib/supabase', () => ({
+  supabase: new Proxy(
+    {},
+    {
+      get: (_target, prop) => {
+        spy.clientCalls.push(String(prop));
+        return () => {
+          throw new Error('no network on the paint path');
+        };
+      },
+    },
+  ),
+}));
+vi.mock('@/components/ui/toast', () => ({
+  useToast: () => ({
+    show: (options: Record<string, unknown>) => {
+      spy.toasts.push(options);
+      return 'toast-1';
+    },
+    dismiss: () => {},
+  }),
+}));
 
 import {
   CommandPalette,
+  RECENT_TITLE_CEILING_MS,
+  RECENT_ZERO_COPY,
+  RECENTS_CLEARED_TOAST,
+  recentEntriesOf,
   emptyCopy,
   namesNeeded,
   PaletteBody,
@@ -36,7 +67,15 @@ import {
 } from '@/components/shell/CommandPalette';
 import { rememberMentionNames, resetMentionNames } from '@/lib/chat/mentions';
 import type { SearchHit } from '@/lib/chat/search';
-import type { RecentEntry } from '@/lib/recent-items';
+import {
+  readRecents,
+  recentKey,
+  recordRecent,
+  type RecentEntry,
+  type RecentItem,
+  type RecentStorage,
+} from '@/lib/recent-items';
+import { UNDO_MS } from '@/lib/undo';
 import { mapWorkspaceRow } from '@/lib/search/workspace-search';
 import type {
   KindCounts,
@@ -530,5 +569,186 @@ describe('CommandPalette', () => {
     expect(all).not.toContain('Former member');
     expect(all).not.toMatch(RAW_TOKEN);
     expect(rows.find((r) => r.id === 'chat-m1')).toMatchObject({ title: '' });
+  });
+});
+
+function memoryStorage(): RecentStorage {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k) => map.get(k) ?? null,
+    setItem: (k, v) => void map.set(k, v),
+    removeItem: (k) => void map.delete(k),
+    key: (i) => [...map.keys()][i] ?? null,
+    get length() {
+      return map.size;
+    },
+  };
+}
+
+function titled(n: number): RecentItem {
+  return {
+    type: 'post',
+    id: `p${n}`,
+    openedAt: 100 - n,
+    title: `Recent post ${n}`,
+    target: { path: `/p/gbl-${n}` },
+  };
+}
+
+describe('CommandPalette Recent from the device', () => {
+  const props = {
+    open: true,
+    onClose: () => {},
+    workspaceId: WS,
+    workspaceKey: 'GBL',
+    userId: ME,
+  };
+  let storage: RecentStorage;
+
+  function seed(items: RecentItem[]): void {
+    storage.setItem(recentKey(ME, WS), JSON.stringify(items));
+  }
+
+  beforeEach(() => {
+    storage = memoryStorage();
+    vi.stubGlobal('window', { localStorage: storage });
+    spy.clientCalls.length = 0;
+    spy.toasts.length = 0;
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('cached recents render on the first render with zero client calls', () => {
+    seed([titled(1), titled(2), titled(3)]);
+    const tree = CommandPalette(props);
+    const all = texts(tree);
+    expect(all).toEqual(
+      expect.arrayContaining(['Recent post 1', 'Recent post 2', 'Recent post 3']),
+    );
+    expect(all).not.toContain('Searching…');
+    expect(spy.clientCalls).toEqual([]);
+  });
+
+  it('guard: the header offers Clear all and every recent row has its remove button', () => {
+    seed([titled(1), titled(2), titled(3)]);
+    const tree = CommandPalette(props);
+    const clear = findAll(tree, 'data-palette-clear-recents');
+    expect(clear).toHaveLength(1);
+    expect(texts(clear[0])).toEqual(['Clear all']);
+    const rows = findAll(tree, 'data-palette-item');
+    const removes = findAll(tree, 'data-palette-recent-remove');
+    expect(removes).toHaveLength(rows.length);
+    expect(removes.map((el) => (el.props as Record<string, string>)['aria-label'])).toEqual([
+      'Remove Recent post 1',
+      'Remove Recent post 2',
+      'Remove Recent post 3',
+    ]);
+    // The field keeps focus: X and Clear all never take it.
+    for (const el of [...removes, ...clear]) {
+      const prevent = vi.fn();
+      (el.props as { onMouseDown: (e: unknown) => void }).onMouseDown({ preventDefault: prevent });
+      expect(prevent).toHaveBeenCalledTimes(1);
+    }
+    expect(spy.clientCalls).toEqual([]);
+  });
+
+  it('X removes that one recent from storage, no toast, no read', () => {
+    seed([titled(1), titled(2)]);
+    const remove = findAll(CommandPalette(props), 'data-palette-recent-remove').find(
+      (el) => (el.props as Record<string, string>)['data-palette-recent-remove'] === 'p1',
+    );
+    (remove?.props as { onClick: () => void }).onClick();
+    expect(readRecents(storage, ME, WS).map((i) => i.id)).toEqual(['p2']);
+    expect(spy.toasts).toEqual([]);
+    expect(spy.clientCalls).toEqual([]);
+  });
+
+  it('shows the newest 8 and "Show all (N)" beyond them; expanded shows every one', () => {
+    seed(Array.from({ length: 12 }, (_, i) => titled(i + 1)));
+    const tree = CommandPalette(props);
+    expect(texts(tree)).toContain('Show all (12)');
+    const rows = findAll(tree, 'data-palette-item').map(
+      (el) => (el.props as Record<string, string>)['data-palette-item'],
+    );
+    expect(rows).toHaveLength(9);
+    expect(rows.at(-1)).toBe('more-recent');
+    const recents = recentEntriesOf(readRecents(storage, ME, WS), new Set(), new Map());
+    const open = paletteSections({
+      query: '',
+      search: IDLE,
+      recents,
+      expanded: new Set(),
+      recentsExpanded: true,
+      workspaceId: WS,
+      workspaceKey: 'GBL',
+      nowMs: NOW,
+    });
+    expect(open[0]?.items).toHaveLength(12);
+    expect(open[0]?.items.some((i) => i.type === 'more')).toBe(false);
+    expect(spy.clientCalls).toEqual([]);
+  });
+
+  it('Clear all: zero line at once, the Undo strip for UNDO_MS, Undo restores, expiry commits', () => {
+    seed([titled(1), titled(2)]);
+    const clear = findAll(CommandPalette(props), 'data-palette-clear-recents')[0];
+    (clear?.props as { onClick: () => void }).onClick();
+    expect(spy.toasts).toHaveLength(1);
+    const toast = spy.toasts[0] as {
+      title: string;
+      durationMs: number;
+      kind: string;
+      action: { label: string; onPress: () => void };
+      onExpire: () => void;
+    };
+    expect(toast).toMatchObject({
+      title: RECENTS_CLEARED_TOAST,
+      durationMs: UNDO_MS,
+      kind: 'undo',
+    });
+    expect(toast.action.label).toBe('Undo');
+    // Held back until the strip ends: a reopen shows the zero line, storage untouched.
+    expect(texts(CommandPalette(props))).toContain(RECENT_ZERO_COPY);
+    expect(readRecents(storage, ME, WS)).toHaveLength(2);
+    toast.action.onPress();
+    expect(texts(CommandPalette(props))).toEqual(
+      expect.arrayContaining(['Recent post 1', 'Recent post 2']),
+    );
+
+    // A second clear commits on expiry; an item opened during the window stays.
+    const again = findAll(CommandPalette(props), 'data-palette-clear-recents')[0];
+    (again?.props as { onClick: () => void }).onClick();
+    recordRecent(storage, ME, WS, { type: 'plan', id: 'pl1' }, 500);
+    (spy.toasts[1] as { onExpire: () => void }).onExpire();
+    expect(readRecents(storage, ME, WS).map((i) => i.id)).toEqual(['pl1']);
+    expect(spy.clientCalls).toEqual([]);
+  });
+
+  it('no recents shows the one zero line, no button', () => {
+    const tree = CommandPalette(props);
+    expect(texts(tree)).toContain(RECENT_ZERO_COPY);
+    expect(findAll(tree, 'data-palette-clear-recents')).toEqual([]);
+    expect(RECENT_ZERO_COPY).toBe('Things you open show up here.');
+    expect(spy.clientCalls).toEqual([]);
+  });
+
+  it('typed search is unchanged: no zero line, no Clear all', () => {
+    const search = ready('diwali', [wsHit('post', 1)], [], { post: 9 });
+    const tree = body('diwali', search);
+    expect(texts(tree)).not.toContain(RECENT_ZERO_COPY);
+    expect(findAll(tree, 'data-palette-clear-recents')).toEqual([]);
+    expect(texts(tree)).toContain('Show all (9)');
+  });
+
+  it('uncached rows wait on the ceiling path; cached rows paint at once', () => {
+    expect(RECENT_TITLE_CEILING_MS).toBe(600);
+    const items: RecentItem[] = [titled(1), { type: 'post', id: 'p-new', openedAt: 200 }];
+    seed(items);
+    const first = texts(CommandPalette(props));
+    expect(first).toContain('Recent post 1');
+    expect(spy.clientCalls).toEqual([]);
+    // Once the batched read lands, the untitled row joins.
+    const fetched = new Map([['post:p-new', { title: 'Fresh', target: { path: '/p/gbl-9' } }]]);
+    expect(
+      recentEntriesOf(readRecents(storage, ME, WS), new Set(), fetched).map((e) => e.title),
+    ).toEqual(['Fresh', 'Recent post 1']);
   });
 });

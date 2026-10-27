@@ -105,12 +105,15 @@ test.describe('command palette', () => {
         ),
       )
       .toContain('"type":"group"');
-    // Only {type, id, openedAt} is stored: no titles.
-    const stored = await page.evaluate(
-      (key) => window.localStorage.getItem(key) ?? '',
-      `sorted:recent:${ME}:${WORKSPACE_ID}`,
-    );
-    expect(stored).not.toContain(GROUP_NAME);
+    // The title is cached off the paint path: one debounced idle read after the open.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (key) => window.localStorage.getItem(key) ?? '',
+          `sorted:recent:${ME}:${WORKSPACE_ID}`,
+        ),
+      )
+      .toContain(GROUP_NAME);
 
     await page.goto('/chat');
     await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
@@ -131,6 +134,66 @@ test.describe('command palette', () => {
       `sorted:recent:${ME}:${WORKSPACE_ID}`,
     );
     expect(after).toBeNull();
+  });
+});
+
+// Recent paints from the device: 12 seeded recents with cached titles, no
+// title read on open, X, Show all (12), Clear all with the zero line and Undo.
+const SEEDED = Array.from({ length: 12 }, (_, i) => ({
+  type: 'post',
+  id: `e2e-recent-${i + 1}`,
+  openedAt: 1_000 - i,
+  title: `Seeded recent ${i + 1}`,
+  target: { path: `/posts/e2e-recent-${i + 1}` },
+}));
+
+test.describe('command palette Recent from the device', () => {
+  test('paints at once with no read; X, Show all, Clear all and Undo', async ({ page }) => {
+    await installHarnessNetwork(page);
+    // A title read for the seeded ids fails, so the idle refresh drops nothing.
+    await page.route(/e2e-recent/, (route) => route.abort());
+    await page.addInitScript(
+      ([key, items]) => window.localStorage.setItem(key, JSON.stringify(items)),
+      [`sorted:recent:${ME}:${WORKSPACE_ID}`, SEEDED] as const,
+    );
+    await page.goto('/chat');
+    await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+    const titleReads: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('e2e-recent')) titleReads.push(req.url());
+    });
+    await openPalette(page);
+    const recent = page.locator('[data-palette-group="Recent"]');
+    const rows = recent.locator('[data-palette-item^="recent-"]');
+    await expect(rows).toHaveCount(8);
+    await expect(recent.getByText('Seeded recent 1', { exact: true })).toBeVisible();
+    expect(titleReads).toEqual([]);
+
+    const input = page.getByPlaceholder('Search anything');
+    const showAll = recent.getByText('Show all (12)', { exact: true });
+    await expect(showAll).toBeVisible();
+    await showAll.click();
+    await expect(rows).toHaveCount(12);
+
+    await recent.locator('[data-palette-clear-recents]').click();
+    await expect(rows).toHaveCount(0);
+    await expect(page.getByText('Things you open show up here.', { exact: true })).toBeVisible();
+    await expect(input).toBeFocused();
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(rows).toHaveCount(12);
+
+    await recent.locator('[data-palette-recent-remove="e2e-recent-1"]').click();
+    await expect(rows).toHaveCount(11);
+    await expect(recent.getByText('Seeded recent 1', { exact: true })).toHaveCount(0);
+    await expect(input).toBeFocused();
+    const stored = await page.evaluate(
+      (key) => window.localStorage.getItem(key) ?? '',
+      `sorted:recent:${ME}:${WORKSPACE_ID}`,
+    );
+    expect(stored).not.toContain('"e2e-recent-1"');
+    // No title read on open, tap, X, Clear all, Undo or Show all (the idle
+    // refresh, if it ran, is at most one batched read per type).
+    expect(titleReads.length).toBeLessThanOrEqual(1);
   });
 });
 

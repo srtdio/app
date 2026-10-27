@@ -5,8 +5,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+vi.mock('@/components/ui/toast', () => ({
+  useToast: () => ({ show: () => 'toast-1', dismiss: () => {} }),
+}));
 
+import { supabase } from '@/lib/supabase';
+import { readRecents, recentKey, resetRecentsRefresh } from '@/lib/recent-items';
 import {
+  CommandPalette,
   PaletteBody,
   RECENT_LABEL,
   type PaletteItem,
@@ -22,6 +28,8 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   document.body.innerHTML = '';
+  window.localStorage.clear();
+  vi.useRealTimers();
 });
 
 const RECENT: PaletteItem = {
@@ -30,6 +38,7 @@ const RECENT: PaletteItem = {
   title: 'Diwali launch reel',
   typeLabel: 'Post',
   target: { path: '/posts/GBL-1' },
+  recent: { type: 'post', id: 'p1' },
 };
 
 const SECTIONS: PaletteSection[] = [{ label: RECENT_LABEL, items: [RECENT] }];
@@ -91,5 +100,112 @@ describe('CommandPalette type roles', () => {
     const meta = classesOf('Post');
     expect(meta).toContain('text-sm');
     expect(meta).toContain('text-fg-3');
+  });
+});
+
+const WS = '0190a000-0000-7000-8000-00000000a001';
+const ME = '0190a000-0000-7000-8000-0000000000a4';
+
+/** The client's from(): each table's rows by .in() id, or a read that never lands. */
+function stubFrom(tables: Record<string, Array<Record<string, unknown>>> | 'hang'): string[] {
+  const calls: string[] = [];
+  (supabase as unknown as { from: unknown }).from = (table: string) => {
+    let ids: string[] = [];
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      is: () => chain,
+      in: (_col: string, values: string[]) => {
+        ids = values;
+        calls.push(table);
+        return chain;
+      },
+      then: (resolve: (v: unknown) => void) => {
+        if (tables === 'hang') return;
+        resolve({
+          data: (tables[table] ?? []).filter((r) => ids.includes(String(r.id))),
+          error: null,
+        });
+      },
+    };
+    return chain;
+  };
+  return calls;
+}
+
+async function mountPalette(): Promise<void> {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => {
+    root?.render(
+      <CommandPalette open onClose={() => {}} workspaceId={WS} workspaceKey="GBL" userId={ME} />,
+    );
+  });
+}
+
+const rowTitles = (): string[] =>
+  [...document.querySelectorAll('[data-palette-item] .font-medium')].map(
+    (el) => el.textContent ?? '',
+  );
+
+describe('CommandPalette Recent paint', () => {
+  it('the session refresh writes storage only: rows on screen are not repainted', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    resetRecentsRefresh();
+    window.localStorage.setItem(
+      recentKey(ME, WS),
+      JSON.stringify([
+        { type: 'post', id: 'p1', openedAt: 1, title: 'Old title', target: { path: '/p/gbl-1' } },
+      ]),
+    );
+    const calls = stubFrom({ posts: [{ id: 'p1', title: 'New title', number: 1 }] });
+    await mountPalette();
+    expect(rowTitles()).toEqual(['Old title']);
+    expect(calls).toEqual([]);
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    await act(async () => {
+      for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    });
+    expect(calls).toEqual(['posts']);
+    expect(readRecents(window.localStorage, ME, WS)[0]?.title).toBe('New title');
+    expect(rowTitles()).toEqual(['Old title']);
+  });
+
+  it('an uncached row: cached rows paint at once; past the 600 ms ceiling it stays out', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    window.localStorage.setItem(
+      recentKey(ME, WS),
+      JSON.stringify([
+        { type: 'post', id: 'p-new', openedAt: 2 },
+        { type: 'post', id: 'p1', openedAt: 1, title: 'Cached', target: { path: '/p/gbl-1' } },
+      ]),
+    );
+    stubFrom('hang');
+    await mountPalette();
+    expect(rowTitles()).toEqual(['Cached']);
+    await act(async () => {
+      vi.advanceTimersByTime(600);
+    });
+    expect(rowTitles()).toEqual(['Cached']);
+  });
+
+  it('an uncached row joins once its batched read lands inside the ceiling', async () => {
+    window.localStorage.setItem(
+      recentKey(ME, WS),
+      JSON.stringify([
+        { type: 'post', id: 'p-new', openedAt: 2 },
+        { type: 'post', id: 'p1', openedAt: 1, title: 'Cached', target: { path: '/p/gbl-1' } },
+      ]),
+    );
+    stubFrom({ posts: [{ id: 'p-new', title: 'Fresh', number: 2 }] });
+    await mountPalette();
+    await act(async () => {
+      for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    });
+    expect(rowTitles()).toEqual(['Fresh', 'Cached']);
+    expect(readRecents(window.localStorage, ME, WS)[0]?.title).toBe('Fresh');
   });
 });

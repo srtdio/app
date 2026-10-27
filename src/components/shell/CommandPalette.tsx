@@ -14,6 +14,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
+import { useToast } from '@/components/ui/toast';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -23,6 +24,7 @@ import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
 import { readMentionProfiles, READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import { formatChatTime } from '@/lib/time';
+import { UNDO_MS } from '@/lib/undo';
 import {
   mentionIds,
   mentionNamesIn,
@@ -44,10 +46,24 @@ import {
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import {
   deviceStorage,
-  loadRecentEntries,
+  hasCachedTitle,
+  readRecentTitles,
   readRecents,
+  recentItemKey,
+  recentKey,
+  recentsRefreshed,
+  refreshRecentTitles,
+  removeRecent,
+  removeRecents,
+  whenIdle,
+  writeRecentTitles,
+  WARM_DEBOUNCE_MS,
+  RECENT_SHOWN,
   RECENT_TYPE_LABEL,
   type RecentEntry,
+  type RecentItem,
+  type RecentTarget,
+  type RecentType,
 } from '@/lib/recent-items';
 import {
   chatHitPath,
@@ -133,6 +149,63 @@ const GROUP_PREVIEW = PER_KIND_PREVIEW;
 /** The empty-search section. */
 export const RECENT_LABEL = 'Recent';
 
+/** The empty-search zero line: no recents on this device for me here. */
+export const RECENT_ZERO_COPY = 'Things you open show up here.';
+
+/** The Undo strip after Clear all. */
+export const RECENTS_CLEARED_TOAST = 'Recents cleared';
+
+/**
+ * The one wait on the empty-search path: when some of the newest 8 recents
+ * have no cached title (opened before the warm-up finished, or stored before
+ * titles were cached), their batched title read gets this long; past it the
+ * cached rows stay and the untitled ones are left out of this open.
+ */
+export const RECENT_TITLE_CEILING_MS = 600;
+
+// Clear all holds its items here until the Undo strip ends, so a reopen inside
+// the window does not show them. Each hold names the openedAt it cleared, so a
+// reopen of the same item after the clear still shows.
+const clearHolds: Array<{ scope: string; items: readonly RecentItem[] }> = [];
+
+function heldBack(scope: string, item: RecentItem): boolean {
+  const key = recentItemKey(item);
+  return clearHolds.some(
+    (h) =>
+      h.scope === scope &&
+      h.items.some((c) => recentItemKey(c) === key && c.openedAt >= item.openedAt),
+  );
+}
+
+function releaseHold(hold: { scope: string; items: readonly RecentItem[] }): void {
+  const at = clearHolds.indexOf(hold);
+  if (at >= 0) clearHolds.splice(at, 1);
+}
+
+/**
+ * This device's recents for me in this workspace with what can draw now: the
+ * cached title, or one a title read just returned. Uncached ones are skipped.
+ * Pure over its inputs.
+ */
+export function recentEntriesOf(
+  items: readonly RecentItem[],
+  hidden: ReadonlySet<string>,
+  fetched: ReadonlyMap<string, { title: string; target: RecentTarget }>,
+): RecentEntry[] {
+  const out: RecentEntry[] = [];
+  for (const item of items) {
+    const key = recentItemKey(item);
+    if (hidden.has(key)) continue;
+    const hit =
+      item.title !== undefined && item.title !== '' && item.target !== undefined
+        ? { title: item.title, target: item.target }
+        : fetched.get(key);
+    if (hit === undefined) continue;
+    out.push({ type: item.type, id: item.id, title: hit.title, target: hit.target });
+  }
+  return out;
+}
+
 /** One keyboard-reachable row: a recent, a result, or a group's "Show all". */
 export type PaletteItem =
   | {
@@ -144,8 +217,15 @@ export type PaletteItem =
       time: string;
       target: HitTarget;
     }
-  | { id: string; type: 'recent'; title: string; typeLabel: string; target: HitTarget }
-  | { id: string; type: 'more'; group: ResultGroup; count: number };
+  | {
+      id: string;
+      type: 'recent';
+      title: string;
+      typeLabel: string;
+      target: HitTarget;
+      recent: { type: RecentType; id: string };
+    }
+  | { id: string; type: 'more'; group: ResultGroup | typeof RECENT_LABEL; count: number };
 
 export interface PaletteSection {
   label: typeof RECENT_LABEL | ResultGroup;
@@ -205,7 +285,9 @@ function chatSenderTitle(hit: SearchHit, workspaceId: string | null): string {
 }
 
 /**
- * The palette's sections. Empty search: Recent. From 2 characters, once
+ * The palette's sections. Empty search: Recent, the newest RECENT_SHOWN with
+ * "Show all (N)" beyond them unless expanded; none (the zero line) when there
+ * are no recents. From 2 characters, once
  * results are in: People, Posts, Briefs, Comments, Files, Plans, Plan items,
  * Tasks, Groups, Chat; empty groups hidden; each capped at 5 with "Show all
  * (N)" (N the server's total) unless expanded. Pure.
@@ -215,6 +297,8 @@ export function paletteSections(input: {
   search: PaletteSearchState;
   recents: readonly RecentEntry[];
   expanded: ReadonlySet<ResultGroup>;
+  /** Show all recents, not only the newest RECENT_SHOWN. */
+  recentsExpanded?: boolean;
   workspaceId: string | null;
   workspaceKey: string | null;
   nowMs: number;
@@ -224,18 +308,20 @@ export function paletteSections(input: {
   const query = normalizeQuery(input.query);
   if (query === '') {
     if (input.recents.length === 0) return [];
-    return [
-      {
-        label: RECENT_LABEL,
-        items: input.recents.map((r) => ({
-          id: `recent-${r.type}-${r.id}`,
-          type: 'recent',
-          title: r.title,
-          typeLabel: RECENT_TYPE_LABEL[r.type],
-          target: r.target,
-        })),
-      },
-    ];
+    const all = input.recents;
+    const shown = input.recentsExpanded === true ? all : all.slice(0, RECENT_SHOWN);
+    const items: PaletteItem[] = shown.map((r) => ({
+      id: `recent-${r.type}-${r.id}`,
+      type: 'recent',
+      title: r.title,
+      typeLabel: RECENT_TYPE_LABEL[r.type],
+      target: r.target,
+      recent: { type: r.type, id: r.id },
+    }));
+    if (shown.length < all.length) {
+      items.push({ id: 'more-recent', type: 'more', group: RECENT_LABEL, count: all.length });
+    }
+    return [{ label: RECENT_LABEL, items }];
   }
   const { search } = input;
   if (search.status !== 'ready' || search.query !== query) return [];
@@ -323,7 +409,14 @@ interface PaletteBodyProps {
   onRetry: () => void;
   /** Clears the search box (the no-results state's Clear search). */
   onClearQuery?: () => void;
+  /** A Recent row's X: removes that one recent. */
+  onRemoveRecent?: (recent: { type: RecentType; id: string }) => void;
+  /** The Recent header's Clear all. */
+  onClearRecents?: () => void;
 }
+
+// X and Clear all keep the field focused (and the phone keeps its keyboard).
+const keepFocus = (event: ReactMouseEvent): void => event.preventDefault();
 
 /** The palette's list: sections, then the loading, empty or error line. Pure. */
 export function PaletteBody(props: PaletteBodyProps): ReactElement {
@@ -361,6 +454,12 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
         )}
       </div>
     );
+  } else if (normalizeQuery(props.query) === '' && sections.length === 0) {
+    status = (
+      <p data-palette-state="recents-zero" className="px-4 py-6 text-center text-base text-fg-3">
+        {RECENT_ZERO_COPY}
+      </p>
+    );
   }
   return (
     <>
@@ -372,9 +471,28 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           data-palette-group={section.label}
           className="px-2 pb-1"
         >
-          <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-            {section.label}
-          </div>
+          {section.label === RECENT_LABEL ? (
+            <div className="flex min-h-[44px] items-center justify-between">
+              <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+                {section.label}
+              </div>
+              {props.onClearRecents !== undefined ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  data-palette-clear-recents=""
+                  onMouseDown={keepFocus}
+                  onClick={props.onClearRecents}
+                >
+                  Clear all
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+              {section.label}
+            </div>
+          )}
           {section.items.map((item) => {
             const index = flat.indexOf(item);
             const isActive = index === props.active;
@@ -400,15 +518,34 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               );
             }
             if (item.type === 'recent') {
+              const onRemove = props.onRemoveRecent;
+              // A button cannot hold a button: the row and its X sit side by side.
               return (
-                <PressableRow
-                  key={item.id}
-                  {...common}
-                  className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
-                >
-                  <span className="min-w-0 truncate font-medium text-fg">{item.title}</span>
-                  <span className="truncate text-sm text-fg-3">{item.typeLabel}</span>
-                </PressableRow>
+                <div key={item.id} className="flex items-center">
+                  <PressableRow
+                    {...common}
+                    className={cn(
+                      ROW,
+                      'min-w-0 flex-1 flex-col items-stretch justify-center gap-0.5 py-1.5',
+                      tone,
+                    )}
+                  >
+                    <span className="min-w-0 truncate font-medium text-fg">{item.title}</span>
+                    <span className="truncate text-sm text-fg-3">{item.typeLabel}</span>
+                  </PressableRow>
+                  {onRemove !== undefined ? (
+                    <IconButton
+                      type="button"
+                      label={`Remove ${item.title}`}
+                      data-palette-recent-remove={item.recent.id}
+                      onMouseDown={keepFocus}
+                      onClick={() => onRemove(item.recent)}
+                      className="shrink-0 text-fg-3"
+                    >
+                      <IconX size={ICON_SIZE.inline} />
+                    </IconButton>
+                  ) : null}
+                </div>
               );
             }
             return (
@@ -479,7 +616,14 @@ export function CommandPalette({
   const [active, setActive] = useState(0);
   const [expanded, setExpanded] = useState<ReadonlySet<ResultGroup>>(new Set());
   const [search, setSearch] = useState<PaletteSearchState>(IDLE_PALETTE_SEARCH);
-  const [recents, setRecents] = useState<RecentEntry[]>([]);
+  const toast = useToast();
+  // Recents removed (X) or cleared (Clear all, until Undo) during this open.
+  const [hiddenRecents, setHiddenRecents] = useState<ReadonlySet<string>>(new Set());
+  // Titles the ceiling-bound read returned for rows with none cached.
+  const [fetchedTitles, setFetchedTitles] = useState<
+    ReadonlyMap<string, { title: string; target: RecentTarget }>
+  >(new Map());
+  const [recentsExpanded, setRecentsExpanded] = useState(false);
   const runnerRef = useRef<PaletteSearchRunner | null>(null);
   // `rendered` keeps the palette mounted through its exit; `entered` drives the
   // enter/exit transition.
@@ -531,25 +675,74 @@ export function CommandPalette({
     };
   }, [open, workspaceId]);
 
-  // Recents: this device's list for me in this workspace, titled with one
-  // batched read per type; anything not returned drops.
+  // Recents: this device's list for me in this workspace, read from storage
+  // during the open render with the cached titles, so Recent paints on the
+  // first frame with no read. One snapshot per open: storage writes after it
+  // (the refresh below) show on the next open, never repaint these rows.
+  const storedRecents = useMemo(() => {
+    if (!open || workspaceId === null || userId === null) return [];
+    const scope = recentKey(userId, workspaceId);
+    return readRecents(deviceStorage(), userId, workspaceId).filter((i) => !heldBack(scope, i));
+  }, [open, workspaceId, userId]);
+  const recents = useMemo(
+    () => recentEntriesOf(storedRecents, hiddenRecents, fetchedTitles),
+    [storedRecents, hiddenRecents, fetchedTitles],
+  );
+
+  // The rare case: some of the newest 8 have no cached title. One batched read
+  // for only those, after paint, capped at RECENT_TITLE_CEILING_MS; the cached
+  // rows are already on screen and the untitled ones join when it lands.
   useEffect(() => {
-    setRecents([]);
     if (!open || workspaceId === null || userId === null) return;
-    const items = readRecents(deviceStorage(), userId, workspaceId);
-    if (items.length === 0) return;
+    const need = storedRecents.slice(0, RECENT_SHOWN).filter((i) => !hasCachedTitle(i));
+    if (need.length === 0) return;
     const controller = new AbortController();
-    void loadRecentEntries({
+    const ceiling = setTimeout(() => controller.abort(), RECENT_TITLE_CEILING_MS);
+    void readRecentTitles({
       client: supabase,
       workspaceId,
       workspaceKey,
       userId,
-      items,
+      items: need,
       signal: controller.signal,
-    }).then((entries) => {
-      if (!controller.signal.aborted) setRecents(entries);
+    }).then((titles) => {
+      clearTimeout(ceiling);
+      if (controller.signal.aborted) return;
+      writeRecentTitles(deviceStorage(), userId, workspaceId, need, titles, false);
+      setFetchedTitles(titles.found);
     });
-    return () => controller.abort();
+    return () => {
+      clearTimeout(ceiling);
+      controller.abort();
+    };
+  }, [open, workspaceId, workspaceKey, userId, storedRecents]);
+
+  // Freshness: once per session per workspace, WARM_DEBOUNCE_MS after paint and
+  // in idle time, re-read every stored title into storage (one batched read
+  // per type). Storage only; closing or switching workspace aborts it.
+  useEffect(() => {
+    if (!open || workspaceId === null || userId === null) return;
+    if (recentsRefreshed(userId, workspaceId)) return;
+    const controller = new AbortController();
+    let cancelIdle = (): void => {};
+    // Past the open's own work (typing starts a search), then idle time.
+    const timer = setTimeout(() => {
+      cancelIdle = whenIdle(() => {
+        void refreshRecentTitles({
+          client: supabase,
+          storage: deviceStorage(),
+          workspaceId,
+          workspaceKey,
+          userId,
+          signal: controller.signal,
+        });
+      });
+    }, WARM_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      cancelIdle();
+      controller.abort();
+    };
   }, [open, workspaceId, workspaceKey, userId]);
 
   useEffect(() => {
@@ -563,11 +756,12 @@ export function CommandPalette({
         search,
         recents,
         expanded,
+        recentsExpanded,
         workspaceId,
         workspaceKey,
         nowMs: Date.now(),
       }),
-    [query, search, recents, expanded, workspaceKey, workspaceId],
+    [query, search, recents, expanded, recentsExpanded, workspaceKey, workspaceId],
   );
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 
@@ -577,6 +771,9 @@ export function CommandPalette({
     // Both ways: a reopen during the close fade never shows the old text.
     setQuery('');
     setActive(0);
+    setHiddenRecents(new Set());
+    setFetchedTitles(new Map());
+    setRecentsExpanded(false);
     if (open && document.activeElement !== inputRef.current) inputRef.current?.focus();
   }, [open, inputRef]);
 
@@ -626,12 +823,63 @@ export function CommandPalette({
       return;
     }
     if (item.type === 'more') {
-      setExpanded((prev) => new Set(prev).add(item.group));
-      const kind = GROUP_KIND.get(item.group);
+      const group = item.group;
+      if (group === RECENT_LABEL) {
+        setRecentsExpanded(true);
+        return;
+      }
+      setExpanded((prev) => new Set(prev).add(group));
+      const kind = GROUP_KIND.get(group);
       if (kind !== undefined) runnerRef.current?.expand(kind);
       return;
     }
     openTarget(item.target);
+  }
+
+  // X: that one recent leaves storage and the list at once. No toast, no read.
+  function removeOneRecent(recent: { type: RecentType; id: string }): void {
+    if (workspaceId === null || userId === null) return;
+    removeRecent(deviceStorage(), userId, workspaceId, recent);
+    setHiddenRecents((prev) => new Set(prev).add(recentItemKey(recent)));
+    setActive((value) => Math.max(0, Math.min(value, flat.length - 2)));
+    inputRef.current?.focus({ preventScroll: true });
+  }
+
+  // Clear all: the list goes at once; storage loses exactly these items when
+  // the Undo strip ends (even with the palette closed), and Undo brings the
+  // same list back. Storage only, no read.
+  function clearAllRecents(): void {
+    if (workspaceId === null || userId === null) return;
+    const items = storedRecents.filter((i) => !hiddenRecents.has(recentItemKey(i)));
+    if (items.length === 0) return;
+    const keys = items.map(recentItemKey);
+    const hold = { scope: recentKey(userId, workspaceId), items };
+    clearHolds.push(hold);
+    setHiddenRecents((prev) => new Set([...prev, ...keys]));
+    setActive(0);
+    inputRef.current?.focus({ preventScroll: true });
+    const ws = workspaceId;
+    const me = userId;
+    toast.show({
+      title: RECENTS_CLEARED_TOAST,
+      action: {
+        label: 'Undo',
+        onPress: () => {
+          releaseHold(hold);
+          setHiddenRecents((prev) => {
+            const next = new Set(prev);
+            for (const key of keys) next.delete(key);
+            return next;
+          });
+        },
+      },
+      durationMs: UNDO_MS,
+      kind: 'undo',
+      onExpire: () => {
+        releaseHold(hold);
+        removeRecents(deviceStorage(), me, ws, items);
+      },
+    });
   }
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
@@ -738,6 +986,8 @@ export function CommandPalette({
               setQuery('');
               inputRef.current?.focus({ preventScroll: true });
             }}
+            onRemoveRecent={removeOneRecent}
+            onClearRecents={clearAllRecents}
           />
         </div>
       </div>
