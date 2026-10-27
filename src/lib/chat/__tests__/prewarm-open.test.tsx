@@ -424,7 +424,7 @@ describe('first tap on a pre-warmed chat', () => {
     expect(latest?.readState.open).toEqual(cold.open);
   });
 
-  it('its scheduled rows, marks and cursors are this open\'s parts (nothing re-read)', async () => {
+  it("its scheduled rows, marks and cursors are this open's parts (nothing re-read)", async () => {
     const page = pageOf(10);
     const { db, queries } = recordingClient(page, [FUTURE_SCHEDULED]);
     const memory = createOpenCache();
@@ -461,7 +461,7 @@ describe('first tap on a pre-warmed chat', () => {
     expect(latest?.messages.find((m) => m.id === 'm-0003')?.deleted).toBe(true);
   });
 
-  it('after 60 s: today\'s reopen (bundle from the page end, rows by id, reactions)', async () => {
+  it("after 60 s: today's reopen (bundle from the page end, rows by id, reactions)", async () => {
     const page = pageOf(30);
     const { db, queries } = recordingClient(page);
     const memory = createOpenCache();
