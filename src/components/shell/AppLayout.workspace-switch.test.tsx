@@ -5,7 +5,7 @@
 // AppLayout.test.tsx), so this asserts the source keeps the key and runs the
 // same keyed Outlet under a real router with a stateful page.
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { act, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const source = readFileSync(fileURLToPath(new URL('./AppLayout.tsx', import.meta.url)), 'utf8');
+const source = readFileSync(join(process.cwd(), 'src/components/shell/AppLayout.tsx'), 'utf8');
 
 /** A page that holds the workspace it first mounted under (like a page's items). */
 function Page({ workspaceId }: { workspaceId: string }): ReactElement {
