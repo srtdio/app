@@ -83,7 +83,10 @@ describe('C: a deep link starts the open from the URL', () => {
       store,
       read: (input: ChatOpenBundleInput): Promise<Result<ChatOpenBundle>> => {
         asked.push(input);
-        return Promise.resolve({ ok: false, error: { code: 'unknown', message: 'workspace_member_only' } });
+        return Promise.resolve({
+          ok: false,
+          error: { code: 'unknown', message: 'workspace_member_only' },
+        });
       },
       share: sharedChatRead,
       traceId: () => '0190a000-0000-7000-8000-0000000000aa',
