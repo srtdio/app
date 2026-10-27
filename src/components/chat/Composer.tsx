@@ -1044,6 +1044,86 @@ function swallowTrailingClick(): void {
   fallback = setTimeout(done, 10_000);
 }
 
+/** The pointer fields a Send press reads; React's PointerEvent and MouseEvent satisfy it. */
+interface SendPressEvent {
+  clientX: number;
+  clientY: number;
+  pointerType?: string;
+  currentTarget?: unknown;
+  preventDefault: () => void;
+}
+
+/** The hold-to-schedule handlers a Send press composes with (useLongPress handlers). */
+interface SendHoldHandlers {
+  onPointerDown: (event: SendPressEvent) => void;
+  onPointerMove: (event: SendPressEvent) => void;
+  onPointerUp: () => void;
+  onPointerCancel: () => void;
+}
+
+type SendPressHandlers = Partial<SendHoldHandlers> & {
+  onMouseDown?: (event: SendPressEvent) => void;
+};
+
+/** The slice of the textarea the refocus needs (a test fake satisfies it). */
+interface FocusArea {
+  focus: (options?: FocusOptions) => void;
+  setSelectionRange: (start: number, end: number) => void;
+}
+
+/** True when the composer textarea has focus right now (the keyboard is up). */
+export function keepsComposerFocus(area: unknown, active: unknown): boolean {
+  return area !== null && area !== undefined && area === active;
+}
+
+/**
+ * Phone: a press on Send keeps the textarea focused, so the keyboard never
+ * starts closing (and the composer never moves) before the click lands; one
+ * tap sends. Only when the textarea has focus: a press with the keyboard down
+ * never opens it. The hold-to-schedule handlers always run as before. Laptop
+ * gets the hold handlers only (focus unchanged).
+ */
+export function sendPressHandlers(input: {
+  enabled: boolean;
+  textarea: () => unknown;
+  activeElement: () => unknown;
+  hold: SendHoldHandlers | null;
+  onPress: (keptFocus: boolean) => void;
+}): SendPressHandlers {
+  if (!input.enabled) return input.hold ?? {};
+  function keep(event: SendPressEvent): boolean {
+    const kept = keepsComposerFocus(input.textarea(), input.activeElement());
+    if (kept) event.preventDefault();
+    return kept;
+  }
+  return {
+    ...input.hold,
+    onPointerDown(event) {
+      input.onPress(keep(event));
+      input.hold?.onPointerDown(event);
+    },
+    onMouseDown(event) {
+      keep(event);
+    },
+  };
+}
+
+/**
+ * Fallback inside the Send click (still the user gesture): the textarea had
+ * focus at press but lost it anyway, so it takes it back with the caret at 0
+ * and the keyboard stays up. True when it refocused.
+ */
+export function refocusComposer(
+  area: FocusArea | null,
+  keptAtPress: boolean,
+  active: unknown,
+): boolean {
+  if (!keptAtPress || area === null || area === active) return false;
+  area.focus({ preventScroll: true });
+  area.setSelectionRange(0, 0);
+  return true;
+}
+
 /**
  * Composer with text + an extensible attach menu (Photo / File). Files are
  * pre-checked client-side (a rejected one is refused with a toast) and shown as
@@ -1724,6 +1804,17 @@ export function Composer(props: ComposerProps): ReactElement {
   });
   const holdToSchedule = layout === 'touch' && schedulable;
   const showChevron = layout === 'laptop' && schedulable;
+  // Phone: Send keeps the keyboard up; see sendPressHandlers.
+  const sendKeptFocusRef = useRef(false);
+  const sendPress = sendPressHandlers({
+    enabled: layout === 'touch',
+    textarea: () => textareaRef.current,
+    activeElement: () => (typeof document === 'undefined' ? null : document.activeElement),
+    hold: holdToSchedule ? sendHold.handlers : null,
+    onPress: (kept) => {
+      sendKeptFocusRef.current = kept;
+    },
+  });
 
   async function startNow(): Promise<void> {
     const ok = await recorder.start();
@@ -2264,9 +2355,17 @@ export function Composer(props: ComposerProps): ReactElement {
                       holdToSchedule && NO_TOUCH_SELECT,
                     )}
                     disabled={!canSend || (scheduling && !schedulable)}
-                    {...(holdToSchedule ? sendHold.handlers : {})}
+                    {...sendPress}
                     onClick={(event) => {
-                      if (sendHold.consumeClickSuppression()) event.preventDefault();
+                      const keptAtPress = sendKeptFocusRef.current;
+                      sendKeptFocusRef.current = false;
+                      if (sendHold.consumeClickSuppression()) {
+                        event.preventDefault();
+                        return;
+                      }
+                      if (layout === 'touch') {
+                        refocusComposer(textareaRef.current, keptAtPress, document.activeElement);
+                      }
                     }}
                     onContextMenu={holdToSchedule ? (event) => event.preventDefault() : undefined}
                   >

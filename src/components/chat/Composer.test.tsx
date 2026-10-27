@@ -23,7 +23,10 @@ import {
   draftAttachments,
   hasLinkCards,
   isSendKeydown,
+  keepsComposerFocus,
   mentionKeyAction,
+  refocusComposer,
+  sendPressHandlers,
   replyBarPreview,
   ReplyBar,
   restoreDraftText,
@@ -39,6 +42,7 @@ import { createOutboxSender, runSend, type SendOutcome } from '@/lib/chat/send-f
 import { canSendAttachmentMessage, type MessageAttachment } from '@/lib/chat/attachments';
 import { stripHashToken } from '@/lib/chat/post-refs';
 import { IconButton } from '@/components/ui/IconButton';
+import { createLongPressController, LONG_PRESS_MS } from '@/components/ui/useLongPress';
 import { getDraft, resetDrafts, setDraft } from '@/lib/chat/drafts';
 import { runEdit } from '@/lib/chat/delete-flow';
 import type { Client } from '@srtdio/rpc';
@@ -783,5 +787,149 @@ describe('voice notes under 1 second are discarded', () => {
     );
     expect(fn).toMatch(/finally \{\s+setVoiceBusy\(false\);\s+\}/);
     expect(fn).not.toContain('recorder.seconds');
+  });
+});
+
+describe('phone Send: one tap sends and the keyboard stays up', () => {
+  // A fake of the press: the textarea, which element has focus, and a
+  // pointerdown that records whether its default (the blur) was prevented.
+  function setup(opts: { focused: boolean; schedulable?: boolean }) {
+    let active: unknown = null;
+    const area = { focus: vi.fn(), setSelectionRange: vi.fn() };
+    area.focus.mockImplementation(() => {
+      active = area;
+    });
+    if (opts.focused) active = area;
+    let keptAtPress = false;
+    const onLongPress = vi.fn();
+    const hold = createLongPressController({ onLongPress });
+    const handlers = sendPressHandlers({
+      enabled: true,
+      textarea: () => area,
+      activeElement: () => active,
+      hold: opts.schedulable === false ? null : hold.handlers,
+      onPress: (kept) => {
+        keptAtPress = kept;
+      },
+    });
+    function press(): { prevented: boolean } {
+      const result = { prevented: false };
+      const event = {
+        clientX: 10,
+        clientY: 10,
+        pointerType: 'touch',
+        preventDefault: () => {
+          result.prevented = true;
+        },
+      };
+      handlers.onPointerDown?.(event);
+      handlers.onMouseDown?.(event);
+      // The browser's default on an unprevented press blurs the textarea.
+      if (!result.prevented) active = null;
+      return result;
+    }
+    return {
+      area,
+      active: () => active,
+      keptAtPress: () => keptAtPress,
+      hold,
+      onLongPress,
+      handlers,
+      press,
+    };
+  }
+
+  it('pointerdown on Send with the textarea focused prevents the blur; the textarea stays focused', () => {
+    const t = setup({ focused: true });
+    expect(t.press().prevented).toBe(true);
+    expect(t.active()).toBe(t.area);
+    expect(t.keptAtPress()).toBe(true);
+    // Nothing to fall back to: the textarea never lost focus.
+    expect(refocusComposer(t.area, t.keptAtPress(), t.active())).toBe(false);
+    expect(t.area.focus).not.toHaveBeenCalled();
+    t.hold.dispose();
+  });
+
+  it('with the textarea not focused (keyboard down), pointerdown is not prevented and nothing focuses', () => {
+    const t = setup({ focused: false });
+    expect(t.press().prevented).toBe(false);
+    expect(t.keptAtPress()).toBe(false);
+    expect(refocusComposer(t.area, t.keptAtPress(), t.active())).toBe(false);
+    expect(t.area.focus).not.toHaveBeenCalled();
+    expect(keepsComposerFocus(null, null)).toBe(false);
+    t.hold.dispose();
+  });
+
+  it('one click with text sends exactly once and the send clears the text', async () => {
+    const t = setup({ focused: true });
+    const onSend = vi.fn();
+    let text = 'hello';
+    t.press();
+    t.handlers.onPointerUp?.();
+    // The click: a tap is never swallowed, so the form submits once.
+    if (!t.hold.consumeClickSuppression()) {
+      const taken = dispatchSend(onSend, {
+        text,
+        attachments: [],
+        sharedPostIds: [],
+        reply: null,
+        sharedBriefIds: [],
+      });
+      if (taken) text = '';
+    }
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend.mock.calls[0]?.[0]).toBe('hello');
+    expect(text).toBe('');
+    expect(t.active()).toBe(t.area);
+    // The real send() clears the text after a taken send.
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const source = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
+    const body = source.slice(source.indexOf('  function send(draft: LinkCardDraft)'));
+    const fn = body.slice(0, body.indexOf('\n  }\n') + 4);
+    expect(fn).toContain("setText('');");
+    // The Send button spreads the composed press handlers (hold included).
+    expect(source).toContain('{...sendPress}');
+    expect(source).toContain('hold: holdToSchedule ? sendHold.handlers : null');
+    t.hold.dispose();
+  });
+
+  it('the textarea lost focus anyway: the click refocuses it with the caret at 0', () => {
+    const t = setup({ focused: true });
+    t.press();
+    expect(refocusComposer(t.area, true, null)).toBe(true);
+    expect(t.area.focus).toHaveBeenCalledTimes(1);
+    expect(t.area.setSelectionRange).toHaveBeenCalledWith(0, 0);
+    t.hold.dispose();
+  });
+
+  it('hold-to-schedule still opens Schedule on a long press and the trailing click does not send', () => {
+    vi.useFakeTimers();
+    try {
+      const t = setup({ focused: true });
+      const onSend = vi.fn();
+      expect(t.press().prevented).toBe(true);
+      vi.advanceTimersByTime(LONG_PRESS_MS + 10);
+      expect(t.onLongPress).toHaveBeenCalledTimes(1);
+      t.handlers.onPointerUp?.();
+      if (!t.hold.consumeClickSuppression()) onSend();
+      expect(onSend).not.toHaveBeenCalled();
+      t.hold.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('laptop: only the hold handlers (none when not schedulable), focus untouched', () => {
+    const onPress = vi.fn();
+    const none = sendPressHandlers({
+      enabled: false,
+      textarea: () => null,
+      activeElement: () => null,
+      hold: null,
+      onPress,
+    });
+    expect(none).toEqual({});
+    expect(onPress).not.toHaveBeenCalled();
   });
 });
