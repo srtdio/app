@@ -699,7 +699,21 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await openDm(page);
       const kept = page.locator('[data-bubble]', { hasText: REMOVED_BODY }).last();
-      await kept.scrollIntoViewIfNeeded();
+      const list = page.locator('[data-thread-viewport] ul').first();
+      // A reader's scroll (a wheel first: a script scroll alone never lets the
+      // thread's stick-to-bottom go). A pin of the open between the wheel and
+      // the scroll takes the scroll back as its own: start again from the
+      // bottom until the reader's state holds (Scroll to latest shows).
+      await expect(async () => {
+        await list.evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+        });
+        await list.dispatchEvent('wheel');
+        await kept.scrollIntoViewIfNeeded();
+        await expect(page.locator('[data-latest-button][aria-hidden="false"]')).toHaveCount(1, {
+          timeout: 1_000,
+        });
+      }).toPass({ timeout: READY_MS });
       await waitFor([kept.getByTestId('files-removed-line')], 'files removed line');
     },
   },
