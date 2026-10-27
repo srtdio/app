@@ -1754,8 +1754,7 @@ export function PostDetailPage({
       <PostDecisionBar model={decisionModel} busy={decisionBusy} error={actionError} />
     ) : null;
   const decisionBarShown = decisionBar !== null && (decisionModel !== null || actionError !== null);
-  const decisionBarPx = decisionBarSpace(decisionModel, actionError);
-  const decisionBarHeight = `calc(${decisionBarPx}px + env(safe-area-inset-bottom))`;
+  const decisionBarHeight = `calc(${decisionBarSpace(decisionModel, actionError)}px + env(safe-area-inset-bottom))`;
 
   // Spec B4: beside the lock, how to change it, and (agency roles, when the
   // move is legal) "Move to Parked", which opens the existing park confirm.
