@@ -9,7 +9,7 @@ import {
   flushDeviceCache,
   hydrate,
   isPersistable,
-  MAX_AGE_MS,
+  MAX_STORE_BYTES,
   MAX_VALUE_BYTES,
   overCapKeys,
   parseKey,
@@ -75,44 +75,50 @@ describe('keys', () => {
     expect(parseKey('k')).toBeNull();
   });
 
-  it('never saves chat stores (part B) or keys without a user', () => {
+  it('saves the chat list and pages, never the open reads or keys without a user', () => {
     expect(isPersistable('u1:w1:chat-open:members')).toBe(false);
+    expect(isPersistable('u1:w1:chat:list')).toBe(true);
+    expect(isPersistable('u1:w1:chat:page:c1')).toBe(true);
+    expect(isPersistable('u1:w1:chat:pages')).toBe(true);
     expect(isPersistable('k')).toBe(false);
     expect(isPersistable('u1:w1:pipeline-posts')).toBe(true);
   });
 });
 
 describe('hydrate', () => {
-  it('returns only this user, non-expired, same-version records', async () => {
+  it('returns only this user, same-version records', async () => {
     mem.rows.set('u1:w1:a', record('u1:w1:a'));
     mem.rows.set('u2:w1:a', record('u2:w1:a'));
-    mem.rows.set('u1:w1:old', record('u1:w1:old', { savedAt: NOW - MAX_AGE_MS - 1 }));
-    const out = await hydrate('u1', { nowMs: NOW, version: 'v1' });
+    const out = await hydrate('u1', { version: 'v1' });
     expect([...out.keys()]).toEqual(['u1:w1:a']);
     expect(out.get('u1:w1:a')).toEqual({ v: 'u1:w1:a' });
     await flushDeviceCache();
-    // The other user's and the expired records are deleted.
+    // The other user's records are deleted.
     expect([...mem.rows.keys()]).toEqual(['u1:w1:a']);
   });
 
-  it('keeps a record exactly 72 h old and drops one a moment older', async () => {
-    mem.rows.set('u1:w1:edge', record('u1:w1:edge', { savedAt: NOW - MAX_AGE_MS }));
-    mem.rows.set('u1:w1:past', record('u1:w1:past', { savedAt: NOW - MAX_AGE_MS - 1 }));
-    const out = await hydrate('u1', { nowMs: NOW, version: 'v1' });
-    expect([...out.keys()]).toEqual(['u1:w1:edge']);
+  it('has no age limit: a record saved long ago (or dated ahead) is still returned', async () => {
+    const year = 365 * 24 * 60 * 60 * 1000;
+    mem.rows.set('u1:w1:old', record('u1:w1:old', { savedAt: NOW - year }));
+    mem.rows.set('u1:w1:ahead', record('u1:w1:ahead', { savedAt: NOW + year }));
+    mem.rows.set('u1:w1:chat:list', record('u1:w1:chat:list', { savedAt: 0 }));
+    const out = await hydrate('u1', { version: 'v1' });
+    expect([...out.keys()].sort()).toEqual(['u1:w1:ahead', 'u1:w1:chat:list', 'u1:w1:old']);
+    await flushDeviceCache();
+    expect(mem.rows.size).toBe(3);
   });
 
   it('wipes everything on a version mismatch', async () => {
     mem.rows.set('u1:w1:a', record('u1:w1:a'));
     mem.rows.set('u1:w1:b', record('u1:w1:b', { appVersion: 'v0' }));
-    const out = await hydrate('u1', { nowMs: NOW, version: 'v1' });
+    const out = await hydrate('u1', { version: 'v1' });
     expect(out.size).toBe(0);
     expect(mem.rows.size).toBe(0);
   });
 
   it('returns nothing when a wipe lands while it reads', async () => {
     mem.rows.set('u1:w1:a', record('u1:w1:a'));
-    const pending = hydrate('u1', { nowMs: NOW, version: 'v1' });
+    const pending = hydrate('u1', { version: 'v1' });
     void wipe();
     expect((await pending).size).toBe(0);
   });
@@ -176,6 +182,17 @@ describe('writes', () => {
     expect(mem.rows.has('u1:w1:big')).toBe(false);
     expect(mem.rows.has('u1:w1:small')).toBe(true);
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the store at 100 MB', () => {
+    expect(MAX_STORE_BYTES).toBe(100 * 1024 * 1024);
+    const entries = new Map([
+      ['a', { savedAt: 1, size: 60 * 1024 * 1024 }],
+      ['b', { savedAt: 2, size: 39 * 1024 * 1024 }],
+    ]);
+    expect(overCapKeys(entries)).toEqual([]);
+    entries.set('c', { savedAt: 3, size: 2 * 1024 * 1024 });
+    expect(overCapKeys(entries)).toEqual(['a']);
   });
 
   it('caps the store by dropping the oldest records', () => {

@@ -21,7 +21,7 @@
 // not kept here: they are the workspace's shared session reads
 // (workspace-reads.ts), joined by every chat while fresh. Memory is
 // keyed by user id, workspace id and channel id, capped at OPEN_CACHE_LIMIT
-// chats (least recently used goes first), never persisted, and cleared in
+// chats (least recently used goes first), and cleared in
 // full when the user or the workspace changes: at once when the shell
 // switches (leaveChatScope, from ChatStoreProvider), and checked again on
 // every access, so a sign-out that never fired the event still never shows
@@ -35,6 +35,18 @@
 // REMEMBERED_MESSAGES_LIMIT); while no thread shows it, every live event for
 // it lands on the remembered rows through the same apply functions the open
 // thread uses (thread.ts). Events stamped with another workspace are ignored.
+//
+// The messages page (and only it) is also saved on this device through the
+// session reads (primeRead under `${userId}:${workspaceId}:chat:page:${channelId}`,
+// device-cache.ts): every keep and every live change saves it, never an
+// empty page and never a sending or failed row. A cold open seeds the memory
+// from that saved page (peekKept) the first time the chat is asked for, so
+// the reopen path (paint the page, revalidate from `through`) runs as for a
+// page remembered this session. A workspace switch clears the memory only;
+// the device copy stays for that workspace's next open. At most
+// OPEN_CACHE_LIMIT pages per workspace stay on the device (least recently
+// kept goes first). Sign-out, an account switch and a workspace no longer
+// listed remove them with every other saved read (session-read.ts).
 
 import type { Result } from '@srtdio/rpc';
 import type { ScheduledRow } from '@/lib/chat/scheduled';
@@ -63,7 +75,8 @@ import {
 } from '@/lib/chat/history';
 import { resetViewerSideCache } from '@/lib/chat/viewer-role';
 import { SIGNOUT_EVENT } from '@/lib/events';
-import { READ_FRESH_MS } from '@/lib/session-read';
+import { peekKept, primeRead, READ_FRESH_MS, readKey } from '@/lib/session-read';
+import { drop as dropSaved, flushDeviceCache } from '@/lib/device-cache';
 import { supabase } from '@/lib/supabase';
 
 /** Chats remembered per session (least recently opened goes first). */
@@ -224,11 +237,14 @@ function slotKey(key: ChatKey): string {
 
 /** The store itself; the module holds one, tests make their own. */
 export function createOpenCache(
-  opts: { limit?: number; now?: () => number; onClear?: () => void } = {},
+  opts: { limit?: number; now?: () => number; onClear?: () => void; device?: PageDevice } = {},
 ): OpenCache {
   const limit = opts.limit ?? OPEN_CACHE_LIMIT;
   const now = opts.now ?? (() => Date.now());
+  const device = opts.device;
   const slots = new Map<string, Slot>();
+  // Chats whose saved page was already looked for in this scope (once each).
+  const seeded = new Set<string>();
   let scope: { userId: string; workspaceId: string } | null = null;
   const emptyListeners: Array<() => void> = [];
   const heldListeners: Array<() => void> = [];
@@ -236,6 +252,7 @@ export function createOpenCache(
   const clear = (): void => {
     const had = slots.size > 0;
     slots.clear();
+    seeded.clear();
     scope = null;
     opts.onClear?.();
     if (had) for (const l of emptyListeners) l();
@@ -281,6 +298,21 @@ export function createOpenCache(
     return slot;
   }
 
+  /** A cold open: the chat's saved page becomes its remembered page, once per scope. */
+  const seedThread = (key: ChatKey): void => {
+    if (device === undefined) return;
+    enter(key);
+    const k = slotKey(key);
+    if (seeded.has(k)) return;
+    seeded.add(k);
+    if (slots.get(k)?.memory.thread !== undefined) return;
+    const saved = device.load(key);
+    if (saved === undefined) return;
+    const slot = slotOf(key, true);
+    slot.memory.thread = saved;
+    slot.memoryAt.thread = now();
+  };
+
   const live = (s: Stashed): boolean =>
     s.settledAt === null || now() - s.settledAt < JOIN_WINDOW_MS;
 
@@ -314,6 +346,7 @@ export function createOpenCache(
       slot.memoryAt[part] = now();
     },
     recall(key, part) {
+      if (part === 'thread') seedThread(key);
       return slotOf(key, false)?.memory[part];
     },
     recallFresh(key, part, maxAgeMs = READ_FRESH_MS) {
@@ -346,9 +379,16 @@ export function createOpenCache(
       const slot = slots.get(slotKey(key));
       const value = slot?.memory[part];
       if (slot === undefined || value === undefined) return;
-      slot.memory[part] = change(value as ChatMemory[K]);
+      const next = change(value as ChatMemory[K]);
+      slot.memory[part] = next;
+      if (part === 'thread' && next !== value) device?.save(key, next as RememberedThread, false);
     },
     forget(key, part) {
+      if (part === 'thread') {
+        // The saved copy goes too, so a cold open never seeds it back.
+        seeded.add(slotKey(key));
+        device?.forget(key);
+      }
       const slot = slots.get(slotKey(key));
       if (slot === undefined) return;
       delete slot.memory[part];
@@ -375,7 +415,9 @@ export function createOpenCache(
       const current = (): boolean => slots.get(slotKey(key)) === slot;
       return {
         keep: (thread) => {
-          if (current() && slot.threadEpoch === epoch) slot.memory.thread = thread;
+          if (!current() || slot.threadEpoch !== epoch) return;
+          slot.memory.thread = thread;
+          device?.save(key, thread, true);
         },
         release: () => {
           if (released) return;
@@ -410,15 +452,137 @@ export function createOpenCache(
   };
 }
 
+/** Where a store saves its remembered pages (the device through the session reads; tests pass fakes). */
+export interface PageDevice {
+  /** The chat's saved page, or undefined (none, forgotten, or not a page). */
+  load: (key: ChatKey) => RememberedThread | undefined;
+  /** Save the page (`opened`: a thread kept it, so it is the most recently opened). */
+  save: (key: ChatKey, thread: RememberedThread, opened: boolean) => void;
+  /** The chat's page is forgotten: its saved copy goes too. */
+  forget: (key: ChatKey) => void;
+}
+
+/** A remembered page as saved on the device: plain data (the cursor times as pairs). */
+export interface SavedPage {
+  rows: ThreadMessage[];
+  hasMore: boolean;
+  through: MessageCursor | null;
+  reads: { rows: ReadPositionsRead['rows']; times: Array<[string, number]> } | null;
+  unresolved: string[];
+}
+
+/** The session read key of a chat's saved page. */
+export function chatPageKey(key: ChatKey): string {
+  return readKey(key.userId, key.workspaceId, `chat:page:${key.channelId}`);
+}
+
+/** The session read key of a workspace's saved page order (channel ids, least recent first). */
+export function chatPagesKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'chat:pages');
+}
+
+/**
+ * A page as saved: its server rows only (never a sending or failed row, no
+ * local previews, at most REMEMBERED_MESSAGES_LIMIT), or null when none is
+ * left (an empty page is never saved). Pure.
+ */
+export function toSavedPage(thread: RememberedThread): SavedPage | null {
+  const window = rememberedWindow(thread.rows, thread.hasMore);
+  if (window.rows.length === 0) return null;
+  const kept = new Set(window.rows.map((m) => m.id));
+  return {
+    rows: window.rows,
+    hasMore: window.hasMore,
+    through: thread.through ?? null,
+    reads:
+      thread.reads !== null ? { rows: thread.reads.rows, times: [...thread.reads.times] } : null,
+    unresolved: thread.unresolved.filter((id) => kept.has(id)),
+  };
+}
+
+/** A saved page back as a remembered page, or undefined when it is none (or empty). Pure. */
+export function fromSavedPage(saved: unknown): RememberedThread | undefined {
+  if (typeof saved !== 'object' || saved === null) return undefined;
+  const page = saved as Partial<SavedPage>;
+  if (!Array.isArray(page.rows) || page.rows.length === 0) return undefined;
+  return {
+    rows: page.rows,
+    hasMore: page.hasMore === true,
+    through: page.through ?? undefined,
+    reads:
+      page.reads !== null && page.reads !== undefined
+        ? { rows: page.reads.rows, times: new Map(page.reads.times) }
+        : null,
+    unresolved: Array.isArray(page.unresolved) ? page.unresolved : [],
+  };
+}
+
+/** primeRead, written to the device at once when the tab is hidden (the app may close). */
+function primeHidden(key: string, value: unknown): void {
+  primeRead(key, value);
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    void flushDeviceCache();
+  }
+}
+
+/**
+ * The app's page device: each page through primeRead (memory and device), a
+ * forgotten one as null, and the workspace's order list holding at most
+ * `limit` pages (the least recently kept is dropped from the device).
+ */
+export function sessionPageDevice(
+  io: {
+    peek: (key: string) => unknown;
+    prime: (key: string, value: unknown) => void;
+    drop: (key: string) => void;
+  } = { peek: peekKept, prime: primeHidden, drop: (k) => void dropSaved(k) },
+  limit: number = OPEN_CACHE_LIMIT,
+): PageDevice {
+  const orderOf = (key: ChatKey): string[] => {
+    const saved = io.peek(chatPagesKey(key.userId, key.workspaceId));
+    return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : [];
+  };
+  return {
+    load: (key) => fromSavedPage(io.peek(chatPageKey(key))),
+    save: (key, thread, opened) => {
+      const page = toSavedPage(thread);
+      if (page === null) return;
+      io.prime(chatPageKey(key), page);
+      const order = orderOf(key);
+      const at = order.indexOf(key.channelId);
+      if (at >= 0 && !opened) return;
+      if (at >= 0) order.splice(at, 1);
+      order.push(key.channelId);
+      while (order.length > limit) {
+        const out = order.shift();
+        if (out !== undefined) io.drop(chatPageKey({ ...key, channelId: out }));
+      }
+      io.prime(chatPagesKey(key.userId, key.workspaceId), order);
+    },
+    forget: (key) => {
+      const held = io.peek(chatPageKey(key));
+      if (held === undefined || held === null) return;
+      io.prime(chatPageKey(key), null);
+      const order = orderOf(key);
+      const at = order.indexOf(key.channelId);
+      if (at < 0) return;
+      order.splice(at, 1);
+      io.prime(chatPagesKey(key.userId, key.workspaceId), order);
+    },
+  };
+}
+
 /**
  * The tab's one store. A clear also forgets the other module-level stores a
  * chat open fills: the viewer side per workspace and the prefetched pages.
+ * Its pages are saved on the device (sessionPageDevice).
  */
 export const openCache = createOpenCache({
   onClear: () => {
     resetViewerSideCache();
     clearMessagePrefetch();
   },
+  device: sessionPageDevice(),
 });
 
 /** The key for a chat, or null without a signed-in user, a workspace or a chat. */
@@ -633,9 +797,16 @@ export function forgetRememberedThread(key: ChatKey | null, store: OpenCache = o
   if (key !== null) store.forget(key, 'thread');
 }
 
+/** The chats of this user and workspace with a page saved on the device (least recent first). */
+export function savedPageIds(userId: string, workspaceId: string): string[] {
+  const saved = peekKept<unknown>(chatPagesKey(userId, workspaceId));
+  return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : [];
+}
+
 /**
  * The roster for this user and workspace was read: a remembered chat it no
- * longer lists (left, removed, deleted) is forgotten. `keep` says which other
+ * longer lists (left, removed, deleted) is forgotten, its saved page too
+ * (`saved`: the chats with a page on the device). `keep` says which other
  * chats stay (Personal notes are never in the roster).
  */
 export function forgetThreadsOutside(
@@ -644,10 +815,16 @@ export function forgetThreadsOutside(
   listed: ReadonlySet<string>,
   keep: (channelId: string) => boolean,
   store: OpenCache = openCache,
+  saved: readonly string[] = savedPageIds(userId, workspaceId),
 ): void {
   for (const { key } of store.holding('thread')) {
     if (key.userId !== userId || key.workspaceId !== workspaceId) continue;
     if (!listed.has(key.channelId) && !keep(key.channelId)) store.forget(key, 'thread');
+  }
+  for (const channelId of saved) {
+    if (!listed.has(channelId) && !keep(channelId)) {
+      store.forget({ userId, workspaceId, channelId }, 'thread');
+    }
   }
 }
 

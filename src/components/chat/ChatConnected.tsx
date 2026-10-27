@@ -30,7 +30,7 @@ import {
   type ThreadMessage,
 } from '@/lib/chat/thread';
 import { createCmdMessage } from '@/lib/chat/message-factory';
-import { loadScope, type ChatLoadStatus } from '@/lib/chat/chat-store';
+import { loadScope, selectHidden, type ChatLoadStatus } from '@/lib/chat/chat-store';
 import {
   openChannelAfterRoster,
   reloadedFor,
@@ -45,7 +45,9 @@ import { generateTraceId } from '@/lib/trace';
 import { clearChannelRecord } from '@/lib/chat/record';
 import { runClearChannels, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { safeTimeZone } from '@/lib/time';
-import { useChatThread } from '@/lib/chat/use-chat-thread';
+import { prewarmChats, useChatThread } from '@/lib/chat/use-chat-thread';
+import { readChatOpenBundle } from '@/lib/chat/history';
+import { whenIdle } from '@/lib/chunk-reload';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
 import { joinChatBundle } from '@/lib/chat/open-bundle';
@@ -58,7 +60,7 @@ import { ROSTER_READ_BUDGET_MS, useChatStore } from '@/components/chat/ChatStore
 import type { ChatConnection, ChatStatus } from '@/lib/chat/types';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconChat } from '@/components/ui/icons';
-import { ChannelList } from '@/components/chat/ChannelList';
+import { ChannelList, visibleChannels } from '@/components/chat/ChannelList';
 import {
   MessageThread,
   profileNameOf,
@@ -167,6 +169,41 @@ export function startChatOpen(userId: string, workspaceId: string, channelId: st
 }
 
 const NO_TYPING: string[] = [];
+
+/**
+ * When the pre-warm runs: only once the list is ready, only while the tab is
+ * visible (a hidden tab waits for visible), and only at idle, after paint.
+ * Returns the cancel. Injected so tests drive it without a browser.
+ */
+export function schedulePrewarm(input: {
+  ready: boolean;
+  visible: () => boolean;
+  onVisibilityChange: (listener: () => void) => () => void;
+  idle: (task: () => void) => () => void;
+  run: () => void;
+}): () => void {
+  if (!input.ready) return () => {};
+  let cancelIdle: (() => void) | null = null;
+  let stopListening: (() => void) | null = null;
+  const start = (): void => {
+    if (!input.visible() || cancelIdle !== null) return;
+    stopListening?.();
+    stopListening = null;
+    cancelIdle = input.idle(input.run);
+  };
+  stopListening = input.onVisibilityChange(start);
+  start();
+  return () => {
+    cancelIdle?.();
+    stopListening?.();
+  };
+}
+
+/** Whether the device asks to save data (Save-Data); false where the browser does not say. */
+function saveDataOn(): boolean {
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  return connection?.saveData === true;
+}
 
 /** What the open notes thread knows about its saved copies' sources. */
 interface SavedState {
@@ -1187,6 +1224,64 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     if (found !== undefined) openChannel(found, channelWriteFor('pendingOpen'));
     clearPendingOpen();
   }, [pendingOpen, loadStatus, chatRoster, clearPendingOpen, openChannel]);
+
+  // Pre-warm: once the list is ready and the tab visible, at idle (after the
+  // list painted), the top chats' open reads run and are kept as the pages
+  // an open leaves behind, so the first tap paints with no skeleton. Once
+  // per list load (this mount and scope); no await, hold or gate on any
+  // paint path; skipped under Save-Data. A switch or leave drops what lands.
+  const prewarmInputRef = useRef({ roster, chatStore });
+  prewarmInputRef.current = { roster, chatStore };
+  const prewarmedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const scopeId = `${currentUserId}:${workspaceId}`;
+    if (prewarmedRef.current === scopeId) return;
+    let live = true;
+    const cancel = schedulePrewarm({
+      ready: loadStatus === 'ready',
+      visible: () => document.visibilityState === 'visible',
+      onVisibilityChange: (listener) => {
+        document.addEventListener('visibilitychange', listener);
+        return () => document.removeEventListener('visibilitychange', listener);
+      },
+      idle: (task) => whenIdle(task),
+      run: () => {
+        if (!live) return;
+        prewarmedRef.current = scopeId;
+        const { roster: listed, chatStore: listState } = prewarmInputRef.current;
+        const keys = visibleChannels(
+          listed,
+          (id) => listState.conversations[id],
+          (id) => selectHidden(listState, id),
+          '',
+        ).flatMap((channel) => {
+          const key = chatKey(currentUserId, workspaceId, channel.channelId);
+          return key !== null ? [key] : [];
+        });
+        void prewarmChats(keys, {
+          read: (key) =>
+            withReadTimeout((signal) =>
+              readChatOpenBundle(
+                supabase,
+                {
+                  traceId: generateTraceId(),
+                  workspaceId: key.workspaceId,
+                  channelId: key.channelId,
+                  since: null,
+                },
+                signal,
+              ),
+            ),
+          saveData: saveDataOn,
+          current: () => live,
+        });
+      },
+    });
+    return () => {
+      live = false;
+      cancel();
+    };
+  }, [loadStatus, workspaceId, currentUserId]);
 
   // Keyed on the channel the send was recorded in, which may no longer be open.
   const onOwnMessage = useCallback(

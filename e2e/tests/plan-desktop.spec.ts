@@ -899,9 +899,10 @@ test('E: phone (iPhone 13): full page; view mode has no edit controls; Edit show
   await expect(plan).toHaveAttribute('role', 'dialog');
   await expect(plan).toHaveAttribute('aria-modal', 'true');
   const vp = page.viewportSize();
-  const box = await plan.boundingBox();
-  expect(box?.width).toBe(vp?.width);
-  expect(box?.height).toBe(vp?.height);
+  // Full page once its open settles (the enter motion can still be on its
+  // last sub-pixel when the first day row shows).
+  await expect.poll(async () => (await plan.boundingBox())?.width).toBe(vp?.width);
+  await expect.poll(async () => (await plan.boundingBox())?.height).toBe(vp?.height);
   // View mode (X3): no grip, no day chip, no remove, no swipe; no laptop hints or close.
   await expect(
     plan.locator(

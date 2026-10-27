@@ -85,6 +85,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - New API endpoints, RPC functions, and Workers must accept and propagate trace_id. Read it from the `X-Trace-Id` header on inbound, attach it to all outbound calls.
 - Use logger from `src/lib/logger.ts`. No `console.*` in `src/**` outside logger files.
 - Blast radius: before changing a shared function, gate, constant or wait, list every caller and screen that uses it in the PR body with what changes for each. A new wait, hold, cap or gate on a paint path states its ceiling and reason and may not stack on an existing one without stating the total.
+- Speed ratchet: no PR may make a paint or tap path slower. Do not add an await, hold, gate or network read on a paint or tap path without Shubham's approval. The PR body lists the paths touched, their before/after ?paintlog marks, and what this PR made faster.
 
 ## Design rules (locked 24 Oct 2026)
 

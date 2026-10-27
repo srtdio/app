@@ -4,27 +4,28 @@
 // store, one record per session-read key.
 //
 // hydrate(userId) is the only read: once at boot, it returns this user's
-// records saved under this build and younger than MAX_AGE_MS, and deletes the
-// rest (another build's records wipe everything). put and drop are queued and
+// records saved under this build, and deletes the rest (another build's
+// records wipe everything). There is no age limit: a saved screen goes only
+// by the kill switch (sign-out, account switch, a new build, a workspace no
+// longer listed) or the store cap (MAX_STORE_BYTES, oldest first). put and drop are queued and
 // written off the paint path in one batch. Nothing here throws: any
 // IndexedDB failure (private mode, quota, blocked) logs once and the app runs
 // exactly as it does without the cache.
 //
 // Keys carry the user id and workspace id first (`${userId}:${workspaceId}:…`;
-// an empty workspace id is a user-level record, the shell's own). Chat keys
-// are not saved here (part B).
+// an empty workspace id is a user-level record, the shell's own). Of the chat
+// keys only the list snapshot and the remembered pages (`chat:…`) are saved;
+// the open's shared reads (`chat-open:…`) are not.
 
 import { mark } from '@/lib/perf-marks';
 import { logger } from '@/lib/logger';
 
 export const DB_NAME = 'sorted-cache';
 const STORE = 'records';
-/** Saved screens are shown up to 72 h old, never older. */
-export const MAX_AGE_MS = 72 * 60 * 60 * 1000;
 /** A single value larger than this is not saved. */
 export const MAX_VALUE_BYTES = 2 * 1024 * 1024;
 /** The whole store is held under this; the oldest records go first. */
-export const MAX_STORE_BYTES = 50 * 1024 * 1024;
+export const MAX_STORE_BYTES = 100 * 1024 * 1024;
 /** Writes wait this long for more writes, then go in one batch when idle. */
 export const FLUSH_DELAY_MS = 300;
 
@@ -65,12 +66,15 @@ export function parseKey(key: string): { userId: string; workspaceId: string | n
   return { userId: key.slice(0, first), workspaceId: workspaceId === '' ? null : workspaceId };
 }
 
-/** Whether a key is saved on the device: user-scoped, and not a chat store (part B). */
+/**
+ * Whether a key is saved on the device: user-scoped, and of the chat keys only
+ * the list snapshot and the remembered pages (`chat:…`), never `chat-open:…`.
+ */
 export function isPersistable(key: string): boolean {
   const parsed = parseKey(key);
   if (parsed === null) return false;
   const what = key.slice(key.indexOf(':', key.indexOf(':') + 1) + 1);
-  return !what.startsWith('chat');
+  return !what.startsWith('chat') || what.startsWith('chat:');
 }
 
 // No IndexedDB at all (an old browser, tests): a quiet no-op, nothing to report.
@@ -290,13 +294,13 @@ export function flushDeviceCache(): Promise<void> {
 
 /**
  * This user's saved values: one storage read, at boot. Returns only records
- * for `userId` saved by this build and younger than MAX_AGE_MS; deletes
- * expired ones and other users' ones, and wipes everything when any record
- * is from another build. An empty map on any failure.
+ * for `userId` saved by this build, at any age; deletes other users' ones,
+ * and wipes everything when any record is from another build. An empty map
+ * on any failure.
  */
 export async function hydrate(
   userId: string,
-  opts: { nowMs?: number; version?: string } = {},
+  opts: { version?: string } = {},
 ): Promise<Map<string, unknown>> {
   const out = new Map<string, unknown>();
   const started = epoch;
@@ -306,7 +310,6 @@ export async function hydrate(
   await enqueue(async (store) => {
     records = await store.getAll();
   }, 'read failed');
-  const nowMs = opts.nowMs ?? Date.now();
   if (started !== epoch) return out;
   if (records.some((r) => r.appVersion !== version)) {
     mark('device-cache:hydrated');
@@ -315,8 +318,7 @@ export async function hydrate(
   }
   const remove: string[] = [];
   for (const record of records) {
-    const expired = nowMs - record.savedAt > MAX_AGE_MS || record.savedAt > nowMs + MAX_AGE_MS;
-    if (record.userId !== userId || expired) {
+    if (record.userId !== userId) {
       remove.push(record.key);
       continue;
     }

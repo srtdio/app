@@ -10,6 +10,7 @@ import {
   TASK_CHANNEL,
   TASK_DUE_TITLE,
 } from '../fixtures/tasks-data';
+import { withSaveData } from '../helpers/save-data';
 
 // The chat Tasks: one shared, flat list every member edits the same way. The
 // composer button, the sheet (tick, inline edit, the priority menu, add,
@@ -302,6 +303,8 @@ test('an older page paints with its task lines in one commit; the reader does no
   page,
 }) => {
   const network = await installHarnessNetwork(page);
+  // Measures the cold open: no pre-warm (Save-Data).
+  await withSaveData(page);
   seedTasks(network.world);
   seedOlderTaskHistory(network.world);
   const olderTask = network.world.tables.chat_tasks?.find((t) => t.title === OLDER_LINE_TITLE);
