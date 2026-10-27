@@ -4,10 +4,8 @@
 //       topic inbox:A, private, event 'inbox', whose payload carries {w} and
 //       nothing else (realtime.send may add its own message id key).
 //   T2. Joining inbox:A (realtime.topic = inbox:A), user A can SELECT the
-//       nudge and user B cannot. The policy authorizes the topic being joined
-//       (realtime.topic()), not each row's topic: that is how Realtime checks a
-//       private channel join, and realtime.messages is not exposed over the
-//       Data API, so there is no row-level read to test beyond the join.
+//       nudge and user B cannot; B, joined to inbox:B, cannot read rows with
+//       topic inbox:A (the row topic must equal the joined topic).
 //   T3. authenticated cannot INSERT into realtime.messages on inbox:A.
 //   T4. The inbox insert still succeeds when the nudge fails (realtime.send
 //       renamed as its owner inside a rolled-back transaction). Skipped with
@@ -190,6 +188,7 @@ end $$;`,
     const topicA = `inbox:${userA.id}`;
     expect(countAs(dbUrl, userA.id, topicA, topicA)).toBeGreaterThanOrEqual(1);
     expect(countAs(dbUrl, userB.id, topicA, topicA)).toBe(0);
+    expect(countAs(dbUrl, userB.id, `inbox:${userB.id}`, topicA)).toBe(0);
   });
 
   it.runIf(realtime)(
