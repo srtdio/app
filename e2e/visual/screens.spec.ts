@@ -776,42 +776,55 @@ async function cockpitDot(page: Page, level: 'green' | 'red'): Promise<void> {
   await waitFor([page.locator(`[data-cockpit-dot="${level}"]`)], `cockpit dot ${level}`);
 }
 
-async function openCockpit(
-  page: Page,
-  level: 'green' | 'red',
-  tab: string | null,
-  text: string,
-  tabsAtEnd = false,
-) {
+async function openCockpit(page: Page, level: 'green' | 'red', tab: string | null, text: string) {
   await cockpitDot(page, level);
   await page.locator('[data-cockpit-dot]').click();
   const surface = isLaptop(page)
     ? page.locator('aside[aria-label="Cockpit"]')
     : page.getByRole('dialog', { name: 'Cockpit' });
   await waitFor([surface.getByRole('tab', { name: 'Needs you' })], 'cockpit open');
+  // The sheet (translateY) and the side panel (translateX on its child) slide in.
+  // A tab clicked mid-slide makes Playwright retry the click, and each retry
+  // scrolls the tab row to a different offset. Wait until the surface is at
+  // rest: identity transform and no running animation on it or its children.
+  const handle = await surface.elementHandle();
+  await page.waitForFunction(
+    (el) => {
+      if (el === null) return false;
+      const parts = [el, ...Array.from(el.children)];
+      return parts.every((part) => {
+        const t = getComputedStyle(part).transform;
+        const atRest = t === 'none' || t === 'matrix(1, 0, 0, 1, 0, 0)';
+        return atRest && part.getAnimations().every((a) => a.playState !== 'running');
+      });
+    },
+    handle,
+    { timeout: 5_000 },
+  );
+  await handle?.dispose();
   if (tab !== null) await surface.getByRole('tab', { name: tab }).click();
   await waitFor(
     [surface.getByRole('tabpanel').getByText(text).first()],
     `cockpit ${tab ?? 'needs'}`,
   );
-  // The tab row scrolls sideways. Clicking a chip past its edge lets Playwright
-  // scroll it into view, and how far depends on the attempt: the first lands the
-  // chip flush with the row's edge, a retry (the sheet still sliding up) aligns
-  // differently and shows the row's end padding. Pin the row to its end so the
-  // last tab's shot is the same on every run.
-  if (tabsAtEnd) {
-    await surface.getByRole('tablist', { name: 'Cockpit' }).evaluate((row) => {
-      row.scrollLeft = row.scrollWidth - row.clientWidth;
-    });
-    await page.waitForFunction(
-      () => {
-        const row = document.querySelector('[role="tablist"][aria-label="Cockpit"]');
-        return row !== null && row.scrollLeft >= row.scrollWidth - row.clientWidth - 1;
-      },
-      undefined,
-      { timeout: 5_000 },
-    );
-  }
+  // The tab row scrolls sideways. Set its offset from the picked tab alone, the
+  // same on every capture: 0 while the tab and the row's end padding fit,
+  // otherwise just far enough to show both (the last tab pins the row's end).
+  const row = surface.getByRole('tablist', { name: 'Cockpit' });
+  const target = await row.evaluate((el) => {
+    const picked = el.querySelector('[role="tab"][aria-selected="true"]');
+    if (picked === null) return 0;
+    const pad = parseFloat(getComputedStyle(el).paddingRight) || 0;
+    const right = picked.getBoundingClientRect().right - el.getBoundingClientRect().left;
+    const want = el.scrollLeft + right + pad - el.clientWidth;
+    const max = el.scrollWidth - el.clientWidth;
+    const next = Math.round(Math.min(max, Math.max(0, want)));
+    el.scrollLeft = next;
+    return next;
+  });
+  await expect
+    .poll(() => row.evaluate((el) => el.scrollLeft), { timeout: 5_000 })
+    .toBeGreaterThanOrEqual(target - 1);
 }
 
 for (const level of ['green', 'red'] as const) {
@@ -867,7 +880,7 @@ SCREENS.push({
   operator: 'green',
   only: 'phone',
   url: '/pipeline',
-  steps: (page) => openCockpit(page, 'green', 'Traffic', 'Home to sign-up', true),
+  steps: (page) => openCockpit(page, 'green', 'Traffic', 'Home to sign-up'),
 });
 
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
