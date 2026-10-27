@@ -1350,6 +1350,20 @@ export function useChatThread(params: {
         setMessages(seeded);
         setHasMore(page.hasMore);
         setLoading(false);
+      } else {
+        // The render's seed is a render-phase update, and React can drop it
+        // after commit (a navigation into the chat): the same rows are queued
+        // again here, as a no-op whenever the seed held.
+        const newest = page.rows[page.rows.length - 1];
+        if (newest !== undefined) {
+          setMessages((prev) =>
+            prev.some((m) => m.id === newest.id)
+              ? prev
+              : withOutboxBubbles(page.rows, outboxRef.current.entries(channelId), currentUserId),
+          );
+          setHasMore((prev) => prev || page.hasMore);
+          setLoading(false);
+        }
       }
       seededRef.current = undefined;
       contiguity.catchUpApplied(epoch, page.through);

@@ -13,6 +13,7 @@ import {
 import { delaySupabaseReads, realisticDelay } from '../fixtures/read-delays';
 import { installLiveAgora, type LiveAgora } from '../fixtures/live-agora';
 import type { Row } from '../fixtures/postgrest';
+import { withSaveData } from '../helpers/save-data';
 
 // Chat remembers messages per chat. Per frame (and per DOM change) the
 // recorder keeps the first and last message ids on screen, whether a thread
@@ -611,6 +612,8 @@ function signedInAs(userId: string): { accessToken: string; user: Record<string,
 /** Sign-out, then another user in the same tab: nothing remembered, a fresh open. */
 async function runSignOut(page: Page): Promise<void> {
   const { network } = await setup(page);
+  // Measures the cold open: no pre-warm (Save-Data).
+  await withSaveData(page);
   const other = signedInAs(PEER);
   let signedInOther = false;
   await page.route(/\/auth\/v1\/(logout|user)/, async (route) => {

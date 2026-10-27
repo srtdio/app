@@ -21,6 +21,7 @@ import {
   readSpans,
   realisticDelay,
 } from '../fixtures/read-delays';
+import { withSaveData } from '../helpers/save-data';
 
 // Opening a chat is complete at once. Per frame (and per DOM change) the
 // recorder keeps which chat is on screen, whether its messages, the plan
@@ -360,6 +361,8 @@ async function runTimeline(page: Page): Promise<void> {
 /** Everything settles inside the hold: one frame paints it all. */
 async function runAtOnce(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
+  // Measures the cold open: no pre-warm (Save-Data).
+  await withSaveData(page);
   seedPlanChat(network);
   // Messages 200ms, every other read 80ms: three rounds on each path (the
   // page, its chips, their files; the plan ids, the plans, their reviews).
