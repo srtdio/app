@@ -56,7 +56,9 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
     if (!rendered) return;
     const root = document.documentElement;
     root.style.setProperty('--side-panel-w', SIDE_PANEL_WIDTH_PX);
-    return () => root.style.removeProperty('--side-panel-w');
+    return () => {
+      root.style.removeProperty('--side-panel-w');
+    };
   }, [rendered]);
 
   // Focus lands in the panel once it is on screen.
