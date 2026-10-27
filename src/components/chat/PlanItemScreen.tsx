@@ -24,7 +24,7 @@
 // (PlanPage). Tokens only.
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent, ReactElement, RefObject } from 'react';
+import type { FormEvent, ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   planConceptEdit,
@@ -36,6 +36,8 @@ import {
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/toast';
+import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
+import { DUR_SLOW_MS } from '@/lib/motion';
 import { ICON_SIZE, IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
@@ -693,32 +695,54 @@ export function PlanItemScreen(props: {
     </div>
   ) : null;
 
-  // The deep-linked comment: once the read lists it, scroll to it and
-  // highlight it briefly. Not listed (deleted, hidden): nothing happens.
+  // The linked comment (concept items; a post item's comments land inside the
+  // embedded post page): once its row renders, scroll to it and ring it briefly
+  // (useFocusTarget, keyed by id, so a second link on this open item lands too).
+  // The read lists everything it can show, so a ready read without it means
+  // deleted or not visible: one toast, the item stays open.
   const highlightId = props.highlightCommentId ?? null;
   const [highlighted, setHighlighted] = useState<string | null>(null);
-  const highlightRef = useRef<HTMLDivElement | null>(null);
-  const highlightDone = useRef(false);
-  const listed = read.status === 'ready' && shown.some((c) => c.id === highlightId);
-  // The page slides in on translateY: the linked comment scrolls and lights
-  // up once the slide has ended (PlanPage's onEntered), never mid-slide.
-  const [rested, setRested] = useState(false);
+  const commentsRef = useRef<HTMLElement>(null);
+  // The phone page slides in (duration-slow): the link lands once it is at
+  // rest, read off its transform each frame (never transitionend, which can be
+  // missed). Ceiling SLIDE_SETTLE_MS: past it the link lands anyway. The only
+  // hold on this path.
+  const [slidIn, setSlidIn] = useState(false);
   useEffect(() => {
-    if (!props.open) setRested(false);
-  }, [props.open]);
-  useEffect(() => {
-    if (highlightId === null || !props.open || !rested || !listed || highlightDone.current) {
+    if (!props.open) {
+      setSlidIn(false);
       return;
     }
-    highlightDone.current = true;
-    setHighlighted(highlightId);
-    highlightRef.current?.scrollIntoView({ block: 'center' });
-  }, [highlightId, props.open, rested, listed]);
-  useEffect(() => {
-    if (highlighted === null) return;
-    const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
-    return () => clearTimeout(timer);
-  }, [highlighted]);
+    const start = performance.now();
+    let frame = 0;
+    const check = (): void => {
+      const page = commentsRef.current?.closest('[data-plan-page]') ?? null;
+      const transform = page !== null ? getComputedStyle(page).transform : 'none';
+      const atRest = transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)';
+      if ((page !== null && atRest) || performance.now() - start > SLIDE_SETTLE_MS) {
+        setSlidIn(true);
+        return;
+      }
+      frame = requestAnimationFrame(check);
+    };
+    frame = requestAnimationFrame(check);
+    return () => cancelAnimationFrame(frame);
+  }, [props.open]);
+  useFocusTarget({
+    targetId: props.open && slidIn && item.kind !== 'post' ? highlightId : null,
+    findElement: (id) =>
+      commentsRef.current?.querySelector<HTMLElement>(`[data-plan-comment-id="${id}"]`) ?? null,
+    absent: read.status === 'ready' && !shown.some((c) => c.id === highlightId),
+    onMissing: () => toast.show({ title: FOCUS_MISSING_COPY, tone: 'error' }),
+    highlight: () => {
+      setHighlighted(highlightId);
+      const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
+      return () => {
+        clearTimeout(timer);
+        setHighlighted(null);
+      };
+    },
+  });
 
   const teamNote = side === 'agency' && visibility === 'team';
   return (
@@ -733,7 +757,6 @@ export function PlanItemScreen(props: {
         desktopBack
         closeLabel="Close plan"
         {...(props.onDismiss !== undefined ? { onDismiss: props.onDismiss } : {})}
-        onEntered={() => setRested(true)}
         {...(item.kind === 'concept' && planActions
           ? {
               action: (
@@ -990,7 +1013,7 @@ export function PlanItemScreen(props: {
                 ) : null}
               </div>
             ) : null}
-            <section className="flex flex-col gap-2.5" aria-label="Comments">
+            <section ref={commentsRef} className="flex flex-col gap-2.5" aria-label="Comments">
               <h4 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
                 Comments
               </h4>
@@ -1001,19 +1024,14 @@ export function PlanItemScreen(props: {
               ) : shown.length === 0 ? (
                 <p className="text-md text-fg-3">Comments show up here.</p>
               ) : (
-                shown.map((c) =>
-                  c.id === highlightId ? (
-                    <CommentRow
-                      key={c.id}
-                      comment={c}
-                      workspaceId={workspaceId}
-                      highlighted={highlighted === c.id}
-                      rowRef={highlightRef}
-                    />
-                  ) : (
-                    <CommentRow key={c.id} comment={c} workspaceId={workspaceId} />
-                  ),
-                )
+                shown.map((c) => (
+                  <CommentRow
+                    key={c.id}
+                    comment={c}
+                    workspaceId={workspaceId}
+                    highlighted={highlighted === c.id}
+                  />
+                ))
               )}
             </section>
             {planActions ? (
@@ -1127,6 +1145,9 @@ function ItemMedia(props: {
   );
 }
 
+/** The most a linked comment waits for the item page's slide in to come to rest. */
+const SLIDE_SETTLE_MS = DUR_SLOW_MS * 4;
+
 /** How long a deep-linked comment stays highlighted. */
 const HIGHLIGHT_MS = 2400;
 
@@ -1134,13 +1155,12 @@ function CommentRow(props: {
   comment: ShownComment;
   workspaceId: string | null;
   highlighted?: boolean;
-  rowRef?: RefObject<HTMLDivElement>;
 }): ReactElement {
   const c = props.comment;
   const team = c.visibility === 'team';
   return (
     <div
-      {...(props.rowRef !== undefined ? { ref: props.rowRef, 'data-plan-comment-id': c.id } : {})}
+      data-plan-comment-id={c.id}
       {...(props.highlighted === true ? { 'data-plan-comment-highlight': '' } : {})}
       data-plan-comment={c.visibility}
       className={cn(

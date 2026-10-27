@@ -403,21 +403,19 @@ export function BriefDetailPage({
     [memberOptions],
   );
 
-  // Email deep-link: ?comment={commentId} focuses that comment row. Captured into
-  // state so it survives the immediate strip below, then handed to Comments which
-  // owns the scroll-to-and-flash. Fired once per distinct id; only 'comment' is
-  // stripped, preserving any sibling deep-link param.
+  // A comment link (?comment={commentId}: Activity, toast, email, search) focuses
+  // that comment row. Captured into state so it survives the immediate strip
+  // below, then handed to Comments, which lands on it (useFocusTarget, keyed by
+  // id: a new id on this same page runs again). Only 'comment' is stripped,
+  // preserving any sibling deep-link param.
   const [searchParams, setSearchParams] = useSearchParams();
   // A search jump's words: coloured in the title, objective and comments until
   // this page unmounts (the target comment comes through ?comment= below).
   const searchJump = useSearchJump();
   const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
-  const handledCommentParam = useRef<string | null>(null);
   useEffect(() => {
     const comment = searchParams.get('comment');
     if (comment === null || comment === '') return;
-    if (handledCommentParam.current === comment) return;
-    handledCommentParam.current = comment;
     setFocusCommentId(comment);
     const next = new URLSearchParams(searchParams);
     next.delete('comment');
@@ -897,7 +895,8 @@ export function BriefDetailPage({
             <section ref={commentsRef} className="min-w-0">
               <div className={`${SECTION_LABEL} mb-2`}>Comments</div>
               <Comments
-                workspaceId={workspaceId}
+                // The brief's own workspace: a link can open a brief outside the active one.
+                workspaceId={brief.workspace_id}
                 entityType="brief"
                 entityId={briefId}
                 focusCommentId={focusCommentId}

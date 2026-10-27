@@ -647,13 +647,13 @@ export function NotificationsPage() {
     [workspaceId, workspaceKey, navigate, markEntriesRead, toast],
   );
 
-  // Open a thread from its lead entry: every unread entry in the group is marked
-  // read in one batch (a reminder stays), then it opens from the lead.
+  // Open a thread: every unread entry in the group is marked read in one batch
+  // (a reminder stays), then it opens from `entry` (the card's groupOpenEntry:
+  // the newest entry that links to a comment, else the lead).
   const handleOpenGroup = useCallback(
-    (group: ActivityItem[]) => {
-      const lead = group[0];
-      if (lead === undefined || workspaceId === null) return;
-      const open = openAction(lead, workspaceKey);
+    (group: ActivityItem[], entry: ActivityItem) => {
+      if (workspaceId === null) return;
+      const open = openAction(entry, workspaceKey);
       const unread = group.filter((e) => e.readAt === null && openAction(e, workspaceKey).markRead);
       markEntriesRead(unread);
       if (open.toast !== null) toast?.show({ title: open.toast });

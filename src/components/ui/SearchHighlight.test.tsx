@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GLOW_MS,
-  glowById,
   glowTarget,
   JUMP_SETTLE_MS,
   Highlight,
@@ -134,12 +133,6 @@ describe('glowTarget (arrival tint)', () => {
     expect(el.hasAttribute('data-jump-glow')).toBe(false);
     expect(el.style.backgroundColor).toBe('');
     expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it('a target that is not rendered (deleted, inaccessible) is a quiet no-op', () => {
-    const clear = glowById('nowhere');
-    expect(vi.getTimerCount()).toBe(0);
-    expect(() => clear()).not.toThrow();
   });
 });
 
