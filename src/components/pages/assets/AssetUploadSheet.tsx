@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -422,6 +423,7 @@ export function AssetUploadSheet({
   const startRun = useCallback(
     async (targets: PendingUpload[]): Promise<void> => {
       if (onSubmit === undefined || targets.length === 0) return;
+      mark('asset:upload:tap');
       const control: RunControl = {
         controller: new AbortController(),
         stopped: false,
@@ -462,6 +464,7 @@ export function AssetUploadSheet({
         },
         onResult: (id, outcome) => {
           const name = byId.get(id)?.displayName ?? 'file';
+          mark(`asset:upload:part:${id}`);
           if (!control.abandoned) {
             setProgress((prev) => ({ ...prev, finished: Math.min(prev.finished + 1, prev.total) }));
           }
@@ -481,6 +484,7 @@ export function AssetUploadSheet({
         },
       });
 
+      mark('asset:upload:end');
       if (runRef.current === control) runRef.current = null;
       // The sheet went away mid-run: the toast is out; nothing here is shown.
       if (control.abandoned) {

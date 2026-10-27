@@ -1478,6 +1478,7 @@ export function Comments({
       traceId: newTrace(),
     });
     const result = await createComment(supabase, input);
+    mark('comment:rpc:end');
     if (
       !result.ok &&
       entityType === 'post' &&
@@ -1513,6 +1514,7 @@ export function Comments({
         nowIso: new Date().toISOString(),
       });
       setComments((prev) => upsertRows(prev, [landed]));
+      mark('comment:painted');
     }
     const parentId = options.parentCommentId;
     if (parentId !== null) replyDrafts.delete(draftKey(parentId));

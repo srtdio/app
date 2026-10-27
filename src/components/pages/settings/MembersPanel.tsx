@@ -158,11 +158,13 @@ export function MembersPanel() {
   }
 
   async function performRemove(member: MemberEntry): Promise<void> {
+    mark('member:remove:tap');
     setRemoving(true);
     const result = await memberRemove(supabase, {
       p_member_id: member.id,
       p_trace_id: newTrace(),
     });
+    mark('member:remove:end');
     setRemoving(false);
     if (result.ok) {
       setConfirmFor(null);

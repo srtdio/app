@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, MutableRefObject, ReactElement } from 'react';
 import { useInRouterContext, useNavigate, type NavigateFunction } from 'react-router-dom';
@@ -762,6 +763,7 @@ export function CreatePostSheet({
   // closing sheet never flashes a revoked image.
   useEffect(() => {
     if (!open) return;
+    mark('pcs:open');
     revokePreviews(formRef.current.attachments);
     setForm({
       ...initialCreateState({
@@ -1047,6 +1049,7 @@ export function CreatePostSheet({
         return;
       }
       // The post first, with no gallery: the photo binds after the sheet closes.
+      mark('pcs:submit');
       const result = await submitCreatePost({
         client: supabase,
         workspaceId,
@@ -1056,6 +1059,7 @@ export function CreatePostSheet({
         postCreate,
         gallerySet,
       });
+      mark('pcs:created');
       if (!result.ok) {
         setSubmitting(false);
         const field = serverFieldError(result.message);
@@ -1150,6 +1154,7 @@ export function CreatePostSheet({
 
     // The duplicate guard (as the preset's): once the post row exists its id is
     // kept, so a retry after a failed attach or move re-uses it.
+    mark('pcs:submit');
     const result = await submitCreatePost({
       client: supabase,
       workspaceId,
@@ -1164,6 +1169,7 @@ export function CreatePostSheet({
         pathRead.current = createdPath(postId);
       },
     });
+    mark('pcs:created');
 
     if (!result.ok) {
       logger.error('create post failed', { error: result.message });

@@ -34,6 +34,7 @@ import { cn } from '@/lib/cn';
 import { setPrefetchContext } from '@/lib/prefetch-context';
 import { routeChunksLoaded, whenRouteChunksSettle } from '@/lib/chunk-reload';
 import { SessionLoading } from '@/components/auth/RouteGuards';
+import { MarksPanel } from '@/components/dev/MarksPanel';
 
 /** True on /chat with an open thread (?channel=<id>); mobile then drops the shell chrome. */
 export function isThreadRoute(pathname: string, search: URLSearchParams): boolean {
@@ -417,6 +418,7 @@ function AppLayoutBody() {
             <WorkspaceSwitcher />
             <WorkspaceFullSheet />
             <InductionGuide />
+            <MarksPanel />
           </div>
         </InboxStoreProvider>
       </ChatStoreProvider>

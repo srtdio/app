@@ -117,6 +117,8 @@ export function Sheet({
     },
   });
 
+  if (open && !rendered) mark(`sheet:open:${title}`);
+  if (!open && entered) mark(`sheet:close:${title}`);
   if (!rendered) {
     return null;
   }

@@ -610,7 +610,9 @@ export function AssetsPage() {
   const deleteItems = useCallback(
     (ids: string[]): void => {
       if (ids.length === 0) return;
+      mark('asset:delete:tap');
       setPendingDelete((prev) => new Set([...prev, ...ids]));
+      mark('asset:delete:hidden');
       runUndoable({
         label: deleteToastLabel(ids.length),
         revert: () => unhide(ids),
@@ -641,6 +643,7 @@ export function AssetsPage() {
             }
             return { ok: true, data: { deleted: targets, kept } };
           });
+          mark('asset:delete:rpc:end');
           const { deleted, kept, failure } = outcome;
           if (deleted.length > 0) setItemsAndKeep((prev) => removeAssetsById(prev, deleted));
           unhide(ids);

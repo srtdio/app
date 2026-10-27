@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
@@ -275,6 +276,7 @@ export function AssetLightbox({
 
   // Resolve the signed URL for the viewed asset only when it renders inline.
   useEffect(() => {
+    mark('asset:viewer:open');
     setMediaSrc(null);
     setMediaFailed(false);
     if (item === undefined || !presignEnabled || !isInlineRenderable(kind)) return;
@@ -286,6 +288,7 @@ export function AssetLightbox({
     cache
       .resolve(item.currentVersionId)
       .then((presigned) => {
+        mark('asset:viewer:bytes');
         if (live) setMediaSrc(presigned.url);
       })
       .catch(() => {

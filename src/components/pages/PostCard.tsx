@@ -321,6 +321,7 @@ export function PostCard({
   // only the click that follows lets the page join them.
   const pressPrefetch = (): void => prefetchPostOpen(post.id);
   const open = (): void => {
+    mark('post:open:tap');
     mark('post:click');
     confirmPostOpen(post.id);
     navigate(href, openState === undefined ? undefined : { state: openState });

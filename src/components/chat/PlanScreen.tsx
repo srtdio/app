@@ -1447,7 +1447,9 @@ export function PlanScreen(props: {
     dayHeader: string | null,
   ): void => {
     if (slotWriting.current.has(item.id)) return;
+    mark('plan:ok:tap');
     slotWriting.current.add(item.id);
+    mark('plan:ok:optimistic');
     setSlotOverrides((prev) => ({ ...prev, [item.id]: 'approved' }));
     const revert = (): void => {
       slotWriting.current.delete(item.id);
@@ -1466,6 +1468,7 @@ export function PlanScreen(props: {
           p_status: 'approved',
           p_trace_id: traceId,
         });
+        mark('plan:ok:rpc:end');
         if (!result.ok) {
           logger.warn('chat: plan slot review failed', {
             trace_id: traceId,
@@ -1653,6 +1656,7 @@ export function PlanScreen(props: {
   };
   const openItem = (id: string): void => {
     if (editMode) return;
+    mark('plan:item:open');
     setAskChanges(false);
     setItemId(id);
   };
@@ -3499,6 +3503,7 @@ function PlanStatusLines(props: {
           if (decided !== 'approved') props.onOk();
         }}
         onNotOk={() => {
+          mark('plan:notok:tap');
           setChanging(false);
           props.onNotOk();
         }}

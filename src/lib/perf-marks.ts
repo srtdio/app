@@ -13,14 +13,34 @@ export function mark(name: string): void {
   }
 }
 
-/** Every mark so far, in ms since timeOrigin (1 decimal), oldest first. Empty on any error. */
-export function readMarks(): { name: string; ms: number }[] {
+/**
+ * Every mark so far, in ms since timeOrigin (1 decimal), oldest first. With
+ * firstOnly, only the first entry per name is kept. Empty on any error.
+ */
+export function readMarks(options: { firstOnly?: boolean } = {}): { name: string; ms: number }[] {
   try {
-    return performance
+    const all = performance
       .getEntriesByType('mark')
       .map((entry) => ({ name: entry.name, ms: Math.round(entry.startTime * 10) / 10 }))
       .sort((a, b) => a.ms - b.ms);
+    if (options.firstOnly !== true) return all;
+    const seen = new Set<string>();
+    return all.filter((entry) => {
+      if (seen.has(entry.name)) return false;
+      seen.add(entry.name);
+      return true;
+    });
   } catch {
     return [];
+  }
+}
+
+/** Drop every mark. A no-op without performance.clearMarks; never throws. */
+export function clearMarks(): void {
+  try {
+    if (typeof performance === 'undefined' || typeof performance.clearMarks !== 'function') return;
+    performance.clearMarks();
+  } catch {
+    // Marks are best effort.
   }
 }

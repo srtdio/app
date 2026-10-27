@@ -7,6 +7,7 @@
 // fetched. Once per route per session; a failed prefetch is logged and
 // swallowed (the route's own lazy load retries and owns the reload guard).
 
+import { mark } from '@/lib/perf-marks';
 import {
   loadAssets,
   loadBriefs,
@@ -88,6 +89,7 @@ export function navPrefetchProps(path: string): {
   onTouchStart: () => void;
 } {
   const prefetch = (): void => {
+    mark(`nav:tap:${path}`);
     prefetchRoute(path);
     prefetchRouteData(path);
   };

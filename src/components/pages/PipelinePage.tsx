@@ -710,6 +710,7 @@ export function runUndoableMove(
   const retryMove = (): void => runUndoableMove(deps, postId, toStage, reason, options);
   const onBehalfOf = toStage === 'approved' ? options.onBehalfOf : undefined;
   deps.inFlight.add(postId);
+  mark('decision:optimistic');
   setStage(toStage);
   deps.onClose();
   deps.run({
@@ -717,12 +718,14 @@ export function runUndoableMove(
     commit: async () => {
       const traceId = deps.newTraceId?.();
       try {
+        mark('decision:rpc:start');
         const result = await stageTransition(deps.client, {
           postId,
           toStage,
           ...(traceId !== undefined ? { traceId } : {}),
           ...(onBehalfOf !== undefined && onBehalfOf !== '' ? { onBehalfOf } : {}),
         });
+        mark('decision:rpc:end');
         if (!result.ok) {
           revert();
           const copy = moveErrorCopy(result.error);
@@ -866,6 +869,7 @@ export function PipelinePage() {
     // Seed the cover store from the same rows before the cards render.
     if (last !== undefined) primeCovers(workspaceId, listedCovers(last));
     if (last !== undefined) mark('pipeline:kept-paint');
+    if (last !== undefined) mark('post:close:board-paint');
     return last;
   });
   // Whether the person has acted on the board since it mounted: a quiet

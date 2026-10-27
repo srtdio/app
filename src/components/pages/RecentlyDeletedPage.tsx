@@ -202,9 +202,11 @@ export function RecentlyDeletedPage() {
 
   const restore = useCallback(
     async (item: DeletedAssetItem): Promise<void> => {
+      mark('asset:restore:tap');
       setBusyId(item.id);
       try {
         const result = await restoreAsset(supabase, item.id, newTrace());
+        mark('asset:restore:end');
         if (!result.ok) {
           push(RESTORE_FAILED, true);
           return;

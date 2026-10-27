@@ -1135,6 +1135,7 @@ export function PostDetailPage({
   // Leaving the post (FT13): the host's own close when embedded; else one step
   // back when there is in-app history to return to, else the pipeline.
   function leave(): void {
+    mark('post:close:tap');
     if (onNavigateAway !== undefined) {
       onNavigateAway();
       return;

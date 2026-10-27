@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mark, readMarks } from '@/lib/perf-marks';
+import { clearMarks, mark, readMarks } from '@/lib/perf-marks';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -53,6 +53,22 @@ describe('readMarks', () => {
     ]);
   });
 
+  it('keeps the first entry per name with firstOnly', () => {
+    vi.stubGlobal('performance', {
+      getEntriesByType: () => [
+        { name: 'b', startTime: 30 },
+        { name: 'a', startTime: 10 },
+        { name: 'b', startTime: 20 },
+        { name: 'a', startTime: 40 },
+      ],
+    });
+    expect(readMarks({ firstOnly: true })).toEqual([
+      { name: 'a', ms: 10 },
+      { name: 'b', ms: 20 },
+    ]);
+    expect(readMarks()).toHaveLength(4);
+  });
+
   it('returns an empty list on any error', () => {
     vi.stubGlobal('performance', {
       getEntriesByType: () => {
@@ -60,5 +76,21 @@ describe('readMarks', () => {
       },
     });
     expect(readMarks()).toEqual([]);
+  });
+});
+
+describe('clearMarks', () => {
+  it('is a no-op when performance is missing', () => {
+    vi.stubGlobal('performance', undefined);
+    expect(() => clearMarks()).not.toThrow();
+  });
+
+  it('never throws when performance.clearMarks throws', () => {
+    vi.stubGlobal('performance', {
+      clearMarks: () => {
+        throw new Error('nope');
+      },
+    });
+    expect(() => clearMarks()).not.toThrow();
   });
 });

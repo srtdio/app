@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Field } from '@/components/ui/Field';
@@ -277,6 +278,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
   // including the attachments list and the note.
   useEffect(() => {
     if (!open) return;
+    mark('brief:create:open');
     setForm(initialBriefState());
     setFieldErrors({});
     setSubmitError(null);
@@ -321,6 +323,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     setSubmitting(true);
     setSubmitError(null);
 
+    mark('brief:create:submit');
     const result = await submitCreateBrief({
       client: supabase,
       workspaceId,
