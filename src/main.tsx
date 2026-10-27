@@ -16,6 +16,7 @@ import {
 } from '@/lib/stale-deploy';
 import { reloadIfStale } from '@/lib/chunk-reload';
 import { startBootChunks } from '@/lib/page-loaders';
+import { captureEarlyErrors, scheduleSentry } from '@/lib/sentry-lazy';
 
 // Entry point. Decides synchronously whether "/" is a guest visit; a guest gets
 // the homepage chunk only (no App, router, Supabase, Sentry, Agora or app CSS).
@@ -41,30 +42,26 @@ async function recoverFromFailedBoot(err: unknown): Promise<void> {
   throw err;
 }
 
-function ErrorFallback() {
-  return (
-    <main className="min-h-screen flex items-center justify-center bg-bg text-fg">
-      <span className="text-base">Something went wrong. Refresh to try again.</span>
-    </main>
-  );
-}
-
 async function bootApp(root: HTMLElement): Promise<void> {
   // A stored session (supabase-js's sb-*-auth-token key exists; its value is
   // not read here) means the signed-in shell is next: start its chunk and the
   // current route's chunk now, in parallel with the app chunk and getSession,
   // instead of after the session resolves. Code only, no data.
   mark('boot:app:start');
+  // Sentry loads after first render; until then uncaught errors are kept here.
+  captureEarlyErrors();
   if (hasStoredSession(localStorageKeys)) startBootChunks(window.location.pathname);
   // index.css is requested first so its <link> keeps today's cascade order.
   // Each import is destructured where it is made so Rollup can still
-  // tree-shake the modules (a bare namespace import would keep all of Sentry).
-  const [, ErrorBoundary, App, initSentry, TraceProvider, initTheme, initViewportLock, logger] =
+  // tree-shake the modules. Sentry is not here: scheduleSentry loads it after
+  // render.
+  const [, BootErrorBoundary, App, TraceProvider, initTheme, initViewportLock, logger] =
     await Promise.all([
       import('@/index.css'),
-      import('@sentry/react').then(({ ErrorBoundary }) => ErrorBoundary),
+      import('@/components/shell/BootErrorBoundary').then(
+        ({ BootErrorBoundary }) => BootErrorBoundary,
+      ),
       import('@/App').then(({ default: App }) => App),
-      import('@/lib/sentry').then(({ initSentry }) => initSentry),
       import('@/lib/trace-context').then(({ TraceProvider }) => TraceProvider),
       import('@/lib/theme').then(({ initTheme }) => initTheme),
       import('@/lib/viewport-lock').then(({ initViewportLock }) => initViewportLock),
@@ -72,7 +69,6 @@ async function bootApp(root: HTMLElement): Promise<void> {
     ]);
   mark('boot:app:imports');
 
-  initSentry();
   initTheme();
   initViewportLock();
 
@@ -87,13 +83,14 @@ async function bootApp(root: HTMLElement): Promise<void> {
   mark('boot:app:render');
   createRoot(root).render(
     <StrictMode>
-      <ErrorBoundary fallback={<ErrorFallback />}>
+      <BootErrorBoundary>
         <TraceProvider>
           <App />
         </TraceProvider>
-      </ErrorBoundary>
+      </BootErrorBoundary>
     </StrictMode>,
   );
+  scheduleSentry();
 }
 
 async function bootHome(root: HTMLElement): Promise<void> {
