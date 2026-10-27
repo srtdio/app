@@ -1106,6 +1106,31 @@ export function entityHref(item: ActivityItem, workspaceKey: string | null = nul
   return null;
 }
 
+/** Whether a row's link lands on a comment (?comment= / &comment=). Pure. */
+export function hasCommentTarget(item: ActivityItem): boolean {
+  return /[?&]comment=/.test(entityHref(item) ?? '');
+}
+
+/**
+ * The entry a grouped card's head opens: the newest entry that links to a
+ * comment (so a stage change on top never swallows the comment under it), else
+ * the lead entry as before. Sub-row taps open their own entry. Pure.
+ */
+export function groupOpenEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
+  let target: ActivityItem | undefined;
+  let targetMs = Number.NEGATIVE_INFINITY;
+  for (const entry of group) {
+    if (!hasCommentTarget(entry)) continue;
+    const ms = Date.parse(entry.createdAt);
+    const at = Number.isNaN(ms) ? Number.NEGATIVE_INFINITY : ms;
+    if (target === undefined || at > targetMs) {
+      target = entry;
+      targetMs = at;
+    }
+  }
+  return target ?? group[0];
+}
+
 /** A row is snoozed when its snoozed_until is in the future. */
 export function isSnoozed(item: ActivityItem, nowMs: number): boolean {
   if (item.snoozedUntil === null) return false;

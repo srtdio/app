@@ -22,7 +22,8 @@ import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
 import { checkLink } from '@/lib/links/safety';
 import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
-import { glowById, highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
+import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
+import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
 import { IconCheck, IconEdit, IconMore, IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { LoadError } from '@/components/ui/LoadError';
@@ -46,6 +47,7 @@ import {
   createComment,
   deleteComment,
   editComment,
+  getCommentsByIds,
   isInvalidMention,
   listComments,
   parseMentions,
@@ -120,8 +122,9 @@ interface CommentsProps {
   onAnnotationChipClick?: (commentId: string) => void;
   /** Bumped by the parent (e.g. after an annotate) to refetch page 0. */
   refreshSignal?: number;
-  /** Email deep-link target: once this comment is present in the loaded list it
-   *  is scrolled to and flashed exactly once (per distinct id). */
+  /** A linked comment (Activity, toast, email, search): read by id when it is
+   *  not on page zero, then scrolled to and tinted once per distinct id
+   *  (useFocusTarget). One toast when it is deleted or not visible. */
   focusCommentId?: string | null;
   /** True when the viewer's workspace role is 'client'. Gates ONLY the
    *  top-level composer on posts, which becomes the checkpoint SlotComposer
@@ -274,6 +277,10 @@ export function resolvedThreadCount(threads: readonly ThreadRoot[]): number {
 export function commentDomId(commentId: string): string {
   return `comment-${commentId}`;
 }
+
+/** A linked row lands clear of a sticky bottom bar: the host sets
+ *  --focus-inset-bottom (the post page's phone decision bar). */
+export const COMMENT_ROW_SCROLL_CLASS = 'scroll-mb-[var(--focus-inset-bottom,0px)]';
 
 /**
  * Filter a comment's attachments to its images and locate the clicked one among
@@ -568,7 +575,7 @@ export function renderReplyList(
   return (
     <ul className="mt-3 flex flex-col gap-3 border-l border-border pl-4">
       {replies.map((reply) => (
-        <li key={reply.id} id={commentDomId(reply.id)}>
+        <li key={reply.id} id={commentDomId(reply.id)} className={COMMENT_ROW_SCROLL_CLASS}>
           {renderReply(reply)}
         </li>
       ))}
@@ -1168,6 +1175,18 @@ export function Comments({
   // Every checkpoint for this post, loaded whole in one query so none paginates
   // away; merged with the paginated `comments` below (de-duped, newest-first).
   const [checkpoints, setCheckpoints] = useState<CommentRow[]>([]);
+  // A linked comment read by id (and its root when it is a reply) because it is
+  // not on page zero; merged like the checkpoints. Dropped on an entity change.
+  const [focusRows, setFocusRows] = useState<CommentRow[]>([]);
+  // The linked id the by-id read found deleted or not visible.
+  const [focusAbsentId, setFocusAbsentId] = useState<string | null>(null);
+  const entityKey = `${workspaceId}:${entityType}:${entityId}`;
+  const [focusRowsFor, setFocusRowsFor] = useState(entityKey);
+  if (focusRowsFor !== entityKey) {
+    setFocusRowsFor(entityKey);
+    setFocusRows([]);
+    setFocusAbsentId(null);
+  }
   // A host-owned read: each new set of rows replaces the local copy (the
   // optimistic patches below edit that copy), adopted during render so the
   // list never paints a frame behind the read.
@@ -1344,6 +1363,7 @@ export function Comments({
           : rows;
       setComments(patch);
       setCheckpoints(patch);
+      setFocusRows(patch);
     },
     [],
   );
@@ -1351,7 +1371,12 @@ export function Comments({
   // The rendered list: the always-loaded checkpoints merged into the paginated
   // comments, de-duped by id and newest-first. Only non-checkpoint comments
   // paginate; a checkpoint beyond page zero is still here.
-  const merged = useMemo(() => mergeCheckpoints(comments, checkpoints), [comments, checkpoints]);
+  const merged = useMemo(
+    () => mergeCheckpoints(comments, mergeCheckpoints(checkpoints, focusRows)),
+    [comments, checkpoints, focusRows],
+  );
+  const mergedRef = useRef(merged);
+  mergedRef.current = merged;
 
   useEffect(() => {
     // A new entity (or first mount) is a first load again: skeleton, never the
@@ -1371,21 +1396,52 @@ export function Comments({
     void loadPage(0);
   }, [refreshSignal, loadPage]);
 
-  // Deep-link focus (email, search): once the targeted comment lands in the
-  // loaded list, scroll it to the centre and tint it for 2s, exactly once per
-  // distinct id. Best-effort: an id not present (wrong entity, deleted, or
-  // beyond page 0) simply never fires, so the parent opens with no error.
-  const flashedCommentId = useRef<string | null>(null);
-  const glowCleanup = useRef<(() => void) | null>(null);
+  // A linked comment not already listed is read by id as soon as the link
+  // arrives (on a first mount, alongside page zero), with its thread root when
+  // it is a reply, so a link lands on a comment of any age. Deleted or not
+  // visible: the link reports it missing.
+  const focusId = focusCommentId ?? null;
   useEffect(() => {
-    if (focusCommentId === undefined || focusCommentId === null || focusCommentId === '') return;
-    if (flashedCommentId.current === focusCommentId) return;
-    if (!merged.some((c) => c.id === focusCommentId)) return;
-    flashedCommentId.current = focusCommentId;
-    glowCleanup.current?.();
-    glowCleanup.current = glowById(commentDomId(focusCommentId));
-  }, [merged, focusCommentId]);
-  useEffect(() => () => glowCleanup.current?.(), []);
+    if (focusId === null || focusId === '') return;
+    if (mergedRef.current.some((row) => row.id === focusId)) return;
+    let active = true;
+    const read = (ids: string[]) =>
+      getCommentsByIds(supabase, {
+        workspace_id: workspaceId,
+        entity_type: entityType,
+        entity_id: entityId,
+        ids,
+      });
+    void (async () => {
+      const target = await read([focusId]);
+      if (!active || !target.ok) return;
+      const row = target.data[0];
+      if (row === undefined || row.deleted_at !== null) {
+        setFocusAbsentId(focusId);
+        return;
+      }
+      const rows = [row];
+      if (row.parent_comment_id !== null) {
+        const root = await read([row.parent_comment_id]);
+        if (!active) return;
+        if (root.ok) rows.push(...root.data);
+      }
+      setFocusRows((prev) => upsertRows(prev, rows));
+    })();
+    return () => {
+      active = false;
+    };
+  }, [focusId, workspaceId, entityType, entityId]);
+
+  // Land on the linked comment once its row renders (src/lib/focus-target.ts).
+  const rootRef = useRef<HTMLDivElement>(null);
+  useFocusTarget({
+    targetId: focusId,
+    findElement: (id) =>
+      rootRef.current?.querySelector<HTMLElement>(`[id="${commentDomId(id)}"]`) ?? null,
+    absent: focusId !== null && focusAbsentId === focusId,
+    onMissing: () => toast?.show({ title: FOCUS_MISSING_COPY, tone: 'error' }),
+  });
   // A search jump's words: coloured in every comment body until the screen unmounts.
   const searchWords = useContext(SearchWordsContext);
 
@@ -2367,6 +2423,7 @@ export function Comments({
         id={commentDomId(comment.id)}
         className={cn(
           'rounded-xl border bg-panel-2 px-4 py-3',
+          COMMENT_ROW_SCROLL_CLASS,
           isResolved ? 'border-good' : 'border-border',
         )}
       >
@@ -2476,7 +2533,10 @@ export function Comments({
             <li
               key={comment.id}
               id={commentDomId(comment.id)}
-              className={cn(index > 0 ? 'mt-3 border-t border-border pt-3' : '')}
+              className={cn(
+                COMMENT_ROW_SCROLL_CLASS,
+                index > 0 ? 'mt-3 border-t border-border pt-3' : '',
+              )}
             >
               {tombstone
                 ? renderTombstone(comment, replies)
@@ -2528,7 +2588,7 @@ export function Comments({
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={rootRef} className="flex flex-col gap-4">
       {showHeader ? (
         <div data-comments-header="" className="flex items-center gap-2">
           <h3 className="text-base font-semibold text-fg">{CHECKPOINTS_TITLE}</h3>

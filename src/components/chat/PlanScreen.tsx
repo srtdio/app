@@ -358,8 +358,6 @@ export function PlanPage(props: {
   closeLabel?: string;
   /** Laptop: Escape for an inner layer (drag, pick-up, popover, menu, rename); true when taken. */
   onEscape?: () => boolean;
-  /** The slide in has ended (at once when there is no slide, as under reduced motion). */
-  onEntered?: () => void;
   footer?: ReactNode;
   /** A header action (44px) after the title column, e.g. an overflow button. */
   action?: ReactNode;
@@ -381,8 +379,6 @@ export function PlanPage(props: {
   const [entered, setEntered] = useState(false);
   const desktop = useIsLaptop();
   const pageRef = useRef<HTMLDivElement>(null);
-  const onEnteredRef = useRef(props.onEntered);
-  onEnteredRef.current = props.onEntered;
   const onBackRef = useRef(props.onBack);
   onBackRef.current = props.onBack;
   const onEscapeRef = useRef(props.onEscape);
@@ -448,23 +444,6 @@ export function PlanPage(props: {
   // Phone: a modal layer. Focus moves in on open (never a text field on a
   // touch device), Tab stays inside, and the opener gets it back on close.
   useModalFocus(pageRef, !desktop && props.open && rendered);
-  useEffect(() => {
-    const el = pageRef.current;
-    if (!entered || el === null) return;
-    if (parseFloat(getComputedStyle(el).transitionDuration) === 0) {
-      onEnteredRef.current?.();
-      return;
-    }
-    const done = (event: TransitionEvent): void => {
-      if (event.target === el && event.propertyName === 'transform') onEnteredRef.current?.();
-    };
-    el.addEventListener('transitionend', done);
-    el.addEventListener('transitioncancel', done);
-    return () => {
-      el.removeEventListener('transitionend', done);
-      el.removeEventListener('transitioncancel', done);
-    };
-  }, [entered]);
   useEffect(() => {
     if (props.open) {
       setRendered(true);

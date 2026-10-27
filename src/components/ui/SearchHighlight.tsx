@@ -42,22 +42,12 @@ export const JUMP_SETTLE_MS = 700;
 export const GLOW_MS = 2000;
 
 /**
- * Scroll a jump target to the centre of its scroller and tint it for 2s, then
- * fade the tint out (reduced motion: no scroll animation and no fade, the tint
- * just clears at 2s). Returns the cleanup, which clears the timers and the
- * tint (call it on unmount). Inline styles, so no row class is ever touched.
+ * Tint an arrived-at row for 2s, then fade the tint out (reduced motion: no
+ * fade, the tint just clears at 2s). Returns the cleanup, which clears the
+ * timers and the tint. Inline styles, so no row class is ever touched.
  */
-export function glowTarget(el: HTMLElement): () => void {
+export function tintTarget(el: HTMLElement): () => void {
   const reduced = prefersReducedMotion();
-  el.scrollIntoView?.({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
-  // A smooth scroll can be cut short when rows above it change height while it
-  // runs (images and previews settling, seen on iPhone Safari): once it should
-  // have finished, a target still off screen is brought in without animation.
-  const settleTimer = window.setTimeout(() => {
-    if (!el.isConnected) return;
-    const r = el.getBoundingClientRect();
-    if (r.bottom <= 0 || r.top >= window.innerHeight) el.scrollIntoView?.({ block: 'center' });
-  }, JUMP_SETTLE_MS);
   const prev = { background: el.style.backgroundColor, transition: el.style.transition };
   el.setAttribute('data-jump-glow', '');
   el.style.transition = 'none';
@@ -78,15 +68,32 @@ export function glowTarget(el: HTMLElement): () => void {
     fadeTimer = window.setTimeout(restore, DUR_SLOW_MS);
   }, GLOW_MS);
   return () => {
-    window.clearTimeout(settleTimer);
     window.clearTimeout(holdTimer);
     if (fadeTimer !== null) window.clearTimeout(fadeTimer);
     restore();
   };
 }
 
-/** glowTarget by DOM id; a no-op (and a no-op cleanup) when the id is not rendered. */
-export function glowById(elementId: string): () => void {
-  const el = typeof document !== 'undefined' ? document.getElementById(elementId) : null;
-  return el === null ? () => {} : glowTarget(el);
+/**
+ * Scroll a jump target to the centre of its scroller and tint it (tintTarget).
+ * Returns the cleanup, which clears the timers and the tint (call it on
+ * unmount). Comment links land through useFocusTarget (src/lib/focus-target.ts),
+ * which centres in the row's own scroller instead.
+ */
+export function glowTarget(el: HTMLElement): () => void {
+  const reduced = prefersReducedMotion();
+  el.scrollIntoView?.({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+  // A smooth scroll can be cut short when rows above it change height while it
+  // runs (images and previews settling, seen on iPhone Safari): once it should
+  // have finished, a target still off screen is brought in without animation.
+  const settleTimer = window.setTimeout(() => {
+    if (!el.isConnected) return;
+    const r = el.getBoundingClientRect();
+    if (r.bottom <= 0 || r.top >= window.innerHeight) el.scrollIntoView?.({ block: 'center' });
+  }, JUMP_SETTLE_MS);
+  const untint = tintTarget(el);
+  return () => {
+    window.clearTimeout(settleTimer);
+    untint();
+  };
 }

@@ -303,22 +303,20 @@ export function PostDetailPage({
   const newTrace = useNewTrace();
   const { workspaceId, workspaceKey, workspaces, workspaceName } = useWorkspace();
 
-  // Email deep-link: ?comment={commentId} focuses that comment row. Captured into
-  // state so it survives the immediate strip below, then handed to Comments which
-  // flashes it once the row loads. Fired once per distinct id; only 'comment' is
-  // stripped, preserving any sibling deep-link param.
+  // A comment link (?comment={commentId}: Activity, toast, email, search) focuses
+  // that comment row. Captured into state so it survives the immediate strip
+  // below, then handed to Comments, which lands on it (useFocusTarget, keyed by
+  // id: a new id on this same page runs again). Only 'comment' is stripped,
+  // preserving any sibling deep-link param.
   const [searchParams, setSearchParams] = useSearchParams();
   // A search jump's words: coloured in the title, caption and comments until
   // this page unmounts (the target comment comes through ?comment= below).
   const searchJump = useSearchJump(!embedded);
   const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
-  const handledCommentParam = useRef<string | null>(null);
   useEffect(() => {
     if (embedded) return;
     const comment = searchParams.get('comment');
     if (comment === null || comment === '') return;
-    if (handledCommentParam.current === comment) return;
-    handledCommentParam.current = comment;
     setFocusCommentId(comment);
     // Strip 'comment' in place (replace): the deep link never adds a history entry.
     const next = new URLSearchParams(searchParams);
@@ -331,6 +329,12 @@ export function PostDetailPage({
   const isLaptop = useIsLaptop();
 
   const [detail, setDetail] = useState<PostDetail | null>(null);
+  // Comments and checkpoints read in the post's own workspace (a link can open
+  // a post outside the active one). Until the post lands the active workspace
+  // is the best guess, so the reads still start on the first render; they
+  // re-run only when the post turns out to live elsewhere.
+  const commentsWorkspaceId =
+    detail !== null && detail.post.id === postId ? detail.post.workspace_id : workspaceId;
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   // Flow B 25 / 36: the gallery read is part of the first paint. galleryLoaded
   // flips once the first read settles (either way); a failed read keeps
@@ -400,12 +404,12 @@ export function PostDetailPage({
   const [checkpointRows, setCheckpointRows] = useState<CommentRow[] | null>(null);
   const checkpointSeq = useRef(0);
   const loadCheckpoints = useCallback(async (): Promise<void> => {
-    if (workspaceId === null || postId === undefined) return;
+    if (commentsWorkspaceId === null || postId === undefined) return;
     const seq = ++checkpointSeq.current;
-    const rows = await fetchCheckpoints(supabase, workspaceId, postId);
+    const rows = await fetchCheckpoints(supabase, commentsWorkspaceId, postId);
     if (seq !== checkpointSeq.current) return;
     setCheckpointRows(rows);
-  }, [workspaceId, postId]);
+  }, [commentsWorkspaceId, postId]);
   useEffect(() => {
     // Switching posts drops the prior rows so nothing bleeds across.
     setCheckpointRows(null);
@@ -1443,7 +1447,10 @@ export function PostDetailPage({
   // (display none: nothing seen, nothing focusable, no tour anchor, no
   // deep-link flash) behind the skeleton's own placeholder; at the first paint
   // it is revealed, already loaded or under Comments' own loading skeleton.
-  function sidePanel(pending: boolean): React.ReactElement {
+  //
+  // focusInsetBottom: the phone decision bar's height, set as
+  // --focus-inset-bottom so a linked comment lands clear of the sticky bar.
+  function sidePanel(pending: boolean, focusInsetBottom?: string): React.ReactElement {
     return (
       <div
         {...(pending ? { 'aria-hidden': true } : { 'data-post-side': '' })}
@@ -1454,17 +1461,20 @@ export function PostDetailPage({
           id={COMMENTS_SECTION_ID}
           hidden={pending}
           className="scroll-mt-16 rounded-xl border border-border bg-panel-2 p-4"
+          {...(focusInsetBottom !== undefined
+            ? { style: { ['--focus-inset-bottom' as string]: focusInsetBottom } }
+            : {})}
         >
-          {workspaceId !== null && postId !== undefined ? (
+          {commentsWorkspaceId !== null && postId !== undefined ? (
             <div data-induction={INDUCTION_KEYS.postCommentComposer}>
               <Comments
-                workspaceId={workspaceId}
+                workspaceId={commentsWorkspaceId}
                 entityType="post"
                 entityId={postId}
                 annotationsByCommentId={annotationsByCommentId}
                 onAnnotationChipClick={(commentId) => flashTo(`caption-mark-${commentId}`)}
                 refreshSignal={commentsRefresh}
-                // A deep-linked comment flashes only once it can be seen.
+                // A linked comment lands only once it can be seen.
                 focusCommentId={
                   pending ? null : embedded ? (focusCommentIdProp ?? null) : focusCommentId
                 }
@@ -1479,7 +1489,7 @@ export function PostDetailPage({
                 sharedCheckpoints={sharedCheckpoints}
                 belowHeader={
                   <CheckpointStrip
-                    workspaceId={workspaceId}
+                    workspaceId={commentsWorkspaceId}
                     postId={postId}
                     viewerIsClient={clientRole}
                     refreshSignal={commentsRefresh}
@@ -1744,6 +1754,8 @@ export function PostDetailPage({
       <PostDecisionBar model={decisionModel} busy={decisionBusy} error={actionError} />
     ) : null;
   const decisionBarShown = decisionBar !== null && (decisionModel !== null || actionError !== null);
+  const decisionBarPx = decisionBarSpace(decisionModel, actionError);
+  const decisionBarHeight = `calc(${decisionBarPx}px + env(safe-area-inset-bottom))`;
 
   // Spec B4: beside the lock, how to change it, and (agency roles, when the
   // move is legal) "Move to Parked", which opens the existing park confirm.
@@ -2163,7 +2175,7 @@ export function PostDetailPage({
 
           {/* Spec D1: the checkpoints column, the same element the skeleton
             mounted (see sidePanel). */}
-          {sidePanel(false)}
+          {sidePanel(false, decisionBarShown ? decisionBarHeight : undefined)}
         </div>
       )}
 
@@ -2173,9 +2185,7 @@ export function PostDetailPage({
         <div
           aria-hidden
           data-decision-bar-space=""
-          style={{
-            height: `calc(${decisionBarSpace(decisionModel, actionError)}px + env(safe-area-inset-bottom))`,
-          }}
+          style={{ height: decisionBarHeight }}
         />
       ) : null}
       {decisionBar}

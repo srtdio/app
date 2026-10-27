@@ -39,6 +39,7 @@ import {
   deletedFilesBody,
   fileKindLabel,
   filesPhrase,
+  groupOpenEntry,
   isSnoozed,
   isChatMention,
   isWelcome,
@@ -64,8 +65,9 @@ interface ActivityCardProps {
   cache: PresignCache;
   /** False when presigning is unconfigured: the tile shows the fallback. */
   presignEnabled: boolean;
-  /** Open the thread: mark the lead entry read and navigate from it. */
-  onOpenGroup: (group: ActivityItem[]) => void;
+  /** Open the thread: mark it read and navigate from `entry` (groupOpenEntry:
+   *  the newest entry that links to a comment, else the lead). */
+  onOpenGroup: (group: ActivityItem[], entry: ActivityItem) => void;
   /** Open a single thread entry: mark it read and navigate from that entry. */
   onOpenEntry: (entry: ActivityItem) => void;
   onSnooze: (item: ActivityItem, kind: SnoozeKind) => void;
@@ -462,6 +464,8 @@ export function ActivityCard({
   const lead = group[0];
   if (lead === undefined) return null;
   const rest = group.slice(1);
+  // The head opens the newest entry that links to a comment, else the lead.
+  const openEntry = groupOpenEntry(group) ?? lead;
   // A chat, plan or task alert reads in the bell's words, with its own icon.
   const alert = lead.alert ?? null;
 
@@ -500,7 +504,7 @@ export function ActivityCard({
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onOpenGroup(group);
+      onOpenGroup(group, openEntry);
     }
   }
 
@@ -533,7 +537,7 @@ export function ActivityCard({
             ? {
                 role: 'button',
                 tabIndex: 0,
-                onClick: () => onOpenGroup(group),
+                onClick: () => onOpenGroup(group, openEntry),
                 onKeyDown,
               }
             : {})}

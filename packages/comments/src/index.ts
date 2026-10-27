@@ -4,7 +4,7 @@
 //     membership, then writes through the public.comment_create SECURITY DEFINER
 //     proc (via the @srtdio/rpc wrapper). It never writes the comments table
 //     directly; the authenticated role has no INSERT policy.
-//   * listComments and searchComments are direct, RLS-scoped SELECTs as the
+//   * listComments, getCommentsByIds and searchComments are direct, RLS-scoped SELECTs as the
 //     authenticated caller. RLS confines every read to the caller's workspaces;
 //     the explicit workspace_id filter also pins the query to the entity/FTS
 //     indexes.
@@ -219,6 +219,34 @@ export async function listComments(
     .order('created_at', { ascending: false })
     .range(start, start + PAGE_SIZE - 1);
 
+  if (error) return { ok: false, error: transportError(error.message) };
+  return { ok: true, data: data ?? [] };
+}
+
+export interface GetCommentsByIdsInput {
+  workspace_id: string;
+  entity_type: CommentEntityType;
+  entity_id: string;
+  ids: readonly string[];
+}
+
+/**
+ * Read specific comments on one entity by id (a linked comment beyond page
+ * zero, and its thread root). The same RLS-scoped SELECT as listComments,
+ * soft-deleted rows included; an id the caller cannot see is simply absent.
+ */
+export async function getCommentsByIds(
+  client: Client,
+  input: GetCommentsByIdsInput,
+): Promise<CommentResult<CommentRow[]>> {
+  if (input.ids.length === 0) return { ok: true, data: [] };
+  const { data, error } = await client
+    .from('comments')
+    .select('*')
+    .eq('workspace_id', input.workspace_id)
+    .eq('entity_type', input.entity_type)
+    .eq('entity_id', input.entity_id)
+    .in('id', [...input.ids]);
   if (error) return { ok: false, error: transportError(error.message) };
   return { ok: true, data: data ?? [] };
 }
