@@ -134,7 +134,6 @@ describe('glowTarget (arrival tint)', () => {
     expect(el.style.backgroundColor).toBe('');
     expect(vi.getTimerCount()).toBe(0);
   });
-
 });
 
 describe('search highlight contrast, light and dark', () => {

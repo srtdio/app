@@ -2182,11 +2182,7 @@ export function PostDetailPage({
       {/* The sticky decision bar (phone) and the room under the content so it
           never covers the comment composer. */}
       {decisionBarShown ? (
-        <div
-          aria-hidden
-          data-decision-bar-space=""
-          style={{ height: decisionBarHeight }}
-        />
+        <div aria-hidden data-decision-bar-space="" style={{ height: decisionBarHeight }} />
       ) : null}
       {decisionBar}
 
