@@ -1,8 +1,9 @@
 // The performance marks (src/lib/perf-marks.ts) on every signed-in route, for
 // timing load paths on a real phone. Off by default: it shows only while the
 // paint log is on (?paintlog=1, kept for the tab session; ?paintlog=0 turns it
-// off), so no normal visit renders anything. Lists the first mark per name in
-// ms since timeOrigin, re-read every 500 ms while open, with Copy and Clear.
+// off), so no normal visit renders anything. It starts folded as one small
+// corner button, so it never covers the page; opened, it lists the first mark
+// per name in ms since timeOrigin, re-read every 500 ms, with Copy and Clear.
 // Tokens only.
 
 import { useEffect, useState } from 'react';
@@ -26,7 +27,7 @@ export function MarksPanel(): ReactElement | null {
 }
 
 function MarksStrip(): ReactElement {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [marks, setMarks] = useState(() => readMarks({ firstOnly: true }));
   // Above every marked bottom bar (tab bar, composer), never over them.
   const inset = useBottomInset();
@@ -47,6 +48,21 @@ function MarksStrip(): ReactElement {
     clearMarks();
     setMarks(readMarks({ firstOnly: true }));
   };
+  if (!open) {
+    return (
+      <div data-marks-panel="" style={{ bottom: inset + 8 }} className="fixed right-2 z-[60]">
+        <Button
+          type="button"
+          variant="secondary"
+          data-marks-show=""
+          onClick={() => setOpen(true)}
+          className={BUTTON}
+        >
+          Marks
+        </Button>
+      </div>
+    );
+  }
   return (
     <div
       data-marks-panel=""
@@ -63,20 +79,18 @@ function MarksStrip(): ReactElement {
         <Button type="button" variant="ghost" onClick={onClear} className={BUTTON}>
           Clear
         </Button>
-        <Button type="button" variant="ghost" onClick={() => setOpen((v) => !v)} className={BUTTON}>
-          {open ? 'Hide' : 'Show'}
+        <Button type="button" variant="ghost" onClick={() => setOpen(false)} className={BUTTON}>
+          Hide
         </Button>
       </div>
-      {open ? (
-        <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-1 font-mono text-xs leading-4 tabular-nums">
-          {marks.map((m) => (
-            <li key={m.name} className="flex gap-2">
-              <span className="min-w-0 flex-1 break-all">{m.name}</span>
-              <span className="shrink-0 text-fg-3">{m.ms.toFixed(1)}</span>
-            </li>
-          ))}
-        </ol>
-      ) : null}
+      <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-1 font-mono text-xs leading-4 tabular-nums">
+        {marks.map((m) => (
+          <li key={m.name} className="flex gap-2">
+            <span className="min-w-0 flex-1 break-all">{m.name}</span>
+            <span className="shrink-0 text-fg-3">{m.ms.toFixed(1)}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
