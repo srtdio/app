@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -887,6 +888,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     if (searchParams.has('message') || carriesWords) stripMessageParam();
     if (selectedRef.current?.channelId === channel) return;
     if (step.open !== null) {
+      mark('chat:deeplink:select');
       setSelected(step.open);
       return;
     }
@@ -1378,12 +1380,14 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     // hung membership read still stores the profiles, with membership unknown.
     const forWorkspace = workspaceId;
     // Answered from the shared workspace members cache when it is warm.
+    mark('chat:names:start');
     void readMentionProfilesShared(supabase, {
       userId: currentUserId,
       workspaceId: forWorkspace,
       userIds: ids,
       timeoutMs: READ_TIMEOUT_MS,
     }).then((result) => {
+      mark('chat:names:end');
       for (const id of ids) flight.delete(id);
       // An answer for a workspace no longer open is dropped.
       if (!mounted.current || workspaceIdRef.current !== forWorkspace) return;
@@ -1481,6 +1485,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
           error: result.error.message,
         });
       }
+      mark('chat:scheduled:end');
       setScheduled((prev) => ({
         channelId,
         rows: result.ok ? result.data : prev.channelId === channelId ? prev.rows : NO_SCHEDULED,
@@ -1971,6 +1976,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             onRetry={retryLoad}
             selectedChannelId={selected?.channelId ?? null}
             onSelect={(channel: ChannelSummary) => {
+              mark('chat:tap');
               // A plain open drops any hit's jump not taken yet.
               setSearchRequest(null);
               // Every read the open needs starts now, before the thread mounts.

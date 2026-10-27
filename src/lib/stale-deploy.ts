@@ -13,6 +13,8 @@
 // This module imports nothing so the guest homepage path can use it without
 // pulling in the logger (and through it Sentry); callers inject `warn`.
 
+import { mark } from '@/lib/perf-marks';
+
 export const STALE_RELOAD_KEY = 'sorted:stale-reload';
 export const RELOAD_PARAM = '_r';
 const STYLESHEET_WAIT_MS = 3000;
@@ -95,12 +97,14 @@ function writeGuard(deps: StaleDeployDeps, set: boolean): void {
 
 // Returns true when the app should render, false when a reload was issued.
 export async function runStaleDeployGuard(deps: StaleDeployDeps): Promise<boolean> {
+  mark('stale:wait');
   try {
     await waitForStylesheet(
       deps.stylesheet,
       deps.isDocumentComplete(),
       deps.timeoutMs ?? STYLESHEET_WAIT_MS,
     );
+    mark('stale:resolved');
     const url = new URL(deps.getHref());
     const hasParam = url.searchParams.has(RELOAD_PARAM);
 

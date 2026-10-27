@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import { FORMER_MEMBER } from '@/lib/people-names';
@@ -584,6 +585,7 @@ export function PostDetailPage({
     void fetchMemberRole(supabase, workspaceId, userId)
       .catch(() => null)
       .then((next) => {
+        mark('post:role:end');
         if (cancelled) return;
         setRole(next);
         setRoleLoaded(true);
@@ -652,10 +654,12 @@ export function PostDetailPage({
       setLoadError(false);
       // The first read joins the read a card press already started (see
       // src/lib/post-prefetch.ts); a silent refresh always reads afresh.
+      mark('post:detail:start');
       const result =
         silent || userId === null || workspaceId === null
           ? await getPost(supabase, postId)
           : await takePostDetail(supabase, userId, workspaceId, postId);
+      mark('post:detail:end');
       if (!silent) setLoading(false);
       if (!result.ok) {
         logger.warn('post page: load failed', { error: result.error.message });
@@ -674,6 +678,7 @@ export function PostDetailPage({
   );
 
   useEffect(() => {
+    mark('post:mount');
     void load();
   }, [load]);
 
@@ -723,6 +728,7 @@ export function PostDetailPage({
     void read
       .catch(() => null)
       .then((result) => {
+        mark('post:gallery:end');
         if (!active) return;
         if (result !== null && result.ok) {
           setGallery(result.data);
@@ -754,9 +760,11 @@ export function PostDetailPage({
       return;
     }
     let active = true;
+    mark('post:brief:start');
     void getBriefTitle(supabase, briefId)
       .catch(() => null)
       .then((result) => {
+        mark('post:brief:end');
         if (!active) return;
         setBriefName(result !== null && result.ok ? result.data : null);
         setBriefLoadedFor(briefId);
@@ -1794,6 +1802,7 @@ export function PostDetailPage({
       {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
     />
   );
+  mark('post:first-paint');
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>

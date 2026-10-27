@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useState, type ComponentType, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
@@ -320,6 +321,7 @@ export function PostCard({
   // only the click that follows lets the page join them.
   const pressPrefetch = (): void => prefetchPostOpen(post.id);
   const open = (): void => {
+    mark('post:click');
     confirmPostOpen(post.id);
     navigate(href, openState === undefined ? undefined : { state: openState });
   };

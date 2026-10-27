@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import {
   createContext,
   Fragment,
@@ -1284,6 +1285,7 @@ export function Comments({
         }),
         withCheckpoints ? fetchCheckpoints(supabase, workspaceId, entityId) : Promise.resolve(null),
       ]);
+      mark('comments:rows-in');
       if (stale()) return;
       if (!result.ok) {
         if (nextPage === 0) {

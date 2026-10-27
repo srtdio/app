@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -145,6 +146,7 @@ function AppLayoutBody() {
       setPrefetchContext(null);
       return;
     }
+    mark('prefetch:ctx');
     setPrefetchContext({ userId, workspaceId });
     return () => setPrefetchContext(null);
   }, [userId, workspaceId]);
@@ -160,6 +162,7 @@ function AppLayoutBody() {
     if (firstRouteReady) return;
     let active = true;
     void whenRouteChunksSettle(firstPath).then(() => {
+      mark('shell:firstroute');
       if (active) setFirstRouteReady(true);
     });
     return () => {
@@ -284,7 +287,9 @@ function AppLayoutBody() {
   if (flow === null && (profileLoading || initialLoading || inductionPending)) {
     return <SessionLoading />;
   }
+  mark('shell:gate-open');
   if (onboardingNeeded && flow === null) {
+    mark('shell:onboarding');
     setFlow({
       workspaceId: workspaces.length > 0 ? workspaceId : null,
       workspaceName: workspaces.length > 0 ? workspaceDisplayName : null,

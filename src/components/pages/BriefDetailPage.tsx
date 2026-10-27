@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { appPresignCache } from '@/lib/shared-presign';
 import { useSearchJump } from '@/lib/search/jump';
@@ -475,6 +476,7 @@ export function BriefDetailPage({
       if (!silent) setLoading(true);
       setLoadFailed(false);
       const result = await getBrief(supabase, briefId);
+      mark('brief:row-in');
       if (!silent) setLoading(false);
       if (!result.ok) {
         if (!silent) setLoadFailed(true);
@@ -492,6 +494,7 @@ export function BriefDetailPage({
   );
 
   useEffect(() => {
+    mark('brief:mount');
     void load();
   }, [load]);
 
@@ -524,6 +527,7 @@ export function BriefDetailPage({
     }
     let active = true;
     void getBriefGallery(supabase, briefId).then((result) => {
+      mark('brief:gallery-in');
       if (active) setGallery(result.ok ? result.data : []);
     });
     return () => {
@@ -544,6 +548,7 @@ export function BriefDetailPage({
     let active = true;
     listBriefLinkedPosts(supabase, { briefId, limit: LINKED_POSTS_SCAN }).then(
       (result) => {
+        mark('brief:linked-in');
         if (active) setLinkedPosts(result.ok ? result.data : []);
       },
       () => {
@@ -687,6 +692,7 @@ export function BriefDetailPage({
     );
   }
 
+  mark('brief:paint');
   const brief = detail.brief;
   const closed = isBriefClosed(brief);
   const links = briefExternalLinks(brief.reference_links, gallery);

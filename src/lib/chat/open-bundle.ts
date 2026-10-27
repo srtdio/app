@@ -21,6 +21,7 @@
 // Plan bundles are not in it: listeners (onChatBundle) hear each bundle
 // settle and the plan cards start their own read then (PlanCardsProvider).
 
+import { mark } from '@/lib/perf-marks';
 import type { Result } from '@srtdio/rpc';
 import { LATE_READ_GRACE_MS, withReadTimeout } from '@/lib/chat-reads';
 import {
@@ -109,6 +110,7 @@ export function startChatBundle(
   const store = deps.store;
   const since = opts.since !== undefined ? opts.since : rememberedSince(key, store);
   const traceId = deps.traceId();
+  mark('chat:bundle:start');
   const promise = withReadTimeout(
     (signal) =>
       deps.read({ traceId, workspaceId: key.workspaceId, channelId: key.channelId, since }, signal),
@@ -173,6 +175,7 @@ export function startChatBundle(
     resultOk,
   );
   void promise.then((result) => {
+    mark('chat:bundle:end');
     for (const l of [...listeners]) l(key, result);
   });
   return promise;

@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useState } from 'react';
 import type { Client } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
@@ -97,7 +98,9 @@ export function useRefResolution(
     }
     let active = true;
     setResolution((prev) => (prev.status === 'loading' ? prev : { status: 'loading' }));
+    mark('ref:start');
     void resolveRef(supabase, rawRef, primaryKind, generateTraceId()).then((result) => {
+      mark('ref:end');
       if (active) setResolution(result);
     });
     return () => {

@@ -21,6 +21,7 @@
 // Settings members panel paints it on a return while this cache loads
 // (keptWorkspaceMembers), so it never shows loading twice in a session.
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from 'react';
 import { listMembers } from '@srtdio/workspace';
 import type { Database } from '@srtdio/schemas';
@@ -151,12 +152,14 @@ interface MemberReaders {
 export async function loadWorkspaceMembers(readers: MemberReaders): Promise<WorkspaceMembersData> {
   try {
     const members = await readers.members();
+    mark('members:list:end');
     if (!members.ok) {
       logger.warn('workspace members: load failed', { error: members.error.message });
       return { ...EMPTY_DATA, error: members.error.message };
     }
     const rows = members.data;
     const profiles = await readers.profiles(memberUserIds(rows));
+    mark('members:profiles:end');
     if (!profiles.ok) {
       logger.warn('workspace members: profiles load failed', { error: profiles.error.message });
       return { ...EMPTY_DATA, rows, error: profiles.error.message };
@@ -252,6 +255,7 @@ function startRead(key: string, entry: Entry, mode: LoadMode): void {
   const sessionKey = membersReadKey(userId, workspaceId);
   // A refetch or a change reads the server again; a mount joins a fresh read.
   if (mode !== 'initial') invalidateReads(sessionKey);
+  mark('members:start');
   void sharedRead(
     sessionKey,
     () =>

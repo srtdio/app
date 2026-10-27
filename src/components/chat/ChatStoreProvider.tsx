@@ -23,6 +23,7 @@
 // mutation lives in the pure reducer (chat-store.ts); this file only wires that
 // reducer to Agora, Postgres, React, and the toast surface.
 
+import { mark } from '@/lib/perf-marks';
 import {
   createContext,
   useCallback,
@@ -741,6 +742,7 @@ export async function loadChatList(
   // Every read has data (on time, or already landed late): the list, final.
   const complete = ready();
   if (complete !== null) {
+    mark('chat:list:ready');
     delivered = true;
     return complete;
   }
@@ -753,6 +755,7 @@ export async function loadChatList(
       counts: counts.ok ? 'ok' : counts.error.message,
     });
   }
+  mark('chat:list:error');
   return (prev) => store.loadFailed(prev, scope);
 }
 
@@ -1043,6 +1046,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     // Retry, a switch or unmount aborts every read of this load (late ones too).
     const abort = new AbortController();
     seenRef.current = new Set();
+    mark('chat:list:begin');
     setState((prev) => store.beginLoad(prev, scope));
     void loadChatList(
       {

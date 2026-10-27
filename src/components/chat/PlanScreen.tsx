@@ -51,6 +51,7 @@
 // Motion: drag on translateY and scale only (no scale on a laptop); the page,
 // menu and sheets on translateY. Tokens only.
 
+import { mark } from '@/lib/perf-marks';
 import {
   Fragment,
   useCallback,
@@ -1147,6 +1148,7 @@ export function PlanScreen(props: {
   }, [props.open, planId, reload]);
 
   const readBundle = read.status === 'ready' ? read.data.bundle : null;
+  if (readBundle !== null) mark('plan:ready');
   const shownBundle =
     readBundle !== null &&
     props.onlyWorkspaceId !== undefined &&

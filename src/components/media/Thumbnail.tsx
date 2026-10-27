@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { SIGNOUT_EVENT } from '@/lib/events';
@@ -225,6 +226,7 @@ export function Thumbnail({
               loading="lazy"
               decoding="async"
               onLoad={() => {
+                mark('thumb:painted');
                 if (!shownOriginals.has(versionId)) {
                   shownOriginals.add(versionId);
                   setFadedIn(versionId);

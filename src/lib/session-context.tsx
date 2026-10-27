@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js';
@@ -60,6 +61,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then(({ data }) => {
         if (!active) return;
+        mark('session:resolved');
         setSession(data.session);
         setLoading(false);
       })
@@ -71,6 +73,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      mark(`auth:event:${event}`);
       noteAuthToken(event, nextSession?.access_token);
       setSession((current) => resolveSession(event, nextSession, current));
       setLoading(false);

@@ -1,3 +1,4 @@
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -49,6 +50,7 @@ function useGrowingCount(total: number): {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
+          mark('grid:grow');
           setCount((now) => now + ASSET_GRID_PAGE);
         }
       },

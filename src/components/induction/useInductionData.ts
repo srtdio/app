@@ -8,6 +8,7 @@
 // after it was done: induction_done_at stays stamped (first finish wins), so a
 // tab-scoped replay mark reads the state as not done until the next finish.
 
+import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
@@ -89,7 +90,9 @@ export function useInductionData(workspaceId: string | null): InductionData {
     seq.current += 1;
     const mine = seq.current;
     const startedAt = performance.now();
+    mark('induction:start');
     void readInductionState(supabase, { workspaceId, traceId: newTrace() }).then((state) => {
+      mark('induction:end');
       if (mine !== seq.current) return;
       const guard = storing.current;
       // A read that left before the store landed still says the old step.

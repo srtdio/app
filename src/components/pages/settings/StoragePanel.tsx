@@ -4,6 +4,7 @@
 // us. The meter turns bad at the Worker's upload cap (CAP_BYTES), which is
 // never printed: the UI only says "full".
 
+import { mark } from '@/lib/perf-marks';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { workspaceStorage } from '@srtdio/rpc';
@@ -76,7 +77,9 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
     setBreakdown(null);
     if (workspaceId === null) return;
     let active = true;
+    mark('storage:start');
     void workspaceStorage(supabase, { p_workspace_id: workspaceId }).then((res) => {
+      mark('storage:end');
       if (!active) return;
       if (!res.ok) {
         logger.warn('workspace_storage failed', { error: res.error.message });

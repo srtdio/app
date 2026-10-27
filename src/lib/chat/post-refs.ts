@@ -4,6 +4,7 @@
 // instead of a quote. The composer's hash picker opens while the text at the
 // caret is a hash token. Client-side over the loaded pages only; no reads here.
 
+import { mark } from '@/lib/perf-marks';
 import type { ReplyQuote } from '@/lib/chat/attachments';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import { awaitsRootHydration, chipCountRoot, type RootFields } from '@/lib/chat/thread-rail';
@@ -279,6 +280,7 @@ export function admitRows<T extends GateFields>(
       }
     }
     if (all) {
+      mark('chat:gate:release');
       for (const id of gate.pending.keys()) gate.shown.add(id);
       gate.pending.clear();
     }
