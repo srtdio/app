@@ -15,6 +15,7 @@ import { ContactSheet } from '@/components/support/ContactSheet';
 import { SupportRows } from '@/components/support/SupportRows';
 import { ActionRow } from '@/components/ui/ActionRow';
 import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
+import { LoadError } from '@/components/ui/LoadError';
 import { cn } from '@/lib/cn';
 import { CAP_BYTES } from '@/lib/storage-limits';
 import { logger } from '@/lib/logger';
@@ -72,9 +73,13 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
   const navigate = useNavigate();
   const [breakdown, setBreakdown] = useState<StorageBreakdown | null>(null);
   const [support, setSupport] = useState<'contact' | 'book' | null>(null);
+  // The read failed or timed out: with no /usage either, Retry instead of a blank panel.
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setBreakdown(null);
+    setFailed(false);
     if (workspaceId === null) return;
     let active = true;
     mark('storage:start');
@@ -83,6 +88,7 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
       if (!active) return;
       if (!res.ok) {
         logger.warn('workspace_storage failed', { error: res.error.message });
+        setFailed(true);
         return;
       }
       setBreakdown(res.data[0] ?? null);
@@ -90,10 +96,13 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
     return () => {
       active = false;
     };
-  }, [workspaceId]);
+  }, [workspaceId, attempt]);
 
   // /usage (workspace_bytes_used) is what the cap and the banner use: lead with it.
   const usedBytes = usage?.usedBytes ?? breakdown?.bytes_used ?? null;
+  if (usedBytes === null && failed && workspaceId !== null) {
+    return <LoadError title="storage" onRetry={() => setAttempt((n) => n + 1)} />;
+  }
   if (usedBytes === null || workspaceId === null) return null;
   const workspace = workspaceDisplayName ?? '';
   const tone = meterTone(usedBytes, usage);

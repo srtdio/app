@@ -244,6 +244,11 @@ interface WorkspaceContextValue {
   setActiveWorkspaceId: (id: string) => void;
   refreshWorkspaces: () => Promise<void>;
   /**
+   * Try again on the failed first list: re-runs the boot bootstrap in place
+   * (no reload). A late answer from the failed attempt is dropped.
+   */
+  retryWorkspaces: () => void;
+  /**
    * Merge a successful workspace_update into the cached row, without the
    * loading state a full refresh shows (that would remount the shell).
    */
@@ -283,6 +288,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by retryWorkspaces: re-runs the bootstrap effect for the same user.
+  const [bootAttempt, setBootAttempt] = useState(0);
   // Attempt the create-on-first-load once per mount; survives the repeated
   // onAuthStateChange that flips `session` to a new (but equivalent) object.
   const bootstrapGuard = useRef(false);
@@ -411,7 +418,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       active = false;
       offHydrated();
     };
-  }, [userId, newTrace]);
+  }, [userId, newTrace, bootAttempt]);
+
+  const retryWorkspaces = useCallback(() => setBootAttempt((n) => n + 1), []);
 
   const setActiveWorkspaceId = useCallback((id: string) => {
     setActiveId(id);
@@ -539,6 +548,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       error,
       setActiveWorkspaceId,
       refreshWorkspaces,
+      retryWorkspaces,
       applyWorkspacePatch,
       createBlocked,
       isPlatformOperator,
@@ -554,6 +564,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       error,
       setActiveWorkspaceId,
       refreshWorkspaces,
+      retryWorkspaces,
       applyWorkspacePatch,
       createBlocked,
       isPlatformOperator,

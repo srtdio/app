@@ -209,3 +209,24 @@ describe('Members panel: a return paints the kept list', () => {
     expect(text()).toContain('Cara');
   });
 });
+
+describe('Members panel: a failed or timed-out read', () => {
+  it('shows Retry, and Retry re-reads the list in place', async () => {
+    h.listMembers.mockResolvedValueOnce({ ok: false, error: { message: 'TimeoutError' } });
+    render();
+    await settle();
+    expect(text()).toContain("Couldn't load members.");
+    const retry = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Retry',
+    );
+    expect(retry).toBeDefined();
+
+    act(() => {
+      retry?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await settle();
+    expect(h.listMembers).toHaveBeenCalledTimes(2);
+    expect(text()).not.toContain("Couldn't load members.");
+    expect(text()).toContain('Asha');
+  });
+});

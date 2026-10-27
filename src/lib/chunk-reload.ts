@@ -145,6 +145,15 @@ export function reloadOnce(deps: ChunkReloadDeps = browserDeps): boolean {
 }
 
 /**
+ * Try again on a page chunk still loading after CHUNK_WAIT_MS: the one
+ * guarded reload. Once the guard is spent the tap still reloads, since a
+ * person's tap cannot loop.
+ */
+export function reloadForChunkWait(deps: ChunkReloadDeps = browserDeps): void {
+  if (!reloadOnce(deps)) deps.reload();
+}
+
+/**
  * Reload once only when the error proves a stale build: it is a chunk load
  * error, it names the module's URL, and a HEAD for that URL answers 404 or
  * 410 while the page is not being left. Resolves true when a reload was issued.
@@ -304,9 +313,25 @@ export function routeChunksLoaded(pathname: string): boolean {
   return routeChunkTable(pathname).every((load) => loadedChunk(load) !== undefined);
 }
 
-/** Settles (never rejects) once every chunk the path renders has landed or failed. */
-export function whenRouteChunksSettle(pathname: string): Promise<void> {
-  return Promise.allSettled(routeChunkTable(pathname).map((load) => load())).then(() => undefined);
+/** The longest a page chunk holds a loader (the shell's first route, a Suspense fallback). */
+export const CHUNK_WAIT_MS = 10_000;
+
+/**
+ * Settles (never rejects) once every chunk the path renders has landed or
+ * failed, or after `capMs`, whichever is first. The chunks keep loading.
+ */
+export function whenRouteChunksSettle(
+  pathname: string,
+  capMs: number = CHUNK_WAIT_MS,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cap = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, capMs);
+  });
+  const settled = Promise.allSettled(routeChunkTable(pathname).map((load) => load())).then(
+    () => undefined,
+  );
+  return Promise.race([settled, cap]).finally(() => clearTimeout(timer));
 }
 
 /** True when the browser asks to save data (Network Information API, where present). */

@@ -66,11 +66,13 @@ interface Snapshot {
 
 const history: Snapshot[] = [];
 let refresh: (() => Promise<void>) | null = null;
+let retry: (() => void) | null = null;
 
 function Probe() {
   const { session: s } = useSession();
   const w = useWorkspace();
   refresh = w.refreshWorkspaces;
+  retry = w.retryWorkspaces;
   history.push({
     loading: w.loading,
     loaded: w.loaded,
@@ -191,6 +193,41 @@ describe('WorkspaceProvider across auth events', () => {
     listWorkspaces.mockResolvedValue({ ok: false, error: { message: 'network down' } });
     await mount();
     expect(last()).toMatchObject({ loading: false, loaded: false, error: 'network down', ids: [] });
+  });
+
+  it('Try again re-runs the first list in place after a failure or timeout', async () => {
+    listWorkspaces.mockResolvedValue({ ok: false, error: { message: 'TimeoutError' } });
+    await mount();
+    expect(last()).toMatchObject({ loaded: false, error: 'TimeoutError' });
+    const failedAt = history.length;
+    listWorkspaces.mockResolvedValue({ ok: true, data: [ws('ws-1')] });
+
+    act(() => retry?.());
+    await flush();
+
+    expect(listWorkspaces).toHaveBeenCalledTimes(2);
+    expect(history.slice(failedAt).some((h) => h.loading && h.error === null)).toBe(true);
+    expect(last()).toMatchObject({ loading: false, loaded: true, error: null, ids: ['ws-1'] });
+  });
+
+  it('a late answer from the read Try again replaced is dropped', async () => {
+    let answerFirst: (value: unknown) => void = () => undefined;
+    listWorkspaces.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerFirst = resolve;
+        }),
+    );
+    await mount();
+    listWorkspaces.mockResolvedValue({ ok: true, data: [ws('ws-2')] });
+
+    act(() => retry?.());
+    await flush();
+    expect(last()).toMatchObject({ loaded: true, ids: ['ws-2'] });
+
+    act(() => answerFirst({ ok: false, error: { message: 'late' } }));
+    await flush();
+    expect(last()).toMatchObject({ loading: false, loaded: true, error: null, ids: ['ws-2'] });
   });
 });
 

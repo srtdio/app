@@ -162,7 +162,8 @@ function useAttachments(origin: AssetOrigin): ChatAttachments {
         url,
         endpoint: transcribeEndpoint,
         token,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+        // Its own 20 s ceiling (TRANSCRIBE_TIMEOUT_MS), not the 10 s default.
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace(), { timeoutMs: null }),
         timeoutMs: TRANSCRIBE_TIMEOUT_MS,
       });
     },

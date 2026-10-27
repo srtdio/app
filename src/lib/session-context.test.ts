@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js';
-import { performSignout, resolveSession } from './session-context';
+import {
+  deferAuthEvent,
+  performSignout,
+  resolveSession,
+  sessionReadFailed,
+} from './session-context';
 
 // A stand-in for the GoTrue session; only identity matters to these assertions.
 const aSession = {
@@ -62,5 +67,22 @@ describe('performSignout', () => {
     const signOut = vi.fn().mockResolvedValue({ error: { message: 'boom' } });
     const client = { auth: { signOut } } as unknown as SupabaseClient;
     await expect(performSignout(client)).resolves.toBeUndefined();
+  });
+});
+
+describe('a failed boot read is not a sign-out', () => {
+  it('sessionReadFailed: no session + an error + a stored session', () => {
+    expect(sessionReadFailed(null, new Error('TimeoutError'), 'u1')).toBe(true);
+    expect(sessionReadFailed(null, new Error('TimeoutError'), null)).toBe(false);
+    expect(sessionReadFailed(null, null, 'u1')).toBe(false);
+    expect(sessionReadFailed(aSession, new Error('x'), 'u1')).toBe(false);
+  });
+
+  it('deferAuthEvent: only a null INITIAL_SESSION with a stored session', () => {
+    const stored = () => 'u1';
+    expect(deferAuthEvent('INITIAL_SESSION', null, stored)).toBe(true);
+    expect(deferAuthEvent('INITIAL_SESSION', null, () => null)).toBe(false);
+    expect(deferAuthEvent('INITIAL_SESSION', aSession, stored)).toBe(false);
+    expect(deferAuthEvent('SIGNED_OUT', null, stored)).toBe(false);
   });
 });

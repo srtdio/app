@@ -15,13 +15,11 @@ import { WorkspaceFullSheet } from '@/components/storage/WorkspaceFullSheet';
 import { ChatStoreProvider } from '@/components/chat/ChatStoreProvider';
 import { ChatTabSignals } from '@/components/chat/ChatTabSignals';
 import { InboxStoreProvider } from '@/components/shell/InboxStoreProvider';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { IconPipeline } from '@/components/ui/icons';
 import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
 import { InductionGuide } from '@/components/induction/InductionGuide';
 import { InductionProvider } from '@/components/induction/InductionProvider';
 import { useInductionData } from '@/components/induction/useInductionData';
-import { approverStageOf, type ApproverStage } from '@/lib/induction';
+import { approverStageOf, INDUCTION_REFRESH_EVENT, type ApproverStage } from '@/lib/induction';
 import { dispatchSorted } from '@/lib/events';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
@@ -34,7 +32,7 @@ import { cn } from '@/lib/cn';
 import { setPrefetchContext } from '@/lib/prefetch-context';
 import { routeChunksLoaded, whenRouteChunksSettle } from '@/lib/chunk-reload';
 import { useReloadOnNavigateWhenStale } from '@/lib/app-version';
-import { SessionLoading } from '@/components/auth/RouteGuards';
+import { LoadFailed, SessionLoading } from '@/components/auth/RouteGuards';
 import { MarksPanel } from '@/components/dev/MarksPanel';
 
 // The operator's Cockpit (dot + panel): one lazy chunk, requested only when the
@@ -91,6 +89,13 @@ export function shellChrome(threadOpen: boolean): {
 // painted from the device cache.
 let firstShellPainted = false;
 
+/**
+ * The longest the boot loader (profile, workspace list, induction) may stay
+ * up before it becomes "Couldn't load. Try again.". Above REQUEST_TIMEOUT_MS
+ * (10 s), so a timed-out read lands its own failure first.
+ */
+export const SHELL_GATE_MS = 12_000;
+
 // One ToastProvider for every branch below: a toast fired as the shell swaps
 // branches (e.g. "<name> deleted for good" as the last workspace goes, through
 // the induction read's blank frame) survives the swap.
@@ -113,6 +118,7 @@ function AppLayoutBody() {
     workspaceKey,
     setActiveWorkspaceId,
     refreshWorkspaces,
+    retryWorkspaces,
     error: workspaceError,
     isPlatformOperator,
   } = useWorkspace();
@@ -181,6 +187,8 @@ function AppLayoutBody() {
   useEffect(() => {
     if (firstRouteReady) return;
     let active = true;
+    // Capped at CHUNK_WAIT_MS: the shell then opens and the route's own
+    // Suspense fallback and chunk-error path take over.
     void whenRouteChunksSettle(firstPath).then(() => {
       mark('shell:firstroute');
       if (active) setFirstRouteReady(true);
@@ -298,6 +306,28 @@ function AppLayoutBody() {
     };
   }, [openPalette, closePalette]);
 
+  // The boot gate's ceiling: its reads (profile, workspace list, induction)
+  // each end within REQUEST_TIMEOUT_MS; anything still holding the loader
+  // after SHELL_GATE_MS (an auth refresh still retrying) shows Try again.
+  const gateUp = flow === null && (profileLoading || initialLoading || inductionPending);
+  const [gateAttempt, setGateAttempt] = useState(0);
+  const [gateExpired, setGateExpired] = useState(false);
+  useEffect(() => {
+    if (!gateUp) {
+      setGateExpired(false);
+      return;
+    }
+    const id = window.setTimeout(() => setGateExpired(true), SHELL_GATE_MS);
+    return () => window.clearTimeout(id);
+  }, [gateUp, gateAttempt]);
+  const retryGate = useCallback(() => {
+    setGateExpired(false);
+    setGateAttempt((n) => n + 1);
+    if (profileLoading) refetchProfile();
+    if (initialLoading) retryWorkspaces();
+    if (inductionPending) window.dispatchEvent(new Event(INDUCTION_REFRESH_EVENT));
+  }, [profileLoading, initialLoading, inductionPending, refetchProfile, retryWorkspaces]);
+
   // Onboarding gate: an unfinished profile or no workspace opens OnboardingFlow
   // full screen, before any chrome. It is opened in render (no shell frame first)
   // and its workspace context is frozen at open, then it stays mounted until the
@@ -305,8 +335,8 @@ function AppLayoutBody() {
   // remounts mid-way or flashes the shell.
   // The same loader element as the session wait and the chunk fallbacks
   // (RouteGuards' SessionLoading): boot shows one loader, never a swap.
-  if (flow === null && (profileLoading || initialLoading || inductionPending)) {
-    return <SessionLoading />;
+  if (gateUp) {
+    return gateExpired ? <LoadFailed onRetry={retryGate} /> : <SessionLoading />;
   }
   mark('shell:gate-open');
   if (onboardingNeeded && flow === null) {
@@ -344,18 +374,11 @@ function AppLayoutBody() {
     logger.error('onboarding gate: profile load failed, falling through to app');
   }
 
-  // A failed initial workspace list is not "no workspace": say so instead of a
-  // shell. A failed re-list after that keeps the loaded shell.
+  // A failed (or timed-out) initial workspace list is not "no workspace": say
+  // so, with Try again re-running the list in place. A failed re-list after
+  // that keeps the loaded shell; a saved list on the device paints first.
   if (!loaded && !loading && workspaceError !== null) {
-    return (
-      <div className="grid h-full w-full place-items-center bg-bg px-6">
-        <EmptyState
-          icon={<IconPipeline />}
-          title="Couldn't load your workspaces. Try again."
-          description="Reload the page."
-        />
-      </div>
-    );
+    return <LoadFailed onRetry={retryWorkspaces} />;
   }
 
   // No workspace yet: the real shell with an empty main, its slot opening the

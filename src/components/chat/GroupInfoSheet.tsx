@@ -664,7 +664,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         const up = await uploadAvatarFile(png, {
           endpoint,
           token,
-          fetcher: (input, init) => fetchWithTrace(input, init, traceId),
+          fetcher: (input, init) => fetchWithTrace(input, init, traceId, { timeoutMs: null }),
           target: { kind: 'group', id: props.groupId, apiKey: env.VITE_SUPABASE_PUBLISHABLE_KEY },
         });
         if (!up.ok) {

@@ -156,10 +156,17 @@ export async function acceptInvite(deps: {
   onSuccess: () => void;
   onError: (failure: AcceptFailure) => void;
 }): Promise<void> {
-  const { error } = await deps.invoke('invite-accept', {
-    body: { invite_id: deps.inviteId },
-    headers: { 'x-trace-id': deps.traceId },
-  });
+  let error: unknown;
+  try {
+    ({ error } = await deps.invoke('invite-accept', {
+      body: { invite_id: deps.inviteId },
+      headers: { 'x-trace-id': deps.traceId },
+    }));
+  } catch (thrown: unknown) {
+    // A timed-out or failed request that throws instead of returning an error:
+    // the same failure view with Try again, never a stuck "Joining".
+    error = thrown;
+  }
   if (error !== null && error !== undefined) {
     deps.onError(classifyAcceptError(error));
     return;

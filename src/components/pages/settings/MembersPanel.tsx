@@ -11,6 +11,7 @@ import { mark } from '@/lib/perf-marks';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { memberRemove } from '@srtdio/rpc';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { LoadError } from '@/components/ui/LoadError';
 import { useToast } from '@/components/ui/toast';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { logger } from '@/lib/logger';
@@ -261,7 +262,9 @@ export function MembersPanel() {
       {loading ? (
         <p className="text-base text-fg-3">Loading members</p>
       ) : error !== null ? (
-        <p className="text-base text-bad">Couldn&apos;t load members. Try again.</p>
+        // A failed or timed-out read: Retry re-reads the shared list in place
+        // (its generation guard drops a late answer from the failed read).
+        <LoadError title="members" onRetry={refetchMembers} />
       ) : (
         <MembersList
           derived={derived}

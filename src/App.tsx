@@ -1,10 +1,21 @@
-import { Suspense, useEffect, type ReactElement, type ReactNode } from 'react';
+import { Suspense, useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
-import { RequireAuth, RequireGuest, SessionLoading } from '@/components/auth/RouteGuards';
+import {
+  LoadFailed,
+  RequireAuth,
+  RequireGuest,
+  SessionLoading,
+} from '@/components/auth/RouteGuards';
 import { HomeGate } from '@/components/home/HomeGate';
 import { SessionProvider } from '@/lib/session-context';
-import { lazyRoute, loadShell, whenIdle } from '@/lib/chunk-reload';
+import {
+  CHUNK_WAIT_MS,
+  lazyRoute,
+  loadShell,
+  reloadForChunkWait,
+  whenIdle,
+} from '@/lib/chunk-reload';
 import {
   loadAssets,
   loadBriefDetail,
@@ -129,9 +140,21 @@ function prefetchShellPages(): () => void {
 /** A plan opened beside Activity (Activity plan rows); Back falls back to /notifications. */
 const notificationsPlan = page(<PlanPage fallback="/notifications" />);
 
-/** The session loader doubles as the chunk fallback, so the swap never shifts layout. */
+/**
+ * The chunk fallback: the session loader (so the swap never shifts layout)
+ * until CHUNK_WAIT_MS, then Try again (the one guarded chunk reload).
+ */
+export function ChunkFallback(): ReactElement {
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setExpired(true), CHUNK_WAIT_MS);
+    return () => window.clearTimeout(id);
+  }, []);
+  return expired ? <LoadFailed onRetry={() => reloadForChunkWait()} /> : <SessionLoading />;
+}
+
 function page(element: ReactNode): ReactElement {
-  return <Suspense fallback={<SessionLoading />}>{element}</Suspense>;
+  return <Suspense fallback={<ChunkFallback />}>{element}</Suspense>;
 }
 
 export default function App() {
