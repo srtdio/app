@@ -30,7 +30,12 @@ vi.mock('./asset-read', async (importOriginal) => {
   };
 });
 
-import worker, { serializeError, type ChatTokenEnv } from './chat-token';
+import worker, {
+  markActiveDay,
+  requestCountry,
+  serializeError,
+  type ChatTokenEnv,
+} from './chat-token';
 import { toAgoraUsername } from './agora-identity';
 
 const USER = '33333333-3333-7333-8333-333333333333';
@@ -257,5 +262,108 @@ describe('serializeError', () => {
     const out = serializeError(new TypeError('boom'));
     expect(out).toContain('TypeError');
     expect(out).toContain('boom');
+  });
+});
+
+describe('active-day tick (user_active_day_mark)', () => {
+  const tickEnv: ChatTokenEnv = { ...env, SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test' };
+  const RPC_URL = `${SUPABASE_URL}/rest/v1/rpc/user_active_day_mark`;
+
+  /** Agora answers at once; the RPC hangs until release() (a slow database). */
+  function stubSlowRpc(): { calls: Request[]; release: () => void } {
+    const calls: Request[] = [];
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url === RPC_URL) {
+          calls.push(new Request(url, init));
+          return gate.then(() => new Response(null, { status: 204 }));
+        }
+        return Promise.resolve(new Response(null, { status: 200 }));
+      }),
+    );
+    return { calls, release };
+  }
+
+  function withCountry(request: Request, country: unknown): Request {
+    Object.defineProperty(request, 'cf', { value: { country } });
+    return request;
+  }
+
+  it('returns the token without waiting for a slow RPC, and hands the tick to waitUntil', async () => {
+    const token = await mintToken(USER);
+    state.members.add(`${USER}:${WORKSPACE}`);
+    const rpc = stubSlowRpc();
+    const scheduled: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (work: Promise<unknown>) => scheduled.push(work) };
+
+    const res = await worker.fetch(
+      withCountry(tokenRequest(token, { workspace_id: WORKSPACE }), 'in'),
+      tickEnv,
+      ctx,
+    );
+    // The response is complete while the RPC is still held.
+    expect(res.status).toBe(200);
+    expect(scheduled).toHaveLength(1);
+    let settled = false;
+    void scheduled[0]?.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    rpc.release();
+    await scheduled[0];
+    expect(rpc.calls).toHaveLength(1);
+    const call = rpc.calls[0];
+    expect(call?.headers.get('apikey')).toBe('sb_publishable_test');
+    // The caller's own token, never the service key.
+    expect(call?.headers.get('authorization')).toBe(`Bearer ${token}`);
+    expect(call?.headers.get('authorization')).not.toContain(env.SUPABASE_SECRET_KEY);
+    const body = (await call?.json()) as { p_country: string | null; p_trace_id: string };
+    expect(body.p_country).toBe('IN');
+    expect(body.p_trace_id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('schedules nothing on a refused mint', async () => {
+    const token = await mintToken(USER);
+    stubSlowRpc();
+    const scheduled: Promise<unknown>[] = [];
+    const res = await worker.fetch(tokenRequest(token, { workspace_id: WORKSPACE }), tickEnv, {
+      waitUntil: (work) => scheduled.push(work),
+    });
+    expect(res.status).toBe(403);
+    expect(scheduled).toHaveLength(0);
+  });
+
+  it('swallows an RPC failure (logged, never thrown)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('down'))),
+    );
+    const request = tokenRequest('t', { workspace_id: WORKSPACE });
+    await expect(markActiveDay(tickEnv, request, 'not-a-uuid')).resolves.toBeUndefined();
+  });
+
+  it('skips the call when the publishable key is not set', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal('fetch', fetchMock);
+    await markActiveDay(env, tokenRequest('t', { workspace_id: WORKSPACE }), USER);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reads request.cf.country as two uppercase letters or null', () => {
+    const req = (): Request => tokenRequest('t', {});
+    expect(requestCountry(withCountry(req(), 'gb'))).toBe('GB');
+    expect(requestCountry(withCountry(req(), 'T1'))).toBeNull();
+    expect(requestCountry(withCountry(req(), 'XXX'))).toBeNull();
+    expect(requestCountry(withCountry(req(), undefined))).toBeNull();
+    expect(requestCountry(req())).toBeNull();
   });
 });

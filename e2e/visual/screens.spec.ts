@@ -61,6 +61,12 @@ interface Screen {
   prepare?: (network: HarnessNetwork, page: Page, now: number) => Promise<void> | void;
   /** No session (the guest routes and the invite link's Join card). */
   signedOut?: boolean;
+  /** The harness user is the platform operator (the Cockpit dot shows), at this answer level. */
+  operator?: 'green' | 'red';
+  /** Capture in one layout only (the Cockpit's side panel vs sheet). */
+  only?: 'laptop' | 'phone';
+  /** Force the dark scheme (the laptop project is light; these add its dark shots). */
+  dark?: boolean;
   url: string;
   /** Waits for the page, then walks to the state to capture. */
   steps: (page: Page) => Promise<void>;
@@ -761,6 +767,85 @@ const SCREENS: Screen[] = [
   },
 ];
 
+// The operator's Cockpit (e2e/fixtures/cockpit-data.ts): the dot green and red
+// on every project (plus laptop dark), the laptop side panel beside Pipeline on
+// Needs you and Users (light and dark), the phone sheet on Users and Traffic
+// (iPhone light and dark).
+async function cockpitDot(page: Page, level: 'green' | 'red'): Promise<void> {
+  await pipelineReady(page);
+  await waitFor([page.locator(`[data-cockpit-dot="${level}"]`)], `cockpit dot ${level}`);
+}
+
+async function openCockpit(page: Page, level: 'green' | 'red', tab: string | null, text: string) {
+  await cockpitDot(page, level);
+  await page.locator('[data-cockpit-dot]').click();
+  const surface = isLaptop(page)
+    ? page.locator('aside[aria-label="Cockpit"]')
+    : page.getByRole('dialog', { name: 'Cockpit' });
+  await waitFor([surface.getByRole('tab', { name: 'Needs you' })], 'cockpit open');
+  if (tab !== null) await surface.getByRole('tab', { name: tab }).click();
+  await waitFor(
+    [surface.getByRole('tabpanel').getByText(text).first()],
+    `cockpit ${tab ?? 'needs'}`,
+  );
+}
+
+for (const level of ['green', 'red'] as const) {
+  SCREENS.push({
+    name: `cockpit-dot-${level}`,
+    seed: creator,
+    operator: level,
+    url: '/pipeline',
+    steps: (page) => cockpitDot(page, level),
+  });
+  SCREENS.push({
+    name: `cockpit-dot-${level}-dark`,
+    seed: creator,
+    operator: level,
+    only: 'laptop',
+    dark: true,
+    url: '/pipeline',
+    steps: (page) => cockpitDot(page, level),
+  });
+}
+for (const dark of [false, true]) {
+  const suffix = dark ? '-dark' : '';
+  SCREENS.push({
+    name: `cockpit-panel-needs${suffix}`,
+    seed: creator,
+    operator: 'red',
+    only: 'laptop',
+    dark,
+    url: '/pipeline',
+    steps: (page) => openCockpit(page, 'red', null, 'invite-send is failing'),
+  });
+  SCREENS.push({
+    name: `cockpit-panel-users${suffix}`,
+    seed: creator,
+    operator: 'red',
+    only: 'laptop',
+    dark,
+    url: '/pipeline',
+    steps: (page) => openCockpit(page, 'red', 'Users', 'People by country'),
+  });
+}
+SCREENS.push({
+  name: 'cockpit-sheet-users',
+  seed: creator,
+  operator: 'green',
+  only: 'phone',
+  url: '/pipeline',
+  steps: (page) => openCockpit(page, 'green', 'Users', 'People by country'),
+});
+SCREENS.push({
+  name: 'cockpit-sheet-traffic',
+  seed: creator,
+  operator: 'green',
+  only: 'phone',
+  url: '/pipeline',
+  steps: (page) => openCockpit(page, 'green', 'Traffic', 'Home to sign-up'),
+});
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -817,6 +902,10 @@ async function settle(page: Page): Promise<void> {
 
 for (const screen of SCREENS) {
   test(screen.name, async ({ page }) => {
+    if (screen.only !== undefined) {
+      test.skip((screen.only === 'laptop') !== isLaptop(page), `${screen.only} only`);
+    }
+    if (screen.dark === true) await page.emulateMedia({ colorScheme: 'dark' });
     // The page's clock is pinned (Date only; timers keep running).
     await page.clock.setFixedTime(NOW);
     // Vite's HMR socket answers nothing, so a file saved mid-run never
@@ -825,7 +914,10 @@ for (const screen of SCREENS) {
       (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
       () => undefined,
     );
-    const network = await installHarnessNetwork(page);
+    const network = await installHarnessNetwork(
+      page,
+      screen.operator !== undefined ? { operator: true, cockpitLevel: screen.operator } : {},
+    );
     // Rebuild the world at the fixed instant (the handlers read world.tables per request).
     Object.assign(network.world, buildWorld(NOW));
     if (screen.signedOut === true) await signOut(page);

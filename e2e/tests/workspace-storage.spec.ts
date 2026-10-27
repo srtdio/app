@@ -128,7 +128,7 @@ test('owner at the free-plan limit gets Contact us and Book a call @theme', asyn
 
 test('a platform operator who owns a workspace sees no limit rows @theme', async ({ page }) => {
   const errors = collectPageErrors(page);
-  const network = await installHarnessNetwork(page);
+  const network = await installHarnessNetwork(page, { operator: true });
   await page.goto('/pipeline');
 
   const dialog = await openSwitcher(page);
@@ -141,7 +141,7 @@ test('a platform operator who owns a workspace sees no limit rows @theme', async
 
 test('storage banner shows at 820 MB and not at 500 MB @theme', async ({ page }) => {
   const errors = collectPageErrors(page);
-  const network = await installHarnessNetwork(page);
+  const network = await installHarnessNetwork(page, { operator: true });
   await routeUsage(page, 500);
   const firstRead = page.waitForResponse(/asset-upload\.harness\.test\/usage/);
   await page.goto('/pipeline');
@@ -169,7 +169,7 @@ test('storage banner shows at 820 MB and not at 500 MB @theme', async ({ page })
 
 test('an upload refused as workspace_full opens the full sheet @theme', async ({ page }) => {
   const errors = collectPageErrors(page);
-  const network = await installHarnessNetwork(page);
+  const network = await installHarnessNetwork(page, { operator: true });
   await routeUploadFull(page);
   await page.goto('/chat');
   await page.getByText(PEER_NAME, { exact: true }).first().click();
@@ -208,7 +208,7 @@ test('Settings > Storage under the warning line has no talk-to-us rows @theme', 
   page,
 }) => {
   const errors = collectPageErrors(page);
-  const network = await installHarnessNetwork(page);
+  const network = await installHarnessNetwork(page, { operator: true });
   await routeUsage(page, 300);
   await routeWorkspaceStorage(page, { used: 300, library: 220, chat: 60, voice: 12, deleted: 8 });
   await page.goto('/settings');
@@ -239,7 +239,7 @@ test('Settings > Storage under the warning line has no talk-to-us rows @theme', 
 
 test('Settings > Storage past the warning line offers more space @theme', async ({ page }) => {
   const errors = collectPageErrors(page);
-  const network = await installHarnessNetwork(page);
+  const network = await installHarnessNetwork(page, { operator: true });
   await routeUsage(page, 850);
   await routeWorkspaceStorage(page, { used: 850, library: 700, chat: 90, voice: 20, deleted: 40 });
   await page.goto('/settings?panel=storage');

@@ -1,5 +1,5 @@
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '@/components/shell/Sidebar';
@@ -36,6 +36,15 @@ import { routeChunksLoaded, whenRouteChunksSettle } from '@/lib/chunk-reload';
 import { useReloadOnNavigateWhenStale } from '@/lib/app-version';
 import { SessionLoading } from '@/components/auth/RouteGuards';
 import { MarksPanel } from '@/components/dev/MarksPanel';
+
+// The operator's Cockpit (dot + panel): one lazy chunk, requested only when the
+// operator flag is true. Nobody else downloads it or makes any request for it.
+const CockpitDot = lazy(() =>
+  import('@/components/cockpit/Cockpit').then((m) => ({ default: m.CockpitDot })),
+);
+const CockpitPanel = lazy(() =>
+  import('@/components/cockpit/Cockpit').then((m) => ({ default: m.CockpitPanel })),
+);
 
 /** True on /chat with an open thread (?channel=<id>); mobile then drops the shell chrome. */
 export function isThreadRoute(pathname: string, search: URLSearchParams): boolean {
@@ -103,6 +112,7 @@ function AppLayoutBody() {
     setActiveWorkspaceId,
     refreshWorkspaces,
     error: workspaceError,
+    isPlatformOperator,
   } = useWorkspace();
   const navigate = useNavigate();
   const {
@@ -413,15 +423,34 @@ function AppLayoutBody() {
                   currentUserAvatarUrl={profile?.avatar_url ?? null}
                   onOpenPalette={openPalette}
                   onOpenAvatar={() => setAvatarOpen(true)}
+                  {...(isPlatformOperator
+                    ? {
+                        cockpitSlot: (
+                          <Suspense fallback={null}>
+                            <CockpitDot />
+                          </Suspense>
+                        ),
+                      }
+                    : {})}
                 />
               </div>
               {/* Its own sibling above main: showing it never remounts the Outlet. */}
               <StorageWarningBanner />
               {/* Keyed by workspace: a switch remounts the route, so the new workspace
                   paints its own kept view or skeleton and nothing of the old one stays. */}
-              <main className={chrome.mainClassName}>
-                {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
-              </main>
+              {/* main and, for the operator on laptop, the Cockpit panel beside it
+                  (the page shrinks, nothing dims). The row is always here, so the
+                  Outlet never remounts when the flag resolves. */}
+              <div className="flex min-h-0 flex-1">
+                <main className={chrome.mainClassName}>
+                  {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
+                </main>
+                {isPlatformOperator ? (
+                  <Suspense fallback={null}>
+                    <CockpitPanel />
+                  </Suspense>
+                ) : null}
+              </div>
             </div>
             {chrome.showBottomTabs ? <BottomTabs /> : null}
             <ToastViewport />

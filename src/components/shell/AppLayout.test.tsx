@@ -95,3 +95,37 @@ describe('AppLayout detail route chrome', () => {
     );
   });
 });
+
+// The Cockpit is the operator's only: for everyone else nothing renders, no
+// chunk downloads and no request goes out. The source is the contract: the
+// cockpit module is reachable only through React.lazy, and both lazy pieces
+// mount only behind the operator flag the workspace context already reads.
+describe('AppLayout Cockpit gate', () => {
+  it('imports the cockpit only through React.lazy (no static import)', () => {
+    expect(source).not.toMatch(/^import[^;]*@\/components\/cockpit/m);
+    expect(source).not.toMatch(/^import[^;]*@\/lib\/cockpit/m);
+    expect(source).toContain("import('@/components/cockpit/Cockpit')");
+  });
+
+  it('mounts the dot and the panel only for the operator', () => {
+    expect(source).toContain('isPlatformOperator,\n  } = useWorkspace();');
+    expect(source).toMatch(/isPlatformOperator\s*\?\s*\{\s*cockpitSlot:/);
+    expect(source).toMatch(
+      /\{isPlatformOperator \? \(\s*<Suspense fallback=\{null\}>\s*<CockpitPanel \/>/,
+    );
+    // Every lazy cockpit render sits behind the flag.
+    const renders = source.match(/<Cockpit(Dot|Panel) \/>/g) ?? [];
+    expect(renders).toHaveLength(2);
+  });
+
+  it('adds no read of its own: the flag is the one workspace-context already holds', () => {
+    expect(source).not.toContain('platform_operators');
+    expect(source).not.toContain('readIsPlatformOperator');
+  });
+
+  it('keeps <main> in a row that is always rendered, so the Outlet never remounts', () => {
+    expect(source).toContain(
+      '<div className="flex min-h-0 flex-1">\n                <main className={chrome.mainClassName}>',
+    );
+  });
+});

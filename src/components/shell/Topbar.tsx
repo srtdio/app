@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { TestSiteAnywhereStart } from '@/components/test-site/TestSiteAnywhereStart';
 import { NotificationsButton } from '@/components/shell/NotificationsButton';
 import { Avatar } from '@/components/ui/Avatar';
@@ -21,6 +22,8 @@ interface TopbarProps {
    * out (nothing behind it works without a workspace).
    */
   onCreateWorkspace?: () => void;
+  /** The operator's Cockpit dot, left of Activity (AppLayout passes it only for the operator). */
+  cockpitSlot?: ReactNode;
 }
 
 export function Topbar({
@@ -30,6 +33,7 @@ export function Topbar({
   onOpenPalette,
   onOpenAvatar,
   onCreateWorkspace,
+  cockpitSlot,
 }: TopbarProps) {
   return (
     <header className="sticky top-0 z-30 flex items-center gap-2 h-14 px-3 md:px-4 border-b border-border bg-panel">
@@ -86,6 +90,7 @@ export function Topbar({
             <IconSearch />
           </IconButton>
         )}
+        {cockpitSlot}
         {/* Activity on every main screen (its one mount), with the unread count. */}
         {workspaceName !== null && onCreateWorkspace === undefined ? <NotificationsButton /> : null}
 

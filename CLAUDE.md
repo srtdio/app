@@ -39,6 +39,7 @@ pnpm workspace monorepo. Frontend is a Vite 5 + React 18 + Tailwind 3 SPA; backe
 - `src/server/` - server-side code shared by Workers: `workers/` one module per Worker (chat-token, chat-agora-sync, chat-scheduled-send, chat-transcribe, asset-upload/read, avatar-upload, link-preview, og-preview), plus `assets/` upload pipeline (MIME allowlist, EXIF strip, SVG sanitize, virus scan), `cron/` scheduled handlers (catchup-send, storage-purge Workers), `middleware/` (idempotency), `logger.ts`, `trace.ts`.
 - `workers/<name>/` - one `wrangler.toml` per Worker whose `main` points at `src/server/workers/<name>.ts`; secrets are Worker secrets, only binding names appear in the toml. Each Worker has its own `*-deploy.yml` workflow.
 - `packages/` - domain packages imported as `@srtdio/*`, all exporting raw TS from `src/index.ts` (no build step). `schemas` is the base: Zod schemas + generated Supabase types. `rpc` wraps Supabase RPC (`callRpc`). `posts`, `briefs`, `comments`, `inbox`, `workspace`, `storage` are domain logic shared by frontend and Workers. `test-utils` holds RLS test helpers.
+- `supabase/functions/ops-cockpit` - the platform operator's Cockpit API (GET mode=status|full; 404 for anyone without an active platform_operators row); the UI is `src/components/cockpit/`, lazy-loaded only when the operator flag is true.
 - `supabase/` - `migrations/` (implementation truth for schema), `functions/` Deno edge functions (invite-send/accept, brand-request-send, book-call-send, demo-request-send, catchup-unsubscribe, resend-webhook), `config.toml`.
 
 ### Supabase project
@@ -100,6 +101,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts).
 - Inline errors: ui/ErrorNote only. Small labels (stage, status, role, draft): ui/Tag only.
 - Shadows: cards none; menus/popovers/sheets/dialogs shadow-2xl; dragged items shadow-lg; tokens for toast, auth card, spotlight.
+- A panel beside the page is ui/SidePanel only (laptop via useIsLaptop, 380px, translateX, nothing dims, Esc closes); phone shows the same content in a Sheet (guard: cockpit/side-panel-rule.test.ts).
 - Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".
 - Icon sizes come from ICON_SIZE in ui/icons.tsx.
 - Words: Activity (never Notifications), file (the tab is Assets), Due date, stages Draft/Review/Approved/Parked/Rejected. Format, chat and workspace names come from their src/lib functions only.

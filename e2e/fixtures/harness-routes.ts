@@ -19,6 +19,7 @@ import { chatOpenBundle } from './chat-open-bundle';
 import { TASK_RPC } from './tasks-data';
 import { INDUCTION_RPC } from './induction-rpc';
 import { SEARCH_RPC } from './search-data';
+import { cockpitFull, cockpitStatus, type CockpitMockLevel } from './cockpit-data';
 
 const SUPABASE_HOST = 'harness.supabase.test';
 const CHAT_TOKEN_HOST = 'chat-token.harness.test';
@@ -1421,6 +1422,8 @@ export interface HarnessNetwork {
   holdRpc: (name: string) => { release: () => void };
   /** REST tables whose reads fail (500) until removed. */
   failTable: Set<string>;
+  /** Every ops-cockpit request's query string, in order (the operator's Cockpit). */
+  cockpitCalls: string[];
 }
 
 export async function installHarnessNetwork(
@@ -1434,6 +1437,14 @@ export async function installHarnessNetwork(
     voiceAudio?: 'wav' | 'invalid' | 'stall';
     /** A transcript stored on every voice note's attachment_meta (the legacy field). */
     voiceTranscript?: string;
+    /**
+     * The harness user is an active platform operator: exempt from the
+     * one-workspace rule, and the top bar shows the Cockpit dot. Off by
+     * default, so every other screen is a normal user's.
+     */
+    operator?: boolean;
+    /** The Cockpit's answer level for the operator (default green). */
+    cockpitLevel?: CockpitMockLevel;
   } = {},
 ): Promise<HarnessNetwork> {
   const world = buildWorld();
@@ -1456,6 +1467,8 @@ export async function installHarnessNetwork(
   const tableGates = new Map<string, Promise<void>>();
   const rpcGates = new Map<string, Promise<void>>();
   const failTable = new Set<string>();
+  const cockpitCalls: string[] = [];
+  const operator = opts.operator === true;
 
   await page.addInitScript((session) => {
     window.localStorage.setItem('sb-harness-auth-token', session);
@@ -1480,6 +1493,25 @@ export async function installHarnessNetwork(
     const method = request.method();
     if (method === 'OPTIONS') {
       await route.fulfill({ status: 204, headers: CORS });
+      return;
+    }
+    if (url.hostname === SUPABASE_HOST && url.pathname === '/functions/v1/ops-cockpit') {
+      cockpitCalls.push(url.search);
+      // Anyone but the operator: 404, empty body, as the edge function answers.
+      if (!operator) {
+        await route.fulfill({ status: 404, headers: CORS, body: '' });
+        return;
+      }
+      const level = opts.cockpitLevel ?? 'green';
+      const body =
+        url.searchParams.get('mode') === 'status'
+          ? cockpitStatus(level)
+          : cockpitFull(level, url.searchParams.get('tab') ?? 'needs');
+      await route.fulfill({
+        status: 200,
+        headers: { ...CORS, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       return;
     }
     if (url.hostname === SUPABASE_HOST) {
@@ -1545,14 +1577,14 @@ export async function installHarnessNetwork(
           await route.fulfill({ status: 204, headers: CORS });
           return;
         }
-        // The create form's exemption read (own row under RLS): the harness user is an
-        // active platform operator, so the create-workspace flows stay open. The
-        // non-exempt path is covered by the WorkspaceSwitcher unit tests.
+        // The operator read (own row under RLS): exempt from the one-workspace
+        // rule and the Cockpit's gate. A normal user by default; specs that
+        // create a second workspace or open the Cockpit pass operator: true.
         if (table === 'platform_operators') {
           await route.fulfill({
             status: 200,
             headers: { ...CORS, 'content-type': 'application/json' },
-            body: JSON.stringify([{ user_id: ME }]),
+            body: JSON.stringify(operator ? [{ user_id: ME }] : []),
           });
           return;
         }
@@ -1793,6 +1825,7 @@ export async function installHarnessNetwork(
     world,
     unmatched,
     blocked,
+    cockpitCalls,
     holdHistory: () => {
       let release = (): void => {};
       historyGate = new Promise<void>((resolve) => {

@@ -28,7 +28,7 @@ function expectClean(network: HarnessNetwork): void {
 test('create a workspace with a platform, then post in its formats @theme @desktop', async ({
   page,
 }) => {
-  const network = await installHarnessNetwork(page);
+  const network = await installHarnessNetwork(page, { operator: true });
   await page.goto('/pipeline');
 
   const label = workspaceLabel(page);
