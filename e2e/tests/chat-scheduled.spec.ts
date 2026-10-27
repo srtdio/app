@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectMinTouchTarget } from '../helpers/touch-target';
+import { withSaveData } from '../helpers/save-data';
 import { installHarnessNetwork, solidPng, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   DM_CHANNEL,
@@ -182,6 +183,9 @@ test.describe('phone', () => {
     page,
   }) => {
     const network = await installHarnessNetwork(page);
+    // Measures the cold open (the strip waits for the held bundle): no
+    // pre-warm (Save-Data). A pre-warmed tap paints rows and strip at once.
+    await withSaveData(page);
     const rows = (network.world.tables.chat_scheduled_messages ??= []);
     rows.push(
       scheduledRow(
