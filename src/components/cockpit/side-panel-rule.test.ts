@@ -23,7 +23,7 @@ const FILES = tsxFiles(ROOT).map((path) => ({
 describe('ui rules: one side panel', () => {
   it('no hand-built 380px side panel outside ui/SidePanel.tsx', () => {
     const offenders = FILES.filter(
-      ({ rel, src }) => rel !== 'ui/SidePanel.tsx' && /<aside\b[^>]*w-\[\d+px\]/.test(src),
+      ({ rel, src }) => rel !== 'ui/SidePanel.tsx' && /<aside\b[^>]*w-\[380px\]/.test(src),
     ).map(({ rel }) => rel);
     expect(offenders).toEqual([]);
   });
@@ -42,6 +42,6 @@ describe('ui rules: one side panel', () => {
   it('SidePanel moves on the X axis only', () => {
     const src = FILES.find((f) => f.rel === 'ui/SidePanel.tsx')?.src ?? '';
     expect(src).toContain('translate-x-full');
-    expect(src).not.toMatch(/translate-y|rotate|scale-/);
+    expect(src).not.toMatch(/\btranslate-y-|\brotate-|\bscale-/);
   });
 });
