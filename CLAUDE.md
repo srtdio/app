@@ -87,6 +87,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Use logger from `src/lib/logger.ts`. No `console.*` in `src/**` outside logger files.
 - Blast radius: before changing a shared function, gate, constant or wait, list every caller and screen that uses it in the PR body with what changes for each. A new wait, hold, cap or gate on a paint path states its ceiling and reason and may not stack on an existing one without stating the total.
 - Speed ratchet: no PR may make a paint or tap path slower. Do not add an await, hold, gate or network read on a paint or tap path without Shubham's approval. The PR body lists the paths touched, their before/after ?paintlog marks, and what this PR made faster.
+- Activity and chat arrive live by push; polling is only a safety net. No PR may make either wait for a poll.
 
 ## Design rules (locked 24 Oct 2026)
 
