@@ -366,7 +366,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
       return uploadAvatarFile(file, {
         endpoint,
         token,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace(), { timeoutMs: null }),
       });
     })();
   }

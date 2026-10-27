@@ -747,7 +747,9 @@ export function AssetsPage() {
         workspaceId,
         url,
         name,
-        fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+        // A link add creates a row with no client id: no default ceiling (a retry
+        // after a timeout could add it twice).
+        fetcher: (input, init) => fetchWithTrace(input, init, newTrace(), { timeoutMs: null }),
       });
     },
     [uploadEndpoint, workspaceId, newTrace],

@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSession } from '@/lib/session-context';
-import { SessionLoading } from '@/components/auth/RouteGuards';
+import { LoadFailed, SessionLoading } from '@/components/auth/RouteGuards';
 
 // Lazy so the app bundle never carries the homepage, its styles or its fonts.
 const HomePage = lazy(() => import('./HomePage'));
@@ -21,7 +21,8 @@ function Blank() {
 
 /** / for everyone: signed-in users go to the app, guests see the homepage. */
 export function HomeGate() {
-  const { session, loading } = useSession();
+  const { session, loading, failed, retry } = useSession();
+  if (failed) return <LoadFailed onRetry={retry} />;
   const route = homeRouteFor({ loading, signedIn: Boolean(session) });
   // The app boots on / only with a stored session or an auth callback; the
   // canvas there is the app's (--bg), so the wait is the app's one loader

@@ -80,6 +80,7 @@ vi.mock('@/lib/workspace-context', () => ({
       workspaceDisplayName: s.workspaces[0]?.name ?? null,
       setActiveWorkspaceId: vi.fn(),
       refreshWorkspaces: vi.fn(async () => undefined),
+      retryWorkspaces: vi.fn(),
     };
   },
 }));
@@ -175,14 +176,14 @@ describe('AppLayout across workspace re-lists', () => {
 
     render({ loading: false, loaded: true, error: 'network down', workspaces: ROWS });
 
-    expect(text()).not.toContain("Couldn't load your workspaces");
+    expect(text()).not.toContain("Couldn't load. Try again.");
     expect(mounts.count).toBe(1);
     expect(draftValue()).toBe('keep me');
   });
 
   it('shows the error screen when the initial list fails', () => {
     render({ loading: false, loaded: false, error: 'network down', workspaces: [] });
-    expect(text()).toContain("Couldn't load your workspaces");
+    expect(text()).toContain("Couldn't load. Try again.");
   });
 
   it('a user change (loaded resets) returns to the full-screen Loading', () => {

@@ -2,6 +2,7 @@ import { mark } from '@/lib/perf-marks';
 import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { resolveNext, withNext } from '@/components/auth/next-param';
+import { Button } from '@/components/ui/Button';
 import { useSession } from '@/lib/session-context';
 
 /**
@@ -12,6 +13,25 @@ export function SessionLoading() {
   return (
     <div className="min-h-full w-full grid place-items-center bg-bg">
       <span className="text-base text-fg-3">Loading</span>
+    </div>
+  );
+}
+
+/** The one sentence every full-screen load failure shows. */
+export const LOAD_FAILED_TEXT = "Couldn't load. Try again.";
+
+/**
+ * The full-screen failure that replaces a loader once its wait has a ceiling
+ * (session, workspace list, first page chunk): one line and Try again. Same
+ * canvas as SessionLoading, tokens only, so light and dark match.
+ */
+export function LoadFailed({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div role="alert" className="min-h-full w-full grid place-items-center bg-bg px-4">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <p className="text-base text-fg-2">{LOAD_FAILED_TEXT}</p>
+        <Button onClick={onRetry}>Try again</Button>
+      </div>
     </div>
   );
 }
@@ -69,8 +89,10 @@ export function guestDestination(queryNext: string | null, state: unknown): stri
 
 /** App routes: require a session, otherwise redirect to /signin. */
 export function RequireAuth() {
-  const { session, loading } = useSession();
+  const { session, loading, failed, retry } = useSession();
   const location = useLocation();
+  // A failed or hung read with a stored session: Try again, never /signin.
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (loading) return <SessionLoading />;
   mark('guard:auth');
   if (session || isPublicInviteVisit(location)) return <Outlet />;
@@ -89,7 +111,7 @@ export function RequireAuth() {
  * flight; that visit stays on sign in instead of bouncing back to the invite.
  */
 export function RequireGuest() {
-  const { session, loading } = useSession();
+  const { session, loading, failed, retry } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -101,6 +123,7 @@ export function RequireGuest() {
       navigate(location.pathname + location.search, { replace: true, state: null });
     }
   }, [switching, loading, session, navigate, location.pathname, location.search]);
+  if (failed) return <LoadFailed onRetry={retry} />;
   if (loading) return <SessionLoading />;
   mark('guard:guest');
   if (!session || switching) return <Outlet />;

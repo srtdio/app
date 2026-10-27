@@ -485,7 +485,8 @@ export function OnboardingFlow({
               uploadAvatarFile(file, {
                 endpoint,
                 token: data.session?.access_token ?? null,
-                fetcher: (input, init) => fetchWithTrace(input, init, newTrace()),
+                fetcher: (input, init) =>
+                  fetchWithTrace(input, init, newTrace(), { timeoutMs: null }),
               }),
             )
             .then((up) => (up.ok ? up.data.avatarUrl : null))

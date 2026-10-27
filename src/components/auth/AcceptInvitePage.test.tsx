@@ -105,6 +105,19 @@ describe('acceptInvite', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onSuccess).not.toHaveBeenCalled();
   });
+
+  it('clears to the generic failure when the request times out and invoke throws', async () => {
+    const invoke = vi
+      .fn()
+      .mockRejectedValue(new DOMException('request timed out after 10000 ms', 'TimeoutError'));
+    const onSuccess = vi.fn();
+    const onError = vi.fn();
+
+    await acceptInvite({ inviteId: 'inv-123', traceId: 't-1', invoke, onSuccess, onError });
+
+    expect(onError).toHaveBeenCalledWith('generic');
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
 });
 
 // A FunctionsHttpError-shaped error: supabase-js puts the fetch Response on context.
