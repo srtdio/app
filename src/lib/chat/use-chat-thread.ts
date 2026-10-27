@@ -27,6 +27,13 @@
 // remembered rows by id and one batched reactions read. While the thread shows a chat it owns that chat's
 // rows and writes them back when it leaves; while closed, live events land
 // on the remembered rows through the same apply functions used here.
+//
+// Remembered pages are also saved on the device (open-cache.ts), so a cold
+// open reopens a chat the same way; the open chat's page is kept (and saved)
+// when the tab hides too, so closing the app keeps the chat on screen. The
+// top chats are pre-warmed at idle (prewarmChats): the open's bundle read,
+// folded as an open folds it and kept as the page the open would leave
+// behind, so the first tap reopens with no skeleton.
 
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -74,6 +81,7 @@ import {
   openCache,
   rememberedWindow,
   withOwnCursor,
+  type ChatKey,
   type OpenCache,
   type RememberedThread,
 } from '@/lib/chat/open-cache';
@@ -563,6 +571,89 @@ export async function revalidateRemembered(
     reactions: reactions === null ? new Map() : reactions.ok ? reactions.data : null,
     checkedIds: ids,
   };
+}
+
+/**
+ * The page an open of this bundle leaves behind, built by the open's own
+ * fold (applyOpenBundle over no rows and no outbox) and the leave's window
+ * (rememberedWindow); null when the chat has no rows (an empty page is never
+ * kept). Pure.
+ */
+export function rememberedFromBundle(
+  bundle: ChatOpenBundle,
+  currentUserId: string,
+): RememberedThread | null {
+  const fetched = bundle.page.rows.map((row) => rowToThreadMessage(row, currentUserId));
+  const quoted = bundle.quoted.map((row) => rowToThreadMessage(row, currentUserId));
+  const reactions = aggregateReactions(bundle.reactions, currentUserId);
+  const folded = applyOpenBundle([], { fetched, quoted, reactions, entries: [], currentUserId });
+  const window = rememberedWindow(folded, bundle.page.hasMore);
+  if (window.rows.length === 0) return null;
+  const newest = bundle.page.rows[bundle.page.rows.length - 1];
+  return {
+    rows: window.rows,
+    hasMore: window.hasMore,
+    through: newest !== undefined ? rowCursor(newest) : undefined,
+    reads: bundle.readPositions,
+    unresolved: awaitingResolve(window.rows),
+  };
+}
+
+/** The most chats one list load pre-warms. */
+export const PREWARM_LIMIT = 5;
+
+/** What a pre-warm needs (the app's; tests pass fakes). */
+export interface PrewarmDeps {
+  store?: OpenCache;
+  /** The open's chat_open_bundle read for a chat with no remembered page (p_since null). */
+  read: (key: ChatKey) => Promise<Result<ChatOpenBundle>>;
+  /** Whether the device asks to save data (navigator.connection.saveData). */
+  saveData: () => boolean;
+  /**
+   * Whether the list this pre-warm started for still shows (same user and
+   * workspace): an answer that lands after a switch is dropped, never kept.
+   */
+  current: () => boolean;
+}
+
+/**
+ * Pre-warm the top chats (most recent first) after the list painted: for at
+ * most PREWARM_LIMIT of them with no remembered page, the open's bundle read
+ * runs and its page is kept as an open would leave it (attach, keep,
+ * release), so the first tap reopens from it with no skeleton. Never notes
+ * an open (no opened(), no open hold), never touches a chat a thread shows or
+ * a tap already started, and does nothing under Save-Data. Never throws.
+ */
+export async function prewarmChats(keys: readonly ChatKey[], deps: PrewarmDeps): Promise<number> {
+  const store = deps.store ?? openCache;
+  if (deps.saveData() || !deps.current()) return 0;
+  const busy = (key: ChatKey): boolean =>
+    store.attached(key) ||
+    store.joinable(key, 'bundle') ||
+    store.recall(key, 'thread') !== undefined;
+  const picked = keys.filter((key) => !busy(key)).slice(0, PREWARM_LIMIT);
+  if (picked.length === 0) return 0;
+  mark('chat:prewarm:start');
+  const kept = await Promise.all(
+    picked.map(async (key) => {
+      let result: Result<ChatOpenBundle>;
+      try {
+        result = await deps.read(key);
+      } catch {
+        return false;
+      }
+      // A switch since, or a tap or a thread got there first: the open's own read wins.
+      if (!result.ok || !deps.current() || busy(key)) return false;
+      const page = rememberedFromBundle(result.data, key.userId);
+      if (page === null) return false;
+      const owner = store.attach(key);
+      owner.keep(page);
+      owner.release();
+      return true;
+    }),
+  );
+  mark('chat:prewarm:end');
+  return kept.filter(Boolean).length;
 }
 
 /**
@@ -1335,43 +1426,60 @@ export function useChatThread(params: {
     };
     if (remembered !== undefined && memoryKey !== null) reopen(remembered, memoryKey);
     else openFresh({ fresh: retrying });
+    /**
+     * What this thread leaves behind: its server rows (the newest window) and
+     * the cursors, the viewer's own as this thread last wrote it; null when no
+     * server row is recorded.
+     */
+    const leftBehind = (): RememberedThread | null => {
+      const left = leaving(channelId);
+      const window = rememberedWindow(left.messages, left.hasMore);
+      if (window.rows.length === 0) return null;
+      const r = left.reads;
+      let readsLeft = r.channelId === channelId && r.status === 'ready' ? r.read : null;
+      const written = lastCursorRef.current;
+      const cursorRow = written !== null ? left.messages.find((m) => m.id === written) : undefined;
+      if (readsLeft !== null && cursorRow !== undefined) {
+        readsLeft = withOwnCursor(
+          readsLeft,
+          currentUserId,
+          { id: cursorRow.id, time: cursorRow.time },
+          new Date().toISOString(),
+        );
+      }
+      return {
+        rows: window.rows,
+        hasMore: window.hasMore,
+        through: contiguity.through(),
+        reads: readsLeft,
+        // Quotes and roots still waiting are resolved on the next reopen.
+        unresolved: awaitingResolve(window.rows, pendingResolve),
+      };
+    };
+    // The tab hides (the app may close without a leave): the page as it
+    // stands is kept now, so a cold open reopens this chat from the device.
+    // Off the paint path; the thread keeps owning its rows.
+    const onHidden = (): void => {
+      if (cancelled || !shown || owner === null || document.visibilityState !== 'hidden') return;
+      const page = leftBehind();
+      if (page !== null) owner.keep(page);
+    };
+    document.addEventListener('visibilitychange', onHidden);
     return () => {
       cancelled = true;
       abort.abort();
+      document.removeEventListener('visibilitychange', onHidden);
       if (owner === null) return;
       if (shown) {
-        // What this thread leaves behind: its server rows (the newest window)
-        // and the cursors, the viewer's own as this thread last wrote it.
-        const left = leaving(channelId);
-        const window = rememberedWindow(left.messages, left.hasMore);
-        const r = left.reads;
-        let readsLeft = r.channelId === channelId && r.status === 'ready' ? r.read : null;
-        const written = lastCursorRef.current;
-        const cursorRow =
-          written !== null ? left.messages.find((m) => m.id === written) : undefined;
-        if (readsLeft !== null && cursorRow !== undefined) {
-          readsLeft = withOwnCursor(
-            readsLeft,
-            currentUserId,
-            { id: cursorRow.id, time: cursorRow.time },
-            new Date().toISOString(),
-          );
-        }
-        if (window.rows.length === 0) {
+        const page = leftBehind();
+        if (page === null) {
           // No server rows recorded (a render before the page landed, or only
           // outbox rows): never remember an empty page; the next open is fresh.
           if (memoryKey !== null) memory.forget(memoryKey, 'thread');
           owner.release();
           return;
         }
-        owner.keep({
-          rows: window.rows,
-          hasMore: window.hasMore,
-          through: contiguity.through(),
-          reads: readsLeft,
-          // Quotes and roots still waiting are resolved on the next reopen.
-          unresolved: awaitingResolve(window.rows, pendingResolve),
-        });
+        owner.keep(page);
       }
       owner.release();
     };

@@ -22,6 +22,16 @@
 // conversation is marked read locally (the thread writes the cursor). All store
 // mutation lives in the pure reducer (chat-store.ts); this file only wires that
 // reducer to Agora, Postgres, React, and the toast surface.
+//
+// The list paints from the device like WhatsApp: what a ready list paints
+// (roster, last lines, unread counts, clears) is saved as a plain snapshot
+// through the session reads (primeRead under `${userId}:${workspaceId}:chat:list`,
+// saved on the device), at most once every LIST_SAVE_DELAY_MS and at once
+// when the tab hides. A mount or switch whose snapshot is kept (peekKept,
+// seeded from the device at boot, or as soon as that seed lands) starts
+// 'ready' from it in the first render, and the full load runs behind it: its
+// result replaces the snapshot in place, never a skeleton; a failed one keeps
+// the snapshot and never shows the list error.
 
 import { mark } from '@/lib/perf-marks';
 import {
@@ -66,6 +76,8 @@ import {
   resolveMentionPreview,
 } from '@/lib/chat/mentions';
 import { SIGNOUT_EVENT } from '@/lib/events';
+import { onSessionReadsHydrated, peekKept, primeRead, readKey } from '@/lib/session-read';
+import { flushDeviceCache } from '@/lib/device-cache';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { clearAllDrafts, pruneDrafts, setDraftScope, stripDeletedReplies } from '@/lib/chat/drafts';
 import { clearEmojiRecents } from '@/lib/chat/emoji-list';
@@ -144,6 +156,7 @@ import type {
   ChannelOutbox,
   ChatLoadStatus,
   ChatStoreState,
+  ConversationSummary,
   OutboxEvent,
   OutboxStorage,
 } from '@/lib/chat/chat-store';
@@ -653,7 +666,7 @@ export interface ChatListReaders {
 export const ROSTER_READ_BUDGET_MS = 2 * READ_TIMEOUT_MS;
 
 /** Store transition for a first load. */
-type LoadTransition = (prev: ChatStoreState) => ChatStoreState;
+export type LoadTransition = (prev: ChatStoreState) => ChatStoreState;
 
 /**
  * Run the four list reads in parallel and resolve to the one store transition
@@ -759,6 +772,90 @@ export async function loadChatList(
   return (prev) => store.loadFailed(prev, scope);
 }
 
+/** What the chat list paints, saved on the device for the next cold open. */
+export interface ChatListSnapshot {
+  roster: ChannelSummary[];
+  conversations: Record<string, ConversationSummary>;
+  clears: Record<string, number>;
+}
+
+/** The list's snapshot is saved at most this often (trailing), and at once when the tab hides. */
+export const LIST_SAVE_DELAY_MS = 3_000;
+
+/** The session read key of a workspace's chat list snapshot. */
+export function chatListKey(userId: string, workspaceId: string): string {
+  return readKey(userId, workspaceId, 'chat:list');
+}
+
+/** What a ready list paints, as plain data. Pure. */
+export function listSnapshot(state: ChatStoreState): ChatListSnapshot {
+  return { roster: [...state.roster], conversations: state.conversations, clears: state.clears };
+}
+
+/** A saved snapshot, or null when the value is not one. Pure. */
+export function readListSnapshot(saved: unknown): ChatListSnapshot | null {
+  if (typeof saved !== 'object' || saved === null) return null;
+  const snap = saved as Partial<ChatListSnapshot>;
+  if (!Array.isArray(snap.roster)) return null;
+  if (typeof snap.conversations !== 'object' || snap.conversations === null) return null;
+  if (typeof snap.clears !== 'object' || snap.clears === null) return null;
+  return { roster: snap.roster, conversations: snap.conversations, clears: snap.clears };
+}
+
+/**
+ * The seed transition: the list for `scope` is ready from a saved snapshot
+ * (what the last ready list painted). The viewed and pending-open chats stay
+ * for the same scope, as a load keeps them. Pure.
+ */
+export function seedFromSnapshot(
+  state: ChatStoreState,
+  scope: string,
+  snapshot: ChatListSnapshot,
+): ChatStoreState {
+  return {
+    ...store.beginLoad(state, scope),
+    roster: snapshot.roster,
+    conversations: snapshot.conversations,
+    clears: snapshot.clears,
+    status: 'ready',
+  };
+}
+
+/** The kept snapshot for this user and workspace, or null (never read, never saved). */
+export function keptListSnapshot(
+  userId: string | null,
+  workspaceId: string | null | undefined,
+): ChatListSnapshot | null {
+  if (userId === null || !workspaceId) return null;
+  return readListSnapshot(peekKept<unknown>(chatListKey(userId, workspaceId)));
+}
+
+/**
+ * The store's first state: ready from the kept snapshot when there is one
+ * (a cold open paints the list in the first render), else empty.
+ */
+export function initialListState(
+  userId: string | null,
+  workspaceId: string | null | undefined,
+): ChatStoreState {
+  const snapshot = keptListSnapshot(userId, workspaceId);
+  if (snapshot === null || userId === null || !workspaceId) return store.initialState();
+  return seedFromSnapshot(store.initialState(), store.loadScope(workspaceId, userId), snapshot);
+}
+
+/**
+ * Apply a load's transition over a seeded list: a failure keeps what is
+ * painted (never the list error); anything else replaces it in place. Pure.
+ */
+export function overSeeded(
+  prev: ChatStoreState,
+  transition: LoadTransition,
+  seeded: boolean,
+): ChatStoreState {
+  const next = transition(prev);
+  return seeded && next.status === 'error' ? prev : next;
+}
+
 /**
  * What an incoming-message toast's tap does: for the chat already open, a jump
  * to the message in place (no history step); else open that chat (one step). Pure.
@@ -778,7 +875,10 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   const navigate = useNavigate();
   const currentUserId = session?.user.id ?? null;
 
-  const [state, setState] = useState<ChatStoreState>(store.initialState);
+  // A kept snapshot (saved on the device) paints the list in the first render.
+  const [state, setState] = useState<ChatStoreState>(() =>
+    initialListState(currentUserId, workspaceId),
+  );
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [rosterReload, setRosterReload] = useState<RosterReload>({ version: 0, scope: null });
   // One group-member cache per provider; emptied on every scope change and re-read.
@@ -1047,7 +1147,37 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     const abort = new AbortController();
     seenRef.current = new Set();
     mark('chat:list:begin');
-    setState((prev) => store.beginLoad(prev, scope));
+    // Already painted from the snapshot (the first render), or a snapshot is
+    // kept for this scope: ready now, the load below refreshes it in place.
+    const held = stateRef.current;
+    let seeded = held.scope === scope && held.status === 'ready';
+    if (!seeded) {
+      const snapshot = keptListSnapshot(currentUserId, workspaceId);
+      if (snapshot !== null) {
+        seeded = true;
+        setState((prev) => seedFromSnapshot(prev, scope, snapshot));
+      } else {
+        setState((prev) => store.beginLoad(prev, scope));
+      }
+    }
+    if (seeded) {
+      mark('chat:list:seeded');
+      mark('chat:list:ready');
+    }
+    // The device seed landed after the mount: a list still loading paints
+    // from its snapshot now.
+    const offHydrated = onSessionReadsHydrated(() => {
+      if (cancelled || seeded) return;
+      const snapshot = keptListSnapshot(currentUserId, workspaceId);
+      if (snapshot === null) return;
+      seeded = true;
+      mark('chat:list:seeded');
+      setState((prev) =>
+        prev.scope === scope && prev.status === 'loading'
+          ? seedFromSnapshot(prev, scope, snapshot)
+          : prev,
+      );
+    });
     void loadChatList(
       {
         // The registry trip runs up to the late grace (the load's own abort
@@ -1076,18 +1206,59 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       {
         // A read that only timed out and lands later: its data wins, the error clears.
         onLate: (transition) => {
-          if (!cancelled) setState(transition);
+          if (!cancelled) setState((prev) => overSeeded(prev, transition, seeded));
         },
         cancel: abort.signal,
       },
     ).then((transition) => {
-      if (!cancelled) setState(transition);
+      if (!cancelled) setState((prev) => overSeeded(prev, transition, seeded));
     });
     return () => {
       cancelled = true;
       abort.abort();
+      offHydrated();
     };
   }, [scope, workspaceId, currentUserId, loadAttempt]);
+
+  // Save what the ready list paints (the snapshot a cold open seeds from):
+  // trailing, at most once every LIST_SAVE_DELAY_MS, and at once when the tab
+  // hides. Off the paint path; a switch or sign-out drops a pending save.
+  const saveListRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (scope === null || !workspaceId || currentUserId === null) return;
+    const key = chatListKey(currentUserId, workspaceId);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const save = (): void => {
+      timer = null;
+      const current = stateRef.current;
+      if (current.scope !== scope || current.status !== 'ready') return;
+      primeRead(key, listSnapshot(current));
+    };
+    const schedule = (): void => {
+      if (timer === null) timer = setTimeout(save, LIST_SAVE_DELAY_MS);
+    };
+    const saveNow = (): void => {
+      if (timer === null) return;
+      clearTimeout(timer);
+      save();
+      void flushDeviceCache();
+    };
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') saveNow();
+    };
+    saveListRef.current = schedule;
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', saveNow);
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+      saveListRef.current = () => {};
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', saveNow);
+    };
+  }, [scope, workspaceId, currentUserId]);
+  useEffect(() => {
+    if (state.status === 'ready' && state.scope === scope) saveListRef.current();
+  }, [state, scope]);
 
   const retryLoad = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
