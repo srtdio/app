@@ -213,7 +213,7 @@ describe('PostCard thumbnail frame', () => {
     // The relative tile sits inside a pointer-events-none wrapper, after the
     // full-bleed absolute button, so the button still takes the tap.
     expect(out).toContain(
-      '<div data-post-card-thumb="" class="pointer-events-none overflow-hidden rounded-t-xl"><div',
+      '<div data-post-card-thumb="" class="pointer-events-none relative overflow-hidden rounded-t-xl"><div',
     );
     expect(out.indexOf('aria-label="Open post Post title"')).toBeLessThan(
       out.indexOf('data-post-card-thumb'),
@@ -480,6 +480,58 @@ describe('Pipeline polish: one fixed cover box per platform', () => {
     expect(out).toContain('data-post-card-thumb');
     expect(out).not.toContain('data-post-card-play');
     expect(out).toContain('aria-label="Video"');
+  });
+});
+
+describe('PostCard hover keeps the content visible', () => {
+  // The Open post button is absolute inset-0 and fills panel-2 on hover; the
+  // cover and the body must be positioned so they paint above it, and pass
+  // taps through to it. Only the ⋯ menu takes pointer events back.
+  const tag = (out: string, attr: string) =>
+    new RegExp(`<div[^>]*${attr}=""[^>]*>`).exec(out)?.[0] ?? '';
+
+  it('the body is relative and pointer-events-none', () => {
+    const { cache } = makeCache(null);
+    const out = render({ post: makePost({ caption: 'Hello' }), cache, presignEnabled: true });
+    const body = tag(out, 'data-post-card-body');
+    expect(body).toMatch(/\brelative\b/);
+    expect(body).toContain('pointer-events-none');
+  });
+
+  it('the image and the video cover wrappers are relative and pointer-events-none', () => {
+    const { cache: base } = makeCache('https://cdn.example/full.jpg');
+    const peekThumbnail = vi.fn(() => ({
+      url: 'https://cdn.example/thumb.jpg',
+      expiresAt: Date.now() + 3_600_000,
+    }));
+    const cache = { ...base, peekThumbnail } as unknown as PresignCache;
+    const image = tag(
+      render({
+        post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
+        cache,
+        presignEnabled: true,
+      }),
+      'data-post-card-thumb',
+    );
+    const video = tag(
+      render({
+        post: makePost({ thumbnailAssetVersionId: null, format: 'video' }),
+        cache: makeCache(null).cache,
+        presignEnabled: true,
+      }),
+      'data-post-card-thumb',
+    );
+    for (const wrapper of [image, video]) {
+      expect(wrapper).not.toBe('');
+      expect(wrapper).toMatch(/\brelative\b/);
+      expect(wrapper).toContain('pointer-events-none');
+    }
+  });
+
+  it('the ⋯ menu wrapper and trigger take pointer events back', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('className="pointer-events-auto ml-auto flex shrink-0"');
+    expect(src).toContain('className="pointer-events-auto relative z-10 -my-3 -mr-3 text-fg-3"');
   });
 });
 

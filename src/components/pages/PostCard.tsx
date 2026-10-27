@@ -381,12 +381,16 @@ export function PostCard({
         onClick={open}
         className="absolute inset-0"
       />
-      {/* The tile is relative, so it would paint over the absolute Open post button;
-          pointer-events-none lets a tap on the thumbnail reach the button. The
+      {/* The cover and the body are relative so they paint above the absolute
+          Open post button (whose hover fill would otherwise cover the text);
+          pointer-events-none lets a tap on them reach the button. The
           picture clips to the card's top corners itself: the card root does not
           clip, so the laptop ⋯ popover can open past the card's edge. */}
       {coverKind === 'image' ? (
-        <div data-post-card-thumb="" className="pointer-events-none overflow-hidden rounded-t-xl">
+        <div
+          data-post-card-thumb=""
+          className="pointer-events-none relative overflow-hidden rounded-t-xl"
+        >
           <Thumbnail
             assetVersionId={post.thumbnailAssetVersionId}
             cache={cache}
@@ -404,7 +408,10 @@ export function PostCard({
           </Thumbnail>
         </div>
       ) : coverKind === 'video' ? (
-        <div data-post-card-thumb="" className="pointer-events-none overflow-hidden rounded-t-xl">
+        <div
+          data-post-card-thumb=""
+          className="pointer-events-none relative overflow-hidden rounded-t-xl"
+        >
           <div
             data-post-card-play=""
             className={cn(
@@ -419,7 +426,10 @@ export function PostCard({
           </div>
         </div>
       ) : null}
-      <div data-post-card-body="" className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
+      <div
+        data-post-card-body=""
+        className="pointer-events-none relative flex min-w-0 flex-1 flex-col gap-1.5 p-3"
+      >
         <div
           data-post-card-title=""
           className="line-clamp-2 min-h-[2.75em] text-base font-medium leading-snug [overflow-wrap:anywhere]"
@@ -482,7 +492,7 @@ export function PostCard({
           ) : null}
           {onMove !== undefined ? (
             // Above the Open post overlay (z-10) so a tap opens the menu, not
-            // the post. Pointer down and right-click stop here (the menu rows
+            // the post; pointer-events-auto re-enables it inside the body. Pointer down and right-click stop here (the menu rows
             // included, through the React tree) so the card's own menu gesture
             // never arms under it. The negative margins keep the 44px target
             // from growing the row.
@@ -490,7 +500,7 @@ export function PostCard({
               data-post-card-menu=""
               onPointerDown={(event) => event.stopPropagation()}
               onContextMenu={(event) => event.stopPropagation()}
-              className="ml-auto flex shrink-0"
+              className="pointer-events-auto ml-auto flex shrink-0"
             >
               <ActionMenu
                 title={post.title}
@@ -519,7 +529,7 @@ export function PostCard({
                     aria-haspopup="menu"
                     data-post-card-move=""
                     draggable={false}
-                    className="relative z-10 -my-3 -mr-3 text-fg-3"
+                    className="pointer-events-auto relative z-10 -my-3 -mr-3 text-fg-3"
                   >
                     <IconMore size={ICON_SIZE.control} />
                   </IconButton>
