@@ -204,14 +204,27 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(chatLink(container).getAttribute('aria-label')).toBe('Chat');
   });
 
-  it('Chat circle: fg ink at rest, accent ink and accent-soft fill when active', () => {
-    expect(classes(chatLink(render('/pipeline')))).toEqual(
-      expect.arrayContaining(['bg-panel', 'text-fg']),
-    );
+  it('Chat circle: fg ink at rest, accent ink over an inner accent-soft tint when active', () => {
+    const idle = chatLink(render('/pipeline'));
+    expect(classes(idle)).toEqual(expect.arrayContaining(['bg-panel', 'text-fg']));
+    expect(idle.querySelector('[data-chat-tab-tint]')).toBeNull();
     act(() => root?.unmount());
     host?.remove();
-    expect(classes(chatLink(render('/chat')))).toEqual(
-      expect.arrayContaining(['bg-accent-soft', 'text-accent']),
+    const active = chatLink(render('/chat'));
+    // Solid in every state: the translucent tint never replaces the panel fill.
+    expect(classes(active)).toContain('bg-panel');
+    expect(classes(active)).toContain('text-accent');
+    expect(classes(active)).not.toContain('bg-accent-soft');
+    const tint = active.querySelector('[data-chat-tab-tint]');
+    expect(tint?.getAttribute('aria-hidden')).toBe('true');
+    expect(classes(tint ?? active)).toEqual(
+      expect.arrayContaining([
+        'pointer-events-none',
+        'absolute',
+        'inset-0',
+        'rounded-full',
+        'bg-accent-soft',
+      ]),
     );
   });
 

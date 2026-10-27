@@ -120,17 +120,35 @@ export function BottomTabs() {
             data-chat-tab=""
             data-induction={INDUCTION_KEYS.chatTab}
             {...navPrefetchProps(CHAT_NAV.to)}
+            // bg-panel in every state: accent-soft is translucent, so on its own
+            // the chat rows would show through the circle on /chat.
             className={({ isActive }) =>
               cn(
-                'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border border-border shadow-[var(--shadow-card)]',
-                isActive ? 'bg-accent-soft text-accent' : 'bg-panel text-fg',
+                'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border border-border bg-panel shadow-[var(--shadow-card)]',
+                isActive ? 'text-accent' : 'text-fg',
               )
             }
           >
-            <CHAT_NAV.Icon size={ICON_SIZE.tray} />
-            {total > 0 ? (
-              <CountBadge count={total} className="absolute right-0 top-0 border-2 border-panel" />
-            ) : null}
+            {({ isActive }) => (
+              <>
+                {isActive ? (
+                  <span
+                    aria-hidden
+                    data-chat-tab-tint=""
+                    className="pointer-events-none absolute inset-0 rounded-full bg-accent-soft"
+                  />
+                ) : null}
+                <span className="relative">
+                  <CHAT_NAV.Icon size={ICON_SIZE.tray} />
+                </span>
+                {total > 0 ? (
+                  <CountBadge
+                    count={total}
+                    className="absolute right-0 top-0 border-2 border-panel"
+                  />
+                ) : null}
+              </>
+            )}
           </NavLink>
         ) : null}
       </nav>
