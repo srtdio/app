@@ -9,6 +9,13 @@ type ListResult = CommentResult<CommentRow[]>;
 const ASHA = '11111111-1111-4111-8111-111111111111';
 const GONE = '22222222-2222-4222-8222-222222222222';
 const OTHER = '33333333-3333-4333-8333-333333333333';
+const ASHA_MEMBER = {
+  id: ASHA,
+  name: 'Asha Rao',
+  username: 'asha',
+  role: 'creator',
+  avatarUrl: 'https://a/asha.png',
+};
 
 const h = vi.hoisted(() => ({
   pending: [] as Array<(result: ListResult) => void>,
@@ -180,10 +187,8 @@ afterEach(() => {
 });
 
 describe('comment author names paint from held data', () => {
-  it('a current member renders name and avatar on the first frame, the names read still pending', async () => {
-    h.candidates = [
-      { id: ASHA, name: 'Asha Rao', username: 'asha', role: 'creator', avatarUrl: 'https://a/asha.png' },
-    ];
+  it('a current member paints name and avatar first frame, names read pending', async () => {
+    h.candidates = [ASHA_MEMBER];
     render();
     await resolveLoad(0, [row('c1', ASHA, `Ping @[${GONE}]`)]);
     expect(text()).toContain('Asha Rao');
@@ -192,7 +197,7 @@ describe('comment author names paint from held data', () => {
     expect(readIds()).toEqual([[GONE]]);
   });
 
-  it('a result dropped by cleanup leaves its ids re-askable and the next run resolves them', async () => {
+  it('a result dropped by cleanup is re-asked and the next run resolves it', async () => {
     render(0);
     await resolveLoad(0, [row('c1', GONE)]);
     expect(readIds()).toEqual([[GONE]]);
@@ -217,9 +222,7 @@ describe('comment author names paint from held data', () => {
   });
 
   it('a former member still reads "Former member"', async () => {
-    h.candidates = [
-      { id: ASHA, name: 'Asha Rao', username: 'asha', role: 'creator', avatarUrl: null },
-    ];
+    h.candidates = [ASHA_MEMBER];
     render();
     await resolveLoad(0, [row('c1', GONE)]);
     h.registry.set(GONE, { name: 'Former member', avatar: null });
@@ -228,9 +231,7 @@ describe('comment author names paint from held data', () => {
   });
 
   it('legacy_author_name wins over a current member', async () => {
-    h.candidates = [
-      { id: ASHA, name: 'Asha Rao', username: 'asha', role: 'creator', avatarUrl: 'https://a/asha.png' },
-    ];
+    h.candidates = [ASHA_MEMBER];
     render();
     await resolveLoad(0, [row('c1', ASHA, 'Hello', 'Old Import Name')]);
     expect(text()).toContain('Old Import Name');

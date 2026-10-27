@@ -1418,7 +1418,8 @@ export function Comments({
   // landed after its effect was cleaned up still counts). No network here.
   const known = useMemo(() => {
     const filled = backfillProfiles(peopleIds, profiles, registryProfile);
-    return authorProfiles(candidates, filled.size > 0 ? new Map([...profiles, ...filled]) : profiles);
+    const local = filled.size > 0 ? new Map([...profiles, ...filled]) : profiles;
+    return authorProfiles(candidates, local);
   }, [peopleIds, profiles, candidates, registryProfile]);
 
   // Resolve the ids no current member covers (former members, mentions of

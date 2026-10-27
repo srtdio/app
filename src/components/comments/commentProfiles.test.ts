@@ -17,7 +17,11 @@ describe('authorProfiles', () => {
       [{ id: 'a', name: 'Asha', username: 'asha', avatarUrl: 'https://a.png' }],
       local,
     );
-    expect(out.get('a')).toEqual({ displayName: 'Asha', avatarUrl: 'https://a.png', username: 'asha' });
+    expect(out.get('a')).toEqual({
+      displayName: 'Asha',
+      avatarUrl: 'https://a.png',
+      username: 'asha',
+    });
     expect(resolveName(out, 'gone')).toBe('Former member');
   });
 
