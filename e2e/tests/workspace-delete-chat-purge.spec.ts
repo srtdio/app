@@ -44,7 +44,7 @@ async function setup(
   seed?: (network: HarnessNetwork) => void,
 ): Promise<{ network: HarnessNetwork; recorder: DeleteRecorder; errors: string[] }> {
   const errors = watchConsole(page);
-  const network = await installHarnessNetwork(page);
+  const network = await installHarnessNetwork(page, { operator: true });
   seed?.(network);
   const recorder = await installDeleteRoutes(page, network.world);
   return { network, recorder, errors };

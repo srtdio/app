@@ -134,6 +134,7 @@ export const AREAS: Area[] = [
     specs: [
       'search-placeholder-fit',
       'assets-type-tabs',
+      'cockpit',
       'chat-back-navigation',
       'chat-status-ticker',
       'context-menu',

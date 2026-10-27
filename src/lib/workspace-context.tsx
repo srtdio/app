@@ -251,6 +251,12 @@ interface WorkspaceContextValue {
   /** True when the caller may not create another workspace (free plan, not exempt). */
   createBlocked: boolean;
   /**
+   * The operator read above (isOperator), exposed as a plain boolean: true
+   * only for an active platform_operators row. False while unread, so for
+   * everyone else it never changes and never re-renders a consumer.
+   */
+  isPlatformOperator: boolean;
+  /**
    * Set after the owner deletes a workspace: the create form shows the "is
    * gone" hint while it is, and the create that follows skips induction.
    */
@@ -518,6 +524,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [workspaces, userId, isOperator],
   );
 
+  // A boolean, not the tri-state: null -> false (every non-operator) changes nothing.
+  const isPlatformOperator = isOperator === true;
+
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       workspaceId: activeWorkspace?.id ?? null,
@@ -532,6 +541,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       refreshWorkspaces,
       applyWorkspacePatch,
       createBlocked,
+      isPlatformOperator,
       deletedWorkspace,
       clearDeletedWorkspace,
       workspaceDeleted,
@@ -546,6 +556,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       refreshWorkspaces,
       applyWorkspacePatch,
       createBlocked,
+      isPlatformOperator,
       deletedWorkspace,
       clearDeletedWorkspace,
       workspaceDeleted,

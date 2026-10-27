@@ -1,5 +1,5 @@
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '@/components/shell/Sidebar';
@@ -37,6 +37,15 @@ import { useReloadOnNavigateWhenStale } from '@/lib/app-version';
 import { SessionLoading } from '@/components/auth/RouteGuards';
 import { MarksPanel } from '@/components/dev/MarksPanel';
 
+// The operator's Cockpit (dot + panel): one lazy chunk, requested only when the
+// operator flag is true. Nobody else downloads it or makes any request for it.
+const CockpitDot = lazy(() =>
+  import('@/components/cockpit/Cockpit').then((m) => ({ default: m.CockpitDot })),
+);
+const CockpitPanel = lazy(() =>
+  import('@/components/cockpit/Cockpit').then((m) => ({ default: m.CockpitPanel })),
+);
+
 /** True on /chat with an open thread (?channel=<id>); mobile then drops the shell chrome. */
 export function isThreadRoute(pathname: string, search: URLSearchParams): boolean {
   const channel = search.get('channel');
@@ -70,7 +79,9 @@ export function shellChrome(threadOpen: boolean): {
     topbarClassName: threadOpen ? 'hidden md:contents' : 'contents',
     showBottomTabs: !threadOpen,
     mainClassName: cn(
-      'flex-1 overflow-y-auto overflow-x-hidden',
+      // --side-panel-w is set only while ui/SidePanel is on screen (laptop);
+      // unset it is 0, so the page is unchanged for everyone else.
+      'flex-1 overflow-y-auto overflow-x-hidden md:pr-[var(--side-panel-w,0px)]',
       threadOpen ? 'pb-0' : 'pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-0',
     ),
   };
@@ -103,6 +114,7 @@ function AppLayoutBody() {
     setActiveWorkspaceId,
     refreshWorkspaces,
     error: workspaceError,
+    isPlatformOperator,
   } = useWorkspace();
   const navigate = useNavigate();
   const {
@@ -413,6 +425,15 @@ function AppLayoutBody() {
                   currentUserAvatarUrl={profile?.avatar_url ?? null}
                   onOpenPalette={openPalette}
                   onOpenAvatar={() => setAvatarOpen(true)}
+                  {...(isPlatformOperator
+                    ? {
+                        cockpitSlot: (
+                          <Suspense fallback={null}>
+                            <CockpitDot />
+                          </Suspense>
+                        ),
+                      }
+                    : {})}
                 />
               </div>
               {/* Its own sibling above main: showing it never remounts the Outlet. */}
@@ -422,6 +443,14 @@ function AppLayoutBody() {
               <main className={chrome.mainClassName}>
                 {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
               </main>
+              {/* The operator's Cockpit panel: fixed under the top bar on laptop
+                  (main makes room through --side-panel-w), a Sheet on phone.
+                  Nothing renders here for anyone else. */}
+              {isPlatformOperator ? (
+                <Suspense fallback={null}>
+                  <CockpitPanel />
+                </Suspense>
+              ) : null}
             </div>
             {chrome.showBottomTabs ? <BottomTabs /> : null}
             <ToastViewport />

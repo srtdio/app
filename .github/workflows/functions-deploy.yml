@@ -31,3 +31,5 @@ jobs:
         run: supabase functions deploy demo-request-send --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
       - name: Deploy resend-webhook
         run: supabase functions deploy resend-webhook --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+      - name: Deploy ops-cockpit
+        run: supabase functions deploy ops-cockpit --project-ref "${{ vars.SUPABASE_PROJECT_REF }}" --no-verify-jwt

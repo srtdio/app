@@ -51,6 +51,12 @@ export interface ChatTokenEnv {
   /** Service role: used only for the server-side membership read below. */
   SUPABASE_SECRET_KEY: string;
   /**
+   * Publishable (anon) key: the active-day tick calls user_active_day_mark as
+   * the caller (their own Bearer token), never as service role. When unset the
+   * tick is skipped with one log line; the token mint is unaffected.
+   */
+  SUPABASE_PUBLISHABLE_KEY?: string;
+  /**
    * Comma-separated list of browser origins allowed to call this Worker
    * cross-origin. Operator sets it as a Worker var/secret; when unset the code
    * falls back to {@link DEFAULT_ALLOWED_ORIGINS}.
@@ -239,6 +245,66 @@ async function ensureChatUser(env: ChatTokenEnv, username: string, traceId: stri
   throw new Error(`Agora register failed: ${response.status} ${text}`);
 }
 
+/** The Worker's execution context: only waitUntil is used (the active-day tick). */
+export interface WaitUntilContext {
+  waitUntil(work: Promise<unknown>): void;
+}
+
+/** An ISO 3166-1 alpha-2 code, the only shape user_active_day_mark accepts. */
+const COUNTRY_RE = /^[A-Z]{2}$/;
+
+/** Cloudflare's request.cf.country, uppercased, or null when absent or not two letters. */
+export function requestCountry(request: Request): string | null {
+  const raw = (request as Request & { cf?: { country?: unknown } }).cf?.country;
+  if (typeof raw !== 'string') return null;
+  const code = raw.toUpperCase();
+  return COUNTRY_RE.test(code) ? code : null;
+}
+
+/**
+ * The daily-users tick: user_active_day_mark(p_country, p_trace_id) as the
+ * caller, through PostgREST with the publishable key and the caller's own
+ * Bearer token (never the service key). Idempotent per user per day in SQL.
+ * Never throws: a failure is logged once and swallowed, so it can never reach
+ * the token response (which has already been returned when this runs).
+ */
+export async function markActiveDay(
+  env: ChatTokenEnv,
+  request: Request,
+  traceId: string,
+): Promise<void> {
+  try {
+    const key = env.SUPABASE_PUBLISHABLE_KEY;
+    if (key === undefined || key === '') {
+      logger.warn('active day mark skipped: SUPABASE_PUBLISHABLE_KEY is not set');
+      return;
+    }
+    const authorization = request.headers.get('Authorization') ?? '';
+    const response = await tracedFetch(
+      `${env.SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/user_active_day_mark`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: key,
+          authorization,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          p_country: requestCountry(request),
+          // p_trace_id is a uuid column: a non-UUID header falls back to a fresh id.
+          p_trace_id: isUuid(traceId) ? traceId : crypto.randomUUID(),
+        }),
+      },
+      traceId,
+    );
+    if (!response.ok) {
+      logger.warn('active day mark failed', { status: response.status });
+    }
+  } catch (error) {
+    logger.warn(`active day mark failed: ${serializeError(error)}`);
+  }
+}
+
 interface ChatTokenResult {
   token: string;
   expires_at: string;
@@ -251,6 +317,7 @@ async function handlePost(
   env: ChatTokenEnv,
   traceId: string,
   acao: string | null,
+  ctx: WaitUntilContext | undefined,
 ): Promise<Response> {
   const caller = await verifyCaller(request, getSupabaseJwks(env));
   if (!caller.ok) {
@@ -295,11 +362,16 @@ async function handlePost(
     agora_username: agoraUsername,
     app_key: env.AGORA_CHAT_APP_KEY,
   };
-  return json(200, result, traceId, acao);
+  const response = json(200, result, traceId, acao);
+  // The daily-users tick rides after the response: scheduled, never awaited,
+  // so the mint returns exactly as fast as before. Without a context (unit
+  // tests calling fetch directly) there is nothing to keep it alive: skipped.
+  if (ctx !== undefined) ctx.waitUntil(markActiveDay(env, request, traceId));
+  return response;
 }
 
 export default {
-  async fetch(request: Request, env: ChatTokenEnv): Promise<Response> {
+  async fetch(request: Request, env: ChatTokenEnv, ctx?: WaitUntilContext): Promise<Response> {
     const traceId = extractTraceId(request);
     logger.setTraceId(traceId);
     const acao = resolveAllowedOrigin(request, env);
@@ -310,7 +382,7 @@ export default {
       if (request.method !== 'POST') {
         return fail('method_not_allowed', 'Use POST.', traceId, acao);
       }
-      return await handlePost(request, env, traceId, acao);
+      return await handlePost(request, env, traceId, acao, ctx);
     } catch (error) {
       logger.error(`chat token mint failed: ${serializeError(error)}`);
       return fail('internal_error', 'Failed to mint chat token.', traceId, acao);
