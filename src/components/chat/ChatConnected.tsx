@@ -489,6 +489,56 @@ export function openingChannelId(input: {
   return input.pendingOpen;
 }
 
+/**
+ * The chat a ?channel= deep link opens before the list is in: its bundle,
+ * viewer side and members start at mount (startChatOpen), in parallel with
+ * the list load, never after it. Once per link (`started`: the last one
+ * kicked off). Nothing while a chat is selected, for Personal notes (their own
+ * path), or once the list is ready or failed (the deep-link step opens it, or
+ * toasts). A link the list then says is not visible never mounts a thread for
+ * it, so its stashed reads are never applied (they are keyed by the chat). Pure.
+ */
+export function earlyDeepLinkOpen(input: {
+  channelParam: string | null;
+  selectedChannelId: string | null;
+  notesChannelId: string | null;
+  loadStatus: ChatLoadStatus;
+  started: string | null;
+}): string | null {
+  const channel = input.channelParam;
+  if (channel === null || channel === '') return null;
+  if (input.loadStatus === 'ready' || input.loadStatus === 'error') return null;
+  if (input.selectedChannelId !== null || channel === input.notesChannelId) return null;
+  return channel === input.started ? null : channel;
+}
+
+/**
+ * Whether the open chat paints its skeleton. Stars are not a part: rows
+ * paint, and star badges appear when the stars read settles (remembered
+ * stars still paint in the first frame). Pure.
+ */
+export function chatThreadLoading(input: {
+  threadCurrent: boolean;
+  notesFailed: boolean;
+  pageLoading: boolean;
+  namesReady: boolean;
+  scheduledSettled: boolean;
+  notesOpen: boolean;
+  notesStatusReady: boolean;
+  notesReady: boolean;
+  savedReady: boolean;
+}): boolean {
+  return (
+    !input.threadCurrent ||
+    (!input.notesFailed &&
+      (input.pageLoading ||
+        !input.namesReady ||
+        !input.scheduledSettled ||
+        (input.notesOpen && !input.notesStatusReady) ||
+        (input.notesReady && !input.savedReady)))
+  );
+}
+
 /** The jump the open chat takes: the pending one only while it is for this chat. Pure. */
 /** The latest loaded message carrying a card for this plan, or null (Go to card). Pure. */
 export function latestPlanCardId(
@@ -843,6 +893,22 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   }, [taskParam, taskChannelParam, setSearchParams]);
   const toastRef = useRef(toast);
   toastRef.current = toast;
+  // A deep link on a cold mount: the open's reads start from the URL now,
+  // not after the list load (the step below still selects the row once the
+  // list is ready, or re-reads it and toasts).
+  const earlyOpenRef = useRef<string | null>(null);
+  const earlyChannel = earlyDeepLinkOpen({
+    channelParam: searchParams.get('channel'),
+    selectedChannelId: selected?.channelId ?? null,
+    notesChannelId: notesChat.channelId,
+    loadStatus,
+    started: earlyOpenRef.current,
+  });
+  useLayoutEffect(() => {
+    if (earlyChannel === null || earlyOpenRef.current === earlyChannel) return;
+    earlyOpenRef.current = earlyChannel;
+    startChatOpen(currentUserId, workspaceId, earlyChannel);
+  }, [earlyChannel, currentUserId, workspaceId]);
   // A layout effect: back or forward onto another chat's entry selects it
   // before the next paint (no frame of the old chat or a skeleton).
   useLayoutEffect(() => {
@@ -1228,24 +1294,13 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const stars = useChannelStars({ store: starStore, channelId: selectedChannelId });
   const refetchStars = stars.refetch;
   // A chat whose messages page is remembered reopens without waiting on reads
-  // whose last answer is already on screen: its stars (this store read them)
-  // and its scheduled rows (remembered); both re-read in place.
+  // whose last answer is already on screen: its scheduled rows (remembered),
+  // re-read in place. Stars never hold the rows: the store's remembered stars
+  // paint in the first frame, the rest when the stars read settles.
   const rememberedOpen = useMemo(() => {
     const key = chatKey(currentUserId, workspaceId, selectedChannelId);
     return key !== null && openCache.recall(key, 'thread') !== undefined;
   }, [currentUserId, workspaceId, selectedChannelId]);
-  const [starsRead, setStarsRead] = useState<{ store: typeof starStore; ids: ReadonlySet<string> }>(
-    () => ({ store: starStore, ids: new Set() }),
-  );
-  useEffect(() => {
-    if (!stars.settled || selectedChannelId === null) return;
-    setStarsRead((prev) => {
-      const ids = prev.store === starStore ? prev.ids : new Set<string>();
-      return ids.has(selectedChannelId)
-        ? prev
-        : { store: starStore, ids: new Set([...ids, selectedChannelId]) };
-    });
-  }, [stars.settled, selectedChannelId, starStore]);
   // A remembered chat's marks as last settled, for its first frame, only while
   // fresh (the marks hook sets the same ones in its effect, then revalidates;
   // older ones are never painted).
@@ -1255,12 +1310,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     const key = chatKey(currentUserId, workspaceId, selectedChannelId);
     return key !== null ? openCache.recallFresh(key, 'marks') : undefined;
   }, [rememberedOpen, marksLoaded, currentUserId, workspaceId, selectedChannelId]);
-  const starsSettled =
-    stars.settled ||
-    (rememberedOpen &&
-      selectedChannelId !== null &&
-      starsRead.store === starStore &&
-      starsRead.ids.has(selectedChannelId));
   // Every catch-up refreshes the unread counts and re-reads the channel's marks and stars.
   const onCaughtUp = useCallback(() => {
     refreshUnreadCounts();
@@ -1602,15 +1651,17 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   }, [firstSavedSettled, selectedChannelId]);
   const savedReady = !notesOpen || savedSettledFor === selectedChannelId;
   // Notes whose ensure failed: never the skeleton, the Retry state shows.
-  const threadLoading =
-    !threadCurrent ||
-    (!notesFailed &&
-      (thread.loading ||
-        !namesReady ||
-        !starsSettled ||
-        !scheduledSettled ||
-        (notesOpen && notes.status !== 'ready') ||
-        (notesReady && !savedReady)));
+  const threadLoading = chatThreadLoading({
+    threadCurrent,
+    notesFailed,
+    pageLoading: thread.loading,
+    namesReady,
+    scheduledSettled,
+    notesOpen,
+    notesStatusReady: notes.status === 'ready',
+    notesReady,
+    savedReady,
+  });
   // A message turned tombstone (deleted here or by its sender) loses its star.
   useEffect(() => {
     const gone = thread.messages.filter((m) => m.deleted === true).map((m) => m.id);

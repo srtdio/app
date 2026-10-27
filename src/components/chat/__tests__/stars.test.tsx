@@ -299,8 +299,8 @@ describe('bubble meta', () => {
 describe('thread', () => {
   it('first paint: a starred message paints its star with the first page', () => {
     const { store } = okStore();
-    // ChatConnected holds the skeleton until the stars read settled; by then
-    // the ids are in the store, so the first render with rows has the star.
+    // Stars the store already holds (remembered, or a read that settled
+    // first) paint with the first page; later ones fill in on settle.
     store.setChannel('c1', ['m1']);
     const out = withStars(store, thread({ messages: [message()] }));
     expect(out).toContain('data-meta-star');
