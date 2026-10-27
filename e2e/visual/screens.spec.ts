@@ -699,6 +699,8 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await openDm(page);
       const kept = page.locator('[data-bubble]', { hasText: REMOVED_BODY }).last();
+      // A reader's scroll: the thread's stick-to-bottom lets go (a script scroll alone does not).
+      await page.locator('[data-thread-viewport] ul').first().dispatchEvent('wheel');
       await kept.scrollIntoViewIfNeeded();
       await waitFor([kept.getByTestId('files-removed-line')], 'files removed line');
     },
