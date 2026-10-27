@@ -319,9 +319,7 @@ function PaintLogPanel(): ReactElement {
               Copy
             </Button>
           </div>
-          <ol
-            className="max-h-[20vh] overflow-y-auto px-2 pb-2 font-mono text-xs leading-4 tabular-nums"
-          >
+          <ol className="max-h-[20vh] overflow-y-auto px-2 pb-2 font-mono text-xs leading-4 tabular-nums">
             {marks.map((m, i) => (
               <li key={i} className="flex gap-2">
                 <span className="min-w-0 flex-1 break-all">{m.name}</span>
