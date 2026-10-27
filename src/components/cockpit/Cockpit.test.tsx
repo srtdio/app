@@ -7,10 +7,10 @@ import type { CockpitFull, CockpitTab } from '@/lib/cockpit/types';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const layout = vi.hoisted(() => ({ laptop: true }));
-vi.mock('@/lib/use-is-laptop', () => ({
+vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
   useIsLaptop: () => layout.laptop,
   isLaptopNow: () => layout.laptop,
-  prefersReducedMotion: () => true,
 }));
 
 const calls = vi.hoisted(() => ({ full: [] as [string, boolean][], status: 0 }));
@@ -34,7 +34,8 @@ vi.mock('@/lib/cockpit/client', () => ({
         traffic: { state: 'ok', value: 410, level: 'green' },
         users: { state: 'ok', value: 7, level: 'green' },
       },
-      data: null,
+      // Needs you carries no tab data; every other tab answers with its source.
+      data: tab === 'needs' ? null : { state: 'error', reason: "Can't reach Users" },
     } as CockpitFull;
     return Promise.resolve(answer);
   },
