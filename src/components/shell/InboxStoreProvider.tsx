@@ -14,8 +14,9 @@
 // toast surface and the nav badge (read via useInboxStore).
 //
 // POLL: 30s balances immediacy against battery/network for an approval tool. A
-// backgrounded tab reads nothing and ticks immediately on the return to
-// visible (that tick's rows toast and tone then).
+// backgrounded tab polls every second interval (60s) so the tab alert can tell
+// the viewer something happened (tab-alert.ts), and ticks immediately on the
+// return to visible.
 //
 // COUNT: every unread row counts (the chat, plan and task alerts included), so
 // the Notifications badge matches the page. The count carries the workspace and
@@ -325,9 +326,8 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   }, [workspaceId, userId]);
 
   // The foreground-only poll plus the two window listeners, installed once. The
-  // tick is skipped while the tab is hidden (nothing is read) and runs
-  // immediately on return; the change event refetches the count. All three
-  // are torn down on unmount.
+  // tick is skipped while the tab is hidden and runs immediately on return; the
+  // change event refetches the count. All three are torn down on unmount.
   useEffect(() => {
     const onVisibility = (): void => {
       if (!document.hidden) tickRef.current();
@@ -339,8 +339,16 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       const uid = userIdRef.current;
       if (ws !== null && uid !== null) refreshCount(ws, uid);
     };
+    // Hidden: every second interval only (60s), to stay light on battery.
+    let hiddenSkip = false;
     const interval = window.setInterval(() => {
-      if (!document.hidden) tickRef.current();
+      if (document.hidden) {
+        hiddenSkip = !hiddenSkip;
+        if (hiddenSkip) return;
+      } else {
+        hiddenSkip = false;
+      }
+      tickRef.current();
     }, POLL_MS);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener(INBOX_CHANGED_EVENT, onChanged);

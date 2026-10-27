@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// The shell's inbox poll, counted on fake reads. A hidden tab reads nothing
-// (it used to poll every 60 s); the return to visible ticks once. A tick that
+// The shell's inbox poll, counted on fake reads. A hidden tab polls every
+// 60 s (the background tab alert and tone need it), never asking the
+// reminder readers to reload; the return to visible ticks once. A tick that
 // finds no new rows asks the reminder readers for nothing (it used to make
 // both reload the workspace's reminders every 30 s); a tick with a new row
 // asks once.
@@ -135,15 +136,15 @@ async function mount(): Promise<void> {
 }
 
 describe('inbox poll', () => {
-  it('a hidden tab reads nothing; the return to visible reads once', async () => {
+  it('a hidden tab polls every 60 s, no reminder reload; the return reads once', async () => {
     await mount();
     expect(counts).toMatchObject({ badge: 1, seed: 1, since: 0 });
     setHidden(true);
-    await advance(5 * 60_000);
-    expect(counts).toMatchObject({ badge: 1, seed: 1, since: 0 });
+    for (let i = 0; i < 10; i += 1) await advance(POLL_MS);
+    expect(counts).toMatchObject({ badge: 6, seed: 1, since: 5, announce: 0 });
     setHidden(false);
     await flush();
-    expect(counts).toMatchObject({ badge: 2, since: 1 });
+    expect(counts).toMatchObject({ badge: 7, since: 6, announce: 0 });
   });
 
   it('a tick with no new rows asks the reminders nothing; a new row asks once', async () => {
