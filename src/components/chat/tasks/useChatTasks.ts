@@ -29,7 +29,7 @@ import type { Client } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
-import { readProfiles, type ChatProfile } from '@/lib/chat-reads';
+import { readProfiles, withReadTimeout, type ChatProfile } from '@/lib/chat-reads';
 import { useChat } from '@/lib/chat/chat-context';
 import { userIdFromAgoraUsername } from '@/lib/chat/agora-identity';
 import { createCmdMessage } from '@/lib/chat/message-factory';
@@ -321,9 +321,11 @@ export function useChatTasks(params: {
 
   const load = useCallback(
     async (forChannel: string): Promise<boolean> => {
+      // Each read bounded at READ_TIMEOUT_MS: a hung read lands as failed, so
+      // loaded never stays false.
       const [tasks, events] = await Promise.all([
-        readChannelTasks(db, forChannel),
-        readTaskEvents(db, forChannel),
+        withReadTimeout((signal) => readChannelTasks(db, forChannel, signal)),
+        withReadTimeout((signal) => readTaskEvents(db, forChannel, { signal })),
       ]);
       mark('chat:tasks:loaded');
       if (channelRef.current !== forChannel) return false;

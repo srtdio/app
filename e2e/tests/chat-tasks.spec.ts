@@ -307,6 +307,9 @@ test('an older page paints with its task lines in one commit; the reader does no
   const olderTask = network.world.tables.chat_tasks?.find((t) => t.title === OLDER_LINE_TITLE);
   const olderLines = `[data-task-id="${String(olderTask?.id)}"]`;
   await openChat(page, GROUP_NAME);
+  // Rows paint before the task read lands (tasks are off the open hold): the
+  // first page's lines (a burst here) slot in first; the anchor is measured after.
+  await page.locator('[data-task-row]').first().waitFor({ state: 'attached', timeout: 8000 });
   await expect(page.locator(olderLines)).toHaveCount(0);
 
   // Any commit that shows an older row without all its lines is recorded.
