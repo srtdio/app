@@ -13,7 +13,9 @@ async function freshLazy(): Promise<typeof import('@/lib/sentry-lazy')> {
 }
 
 function throwUncaught(err: Error): void {
-  window.dispatchEvent(new ErrorEvent('error', { error: err, message: err.message }));
+  window.dispatchEvent(
+    new ErrorEvent('error', { error: err, message: err.message, cancelable: true }),
+  );
 }
 
 function rejectUnhandled(reason: unknown): void {
@@ -28,8 +30,14 @@ async function runIdle(lazy: typeof import('@/lib/sentry-lazy')): Promise<void> 
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+// jsdom reports an error event nobody prevented as an uncaught exception.
+function markHandled(event: Event): void {
+  event.preventDefault();
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  window.addEventListener('error', markHandled);
   sentry.initSentry.mockImplementation(() => Promise.resolve(true));
   (window as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback = (cb) => {
     cb();
@@ -38,6 +46,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  window.removeEventListener('error', markHandled);
   delete (window as { requestIdleCallback?: unknown }).requestIdleCallback;
 });
 
