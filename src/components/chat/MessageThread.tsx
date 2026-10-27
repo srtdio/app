@@ -687,10 +687,10 @@ export function openHoldSettled(parts: {
   side: boolean;
   ticker: boolean;
   cards: boolean;
-  /** The chat's task list and its change lines (absent: nothing to wait on). */
-  tasks?: boolean;
 }): boolean {
-  return parts.marks && parts.side && parts.ticker && parts.cards && parts.tasks !== false;
+  // Task lines are not a part: rows paint first and the lines slot in when
+  // their read lands (the list may shift once; the bottom pin holds).
+  return parts.marks && parts.side && parts.ticker && parts.cards;
 }
 
 /**
@@ -5536,7 +5536,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       statusPlanCards === null ||
       pagePlanIds.length === 0 ||
       !statusPlanCards.cache.snapshot(pagePlanIds).loading,
-    tasks: taskChannel === null || chatTasks.loaded,
   });
   const openHeld = !openHoldDone && !openPartsSettled;
   const onOpenPlanCompose = props.onOpenPlanCompose;

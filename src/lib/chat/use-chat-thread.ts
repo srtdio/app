@@ -1304,6 +1304,16 @@ export function useChatThread(params: {
         }
         if (read.newer === null || read.rechecked === null || read.reactions === null) {
           logger.warn('chat: reopen revalidation read failed', { channel_id: channelId });
+          if (page.rows.length === 0) {
+            // An empty remembered page with nothing read to fill it: a fresh
+            // open (as a gap), never an empty chat for the rest of the session.
+            memory.forget(key, 'thread');
+            owner?.release();
+            owner = memory.attach(key);
+            shown = false;
+            openFresh({ fresh: true });
+            return;
+          }
         }
         const untouched = (ids: readonly string[]): string[] =>
           untouchedSince(ids, reactionTouchesRef.current.byId, reactionsFrom);
@@ -1346,6 +1356,13 @@ export function useChatThread(params: {
             { id: cursorRow.id, time: cursorRow.time },
             new Date().toISOString(),
           );
+        }
+        if (window.rows.length === 0) {
+          // No server rows recorded (a render before the page landed, or only
+          // outbox rows): never remember an empty page; the next open is fresh.
+          if (memoryKey !== null) memory.forget(memoryKey, 'thread');
+          owner.release();
+          return;
         }
         owner.keep({
           rows: window.rows,
