@@ -158,9 +158,7 @@ export interface NavigateReloadDeps {
  * Per shell mount: call on every render's location. Returns true when it
  * issued the full page load. The first call only records where the tab is.
  */
-export function createNavigateReloader(
-  deps: NavigateReloadDeps,
-): (target: RouteTarget) => boolean {
+export function createNavigateReloader(deps: NavigateReloadDeps): (target: RouteTarget) => boolean {
   let last: string | null = null;
   return (target) => {
     const url = `${target.pathname}${target.search}${target.hash}`;

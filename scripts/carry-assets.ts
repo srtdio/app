@@ -143,6 +143,8 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  process.stderr.write(`[carry-assets] failed: ${err instanceof Error ? err.stack : String(err)}\n`);
+  process.stderr.write(
+    `[carry-assets] failed: ${err instanceof Error ? err.stack : String(err)}\n`,
+  );
   process.exit(1);
 });
