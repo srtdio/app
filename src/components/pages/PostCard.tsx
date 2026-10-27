@@ -387,7 +387,10 @@ export function PostCard({
           picture clips to the card's top corners itself: the card root does not
           clip, so the laptop ⋯ popover can open past the card's edge. */}
       {coverKind === 'image' ? (
-        <div data-post-card-thumb="" className="pointer-events-none relative overflow-hidden rounded-t-xl">
+        <div
+          data-post-card-thumb=""
+          className="pointer-events-none relative overflow-hidden rounded-t-xl"
+        >
           <Thumbnail
             assetVersionId={post.thumbnailAssetVersionId}
             cache={cache}
@@ -405,7 +408,10 @@ export function PostCard({
           </Thumbnail>
         </div>
       ) : coverKind === 'video' ? (
-        <div data-post-card-thumb="" className="pointer-events-none relative overflow-hidden rounded-t-xl">
+        <div
+          data-post-card-thumb=""
+          className="pointer-events-none relative overflow-hidden rounded-t-xl"
+        >
           <div
             data-post-card-play=""
             className={cn(
