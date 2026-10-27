@@ -144,9 +144,15 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   const workspaceIdRef = useRef<string | null>(workspaceId);
   const userIdRef = useRef<string | null>(userId);
   // One poll at a time, shared by the timer, the return-to-visible tick and the
-  // push nudge; the in-flight poll itself, so a nudge can queue behind it.
+  // push nudge. A nudge waits on idleWaitersRef to queue behind an in-flight poll.
   const inFlightRef = useRef(false);
-  const inFlightPollRef = useRef<Promise<void> | null>(null);
+  const idleWaitersRef = useRef<Array<() => void>>([]);
+  const whenIdle = (): Promise<void> =>
+    inFlightRef.current
+      ? new Promise<void>((resolve) => {
+          idleWaitersRef.current.push(resolve);
+        })
+      : Promise.resolve();
   // Whether the push channel is SUBSCRIBED (the visible poll stretches to 120s).
   const pushLiveRef = useRef(false);
   // Entry ids already toasted for the active tenant: a row is never toasted twice.
@@ -262,20 +268,17 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   // The full poll tick, held in a ref so the interval registers once yet always
   // runs the latest closure (toast/navigate). Refetches the count, then diffs new
   // rows against the high-water mark and toasts at most once for the batch.
-  // Returns the tick's promise (resolved at once when it did not start).
-  const tickRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const tickRef = useRef<() => void>(() => {});
   tickRef.current = () => {
     const ws = workspaceIdRef.current;
     const uid = userIdRef.current;
-    if (ws === null || uid === null || inFlightRef.current) return Promise.resolve();
+    if (ws === null || uid === null || inFlightRef.current) return;
     refreshCount(ws, uid);
     inFlightRef.current = true;
-    const poll = pollNew(ws, uid).finally(() => {
+    void pollNew(ws, uid).finally(() => {
       inFlightRef.current = false;
-      inFlightPollRef.current = null;
+      for (const resolve of idleWaitersRef.current.splice(0)) resolve();
     });
-    inFlightPollRef.current = poll;
-    return poll;
   };
 
   // The toast for new chat mentions: one batched name read, one toast, and the
@@ -353,9 +356,9 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     const token = accessTokenRef.current;
     if (userId === null || token === null) return;
     const gate = createTickGate(async () => {
-      const running = inFlightPollRef.current;
-      if (running !== null) await running;
-      await tickRef.current();
+      await whenIdle();
+      tickRef.current();
+      await whenIdle();
     });
     const stop = subscribeInboxPush(supabase, userId, token, {
       onNudge: (payload) => {
@@ -382,7 +385,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   // change event refetches the count. All three are torn down on unmount.
   useEffect(() => {
     const onVisibility = (): void => {
-      if (!document.hidden) void tickRef.current();
+      if (!document.hidden) tickRef.current();
     };
     const onChanged = (event: Event): void => {
       // The poll's own event: the tick already refetched the count.
@@ -404,7 +407,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       elapsed += 1;
       if (elapsed < intervalsPerTick(document.hidden, pushLiveRef.current)) return;
       elapsed = 0;
-      void tickRef.current();
+      tickRef.current();
     }, POLL_MS);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener(INBOX_CHANGED_EVENT, onChanged);
