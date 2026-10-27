@@ -35,6 +35,12 @@
 //
 // TONE: new Activity rows from someone else play the chat's notification tone
 // (shared throttle, notify-sound.ts), except while Notifications is open.
+//
+// PUSH: one private broadcast channel per signed-in user (inbox-push.ts). A
+// nudge for the active workspace runs the same tick as the poll, at most one
+// per second, with one follow-up queued behind an in-flight tick. While the
+// channel is SUBSCRIBED the visible poll stretches to 120s; any error, close or
+// timeout returns it to 30s. Every re-SUBSCRIBED ticks once to catch up.
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -73,6 +79,13 @@ import { ReminderRing } from '@/components/chat/ReminderRing';
 import { playToneShared } from '@/lib/chat/notify-sound';
 import { pushTabAlert } from '@/lib/tab-alert';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
+import {
+  POLL_MS,
+  createTickGate,
+  intervalsPerTick,
+  nudgeTicks,
+  subscribeInboxPush,
+} from '@/lib/inbox/inbox-push';
 
 /** The slice the nav reads: the actionable unread count for the active workspace. */
 export interface InboxStoreContextValue {
@@ -102,8 +115,6 @@ export function ownedUnread(
   return owned.count;
 }
 
-const POLL_MS = 30_000;
-
 export function InboxStoreProvider({ children }: { children: ReactNode }): ReactElement {
   const { session } = useSession();
   const { workspaceId } = useWorkspace();
@@ -132,8 +143,18 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   // the change listener never read a stale closure.
   const workspaceIdRef = useRef<string | null>(workspaceId);
   const userIdRef = useRef<string | null>(userId);
-  // One poll at a time, shared by the timer and the return-to-visible tick.
+  // One poll at a time, shared by the timer, the return-to-visible tick and the
+  // push nudge. A nudge waits on idleWaitersRef to queue behind an in-flight poll.
   const inFlightRef = useRef(false);
+  const idleWaitersRef = useRef<Array<() => void>>([]);
+  const whenIdle = (): Promise<void> =>
+    inFlightRef.current
+      ? new Promise<void>((resolve) => {
+          idleWaitersRef.current.push(resolve);
+        })
+      : Promise.resolve();
+  // Whether the push channel is SUBSCRIBED (the visible poll stretches to 120s).
+  const pushLiveRef = useRef(false);
   // Entry ids already toasted for the active tenant: a row is never toasted twice.
   const toastedRef = useRef<Set<string>>(new Set());
 
@@ -256,6 +277,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     inFlightRef.current = true;
     void pollNew(ws, uid).finally(() => {
       inFlightRef.current = false;
+      for (const resolve of idleWaitersRef.current.splice(0)) resolve();
     });
   };
 
@@ -325,6 +347,39 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     void seedHighWater(workspaceId, userId);
   }, [workspaceId, userId]);
 
+  // Push: one subscription per signed-in user, replaced on a user switch and
+  // stopped on sign-out and unmount. A nudge waits for an in-flight poll, then
+  // runs the same tick; the gate keeps it to one per second.
+  const accessTokenRef = useRef<string | null>(null);
+  accessTokenRef.current = session?.access_token ?? null;
+  useEffect(() => {
+    const token = accessTokenRef.current;
+    if (userId === null || token === null) return;
+    const gate = createTickGate(async () => {
+      await whenIdle();
+      tickRef.current();
+      await whenIdle();
+    });
+    const stop = subscribeInboxPush(supabase, userId, token, {
+      onNudge: (payload) => {
+        if (nudgeTicks(payload, workspaceIdRef.current)) gate.nudge();
+      },
+      onLive: (live) => {
+        pushLiveRef.current = live;
+      },
+      // A re-SUBSCRIBED catches what was missed while down; the first one only
+      // when the mark is already seeded (else the seed read covers it).
+      onSubscribed: (first) => {
+        if (!first || highWaterRef.current !== null) gate.nudge();
+      },
+    });
+    return () => {
+      stop();
+      gate.dispose();
+      pushLiveRef.current = false;
+    };
+  }, [userId]);
+
   // The foreground-only poll plus the two window listeners, installed once. The
   // tick is skipped while the tab is hidden and runs immediately on return; the
   // change event refetches the count. All three are torn down on unmount.
@@ -340,14 +395,18 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       if (ws !== null && uid !== null) refreshCount(ws, uid);
     };
     // Hidden: every second interval only (60s), to stay light on battery.
-    let hiddenSkip = false;
+    // Visible with the push channel live: every fourth (120s); without it,
+    // every interval (30s), so an error or close returns to 30s at once.
+    let elapsed = 0;
+    let wasHidden = document.hidden;
     const interval = window.setInterval(() => {
-      if (document.hidden) {
-        hiddenSkip = !hiddenSkip;
-        if (hiddenSkip) return;
-      } else {
-        hiddenSkip = false;
+      if (document.hidden !== wasHidden) {
+        wasHidden = document.hidden;
+        elapsed = 0;
       }
+      elapsed += 1;
+      if (elapsed < intervalsPerTick(document.hidden, pushLiveRef.current)) return;
+      elapsed = 0;
       tickRef.current();
     }, POLL_MS);
     document.addEventListener('visibilitychange', onVisibility);
