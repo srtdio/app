@@ -14,9 +14,8 @@
 // toast surface and the nav badge (read via useInboxStore).
 //
 // POLL: 30s balances immediacy against battery/network for an approval tool. A
-// backgrounded tab polls every second interval (60s) so the tab alert can tell
-// the viewer something happened (tab-alert.ts), and ticks immediately on the
-// return to visible.
+// backgrounded tab reads nothing and ticks immediately on the return to
+// visible (that tick's rows toast and tone then).
 //
 // COUNT: every unread row counts (the chat, plan and task alerts included), so
 // the Notifications badge matches the page. The count carries the workspace and
@@ -25,9 +24,9 @@
 //
 // TOASTS: the rows the bell used to own (bell-types.ts) never word the activity
 // toast. A new chat mention toasts "<name> mentioned you" with Open instead,
-// and every tick asks the reminder readers to reload. ReminderRing (the
-// reminder ring, chime and missed-on-open toast) is mounted here so it runs on
-// every page from app start.
+// and a tick that found new rows asks the reminder readers to reload.
+// ReminderRing (the reminder ring, chime and missed-on-open toast) is mounted
+// here so it runs on every page from app start.
 //
 // OWN ROWS: since 20261018140000 every action also writes the actor one
 // already-read row of their own (inbox_self_entry). Those are history, not news:
@@ -195,6 +194,9 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     highWaterRef.current = summary.nextHighWaterMs;
     if (summary.newRows.length > 0) {
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT, { detail: POLL_CHANGE_SOURCE }));
+      // New rows (a reminder that fired, one set on another device): the
+      // reminder readers reload. A tick that found nothing asks nothing.
+      announceRemindersChanged();
     }
     const fresh = unseenRows(summary.newRows, toastedRef.current);
     const { activity, chatMentions } = splitNewRows(fresh);
@@ -250,7 +252,6 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     const uid = userIdRef.current;
     if (ws === null || uid === null || inFlightRef.current) return;
     refreshCount(ws, uid);
-    announceRemindersChanged();
     inFlightRef.current = true;
     void pollNew(ws, uid).finally(() => {
       inFlightRef.current = false;
@@ -324,8 +325,9 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   }, [workspaceId, userId]);
 
   // The foreground-only poll plus the two window listeners, installed once. The
-  // tick is skipped while the tab is hidden and runs immediately on return; the
-  // change event refetches the count. All three are torn down on unmount.
+  // tick is skipped while the tab is hidden (nothing is read) and runs
+  // immediately on return; the change event refetches the count. All three
+  // are torn down on unmount.
   useEffect(() => {
     const onVisibility = (): void => {
       if (!document.hidden) tickRef.current();
@@ -337,16 +339,8 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
       const uid = userIdRef.current;
       if (ws !== null && uid !== null) refreshCount(ws, uid);
     };
-    // Hidden: every second interval only (60s), to stay light on battery.
-    let hiddenSkip = false;
     const interval = window.setInterval(() => {
-      if (document.hidden) {
-        hiddenSkip = !hiddenSkip;
-        if (hiddenSkip) return;
-      } else {
-        hiddenSkip = false;
-      }
-      tickRef.current();
+      if (!document.hidden) tickRef.current();
     }, POLL_MS);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener(INBOX_CHANGED_EVENT, onChanged);

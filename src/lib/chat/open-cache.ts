@@ -86,6 +86,12 @@ export const JOIN_WINDOW_MS = 2_000;
 /** The longest a chat open holds its first paint for the parts still loading. */
 export const OPEN_HOLD_MS = 1_000;
 
+/**
+ * How long a pre-warmed bundle stands in for the open's own: a tap within this
+ * long of the pre-warm opens from it with no re-read; later, the reopen reads.
+ */
+export const PREWARM_FRESH_MS = 60_000;
+
 /** The most rows a remembered messages page keeps (the newest; older ones are dropped). */
 export const REMEMBERED_MESSAGES_LIMIT = 200;
 
@@ -146,6 +152,8 @@ interface Slot {
   owners: number;
   /** Bumped when the remembered page is forgotten: an older owner's write-back is void. */
   threadEpoch: number;
+  /** The pre-warm's bundle (the remembered page came from it), until an open takes it. */
+  prewarm?: { bundle: ChatOpenBundle; at: number; epoch: number };
 }
 
 export interface OpenCache {
@@ -207,6 +215,15 @@ export interface OpenCache {
   attach: (key: ChatKey) => { keep: (thread: RememberedThread) => void; release: () => void };
   /** Whether a thread shows this chat now. */
   attached: (key: ChatKey) => boolean;
+  /** The pre-warm kept this chat's page from `bundle`: an open soon after may take it. */
+  notePrewarm: (key: ChatKey, bundle: ChatOpenBundle) => void;
+  /**
+   * The pre-warmed bundle, once: only within PREWARM_FRESH_MS of the pre-warm,
+   * while the page it kept is still remembered (never forgotten since) and
+   * while none of its scheduled rows is due. Undefined otherwise; either way
+   * the pre-warm is spent.
+   */
+  takePrewarm: (key: ChatKey) => ChatOpenBundle | undefined;
   /** Forget everything. */
   clear: () => void;
   /**
@@ -428,6 +445,23 @@ export function createOpenCache(
     },
     attached(key) {
       return (slots.get(slotKey(key))?.owners ?? 0) > 0;
+    },
+    notePrewarm(key, bundle) {
+      const slot = slots.get(slotKey(key));
+      if (slot === undefined || slot.memory.thread === undefined) return;
+      slot.prewarm = { bundle, at: now(), epoch: slot.threadEpoch };
+    },
+    takePrewarm(key) {
+      const slot = slots.get(slotKey(key));
+      const warm = slot?.prewarm;
+      if (slot === undefined || warm === undefined) return undefined;
+      delete slot.prewarm;
+      if (slot.threadEpoch !== warm.epoch || slot.memory.thread === undefined) return undefined;
+      const at = now();
+      if (at - warm.at > PREWARM_FRESH_MS) return undefined;
+      // A scheduled row due since may have sent: the open reads, as before.
+      if (warm.bundle.scheduled.some((row) => Date.parse(row.send_at) <= at)) return undefined;
+      return warm.bundle;
     },
     opened(key) {
       const slot = slotOf(key, true);

@@ -8,10 +8,12 @@
 // at once: the write's outcome is held locally until the reload lands.
 //
 // Data: one load on mount, then a reload when the tab becomes visible and on
-// every REMINDERS_CHANGED_EVENT (a write here, a ring, the shell's inbox poll
-// tick). Write failures toast "Couldn't do that. Try again."; a "message not
-// found" (deleted meanwhile) stays silent. Every listener and in-flight read is
-// dropped on unmount.
+// every REMINDERS_CHANGED_EVENT (a write here, a ring, an inbox poll tick that
+// found new rows). The read is the one the shell's reminder ring shares
+// (readSharedPendingReminders): a mount takes its last answer, and each cause
+// is one read for both. Write failures toast "Couldn't do that. Try again."; a
+// "message not found" (deleted meanwhile) stays silent. Every listener and
+// in-flight read is dropped on unmount.
 
 import {
   createContext,
@@ -37,10 +39,10 @@ import {
   announceRemindersChanged,
   cancelReminder,
   mapReminderError,
-  readPendingReminders,
+  readSharedPendingReminders,
   reminderSetCopy,
   setReminder,
-  type ReminderRow,
+  type PendingReminder,
 } from '@/lib/chat/reminders';
 import { useToast } from '@/components/ui/toast';
 
@@ -50,14 +52,14 @@ export const REMINDER_CANCELLED_COPY = 'Reminder cancelled';
 /** What the reminder sheet is for: a new reminder on a message, or a new time for one. */
 type ReminderTarget =
   | { mode: 'new'; messageId: string; channelId: string; preview: string }
-  | { mode: 'change'; reminder: ReminderRow; preview: string };
+  | { mode: 'change'; reminder: PendingReminder; preview: string };
 
 interface ReminderContextValue {
   canRemind: (messageId: string) => boolean;
   /** Opens the sheet: a new reminder, or change mode when one is pending on the message. */
   openReminderFor: (messageId: string) => void;
   /** The viewer's pending reminder on a message, from the loaded list; null when none. */
-  pendingReminderFor: (messageId: string) => ReminderRow | null;
+  pendingReminderFor: (messageId: string) => PendingReminder | null;
   /** The change-mode sheet's "Cancel reminder": cancels the target, toasts "Reminder cancelled". */
   cancelReminderFromSheet: () => Promise<void>;
   /** The sheet ChatReminderSheet shows (null: closed). */
@@ -97,7 +99,7 @@ export interface ReminderActionDeps {
 interface ReminderActions {
   setReminderAt: (target: { messageId: string; channelId: string }, at: Date) => Promise<void>;
   /** Resolves true when the reminder was cancelled. */
-  cancelReminder: (reminder: ReminderRow) => Promise<boolean>;
+  cancelReminder: (reminder: PendingReminder) => Promise<boolean>;
 }
 
 /**
@@ -148,10 +150,10 @@ export function ReminderProvider(props: {
 }): ReactElement {
   const { workspaceId, currentUserId } = props;
   const toast = useToast();
-  const [reminders, setReminders] = useState<readonly ReminderRow[]>([]);
+  const [reminders, setReminders] = useState<readonly PendingReminder[]>([]);
   const [reminderTarget, setReminderTarget] = useState<ReminderTarget | null>(null);
   // Reminder writes not yet in a reload, by message id (null: cancelled).
-  const [localReminders, setLocalReminders] = useState<ReadonlyMap<string, ReminderRow | null>>(
+  const [localReminders, setLocalReminders] = useState<ReadonlyMap<string, PendingReminder | null>>(
     new Map(),
   );
 
@@ -171,34 +173,43 @@ export function ReminderProvider(props: {
     };
   }, []);
 
-  const reload = useCallback((): void => {
-    seqRef.current += 1;
-    const seq = seqRef.current;
-    void readPendingReminders(supabase, { workspaceId }).then((res) => {
-      if (!mountedRef.current || seq !== seqRef.current) return;
-      if (!res.ok) {
-        // A failed reload keeps what is loaded (and any write held locally).
-        logger.warn('reminders: load failed', { error: res.error.message });
-        return;
-      }
-      setReminders(res.data);
-      setLocalReminders(new Map());
-    });
-  }, [workspaceId]);
+  const reload = useCallback(
+    (cause?: Event): void => {
+      seqRef.current += 1;
+      const seq = seqRef.current;
+      const read = readSharedPendingReminders(supabase, {
+        userId: currentUserId,
+        workspaceId,
+        ...(cause !== undefined ? { cause } : {}),
+      });
+      void read.then((res) => {
+        if (!mountedRef.current || seq !== seqRef.current) return;
+        if (!res.ok) {
+          // A failed reload keeps what is loaded (and any write held locally).
+          logger.warn('reminders: load failed', { error: res.error.message });
+          return;
+        }
+        setReminders(res.data);
+        setLocalReminders(new Map());
+      });
+    },
+    [workspaceId, currentUserId],
+  );
 
   // First load, a fresh one on a workspace switch, then the tab becoming
   // visible and every "reminders changed" reload.
   useEffect(() => {
     setReminders([]);
     reload();
-    const onVisible = (): void => {
-      if (document.visibilityState === 'visible') reload();
+    const onVisible = (event: Event): void => {
+      if (document.visibilityState === 'visible') reload(event);
     };
+    const onChanged = (event: Event): void => reload(event);
     document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener(REMINDERS_CHANGED_EVENT, reload);
+    window.addEventListener(REMINDERS_CHANGED_EVENT, onChanged);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener(REMINDERS_CHANGED_EVENT, reload);
+      window.removeEventListener(REMINDERS_CHANGED_EVENT, onChanged);
     };
   }, [reload]);
 
@@ -222,19 +233,16 @@ export function ReminderProvider(props: {
                 ? null
                 : {
                     id: next.id,
-                    user_id: currentUserId,
                     message_id: messageId,
                     channel_id: next.channelId,
-                    workspace_id: workspaceId,
                     remind_at: next.remindAt.toISOString(),
                     fired_at: null,
                     cancelled_at: null,
-                    created_at: new Date().toISOString(),
                   },
             ),
           ),
       }),
-    [workspaceId, currentUserId, toast],
+    [toast],
   );
 
   const previewOfMessage = useCallback((messageId: string): string => {
@@ -267,7 +275,7 @@ export function ReminderProvider(props: {
   }, []);
 
   const pendingReminderFor = useCallback(
-    (messageId: string): ReminderRow | null => {
+    (messageId: string): PendingReminder | null => {
       const local = localReminders.get(messageId);
       if (local !== undefined) return local;
       return (

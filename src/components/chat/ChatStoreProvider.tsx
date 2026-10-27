@@ -161,6 +161,28 @@ import type {
   OutboxStorage,
 } from '@/lib/chat/chat-store';
 import { clearVoiceDrafts, isVoiceDraftEntryId } from '@/lib/chat/voice-draft';
+import { createReadTracker, type ReadTracker } from '@/lib/wake-read';
+import type { ChatStatus } from '@/lib/chat/types';
+
+/**
+ * A connect within this long of an unread counts read settling (or while one
+ * is out) re-reads nothing: the first list load's counts are that read.
+ */
+export const UNREAD_CONNECT_SKIP_MS = 5_000;
+
+/**
+ * Whether a status change re-reads the unread counts: a (re)connect does,
+ * unless a counts read is out or settled under UNREAD_CONNECT_SKIP_MS ago
+ * (`countsFresh`). Pure.
+ */
+export function connectRefreshWanted(
+  previous: ChatStatus,
+  status: ChatStatus,
+  countsFresh: boolean,
+): boolean {
+  if (status !== 'connected' || previous === 'connected') return false;
+  return !countsFresh;
+}
 
 /** The store plus the actions the chat UI uses to keep it in step. */
 interface ChatStoreContextValue {
@@ -1050,18 +1072,30 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
     setState((prev) => store.clearPendingOpen(prev));
   }, []);
 
+  // Every unread counts read of this scope (the list load's and each refresh),
+  // so a connect right after one re-reads nothing. A new scope starts empty.
+  const unreadReadsRef = useRef<{ scope: string; reads: ReadTracker } | null>(null);
+  const unreadReadsFor = useCallback((forScope: string): ReadTracker => {
+    const held = unreadReadsRef.current;
+    if (held !== null && held.scope === forScope) return held.reads;
+    const reads = createReadTracker(UNREAD_CONNECT_SKIP_MS);
+    unreadReadsRef.current = { scope: forScope, reads };
+    return reads;
+  }, []);
+
   // Refreshes after the first load (each bounded at 5s); a failure keeps the
   // current values, and a response for a workspace the store has moved on
   // from is dropped.
   const refreshUnreadCounts = useCallback(() => {
     if (scope === null || workspaceId === null) return;
-    void loadUnreadCounts(supabase, workspaceId).then((result) => {
+    const read = unreadReadsFor(scope).track(loadUnreadCounts(supabase, workspaceId));
+    void read.then((result) => {
       if (!result.ok) {
         logger.warn('chat store: unread counts load failed', { error: result.error.message });
       }
       setState((prev) => refreshedState(prev, scope, result, store.applyUnreadCounts));
     });
-  }, [scope, workspaceId]);
+  }, [scope, workspaceId, unreadReadsFor]);
 
   const refreshPreviews = useCallback(() => {
     if (scope === null || workspaceId === null || currentUserId === null) return;
@@ -1196,7 +1230,8 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
           }),
         clears: (signal) => readChannelClears(supabase, { workspaceId }, signal),
         previews: (signal) => readConversationPreviews(supabase, workspaceId, signal),
-        counts: (signal) => readUnreadCounts(supabase, workspaceId, signal),
+        counts: (signal) =>
+          unreadReadsFor(scope).track(readUnreadCounts(supabase, workspaceId, signal)),
         names: (previews) =>
           namePreviews(previews, readListNames(workspaceId), workspaceId, currentUserId),
       },
@@ -1218,7 +1253,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       abort.abort();
       offHydrated();
     };
-  }, [scope, workspaceId, currentUserId, loadAttempt]);
+  }, [scope, workspaceId, currentUserId, loadAttempt, unreadReadsFor]);
 
   // Save what the ready list paints (the snapshot a cold open seeds from):
   // trailing, at most once every LIST_SAVE_DELAY_MS, and at once when the tab
@@ -1560,15 +1595,18 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   }, [workspaceId, currentUserId, groupMembers]);
 
   // Every (re)connect re-reads the counts (live messages missed while offline
-  // are already in Postgres) and retries any queued send at once.
+  // are already in Postgres) and retries any queued send at once. The first
+  // connect usually lands while the list load's counts read is out or just
+  // settled: that read already has them (connectRefreshWanted).
   const previousStatusRef = useRef(status);
   useEffect(() => {
     const previous = previousStatusRef.current;
     previousStatusRef.current = status;
     if (status !== 'connected' || previous === 'connected') return;
-    refreshUnreadCounts();
+    const fresh = scope !== null && unreadReadsFor(scope).fresh();
+    if (connectRefreshWanted(previous, status, fresh)) refreshUnreadCounts();
     senderRef.current?.kick();
-  }, [status, refreshUnreadCounts]);
+  }, [status, refreshUnreadCounts, scope, unreadReadsFor]);
 
   // Debounced reconcile after live traffic (2s after the last incoming message).
   const refreshRef = useRef(refreshUnreadCounts);

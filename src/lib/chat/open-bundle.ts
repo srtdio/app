@@ -18,6 +18,11 @@
 // p_since (the remembered page's contiguous end): rows at or after it, max
 // 200 (more is a gap), plus every other part as of now.
 //
+// A chat the pre-warm read (prewarmChats) and kept within PREWARM_FRESH_MS
+// opens from that bundle: it is stashed as this open's own (every part beside
+// it, as above), nothing is read, and the thread's reopen re-reads nothing
+// (openedFromPrewarm). Later than that, the reopen above, unchanged.
+//
 // Plan bundles are not in it: listeners (onChatBundle) hear each bundle
 // settle and the plan cards start their own read then (PlanCardsProvider).
 
@@ -61,6 +66,8 @@ const APP_DEPS: ChatBundleDeps = {
 
 /** The p_since each store's stashed bundle was started with, by chat. */
 const startedSince = new WeakMap<OpenCache, Map<string, string | null>>();
+/** The stashed bundle each store took from a pre-warm, by chat (the promise itself). */
+const fromPrewarm = new WeakMap<OpenCache, Map<string, Promise<Result<ChatOpenBundle>>>>();
 
 function slotKey(key: ChatKey): string {
   return `${key.userId}\n${key.workspaceId}\n${key.channelId}`;
@@ -104,19 +111,37 @@ function openPostsOk(data: OpenPostsData): boolean {
  */
 export function startChatBundle(
   key: ChatKey,
-  opts: { since?: string | null; deps?: ChatBundleDeps } = {},
+  opts: { since?: string | null; deps?: ChatBundleDeps; prewarmed?: ChatOpenBundle } = {},
 ): Promise<Result<ChatOpenBundle>> {
   const deps = opts.deps ?? APP_DEPS;
   const store = deps.store;
   const since = opts.since !== undefined ? opts.since : rememberedSince(key, store);
-  const traceId = deps.traceId();
-  mark('chat:bundle:start');
-  const promise = withReadTimeout(
-    (signal) =>
-      deps.read({ traceId, workspaceId: key.workspaceId, channelId: key.channelId, since }, signal),
-    LATE_READ_GRACE_MS,
-  );
+  const warm = opts.prewarmed;
+  let promise: Promise<Result<ChatOpenBundle>>;
+  if (warm !== undefined) {
+    // The pre-warm's answer is this open's bundle: nothing is read.
+    mark('chat:bundle:prewarmed');
+    promise = Promise.resolve({ ok: true, data: warm });
+  } else {
+    const traceId = deps.traceId();
+    mark('chat:bundle:start');
+    promise = withReadTimeout(
+      (signal) =>
+        deps.read(
+          { traceId, workspaceId: key.workspaceId, channelId: key.channelId, since },
+          signal,
+        ),
+      LATE_READ_GRACE_MS,
+    );
+  }
   store.stash(key, 'bundle', promise, true);
+  let warmed = fromPrewarm.get(store);
+  if (warmed === undefined) {
+    warmed = new Map();
+    fromPrewarm.set(store, warmed);
+  }
+  if (warm !== undefined) warmed.set(slotKey(key), promise);
+  else warmed.delete(slotKey(key));
   let byChat = startedSince.get(store);
   if (byChat === undefined) {
     byChat = new Map();
@@ -194,7 +219,21 @@ export function joinChatBundle(
   const since = opts.since !== undefined ? opts.since : rememberedSince(key, deps.store);
   const joined = deps.store.join(key, 'bundle');
   if (joined !== null && startedSince.get(deps.store)?.get(slotKey(key)) === since) return joined;
+  // An open (no p_since named: the tap, the thread's switch) of a chat the
+  // pre-warm just kept takes that bundle as its own.
+  const warm = opts.since === undefined ? deps.store.takePrewarm(key) : undefined;
+  if (warm !== undefined) return startChatBundle(key, { since, deps, prewarmed: warm });
   return startChatBundle(key, { since, deps });
+}
+
+/**
+ * Whether this open's bundle (the stashed one, still joinable) is the
+ * pre-warm's: the remembered page came from it and every live event since
+ * was folded into that page, so the reopen re-reads nothing.
+ */
+export function openedFromPrewarm(key: ChatKey, store: OpenCache = openCache): boolean {
+  const warmed = fromPrewarm.get(store)?.get(slotKey(key));
+  return warmed !== undefined && store.join(key, 'bundle') === warmed;
 }
 
 /** The open's bundle while one can be joined, else null (never starts one). */

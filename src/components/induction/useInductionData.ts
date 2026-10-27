@@ -1,6 +1,7 @@
 // induction_state for the shell: read on mount (and per workspace), on the
 // 'sorted:induction-refresh' event (the success sites dispatch it), on a 4 s
-// poll only while a gated step is active, and on a route change only while the
+// poll only while a gated step is active and the tab is visible (once more on
+// the return to visible), and on a route change only while the
 // guide is live (the tour is running, or the last read failed and needs to
 // heal). A person who finished the tour reads it once per shell mount, never
 // per navigation. Writes are optimistic: Next moves the
@@ -122,10 +123,21 @@ export function useInductionData(workspaceId: string | null): InductionData {
     return () => window.removeEventListener(INDUCTION_REFRESH_EVENT, refresh);
   }, [refresh]);
 
+  // The gated-step poll runs only while the tab is visible: a hidden tab
+  // reads nothing, and becoming visible reads once (then the poll goes on).
   useEffect(() => {
     if (!polling) return;
-    const id = window.setInterval(refresh, INDUCTION_POLL_MS);
-    return () => window.clearInterval(id);
+    const id = window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, INDUCTION_POLL_MS);
+    const onVisibility = (): void => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [polling, refresh]);
 
   const setStep = useCallback(
