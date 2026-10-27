@@ -19,7 +19,9 @@
 // return to visible.
 //
 // COUNT: every unread row counts (the chat, plan and task alerts included), so
-// the Notifications badge matches the page.
+// the Notifications badge matches the page. The count carries the workspace and
+// user it was read for (ownedUnread): after a switch the badge shows nothing
+// until the new workspace's count lands, never the old workspace's number.
 //
 // TOASTS: the rows the bell used to own (bell-types.ts) never word the activity
 // toast. A new chat mention toasts "<name> mentioned you" with Open instead,
@@ -79,6 +81,27 @@ export interface InboxStoreContextValue {
 
 const InboxStoreContext = createContext<InboxStoreContextValue | null>(null);
 
+/** A count and the tenant it was read for. */
+export interface OwnedCount {
+  workspaceId: string;
+  userId: string;
+  count: number;
+}
+
+/**
+ * The count the badge shows: the read's count only when it belongs to the active
+ * workspace and user; otherwise 0 (the badge renders nothing), so a switch never
+ * shows the other workspace's number while the new one is read. Pure.
+ */
+export function ownedUnread(
+  owned: OwnedCount | null,
+  workspaceId: string | null,
+  userId: string | null,
+): number {
+  if (owned === null || owned.workspaceId !== workspaceId || owned.userId !== userId) return 0;
+  return owned.count;
+}
+
 const POLL_MS = 30_000;
 
 export function InboxStoreProvider({ children }: { children: ReactNode }): ReactElement {
@@ -97,7 +120,9 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     : null;
   const userId = session?.user.id ?? null;
 
-  const [unreadCount, setUnreadCount] = useState(0);
+  // The count with the tenant it belongs to; read through ownedUnread below.
+  const [owned, setOwned] = useState<OwnedCount | null>(null);
+  const unreadCount = ownedUnread(owned, workspaceId, userId);
 
   // The newest created_at already accounted for (ms), from the server's clock.
   // Null until seeded for the active workspace/user (a tick seeds it and toasts
@@ -129,7 +154,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
         refresh: true,
       });
       if (!stillActive(ws, uid)) return;
-      if (res.ok) setUnreadCount(res.data.unread);
+      if (res.ok) setOwned({ workspaceId: ws, userId: uid, count: res.data.unread });
       else logger.warn('inbox store: count refresh failed', { error: res.error.message });
     })();
   };
@@ -291,7 +316,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     highWaterRef.current = null;
     toastedRef.current = new Set();
     if (workspaceId === null || userId === null) {
-      setUnreadCount(0);
+      setOwned(null);
       return;
     }
     refreshCount(workspaceId, userId);
