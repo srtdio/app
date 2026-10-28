@@ -40,7 +40,7 @@ async function forcedRefresh(cache: PresignCache): Promise<VoiceUrlResult> {
     return null;
   }
   const host = document.createElement('div');
-  document.body.append(host);
+  document.body.appendChild(host);
   root = createRoot(host);
   act(() => root!.render(<Probe />));
   const out: { result?: VoiceUrlResult } = {};
