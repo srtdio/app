@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-// The chat post card's media in a live DOM: the frame follows the first photo
-// or video (A2), a video-only Reel shows its stored thumbnail or, with none,
-// the video itself at its first frame (A1), and a media-optional format with
-// no media draws no frame (A3).
+// The chat post card's media in a live DOM: the box is the workspace
+// platform's one frame whatever the first photo or video is (A2, fixed card
+// geometry), a video-only Reel shows its stored thumbnail or, with none, the
+// video itself at its first frame (A1), and a media-optional format with no
+// media shows its text inside the box (A3).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -84,30 +85,30 @@ async function show(post: PostCardRow): Promise<void> {
 const frameEl = (): HTMLElement | null => document.querySelector('[data-frame-ratio]');
 const ratio = (): number => Number(frameEl()?.getAttribute('data-frame-ratio'));
 
-describe('A2: the card frame follows the first media within platform rules', () => {
-  it('a stored 1:1 photo on an Instagram post renders 1:1, not the 4:5 default', async () => {
+describe('A2: the card box is the platform frame, whatever the first media', () => {
+  it('a stored 1:1 photo on an Instagram post sits in the 4:5 box (cropped to fill)', async () => {
     const photo = media({ width: 1080, height: 1080 });
+    // The post's own frame still follows its media (the sheet and post page use it).
     expect(cardFrame({ platform: 'instagram', format: 'single_image', firstMedia: photo })).toEqual(
       expect.objectContaining({ ratio: 1, source: 'media' }),
     );
     await show(cardRow({ thumbnailAssetVersionId: 'v1', firstMedia: photo, mediaCount: 1 }));
-    expect(ratio()).toBeCloseTo(1);
+    expect(ratio()).toBeCloseTo(4 / 5);
   });
 
-  it('a photo with no stored size (older upload) falls back to the format default', async () => {
+  it('a photo with no stored size (older upload): the same 4:5 box', async () => {
     await show(cardRow({ thumbnailAssetVersionId: 'v1', firstMedia: media({}), mediaCount: 1 }));
     expect(ratio()).toBeCloseTo(4 / 5);
   });
 
-  it('a stored size outside the platform range is clamped to it', async () => {
+  it('a tall stored size: still the 4:5 box', async () => {
     const tall = media({ width: 1080, height: 3000 });
     await show(cardRow({ thumbnailAssetVersionId: 'v1', firstMedia: tall, mediaCount: 1 }));
-    // Instagram's tallest feed ratio is 3:4.
-    expect(ratio()).toBeCloseTo(3 / 4);
+    expect(ratio()).toBeCloseTo(4 / 5);
   });
 });
 
-describe('A1: a video-only Reel shows media in its 9:16 frame', () => {
+describe('A1: a video-only Reel shows media in the platform box', () => {
   const reel = cardRow({
     format: 'reel',
     firstMedia: media({ kind: 'video', width: 1080, height: 1920 }),
@@ -120,7 +121,7 @@ describe('A1: a video-only Reel shows media in its 9:16 frame', () => {
       .spyOn(PresignCache.prototype, 'thumbnail')
       .mockResolvedValue({ url: THUMB, expiresAt: Date.now() + HOUR });
     await show(reel);
-    expect(ratio()).toBeCloseTo(9 / 16);
+    expect(ratio()).toBeCloseTo(4 / 5);
     expect(thumbnail).toHaveBeenCalledWith('v1');
     const img = document.querySelector<HTMLImageElement>('[data-card-video-thumb]');
     expect(img?.getAttribute('src')).toBe(THUMB);
@@ -135,7 +136,7 @@ describe('A1: a video-only Reel shows media in its 9:16 frame', () => {
   it('with no thumbnail (older video): the video itself at its first frame', async () => {
     vi.spyOn(PresignCache.prototype, 'thumbnail').mockResolvedValue(null);
     await show(reel);
-    expect(ratio()).toBeCloseTo(9 / 16);
+    expect(ratio()).toBeCloseTo(4 / 5);
     expect(document.querySelector('[data-card-video-thumb]')).toBeNull();
     const video = document.querySelector<HTMLVideoElement>('[data-card-video]');
     expect(video).not.toBeNull();
@@ -170,11 +171,12 @@ describe('A1: a video-only Reel shows media in its 9:16 frame', () => {
   });
 });
 
-describe('A3: a media-optional format has a frame only when media is attached', () => {
-  it('an X thread with no media: no frame, the title alone (no KEY-N code)', async () => {
+describe('A3: a media-optional format with no media shows its text in the box', () => {
+  it('an X thread with no media: its title inside the X box (no KEY-N code)', async () => {
     await show(cardRow({ platform: 'x', format: 'thread' }));
-    expect(frameEl()).toBeNull();
-    expect(document.querySelector('[data-card-media]')).toBeNull();
+    expect(ratio()).toBeCloseTo(16 / 9);
+    expect(document.querySelector('[data-card-text]')?.textContent).toBe('Post p1');
+    expect(document.querySelector('[data-card-media] img')).toBeNull();
     expect(document.querySelector('[data-card-ref]')).toBeNull();
     expect(document.querySelector('[data-card-title]')).not.toBeNull();
     expect(document.body.textContent ?? '').not.toMatch(/\b[A-Z]{2,}-\d+\b/);

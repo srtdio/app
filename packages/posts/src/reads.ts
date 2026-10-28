@@ -455,10 +455,12 @@ export type PostCardRow = Pick<
   | 'approved_by'
   | 'approved_at'
 > &
+  // The caption: a text-only post's card shows it inside its media box.
+  Partial<Pick<Post, 'caption'>> &
   PostMediaSummary;
 
 export const POST_CARD_ROW_COLUMNS =
-  'id, number, title, format, platform, stage, target_date, stage_entered_at, approved_by, approved_at';
+  'id, number, title, format, platform, stage, target_date, stage_entered_at, approved_by, approved_at, caption';
 
 /**
  * Every live attachment row for `postIds` with its version's mime and stored
