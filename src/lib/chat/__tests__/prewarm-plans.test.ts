@@ -110,7 +110,7 @@ async function prewarm(
     saveData: () => false,
     current: () => true,
     readPlans,
-    ...(onPlans !== undefined ? { onPlans: (ids) => onPlans(ids) } : {}),
+    ...(onPlans !== undefined ? { onPlans: (ids: readonly string[]) => onPlans(ids) } : {}),
   });
 }
 
