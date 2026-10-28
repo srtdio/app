@@ -111,13 +111,11 @@ function render(next: WorkspaceState): void {
 }
 
 const gateWarns = (): number =>
-  vi
-    .mocked(logger.warn)
-    .mock.calls.filter(([msg]) => String(msg).startsWith('onboarding gate:')).length;
+  vi.mocked(logger.warn).mock.calls.filter(([msg]) => String(msg).startsWith('onboarding gate:'))
+    .length;
 const gateErrors = (): number =>
-  vi
-    .mocked(logger.error)
-    .mock.calls.filter(([msg]) => String(msg).startsWith('onboarding gate:')).length;
+  vi.mocked(logger.error).mock.calls.filter(([msg]) => String(msg).startsWith('onboarding gate:'))
+    .length;
 
 beforeEach(() => {
   profile.loading = false;
