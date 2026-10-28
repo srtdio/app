@@ -146,24 +146,24 @@ export function PlanCardsProvider(props: {
   );
   // One cache per open: made here, disposed when the chat is left. Nothing is
   // carried from an earlier open.
-  const raw = useMemo(
-    () =>
-      workspaceId !== null && channelId !== null
-        ? createPlanCardCache((ids, signal) => {
-            const read = (): ReturnType<typeof readPlanBundles> =>
-              readPlanBundles(supabase, ids, signal, undefined, workspaceId);
-            // An open that took the pre-warmed chat bundle takes the pre-warm's
-            // plan read as its first (joined while in flight): one plan read
-            // per open in all. A failed one reads; every later read reads.
-            const primed = memo !== null ? openCache.takeOpenPlans(memo, ids) : undefined;
-            if (primed === undefined) return read();
-            return primed.then((result) => (result.ok ? result : read()));
-          })
-        : null,
+  const raw = useMemo(() => {
+    if (workspaceId === null || channelId === null) return null;
+    // The open's first plan read may be the pre-warm's (within
+    // PREWARM_FRESH_MS, asking only ids it read; joined while in flight): one
+    // plan read per open in all. Only the first: every later read (a plan
+    // change, a retry, a failed pre-warm read) reads.
+    let first = true;
+    return createPlanCardCache((ids, signal) => {
+      const read = (): ReturnType<typeof readPlanBundles> =>
+        readPlanBundles(supabase, ids, signal, undefined, workspaceId);
+      const primed = first && memo !== null ? openCache.prewarmPlansFor(memo, ids) : undefined;
+      first = false;
+      if (primed === undefined) return read();
+      return primed.then((result) => (result.ok ? result : read()));
+    });
     // A new open (another viewer, workspace or chat) is a new cache.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [memo, workspaceId, channelId],
-  );
+  }, [memo, workspaceId, channelId]);
   // The open's fire-once gate: every ask waits for the chat bundle or a tap.
   const gate = useMemo(
     () => (raw !== null ? createPlanFireOnce((ids) => raw.request(ids)) : null),

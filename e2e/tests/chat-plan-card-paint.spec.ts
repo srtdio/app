@@ -196,10 +196,13 @@ async function run(page: Page, scenario: Scenario): Promise<void> {
   scenario.seed(network);
   const planReads = countPlanReads(page);
   await recordPaints(page, scenario.messageId);
+  // A slow plan read is held from the page load: the chat list's pre-warm may
+  // make the open's one plan read (the open then joins it), so the read held
+  // is this open's whichever side asks it, never a race with the tap.
+  const gate = scenario.slowMs !== undefined ? network.holdRpc('plan_bundle_read') : null;
   await page.goto('/chat');
   const row = page.getByText(PEER_NAME, { exact: true }).first();
   await row.waitFor({ state: 'visible' });
-  const gate = scenario.slowMs !== undefined ? network.holdRpc('plan_bundle_read') : null;
   await row.click();
   // The hold is timed from the held request, not from the thread's paint: on a
   // loaded runner the two can be seconds apart, and the read's own 5s timeout
