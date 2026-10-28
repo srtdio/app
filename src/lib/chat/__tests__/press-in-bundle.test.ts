@@ -41,6 +41,7 @@ import {
   PRESS_SETTLE_MS,
   PRESS_SLOP_PX,
   createPressIntent,
+  type PressIntent,
   type PressIntentDeps,
 } from '@/lib/chat/press-intent';
 import type { ChatMessageRow } from '@/lib/chat/thread';
@@ -208,6 +209,158 @@ describe('press-in starts the open bundle; the tap joins it', () => {
     tap(store, d);
     expect(joinableChatBundle(KEY, store)).toBe(pressed);
     await pressed;
+    expect(d.asked).toHaveLength(1);
+  });
+});
+
+/** A hand-driven clock and scroll source for the press intents. */
+function fakeClock(): {
+  deps: PressIntentDeps;
+  advance: (ms: number) => void;
+  scroll: () => void;
+} {
+  let now = 0;
+  const timers = new Set<{ at: number; fn: () => void }>();
+  const scrolls = new Set<() => void>();
+  return {
+    deps: {
+      setTimer: (fn, ms) => {
+        const timer = { at: now + ms, fn };
+        timers.add(timer);
+        return () => void timers.delete(timer);
+      },
+      watchScroll: (fn) => {
+        scrolls.add(fn);
+        return () => void scrolls.delete(fn);
+      },
+    },
+    advance: (ms) => {
+      now += ms;
+      for (const timer of [...timers]) {
+        if (timer.at > now) continue;
+        timers.delete(timer);
+        timer.fn();
+      }
+    },
+    scroll: () => {
+      for (const fn of [...scrolls]) fn();
+    },
+  };
+}
+
+const ROW_HEIGHT = 72;
+
+/** Ten chat rows, each with its press intent wired as ChannelCard wires it. */
+function tenRows(
+  d: ChatBundleDeps,
+  clock: ReturnType<typeof fakeClock>,
+): Array<{ key: ChatKey; y: number; press: PressIntent }> {
+  return Array.from({ length: 10 }, (_, i) => {
+    const key: ChatKey = { ...KEY, channelId: `c${i}` };
+    return {
+      key,
+      y: i * ROW_HEIGHT + ROW_HEIGHT / 2,
+      press: createPressIntent(() => void pressChatBundle(key, { deps: d }), clock.deps),
+    };
+  });
+}
+
+describe('press-in never reads on a scroll', () => {
+  it('a scroll over 10 rows (moves, the pan cancel, list scrolls) fires 0 bundle reads', async () => {
+    const store = createOpenCache();
+    const d = deps(store);
+    const clock = fakeClock();
+    const rows = tenRows(d, clock);
+    // The finger lands on each row in turn as the list flicks under it.
+    for (const row of rows) {
+      row.press.down({ clientX: 100, clientY: row.y });
+      clock.advance(16);
+      // The pan: a move past the slop, then the browser's pointercancel.
+      row.press.move({ clientX: 100, clientY: row.y - PRESS_SLOP_PX - 1 });
+      row.press.cancel();
+      clock.advance(PRESS_SETTLE_MS * 2);
+    }
+    // A still finger on a row while the list scrolls (momentum) is a scroll too.
+    const resting = rows[4];
+    resting?.press.down({ clientX: 100, clientY: resting.y });
+    clock.advance(30);
+    clock.scroll();
+    clock.advance(PRESS_SETTLE_MS * 2);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(d.asked).toHaveLength(0);
+    for (const row of rows) expect(joinableChatBundle(row.key, store)).toBeNull();
+  });
+
+  it('a jitter inside the slop is still a press', async () => {
+    const store = createOpenCache();
+    const d = deps(store);
+    const clock = fakeClock();
+    const row = tenRows(d, clock)[2];
+    if (row === undefined) throw new Error('no row');
+    row.press.down({ clientX: 100, clientY: row.y });
+    row.press.move({ clientX: 103, clientY: row.y + PRESS_SLOP_PX - 4 });
+    clock.advance(PRESS_SETTLE_MS);
+    const read = joinableChatBundle(row.key, store);
+    expect(read).not.toBeNull();
+    await read;
+    expect(d.asked).toHaveLength(1);
+  });
+
+  it('a hover (no pointerdown) never arms a press', () => {
+    const clock = fakeClock();
+    const press = createPressIntent(() => {
+      throw new Error('a hover must not read');
+    }, clock.deps);
+    press.move({ clientX: 10, clientY: 10 });
+    clock.advance(PRESS_SETTLE_MS * 4);
+    expect(press.armed()).toBe(false);
+  });
+
+  it('a tap held past the settle mark: one read, started at 80 ms, shared with the open', async () => {
+    const store = createOpenCache();
+    const d = deps(store);
+    const clock = fakeClock();
+    const row = tenRows(d, clock)[5];
+    if (row === undefined) throw new Error('no row');
+    row.press.down({ clientX: 100, clientY: row.y });
+    clock.advance(PRESS_SETTLE_MS - 1);
+    expect(joinableChatBundle(row.key, store)).toBeNull();
+    clock.advance(1);
+    const pressed = joinableChatBundle(row.key, store);
+    expect(pressed).not.toBeNull();
+    // The lift, then the tap's kickoff and the thread's switch join it.
+    row.press.cancel();
+    kickoffChatOpen(
+      row.key,
+      { bundle: (k) => void joinChatBundle(k, { deps: d }), viewerSide: () => {} },
+      store,
+    );
+    expect(joinChatBundle(row.key, { deps: d })).toBe(pressed);
+    await pressed;
+    expect(d.asked).toHaveLength(1);
+    expect(d.asked[0]?.channelId).toBe('c5');
+  });
+
+  it('a quick tap (lift before 80 ms): the press reads nothing, the tap reads once', async () => {
+    const store = createOpenCache();
+    const d = deps(store);
+    const clock = fakeClock();
+    const row = tenRows(d, clock)[7];
+    if (row === undefined) throw new Error('no row');
+    row.press.down({ clientX: 100, clientY: row.y });
+    clock.advance(40);
+    row.press.cancel();
+    clock.advance(PRESS_SETTLE_MS * 2);
+    expect(joinableChatBundle(row.key, store)).toBeNull();
+    kickoffChatOpen(
+      row.key,
+      { bundle: (k) => void joinChatBundle(k, { deps: d }), viewerSide: () => {} },
+      store,
+    );
+    const opened = joinableChatBundle(row.key, store);
+    expect(joinChatBundle(row.key, { deps: d })).toBe(opened);
+    await opened;
     expect(d.asked).toHaveLength(1);
   });
 });
