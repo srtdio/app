@@ -74,3 +74,89 @@ describe('sentry facade', () => {
     expect(sdk.captureException).not.toHaveBeenCalled();
   });
 });
+
+describe('dropNoise (beforeSend)', () => {
+  type Event = Parameters<typeof import('@/lib/sentry').dropNoise>[0];
+  const event = (ex: Record<string, unknown>): Event =>
+    ({ type: undefined, exception: { values: [ex] } }) as unknown as Event;
+  const agoraFrames = {
+    frames: [
+      { filename: 'app:///node_modules/agora-chat/Easemob-chat.js' },
+      { filename: 'https://srtdio-app.pages.dev/assets/vendor-agora-AbC123.js' },
+    ],
+  };
+
+  it('is wired as beforeSend on init', async () => {
+    const sentry = await freshSentry();
+    await sentry.initSentry();
+    expect(sdk.init).toHaveBeenCalledWith(
+      expect.objectContaining({ beforeSend: sentry.dropNoise }),
+    );
+  });
+
+  it('drops the browsing-context AbortError (FRONTEND-D)', async () => {
+    const { dropNoise } = await freshSentry();
+    const e = event({
+      type: 'AbortError',
+      value: 'Promise was rejected because the browsing context is going away',
+    });
+    expect(dropNoise(e)).toBeNull();
+  });
+
+  it('drops an unhandled rejection with only agora-chat frames (FRONTEND-B)', async () => {
+    const { dropNoise } = await freshSentry();
+    const e = event({
+      type: 'TypeError',
+      value: 'this._msgHash[...] is undefined',
+      mechanism: { type: 'onunhandledrejection', handled: false },
+      stacktrace: agoraFrames,
+    });
+    expect(dropNoise(e)).toBeNull();
+  });
+
+  it('keeps a normal Error', async () => {
+    const { dropNoise } = await freshSentry();
+    const e = event({
+      type: 'Error',
+      value: 'boom',
+      mechanism: { type: 'generic', handled: true },
+      stacktrace: { frames: [{ filename: 'https://srtdio-app.pages.dev/assets/index-1.js' }] },
+    });
+    expect(dropNoise(e)).toBe(e);
+  });
+
+  it('keeps an agora rejection with a first-party frame', async () => {
+    const { dropNoise } = await freshSentry();
+    const e = event({
+      type: 'TypeError',
+      value: 'this._msgHash[...] is undefined',
+      mechanism: { type: 'onunhandledrejection', handled: false },
+      stacktrace: {
+        frames: [
+          ...agoraFrames.frames,
+          { filename: 'https://srtdio-app.pages.dev/assets/ChatConnected-9.js' },
+        ],
+      },
+    });
+    expect(dropNoise(e)).toBe(e);
+  });
+
+  it('keeps a plain-object Agora rejection with no stacktrace (FRONTEND-3/7 stay visible)', async () => {
+    const { dropNoise } = await freshSentry();
+    const e = event({
+      type: 'UnhandledRejection',
+      value: 'Object captured as promise rejection with keys: data, message, type',
+      mechanism: { type: 'onunhandledrejection', handled: false },
+    });
+    (e as unknown as { extra: unknown }).extra = {
+      __serialized__: { type: 510, message: 'websocket disconnected', data: {} },
+    };
+    expect(dropNoise(e)).toBe(e);
+  });
+
+  it('keeps an AbortError for any other reason', async () => {
+    const { dropNoise } = await freshSentry();
+    const e = event({ type: 'AbortError', value: 'The user aborted a request.' });
+    expect(dropNoise(e)).toBe(e);
+  });
+});

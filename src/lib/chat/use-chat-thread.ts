@@ -1357,7 +1357,10 @@ export function useChatThread(params: {
       mark('chat:bundle:applied');
     };
     const failOpen = (message: string): void => {
-      logger.error('chat: history load failed', { channel_id: channelId, error: message });
+      // A timeout keeps the read alive (withLateRead) and its late page still
+      // wins, so it is a warning; any other failure is an error.
+      const log = message === 'read timed out' ? logger.warn : logger.error;
+      log('chat: history load failed', { channel_id: channelId, error: message });
       setLoadFailed(true);
       setLoading(false);
       // A page that lands later (Retry) reads the peer's cursor as it is then.
