@@ -198,9 +198,7 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
   await expect(page.locator('[data-plan-card]').first()).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1_000);
   const after = await rowOffsets(page);
-  const cardHeight = await postCard.evaluate((el) =>
-    Math.round(el.getBoundingClientRect().height),
-  );
+  const cardHeight = await postCard.evaluate((el) => Math.round(el.getBoundingClientRect().height));
 
   const log = await logOf(page);
   const tap = log.taps[log.taps.length - 1] ?? 0;
