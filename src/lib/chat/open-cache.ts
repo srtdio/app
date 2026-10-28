@@ -50,6 +50,7 @@
 
 import type { Result } from '@srtdio/rpc';
 import type { ScheduledRow } from '@/lib/chat/scheduled';
+import type { PlanBundle } from '@/lib/chat/plans';
 import type { ChatMark } from '@/lib/chat/marks';
 import type { OpenPostsData, OpenPostsView } from '@/lib/chat/use-open-posts';
 import type { StatusReadResults, StatusRoundView } from '@/lib/chat/use-status-counts';
@@ -74,6 +75,7 @@ import {
   type ReadPositionsRead,
 } from '@/lib/chat/history';
 import { resetViewerSideCache } from '@/lib/chat/viewer-role';
+import { clearCardHeights } from '@/lib/chat/card-heights';
 import { clearPlanShapes } from '@/lib/chat/plan-shapes';
 import { SIGNOUT_EVENT } from '@/lib/events';
 import { peekKept, primeRead, READ_FRESH_MS, readKey } from '@/lib/session-read';
@@ -154,7 +156,21 @@ interface Slot {
   /** Bumped when the remembered page is forgotten: an older owner's write-back is void. */
   threadEpoch: number;
   /** The pre-warm's bundle (the remembered page came from it), until an open takes it. */
-  prewarm?: { bundle: ChatOpenBundle; at: number; epoch: number };
+  prewarm?: { bundle: ChatOpenBundle; at: number; epoch: number; plans?: PrewarmPlans };
+  /** The plan read an open took with the pre-warm, until the open's plan cards use it. */
+  openPlans?: PrewarmPlans;
+}
+
+/**
+ * The pre-warm's one batched plan read, as one chat's open can take it: the
+ * ids it asked for this chat (its bundle's shared plans and its page's plans)
+ * and the read itself (shared by every pre-warmed chat; joined while in flight).
+ */
+export interface PrewarmPlans {
+  asked: ReadonlySet<string>;
+  read: Promise<Result<Map<string, PlanBundle>>>;
+  /** When the pre-warm read the chat (PREWARM_FRESH_MS counts from it). */
+  at: number;
 }
 
 export interface OpenCache {
@@ -230,6 +246,25 @@ export interface OpenCache {
    * press on the row reads nothing for it: the tap takes it).
    */
   holdsPrewarm: (key: ChatKey) => boolean;
+  /**
+   * The pre-warm's plan read for this chat: kept beside its pre-warmed bundle
+   * (ignored when none is held), and taken with it by the open.
+   */
+  notePrewarmPlans: (
+    key: ChatKey,
+    asked: readonly string[],
+    read: Promise<Result<Map<string, PlanBundle>>>,
+  ) => void;
+  /**
+   * The open's first plan read, once: the pre-warm's, when the open took the
+   * pre-warmed bundle, within PREWARM_FRESH_MS of the pre-warm, and asking
+   * only ids it read. Undefined otherwise (the open reads as before); either
+   * way it is spent, so every later read (a plan change, a retry) reads.
+   */
+  takeOpenPlans: (
+    key: ChatKey,
+    ids: readonly string[],
+  ) => Promise<Result<Map<string, PlanBundle>>> | undefined;
   /** Forget everything. */
   clear: () => void;
   /**
@@ -476,8 +511,29 @@ export function createOpenCache(
     takePrewarm(key) {
       const slot = slots.get(slotKey(key));
       const warm = usablePrewarm(slot);
-      if (slot !== undefined) delete slot.prewarm;
+      if (slot !== undefined) {
+        // The pre-warm's plan read goes with its bundle, or with nothing.
+        const plans = warm !== undefined ? slot.prewarm?.plans : undefined;
+        if (plans !== undefined) slot.openPlans = plans;
+        else delete slot.openPlans;
+        delete slot.prewarm;
+      }
       return warm;
+    },
+    notePrewarmPlans(key, asked, read) {
+      const slot = slots.get(slotKey(key));
+      const warm = slot?.prewarm;
+      if (slot === undefined || warm === undefined || usablePrewarm(slot) === undefined) return;
+      warm.plans = { asked: new Set(asked), read, at: warm.at };
+    },
+    takeOpenPlans(key, ids) {
+      const slot = slots.get(slotKey(key));
+      const plans = slot?.openPlans;
+      if (slot === undefined || plans === undefined) return undefined;
+      delete slot.openPlans;
+      if (now() - plans.at > PREWARM_FRESH_MS) return undefined;
+      if (!ids.every((id) => plans.asked.has(id))) return undefined;
+      return plans.read;
     },
     holdsPrewarm(key) {
       return usablePrewarm(slots.get(slotKey(key))) !== undefined;
@@ -628,7 +684,7 @@ export function sessionPageDevice(
 /**
  * The tab's one store. A clear also forgets the other module-level stores a
  * chat open fills: the viewer side per workspace, the prefetched pages and
- * the plan card shapes.
+ * the plan card shapes and the post card heights.
  * Its pages are saved on the device (sessionPageDevice).
  */
 export const openCache = createOpenCache({
@@ -636,6 +692,7 @@ export const openCache = createOpenCache({
     resetViewerSideCache();
     clearMessagePrefetch();
     clearPlanShapes();
+    clearCardHeights();
   },
   device: sessionPageDevice(),
 });

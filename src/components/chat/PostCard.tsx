@@ -61,6 +61,7 @@ import { formatDateTime, formatDueDate } from '@/lib/time';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
+import { knownCardHeight, noteCardHeight } from '@/lib/chat/card-heights';
 import {
   POST_CARD_META_TYPE,
   POST_CARD_TITLE_TYPE,
@@ -508,7 +509,7 @@ export function SharedPostCards({
     return (
       <div ref={retryInView} className="mt-1.5 flex flex-col items-start gap-1.5">
         {postIds.map((id) => (
-          <div key={id} className={`${CARD_SKELETON} animate-pulse`} />
+          <PostCardSkeleton key={id} postId={id} />
         ))}
       </div>
     );
@@ -610,8 +611,47 @@ export const SHARED_CARD = `${SHARED_CARD_BOX} bg-panel`;
 export const POST_CARD =
   'flex w-[240px] flex-col overflow-hidden rounded-xl border border-border bg-panel text-left';
 
-/** A loading card: the height of a no-media card (one title line, meta row, footer). */
-export const CARD_SKELETON = 'h-[118px] w-[240px] rounded-xl border border-border bg-panel-2';
+/**
+ * A loading card's frame (POST_CARD's box). Its height is never a literal:
+ * PostCardSkeleton fills it with the card's own pieces, or the card's known
+ * painted height.
+ */
+export const CARD_SKELETON =
+  'flex w-[240px] flex-col overflow-hidden rounded-xl border border-border bg-panel-2';
+
+/**
+ * A post card's placeholder at the card's final outer height, so the card
+ * fills in place and never moves a row. A card painted before (this session,
+ * this layout) reserves that exact height (a cover image, a two-line title).
+ * Otherwise it is built from the plain card's own pieces (the body's padding
+ * and gap, one title line in this layout's type, the meta row's tag, the 44px
+ * footer), so it is that card's exact box in every layout: never a guessed px.
+ */
+export function PostCardSkeleton(props: { postId: string }): ReactElement {
+  const layout = useChatLayout();
+  const known = knownCardHeight(layout, props.postId);
+  if (known !== undefined) {
+    return (
+      <div
+        aria-hidden="true"
+        data-card-skeleton=""
+        style={{ height: known }}
+        className={cn(CARD_SKELETON, 'animate-pulse')}
+      />
+    );
+  }
+  return (
+    <div aria-hidden="true" data-card-skeleton="" className={cn(CARD_SKELETON, 'animate-pulse')}>
+      <div className="invisible flex flex-col gap-1.5 px-3 py-2.5">
+        <span className={sized(POST_CARD_TITLE_TYPE, layout)}>{'\u00a0'}</span>
+        <span className={cn('flex items-center gap-1.5', POST_CARD_META_TYPE)}>
+          <Tag label={'\u00a0'} />
+        </span>
+      </div>
+      <div className="h-[44px] border-t border-transparent" />
+    </div>
+  );
+}
 
 /** A small pill laid over the cover image. */
 const MEDIA_PILL =
@@ -732,6 +772,23 @@ function PostCardItem(
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMounted, setSheetMounted] = useState(false);
   const layout = useChatLayout();
+  // The painted outer height, for this card's placeholder on a later open
+  // (a ResizeObserver: never a layout read on the paint path).
+  const rootRef = useRef<HTMLDivElement>(null);
+  const postId = post.id;
+  useEffect(() => {
+    const el = rootRef.current;
+    if (el === null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      // WebKit before 15.4 has no borderBoxSize: the element's own height then.
+      const sizes = entries[0]?.borderBoxSize as readonly ResizeObserverSize[] | undefined;
+      const box = sizes?.[0];
+      const px = box !== undefined ? box.blockSize : el.offsetHeight;
+      noteCardHeight(layout, postId, px);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [layout, postId]);
   const onTalkAbout = props.onTalkAbout;
   const talkRef = useRef<TalkAboutHold | null>(null);
   talkRef.current ??= createTalkAboutHold();
@@ -753,6 +810,7 @@ function PostCardItem(
   return (
     <>
       <div
+        ref={rootRef}
         role="button"
         tabIndex={0}
         data-msg-link=""
