@@ -806,6 +806,14 @@ export function createTalkAboutHold(): TalkAboutHold {
   };
 }
 
+/**
+ * Whether a pointerleave on the card ends its press: only the pressing
+ * pointer's own leave does (no press yet: any leave). Pure.
+ */
+export function leaveEndsPress(pressId: number | null, leaveId: number): boolean {
+  return pressId === null || pressId === leaveId;
+}
+
 /** The sheet's "Talk about" tap: the post comes in, then the composer takes focus, before the sheet closes. Pure. */
 export function talkAboutThenFocus(
   talkAbout: () => void,
@@ -853,6 +861,8 @@ function PostCardItem(
   const talk = talkRef.current;
   // The press's pointer type: a mouse hold focuses as it fires.
   const pressPointer = useRef('');
+  // The press's pointer id: only that pointer leaving ends the press.
+  const pressId = useRef<number | null>(null);
   const hold = useLongPress(() => {
     onTalkAbout?.();
     const now = holdFocusesOnFire({ layout, pointerType: pressPointer.current });
@@ -879,6 +889,7 @@ function PostCardItem(
               onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
                 touchPress.current = e.pointerType !== 'mouse';
                 pressPointer.current = e.pointerType;
+                pressId.current = e.pointerId;
                 talk.reset();
                 // A hold released off the card left its click guard set: a new
                 // press is never the tail of that hold.
@@ -895,8 +906,13 @@ function PostCardItem(
                 hold.handlers.onPointerCancel();
                 talk.reset();
               },
-              // Released off the card: that press never focuses later.
-              onPointerLeave: () => talk.reset(),
+              // Released off the card: that press never focuses later. Only the
+              // pressing pointer counts: WebKit sends the mouse cursor's leave
+              // when the thread scrolls under it (Talk about re-pins the
+              // thread), which must not end a touch hold.
+              onPointerLeave: (e: PointerEvent<HTMLDivElement>) => {
+                if (leaveEndsPress(pressId.current, e.pointerId)) talk.reset();
+              },
               // A mouse press on the card is the hold's alone: no native press
               // handling (WebKit's moves the caret the hold just put in the
               // composer on release). Touch presses are left as they were.

@@ -22,6 +22,7 @@ import {
   CARD_SKELETON,
   NotVisibleCard,
   cardTapHandlers,
+  leaveEndsPress,
   POST_CARD,
   SHARED_CARD,
   SharedPostCardList,
@@ -532,5 +533,14 @@ describe('chat post card platform frame', () => {
       expect(html).not.toContain('data-card-ref');
       expect(visibleText(html)).not.toMatch(CODE);
     }
+  });
+});
+
+describe('leaveEndsPress', () => {
+  it('only the pressing pointer leaving ends the press', () => {
+    expect(leaveEndsPress(11, 11)).toBe(true);
+    // WebKit's mouse cursor leaving as the thread scrolls under it never ends a touch hold.
+    expect(leaveEndsPress(11, 1)).toBe(false);
+    expect(leaveEndsPress(null, 1)).toBe(true);
   });
 });
