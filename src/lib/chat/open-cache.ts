@@ -11,7 +11,9 @@
 // here as 'bundle'; the parts each hook reads first (marks, scheduled rows,
 // cursors, open posts, plan ids, briefs) are stashed beside it, derived from
 // that one call. Plan bundles are never remembered: each open reads its own
-// (PlanCardsProvider), so no bundle from an earlier open is ever painted.
+// (PlanCardsProvider), so no bundle from an earlier open is ever painted. The
+// one exception is the pre-warm's plan read, kept beside its pre-warmed chat
+// bundle and taken with it (same PREWARM_FRESH_MS) as the open's first read.
 //
 // The last settled state of each chat (marks, scheduled rows) is
 // remembered. Marks and scheduled

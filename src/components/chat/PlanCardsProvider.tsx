@@ -1,6 +1,8 @@
 // The thread's plan cards, read in batches: every plan id across the loaded
 // messages (threadCardIds) is asked of ONE cache per open. Nothing is
-// remembered from an earlier open (no old bundle is ever painted). The open's
+// remembered from an earlier open (no old bundle is ever painted); an open
+// that took the pre-warmed chat bundle (within PREWARM_FRESH_MS) takes the
+// pre-warm's batched plan read as its first read instead of reading again. The open's
 // first read starts the moment the chat bundle returns (its shared plan ids
 // plus every plan shared on its page) or when a plan card is tapped first,
 // whichever comes first, and never twice for the same ids (plan-fire.ts);
