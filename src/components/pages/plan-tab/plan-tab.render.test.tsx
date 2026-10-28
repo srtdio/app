@@ -121,21 +121,25 @@ function between(html: string, from: string, to: string): string {
 
 function renderCalendar(view: 'month' | 'week'): string {
   return renderToStaticMarkup(
-    <PlanCalendar
-      view={view}
-      anchor={TODAY}
-      today={TODAY}
-      timeZone="UTC"
-      side="agency"
-      data={{ bundles: DATA.bundles, posts: [], thumbs: DATA.thumbs }}
-      onAnchor={() => {}}
-      onWeekOf={() => {}}
-      onOpen={() => {}}
-      onAddTo={() => {}}
-      onNewPlan={() => {}}
-      reload={async () => {}}
-      more={null}
-    />,
+    <MemoryRouter>
+      <ToastProvider>
+        <PlanCalendar
+          view={view}
+          anchor={TODAY}
+          today={TODAY}
+          timeZone="UTC"
+          side="agency"
+          data={{ bundles: DATA.bundles, posts: [], thumbs: DATA.thumbs }}
+          onAnchor={() => {}}
+          onWeekOf={() => {}}
+          onOpen={() => {}}
+          onAddTo={() => {}}
+          onNewPlan={() => {}}
+          reload={async () => {}}
+          more={null}
+        />
+      </ToastProvider>
+    </MemoryRouter>,
   );
 }
 
