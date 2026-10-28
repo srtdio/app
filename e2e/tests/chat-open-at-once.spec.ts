@@ -430,6 +430,9 @@ async function runAtOnce(page: Page): Promise<void> {
 /** One read 2s late: the rest paint at the hold's cap, the late part fills in place. */
 async function runOneLate(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
+  // Measures the cold open's hold cap: no pre-warm (Save-Data). A pre-warm's
+  // plan read, started at load, would be this open's own and land before 2s.
+  await withSaveData(page);
   seedPlanChat(network);
   await delaySupabaseReads(page, (name) =>
     name === 'rpc plan_bundle_read' ? 2_000 : realisticDelay(name),

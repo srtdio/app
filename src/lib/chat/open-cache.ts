@@ -259,8 +259,8 @@ export interface OpenCache {
   /**
    * The pre-warm's plan read as an open's first plan read, once: only within
    * PREWARM_FRESH_MS of it, for this user and workspace, and when it asked
-   * every one of `ids`; the open that takes it spends it (every later open
-   * and every later read reads). Undefined otherwise: the open reads.
+   * every one of `ids`. The first open that asks spends it, used or not
+   * (every later open and every later read reads). Undefined: the open reads.
    */
   takePrewarmPlans: (
     key: ChatKey,
@@ -528,12 +528,11 @@ export function createOpenCache(
       if (held === null || held.userId !== key.userId || held.workspaceId !== key.workspaceId) {
         return undefined;
       }
-      if (now() - held.at > PREWARM_FRESH_MS) {
-        plans = null;
-        return undefined;
-      }
-      if (!ids.every((id) => held.asked.has(id))) return undefined;
+      // Spent by the first open that asks, used or not: no later open (or
+      // reopen) is ever handed this older answer.
       plans = null;
+      if (now() - held.at > PREWARM_FRESH_MS) return undefined;
+      if (!ids.every((id) => held.asked.has(id))) return undefined;
       return held.read;
     },
     dropPrewarmPlans() {
