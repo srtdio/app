@@ -688,7 +688,7 @@ export async function prewarmChats(keys: readonly ChatKey[], deps: PrewarmDeps):
 /**
  * The plans the warmed chats' opens will ask first, in ONE batched read that
  * an open within PREWARM_FRESH_MS takes as its own first plan read
- * (open-cache prewarmPlansFor), so an open makes one plan read in all,
+ * (open-cache takePrewarmPlans), so an open makes one plan read in all,
  * whichever side made it. Skipped while a chat is open (its open already read
  * its own: a second read would only repeat it). Never throws; nothing waits
  * on it.

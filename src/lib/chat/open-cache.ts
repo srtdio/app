@@ -520,8 +520,14 @@ export function createOpenCache(
       if (slot !== undefined) delete slot.prewarm;
       return warm;
     },
-    notePrewarmPlans(at, asked, read) {
-      plans = { ...at, asked: new Set(asked), read, at: now() };
+    notePrewarmPlans(owner, asked, read) {
+      plans = {
+        userId: owner.userId,
+        workspaceId: owner.workspaceId,
+        asked: new Set(asked),
+        read,
+        at: now(),
+      };
     },
     takePrewarmPlans(key, ids) {
       const held = plans;
