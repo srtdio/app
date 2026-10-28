@@ -370,12 +370,24 @@ test('client: a long plan shows week headers, 44px empty days, and a draft with 
   await expect(draftWrap.locator('[data-plan-control]')).toHaveCount(0);
   await expect(draftWrap.locator('[data-plan-line]')).toHaveCount(0);
   await expect(draft.locator('[data-plan-slot]')).toHaveCount(0);
-  // Today's tile: the weekday strip in the accent, an accent border.
+  // Today's tile: solid accent (strip, number, border), a "Today" pill under
+  // it, and today's day band marked.
   const today = plan.locator('[data-plan-today] [data-plan-day-weekday]');
   if ((await today.count()) > 0) {
     await expect(today).toHaveClass(/\bbg-accent\b/);
     await expect(today).toHaveClass(/\btext-accent-fg\b/);
-    await expect(plan.locator('[data-plan-today]')).toHaveClass(/\bborder-accent\b/);
+    const tile = plan.locator('[data-plan-today]');
+    await expect(tile).toHaveClass(/\bborder-accent\b/);
+    await expect(tile).toHaveClass(/\bbg-accent\b/);
+    await expect(tile.locator('[data-plan-day-number]')).toHaveClass(/\btext-accent-fg\b/);
+    await tile.scrollIntoViewIfNeeded();
+    const pill = plan.locator('[data-plan-today-pill]');
+    await expect(pill).toBeVisible();
+    await expect(pill).toHaveText('Today');
+    await expect(plan.locator('[data-plan-day]').filter({ has: tile })).toHaveAttribute(
+      'data-plan-day-today',
+      '',
+    );
   }
   expectClean(network);
 });

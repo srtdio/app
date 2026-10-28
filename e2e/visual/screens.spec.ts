@@ -12,6 +12,8 @@ import {
   POST_IDS,
   seedClientPlan,
   seedPlanTab,
+  TAB_OK_ITEM_TITLE,
+  TAB_SHARED_PLAN_ID,
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
 import { AUDIT_BRIEF_ID, seedAudit, type AuditSeedOptions } from '../fixtures/audit-pr-b';
@@ -258,6 +260,31 @@ async function openChatPlanCard(page: Page): Promise<Locator> {
   await card.scrollIntoViewIfNeeded();
   await waitFor([card], 'plan card');
   return card;
+}
+
+/** The Plan tab seeded at the fixed instant (items on today, Wed 21 Oct 2026). */
+const seedTab = (network: HarnessNetwork): void =>
+  seedPlanTab(network.world, { sender: ME, now: NOW });
+
+/** The laptop Plan tab switched to Week (the week of today), today's column filled. */
+async function planTabWeek(page: Page): Promise<void> {
+  await waitFor([page.locator('[data-plan-tab-month]')], 'plan tab month');
+  await tap([page.locator('[data-plan-tab-view="week"]')], 'Week');
+  await waitFor([page.locator('[data-plan-tab-week]')], 'plan tab week');
+  await waitFor([page.locator('[data-plan-tab-today-head] [data-plan-tab-today-pill]')], 'today');
+  await waitFor(
+    [page.locator('[data-plan-tab-today-cell]').getByText(TAB_OK_ITEM_TITLE)],
+    'today items',
+  );
+}
+
+/** The shared plan "Autumn launch" (/plan/:id) with today's tile and pill in view. */
+async function planScreenToday(page: Page): Promise<void> {
+  const plan = page.locator('[data-plan-page="plan"]');
+  await waitFor([plan.locator('[data-plan-today]')], 'plan screen today');
+  const pill = plan.locator('[data-plan-today-pill]');
+  await pill.scrollIntoViewIfNeeded();
+  await waitFor([pill], 'today pill');
 }
 
 async function openChatPlan(page: Page): Promise<void> {
@@ -628,7 +655,7 @@ const SCREENS: Screen[] = [
   {
     name: 'plan-tab',
     seed: creator,
-    extra: (network) => seedPlanTab(network.world, { sender: ME, now: NOW }),
+    extra: seedTab,
     url: '/plan',
     steps: async (page) =>
       waitFor([page.locator('[data-plan-tab-list]'), page.getByText('Autumn launch')], 'plan'),
@@ -881,6 +908,38 @@ SCREENS.push({
   only: 'phone',
   url: '/pipeline',
   steps: (page) => openCockpit(page, 'green', 'Traffic', 'Home to sign-up'),
+});
+
+// The Plan tab's Week (laptop) and a plan screen holding today (Wed 21 Oct, the
+// solid accent tile and its "Today" pill): laptop light and dark; the plan
+// screen also on the phone (iPhone light and dark projects).
+for (const dark of [false, true]) {
+  const suffix = dark ? '-dark' : '';
+  SCREENS.push({
+    name: `plan-tab-week${suffix}`,
+    seed: creator,
+    extra: seedTab,
+    only: 'laptop',
+    dark,
+    url: '/plan',
+    steps: planTabWeek,
+  });
+}
+SCREENS.push({
+  name: 'plan-screen-today',
+  seed: creator,
+  extra: seedTab,
+  url: `/plan/${TAB_SHARED_PLAN_ID}`,
+  steps: planScreenToday,
+});
+SCREENS.push({
+  name: 'plan-screen-today-dark',
+  seed: creator,
+  extra: seedTab,
+  only: 'laptop',
+  dark: true,
+  url: `/plan/${TAB_SHARED_PLAN_ID}`,
+  steps: planScreenToday,
 });
 
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
