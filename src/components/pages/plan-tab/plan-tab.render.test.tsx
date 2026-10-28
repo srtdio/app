@@ -53,6 +53,7 @@ vi.mock('@/components/pages/plan-tab/PlanTabAdd', () => ({ PlanTabAdd: () => nul
 vi.mock('@/components/chat/PlanMoveSheet', () => ({ PlanKeepApprovalSheet: () => null }));
 vi.mock('@/components/media/Thumbnail', () => ({ Thumbnail: () => null }));
 
+import { PlanCalendar } from '@/components/pages/plan-tab/PlanCalendar';
 import { PlanTabLoadMore } from '@/components/pages/plan-tab/PlanTabList';
 import { ToastProvider } from '@/components/ui/toast';
 import { PlanTabPage, entryRoute } from '@/components/pages/PlanTabPage';
@@ -105,6 +106,38 @@ const DATA: PlanTabData = {
   timeZone: 'UTC',
   nextCursor: null,
 };
+
+/** The toolbar's chip row, from its opening tag to the grid. */
+function chipRow(html: string): string {
+  const at = html.indexOf('data-plan-tab-chips');
+  return html.slice(at, html.indexOf('data-plan-tab-fit', at));
+}
+
+/** One element's markup (its opening tag and everything until the next `marker`). */
+function between(html: string, from: string, to: string): string {
+  const at = html.indexOf(from);
+  return at < 0 ? '' : html.slice(html.lastIndexOf('<', at), html.indexOf(to, at));
+}
+
+function renderCalendar(view: 'month' | 'week'): string {
+  return renderToStaticMarkup(
+    <PlanCalendar
+      view={view}
+      anchor={TODAY}
+      today={TODAY}
+      timeZone="UTC"
+      side="agency"
+      data={{ bundles: DATA.bundles, posts: [], thumbs: DATA.thumbs }}
+      onAnchor={() => {}}
+      onWeekOf={() => {}}
+      onOpen={() => {}}
+      onAddTo={() => {}}
+      onNewPlan={() => {}}
+      reload={async () => {}}
+      more={null}
+    />,
+  );
+}
 
 function render(): string {
   return renderToStaticMarkup(
@@ -176,7 +209,7 @@ describe('PlanTabPage', () => {
     expect(render()).not.toContain('data-plan-tab-load-more');
   });
 
-  it('laptop: 13 plans in range show 12 and Load more under the calendar; after the tap 13 and no control', () => {
+  it('laptop: 13 plans in range show 12 and Load more at the end of the chips; after the tap 13 and no control', () => {
     const many = (n: number): PlanBundle[] =>
       Array.from({ length: n }, (_, k) =>
         bundle(plan(`p${String(k).padStart(2, '0')}`, `Plan ${k + 1}`, 'client'), []),
@@ -191,8 +224,13 @@ describe('PlanTabPage', () => {
     expect(html.match(/data-plan-tab-chip="p\d\d"/g)).toHaveLength(12);
     expect(html).toContain('>Load more</button>');
     expect(html).toMatch(/<button class="[^"]*min-h-\[44px\][^"]*"[^>]*data-plan-tab-load-more=""/);
-    // At the end of the laptop view: after the grid.
-    expect(html.indexOf('data-plan-tab-load-more')).toBeGreaterThan(
+    // At the end of the chip row, after the last chip and above the grid.
+    const chips = chipRow(html);
+    expect(chips).toContain('data-plan-tab-load-more');
+    expect(chips.indexOf('data-plan-tab-load-more')).toBeGreaterThan(
+      chips.indexOf('data-plan-tab-chip="p11"'),
+    );
+    expect(html.indexOf('data-plan-tab-load-more')).toBeLessThan(
       html.indexOf('data-plan-tab-month'),
     );
     env.moreBusy = true;
@@ -239,6 +277,62 @@ describe('PlanTabPage', () => {
     expect(html).toContain('No plans shared yet');
     expect(html).not.toContain('shared with you');
     expect(html).not.toContain('Create plan');
+  });
+
+  it('laptop Month: today is the boxed cell (accent-soft, 2px inset ring) with a Today pill', () => {
+    const html = renderCalendar('month');
+    const cell = between(html, 'data-plan-tab-today-cell', 'data-plan-tab-day=');
+    expect(cell).toContain(`data-plan-tab-day="${TODAY}"`);
+    expect(cell).toContain('bg-accent-soft');
+    expect(cell).toContain('shadow-[inset_0_0_0_2px_var(--accent)]');
+    // The keyboard ring stays visible over the today ring.
+    expect(cell).toContain('focus-visible:ring-4');
+    expect(cell).toMatch(/data-plan-tab-today=""[^>]*class="[^"]*bg-accent text-accent-fg/);
+    expect(cell).toMatch(
+      /data-plan-tab-today-pill="" class="[^"]*rounded-full[^"]*bg-accent text-accent-fg[^"]*">Today</,
+    );
+    expect(html.match(/data-plan-tab-today-cell=""/g)).toHaveLength(1);
+    expect(html.match(/data-plan-tab-today-pill=""/g)).toHaveLength(1);
+    // Thin 22px lines; no fixed 128px cells.
+    expect(html).toMatch(/<button[^>]*class="min-h-\[22px\][^"]*h-\[22px\][^"]*text-xs/);
+    expect(html).not.toContain('h-[128px]');
+  });
+
+  it("laptop Week: today's header is solid with an inverse Today pill; its column is boxed and scrolls alone", () => {
+    const html = renderCalendar('week');
+    const head = between(html, 'data-plan-tab-today-head', '</span></span>');
+    expect(head).toContain('bg-accent text-accent-fg');
+    expect(html).toMatch(
+      /data-plan-tab-today-pill="" class="[^"]*ml-auto bg-accent-fg text-accent[^"]*">Today</,
+    );
+    const col = between(html, 'data-plan-tab-today-cell', '>');
+    expect(col).toContain('bg-accent-soft');
+    expect(col).toContain('shadow-[inset_0_0_0_2px_var(--accent)]');
+    expect(
+      html.match(/data-plan-tab-day="[^"]+"[^>]*class="[^"]*min-h-0[^"]*overflow-y-auto/g),
+    ).toHaveLength(7);
+    expect(html).not.toContain('min-h-[520px]');
+  });
+
+  it('laptop: the chips sit in the date row after Today; the legend in the top bar', () => {
+    Object.assign(env, { desktop: true, side: 'agency', data: DATA, moreBusy: false });
+    const html = render();
+    const toolbar = html.slice(
+      html.indexOf('data-plan-tab-toolbar'),
+      html.indexOf('data-plan-tab-fit'),
+    );
+    expect(toolbar).toContain('data-plan-tab-go-today');
+    expect(toolbar).toContain('data-plan-tab-chip="all"');
+    expect(toolbar.indexOf('data-plan-tab-chip="all"')).toBeGreaterThan(
+      toolbar.indexOf('data-plan-tab-go-today'),
+    );
+    // The legend is in the top bar, before Month | Week and New plan, not in the calendar.
+    const legend = html.indexOf('data-plan-tab-legend');
+    expect(legend).toBeGreaterThan(-1);
+    expect(legend).toBeLessThan(html.indexOf('data-plan-tab-view="month"'));
+    expect(legend).toBeLessThan(html.indexOf('data-plan-tab-new'));
+    expect(legend).toBeLessThan(html.indexOf('data-plan-tab="desktop"'));
+    expect(html.match(/data-plan-tab-legend/g)).toHaveLength(1);
   });
 
   it('opens an item in its plan and a loose post on its page', () => {

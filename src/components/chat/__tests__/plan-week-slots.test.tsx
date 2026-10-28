@@ -271,18 +271,25 @@ describe('Undo restores the exact previous status (A3)', () => {
 });
 
 describe('week list layout (L1-L4)', () => {
-  it('date tile: 56x56, weekday strip over the number; today accent strip and border; No date', () => {
+  it('date tile: 56x56, weekday strip over the number; today solid accent with a Today pill; No date', () => {
     const today = renderToStaticMarkup(<DayColumn day="2026-10-14" today="2026-10-14" />);
     expect(today).toContain('flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border');
-    expect(today).toContain('data-plan-today=""');
-    expect(today).toContain('border-accent');
+    expect(today).toMatch(/data-plan-day-col="" data-plan-today=""[^>]*border-accent bg-accent"/);
     expect(today).toMatch(/data-plan-day-weekday=""[^>]*bg-accent text-accent-fg">Wed</);
-    expect(today).toMatch(/data-plan-day-number=""[^>]*font-mono[^>]*tabular-nums text-fg">14</);
+    expect(today).toMatch(
+      /data-plan-day-number=""[^>]*font-mono[^>]*tabular-nums text-accent-fg">14</,
+    );
+    // The Today pill, centred under the tile in its 56px column, 6px below.
+    expect(today).toMatch(/^<div class="flex w-14 shrink-0 flex-col items-center gap-1.5">/);
+    expect(today).toMatch(
+      /data-plan-today-pill="" class="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-fg">Today</,
+    );
     // The weekday is no longer accent text on the panel.
     expect(today).not.toMatch(/ text-accent">/);
     const other = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" />);
     expect(other).not.toContain('data-plan-today');
-    expect(other).toContain('border-border-strong');
+    expect(other).toContain('border-border-strong bg-panel');
+    expect(other).toMatch(/^<div data-plan-day-col=""/);
     expect(other).toMatch(/data-plan-day-weekday=""[^>]*bg-panel-2 text-fg-2">Thu</);
     expect(other).toMatch(/tabular-nums text-fg">15</);
     // `empty` is optional and no longer changes the tile.

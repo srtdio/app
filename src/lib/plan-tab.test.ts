@@ -9,6 +9,7 @@ import {
   canDropOn,
   canOpenDayMenu,
   capEntries,
+  monthCellCap,
   monthGrid,
   monthLabel,
   moreLabel,
@@ -119,6 +120,24 @@ describe('month grid', () => {
     expect(capEntries(['a', 'b'])).toEqual({ shown: ['a', 'b'], more: 0 });
     expect(capEntries(['a', 'b', 'c', 'd', 'e'])).toEqual({ shown: ['a', 'b', 'c'], more: 2 });
     expect(moreLabel(2)).toBe('+2 more');
+  });
+
+  it('caps a laptop month cell by its measured row height', () => {
+    // 140px row: 100px under the number row, 24px a line.
+    expect(monthCellCap({ rowHeight: 140, count: 3 })).toBe(3);
+    expect(monthCellCap({ rowHeight: 140, count: 4 })).toBe(4);
+    // Five do not fit: three lines, then "+2 more".
+    expect(monthCellCap({ rowHeight: 140, count: 5 })).toBe(3);
+    expect(
+      capEntries(['a', 'b', 'c', 'd', 'e'], monthCellCap({ rowHeight: 140, count: 5 })),
+    ).toEqual({ shown: ['a', 'b', 'c'], more: 2 });
+    expect(monthCellCap({ rowHeight: 140, count: 0 })).toBe(0);
+  });
+
+  it('a tiny month row shows no lines, only "+N more"', () => {
+    expect(monthCellCap({ rowHeight: 50, count: 2 })).toBe(0);
+    expect(monthCellCap({ rowHeight: 20, count: 1 })).toBe(0);
+    expect(capEntries(['a', 'b'], 0)).toEqual({ shown: [], more: 2 });
   });
 
   it('reads the whole weeks as the visible range', () => {

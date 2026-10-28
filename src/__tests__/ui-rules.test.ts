@@ -385,6 +385,23 @@ describe('ui rules: icons live in ui/', () => {
   });
 });
 
+describe('ui rules: 44px touch targets', () => {
+  // CLAUDE.md exception: only the laptop Plan month's lines are 22px (dense).
+  it('PressableRow dense is used only in pages/plan-tab/PlanCalendar.tsx', () => {
+    const offenders: string[] = [];
+    for (const { rel, src } of ALL_FILES) {
+      if (rel === 'pages/plan-tab/PlanCalendar.tsx' || rel === 'ui/PressableRow.tsx') continue;
+      for (const at of indexesOf(src, /<PressableRow\b/)) {
+        const attrs = topLevel(openingTag(src, at));
+        if (/\sdense(?=[\s=/>])/.test(attrs)) offenders.push(`${rel}:${lineOf(src, at)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+    // The exception is still in use (no stale rule).
+    expect(bySrc('pages/plan-tab/PlanCalendar.tsx')).toMatch(/<PressableRow\s+dense\b/);
+  });
+});
+
 describe('ui rules: one focus ring', () => {
   it.each(['ui/Button.tsx', 'ui/IconButton.tsx', 'ui/Chip.tsx'])(
     '%s carries the offset accent ring',

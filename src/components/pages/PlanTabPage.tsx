@@ -1,5 +1,6 @@
 // The Plan tab (/plan). Laptop (md and up): the shared top bar (no page title)
-// with Month | Week and, for creators, New plan; then the calendar
+// with the legend on the left, Month | Week and, for creators, New plan on the
+// right; then the calendar, fitted to the window
 // (PlanCalendar) over the visible range. Phone: the top bar with New plan
 // (creators) and the plans as cards in sections (PlanTabList). Both read a
 // page of plans at a time (usePlanTabData): while more remain, the page hands
@@ -48,7 +49,7 @@ import { civilToday } from '@/lib/plan-week';
 import { useSession } from '@/lib/session-context';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace } from '@/lib/workspace-context';
-import { PlanCalendar } from './plan-tab/PlanCalendar';
+import { PlanCalendar, PlanTabLegend } from './plan-tab/PlanCalendar';
 import { PlanTabAdd, type AddTarget } from './plan-tab/PlanTabAdd';
 import { PlanTabList } from './plan-tab/PlanTabList';
 import { usePlanTabData } from './plan-tab/use-plan-tab-data';
@@ -105,15 +106,19 @@ export function PlanTabPage(): ReactElement {
   const openCompose = (range?: ComposeRange): void => setCompose({ range });
 
   // No page title (as Pipeline and Briefs): the shared top bar carries the
-  // laptop Month | Week switch, then New plan for creators, right-aligned.
+  // laptop legend on the left, then the Month | Week switch and New plan for
+  // creators, right-aligned.
   const head = (
     <SectionHeader
       {...(desktop
         ? {
             sort: {
               node: (
-                <div className="ml-auto">
-                  <ViewSwitch view={view} onView={setView} />
+                <div className="flex min-w-0 flex-1 items-center gap-4">
+                  <PlanTabLegend />
+                  <div className="ml-auto shrink-0">
+                    <ViewSwitch view={view} onView={setView} />
+                  </div>
                 </div>
               ),
             },
