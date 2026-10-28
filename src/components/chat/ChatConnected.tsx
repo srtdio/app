@@ -46,7 +46,7 @@ import { generateTraceId } from '@/lib/trace';
 import { clearChannelRecord } from '@/lib/chat/record';
 import { runClearChannels, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { safeTimeZone } from '@/lib/time';
-import { prewarmChats, useChatThread } from '@/lib/chat/use-chat-thread';
+import { PREWARM_LIMIT, prewarmChats, useChatThread } from '@/lib/chat/use-chat-thread';
 import { readChatOpenBundle } from '@/lib/chat/history';
 import { readPlanBundles } from '@/lib/chat/plans';
 import { notePlanShapes, planCardsSized } from '@/lib/chat/plan-shapes';
@@ -1314,19 +1314,15 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
           saveData: saveDataOn,
           current: () => live,
         }).then(() => {
-          if (!live) return;
-          // The plan cards on the pages it kept: their shapes (never their
-          // data) from one batched read, so a kept open's cards are sized in
-          // its first frame (plan-shapes.ts).
-          const planIds = [
-            ...new Set(
-              keys.flatMap(
-                (key) =>
-                  openCache.recall(key, 'thread')?.rows.flatMap((m) => m.sharedPlanIds ?? []) ??
-                  [],
-              ),
-            ),
-          ].filter((id) => !planCardsSized(currentUserId, workspaceId, [id]));
+          if (!live || saveDataOn()) return;
+          // The plan cards on the top chats' kept pages: their shapes (never
+          // their data) from one batched read, so a kept open's cards are
+          // sized in its first frame (plan-shapes.ts).
+          const top = keys.slice(0, PREWARM_LIMIT);
+          const kept = top.flatMap((key) => openCache.recall(key, 'thread')?.rows ?? []);
+          const planIds = [...new Set(kept.flatMap((m) => m.sharedPlanIds ?? []))].filter(
+            (id) => !planCardsSized(currentUserId, workspaceId, [id]),
+          );
           if (planIds.length === 0) return;
           void withReadTimeout((signal) =>
             readPlanBundles(supabase, planIds, signal, undefined, workspaceId),
