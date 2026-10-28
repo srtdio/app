@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { fileURLToPath, URL } from 'node:url';
+import { join } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -93,6 +93,15 @@ describe('CodeStep', () => {
     });
   }
 
+  /** One second at a time: each cooldown tick schedules the next after a render. */
+  async function tick(seconds: number): Promise<void> {
+    for (let i = 0; i < seconds; i += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+    }
+  }
+
   function button(text: string): HTMLButtonElement {
     const found = [...document.querySelectorAll('button')].find((b) => b.textContent === text);
     if (found === undefined) throw new Error(`no button ${text}`);
@@ -113,7 +122,7 @@ describe('CodeStep', () => {
   });
 
   it('the source never drops autocomplete="one-time-code"', () => {
-    const src = readFileSync(fileURLToPath(new URL('./CodeStep.tsx', import.meta.url)), 'utf8');
+    const src = readFileSync(join(process.cwd(), 'src/components/auth/CodeStep.tsx'), 'utf8');
     expect(src).toContain('autoComplete="one-time-code"');
   });
 
@@ -169,8 +178,10 @@ describe('CodeStep', () => {
   it('an expired code shows the error with a Resend code action', async () => {
     vi.useFakeTimers();
     await render();
+    // The resend cooldown runs out, then the rest of the code's hour.
+    await tick(60);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(CODE_EXPIRY_MS);
+      await vi.advanceTimersByTimeAsync(CODE_EXPIRY_MS - 60_000);
     });
     verifyOtp.mockResolvedValue({
       error: { message: 'Token has expired or is invalid', code: 'otp_expired', status: 403 },
@@ -195,11 +206,7 @@ describe('CodeStep', () => {
       )!;
     expect(resend().textContent).toBe('Resend in 1:00');
     expect(resend().disabled).toBe(true);
-    for (let i = 0; i < 32; i += 1) {
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
-      });
-    }
+    await tick(32);
     expect(resend().textContent).toBe('Resend in 0:28');
   });
 
@@ -207,9 +214,7 @@ describe('CodeStep', () => {
     vi.useFakeTimers();
     onResend.mockResolvedValue("Couldn't send the code. Try again.");
     await render();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
+    await tick(60);
     await act(async () => button('Resend code').click());
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(
       "Couldn't send the code. Try again.",
