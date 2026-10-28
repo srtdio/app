@@ -933,11 +933,7 @@ function PostCardItem(
               label={stageLabel(post.stage)}
               {...(isTagDot(post.stage) ? { dot: post.stage } : {})}
             />
-            {target !== '' ? (
-              <span data-card-target="" className="truncate">
-                {target}
-              </span>
-            ) : null}
+            {target !== '' ? <span data-card-target="">{target}</span> : null}
           </span>
         </div>
         {/* The footer row is always there (its 44px are the box's); its words
