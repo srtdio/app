@@ -214,6 +214,24 @@ describe('device cache', () => {
     expect(peekKept(key)).toEqual(['fresh']);
   });
 
+  it('a read still running with no value takes the saved value as kept; the read lands over it', async () => {
+    mem.rows.set(key, saved(key, ['saved']));
+    let answer: (value: string[]) => void = () => undefined;
+    const running = sharedRead(
+      key,
+      () =>
+        new Promise<string[]>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    expect(peekKept(key)).toBeUndefined();
+    await hydrateSessionReads('u');
+    expect(peekKept(key)).toEqual(['saved']);
+    answer(['fresh']);
+    await expect(running).resolves.toEqual(['fresh']);
+    expect(peekKept(key)).toEqual(['fresh']);
+  });
+
   it('never overwrites a value this tab already holds', async () => {
     mem.rows.set(key, saved(key, 'saved'));
     primeRead(key, 'live');
