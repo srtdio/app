@@ -21,7 +21,13 @@
 // A chat the pre-warm read (prewarmChats) and kept within PREWARM_FRESH_MS
 // opens from that bundle: it is stashed as this open's own (every part beside
 // it, as above), nothing is read, and the thread's reopen re-reads nothing
-// (openedFromPrewarm). Later than that, the reopen above, unchanged.
+// (openedFromPrewarm). Later than that, the reopen above, unchanged. Taking
+// it also remembers its scheduled rows and marks, so the open's first frame
+// holds them.
+//
+// A press on a chat row (pressChatBundle, pointerdown) starts the open's
+// bundle before the tap; the tap and the thread join it. A held pre-warm is
+// left for the tap (nothing is read).
 //
 // Plan bundles are not in it: listeners (onChatBundle) hear each bundle
 // settle and the plan cards start their own read then (PlanCardsProvider).
@@ -34,6 +40,7 @@ import {
   type ChatOpenBundle,
   type ChatOpenBundleInput,
 } from '@/lib/chat/history';
+import { indexMarks } from '@/lib/chat/marks';
 import { openCache, type ChatKey, type OpenCache } from '@/lib/chat/open-cache';
 import type { OpenPostsData } from '@/lib/chat/use-open-posts';
 import { resultOk, sharedChatRead, type ChatWorkspaceRead } from '@/lib/chat/workspace-reads';
@@ -122,6 +129,16 @@ export function startChatBundle(
     // The pre-warm's answer is this open's bundle: nothing is read.
     mark('chat:bundle:prewarmed');
     promise = Promise.resolve({ ok: true, data: warm });
+    // Its scheduled rows and marks are this open's parts, already in hand:
+    // remembered now (before the thread renders), so the open's first frame
+    // has them and nothing holds the remembered rows for their parts to
+    // settle. The same rows the parts below resolve with; takePrewarm already
+    // refused a pre-warm with a scheduled row due since.
+    store.remember(key, 'scheduled', warm.scheduled);
+    store.remember(key, 'marks', {
+      marks: indexMarks(warm.marks),
+      markedMessages: store.recall(key, 'marks')?.markedMessages ?? new Map(),
+    });
   } else {
     const traceId = deps.traceId();
     mark('chat:bundle:start');
@@ -224,6 +241,24 @@ export function joinChatBundle(
   const warm = opts.since === undefined ? deps.store.takePrewarm(key) : undefined;
   if (warm !== undefined) return startChatBundle(key, { since, deps, prewarmed: warm });
   return startChatBundle(key, { since, deps });
+}
+
+/**
+ * A press on a chat row (pointerdown, before the tap): the open's bundle read
+ * starts now, stashed, so the tap's kickoff and the thread join it (one read
+ * shared by the press and the tap). Nothing is read while a pre-warm the tap
+ * will take is held (the press never spends it) or while a bundle can be
+ * joined already. Returns the bundle started or joined, else null. Never
+ * notes an open.
+ */
+export function pressChatBundle(
+  key: ChatKey,
+  opts: { deps?: ChatBundleDeps } = {},
+): Promise<Result<ChatOpenBundle>> | null {
+  const deps = opts.deps ?? APP_DEPS;
+  mark('chat:press');
+  if (deps.store.holdsPrewarm(key)) return null;
+  return joinChatBundle(key, { deps });
 }
 
 /**

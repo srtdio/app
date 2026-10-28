@@ -59,11 +59,13 @@ import {
   loadPeerReadCursor,
   loadReactions,
   loadReadPositions,
+  rowPlanIds,
   type ChatOpenBundle,
   type PeerReadCursor,
   type ReadPositionsRead,
   type HistoryPage,
 } from '@/lib/chat/history';
+import type { PlanBundle } from '@/lib/chat/plans';
 import {
   joinChatBundle,
   openedFromPrewarm,
@@ -621,6 +623,18 @@ export interface PrewarmDeps {
    * workspace): an answer that lands after a switch is dropped, never kept.
    */
   current: () => boolean;
+  /**
+   * The plan bundles of these ids (readPlanBundles): one batched read for the
+   * plans every kept chat's open asks first. Absent: no plan read.
+   */
+  readPlans?: (ids: readonly string[]) => Promise<Result<Map<string, PlanBundle>>>;
+  /** That plan read settled (its ids and result), for the plan card shapes. */
+  onPlans?: (ids: readonly string[], result: Result<Map<string, PlanBundle>>) => void;
+}
+
+/** The plan ids an open of this bundle asks first: its shared plans, then its page's. Pure. */
+export function openPlanIds(bundle: ChatOpenBundle): string[] {
+  return [...new Set([...bundle.sharedPlanIds, ...rowPlanIds(bundle.page.rows)])];
 }
 
 /**
@@ -643,6 +657,7 @@ export async function prewarmChats(keys: readonly ChatKey[], deps: PrewarmDeps):
   const picked = keys.filter((key) => !busy(key)).slice(0, PREWARM_LIMIT);
   if (picked.length === 0) return 0;
   mark('chat:prewarm:start');
+  const warmed: Array<{ key: ChatKey; bundle: ChatOpenBundle }> = [];
   const kept = await Promise.all(
     picked.map(async (key) => {
       let result: Result<ChatOpenBundle>;
@@ -661,11 +676,49 @@ export async function prewarmChats(keys: readonly ChatKey[], deps: PrewarmDeps):
       // The bundle stays beside the page: a tap within PREWARM_FRESH_MS opens
       // from it (its marks, scheduled rows, cursors and posts too), no re-read.
       store.notePrewarm(key, result.data);
+      warmed.push({ key, bundle: result.data });
       return true;
     }),
   );
   mark('chat:prewarm:end');
+  prewarmPlans(warmed, deps, store);
   return kept.filter(Boolean).length;
+}
+
+/**
+ * The plans the warmed chats' opens will ask first, in ONE batched read that
+ * an open within PREWARM_FRESH_MS takes as its own first plan read
+ * (open-cache takePrewarmPlans), so an open makes one plan read in all,
+ * whichever side made it. Skipped while a chat is open (its open already read
+ * its own: a second read would only repeat it). Never throws; nothing waits
+ * on it.
+ */
+function prewarmPlans(
+  warmed: ReadonlyArray<{ key: ChatKey; bundle: ChatOpenBundle }>,
+  deps: PrewarmDeps,
+  store: OpenCache,
+): void {
+  const readPlans = deps.readPlans;
+  const first = warmed[0];
+  if (readPlans === undefined || first === undefined || !deps.current()) return;
+  if (store.holding('thread').some(({ key }) => store.attached(key))) return;
+  const all = [...new Set(warmed.flatMap(({ bundle }) => openPlanIds(bundle)))];
+  if (all.length === 0) return;
+  const read = readPlans(all).catch(
+    (error: unknown): Result<Map<string, PlanBundle>> => ({
+      ok: false,
+      error: { code: 'unknown', message: String(error) },
+    }),
+  );
+  store.notePrewarmPlans(
+    { userId: first.key.userId, workspaceId: first.key.workspaceId },
+    all,
+    read,
+  );
+  void read.then((result) => {
+    mark('chat:prewarm:plans');
+    if (deps.current()) deps.onPlans?.(all, result);
+  });
 }
 
 /**

@@ -1,6 +1,8 @@
 // The thread's plan cards, read in batches: every plan id across the loaded
 // messages (threadCardIds) is asked of ONE cache per open. Nothing is
-// remembered from an earlier open (no old bundle is ever painted). The open's
+// remembered from an earlier open (no old bundle is ever painted); an open
+// that took the pre-warmed chat bundle (within PREWARM_FRESH_MS) takes the
+// pre-warm's batched plan read as its first read instead of reading again. The open's
 // first read starts the moment the chat bundle returns (its shared plan ids
 // plus every plan shared on its page) or when a plan card is tapped first,
 // whichever comes first, and never twice for the same ids (plan-fire.ts);
@@ -144,17 +146,24 @@ export function PlanCardsProvider(props: {
   );
   // One cache per open: made here, disposed when the chat is left. Nothing is
   // carried from an earlier open.
-  const raw = useMemo(
-    () =>
-      workspaceId !== null && channelId !== null
-        ? createPlanCardCache((ids, signal) =>
-            readPlanBundles(supabase, ids, signal, undefined, workspaceId),
-          )
-        : null,
+  const raw = useMemo(() => {
+    if (workspaceId === null || channelId === null) return null;
+    // The open's first plan read may be the pre-warm's (the first open within
+    // PREWARM_FRESH_MS, asking only ids it read; joined while in flight): one
+    // plan read per open in all. Only the first: every later read (a plan
+    // change, a retry, a failed pre-warm read) reads.
+    let first = true;
+    return createPlanCardCache((ids, signal) => {
+      const read = (): ReturnType<typeof readPlanBundles> =>
+        readPlanBundles(supabase, ids, signal, undefined, workspaceId);
+      const primed = first && memo !== null ? openCache.takePrewarmPlans(memo, ids) : undefined;
+      first = false;
+      if (primed === undefined) return read();
+      return primed.then((result) => (result.ok ? result : read()));
+    });
     // A new open (another viewer, workspace or chat) is a new cache.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [memo, workspaceId, channelId],
-  );
+  }, [memo, workspaceId, channelId]);
   // The open's fire-once gate: every ask waits for the chat bundle or a tap.
   const gate = useMemo(
     () => (raw !== null ? createPlanFireOnce((ids) => raw.request(ids)) : null),

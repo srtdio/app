@@ -94,6 +94,7 @@ import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { useSession } from '@/lib/session-context';
 import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
+import { onSessionReadsHydrated } from '@/lib/session-read';
 import { useCurrentProfile } from '@/lib/use-current-profile';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
@@ -265,6 +266,11 @@ export function NotificationsPage() {
   // The latest values, read by async loads to drop a result that went stale.
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const loadingRef = useRef(loading);
+  loadingRef.current = loading;
+  // The page key whose device-saved page one painted late (the saved screens
+  // seeded after this mount): the read already running for it lands quietly.
+  const lateKeptRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
   const sortRef = useRef(sort);
@@ -295,6 +301,7 @@ export function NotificationsPage() {
       if (mode !== 'merge') activitySeqRef.current += 1;
       const seq = activitySeqRef.current;
       const key = userId !== null ? activityPageKey(userId, workspaceId, state, sort) : null;
+      if (mode !== 'merge') lateKeptRef.current = null;
       if (mode === 'refresh' && key !== null) invalidateActivityReads(key);
       // The kept page painted by this reset; its refresh is quiet.
       const held = mode === 'reset' && key !== null ? peekActivityPage(key) : undefined;
@@ -324,16 +331,18 @@ export function NotificationsPage() {
       if (seq !== activitySeqRef.current) return;
       setNowMs(Date.now());
       if (mode !== 'merge') setLoading(false);
+      // A kept page is on screen: painted by this reset, or seeded late from the device.
+      const quiet = held !== undefined || (key !== null && lateKeptRef.current === key);
       if (!result.ok) {
         logger.warn('notifications: load failed', { error: result.error });
         // A failed quiet refresh keeps the kept page, silently.
-        if (mode === 'merge' || held !== undefined) return;
+        if (mode === 'merge' || quiet) return;
         if (itemsRef.current.length > 0) push(REFRESH_FAILED);
         else setError(true);
         return;
       }
       // A quiet refresh behind the arrival paint never moves what the person touched.
-      if (held !== undefined && arrival && !untouched()) return;
+      if (quiet && arrival && !untouched()) return;
       if (mode === 'merge') {
         const known = new Set(itemsRef.current.map((item) => item.id));
         const added = result.data.filter((item) => !known.has(item.id));
@@ -485,6 +494,42 @@ export function NotificationsPage() {
     if (state === 'upcoming') void loadUpcoming(arrival);
     else void loadActivity('reset', arrival);
   }, [state, loadActivity, loadUpcoming]);
+
+  // A cold open can mount this page before the device's saved screens are
+  // seeded (hydrateSessionReads runs beside the boot; nothing waits on it).
+  // When they land, a list still on its loading line paints the saved page one
+  // at once, and the read already running lands over it as a quiet refresh.
+  // Upcoming and the Mentions count take their saved values the same way.
+  // Adds no read and no wait: it only paints sooner than the read would.
+  useEffect(() => {
+    if (userId === null || workspaceId === null) return undefined;
+    return onSessionReadsHydrated(() => {
+      const count = peekMentionCount(mentionCountKey(userId, workspaceId));
+      if (count !== undefined) setMentionCount(count);
+      if (stateRef.current === 'upcoming') {
+        if (upcomingLoadedRef.current) return;
+        const rows = peekUpcoming(upcomingKey(userId, workspaceId));
+        if (rows === undefined) return;
+        upcomingLoadedRef.current = true;
+        setUpcoming(rows);
+        setUpcomingLoaded(true);
+        setUpcomingError(false);
+        mark('activity:kept-paint');
+        return;
+      }
+      if (!loadingRef.current || itemsRef.current.length > 0) return;
+      const key = activityPageKey(userId, workspaceId, stateRef.current, sortRef.current);
+      const kept = peekActivityPage(key);
+      if (kept === undefined) return;
+      lateKeptRef.current = key;
+      setItems(kept);
+      setHasMore(kept.length === ACTIVITY_PAGE_SIZE);
+      setNowMs(Date.now());
+      setLoading(false);
+      setError(false);
+      mark('activity:kept-paint');
+    });
+  }, [userId, workspaceId]);
 
   // New rows found by the shell's poll: fold page one in (no duplicates, no
   // scroll jump) and refresh the Mentions count. A local write's event is not
@@ -932,6 +977,14 @@ export function NotificationsPage() {
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
   if (!listLoading) mark('activity:paint');
+  // What the first frame painted (?paintlog): the kept or device-saved page,
+  // or the loading line (nothing saved for this chip and sort yet).
+  const firstPaintRef = useRef<string | null>(null);
+  const keptOnScreen = state === 'upcoming' ? upcomingLoaded : !listLoading;
+  firstPaintRef.current ??= keptOnScreen ? 'activity:kept-paint' : 'activity:loading-paint';
+  useLayoutEffect(() => {
+    if (firstPaintRef.current !== null) mark(firstPaintRef.current);
+  }, []);
   useKeptScroll(keptKey('scroll'), state === 'upcoming' ? upcomingLoaded : !listLoading);
 
   return (

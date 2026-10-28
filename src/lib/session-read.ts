@@ -182,8 +182,9 @@ let hydratedFor: string | null = null;
 
 /**
  * Seed this user's saved values (device cache) as kept but stale: peekKept
- * paints them, the first sharedRead still reads. A key this tab already holds
- * is never overwritten. Started at boot, in parallel with the boot imports;
+ * paints them, the first sharedRead still reads. A value this tab already
+ * holds is never overwritten; a read still running with no value takes the
+ * saved one as its kept value. Started at boot, in parallel with the boot imports;
  * nothing waits on it. Never throws.
  */
 export async function hydrateSessionReads(userId: string): Promise<void> {
@@ -192,7 +193,15 @@ export async function hydrateSessionReads(userId: string): Promise<void> {
   const saved = await deviceCache.hydrate(userId);
   if (started !== generation || heldUserId !== userId) return;
   for (const [key, value] of saved) {
-    if (entries.has(key)) continue;
+    const held = entries.get(key);
+    if (held !== undefined) {
+      // A read that started before the seed (a screen mounted on a cold open)
+      // and has no value yet: the saved one becomes its kept value, so the
+      // screen paints it now. The read still lands over it; a failed one
+      // leaves it kept but stale.
+      if (held.kept === null) held.kept = { value };
+      continue;
+    }
     entries.set(key, {
       promise: Promise.resolve(value),
       settledAt: 0,

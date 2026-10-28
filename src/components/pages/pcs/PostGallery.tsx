@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
   PointerEvent as ReactPointerEvent,
   MouseEvent as ReactMouseEvent,
@@ -24,6 +24,8 @@ import { PostLightbox, placePinFromEvent } from '@/components/pages/pcs/PostLigh
 import { FileTile, storedThumbnailMeta } from '@/components/ui/FileTile';
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { cn } from '@/lib/cn';
+import { SIGNOUT_EVENT } from '@/lib/events';
+import { mark } from '@/lib/perf-marks';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { DropZone } from '@/components/ui/DropZone';
@@ -84,13 +86,39 @@ export function intrinsicSize(
   return null;
 }
 
-/** Lazily resolve and render one tile's inline thumbnail, falling back to a glyph. */
+// Versions whose full image has decoded this session: a remount (a reopened
+// post) paints the full image at once, with no cover first. Cleared on signout.
+const decodedFull = new Set<string>();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(SIGNOUT_EVENT, () => decodedFull.clear());
+}
+
+/**
+ * The small copy already known for a version (the Pipeline card's cover URL,
+ * from the shared presign cache), or null. Synchronous: never a network read.
+ */
+function knownCover(cache: PresignCache, versionId: string): string | null {
+  if (decodedFull.has(versionId)) return null;
+  return cache.peekThumbnail(versionId)?.url ?? null;
+}
+
+/**
+ * Lazily resolve and render one tile's inline thumbnail, falling back to a glyph.
+ *
+ * Cover first (post ribbon only, `coverLoading` set): when the version's small
+ * copy is already known (the Pipeline card showed it), it paints on the first
+ * frame in the same box and fit as the full image, and the full image swaps in
+ * only once it has loaded and decoded. No cover known: exactly as before.
+ */
 function GalleryThumb({
   item,
   cache,
   presignEnabled,
   fit = 'cover',
   onMeasure,
+  coverLoading,
+  paintMarks = false,
 }: {
   item: GalleryItem;
   cache: PresignCache;
@@ -107,6 +135,13 @@ function GalleryThumb({
    * with a zero or NaN dimension, and never on a load error.
    */
   onMeasure?: ((width: number, height: number) => void) | undefined;
+  /**
+   * Post ribbon only: paint the known small copy first (eager for the slide on
+   * screen, lazy for the rest). Absent: no cover (brief grid, snapshots, reorder).
+   */
+  coverLoading?: 'eager' | 'lazy' | undefined;
+  /** Drop the post:media:* perf marks (the ribbon's first slide). */
+  paintMarks?: boolean;
 }) {
   const versionId = item.assetVersionId;
   const renderable = presignEnabled && isImage(item) && versionId !== '';
@@ -114,6 +149,43 @@ function GalleryThumb({
     renderable ? (cache.peek(versionId)?.url ?? null) : null,
   );
   const [failed, setFailed] = useState(false);
+  // The cover is read once per version, synchronously, on the first render.
+  const [cover] = useState<{ versionId: string; url: string } | null>(() => {
+    if (!renderable || coverLoading === undefined) return null;
+    const known = knownCover(cache, versionId);
+    return known === null ? null : { versionId, url: known };
+  });
+  // Layered (cover under, full over) for the whole mount once a cover was
+  // known, so the full <img> never remounts when the cover leaves.
+  const layered = cover !== null && cover.versionId === versionId;
+  const [coverFailed, setCoverFailed] = useState(false);
+  // The version whose full image has loaded and decoded on this mount.
+  const [fullReady, setFullReady] = useState<string | null>(null);
+  const fullShown = fullReady === versionId;
+  const coverUrl = cover !== null && layered && !coverFailed && !fullShown ? cover.url : null;
+  const fullRef = useRef<HTMLImageElement>(null);
+
+  const swapToFull = (): void => {
+    decodedFull.add(versionId);
+    setFullReady(versionId);
+    if (paintMarks) mark('post:media:full-swap');
+  };
+
+  // A full image already decoded in the browser (memory cache) shows before
+  // the first paint, so nothing paints later than it did before covers.
+  useLayoutEffect(() => {
+    if (!layered || fullShown) return;
+    const img = fullRef.current;
+    if (
+      img !== null &&
+      img.complete &&
+      intrinsicSize(img.naturalWidth, img.naturalHeight) !== null
+    ) {
+      decodedFull.add(versionId);
+      setFullReady(versionId);
+      if (paintMarks) mark('post:media:full-swap');
+    }
+  }, [layered, fullShown, url, versionId, paintMarks]);
 
   useEffect(() => {
     if (!renderable) return;
@@ -131,22 +203,78 @@ function GalleryThumb({
     };
   }, [renderable, versionId, cache]);
 
+  const fitClass = fit === 'fit' ? 'object-contain' : 'object-cover';
+  const measure = (img: HTMLImageElement): void => {
+    if (onMeasure === undefined) return;
+    const size = intrinsicSize(img.naturalWidth, img.naturalHeight);
+    if (size !== null) onMeasure(size.width, size.height);
+  };
+
+  if (layered && renderable) {
+    // Cover under, full over (hidden until decoded): one box, one fit, so the
+    // swap moves nothing. A failed full image keeps the cover; a failed cover
+    // shows the full image as it loads, as before.
+    const fullUsable = url !== null && !failed;
+    if (fullUsable || coverUrl !== null) {
+      return (
+        <span className="relative block h-full w-full">
+          {coverUrl !== null ? (
+            <img
+              src={coverUrl}
+              alt=""
+              aria-hidden="true"
+              data-gallery-cover=""
+              loading={coverLoading}
+              decoding="async"
+              onLoad={() => {
+                if (paintMarks) mark('post:media:cover-paint');
+              }}
+              onError={() => setCoverFailed(true)}
+              className={cn('absolute inset-0 h-full w-full', fitClass)}
+            />
+          ) : null}
+          {fullUsable ? (
+            <img
+              ref={fullRef}
+              src={url}
+              alt={item.filename}
+              loading="lazy"
+              decoding="async"
+              data-gallery-full=""
+              onError={() => setFailed(true)}
+              onLoad={(event) => {
+                const img = event.currentTarget;
+                measure(img);
+                if (fullShown) return;
+                // Swap only once the full image is decoded, never on bytes alone.
+                if (typeof img.decode !== 'function') {
+                  swapToFull();
+                  return;
+                }
+                img.decode().then(swapToFull, swapToFull);
+              }}
+              className={cn(
+                'absolute inset-0 h-full w-full',
+                fitClass,
+                coverUrl !== null ? 'opacity-0' : null,
+              )}
+            />
+          ) : null}
+        </span>
+      );
+    }
+  }
+
   if (renderable && url !== null && !failed) {
     return (
       <img
         src={url}
         alt={item.filename}
         loading="lazy"
+        data-gallery-full=""
         onError={() => setFailed(true)}
-        onLoad={(event) => {
-          if (onMeasure === undefined) return;
-          const size = intrinsicSize(
-            event.currentTarget.naturalWidth,
-            event.currentTarget.naturalHeight,
-          );
-          if (size !== null) onMeasure(size.width, size.height);
-        }}
-        className={fit === 'fit' ? 'h-full w-full object-contain' : 'h-full w-full object-cover'}
+        onLoad={(event) => measure(event.currentTarget)}
+        className={cn('h-full w-full', fitClass)}
       />
     );
   }
@@ -1061,6 +1189,10 @@ export function galleryView({
                     cache={cache}
                     presignEnabled={presignEnabled}
                     fit="fit"
+                    // The slide on screen paints its known cover at once; the
+                    // rest fetch theirs only as they near the screen.
+                    coverLoading={index === 0 ? 'eager' : 'lazy'}
+                    paintMarks={index === 0}
                     onMeasure={
                       onMeasure !== undefined
                         ? (width, height) => onMeasure(item.assetAttachmentId, width, height)

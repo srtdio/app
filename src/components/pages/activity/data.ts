@@ -2649,10 +2649,23 @@ export function invalidateActivityReads(key?: string): void {
   for (const k of key !== undefined ? [key] : activityKeys) invalidateReads(k);
 }
 
+/** Every inbox chip with a page one (Upcoming is not an inbox slice). */
+const PAGE_STATES: readonly ActivityState[] = [
+  'all',
+  'unread',
+  'mentions',
+  'briefs',
+  'plans',
+  'snoozed',
+];
+const PAGE_DIRECTIONS: readonly ActivityDirection[] = ['newest', 'oldest'];
+
 /**
  * Apply one of the page's own writes (a mark read, a snooze, their revert) to
- * every kept chip page of this user and workspace, so a return paints it. A
- * page that was stale stays stale (the next read still goes to the server).
+ * every kept chip page of this user and workspace, so a return paints it:
+ * the pages read this session and the ones the device saved (seeded at boot,
+ * not read yet). A page that was stale stays stale (the next read still goes
+ * to the server).
  */
 export function editKeptActivityPages(
   userId: string,
@@ -2660,7 +2673,13 @@ export function editKeptActivityPages(
   edit: (items: ActivityItem[]) => ActivityItem[],
 ): void {
   const prefix = readKey(userId, workspaceId, 'activity-page:');
-  for (const key of activityKeys) {
+  const keys = new Set(activityKeys);
+  for (const state of PAGE_STATES) {
+    for (const direction of PAGE_DIRECTIONS) {
+      keys.add(activityPageKey(userId, workspaceId, state, direction));
+    }
+  }
+  for (const key of keys) {
     const kept = key.startsWith(prefix) ? peekKept<LoadResult>(key) : undefined;
     if (kept === undefined || !kept.ok) continue;
     const fresh = peekRead<LoadResult>(key) !== undefined;
