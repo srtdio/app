@@ -224,6 +224,11 @@ export interface OpenCache {
    * the pre-warm is spent.
    */
   takePrewarm: (key: ChatKey) => ChatOpenBundle | undefined;
+  /**
+   * Whether takePrewarm would hand over a bundle now, without spending it (a
+   * press on the row reads nothing for it: the tap takes it).
+   */
+  holdsPrewarm: (key: ChatKey) => boolean;
   /** Forget everything. */
   clear: () => void;
   /**
@@ -332,6 +337,22 @@ export function createOpenCache(
 
   const live = (s: Stashed): boolean =>
     s.settledAt === null || now() - s.settledAt < JOIN_WINDOW_MS;
+
+  /**
+   * The slot's pre-warmed bundle while an open may take it: within
+   * PREWARM_FRESH_MS, its page still remembered (never forgotten since) and
+   * none of its scheduled rows due. Never spends it.
+   */
+  const usablePrewarm = (slot: Slot | undefined): ChatOpenBundle | undefined => {
+    const warm = slot?.prewarm;
+    if (slot === undefined || warm === undefined) return undefined;
+    if (slot.threadEpoch !== warm.epoch || slot.memory.thread === undefined) return undefined;
+    const at = now();
+    if (at - warm.at > PREWARM_FRESH_MS) return undefined;
+    // A scheduled row due since may have sent: the open reads, as before.
+    if (warm.bundle.scheduled.some((row) => Date.parse(row.send_at) <= at)) return undefined;
+    return warm.bundle;
+  };
 
   const stash = <K extends keyof OpenReads>(
     key: ChatKey,
@@ -453,15 +474,12 @@ export function createOpenCache(
     },
     takePrewarm(key) {
       const slot = slots.get(slotKey(key));
-      const warm = slot?.prewarm;
-      if (slot === undefined || warm === undefined) return undefined;
-      delete slot.prewarm;
-      if (slot.threadEpoch !== warm.epoch || slot.memory.thread === undefined) return undefined;
-      const at = now();
-      if (at - warm.at > PREWARM_FRESH_MS) return undefined;
-      // A scheduled row due since may have sent: the open reads, as before.
-      if (warm.bundle.scheduled.some((row) => Date.parse(row.send_at) <= at)) return undefined;
-      return warm.bundle;
+      const warm = usablePrewarm(slot);
+      if (slot !== undefined) delete slot.prewarm;
+      return warm;
+    },
+    holdsPrewarm(key) {
+      return usablePrewarm(slots.get(slotKey(key))) !== undefined;
     },
     opened(key) {
       const slot = slotOf(key, true);

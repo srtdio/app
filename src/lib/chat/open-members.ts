@@ -201,6 +201,22 @@ export async function readMentionProfilesShared(
 }
 
 /**
+ * readMentionProfilesShared's answer, now, while the held members (fresh)
+ * answer every id, membership included; null otherwise (the read runs as
+ * before). Never reads.
+ */
+export function peekMentionProfiles(
+  userId: string,
+  workspaceId: string,
+  userIds: readonly string[],
+): MentionProfile[] | null {
+  const held = peekMembers(userId, workspaceId);
+  if (held === null) return null;
+  const { profiles, missing } = mentionProfilesFromMembers(held, userIds);
+  return missing.length === 0 ? profiles : null;
+}
+
+/**
  * readChatMembers, answered from the members (held, else the one shared load):
  * only current members whose profile is not held are read (none: no request).
  * A failed load: the read exactly as before.

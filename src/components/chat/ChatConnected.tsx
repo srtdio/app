@@ -9,6 +9,7 @@ import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import {
+  peekMentionProfiles,
   readGroupMemberIdsShared,
   readMentionProfilesShared,
   startChatMembers,
@@ -50,7 +51,7 @@ import { readChatOpenBundle } from '@/lib/chat/history';
 import { whenIdle } from '@/lib/chunk-reload';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
-import { joinChatBundle } from '@/lib/chat/open-bundle';
+import { joinChatBundle, pressChatBundle } from '@/lib/chat/open-bundle';
 import { resolveViewerSide } from '@/lib/chat/viewer-role';
 import { createStarStore, StarStoreContext, useChannelStars } from '@/lib/chat/stars';
 import { useChatTyping } from '@/lib/chat/use-chat-typing';
@@ -166,6 +167,42 @@ export function startChatOpen(userId: string, workspaceId: string, channelId: st
   if (peekWorkspaceMembers(userId, workspaceId) === null) {
     void startChatMembers(supabase, userId, workspaceId);
   }
+}
+
+/**
+ * A press on a chat row (pointerdown, before the tap): the open's one
+ * chat_open_bundle call starts now (or a held pre-warm is left for the tap,
+ * nothing read). The tap's kickoff joins it: one bundle read for both.
+ */
+export function pressChatOpen(userId: string, workspaceId: string, channelId: string): void {
+  const key = chatKey(userId, workspaceId, channelId);
+  if (key === null) return;
+  void pressChatBundle(key);
+}
+
+/**
+ * The names a tapped chat's remembered page needs (its senders, @mentions and
+ * DM peer not held yet), answered now from the held workspace members, so its
+ * first frame paints with them instead of waiting on the names read. Null
+ * when there is no remembered page, nothing is needed, or the held members
+ * cannot answer every id (the names read runs as before). The answer is the
+ * one that read gives from the same members, membership included.
+ */
+export function heldOpenNames(input: {
+  page: { rows: readonly ThreadMessage[] } | undefined;
+  peerUserId: string | null;
+  held: ReadonlyMap<string, unknown>;
+  peek: (ids: readonly string[]) => MentionProfile[] | null;
+}): { ids: string[]; profiles: MentionProfile[] } | null {
+  if (input.page === undefined) return null;
+  const ids = profileIdsNeeded({
+    messages: input.page.rows,
+    peerUserId: input.peerUserId,
+    held: input.held,
+  });
+  if (ids.length === 0) return null;
+  const profiles = input.peek(ids);
+  return profiles !== null ? { ids, profiles } : null;
 }
 
 const NO_TYPING: string[] = [];
@@ -1275,6 +1312,12 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
           saveData: saveDataOn,
           current: () => live,
         });
+        // The members the first tap's names answer from (the same one shared
+        // load the tap would start), so a pre-warmed chat's first frame has
+        // its names too. Joined while fresh; skipped under Save-Data.
+        if (!saveDataOn() && peekWorkspaceMembers(currentUserId, workspaceId) === null) {
+          void startChatMembers(supabase, currentUserId, workspaceId);
+        }
       },
     });
     return () => {
@@ -1571,6 +1614,36 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     workspaceId,
     currentUserId,
   ]);
+  // A tap on a chat whose page is remembered: its names, when the held
+  // members answer them all, land in the same commit as the selection (the
+  // names read's own answer, membership included), so its first frame is the
+  // rows, never the skeleton while that read runs. Else the read above runs.
+  const seedOpenNames = (channel: ChannelSummary): void => {
+    const key = chatKey(currentUserId, workspaceId, channel.channelId);
+    const named = heldOpenNames({
+      page: key !== null ? openCache.recall(key, 'thread') : undefined,
+      peerUserId: channel.peerUserId,
+      held: profiles,
+      peek: (ids) => peekMentionProfiles(currentUserId, workspaceId, ids),
+    });
+    if (named === null) return;
+    mark('chat:names:held');
+    const forWorkspace = workspaceId;
+    rememberMentionRead(forWorkspace, named.ids, named.profiles);
+    setProfileState((prev) => {
+      const next = new Map(prev.workspaceId === forWorkspace ? prev.profiles : undefined);
+      for (const profile of named.profiles) next.set(profile.userId, profile);
+      return { workspaceId: forWorkspace, profiles: next };
+    });
+    setNameReadState((prev) => ({
+      workspaceId: forWorkspace,
+      reads: applyMentionProfileRead(
+        prev.workspaceId === forWorkspace ? prev.reads : NO_NAME_READS,
+        named.ids,
+        { ok: true, data: named.profiles },
+      ),
+    }));
+  };
   const firstPageSettled = firstPageIn && unsettled.length === 0;
   useEffect(() => {
     if (firstPageSettled) setNamesSettled(selectedChannelId);
@@ -2128,8 +2201,13 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
               // Every read the open needs starts now, before the thread mounts.
               if (selected?.channelId !== channel.channelId && !isNotes(channel)) {
                 startChatOpen(currentUserId, workspaceId, channel.channelId);
+                seedOpenNames(channel);
               }
               openChannel(channel);
+            }}
+            onPressIn={(channel: ChannelSummary) => {
+              if (selected?.channelId === channel.channelId || isNotes(channel)) return;
+              pressChatOpen(currentUserId, workspaceId, channel.channelId);
             }}
             onNewChat={() => setNewChatOpen(true)}
             onDeleteChats={onDeleteChats}

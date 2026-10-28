@@ -694,6 +694,20 @@ export function openHoldSettled(parts: {
 }
 
 /**
+ * Whether the open hold keeps the first page off screen now: a cold open's
+ * only, until its parts settle or the hold is done (released or capped). A
+ * kept open (the chat's page was remembered: opened before or pre-warmed)
+ * never holds: its rows are the first frame. Pure.
+ */
+export function openHoldApplies(input: {
+  keptOpen: boolean;
+  holdDone: boolean;
+  partsSettled: boolean;
+}): boolean {
+  return !input.keptOpen && !input.holdDone && !input.partsSettled;
+}
+
+/**
  * The jump pill's next state, or null to leave it. Decided once the first
  * unread is known and the open pin has landed: while the list still means to
  * stick to the bottom but is not there yet (the pin is pending), the divider's
@@ -5523,6 +5537,14 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   );
   const pageCards = useMemo(() => threadCardIds(props.messages), [props.messages]);
   const pagePlanIds = pageCards.planIds;
+  // A chat whose page is remembered (opened before, or pre-warmed) paints its
+  // kept rows in the first frame: the hold above is a cold open's only. Its
+  // parts still loading (the plan bundles, never remembered; the ticker) keep
+  // their same-size placeholders and fill in place, as after the hold's cap.
+  const [keptOpen] = useState(() => {
+    const key = chatKey(props.currentUserId, workspaceId, channelId);
+    return key !== null && openCache.recall(key, 'thread') !== undefined;
+  });
   const openPartsSettled = openHoldSettled({
     marks: props.marks === undefined || props.marksLoaded || props.marksFailed === true,
     // The side words the ticker and the post and plan cards: only they wait on it.
@@ -5537,7 +5559,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       pagePlanIds.length === 0 ||
       !statusPlanCards.cache.snapshot(pagePlanIds).loading,
   });
-  const openHeld = !openHoldDone && !openPartsSettled;
+  const openHeld = openHoldApplies({
+    keptOpen,
+    holdDone: openHoldDone,
+    partsSettled: openPartsSettled,
+  });
   const onOpenPlanCompose = props.onOpenPlanCompose;
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -5975,6 +6001,12 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // The hold's cap, and its release latched once the first page is out.
   useEffect(() => {
     if (openHoldDone) return;
+    if (!pageLoading && keptOpen) {
+      paintLog(`open hold skipped, kept rows, ${Date.now() - openAt}ms after the tap`);
+      mark('chat:hold:kept');
+      setOpenHoldDone(true);
+      return;
+    }
     if (!pageLoading && !openHeld) {
       paintLog(`open hold released, all settled, ${Date.now() - openAt}ms after the tap`);
       mark('chat:hold:release');
@@ -5990,7 +6022,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       Math.max(0, openAt + OPEN_HOLD_MS - Date.now()),
     );
     return () => clearTimeout(timer);
-  }, [openHoldDone, pageLoading, openHeld, openAt]);
+  }, [openHoldDone, pageLoading, openHeld, openAt, keptOpen]);
   // Go to card: the same jump and highlight as a deep link, once per seq.
   const cardJump = props.cardJump ?? null;
   const cardJumpSeq = useRef<number | null>(null);

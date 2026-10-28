@@ -128,6 +128,11 @@ interface ChannelListProps {
   onRetry: () => void;
   selectedChannelId: string | null;
   onSelect: (channel: ChannelSummary) => void;
+  /**
+   * A chat row was pressed (pointerdown, before its tap): the open's reads may
+   * start now. Never selects; the tap (onSelect) still opens.
+   */
+  onPressIn?: (channel: ChannelSummary) => void;
   /** Opens the New chat sheet (header "+" and empty-state action). */
   onNewChat: () => void;
   /** For tests: the zone card times render in. The app passes none (the viewer's device zone). */
@@ -255,6 +260,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
         nowMs={nowMs}
         timeZone={timeZone}
         onSelect={props.onSelect}
+        {...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {})}
         input={props.input ?? DEFAULT_LIST_INPUT}
         {...(props.selecting !== undefined
           ? {
@@ -697,6 +703,8 @@ export function ChannelCard(props: {
   nowMs: number;
   timeZone?: string | undefined;
   onSelect: (channel: ChannelSummary) => void;
+  /** A primary press on the tile (pointerdown), outside select mode: before the tap. */
+  onPressIn?: (channel: ChannelSummary) => void;
   /** The list's input (hover, coarse), read once by the list. */
   input: ChannelListInput;
   /** Present in select mode: whether this tile is checked. */
@@ -731,6 +739,11 @@ export function ChannelCard(props: {
     { ignoreMouse: true },
   );
   const checked = props.checked === true;
+  // Press-in: the open's reads start at the finger's touch, not its lift.
+  const pressIn = (e: PointerEvent<HTMLButtonElement>): void => {
+    if (selecting || !e.isPrimary || e.button !== 0) return;
+    props.onPressIn?.(channel);
+  };
   return (
     <div
       className={cn('group relative', NO_TOUCH_SELECT)}
@@ -747,9 +760,10 @@ export function ChannelCard(props: {
               onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
                 holdFiredRef.current = false;
                 handlers.onPointerDown(e);
+                pressIn(e);
               },
             }
-          : {})}
+          : { onPointerDown: pressIn })}
         onContextMenu={(e: MouseEvent) => {
           if (coarsePointer) e.preventDefault();
           if (!menuEnabled) return;
@@ -1159,6 +1173,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                   onClearSearch: () => props.onSearchChange(''),
                   selectedChannelId: props.selectedChannelId,
                   onSelect: props.onSelect,
+                  ...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {}),
                   onNewChat: newChat,
                   summaryFor,
                   ...(props.draftFor !== undefined ? { draftFor: props.draftFor } : {}),
