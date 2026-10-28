@@ -6,20 +6,27 @@
 
 import type { CopyContext } from './induction-model';
 
-/** Sign-up card and the check-your-email state (self sign-up). */
+/** Sign-in and sign-up cards and the enter-the-code step (email code, no link). */
 export const CHECK_EMAIL_COPY = {
-  signUpSubtitle: "We'll email you a sign-in link. No password.",
-  title: 'Check your email',
+  subtitle: 'We email you a code. No password.',
+  /** Read by the onboarding copy tests only; no screen shows a link line any more. */
   body: 'We sent a link to {email}. Open it on this device to finish signing up.',
-  resend: 'Resend link',
   differentEmail: 'Use a different email',
-  createAccount: 'Create account',
-  sending: 'Sending link',
+  sendCode: 'Send code',
+  sendingCode: 'Sending code',
+  codeTitle: 'Enter the code',
+  sentTo: 'Sent to {email}',
+  /** Followed by the cooldown as m:ss: "Resend in 0:28". */
+  resendIn: 'Resend in',
+  resendCode: 'Resend code',
+  wrongCode: "That code didn't work. Try again.",
+  /** Followed by the tappable resendCode action. */
+  expiredCode: 'That code has expired.',
   rateLimited: 'Too many tries. Wait a minute and try again.',
   /** Shown under the email field when it loses focus with a malformed address. */
   invalidEmail: 'Enter a valid email, like name@company.com',
-  /** Any other refusal from the link request: never the raw provider text. */
-  genericError: "Couldn't send the link. Try again.",
+  /** Any other refusal from the code request: never the raw provider text. */
+  genericError: "Couldn't send the code. Try again.",
 } as const;
 
 /** The pre-app screens (OnboardingFlow): only the lines that changed in W11. */

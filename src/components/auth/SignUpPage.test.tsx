@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { signInWithOtp } = vi.hoisted(() => ({ signInWithOtp: vi.fn() }));
+const { signInWithOtp, verifyOtp } = vi.hoisted(() => ({
+  signInWithOtp: vi.fn(),
+  verifyOtp: vi.fn(),
+}));
 
-vi.mock('@/lib/supabase', () => ({ supabase: { auth: { signInWithOtp } } }));
+vi.mock('@/lib/supabase', () => ({ supabase: { auth: { signInWithOtp, verifyOtp } } }));
 
 import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
 import {
@@ -32,7 +35,7 @@ describe('performSignUp', () => {
     signInWithOtp.mockResolvedValue({ error: null });
   });
 
-  it('emails a sign-in link that creates the account, with the timezone, and no password', async () => {
+  it('emails a code that creates the account, with the timezone, and no password', async () => {
     const result = await performSignUp(authClient(), {
       email: '  dana@kite.in ',
       timezone: 'Asia/Kolkata',
@@ -84,7 +87,7 @@ describe('performSignUp', () => {
       timezone: 'UTC',
       policyConsent: true,
     });
-    expect(result).toEqual({ status: 'error', message: "Couldn't send the link. Try again." });
+    expect(result).toEqual({ status: 'error', message: "Couldn't send the code. Try again." });
   });
 
   it('words the rate limit as Too many tries', () => {
@@ -102,6 +105,8 @@ describe('SignUpPage', () => {
     vi.useFakeTimers();
     signInWithOtp.mockReset();
     signInWithOtp.mockResolvedValue({ error: null });
+    verifyOtp.mockReset();
+    verifyOtp.mockResolvedValue({ error: null });
     host = document.createElement('div');
     document.body.appendChild(host);
   });
@@ -121,7 +126,10 @@ describe('SignUpPage', () => {
           initialEntries={['/signup?email=dana@kite.in']}
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
-          <SignUpPage />
+          <Routes>
+            <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/pipeline" element={<p data-landed="">pipeline</p>} />
+          </Routes>
         </MemoryRouter>,
       );
     });
@@ -139,7 +147,7 @@ describe('SignUpPage', () => {
 
   async function submit(): Promise<void> {
     await click(document.querySelector<HTMLInputElement>('#signup-policy-consent')!);
-    await click(button(CHECK_EMAIL_COPY.createAccount));
+    await click(button(CHECK_EMAIL_COPY.sendCode));
   }
 
   async function tick(seconds: number): Promise<void> {
@@ -153,13 +161,13 @@ describe('SignUpPage', () => {
   it('renders no password field, and the short subtitle', async () => {
     await render();
     expect(document.querySelector('input[type="password"]')).toBeNull();
-    expect(document.body.textContent).toContain("We'll email you a sign-in link. No password.");
+    expect(document.body.textContent).toContain('We email you a code. No password.');
   });
 
   // W11 fix 5: Create is never disabled for the consent box.
-  it('keeps Create enabled unticked, and says why on tap', async () => {
+  it('keeps Send code enabled unticked, and says why on tap', async () => {
     await render();
-    const create = button(CHECK_EMAIL_COPY.createAccount);
+    const create = button(CHECK_EMAIL_COPY.sendCode);
     expect(create.disabled).toBe(false);
     await click(create);
     expect(signInWithOtp).not.toHaveBeenCalled();
@@ -183,31 +191,35 @@ describe('SignUpPage', () => {
     expect(input.getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('shows Check your email with the address after sending', async () => {
+  it('Send code swaps the same card to the code step with the address', async () => {
     await render();
+    const card = host!.firstElementChild;
     await submit();
     expect(signInWithOtp).toHaveBeenCalledTimes(1);
-    expect(document.body.textContent).toContain('Check your email');
-    expect(document.body.textContent).toContain(
-      'We sent a link to dana@kite.in. Open it on this device to finish signing up.',
+    expect(host!.firstElementChild).toBe(card);
+    expect(document.body.textContent).toContain('Enter the code');
+    expect(document.body.textContent).toContain('Sent to dana@kite.in');
+    expect(document.body.textContent).not.toContain('Check your email');
+    expect(document.querySelector('#auth-code')?.getAttribute('autocomplete')).toBe(
+      'one-time-code',
     );
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });
 
-  it('holds Resend link for 60 seconds, then sends once per tap', async () => {
+  it('holds Resend code for 60 seconds (m:ss), then sends once per tap', async () => {
     await render();
     await submit();
     const resend = (): HTMLButtonElement =>
       [...document.querySelectorAll('button')].find((b) =>
-        (b.textContent ?? '').startsWith('Resend link'),
+        (b.textContent ?? '').startsWith('Resend'),
       )!;
     expect(resend().disabled).toBe(true);
-    expect(resend().textContent).toBe(`Resend link (${RESEND_COOLDOWN_SECONDS}s)`);
-    await tick(1);
-    expect(resend().textContent).toBe('Resend link (59s)');
-    await tick(RESEND_COOLDOWN_SECONDS - 1);
+    expect(resend().textContent).toBe(`Resend in 1:00`);
+    await tick(32);
+    expect(resend().textContent).toBe('Resend in 0:28');
+    await tick(RESEND_COOLDOWN_SECONDS - 32);
     expect(resend().disabled).toBe(false);
-    expect(resend().textContent).toBe('Resend link');
+    expect(resend().textContent).toBe('Resend code');
     // No auto-resend while waiting.
     expect(signInWithOtp).toHaveBeenCalledTimes(1);
     await click(resend());
@@ -231,10 +243,28 @@ describe('SignUpPage', () => {
     await submit();
     await tick(RESEND_COOLDOWN_SECONDS);
     signInWithOtp.mockResolvedValue({ error: { message: 'too many', status: 429 } });
-    await click(button('Resend link'));
+    await click(button('Resend code'));
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(RATE_LIMIT_MESSAGE);
     await tick(5);
     expect(signInWithOtp).toHaveBeenCalledTimes(2);
+  });
+
+  it('a right code lands where the link callback did (/pipeline, then onboarding)', async () => {
+    await render();
+    await submit();
+    const code = document.querySelector<HTMLInputElement>('#auth-code')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => {
+      setter?.call(code, '654321');
+      code.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(verifyOtp).toHaveBeenCalledTimes(1);
+    expect(verifyOtp).toHaveBeenCalledWith({
+      email: 'dana@kite.in',
+      token: '654321',
+      type: 'email',
+    });
+    expect(document.querySelector('[data-landed]')).not.toBeNull();
   });
 
   it('agree row: checkbox and label text share one 44px flex row', async () => {

@@ -95,26 +95,40 @@ describe('copy hygiene', () => {
 describe('entry screen copy is unchanged', () => {
   it('CHECK_EMAIL_COPY', () => {
     expect(CHECK_EMAIL_COPY).toEqual({
-      signUpSubtitle: "We'll email you a sign-in link. No password.",
-      title: 'Check your email',
+      subtitle: 'We email you a code. No password.',
       body: 'We sent a link to {email}. Open it on this device to finish signing up.',
-      resend: 'Resend link',
       differentEmail: 'Use a different email',
-      createAccount: 'Create account',
-      sending: 'Sending link',
+      sendCode: 'Send code',
+      sendingCode: 'Sending code',
+      codeTitle: 'Enter the code',
+      sentTo: 'Sent to {email}',
+      resendIn: 'Resend in',
+      resendCode: 'Resend code',
+      wrongCode: "That code didn't work. Try again.",
+      expiredCode: 'That code has expired.',
       rateLimited: 'Too many tries. Wait a minute and try again.',
       invalidEmail: 'Enter a valid email, like name@company.com',
-      genericError: "Couldn't send the link. Try again.",
+      genericError: "Couldn't send the code. Try again.",
     });
   });
 
-  it('the sign-up button lines carry no dash', () => {
-    for (const text of [
-      CHECK_EMAIL_COPY.createAccount,
-      CHECK_EMAIL_COPY.sending,
-      CHECK_EMAIL_COPY.rateLimited,
-    ]) {
+  it('the auth code lines carry no dash and no link wording', () => {
+    for (const text of Object.values(CHECK_EMAIL_COPY)) {
       expect(text).not.toMatch(/[\u2013\u2014]/);
+    }
+    for (const key of [
+      'subtitle',
+      'sendCode',
+      'sendingCode',
+      'codeTitle',
+      'sentTo',
+      'resendIn',
+      'resendCode',
+      'wrongCode',
+      'expiredCode',
+      'genericError',
+    ] as const) {
+      expect(CHECK_EMAIL_COPY[key]).not.toMatch(/link/i);
     }
   });
 
