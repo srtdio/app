@@ -230,12 +230,20 @@ describe('SignUpPage', () => {
   });
 
   it('clears the countdown timer on unmount', async () => {
+    const set = vi.spyOn(window, 'setTimeout');
+    const clear = vi.spyOn(window, 'clearTimeout');
     await render();
     await submit();
-    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    // The countdown's one-second timeouts (the code step's resend clock).
+    const ticks = set.mock.calls
+      .map((call, i) => ({ delay: call[1], id: set.mock.results[i]?.value as unknown }))
+      .filter((t) => t.delay === 1000);
+    expect(ticks.length).toBeGreaterThan(0);
     act(() => root?.unmount());
     root = null;
-    expect(vi.getTimerCount()).toBe(0);
+    expect(clear).toHaveBeenCalledWith(ticks[ticks.length - 1]?.id);
+    set.mockRestore();
+    clear.mockRestore();
   });
 
   it('shows a plain line on a rate limit, with no retry', async () => {
