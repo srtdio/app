@@ -278,16 +278,9 @@ test.describe('laptop', () => {
 });
 
 test.describe('iPhone, cards and threads', () => {
-  /**
-   * Hold like a finger: pointerdown, 700ms still, pointerup on the same target.
-   * The caller settled the target in view; no second scroll here, since any
-   * scroll during the hold cancels it (a post card is a tall fixed box, so a
-   * re-scroll would land inside the hold).
-   */
+  /** Hold like a finger: pointerdown, 700ms still, pointerup on the same target. */
   async function hold(page: Page, target: Locator): Promise<void> {
-    const box = await target.boundingBox();
-    if (box === null) throw new Error('no box');
-    const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+    const at = await centre(target);
     const touch = { ...at, pointerType: 'touch', isPrimary: true, pointerId: 11 };
     await target.dispatchEvent('pointerdown', touch);
     await page.waitForTimeout(700);

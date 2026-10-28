@@ -65,7 +65,6 @@ import {
   chatCardFrame,
   postCardHeight,
 } from '@/components/chat/post-card-geometry';
-import { useWorkspacePlatform } from '@/lib/workspace-context-platform';
 import {
   POST_CARD_META_TYPE,
   POST_CARD_TITLE_TYPE,
@@ -512,9 +511,10 @@ export function SharedPostCards({
   const { side, ready, known } = useSettledViewerSide(workspaceId);
   // Due dates are calendar days on the workspace zone (src/lib/time.ts).
   const workspaceZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
-  // One workspace = one platform: every card's media box takes its frame, known
-  // before any post read (primed from the listed workspaces).
-  const platform = useWorkspacePlatform(workspaceId);
+  // One workspace = one platform: every card's media box takes its frame, read
+  // from the listed workspace row in this same render (no effect, no read), so
+  // the box is final on the first frame.
+  const platform = workspaces.find((w) => w.id === workspaceId)?.platform ?? null;
   const { views, loading, failed, cache } = useSharedPosts(postIds);
   const retryInView = useRetryInView(cache, { postIds }, loading);
   if (postIds.length === 0) return null;
