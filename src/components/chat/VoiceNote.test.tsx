@@ -28,6 +28,7 @@ import {
   VOICE_START_TIMEOUT_MS,
   type VoiceAudio,
   type VoiceFailure,
+  type VoiceUrlResult,
 } from '@/components/chat/VoiceNote';
 import { voiceStore } from '@/lib/chat/transcript-store';
 
@@ -219,11 +220,20 @@ describe('playback recovery', () => {
   const flush = async (): Promise<void> => {
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
   };
+  const relinkError = {
+    name: 'PresignError',
+    code: 'request_failed',
+    message: 'Presign request failed (503).',
+    linkMode: 'file-link',
+  } as const;
+  /** A url as the presign cache answers it; null is a failed re-link. */
+  const asResult = (url: string | null): VoiceUrlResult =>
+    url === null ? { ok: false, error: relinkError } : { ok: true, data: url };
   function setup(opts: {
     peek?: string | null;
     plays?: Array<Promise<void>>;
     refreshed?: Array<string | null>;
-    refreshUrl?: (force: boolean) => Promise<string | null>;
+    refreshUrl?: (force: boolean) => Promise<VoiceUrlResult>;
   }) {
     let applied: string | null = 'https://r2/old';
     const clock = { time: 0 };
@@ -231,8 +241,8 @@ describe('playback recovery', () => {
     const plays = [...(opts.plays ?? [])];
     const refreshed = [...(opts.refreshed ?? ['https://r2/new'])];
     const play = vi.fn(() => plays.shift() ?? Promise.resolve());
-    const refreshUrl = vi.fn<(force: boolean) => Promise<string | null>>(
-      opts.refreshUrl ?? (async () => refreshed.shift() ?? null),
+    const refreshUrl = vi.fn<(force: boolean) => Promise<VoiceUrlResult>>(
+      opts.refreshUrl ?? (async () => asResult(refreshed.shift() ?? null)),
     );
     const failed = vi.fn<(failure: VoiceFailure) => void>();
     const wanted = vi.fn<(wanted: boolean) => void>();
@@ -267,13 +277,13 @@ describe('playback recovery', () => {
     Promise.reject(new DOMException('no', 'NotSupportedError'));
   /** A refreshUrl whose results the test hands out one at a time. */
   function deferredRefresh(): {
-    refreshUrl: (force: boolean) => Promise<string | null>;
+    refreshUrl: (force: boolean) => Promise<VoiceUrlResult>;
     resolve: (url: string | null) => void;
   } {
-    const waiting: Array<(url: string | null) => void> = [];
+    const waiting: Array<(result: VoiceUrlResult) => void> = [];
     return {
       refreshUrl: () => new Promise((resolve) => waiting.push(resolve)),
-      resolve: (url) => waiting.shift()?.(url),
+      resolve: (url) => waiting.shift()?.(asResult(url)),
     };
   }
 
@@ -353,12 +363,53 @@ describe('playback recovery', () => {
     recovery.mediaError(2);
     await flush();
     expect(play).toHaveBeenCalledTimes(1);
+    expect(failed).toHaveBeenCalledTimes(1);
     expect(failed).toHaveBeenCalledWith({
       name: 'PresignError',
       code: null,
       retried: true,
       reason: 'error',
+      relink: {
+        error: relinkError,
+        first: { name: 'MediaError', code: 2, reason: 'error' },
+        ms: expect.any(Number),
+      },
     });
+  });
+
+  it('a media error then a failed re-link reports the presign reason and the first failure', async () => {
+    const { recovery, play, refreshUrl, failed } = setup({ refreshed: [null] });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(failed).toHaveBeenCalledTimes(1);
+    const failure = failed.mock.calls[0]![0];
+    expect(failure.relink?.error).toEqual({
+      name: 'PresignError',
+      code: 'request_failed',
+      message: 'Presign request failed (503).',
+      linkMode: 'file-link',
+    });
+    expect(failure.relink?.first).toEqual({ name: 'MediaError', code: 4, reason: 'error' });
+    expect(failure.relink?.ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it('a re-link that succeeds carries no relink fields and retries as before', async () => {
+    const { recovery, play, refreshUrl, failed, applies } = setup({});
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+    expect(applies).toEqual(['https://r2/new']);
+    expect(play).toHaveBeenCalledTimes(2);
+    recovery.mediaError(4);
+    await flush();
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect(failed.mock.calls[0]![0]).not.toHaveProperty('relink');
   });
 
   it('an error while not playing re-presigns but never starts playback', async () => {

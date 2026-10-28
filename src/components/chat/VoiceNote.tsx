@@ -60,6 +60,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { logger } from '@/lib/logger';
+import type { Result } from '@srtdio/rpc';
 import { resamplePeaks } from '@/lib/chat/waveform-peaks';
 import {
   transcriptView,
@@ -238,6 +239,34 @@ export interface VoiceFailure {
   code: number | null;
   retried: boolean;
   reason: VoiceFailReason;
+  /** A re-link that failed: why, the failure that asked for it, and how long it took. */
+  relink?: VoiceRelink;
+}
+
+/** Why a re-link failed (never a url, link key, token or asset id). */
+export interface VoiceUrlError {
+  /** The thrown error's name (PresignError, TypeError, AbortError, ...). */
+  name: string;
+  /** PresignError.code, null for any other error. */
+  code: string | null;
+  /** The error message, at most 200 characters. */
+  message: string;
+  /** Whether the cache was on fast file links or plain presigns. */
+  linkMode: 'file-link' | 'presign';
+}
+
+/** A url from the presign cache, or why there is none. */
+export type VoiceUrlResult =
+  | Extract<Result<string>, { ok: true }>
+  | { ok: false; error: VoiceUrlError };
+
+/** The failed re-link on a final failure. */
+export interface VoiceRelink {
+  error: VoiceUrlError;
+  /** The failure that asked for the re-link; null when a tap near expiry did. */
+  first: { name: string; code: number | null; reason: VoiceFailReason } | null;
+  /** How long the re-link took, in ms. */
+  ms: number;
 }
 
 /** The element-side moves the recovery makes; the component backs it with the <audio>. */
@@ -274,8 +303,8 @@ export function createVoiceRecovery(deps: {
   player: VoicePlayer;
   /** A still-valid url (more than 60s from expiry), else null. */
   peekUrl: () => string | null;
-  /** A url from the presign cache (force: always a new presign); null on failure. */
-  refreshUrl: (force: boolean) => Promise<string | null>;
+  /** A url from the presign cache (force: always a new presign), or why there is none. */
+  refreshUrl: (force: boolean) => Promise<VoiceUrlResult>;
   failed: (failure: VoiceFailure) => void;
   /** Whether a play is wanted (a tap until it is paused, ends or fails). */
   wanted?: (wanted: boolean) => void;
@@ -381,20 +410,31 @@ export function createVoiceRecovery(deps: {
     busy = true;
     held = null;
     const at = epoch;
-    void deps.refreshUrl(force).then((url) => {
+    const startedAt = performance.now();
+    void deps.refreshUrl(force).then((got) => {
       busy = false;
       const result = held;
       held = null;
       // Cancelled meanwhile with no play tapped since: no failure, no play.
       if (at !== epoch && !wantPlay) {
-        if (url !== null && url !== deps.player.applied) deps.player.apply(url);
+        if (got.ok && got.data !== deps.player.applied) deps.player.apply(got.data);
         return;
       }
-      if (url === null) {
-        final({ name: 'PresignError', code: null, reason: cause?.reason ?? 'error' }, retried);
+      if (!got.ok) {
+        const first =
+          cause === null ? null : { name: cause.name, code: cause.code, reason: cause.reason };
+        final(
+          {
+            name: 'PresignError',
+            code: null,
+            reason: cause?.reason ?? 'error',
+            relink: { error: got.error, first, ms: Math.round(performance.now() - startedAt) },
+          },
+          retried,
+        );
         return;
       }
-      if (force || url !== deps.player.applied) deps.player.apply(url);
+      if (force || got.data !== deps.player.applied) deps.player.apply(got.data);
       if (result !== null) {
         count(result);
         return;
@@ -495,6 +535,22 @@ export function createVoiceRecovery(deps: {
     sourceChanged() {
       clearTimers();
     },
+  };
+}
+
+/** The log fields for a failed re-link, with the page state at the time. */
+function relinkFields(relink: VoiceRelink): Record<string, unknown> {
+  return {
+    presign_name: relink.error.name,
+    presign_code: relink.error.code,
+    presign_message: relink.error.message,
+    first_name: relink.first?.name ?? null,
+    first_code: relink.first?.code ?? null,
+    first_reason: relink.first?.reason ?? null,
+    link_mode: relink.error.linkMode,
+    online: navigator.onLine,
+    visibility: document.visibilityState,
+    refresh_ms: relink.ms,
   };
 }
 
@@ -848,8 +904,8 @@ export function VoiceNote({
   storedTranscript?: string | undefined;
   /** A presigned note: the cached url while it is more than 60s from expiry, else null. */
   peekUrl?: (() => string | null) | undefined;
-  /** A presigned note: a url through the presign cache (force: a new presign); null on failure. */
-  refreshUrl?: ((force: boolean) => Promise<string | null>) | undefined;
+  /** A presigned note: a url through the presign cache (force: a new presign), or why there is none. */
+  refreshUrl?: ((force: boolean) => Promise<VoiceUrlResult>) | undefined;
   /** In a chat bubble: the fixed 264px width and the bubble inset. */
   bubbleInset?: boolean | undefined;
 }): ReactElement {
@@ -906,7 +962,16 @@ export function VoiceNote({
       },
       refreshUrl: (force) => {
         const refresh = latest.current.refreshUrl;
-        return refresh === undefined ? Promise.resolve(appliedRef.current) : refresh(force);
+        if (refresh !== undefined) return refresh(force);
+        const applied = appliedRef.current;
+        return Promise.resolve<VoiceUrlResult>(
+          applied === null
+            ? {
+                ok: false,
+                error: { name: 'NoSource', code: null, message: '', linkMode: 'presign' },
+              }
+            : { ok: true, data: applied },
+        );
       },
       failed: (failure) => {
         // A stalled load may still deliver later: the failed note stays silent.
@@ -919,6 +984,7 @@ export function VoiceNote({
           mime: latest.current.mime ?? 'unknown',
           retried: failure.retried ? 'yes' : 'no',
           reason: failure.reason,
+          ...(failure.relink === undefined ? {} : relinkFields(failure.relink)),
         });
       },
       wanted: setWanted,

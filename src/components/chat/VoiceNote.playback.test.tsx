@@ -14,7 +14,11 @@ vi.mock('agora-chat', () => ({
 
 import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
 import { PRESSABLE_ROW_BASE } from '@/components/ui/PressableRow';
-import { VOICE_START_TIMEOUT_MS, VoiceNote } from '@/components/chat/VoiceNote';
+import {
+  VOICE_START_TIMEOUT_MS,
+  VoiceNote,
+  type VoiceUrlResult,
+} from '@/components/chat/VoiceNote';
 import { voiceStore } from '@/lib/chat/transcript-store';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -43,6 +47,8 @@ afterEach(() => {
   voiceStore.update('pb-1', { transcript: undefined, collapsed: undefined, failedAt: undefined });
 });
 
+const ok = (url: string): VoiceUrlResult => ({ ok: true, data: url });
+
 const flush = async (): Promise<void> => {
   await act(async () => {
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
@@ -51,7 +57,7 @@ const flush = async (): Promise<void> => {
 
 function mount(props: {
   onTranscribe?: () => void;
-  refreshUrl?: (force: boolean) => Promise<string | null>;
+  refreshUrl?: (force: boolean) => Promise<VoiceUrlResult>;
   peekUrl?: () => string | null;
 }): HTMLAudioElement {
   root = createRoot(host!);
@@ -92,9 +98,60 @@ function fireError(audio: HTMLAudioElement): void {
 }
 
 describe('VoiceNote playback', () => {
+  it('a local file (no presign) retries from the url it holds, as before', async () => {
+    play.mockResolvedValue(undefined);
+    const audio = mount({});
+    act(() => playButton().click());
+    await flush();
+    fireError(audio);
+    await flush();
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(audio.getAttribute('src')).toBe('https://r2/a');
+    expect(document.querySelector('[data-voice-error]')).toBeNull();
+  });
+
+  it('a media error then a failed re-link logs the presign reason, never a url', async () => {
+    play.mockResolvedValue(undefined);
+    const refreshUrl = vi.fn(
+      async (): Promise<VoiceUrlResult> => ({
+        ok: false,
+        error: { name: 'TypeError', code: null, message: 'Load failed', linkMode: 'file-link' },
+      }),
+    );
+    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl });
+    act(() => playButton().click());
+    await flush();
+    fireError(audio);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledWith(true);
+    expect(document.querySelector('[data-voice-error]')).not.toBeNull();
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(logError).toHaveBeenCalledWith('chat: voice note play failed', {
+      name: 'PresignError',
+      code: null,
+      mime: 'audio/webm',
+      retried: 'yes',
+      reason: 'error',
+      presign_name: 'TypeError',
+      presign_code: null,
+      presign_message: 'Load failed',
+      first_name: 'MediaError',
+      first_code: 4,
+      first_reason: 'error',
+      link_mode: 'file-link',
+      online: expect.any(Boolean),
+      visibility: expect.any(String),
+      refresh_ms: expect.any(Number),
+    });
+    expect(JSON.stringify(logError.mock.calls)).not.toContain('https://');
+  });
+
   it('sets the url on the element and plays on tap', async () => {
     play.mockResolvedValue(undefined);
-    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/a' });
+    const audio = mount({
+      peekUrl: () => 'https://r2/a',
+      refreshUrl: async () => ok('https://r2/a'),
+    });
     expect(audio.getAttribute('src')).toBe('https://r2/a');
     act(() => playButton().click());
     await flush();
@@ -103,7 +160,7 @@ describe('VoiceNote playback', () => {
 
   it('re-presigns on a tap near expiry before playing', async () => {
     play.mockResolvedValue(undefined);
-    const refreshUrl = vi.fn(async () => 'https://r2/b');
+    const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => ok('https://r2/b'));
     const audio = mount({ peekUrl: () => null, refreshUrl });
     act(() => playButton().click());
     await flush();
@@ -114,7 +171,7 @@ describe('VoiceNote playback', () => {
 
   it('a media error retries once, then shows the error row and logs without urls', async () => {
     play.mockResolvedValue(undefined);
-    const refreshUrl = vi.fn(async () => 'https://r2/fresh');
+    const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => ok('https://r2/fresh'));
     const onTranscribe = vi.fn();
     const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl, onTranscribe });
     act(() => playButton().click());
@@ -145,7 +202,7 @@ describe('VoiceNote playback', () => {
   it('"Read the transcript" opens a stored transcript and the error row hides', async () => {
     voiceStore.update('pb-1', { transcript: 'hello there', collapsed: true });
     play.mockRejectedValue(new DOMException('no', 'NotSupportedError'));
-    mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/b' });
+    mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => ok('https://r2/b') });
     act(() => playButton().click());
     await flush();
     await flush();
@@ -156,7 +213,10 @@ describe('VoiceNote playback', () => {
   });
 
   it('removes its error listener on unmount', () => {
-    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/a' });
+    const audio = mount({
+      peekUrl: () => 'https://r2/a',
+      refreshUrl: async () => ok('https://r2/a'),
+    });
     const removed = vi.spyOn(audio, 'removeEventListener');
     act(() => root?.unmount());
     root = null;
@@ -165,7 +225,10 @@ describe('VoiceNote playback', () => {
 
   it('a background url refresh never resets a playing note', () => {
     play.mockResolvedValue(undefined);
-    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/a' });
+    const audio = mount({
+      peekUrl: () => 'https://r2/a',
+      refreshUrl: async () => ok('https://r2/a'),
+    });
     Object.defineProperty(audio, 'paused', { configurable: true, value: false });
     act(() =>
       root!.render(
@@ -182,7 +245,10 @@ describe('VoiceNote playback', () => {
   });
 
   it('while playing, the speed pill cycles 1× -> 1.5× -> 2× -> 1×', () => {
-    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/a' });
+    const audio = mount({
+      peekUrl: () => 'https://r2/a',
+      refreshUrl: async () => ok('https://r2/a'),
+    });
     act(() => {
       audio.dispatchEvent(new Event('play'));
     });
@@ -199,7 +265,7 @@ describe('VoiceNote playback', () => {
   it('a note that never starts shows the error row once the watchdog runs out twice', async () => {
     vi.useFakeTimers();
     play.mockResolvedValue(undefined);
-    const refreshUrl = vi.fn(async () => 'https://r2/fresh');
+    const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => ok('https://r2/fresh'));
     mount({ peekUrl: () => 'https://r2/a', refreshUrl });
     act(() => playButton().click());
     await flush();
@@ -225,15 +291,15 @@ describe('VoiceNote playback', () => {
 
   it('a user pause during a retry cancels it with no error row', async () => {
     play.mockResolvedValue(undefined);
-    const waiting: Array<(url: string | null) => void> = [];
-    const refreshUrl = vi.fn(() => new Promise<string | null>((resolve) => waiting.push(resolve)));
+    const waiting: Array<(result: VoiceUrlResult) => void> = [];
+    const refreshUrl = vi.fn(() => new Promise<VoiceUrlResult>((resolve) => waiting.push(resolve)));
     const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl });
     act(() => playButton().click());
     await flush();
     fireError(audio);
     // The retry's re-presign is in flight: the control still offers pause.
     act(() => pauseButton().click());
-    waiting.shift()?.('https://r2/fresh');
+    waiting.shift()?.(ok('https://r2/fresh'));
     await flush();
     expect(play).toHaveBeenCalledTimes(1);
     expect(document.querySelector('[data-voice-error]')).toBeNull();
@@ -243,7 +309,10 @@ describe('VoiceNote playback', () => {
 
   it('a pause the element makes during an attempt fails, and twice shows the error row', async () => {
     play.mockResolvedValue(undefined);
-    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/b' });
+    const audio = mount({
+      peekUrl: () => 'https://r2/a',
+      refreshUrl: async () => ok('https://r2/b'),
+    });
     act(() => playButton().click());
     await flush();
     fire(audio, 'pause');
@@ -261,7 +330,7 @@ describe('VoiceNote playback', () => {
   it('unmount clears every watchdog: nothing fires afterwards', async () => {
     vi.useFakeTimers();
     play.mockResolvedValue(undefined);
-    const refreshUrl = vi.fn(async () => 'https://r2/fresh');
+    const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => ok('https://r2/fresh'));
     const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl });
     act(() => playButton().click());
     await flush();
@@ -281,7 +350,10 @@ describe('VoiceNote playback', () => {
     const selector = variant!;
     voiceStore.update('pb-1', { transcript: 'hello there', collapsed: true });
     play.mockRejectedValue(new DOMException('no', 'NotSupportedError'));
-    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/b' });
+    const audio = mount({
+      peekUrl: () => 'https://r2/a',
+      refreshUrl: async () => ok('https://r2/b'),
+    });
     fire(audio, 'play');
     // Play/pause, the speed pill and the Transcribe link while playing.
     const playingButtons = [...document.querySelectorAll('[data-voice-note] button')];
@@ -305,7 +377,7 @@ describe('VoiceNote playback', () => {
   });
 
   it('play is a bare glyph on the shared PressableRow surface: no fill or radius of its own', () => {
-    mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => 'https://r2/a' });
+    mount({ peekUrl: () => 'https://r2/a', refreshUrl: async () => ok('https://r2/a') });
     // Only the primitive's own surface classes (rounded-lg, hover:bg-panel-2)
     // may carry a radius or fill; VoiceNote adds none.
     const own = playButton()
