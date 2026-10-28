@@ -37,6 +37,12 @@ import {
   type ChatBundleDeps,
 } from '@/lib/chat/open-bundle';
 import { prewarmChats } from '@/lib/chat/use-chat-thread';
+import {
+  PRESS_SETTLE_MS,
+  PRESS_SLOP_PX,
+  createPressIntent,
+  type PressIntentDeps,
+} from '@/lib/chat/press-intent';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 import { resetSessionReads } from '@/lib/session-read';
 

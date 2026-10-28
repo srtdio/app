@@ -3,6 +3,7 @@ import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode }
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { createPressIntent, type PressIntent } from '@/lib/chat/press-intent';
 import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CountBadge, countBadgeText } from '@/components/ui/CountBadge';
@@ -739,10 +740,26 @@ export function ChannelCard(props: {
     { ignoreMouse: true },
   );
   const checked = props.checked === true;
-  // Press-in: the open's reads start at the finger's touch, not its lift.
-  const pressIn = (e: PointerEvent<HTMLButtonElement>): void => {
-    if (selecting || !e.isPrimary || e.button !== 0) return;
-    props.onPressIn?.(channel);
+  // Press-in: a press held still for PRESS_SETTLE_MS (a ceiling, never a wait
+  // on the paint or the tap) starts the open's reads before the lift. A
+  // scroll, a pan (pointercancel), a lift or a move past PRESS_SLOP_PX reads
+  // nothing; only a pointerdown arms it, so mouse hover never reads.
+  const onPressInRef = useRef(props.onPressIn);
+  onPressInRef.current = props.onPressIn;
+  const channelRef = useRef(channel);
+  channelRef.current = channel;
+  const pressRef = useRef<PressIntent | null>(null);
+  pressRef.current ??= createPressIntent(() => onPressInRef.current?.(channelRef.current));
+  const press = pressRef.current;
+  useEffect(() => () => press.cancel(), [press]);
+  const pressDown = (e: PointerEvent<HTMLButtonElement>): void => {
+    if (selecting || props.onPressIn === undefined || !e.isPrimary || e.button !== 0) return;
+    press.down(e);
+  };
+  const pressHandlers = {
+    onPointerMove: (e: PointerEvent<HTMLButtonElement>) => press.move(e),
+    onPointerUp: () => press.cancel(),
+    onPointerCancel: () => press.cancel(),
   };
   return (
     <div
@@ -756,14 +773,25 @@ export function ChannelCard(props: {
         align={tileKind(channel) === 'square' ? 'center' : 'left'}
         {...(menuEnabled
           ? {
-              ...handlers,
               onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
                 holdFiredRef.current = false;
                 handlers.onPointerDown(e);
-                pressIn(e);
+                pressDown(e);
+              },
+              onPointerMove: (e: PointerEvent<HTMLButtonElement>) => {
+                handlers.onPointerMove(e);
+                press.move(e);
+              },
+              onPointerUp: () => {
+                handlers.onPointerUp();
+                press.cancel();
+              },
+              onPointerCancel: () => {
+                handlers.onPointerCancel();
+                press.cancel();
               },
             }
-          : { onPointerDown: pressIn })}
+          : { ...pressHandlers, onPointerDown: pressDown })}
         onContextMenu={(e: MouseEvent) => {
           if (coarsePointer) e.preventDefault();
           if (!menuEnabled) return;
