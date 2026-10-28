@@ -22,9 +22,11 @@ import {
   CARD_SKELETON,
   NotVisibleCard,
   cardTapHandlers,
+  leaveEndsPress,
   POST_CARD,
   SHARED_CARD,
   SharedPostCardList,
+  cardBoxStyle,
   cardFrame,
   loadPostCardBatch,
   readApproverRoles,
@@ -69,9 +71,10 @@ describe('NotVisibleCard', () => {
     expect(html).toContain('text-fg-2');
   });
 
-  it('keeps the visible card box size', () => {
+  it('keeps the visible card box size: the one fixed post card box', () => {
     expect(html).toContain('w-[240px]');
-    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain(`height:${String(cardBoxStyle(null, 'touch').height)}px`);
+    expect(html).toContain('data-card-media');
     expect(SHARED_CARD).toContain('bg-panel');
   });
 });
@@ -122,10 +125,12 @@ function render(
 }
 
 describe('SharedPostCardList', () => {
-  it('no thumbnail: no media box, the title alone with no KEY-N code', () => {
+  it('no thumbnail: the neutral media box (no frame), the title, no KEY-N code', () => {
     const html = render(['p1'], [cardRow('p1', { title: 'Launch teaser' })]);
-    expect(html).not.toContain('data-card-media');
+    expect(html).toContain('data-card-media');
+    expect(html).toContain('bg-panel-3');
     expect(html).not.toContain('data-frame-ratio');
+    expect(html).not.toContain('<img');
     expect(html).toMatch(/title="Launch teaser">Launch teaser<\/span>/);
     expect(html).not.toContain('data-card-ref');
     expect(visibleText(html)).not.toMatch(CODE);
@@ -139,7 +144,8 @@ describe('SharedPostCardList', () => {
     expect(html).toContain('data-card-media');
     // Instagram carousel before any size is known: the 4:5 portrait default.
     expect(html).toContain('data-frame-ratio="0.8"');
-    expect(html).toContain('width:min(100%, calc(320px * 0.8))');
+    // The 238px inner width at 4:5 is a 298px box (whole px).
+    expect(html).toContain('width:min(100%, calc(298px * 0.8))');
     expect(html).not.toContain('data-card-pill-ref');
     expect(html).not.toContain('data-card-ref');
     expect(visibleText(html)).not.toMatch(CODE);
@@ -459,7 +465,7 @@ describe('readApproverRoles', () => {
 });
 
 describe('chat post card platform frame', () => {
-  it('the ratio follows the platform and format, 240px wide and capped at 320px tall', () => {
+  it('cardFrame is the post own frame; the card box is the workspace platform frame', () => {
     expect(
       cardFrame({ platform: 'instagram', format: 'reel', firstMedia: null })?.ratio,
     ).toBeCloseTo(9 / 16);
@@ -480,8 +486,9 @@ describe('chat post card platform frame', () => {
         }),
       ],
     );
-    // 9:16 hits the 320px cap: 320 x 0.5625 = 180px wide inside the 240px card.
-    expect(reel).toContain('width:min(100%, calc(320px * 0.5625))');
+    // An Instagram workspace's box is 4:5 for every post, a Reel included.
+    expect(reel).toContain('data-frame-ratio="0.8"');
+    expect(reel).toContain('width:min(100%, calc(298px * 0.8))');
     expect(reel).toContain('w-[240px]');
     const shorts = render(
       ['p1'],
@@ -495,11 +502,14 @@ describe('chat post card platform frame', () => {
         }),
       ],
     );
-    expect(shorts).toContain('data-frame-bands="blur"');
-    expect(shorts).toContain('bg-black');
+    // 9:16 hits the 320px cap: 320 x 0.5625 = 180px wide inside the 240px card.
+    expect(shorts).toContain('width:min(100%, calc(320px * 0.5625))');
+    // Before the cover lands the frame is the neutral surface, never black bands.
+    expect(shorts).toContain('data-frame-bands="none"');
+    expect(shorts).not.toContain('bg-black');
   });
 
-  it('a text or link post keeps the non-media card even with an attachment', () => {
+  it('a text or link post shows its caption inside the media box, even with an attachment', () => {
     for (const format of ['text', 'link']) {
       expect(cardFrame({ platform: 'linkedin', format, firstMedia: IMAGE })).toBeNull();
       const html = render(
@@ -511,12 +521,26 @@ describe('chat post card platform frame', () => {
             thumbnailAssetVersionId: 'v1',
             firstMedia: IMAGE,
             mediaCount: 1,
+            caption: 'Three things we learned shipping the festive range',
           }),
         ],
       );
-      expect(html).not.toContain('data-card-media');
+      expect(html).toContain('data-card-media');
+      expect(html).toMatch(
+        /data-card-text=""[^>]*>Three things we learned shipping the festive range</,
+      );
+      expect(html).not.toContain('<img');
       expect(html).not.toContain('data-card-ref');
       expect(visibleText(html)).not.toMatch(CODE);
     }
+  });
+});
+
+describe('leaveEndsPress', () => {
+  it('only the pressing pointer leaving ends the press', () => {
+    expect(leaveEndsPress(11, 11)).toBe(true);
+    // WebKit's mouse cursor leaving as the thread scrolls under it never ends a touch hold.
+    expect(leaveEndsPress(11, 1)).toBe(false);
+    expect(leaveEndsPress(null, 1)).toBe(true);
   });
 });

@@ -78,7 +78,6 @@ import {
   type ReadPositionsRead,
 } from '@/lib/chat/history';
 import { resetViewerSideCache } from '@/lib/chat/viewer-role';
-import { clearCardHeights } from '@/lib/chat/card-heights';
 import { clearPlanShapes } from '@/lib/chat/plan-shapes';
 import { SIGNOUT_EVENT } from '@/lib/events';
 import { peekKept, primeRead, READ_FRESH_MS, readKey } from '@/lib/session-read';
@@ -693,7 +692,7 @@ export function sessionPageDevice(
 /**
  * The tab's one store. A clear also forgets the other module-level stores a
  * chat open fills: the viewer side per workspace, the prefetched pages and
- * the plan card shapes and the post card heights.
+ * the plan card shapes.
  * Its pages are saved on the device (sessionPageDevice).
  */
 export const openCache = createOpenCache({
@@ -701,7 +700,6 @@ export const openCache = createOpenCache({
     resetViewerSideCache();
     clearMessagePrefetch();
     clearPlanShapes();
-    clearCardHeights();
   },
   device: sessionPageDevice(),
 });

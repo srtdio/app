@@ -38,6 +38,7 @@ const CHAT_SPECS = [
   'chat-keyboard-gap',
   'chat-open-at-once',
   'chat-personal-notes',
+  'chat-post-card-fixed-shape',
   'chat-prewarm-first-frame',
   'chat-plan-card-paint',
   'chat-plan-compose-edit',

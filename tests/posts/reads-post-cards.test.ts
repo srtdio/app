@@ -78,7 +78,7 @@ describe('readPostCards', () => {
     await readPostCards(client, { workspaceId: WS, ids: ['p1', 'p2'] });
     const posts = calls.filter((c) => c.table === 'posts');
     expect(POST_CARD_ROW_COLUMNS).toBe(
-      'id, number, title, format, platform, stage, target_date, stage_entered_at, approved_by, approved_at',
+      'id, number, title, format, platform, stage, target_date, stage_entered_at, approved_by, approved_at, caption',
     );
     expect(posts).toContainEqual({
       table: 'posts',

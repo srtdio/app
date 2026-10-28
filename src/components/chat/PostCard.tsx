@@ -27,6 +27,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type {
+  CSSProperties,
   KeyboardEvent,
   MouseEvent,
   PointerEvent,
@@ -42,11 +43,7 @@ import { useLongPress } from '@/components/ui';
 import { LONG_PRESS_MS, MOVE_CANCEL_PX } from '@/components/ui/useLongPress';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
-import {
-  CHAT_CARD_FRAME_MAX_HEIGHT,
-  frameMediaClass,
-  PlatformFrame,
-} from '@/components/media/PlatformFrame';
+import { frameMediaClass, PlatformFrame } from '@/components/media/PlatformFrame';
 import { frameFor, type Frame } from '@/lib/platform-specs';
 import type { PresignCache } from '@/lib/asset-presign';
 import { appPresignCache, appPresignDeps } from '@/lib/shared-presign';
@@ -61,7 +58,13 @@ import { formatDateTime, formatDueDate } from '@/lib/time';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
-import { knownCardHeight, noteCardHeight } from '@/lib/chat/card-heights';
+import {
+  cardMediaHeight,
+  cardTextLines,
+  cardTitleHeight,
+  chatCardFrame,
+  postCardHeight,
+} from '@/components/chat/post-card-geometry';
 import {
   POST_CARD_META_TYPE,
   POST_CARD_TITLE_TYPE,
@@ -337,8 +340,11 @@ export function useRetryInView(
 /** Copy for a card whose reads failed every try (not a permission state). */
 export const CARD_LOAD_FAILED = "Couldn't load";
 
-/** A card whose reads failed every try: neutral, one 44px tap re-reads it. */
-export function CouldntLoadCard(props: { onRetry: () => void }): ReactElement {
+/**
+ * A card whose reads failed every try: neutral, one 44px tap re-reads it.
+ * `className` sets a fixed height to match its card's own box (the brief card).
+ */
+export function CouldntLoadCard(props: { onRetry: () => void; className?: string }): ReactElement {
   return (
     <PressableRow
       inline
@@ -348,7 +354,10 @@ export function CouldntLoadCard(props: { onRetry: () => void }): ReactElement {
       onClick={props.onRetry}
       // inline (w-auto) plus a fixed min/max of 240: the shared card's width
       // without a w-* class against PressableRow's own.
-      className={`${SHARED_CARD_BODY} min-w-[240px] max-w-[240px] bg-panel-2 text-fg-2`}
+      className={cn(
+        `${SHARED_CARD_BODY} min-w-[240px] max-w-[240px] bg-panel-2 text-fg-2`,
+        props.className,
+      )}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate text-base font-medium">{CARD_LOAD_FAILED}</span>
@@ -502,6 +511,10 @@ export function SharedPostCards({
   const { side, ready, known } = useSettledViewerSide(workspaceId);
   // Due dates are calendar days on the workspace zone (src/lib/time.ts).
   const workspaceZone = workspaces.find((w) => w.id === workspaceId)?.timezone ?? null;
+  // One workspace = one platform: every card's media box takes its frame, read
+  // from the listed workspace row in this same render (no effect, no read), so
+  // the box is final on the first frame.
+  const platform = workspaces.find((w) => w.id === workspaceId)?.platform ?? null;
   const { views, loading, failed, cache } = useSharedPosts(postIds);
   const retryInView = useRetryInView(cache, { postIds }, loading);
   if (postIds.length === 0) return null;
@@ -509,7 +522,7 @@ export function SharedPostCards({
     return (
       <div ref={retryInView} className="mt-1.5 flex flex-col items-start gap-1.5">
         {postIds.map((id) => (
-          <PostCardSkeleton key={id} postId={id} />
+          <PostCardSkeleton key={id} platform={platform} />
         ))}
       </div>
     );
@@ -517,6 +530,7 @@ export function SharedPostCards({
   return (
     <SharedPostCardList
       views={views}
+      platform={platform}
       failed={failed}
       onRetry={(ids) => cache?.retry({ postIds: ids })}
       side={side}
@@ -563,6 +577,11 @@ export interface CardContext {
   workspaceZone?: string | null | undefined;
   /** The workspace's brand name for "on behalf of <Brand>"; null falls back. */
   brand?: string | null;
+  /**
+   * The workspace's platform: every card's media box takes its frame. Absent
+   * (tests): each card's own post platform, the same value in the app.
+   */
+  platform?: string | null | undefined;
 }
 
 /** The resolved cards in postIds order (presentational; no reads). */
@@ -584,9 +603,13 @@ export function SharedPostCardList(
     >
       {views.map((view) =>
         failedIds.has(view.postId) ? (
-          <CouldntLoadCard key={view.postId} onRetry={() => onRetry?.([view.postId])} />
+          <PostCouldntLoadCard
+            key={view.postId}
+            platform={context.platform ?? null}
+            onRetry={() => onRetry?.([view.postId])}
+          />
         ) : view.kind === 'not_visible' ? (
-          <NotVisibleCard key={view.postId} />
+          <NotVisibleCard key={view.postId} platform={context.platform ?? null} />
         ) : (
           <PostCardItem
             key={view.postId}
@@ -607,48 +630,94 @@ const SHARED_CARD_BODY =
 const SHARED_CARD_BOX = `w-[240px] ${SHARED_CARD_BODY}`;
 export const SHARED_CARD = `${SHARED_CARD_BOX} bg-panel`;
 
-/** The live post card frame: media (optional), body, footer stacked. */
+/**
+ * The live post card frame: media box, body, footer stacked, at the one fixed
+ * outer height (cardBoxStyle). Every child keeps its own size (shrink-0).
+ */
 export const POST_CARD =
   'flex w-[240px] flex-col overflow-hidden rounded-xl border border-border bg-panel text-left';
 
-/**
- * A loading card's frame (POST_CARD's box). Its height is never a literal:
- * PostCardSkeleton fills it with the card's own pieces, or the card's known
- * painted height.
- */
+/** A loading card's frame: POST_CARD's box on a neutral fill, no pulse. */
 export const CARD_SKELETON =
   'flex w-[240px] flex-col overflow-hidden rounded-xl border border-border bg-panel-2';
 
-/**
- * A post card's placeholder at the card's final outer height, so the card
- * fills in place and never moves a row. A card painted before (this session,
- * this layout) reserves that exact height (a cover image, a two-line title).
- * Otherwise it is built from the plain card's own pieces (the body's padding
- * and gap, one title line in this layout's type, the meta row's tag, the 44px
- * footer), so it is that card's exact box in every layout: never a guessed px.
- */
-export function PostCardSkeleton(props: { postId: string }): ReactElement {
-  const layout = useChatLayout();
-  const known = knownCardHeight(layout, props.postId);
-  if (known !== undefined) {
-    return (
-      <div
-        aria-hidden="true"
-        data-card-skeleton=""
-        style={{ height: known }}
-        className={cn(CARD_SKELETON, 'animate-pulse')}
-      />
-    );
-  }
+/** The card body: two-line title area over the fixed meta row. */
+const CARD_BODY = 'flex shrink-0 flex-col gap-1.5 px-3 py-2.5';
+/** The meta row: the stage Tag's height, never taller (h-5, CARD_META_ROW_PX). */
+const CARD_META_ROW = 'flex h-5 shrink-0 items-center gap-1.5 overflow-hidden';
+/** The footer row: 44px with a hairline top border (CARD_FOOTER_PX). */
+const CARD_FOOTER =
+  'flex h-[44px] shrink-0 items-center justify-between gap-2 border-t border-border px-3 text-sm';
+
+/** Every card state's outer height: the platform frame plus fixed text rows. Pure. */
+export function cardBoxStyle(platform: string | null, layout: ChatLayout): CSSProperties {
+  return { height: postCardHeight(chatCardFrame(platform), layout) };
+}
+
+/** The title area: always two lines tall, clamped with an ellipsis. */
+function CardTitleArea(props: {
+  layout: ChatLayout;
+  className?: string;
+  title?: string;
+  children: ReactNode;
+}): ReactElement {
   return (
-    <div aria-hidden="true" data-card-skeleton="" className={cn(CARD_SKELETON, 'animate-pulse')}>
-      <div className="invisible flex flex-col gap-1.5 px-3 py-2.5">
-        <span className={sized(POST_CARD_TITLE_TYPE, layout)}>{'\u00a0'}</span>
-        <span className={cn('flex items-center gap-1.5', POST_CARD_META_TYPE)}>
-          <Tag label={'\u00a0'} />
-        </span>
+    <span
+      data-card-title=""
+      style={{ height: cardTitleHeight(props.layout) }}
+      className={cn(
+        'line-clamp-2 shrink-0',
+        sized(POST_CARD_TITLE_TYPE, props.layout),
+        props.className,
+      )}
+      {...(props.title !== undefined ? { title: props.title } : {})}
+    >
+      {props.children}
+    </span>
+  );
+}
+
+/**
+ * The media box slot: the platform frame's fixed height on a neutral fill, so
+ * it is the same box with no cover, before a cover lands, and while loading.
+ */
+function CardMediaSlot(props: {
+  platform: string | null;
+  boxRef?: RefObject<HTMLDivElement>;
+  children?: ReactNode;
+}): ReactElement {
+  return (
+    <div
+      ref={props.boxRef}
+      data-card-media=""
+      style={{ height: cardMediaHeight(chatCardFrame(props.platform)) }}
+      className="relative flex w-full shrink-0 justify-center overflow-hidden bg-panel-3"
+    >
+      {props.children}
+    </div>
+  );
+}
+
+/**
+ * A post card's placeholder: the card's own fixed box (the workspace platform's
+ * media box, the two-line title area, the meta row, the footer) on a neutral
+ * fill, so the card fills in place and never moves a row. No reads, no pulse.
+ */
+export function PostCardSkeleton(props: { platform: string | null }): ReactElement {
+  const layout = useChatLayout();
+  return (
+    <div
+      aria-hidden="true"
+      data-card-skeleton=""
+      style={cardBoxStyle(props.platform, layout)}
+      className={CARD_SKELETON}
+    >
+      <CardMediaSlot platform={props.platform} />
+      <div className={CARD_BODY}>
+        <CardTitleArea layout={layout}>{'\u00a0'}</CardTitleArea>
+        <span className={CARD_META_ROW} />
       </div>
-      <div className="h-[44px] border-t border-transparent" />
+      <div className={CARD_FOOTER} />
     </div>
   );
 }
@@ -737,6 +806,14 @@ export function createTalkAboutHold(): TalkAboutHold {
   };
 }
 
+/**
+ * Whether a pointerleave on the card ends its press: only the pressing
+ * pointer's own leave does (no press yet: any leave). Pure.
+ */
+export function leaveEndsPress(pressId: number | null, leaveId: number): boolean {
+  return pressId === null || pressId === leaveId;
+}
+
 /** The sheet's "Talk about" tap: the post comes in, then the composer takes focus, before the sheet closes. Pure. */
 export function talkAboutThenFocus(
   talkAbout: () => void,
@@ -765,36 +842,27 @@ function PostCardItem(
   );
   const target =
     post.target_date !== null ? formatDueDate(post.target_date, props.workspaceZone) : '';
-  const frame = cardFrame(post);
-  // The card shows media only when it has a first photo or video AND a frame.
-  const media = frame !== null ? post.firstMedia : null;
+  // The media box is the workspace platform's frame, whatever the post holds:
+  // the box never changes shape when its cover lands.
+  const platform = props.platform !== undefined ? props.platform : post.platform;
+  const boxFrame = chatCardFrame(platform);
+  // A format with no media box of its own (text, link, a thread with no media)
+  // shows its text inside the box; a media format shows its first photo or
+  // video there, or the neutral box when it has none.
+  const textOnly = cardFrame(post) === null;
+  const media = textOnly ? null : post.firstMedia;
   // The sheet mounts on first open and stays mounted so its exit can animate.
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMounted, setSheetMounted] = useState(false);
   const layout = useChatLayout();
-  // The painted outer height, for this card's placeholder on a later open
-  // (a ResizeObserver: never a layout read on the paint path).
-  const rootRef = useRef<HTMLDivElement>(null);
-  const postId = post.id;
-  useEffect(() => {
-    const el = rootRef.current;
-    if (el === null || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver((entries) => {
-      // WebKit before 15.4 has no borderBoxSize: the element's own height then.
-      const sizes = entries[0]?.borderBoxSize as readonly ResizeObserverSize[] | undefined;
-      const box = sizes?.[0];
-      const px = box !== undefined ? box.blockSize : el.offsetHeight;
-      noteCardHeight(layout, postId, px);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [layout, postId]);
   const onTalkAbout = props.onTalkAbout;
   const talkRef = useRef<TalkAboutHold | null>(null);
   talkRef.current ??= createTalkAboutHold();
   const talk = talkRef.current;
   // The press's pointer type: a mouse hold focuses as it fires.
   const pressPointer = useRef('');
+  // The press's pointer id: only that pointer leaving ends the press.
+  const pressId = useRef<number | null>(null);
   const hold = useLongPress(() => {
     onTalkAbout?.();
     const now = holdFocusesOnFire({ layout, pointerType: pressPointer.current });
@@ -810,7 +878,6 @@ function PostCardItem(
   return (
     <>
       <div
-        ref={rootRef}
         role="button"
         tabIndex={0}
         data-msg-link=""
@@ -822,6 +889,7 @@ function PostCardItem(
               onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
                 touchPress.current = e.pointerType !== 'mouse';
                 pressPointer.current = e.pointerType;
+                pressId.current = e.pointerId;
                 talk.reset();
                 // A hold released off the card left its click guard set: a new
                 // press is never the tail of that hold.
@@ -838,8 +906,13 @@ function PostCardItem(
                 hold.handlers.onPointerCancel();
                 talk.reset();
               },
-              // Released off the card: that press never focuses later.
-              onPointerLeave: () => talk.reset(),
+              // Released off the card: that press never focuses later. Only the
+              // pressing pointer counts: WebKit sends the mouse cursor's leave
+              // when the thread scrolls under it (Talk about re-pins the
+              // thread), which must not end a touch hold.
+              onPointerLeave: (e: PointerEvent<HTMLDivElement>) => {
+                if (leaveEndsPress(pressId.current, e.pointerId)) talk.reset();
+              },
               // A mouse press on the card is the hold's alone: no native press
               // handling (WebKit's moves the caret the hold just put in the
               // composer on release). Touch presses are left as they were.
@@ -855,20 +928,23 @@ function PostCardItem(
           : {})}
         onClick={tap.onClick}
         onKeyDown={tap.onKeyDown}
+        style={cardBoxStyle(platform, layout)}
         className={cn(POST_CARD, 'cursor-pointer transition-colors hover:bg-panel-2')}
       >
-        {media !== null && frame !== null ? (
-          <CardMedia post={post} frame={frame} media={media} />
-        ) : null}
-        <div className="flex flex-col gap-1.5 px-3 py-2.5">
-          <span
-            data-card-title=""
-            className={cn('line-clamp-2 text-fg', sized(POST_CARD_TITLE_TYPE, layout))}
-            title={post.title}
-          >
+        {textOnly ? (
+          <CardText platform={platform} text={cardText(post)} />
+        ) : media !== null ? (
+          <CardMedia post={post} platform={platform} frame={boxFrame} media={media} />
+        ) : (
+          <CardMediaSlot platform={platform}>
+            <CardPills post={post} />
+          </CardMediaSlot>
+        )}
+        <div className={CARD_BODY}>
+          <CardTitleArea layout={layout} className="text-fg" title={post.title}>
             {post.title}
-          </span>
-          <span className={cn('flex items-center gap-1.5 text-fg-3', POST_CARD_META_TYPE)}>
+          </CardTitleArea>
+          <span className={cn(CARD_META_ROW, 'text-fg-3', POST_CARD_META_TYPE)}>
             <Tag
               label={stageLabel(post.stage)}
               {...(isTagDot(post.stage) ? { dot: post.stage } : {})}
@@ -876,11 +952,10 @@ function PostCardItem(
             {target !== '' ? <span data-card-target="">{target}</span> : null}
           </span>
         </div>
+        {/* The footer row is always there (its 44px are the box's); its words
+            only once the viewer's side is known, never a wording that flips. */}
         {props.sideKnown !== false ? (
-          <div
-            data-card-footer=""
-            className="flex h-[44px] items-center justify-between gap-2 border-t border-border px-3 text-sm"
-          >
+          <div data-card-footer="" className={CARD_FOOTER}>
             <span
               className={cn(
                 'flex min-w-0 items-center gap-1',
@@ -894,7 +969,9 @@ function PostCardItem(
             </span>
             <span className="shrink-0 font-medium text-accent">{footer.action}</span>
           </div>
-        ) : null}
+        ) : (
+          <div className={CARD_FOOTER} />
+        )}
       </div>
       {sheetMounted ? (
         <SheetBoundary>
@@ -962,6 +1039,9 @@ export function cardFrame(
 
 interface CardMediaProps {
   post: PostCardRow;
+  /** The workspace platform: the media box's fixed frame. */
+  platform: string | null;
+  /** chatCardFrame(platform): the frame the first media is fit into. */
   frame: Frame;
   media: CardFirstMedia;
 }
@@ -983,6 +1063,7 @@ function CardImage(props: CardMediaProps): ReactElement {
     <CardMediaBox
       {...props}
       boxRef={thumb.ref}
+      painted={url !== null}
       backdrop={url !== null ? <CoverImage src={url} /> : undefined}
     >
       {url !== null ? (
@@ -1021,6 +1102,7 @@ function CardVideo(props: CardMediaProps): ReactElement {
     <CardMediaBox
       {...props}
       boxRef={boxRef}
+      painted={cover !== null || fallback}
       backdrop={cover !== null ? <CoverImage src={cover} /> : undefined}
     >
       {cover !== null ? (
@@ -1087,32 +1169,41 @@ function CoverImage(props: { src: string }): ReactElement {
 }
 
 /**
- * The frame box, 240px wide and at most 320px tall (a tall frame narrows), with
- * its corner pills.
+ * The media slot with the frame inside it, at the slot's fixed height (a tall
+ * frame narrows), and its corner pills. Until there is media to draw the frame
+ * is the neutral token surface (no bands), so only its fill changes on load.
  */
 function CardMediaBox(
   props: CardMediaProps & {
     boxRef: RefObject<HTMLDivElement>;
     backdrop: ReactNode;
+    /** There is media to draw (a cover URL, or the video's own frame). */
+    painted: boolean;
     children: ReactNode;
   },
 ): ReactElement {
   const { post, frame } = props;
-  const pills = mediaPills(post);
   return (
-    <div
-      ref={props.boxRef}
-      data-card-media=""
-      className="relative flex w-full justify-center bg-panel-3"
-    >
+    <CardMediaSlot platform={props.platform} boxRef={props.boxRef}>
       <PlatformFrame
-        frame={frame}
-        maxHeight={CHAT_CARD_FRAME_MAX_HEIGHT}
+        frame={props.painted ? frame : { ...frame, bands: 'none' }}
+        maxHeight={`${cardMediaHeight(frame)}px`}
         bordered={false}
         backdrop={props.backdrop}
       >
         {props.children}
       </PlatformFrame>
+      <CardPills post={post} />
+    </CardMediaSlot>
+  );
+}
+
+/** The format pill (top right) and the video and slide pills (bottom right). */
+function CardPills(props: { post: PostCardRow }): ReactElement {
+  const { post } = props;
+  const pills = mediaPills(post);
+  return (
+    <>
       <span className={cn(MEDIA_PILL, 'absolute right-2 top-2')}>{formatLabel(post.format)}</span>
       {pills.slides !== null || pills.video !== null ? (
         <span className="absolute bottom-2 right-2 flex gap-1">
@@ -1125,21 +1216,101 @@ function CardMediaBox(
           {pills.slides !== null ? <span className={MEDIA_PILL}>{pills.slides}</span> : null}
         </span>
       ) : null}
+    </>
+  );
+}
+
+/** A text-only post's words: its caption, else its title. Pure. */
+export function cardText(post: Pick<PostCardRow, 'title' | 'caption'>): string {
+  const caption = post.caption?.trim() ?? '';
+  return caption !== '' ? caption : post.title;
+}
+
+/**
+ * A text-only post (text, link, a thread with no media): its words inside the
+ * media box, in the platform's frame on a token surface, clamped to the lines
+ * the box holds, so the box never collapses.
+ */
+function CardText(props: { platform: string | null; text: string }): ReactElement {
+  const frame = chatCardFrame(props.platform);
+  const clamp: CSSProperties = {
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: cardTextLines(frame),
+    overflow: 'hidden',
+  };
+  return (
+    <CardMediaSlot platform={props.platform}>
+      <PlatformFrame
+        frame={{ ...frame, bands: 'none' }}
+        maxHeight={`${cardMediaHeight(frame)}px`}
+        bordered={false}
+      >
+        <span
+          data-card-text=""
+          style={clamp}
+          className="whitespace-pre-line break-words p-3 text-base text-fg"
+        >
+          {props.text}
+        </span>
+      </PlatformFrame>
+    </CardMediaSlot>
+  );
+}
+
+/**
+ * The reader's RLS hid this post (e.g. a client receiving a draft). The same
+ * fixed box as a visible card (neutral media box, title area, meta row, empty
+ * footer), but no thumbnail and no link; never probes why it is hidden.
+ */
+export function NotVisibleCard(props: { platform?: string | null }): ReactElement {
+  const platform = props.platform ?? null;
+  const layout = useChatLayout();
+  return (
+    <div
+      data-card-not-visible=""
+      style={cardBoxStyle(platform, layout)}
+      className={cn(POST_CARD, 'bg-panel-2 text-fg-2')}
+    >
+      <CardMediaSlot platform={platform} />
+      <div className={CARD_BODY}>
+        <CardTitleArea layout={layout}>{NOT_VISIBLE_TITLE}</CardTitleArea>
+        <span className={cn(CARD_META_ROW, 'text-sm')}>
+          <span className="truncate">{NOT_VISIBLE_BODY}</span>
+        </span>
+      </div>
+      <div className={CARD_FOOTER} />
     </div>
   );
 }
 
 /**
- * The reader's RLS hid this post (e.g. a client receiving a draft). Same box as a
- * visible card, but no thumbnail and no link; never probes why it is hidden.
+ * A post card whose reads failed every try: the same fixed box, neutral, the
+ * whole card one tap that re-reads it.
  */
-export function NotVisibleCard(): ReactElement {
+export function PostCouldntLoadCard(props: {
+  platform: string | null;
+  onRetry: () => void;
+}): ReactElement {
+  const layout = useChatLayout();
   return (
-    <div className={`${SHARED_CARD_BOX} bg-panel-2 text-fg-2`}>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-base font-medium">{NOT_VISIBLE_TITLE}</span>
-        <span className="truncate text-sm">{NOT_VISIBLE_BODY}</span>
+    <PressableRow
+      inline
+      card
+      type="button"
+      data-card-failed=""
+      onClick={props.onRetry}
+      style={cardBoxStyle(props.platform, layout)}
+      // inline (w-auto) plus a fixed min/max of 240: the card's width without a
+      // w-* class against PressableRow's own.
+      className="flex min-w-[240px] max-w-[240px] flex-col overflow-hidden border border-border bg-panel-2 text-fg-2"
+    >
+      <CardMediaSlot platform={props.platform} />
+      <span className={CARD_BODY}>
+        <CardTitleArea layout={layout}>{CARD_LOAD_FAILED}</CardTitleArea>
+        <span className={cn(CARD_META_ROW, 'text-sm')}>Tap to try again</span>
       </span>
-    </div>
+      <span className={cn(CARD_FOOTER, 'w-full')} />
+    </PressableRow>
   );
 }

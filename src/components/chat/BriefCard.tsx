@@ -5,7 +5,9 @@
 // renders as an "unavailable" card; a read that failed or timed out keeps the
 // skeleton and is re-read (tab visible, online, connected, into view, or on
 // its own after 5s), up to 3 tries, then shows "Couldn't load" with a tap to
-// retry. Tapping a card opens the brief in the app.
+// retry. Tapping a card opens the brief in the app. Every state (loading,
+// loaded, unavailable, couldn't load) is one fixed 62px box (BRIEF_CARD_HEIGHT),
+// so a card fills in place and never moves a row.
 
 import { useEffect, useMemo, useRef } from 'react';
 import type { ReactElement } from 'react';
@@ -21,6 +23,13 @@ import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { BriefStatusPill } from '@/components/pages/BriefCard';
 import { briefRoute, sharedBriefViews, type SharedBriefView } from '@/lib/chat/briefs';
+
+/**
+ * The brief card's one outer height: py-2 (16) + the title over the status pill
+ * (20 + 4 + 20) + the 1px border twice. The skeleton, the unavailable card and
+ * the retry card take it too.
+ */
+export const BRIEF_CARD_HEIGHT = 'h-[62px]';
 
 function useSharedBriefs(briefIds: string[]): {
   views: SharedBriefView[];
@@ -63,7 +72,8 @@ export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactEle
         {briefIds.map((id) => (
           <div
             key={id}
-            className="h-[54px] w-[240px] animate-pulse rounded-xl border border-border bg-panel-2"
+            data-brief-skeleton=""
+            className={`${BRIEF_CARD_HEIGHT} w-[240px] rounded-xl border border-border bg-panel-2`}
           />
         ))}
       </div>
@@ -76,6 +86,7 @@ export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactEle
           <CouldntLoadCard
             key={view.briefId}
             onRetry={() => cache?.retry({ briefIds: [view.briefId] })}
+            className={BRIEF_CARD_HEIGHT}
           />
         ) : (
           <BriefCardItem key={view.briefId} view={view} />
@@ -89,7 +100,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
   const navigate = useNavigate();
   if (view.kind === 'unavailable') {
     return (
-      <div className={`${SHARED_CARD} text-fg-3`}>
+      <div className={`${SHARED_CARD} ${BRIEF_CARD_HEIGHT} text-fg-3`}>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3">
           <IconBriefs size={ICON_SIZE.nav} />
         </span>
@@ -104,7 +115,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
       card
       aria-label={`Open brief ${view.title}`}
       onClick={() => navigate(briefRoute(view.briefId))}
-      className={`${SHARED_CARD} transition-colors`}
+      className={`${SHARED_CARD} ${BRIEF_CARD_HEIGHT} transition-colors`}
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
         <IconBriefs size={ICON_SIZE.nav} />
