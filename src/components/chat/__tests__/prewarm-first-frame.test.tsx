@@ -30,6 +30,8 @@ import type { ScheduledRow } from '@/lib/chat/scheduled';
 import type { MentionProfile } from '@/lib/chat-reads';
 import { chatThreadLoading, heldOpenNames } from '@/components/chat/ChatConnected';
 import { openHoldApplies } from '@/components/chat/MessageThread';
+import { clearPlanShapes, notePlanShapes, planCardsSized } from '@/lib/chat/plan-shapes';
+import type { PlanBundle } from '@/lib/chat/plans';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -224,6 +226,8 @@ function skeletonOn(input: {
   namesReady: boolean;
   scheduledSettled: boolean;
   keptOpen: boolean;
+  /** The kept open's row-moving parts (its marks, its plan card shapes) are in hand. */
+  keptPartsSettled: boolean;
 }): boolean {
   const threadLoading = chatThreadLoading({
     threadCurrent: true,
@@ -242,6 +246,7 @@ function skeletonOn(input: {
     keptOpen: input.keptOpen,
     holdDone: false,
     partsSettled: false,
+    keptPartsSettled: input.keptPartsSettled,
   });
   return pageLoading || openHeld;
 }
@@ -291,6 +296,9 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
         namesReady: named !== null,
         scheduledSettled: scheduled !== undefined,
         keptOpen: memory.recall(KEY, 'thread') !== undefined,
+        // The marks came with the taken pre-warm; no plan card is on this page.
+        keptPartsSettled:
+          memory.recallFresh(KEY, 'marks') !== undefined && planCardsSized(ME, WS, []),
       }),
     ).toBe(false);
     // Every later commit keeps the rows (the open re-reads nothing).
@@ -298,11 +306,37 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
     expect(reads()).toBe(0);
   });
 
-  it('the open hold is a cold open only: kept rows never wait on the plan bundles', () => {
-    expect(openHoldApplies({ keptOpen: true, holdDone: false, partsSettled: false })).toBe(false);
-    expect(openHoldApplies({ keptOpen: false, holdDone: false, partsSettled: false })).toBe(true);
-    expect(openHoldApplies({ keptOpen: false, holdDone: false, partsSettled: true })).toBe(false);
-    expect(openHoldApplies({ keptOpen: false, holdDone: true, partsSettled: false })).toBe(false);
+  it('a kept open waits only for the parts that would move its rows', () => {
+    const hold = (keptOpen: boolean, partsSettled: boolean, keptPartsSettled: boolean) =>
+      openHoldApplies({ keptOpen, holdDone: false, partsSettled, keptPartsSettled });
+    // Kept rows never wait on the ticker or plan bundles of known-size cards.
+    expect(hold(true, false, true)).toBe(false);
+    // A badge still to land, or a card of unknown shape: held (the cold cap).
+    expect(hold(true, false, false)).toBe(true);
+    // A cold open waits for all its parts, as before.
+    expect(hold(false, false, true)).toBe(true);
+    expect(hold(false, true, false)).toBe(false);
+    // Done (released or capped) never holds again.
+    expect(
+      openHoldApplies({ keptOpen: true, holdDone: true, partsSettled: false, keptPartsSettled: false }),
+    ).toBe(false);
+  });
+
+  it('plan card shapes: only a card known to be full size lets a kept open skip the hold', () => {
+    clearPlanShapes();
+    expect(planCardsSized(ME, WS, ['p-1'])).toBe(false);
+    // A settled read: p-1 came back (a full card), p-2 did not (unavailable), p-3 failed.
+    notePlanShapes(ME, WS, ['p-1', 'p-2', 'p-3'], new Map([['p-1', {} as PlanBundle]]), ['p-3']);
+    expect(planCardsSized(ME, WS, ['p-1'])).toBe(true);
+    expect(planCardsSized(ME, WS, ['p-1', 'p-2'])).toBe(false);
+    expect(planCardsSized(ME, WS, ['p-3'])).toBe(false);
+    // Another viewer or workspace knows nothing of it.
+    expect(planCardsSized(PEER, WS, ['p-1'])).toBe(false);
+    expect(planCardsSized(ME, 'ws-2', ['p-1'])).toBe(false);
+    // The chat memory clearing (sign-out, a switch) forgets the shapes.
+    createOpenCache().clear();
+    clearPlanShapes();
+    expect(planCardsSized(ME, WS, ['p-1'])).toBe(false);
   });
 
   it('a cold open (no page kept) still paints its skeleton first', () => {
@@ -317,6 +351,7 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
         namesReady: true,
         scheduledSettled: memory.recallFresh(KEY, 'scheduled') !== undefined,
         keptOpen: memory.recall(KEY, 'thread') !== undefined,
+        keptPartsSettled: false,
       }),
     ).toBe(true);
   });
