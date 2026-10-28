@@ -33,7 +33,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { ICON_SIZE, IconBan, IconDownload, IconFile, IconImage } from '@/components/ui/icons';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
-import { VoiceNote } from '@/components/chat/VoiceNote';
+import { VoiceNote, type VoiceUrlError, type VoiceUrlResult } from '@/components/chat/VoiceNote';
 import { UploadRing } from '@/components/chat/UploadRing';
 import { BUBBLE_FILL, FileBubble } from '@/components/chat/FileBubble';
 import {
@@ -45,7 +45,7 @@ import {
 import { removedFilesLabel, type RemovedFiles } from '@/lib/chat/remove-files';
 import { cn } from '@/lib/cn';
 import { middleTruncate } from '@/lib/files/display-name';
-import type { PresignCache } from '@/lib/asset-presign';
+import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import {
   classifyAttachment,
   isVoiceAttachment,
@@ -56,12 +56,22 @@ import {
   type MessageAttachment,
 } from '@/lib/chat/attachments';
 
+/** Why a re-link failed, for the log: never the url, link key, token or asset id. */
+export function urlError(error: unknown, linkMode: 'file-link' | 'presign'): VoiceUrlError {
+  return {
+    name: error instanceof Error ? error.name : 'unknown',
+    code: error instanceof PresignError ? error.code : null,
+    message: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+    linkMode,
+  };
+}
+
 /**
  * Presign one attachment id once, refreshing shortly before expiry and when the
  * page comes back to the foreground (iOS throttles the timer in the
  * background); never throws. `peek` is the cached URL while it is more than 60s
  * from expiry (else null); `refresh` resolves a URL through the cache (force:
- * a new presign) and resolves null on failure. Both work only while enabled.
+ * a new presign), or on failure why there is none. Both work only while enabled.
  */
 export function useAttachmentUrl(
   assetId: string,
@@ -71,7 +81,7 @@ export function useAttachmentUrl(
   url: string | null;
   failed: boolean;
   peek: () => string | null;
-  refresh: (force: boolean) => Promise<string | null>;
+  refresh: (force: boolean) => Promise<VoiceUrlResult>;
 } {
   const [url, setUrl] = useState<string | null>(() =>
     enabled && assetId !== '' ? (cache.peek(assetId)?.url ?? null) : null,
@@ -115,15 +125,20 @@ export function useAttachmentUrl(
     [assetId, cache, enabled],
   );
   const refresh = useCallback(
-    async (force: boolean): Promise<string | null> => {
-      if (!enabled || assetId === '') return null;
+    async (force: boolean): Promise<VoiceUrlResult> => {
+      if (!enabled || assetId === '') {
+        return {
+          ok: false,
+          error: { name: 'NotEnabled', code: null, message: '', linkMode: cache.linkMode },
+        };
+      }
       try {
         const presigned = await (force ? cache.refresh(assetId) : cache.resolve(assetId));
         setUrl(presigned.url);
         setFailed(false);
-        return presigned.url;
-      } catch {
-        return null;
+        return { ok: true, data: presigned.url };
+      } catch (error) {
+        return { ok: false, error: urlError(error, cache.linkMode) };
       }
     },
     [assetId, cache, enabled],

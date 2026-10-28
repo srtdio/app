@@ -452,6 +452,11 @@ export class PresignCache {
     return this.resolve(assetVersionId);
   }
 
+  /** How this cache links files: fast file links, or a presign per file (read-only, for logs). */
+  get linkMode(): 'file-link' | 'presign' {
+    return this.fileLinksEnabled() ? 'file-link' : 'presign';
+  }
+
   /** Whether fast file links are configured. */
   private fileLinksEnabled(): boolean {
     const base = this.deps.fileBase ?? null;
