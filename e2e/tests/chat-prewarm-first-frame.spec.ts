@@ -161,9 +161,7 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
   expect(timing['chat:hold:kept'], 'the kept open skipped the hold').toBeDefined();
   expect(timing['chat:hold:release']).toBeUndefined();
   expect(timing['chat:hold:cap']).toBeUndefined();
-  expect(network.rpcCalls.filter((c) => c.name === 'chat_open_bundle')).toHaveLength(
-    bundlesBefore,
-  );
+  expect(network.rpcCalls.filter((c) => c.name === 'chat_open_bundle')).toHaveLength(bundlesBefore);
   // The plan card filled its placeholder once its read landed.
   await expect(page.locator('[data-plan-card]').first()).toBeVisible();
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
