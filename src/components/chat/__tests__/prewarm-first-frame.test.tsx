@@ -307,7 +307,7 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
   });
 
   it('a kept open waits only for the parts that would move its rows', () => {
-    const hold = (keptOpen: boolean, partsSettled: boolean, keptPartsSettled: boolean) =>
+    const hold = (keptOpen: boolean, partsSettled: boolean, keptPartsSettled: boolean): boolean =>
       openHoldApplies({ keptOpen, holdDone: false, partsSettled, keptPartsSettled });
     // Kept rows never wait on the ticker or plan bundles of known-size cards.
     expect(hold(true, false, true)).toBe(false);
