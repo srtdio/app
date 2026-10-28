@@ -5553,8 +5553,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     const key = chatKey(props.currentUserId, workspaceId, channelId);
     return key !== null && openCache.recall(key, 'thread') !== undefined;
   });
-  const marksSettled =
-    props.marks === undefined || props.marksLoaded || props.marksFailed === true;
+  const marksSettled = props.marks === undefined || props.marksLoaded || props.marksFailed === true;
   const cardsSnapshot =
     statusPlanCards !== null && pagePlanIds.length > 0
       ? statusPlanCards.cache.snapshot(pagePlanIds)
@@ -5570,13 +5569,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   useEffect(() => {
     if (cardsSnapshot === null || cardsSnapshot.loading) return;
     if (viewerId === null || workspaceId === null) return;
-    notePlanShapes(
-      viewerId,
-      workspaceId,
-      pagePlanIds,
-      cardsSnapshot.bundles,
-      cardsSnapshot.failed,
-    );
+    notePlanShapes(viewerId, workspaceId, pagePlanIds, cardsSnapshot.bundles, cardsSnapshot.failed);
   }, [cardsSnapshot, pagePlanIds, viewerId, workspaceId]);
   const openPartsSettled = openHoldSettled({
     marks: marksSettled,
