@@ -19,6 +19,7 @@ import {
   useState,
   type SetStateAction,
 } from 'react';
+import { mark } from '@/lib/perf-marks';
 import { peekKept, primeRead, readKey } from '@/lib/session-read';
 
 /** The kept-view key of one screen part for a user and workspace. */
@@ -98,9 +99,29 @@ function shellScroller(): HTMLElement | null {
 }
 
 /**
+ * How long a kept scroll position waits for the page to grow tall enough to
+ * hold it (covers, status lines and late rows landing under kept rows). Not a
+ * paint wait: the page paints at once; only the catch-up stops here.
+ */
+export const SCROLL_CATCH_UP_MS = 1_500;
+
+/** Pure: whether `el` sits at `top` (1px slack for fractional layout). */
+export function atKeptTop(el: Pick<HTMLElement, 'scrollTop'>, top: number): boolean {
+  return Math.abs(el.scrollTop - top) <= 1;
+}
+
+/**
  * Keep the screen's scroll position for the session under `key` and put it
- * back once `ready` (the kept rows are painted). Restores once per mount.
+ * back once `ready` (the kept rows are painted). Restores once per mount, in
+ * a layout effect, so the first painted frame is already at the kept position.
  * `scroller` names the element that scrolls (default: the shell's main).
+ *
+ * When the page is not yet tall enough to hold the kept position (the browser
+ * clamps the write), the target is held, not lost: every size change of the
+ * scroller's content re-applies it before that frame paints (ResizeObserver
+ * runs after layout, before paint), until it lands, the person touches, or
+ * SCROLL_CATCH_UP_MS passes. A clamped position is never saved over the kept
+ * one meanwhile.
  */
 export function useKeptScroll(
   key: string | null,
@@ -108,6 +129,8 @@ export function useKeptScroll(
   scroller: () => HTMLElement | null = shellScroller,
 ): void {
   const restored = useRef(false);
+  // The kept position still being caught up to, else null.
+  const pending = useRef<number | null>(null);
   const getScroller = useRef(scroller);
   getScroller.current = scroller;
 
@@ -116,7 +139,32 @@ export function useKeptScroll(
     restored.current = true;
     const el = getScroller.current();
     const top = peekKept<number>(key);
-    if (el !== null && top !== undefined && top > 0) el.scrollTop = top;
+    if (el === null || top === undefined || top <= 0) return;
+    el.scrollTop = top;
+    mark('kept-view:scroll-restore');
+    if (atKeptTop(el, top) || typeof ResizeObserver === 'undefined') return;
+    pending.current = top;
+    const stop = (): void => {
+      pending.current = null;
+      observer.disconnect();
+      window.clearTimeout(timer);
+      for (const name of TOUCH_EVENTS) window.removeEventListener(name, stop, { capture: true });
+    };
+    const observer = new ResizeObserver(() => {
+      if (pending.current === null) return;
+      el.scrollTop = pending.current;
+      if (atKeptTop(el, pending.current)) {
+        mark('kept-view:scroll-caught-up');
+        stop();
+      }
+    });
+    observer.observe(el);
+    for (const child of Array.from(el.children)) observer.observe(child);
+    const timer = window.setTimeout(stop, SCROLL_CATCH_UP_MS);
+    for (const name of TOUCH_EVENTS) {
+      window.addEventListener(name, stop, { capture: true, passive: true });
+    }
+    return stop;
   }, [key, ready]);
 
   useLayoutEffect(() => {
@@ -124,7 +172,7 @@ export function useKeptScroll(
     const el = getScroller.current();
     if (el === null) return;
     const save = (): void => {
-      if (restored.current) primeRead(key, el.scrollTop);
+      if (restored.current && pending.current === null) primeRead(key, el.scrollTop);
     };
     el.addEventListener('scroll', save, { passive: true });
     return () => el.removeEventListener('scroll', save);

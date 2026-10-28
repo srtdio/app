@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
-import { keptOr, keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  keptOr,
+  keptViewKey,
+  SCROLL_CATCH_UP_MS,
+  useKeptScroll,
+  useKeptState,
+  useUntouched,
+} from '@/lib/kept-view';
 import { dropWorkspaceReads, peekKept, resetSessionReads } from '@/lib/session-read';
 import { SIGNOUT_EVENT } from '@/lib/events';
 
@@ -117,3 +124,112 @@ describe('useKeptScroll', () => {
     expect(el.scrollTop).toBe(420);
   });
 });
+
+describe('useKeptScroll catch-up (B4: no jump on Back)', () => {
+  // A scroller whose reachable height is set by the test, like a browser
+  // clamping scrollTop to scrollHeight - clientHeight.
+  function clampedScroller(max: { value: number }): HTMLElement {
+    const el = document.createElement('main');
+    let top = 0;
+    Object.defineProperty(el, 'scrollTop', {
+      get: () => top,
+      set: (next: number) => {
+        top = Math.max(0, Math.min(next, max.value));
+      },
+    });
+    el.appendChild(document.createElement('div'));
+    document.body.appendChild(el);
+    return el;
+  }
+
+  let observers: Array<{ cb: () => void; disconnected: boolean }> = [];
+  class FakeResizeObserver {
+    entry: { cb: () => void; disconnected: boolean };
+    constructor(cb: () => void) {
+      this.entry = { cb, disconnected: false };
+      observers.push(this.entry);
+    }
+    observe(): void {}
+    disconnect(): void {
+      this.entry.disconnected = true;
+    }
+  }
+  const grow = (): void => {
+    for (const o of observers) if (!o.disconnected) o.cb();
+  };
+
+  function Screen({ el }: { el: HTMLElement }) {
+    useKeptScroll(keptViewKey('u', 'w', 'pipeline:scroll'), true, () => el);
+    return null;
+  }
+
+  afterEach(() => {
+    observers = [];
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  function keep(el: HTMLElement, top: number): void {
+    mount(<Screen el={el} />);
+    el.scrollTop = top;
+    el.dispatchEvent(new Event('scroll'));
+    act(() => root!.unmount());
+    el.scrollTop = 0;
+  }
+
+  it('restores in the first commit when the page can hold the position', () => {
+    const max = { value: 5_000 };
+    const el = clampedScroller(max);
+    keep(el, 1_500);
+    mount(<Screen el={el} />);
+    expect(el.scrollTop).toBe(1_500);
+  });
+
+  it('holds a clamped position and lands it when the content grows, never saving the clamp', () => {
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const max = { value: 5_000 };
+    const el = clampedScroller(max);
+    keep(el, 1_500);
+    max.value = 900;
+    mount(<Screen el={el} />);
+    expect(el.scrollTop).toBe(900);
+    el.dispatchEvent(new Event('scroll'));
+    expect(peekKept<number>(keptViewKey('u', 'w', 'pipeline:scroll'))).toBe(1_500);
+    max.value = 5_000;
+    act(() => grow());
+    expect(el.scrollTop).toBe(1_500);
+    expect(observers.every((o) => o.disconnected)).toBe(true);
+  });
+
+  it('a touch ends the catch-up: the view never moves under the finger', () => {
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const max = { value: 5_000 };
+    const el = clampedScroller(max);
+    keep(el, 1_500);
+    max.value = 900;
+    mount(<Screen el={el} />);
+    act(() => {
+      window.dispatchEvent(new Event('pointerdown'));
+    });
+    max.value = 5_000;
+    act(() => grow());
+    expect(el.scrollTop).toBe(900);
+  });
+
+  it('stops catching up after SCROLL_CATCH_UP_MS', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    const max = { value: 5_000 };
+    const el = clampedScroller(max);
+    keep(el, 1_500);
+    max.value = 900;
+    mount(<Screen el={el} />);
+    act(() => {
+      vi.advanceTimersByTime(SCROLL_CATCH_UP_MS);
+    });
+    max.value = 5_000;
+    act(() => grow());
+    expect(el.scrollTop).toBe(900);
+  });
+});
+
