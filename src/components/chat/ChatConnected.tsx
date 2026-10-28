@@ -48,7 +48,8 @@ import { runClearChannels, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { safeTimeZone } from '@/lib/time';
 import { prewarmChats, useChatThread } from '@/lib/chat/use-chat-thread';
 import { readChatOpenBundle } from '@/lib/chat/history';
-import { readPlanBundles } from '@/lib/chat/plans';
+import { PLAN_CHANGED_EVENT, readPlanBundles } from '@/lib/chat/plans';
+import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { notePlanShapes } from '@/lib/chat/plan-shapes';
 import { whenIdle } from '@/lib/chunk-reload';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
@@ -144,6 +145,14 @@ interface ChatConnectedProps {
   status: ChatStatus;
   workspaceId: string;
   currentUserId: string;
+}
+
+// A plan or post change anywhere drops the pre-warm's plan read: the next
+// open reads the plans as they are now, never that older answer.
+if (typeof window !== 'undefined') {
+  const dropPrewarmPlans = (): void => openCache.dropPrewarmPlans();
+  window.addEventListener(PLAN_CHANGED_EVENT, dropPrewarmPlans);
+  window.addEventListener(POST_CHANGED_EVENT, dropPrewarmPlans);
 }
 
 const NO_MESSAGES: ThreadMessage[] = [];

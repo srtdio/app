@@ -12,8 +12,9 @@
 // cursors, open posts, plan ids, briefs) are stashed beside it, derived from
 // that one call. Plan bundles are never remembered: each open reads its own
 // (PlanCardsProvider), so no bundle from an earlier open is ever painted. The
-// one exception is the pre-warm's one batched plan read, which an open within
-// PREWARM_FRESH_MS takes as its first plan read (prewarmPlansFor).
+// one exception is the pre-warm's one batched plan read, which the first open
+// within PREWARM_FRESH_MS takes as its first plan read (takePrewarmPlans); a
+// plan or post change drops it first.
 //
 // The last settled state of each chat (marks, scheduled rows) is
 // remembered. Marks and scheduled
@@ -256,16 +257,17 @@ export interface OpenCache {
     read: Promise<Result<Map<string, PlanBundle>>>,
   ) => void;
   /**
-   * The pre-warm's plan read for an open's first plan read: only within
+   * The pre-warm's plan read as an open's first plan read, once: only within
    * PREWARM_FRESH_MS of it, for this user and workspace, and when it asked
-   * every one of `ids`. Undefined otherwise (the open reads as before). An
-   * open uses it once (PlanCardsProvider): its later reads (a plan change, a
-   * retry) read.
+   * every one of `ids`; the open that takes it spends it (every later open
+   * and every later read reads). Undefined otherwise: the open reads.
    */
-  prewarmPlansFor: (
+  takePrewarmPlans: (
     key: ChatKey,
     ids: readonly string[],
   ) => Promise<Result<Map<string, PlanBundle>>> | undefined;
+  /** A plan or a post changed: the pre-warm's plan read is never handed out after it. */
+  dropPrewarmPlans: () => void;
   /** Forget everything. */
   clear: () => void;
   /**
@@ -521,14 +523,21 @@ export function createOpenCache(
     notePrewarmPlans(at, asked, read) {
       plans = { ...at, asked: new Set(asked), read, at: now() };
     },
-    prewarmPlansFor(key, ids) {
+    takePrewarmPlans(key, ids) {
       const held = plans;
       if (held === null || held.userId !== key.userId || held.workspaceId !== key.workspaceId) {
         return undefined;
       }
-      if (now() - held.at > PREWARM_FRESH_MS) return undefined;
+      if (now() - held.at > PREWARM_FRESH_MS) {
+        plans = null;
+        return undefined;
+      }
       if (!ids.every((id) => held.asked.has(id))) return undefined;
+      plans = null;
       return held.read;
+    },
+    dropPrewarmPlans() {
+      plans = null;
     },
     holdsPrewarm(key) {
       return usablePrewarm(slots.get(slotKey(key))) !== undefined;

@@ -148,7 +148,7 @@ export function PlanCardsProvider(props: {
   // carried from an earlier open.
   const raw = useMemo(() => {
     if (workspaceId === null || channelId === null) return null;
-    // The open's first plan read may be the pre-warm's (within
+    // The open's first plan read may be the pre-warm's (the first open within
     // PREWARM_FRESH_MS, asking only ids it read; joined while in flight): one
     // plan read per open in all. Only the first: every later read (a plan
     // change, a retry, a failed pre-warm read) reads.
@@ -156,7 +156,7 @@ export function PlanCardsProvider(props: {
     return createPlanCardCache((ids, signal) => {
       const read = (): ReturnType<typeof readPlanBundles> =>
         readPlanBundles(supabase, ids, signal, undefined, workspaceId);
-      const primed = first && memo !== null ? openCache.prewarmPlansFor(memo, ids) : undefined;
+      const primed = first && memo !== null ? openCache.takePrewarmPlans(memo, ids) : undefined;
       first = false;
       if (primed === undefined) return read();
       return primed.then((result) => (result.ok ? result : read()));
