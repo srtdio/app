@@ -698,6 +698,9 @@ export type LoadTransition = (prev: ChatStoreState) => ChatStoreState;
  * only timed out keeps running (withLateRead): once every read has data, the
  * 'ready' transition is handed to `onLate` and the list replaces the error.
  * `cancel` (Retry, switch, unmount) aborts them all and delivers nothing.
+ * Logging: a load that failed only by timeouts is a warning (the late data may
+ * still win); it is an error when a read failed otherwise, or when a timed-out
+ * read gives up (grace end or late failure) before the list was delivered.
  */
 export async function loadChatList(
   readers: ChatListReaders,
@@ -715,6 +718,19 @@ export async function loadChatList(
   } = {};
   let failedFirst = false;
   let delivered = false;
+  // A read ended with no data (withLateRead onGiveUp): the list cannot complete.
+  let gaveUp = false;
+  let reported = false;
+  let failContext: Record<string, string> = {};
+  const reportFailed = (): void => {
+    if (reported || delivered) return;
+    reported = true;
+    logger.error('chat store: initial load failed', failContext);
+  };
+  const giveUp = (): void => {
+    gaveUp = true;
+    if (failedFirst && opts.cancel?.aborted !== true) reportFailed();
+  };
   const ready = (): LoadTransition | null => {
     const { roster, clears, previews, counts } = slots;
     if (roster === undefined || clears === undefined || previews === undefined) return null;
@@ -741,6 +757,7 @@ export async function loadChatList(
       fill(data);
       late();
     },
+    onGiveUp: giveUp,
     ...(opts.cancel !== undefined ? { cancel: opts.cancel } : {}),
   });
   const [roster, clears, previews, counts] = await Promise.all([
@@ -760,6 +777,7 @@ export async function loadChatList(
           slots.previews = named;
           late();
         }),
+      onGiveUp: giveUp,
       ...(opts.cancel !== undefined ? { cancel: opts.cancel } : {}),
     }).then(
       async (r): Promise<Result<ConversationPreview[]>> =>
@@ -783,12 +801,19 @@ export async function loadChatList(
   }
   if (!roster.ok || !clears.ok || !previews.ok || !counts.ok) {
     failedFirst = true;
-    logger.error('chat store: initial load failed', {
+    failContext = {
       roster: roster.ok ? 'ok' : roster.error.message,
       clears: clears.ok ? 'ok' : clears.error.message,
       previews: previews.ok ? 'ok' : previews.error.message,
       counts: counts.ok ? 'ok' : counts.error.message,
-    });
+    };
+    const timedOutOnly = [roster, clears, previews, counts].every(
+      (r) => r.ok || r.error.message === 'read timed out',
+    );
+    // Only timeouts: the reads keep running and a late list still wins, so
+    // this is a warning; giveUp reports the error if the list never lands.
+    if (timedOutOnly && !gaveUp) logger.warn('chat store: initial load timed out', failContext);
+    else reportFailed();
   }
   mark('chat:list:error');
   return (prev) => store.loadFailed(prev, scope);

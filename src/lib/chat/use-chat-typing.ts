@@ -139,12 +139,14 @@ export function useChatTyping(params: {
     const now = Date.now();
     if (now - lastSentRef.current < OUTBOUND_THROTTLE_MS) return;
     lastSentRef.current = now;
+    // Best effort: a send while the socket is down rejects with the SDK's plain
+    // error object; the next keystroke tries again, so it is dropped silently.
     void sendTyping({
       connection: asTypingConnection(activeClient),
       target: activeTarget,
       createCmd: createCmdMessage,
       channelId: activeChannelId,
-    });
+    }).catch(() => {});
   }, []);
 
   // Inbound: subscribe per open channel, with or without an Agora target

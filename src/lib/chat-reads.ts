@@ -114,11 +114,14 @@ export const LATE_READ_GRACE_MS = 30_000;
  * then wins and the error clears). It is aborted at `graceMs`, or at once when
  * `cancel` fires (unmount, channel or workspace switch, Retry), after which
  * nothing is delivered. A thrown rejection is a failure. Never throws.
+ * `onGiveUp` (optional) fires once when the read ends with no data and was not
+ * cancelled: a failure (on time or late), or the grace end. It adds no timer.
  */
 export function withLateRead<T>(
   run: (signal: AbortSignal) => Promise<Result<T>>,
   opts: {
     onLate: (data: T) => void;
+    onGiveUp?: () => void;
     cancel?: AbortSignal;
     timeoutMs?: number;
     graceMs?: number;
@@ -156,6 +159,7 @@ export function withLateRead<T>(
           settled = true;
           stop();
           controller.abort();
+          opts.onGiveUp?.();
         },
         Math.max(0, graceMs - timeoutMs),
       );
@@ -169,9 +173,11 @@ export function withLateRead<T>(
         stop();
         if (!late) {
           resolve(result);
+          if (!result.ok) opts.onGiveUp?.();
           return;
         }
         if (result.ok) opts.onLate(result.data);
+        else opts.onGiveUp?.();
       });
   });
 }

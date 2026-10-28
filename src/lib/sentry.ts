@@ -18,6 +18,40 @@ let loading: Promise<boolean> | null = null;
 let traceIdTag: string | null = null;
 const pending: PendingReport[] = [];
 
+type SentryEvent = Parameters<NonNullable<BrowserOptions['beforeSend']>>[0];
+
+// The agora-chat SDK as a stack frame: its package path (source mapped, dev)
+// or the vendor chunk it is bundled into (vite.config.ts vendor-agora).
+function isAgoraFrame(filename: string | undefined): boolean {
+  return (
+    filename !== undefined && (filename.includes('agora-chat') || filename.includes('vendor-agora'))
+  );
+}
+
+/**
+ * Drop only known harmless noise; every other event passes untouched:
+ * (a) AbortError "browsing context is going away" (tab closed or navigated);
+ * (b) an unhandled rejection whose every frame is inside agora-chat (no
+ *     first-party frame). A rejection with no stack (the SDK's plain
+ *     {type, message, data} objects) is kept on purpose.
+ */
+export function dropNoise(event: SentryEvent): SentryEvent | null {
+  for (const ex of event.exception?.values ?? []) {
+    if (ex.type === 'AbortError' && (ex.value ?? '').includes('browsing context is going away')) {
+      return null;
+    }
+    const frames = ex.stacktrace?.frames ?? [];
+    if (
+      ex.mechanism?.type === 'onunhandledrejection' &&
+      frames.length > 0 &&
+      frames.every((f) => isAgoraFrame(f.filename))
+    ) {
+      return null;
+    }
+  }
+  return event;
+}
+
 async function loadSentry(dsn: string): Promise<boolean> {
   // Destructured where it is imported so Rollup can still tree-shake the SDK.
   const { init, browserTracingIntegration, captureException, setTag } =
@@ -30,6 +64,7 @@ async function loadSentry(dsn: string): Promise<boolean> {
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
     integrations: [browserTracingIntegration()],
+    beforeSend: dropNoise,
   };
 
   if (env.VITE_SENTRY_RELEASE) {
