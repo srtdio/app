@@ -1,0 +1,52 @@
+name: Voice convert
+
+# Started by hand only (Actions -> Voice convert -> Run workflow).
+# dry-run: lists the old WebM voice notes still to convert (live workspace and
+#          asset, no 'compressed' copy yet). Writes nothing.
+# convert: makes a playable MP4 copy (AAC 64 kbps mono) of each one at
+#          ws/<workspace>/<asset>/<version>/compressed and records it in
+#          asset_renditions. Re-runs skip what is already converted.
+# verify:  checks every copy exists at its recorded size and every target has
+#          one; fails the run on any mismatch.
+# Never deletes anything and never touches an original.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: dry-run, convert or verify
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - convert
+          - verify
+
+concurrency:
+  group: voice-convert
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Voice convert
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          node --experimental-transform-types --no-warnings scripts/voice-convert.ts "$MODE"

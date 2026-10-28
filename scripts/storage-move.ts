@@ -214,7 +214,7 @@ export async function runPool<T>(
   await Promise.all(workers);
 }
 
-function message(error: unknown): string {
+export function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -515,7 +515,7 @@ export class R2 {
     return hmac(kService, 'aws4_request');
   }
 
-  private async signedFetch(req: {
+  protected async signedFetch(req: {
     method: 'GET' | 'HEAD' | 'PUT';
     path: string;
     query?: ReadonlyArray<readonly [string, string]>;
@@ -618,7 +618,7 @@ export class Db {
     private readonly tracedFetch: TracedFetch,
   ) {}
 
-  private headers(): Headers {
+  protected headers(): Headers {
     return new Headers({
       apikey: this.key,
       Authorization: `Bearer ${this.key}`,
@@ -627,7 +627,7 @@ export class Db {
     });
   }
 
-  private async get<T>(path: string, traceId: string): Promise<T[]> {
+  protected async get<T>(path: string, traceId: string): Promise<T[]> {
     const res = await this.tracedFetch(
       `${this.url}/rest/v1/${path}`,
       { method: 'GET', headers: this.headers() },
@@ -834,20 +834,20 @@ export async function setup(
 // main
 // ---------------------------------------------------------------------------
 
-function summary(lines: string[]): void {
+export function summary(lines: string[]): void {
   const text = `${lines.join('\n')}\n`;
   process.stdout.write(text);
   const file = process.env.GITHUB_STEP_SUMMARY;
   if (file !== undefined && file !== '') appendFileSync(file, text);
 }
 
-function env(name: string): string {
+export function env(name: string): string {
   const value = process.env[name];
   if (value === undefined || value === '') throw new Error(`${name} is not set`);
   return value;
 }
 
-const tracedFetch: TracedFetch = (input, init, traceId) => {
+export const tracedFetch: TracedFetch = (input, init, traceId) => {
   const headers = new Headers(init.headers);
   headers.set('X-Trace-Id', traceId);
   return globalThis.fetch(input, { ...init, headers });
