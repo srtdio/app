@@ -686,12 +686,12 @@ export async function prewarmChats(keys: readonly ChatKey[], deps: PrewarmDeps):
 }
 
 /**
- * The plans the warmed chats' opens will ask first, in ONE batched read,
- * kept beside each chat's pre-warmed bundle: an open that takes the bundle
- * takes this read as its first plan read (open-cache takeOpenPlans), so an
- * open makes one plan read in all, whichever side made it. Only chats whose
- * pre-warm is still held (a tap may have taken one meanwhile: its open reads
- * its own). Never throws; nothing waits on it.
+ * The plans the warmed chats' opens will ask first, in ONE batched read that
+ * an open within PREWARM_FRESH_MS takes as its own first plan read
+ * (open-cache prewarmPlansFor), so an open makes one plan read in all,
+ * whichever side made it. Skipped while a chat is open (its open already read
+ * its own: a second read would only repeat it). Never throws; nothing waits
+ * on it.
  */
 function prewarmPlans(
   warmed: ReadonlyArray<{ key: ChatKey; bundle: ChatOpenBundle }>,
@@ -699,12 +699,10 @@ function prewarmPlans(
   store: OpenCache,
 ): void {
   const readPlans = deps.readPlans;
-  if (readPlans === undefined || !deps.current()) return;
-  const held = warmed
-    .filter(({ key }) => store.holdsPrewarm(key))
-    .map(({ key, bundle }) => ({ key, ids: openPlanIds(bundle) }))
-    .filter(({ ids }) => ids.length > 0);
-  const all = [...new Set(held.flatMap(({ ids }) => ids))];
+  const first = warmed[0];
+  if (readPlans === undefined || first === undefined || !deps.current()) return;
+  if (store.holding('thread').some(({ key }) => store.attached(key))) return;
+  const all = [...new Set(warmed.flatMap(({ bundle }) => openPlanIds(bundle)))];
   if (all.length === 0) return;
   const read = readPlans(all).catch(
     (error: unknown): Result<Map<string, PlanBundle>> => ({
@@ -712,7 +710,11 @@ function prewarmPlans(
       error: { code: 'unknown', message: String(error) },
     }),
   );
-  for (const { key, ids } of held) store.notePrewarmPlans(key, ids, read);
+  store.notePrewarmPlans(
+    { userId: first.key.userId, workspaceId: first.key.workspaceId },
+    all,
+    read,
+  );
   void read.then((result) => {
     mark('chat:prewarm:plans');
     if (deps.current()) deps.onPlans?.(all, result);

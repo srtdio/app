@@ -12,8 +12,8 @@
 // cursors, open posts, plan ids, briefs) are stashed beside it, derived from
 // that one call. Plan bundles are never remembered: each open reads its own
 // (PlanCardsProvider), so no bundle from an earlier open is ever painted. The
-// one exception is the pre-warm's plan read, kept beside its pre-warmed chat
-// bundle and taken with it (same PREWARM_FRESH_MS) as the open's first read.
+// one exception is the pre-warm's one batched plan read, which an open within
+// PREWARM_FRESH_MS takes as its first plan read (prewarmPlansFor).
 //
 // The last settled state of each chat (marks, scheduled rows) is
 // remembered. Marks and scheduled
@@ -158,20 +158,18 @@ interface Slot {
   /** Bumped when the remembered page is forgotten: an older owner's write-back is void. */
   threadEpoch: number;
   /** The pre-warm's bundle (the remembered page came from it), until an open takes it. */
-  prewarm?: { bundle: ChatOpenBundle; at: number; epoch: number; plans?: PrewarmPlans };
-  /** The plan read an open took with the pre-warm, until the open's plan cards use it. */
-  openPlans?: PrewarmPlans;
+  prewarm?: { bundle: ChatOpenBundle; at: number; epoch: number };
 }
 
-/**
- * The pre-warm's one batched plan read, as one chat's open can take it: the
- * ids it asked for this chat (its bundle's shared plans and its page's plans)
- * and the read itself (shared by every pre-warmed chat; joined while in flight).
- */
-export interface PrewarmPlans {
+/** The pre-warm's one batched plan read for the scope it ran in. */
+interface PrewarmPlans {
+  userId: string;
+  workspaceId: string;
+  /** Every plan id it asked (the warmed chats' shared plans and their pages' plans). */
   asked: ReadonlySet<string>;
+  /** The read itself, joined while in flight. */
   read: Promise<Result<Map<string, PlanBundle>>>;
-  /** When the pre-warm read the chat (PREWARM_FRESH_MS counts from it). */
+  /** When it started (PREWARM_FRESH_MS counts from it). */
   at: number;
 }
 
@@ -249,21 +247,22 @@ export interface OpenCache {
    */
   holdsPrewarm: (key: ChatKey) => boolean;
   /**
-   * The pre-warm's plan read for this chat: kept beside its pre-warmed bundle
-   * (ignored when none is held), and taken with it by the open.
+   * The pre-warm's one batched plan read (plans are workspace data: any chat's
+   * open may ask them), kept for this user and workspace until cleared.
    */
   notePrewarmPlans: (
-    key: ChatKey,
+    scope: ChatScope,
     asked: readonly string[],
     read: Promise<Result<Map<string, PlanBundle>>>,
   ) => void;
   /**
-   * The open's first plan read, once: the pre-warm's, when the open took the
-   * pre-warmed bundle, within PREWARM_FRESH_MS of the pre-warm, and asking
-   * only ids it read. Undefined otherwise (the open reads as before); either
-   * way it is spent, so every later read (a plan change, a retry) reads.
+   * The pre-warm's plan read for an open's first plan read: only within
+   * PREWARM_FRESH_MS of it, for this user and workspace, and when it asked
+   * every one of `ids`. Undefined otherwise (the open reads as before). An
+   * open uses it once (PlanCardsProvider): its later reads (a plan change, a
+   * retry) read.
    */
-  takeOpenPlans: (
+  prewarmPlansFor: (
     key: ChatKey,
     ids: readonly string[],
   ) => Promise<Result<Map<string, PlanBundle>>> | undefined;
@@ -306,12 +305,15 @@ export function createOpenCache(
   // Chats whose saved page was already looked for in this scope (once each).
   const seeded = new Set<string>();
   let scope: { userId: string; workspaceId: string } | null = null;
+  // The pre-warm's plan read (one per list load), for its user and workspace.
+  let plans: PrewarmPlans | null = null;
   const emptyListeners: Array<() => void> = [];
   const heldListeners: Array<() => void> = [];
 
   const clear = (): void => {
     const had = slots.size > 0;
     slots.clear();
+    plans = null;
     seeded.clear();
     scope = null;
     opts.onClear?.();
@@ -513,29 +515,20 @@ export function createOpenCache(
     takePrewarm(key) {
       const slot = slots.get(slotKey(key));
       const warm = usablePrewarm(slot);
-      if (slot !== undefined) {
-        // The pre-warm's plan read goes with its bundle, or with nothing.
-        const plans = warm !== undefined ? slot.prewarm?.plans : undefined;
-        if (plans !== undefined) slot.openPlans = plans;
-        else delete slot.openPlans;
-        delete slot.prewarm;
-      }
+      if (slot !== undefined) delete slot.prewarm;
       return warm;
     },
-    notePrewarmPlans(key, asked, read) {
-      const slot = slots.get(slotKey(key));
-      const warm = slot?.prewarm;
-      if (slot === undefined || warm === undefined || usablePrewarm(slot) === undefined) return;
-      warm.plans = { asked: new Set(asked), read, at: warm.at };
+    notePrewarmPlans(at, asked, read) {
+      plans = { ...at, asked: new Set(asked), read, at: now() };
     },
-    takeOpenPlans(key, ids) {
-      const slot = slots.get(slotKey(key));
-      const plans = slot?.openPlans;
-      if (slot === undefined || plans === undefined) return undefined;
-      delete slot.openPlans;
-      if (now() - plans.at > PREWARM_FRESH_MS) return undefined;
-      if (!ids.every((id) => plans.asked.has(id))) return undefined;
-      return plans.read;
+    prewarmPlansFor(key, ids) {
+      const held = plans;
+      if (held === null || held.userId !== key.userId || held.workspaceId !== key.workspaceId) {
+        return undefined;
+      }
+      if (now() - held.at > PREWARM_FRESH_MS) return undefined;
+      if (!ids.every((id) => held.asked.has(id))) return undefined;
+      return held.read;
     },
     holdsPrewarm(key) {
       return usablePrewarm(slots.get(slotKey(key))) !== undefined;
