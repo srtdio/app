@@ -128,6 +128,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; chat tray opener = plus; attach a file = paper clip. Photos = gallery grid; Assets = picture; Copy link = link. Decision bar buttons have no icons.
 - Long-press on touch and right-click on laptop open the same ActionMenu. Esc closes every overlay and returns focus to its trigger.
 - Exception: plan edit rows open their menu on right-click only; long-press there is drag.
+- Exception: laptop Plan month item lines use PressableRow dense (22px); mouse-only surface, decided 28 Oct 2026. dense is allowed nowhere else.
 - Every UI change updates the visual baselines in the same PR and lists the changed screens. Never update baselines to hide an unplanned change.
 - Onboarding follows the app: it uses only shared pieces, the tour finds controls by data-induction. Any UI change that moves, renames or removes a data-induction control updates the tour step, its copy (src/lib/induction-copy.ts) and its visual baselines in the same PR. Never delete a data-induction attribute without updating the tour.
 - App height: html/body/#root use 100svh; never 100vh/100% alone for full-screen layout (iOS keyboard).

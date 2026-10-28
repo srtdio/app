@@ -1,18 +1,23 @@
-// The Plan tab on a laptop: the chip row (All, then one chip per plan in the
-// range, in its colour, Draft tagged), the toolbar (range label, Last /
-// Next, Today, the legend) and the Month or Week grid. Colour is which plan: a
-// plan item sits on its plan's soft colour with a round dot; a dated post in
-// no plan on the neutral panel with a square dot. A month cell shows three
-// entries then "+N more" (that day's week). The week shows each entry as a
-// card: tile, title, plan, the Plan pill and the post line. A chip filters
-// both views. Creators drag an entry to another day (a 4px pointer travel
-// lifts it: a lifted card follows the pointer, the day under it shows a dashed
-// drop outline when the move is allowed; Escape cancels) and click an empty
-// part of a day for the Add on menu; approvers get neither. A click opens the
+// The Plan tab on a laptop: one toolbar row (range label, Last / Next, Today,
+// then the chips: All, then one chip per plan in the range, in its colour,
+// Draft tagged) over the Month or Week grid, which fits the window
+// (useFitHeight: the page never scrolls above 360px of grid). The legend sits
+// in the page's top bar (PlanTabLegend). Colour is which plan: a plan item
+// sits on its plan's soft colour with a round dot; a dated post in no plan on
+// the neutral panel with a square dot. A month cell shows as many 22px lines
+// as its measured height holds (monthCellCap), then "+N more" (that day's
+// week). The week shows each entry as a card: tile, title, plan, the Plan pill
+// and the post line; a busy day scrolls inside its own column. Today: the
+// month cell and the week column on accent-soft inside a 2px accent ring, with
+// a "Today" pill. A chip filters both views. Creators drag an entry to
+// another day (a 4px pointer travel lifts it: a lifted card follows the
+// pointer, the day under it shows a dashed drop outline when the move is
+// allowed; Escape cancels) and click an empty part of a day for the Add on
+// menu; approvers get neither. A click opens the
 // entry: a plan item in the docked Plan screen, a post on its page. While the
 // range reads, the grid keeps its final size. The range reads a page of plans
 // at a time: while more overlap it, Load more (PlanTabLoadMore, the phone
-// list's control) ends the calendar, under the grid. Tokens only.
+// list's control) ends the chip row. Tokens only.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -46,6 +51,7 @@ import {
   canOpenDayMenu,
   capEntries,
   isDraftPlan,
+  monthCellCap,
   monthGrid,
   moreLabel,
   planPill,
@@ -64,6 +70,7 @@ import {
   type PlanTone,
 } from '@/lib/plan-tab';
 import { civilDayOf, civilWeekdayShort, dayOfMonth, formatCivilDayHeader } from '@/lib/plan-week';
+import { useFitHeight } from '@/lib/use-fit-height';
 import { PlanDayMenu } from './PlanDayMenu';
 import { DraftTag, PlanTabLoadMore, type PlanTabMore } from './PlanTabList';
 import type { AddTarget } from './PlanTabAdd';
@@ -145,6 +152,9 @@ export function PlanCalendar(props: {
   const [menu, setMenu] = useState<{ day: string; anchor: HTMLElement } | null>(null);
   const draggable = canDragEntries(side);
   const drag = useEntryDrag({ enabled: draggable, onDrop: mover.move });
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fitRef = useRef<HTMLDivElement>(null);
+  const fit = useFitHeight(fitRef, rootRef);
 
   const openEntry = (entry: CalendarEntry): void => {
     if (drag.consumeClick()) return;
@@ -178,18 +188,22 @@ export function PlanCalendar(props: {
 
   return (
     <div
+      ref={rootRef}
       data-plan-tab="desktop"
       data-plan-tab-loading={props.data === null ? '' : undefined}
       className={cn('flex flex-col', drag.state !== null && 'select-none')}
     >
-      <ChipRow bundles={bundles} tones={tones} selected={shownFilter} onSelect={setFilter} />
-      <div className="flex flex-wrap items-center gap-2 px-6 py-2">
-        <h2 data-plan-tab-range="" className="mr-1 text-lg font-semibold text-fg">
+      <div data-plan-tab-toolbar="" className="flex items-center gap-2 px-6 py-2">
+        <h2
+          data-plan-tab-range=""
+          className="mr-1 shrink-0 whitespace-nowrap text-lg font-semibold text-fg"
+        >
           {rangeLabel(view, anchor)}
         </h2>
         <IconButton
           label={view === 'month' ? 'Last month' : 'Last week'}
           data-plan-tab-prev=""
+          className="shrink-0"
           onClick={() => props.onAnchor(shiftAnchor(view, anchor, -1))}
         >
           <IconChevronLeft size={ICON_SIZE.control} />
@@ -197,47 +211,52 @@ export function PlanCalendar(props: {
         <IconButton
           label={view === 'month' ? 'Next month' : 'Next week'}
           data-plan-tab-next=""
+          className="shrink-0"
           onClick={() => props.onAnchor(shiftAnchor(view, anchor, 1))}
         >
           <IconChevronRight size={ICON_SIZE.control} />
         </IconButton>
-        <Button data-plan-tab-go-today="" onClick={() => props.onAnchor(today)}>
+        <Button
+          data-plan-tab-go-today=""
+          className="shrink-0"
+          onClick={() => props.onAnchor(today)}
+        >
           {TODAY_LABEL}
         </Button>
-        <div className="ml-auto flex items-center gap-4 text-sm text-fg-2">
-          <span className="flex items-center gap-1.5">
-            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent" />
-            {PLAN_ITEM_LEGEND}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span aria-hidden="true" className={cn('h-2 w-2 rounded-sm', LOOSE_POST_CLASSES.dot)} />
-            {LOOSE_POST_LEGEND}
-          </span>
-        </div>
+        <ChipRow
+          bundles={bundles}
+          tones={tones}
+          selected={shownFilter}
+          onSelect={setFilter}
+          more={props.more}
+        />
       </div>
-      {view === 'month' ? (
-        <MonthGrid
-          anchor={anchor}
-          entries={entries}
-          cellProps={cellProps}
-          entryProps={entryProps}
-          onMore={props.onWeekOf}
-        />
-      ) : (
-        <WeekGrid
-          anchor={anchor}
-          today={today}
-          entries={entries}
-          thumbs={data.thumbs}
-          cellProps={cellProps}
-          entryProps={entryProps}
-        />
-      )}
-      {props.more !== null ? (
-        <div data-plan-tab-load-more-row="" className="flex px-6 pb-8 pt-3">
-          <PlanTabLoadMore more={props.more} />
-        </div>
-      ) : null}
+      <div
+        ref={fitRef}
+        data-plan-tab-fit=""
+        style={fit !== null ? { height: fit } : undefined}
+        className="flex min-h-0 flex-col px-6"
+      >
+        {view === 'month' ? (
+          <MonthGrid
+            anchor={anchor}
+            height={fit}
+            entries={entries}
+            cellProps={cellProps}
+            entryProps={entryProps}
+            onMore={props.onWeekOf}
+          />
+        ) : (
+          <WeekGrid
+            anchor={anchor}
+            today={today}
+            entries={entries}
+            thumbs={data.thumbs}
+            cellProps={cellProps}
+            entryProps={entryProps}
+          />
+        )}
+      </div>
       {drag.state !== null ? <LiftedEntry drag={drag.state} /> : null}
       {menu !== null ? (
         <PlanDayMenu
@@ -277,14 +296,35 @@ const PLAN_CHIP_IDLE = 'border-border';
 // text-accent sorts after the ghost Button's text-fg-2 / hover:text-fg, so it wins.
 const PLAN_CHIP_ON = 'border-accent-line bg-accent-soft text-accent hover:text-accent';
 
+/** The legend (plan item: round dot; post in no plan: square dot), for the page's top bar. */
+export function PlanTabLegend(): ReactElement {
+  return (
+    <div data-plan-tab-legend="" className="flex min-w-0 items-center gap-4 text-sm text-fg-2">
+      <span className="flex items-center gap-1.5 whitespace-nowrap">
+        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+        {PLAN_ITEM_LEGEND}
+      </span>
+      <span className="flex items-center gap-1.5 whitespace-nowrap">
+        <span
+          aria-hidden="true"
+          className={cn('h-2 w-2 shrink-0 rounded-sm', LOOSE_POST_CLASSES.dot)}
+        />
+        {LOOSE_POST_LEGEND}
+      </span>
+    </div>
+  );
+}
+
+/** The chips after Today (scrolling sideways), ending in Load more while more plans overlap. */
 function ChipRow(props: {
   bundles: readonly PlanBundle[];
   tones: ReadonlyMap<string, PlanTone>;
   selected: string | null;
   onSelect: (planId: string | null) => void;
+  more: PlanTabMore | null;
 }): ReactElement {
   return (
-    <div className="flex gap-2 overflow-x-auto px-6 pt-3">
+    <div data-plan-tab-chips="" className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
       <Chip
         type="button"
         label={ALL_LABEL}
@@ -318,6 +358,11 @@ function ChipRow(props: {
           </Button>
         );
       })}
+      {props.more !== null ? (
+        <span data-plan-tab-load-more-row="" className="flex shrink-0">
+          <PlanTabLoadMore more={props.more} />
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -367,54 +412,87 @@ function dayAttrs(props: CellProps): {
 
 const DAY_FOCUS =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent';
+// Today's day keeps its 2px accent ring inside the cell, so its keyboard focus
+// ring is 4px wide to read on top of it. The drop outline sits 4px in, past both.
+const DAY_FOCUS_TODAY =
+  'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-accent';
 const DROP = 'outline-dashed outline-2 -outline-offset-4 outline-accent';
+const TODAY_DAY = 'bg-accent-soft shadow-[inset_0_0_0_2px_var(--accent)]';
+const TODAY_PILL = 'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold';
+
+/** The month grid's weekday header row (px), fixed so each week row's height is known. */
+const MONTH_HEAD_PX = 28;
 
 function MonthGrid(props: {
   anchor: string;
+  /** The fitted grid height (px); null before the first measure. */
+  height: number | null;
   entries: ReadonlyMap<string, CalendarEntry[]>;
   cellProps: (day: string) => CellProps;
   entryProps: (entry: CalendarEntry) => EntryProps;
   onMore: (day: string) => void;
 }): ReactElement {
   const weeks = monthGrid(props.anchor);
+  // Each week row's share of the fitted height (less the header and the 2px border).
+  const rowHeight =
+    props.height !== null ? (props.height - MONTH_HEAD_PX - 2) / Math.max(1, weeks.length) : null;
   return (
     <div
       data-plan-tab-month=""
-      className="mx-6 mb-6 overflow-hidden rounded-lg border border-border"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border"
     >
-      <div className="grid grid-cols-7 border-b border-border bg-panel-2">
+      <div className="grid h-7 shrink-0 grid-cols-7 border-b border-border bg-panel-2">
         {weeks[0]?.map((cell) => (
-          <span key={cell.day} className="px-2 py-1.5 text-sm font-semibold text-fg-3">
+          <span key={cell.day} className="flex items-center px-2 text-sm font-semibold text-fg-3">
             {civilWeekdayShort(cell.day)}
           </span>
         ))}
       </div>
       {weeks.map((week) => (
-        <div key={week[0]?.day} className="grid grid-cols-7">
+        <div
+          key={week[0]?.day}
+          data-plan-tab-week-row=""
+          className="grid min-h-0 flex-1 grid-cols-7 grid-rows-1"
+        >
           {week.map((cell) => {
             const cp = props.cellProps(cell.day);
-            const { shown, more } = capEntries(props.entries.get(cell.day) ?? []);
+            const all = props.entries.get(cell.day) ?? [];
+            const { shown, more } = capEntries(
+              all,
+              rowHeight !== null ? monthCellCap({ rowHeight, count: all.length }) : undefined,
+            );
             const isToday = cell.day === cp.today;
             return (
               <div
                 key={cell.day}
                 {...dayAttrs(cp)}
                 data-plan-tab-out={cell.inMonth ? undefined : ''}
+                data-plan-tab-today-cell={isToday ? '' : undefined}
                 className={cn(
-                  'flex h-[128px] min-w-0 flex-col gap-0.5 border-b border-r border-border p-1.5 last:border-r-0',
-                  cell.inMonth ? 'bg-panel' : 'bg-panel-2',
-                  DAY_FOCUS,
+                  'flex h-full min-h-0 min-w-0 flex-col gap-0.5 overflow-hidden border-b border-r border-border p-1.5 last:border-r-0',
+                  isToday ? TODAY_DAY : cell.inMonth ? 'bg-panel' : 'bg-panel-2',
+                  isToday ? DAY_FOCUS_TODAY : DAY_FOCUS,
                   cp.over && DROP,
                 )}
               >
-                <span
-                  data-plan-tab-today={isToday ? '' : undefined}
-                  className={cn(
-                    'mb-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
-                    isToday ? 'bg-accent text-accent-fg' : cell.inMonth ? 'text-fg' : 'text-fg-3',
-                  )}
-                >
-                  {dayOfMonth(cell.day)}
+                <span className="flex h-6 shrink-0 items-center gap-1.5">
+                  <span
+                    data-plan-tab-today={isToday ? '' : undefined}
+                    className={cn(
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
+                      isToday ? 'bg-accent text-accent-fg' : cell.inMonth ? 'text-fg' : 'text-fg-3',
+                    )}
+                  >
+                    {dayOfMonth(cell.day)}
+                  </span>
+                  {isToday ? (
+                    <span
+                      data-plan-tab-today-pill=""
+                      className={cn(TODAY_PILL, 'bg-accent text-accent-fg')}
+                    >
+                      {TODAY_LABEL}
+                    </span>
+                  ) : null}
                 </span>
                 {shown.map((entry) => (
                   <MonthEntry key={entry.key} {...props.entryProps(entry)} />
@@ -422,10 +500,11 @@ function MonthGrid(props: {
                 {more > 0 ? (
                   <PressableRow
                     inline
+                    dense
                     type="button"
                     data-plan-tab-more={cell.day}
                     onClick={() => props.onMore(cell.day)}
-                    className="shrink-0 self-start px-1.5 text-xs font-medium text-fg-2 hover:text-fg"
+                    className="flex shrink-0 items-center self-start px-1.5 text-xs font-medium text-fg-2 hover:text-fg"
                   >
                     {moreLabel(more)}
                   </PressableRow>
@@ -454,6 +533,7 @@ function MonthEntry(props: EntryProps): ReactElement {
   const look = entryLook(props.entry);
   return (
     <PressableRow
+      dense
       type="button"
       data-plan-tab-entry={props.entry.key}
       data-plan-tab-lifted={props.lifted ? '' : undefined}
@@ -463,7 +543,7 @@ function MonthEntry(props: EntryProps): ReactElement {
       }
       onClick={() => props.onOpen(props.entry)}
       className={cn(
-        'flex min-w-0 shrink-0 items-center gap-1.5 px-1.5 text-sm text-fg',
+        'flex h-[22px] min-w-0 shrink-0 items-center gap-1.5 px-1.5 text-xs text-fg',
         look.soft,
         props.lifted && 'opacity-40',
       )}
@@ -486,34 +566,52 @@ function WeekGrid(props: {
   return (
     <div
       data-plan-tab-week=""
-      className="mx-6 mb-6 overflow-hidden rounded-lg border border-border"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border"
     >
-      <div className="grid grid-cols-7 border-b border-border bg-panel-2">
-        {days.map((day) => (
-          <span
-            key={day}
-            className="flex items-baseline gap-1.5 px-2 py-1.5 text-sm font-semibold text-fg-3"
-          >
-            {civilWeekdayShort(day)}
+      <div className="grid shrink-0 grid-cols-7 border-b border-border bg-panel-2">
+        {days.map((day) => {
+          const isToday = day === props.today;
+          return (
             <span
-              data-plan-tab-today={day === props.today ? '' : undefined}
-              className={cn('text-base', day === props.today ? 'text-accent' : 'text-fg')}
+              key={day}
+              data-plan-tab-today-head={isToday ? '' : undefined}
+              className={cn(
+                'flex min-w-0 items-center gap-1.5 px-2 py-1.5 text-sm font-semibold',
+                isToday ? 'bg-accent text-accent-fg' : 'text-fg-3',
+              )}
             >
-              {dayOfMonth(day)}
+              {civilWeekdayShort(day)}
+              <span
+                data-plan-tab-today={isToday ? '' : undefined}
+                className={cn('text-base', isToday ? 'text-accent-fg' : 'text-fg')}
+              >
+                {dayOfMonth(day)}
+              </span>
+              {isToday ? (
+                <span
+                  data-plan-tab-today-pill=""
+                  className={cn(TODAY_PILL, 'ml-auto bg-accent-fg text-accent')}
+                >
+                  {TODAY_LABEL}
+                </span>
+              ) : null}
             </span>
-          </span>
-        ))}
+          );
+        })}
       </div>
-      <div className="grid grid-cols-7">
+      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-1">
         {days.map((day) => {
           const cp = props.cellProps(day);
+          const isToday = day === props.today;
           return (
             <div
               key={day}
               {...dayAttrs(cp)}
+              data-plan-tab-today-cell={isToday ? '' : undefined}
               className={cn(
-                'flex min-h-[520px] min-w-0 flex-col gap-2 border-r border-border bg-panel p-2 last:border-r-0',
-                DAY_FOCUS,
+                'flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto border-r border-border p-2 last:border-r-0',
+                isToday ? TODAY_DAY : 'bg-panel',
+                isToday ? DAY_FOCUS_TODAY : DAY_FOCUS,
                 cp.over && DROP,
               )}
             >

@@ -19,13 +19,15 @@ import { expectAllVisibleControlsTouchSized, expectMinTouchTarget } from '../hel
 
 // The Plan tab (/plan). Phone: the plans as cards in sections, a tap opens
 // the plan's own screen full page. Laptop (@desktop, desktop-webkit): the
-// Month view with the plans' chips and the legend, then Week, a chip filter,
-// a mouse drag of one item to another day (plan_item_move after the Undo
-// toast), and the empty-day menu listing only the plans that cover that day;
-// an approver sees no Draft, no New plan and no menu; Load more under the
-// calendar while more than a page (12) of plans overlaps the month. Screenshots in light
-// and dark for each (the light ones run @theme). The fixture clock is the
-// real one: the plans sit on this week and next (UTC, the workspace zone).
+// Month view with the plans' chips (in the date toolbar, after Today) and the
+// legend (in the top bar), then Week, a chip filter, a mouse drag of one item
+// to another day (plan_item_move after the Undo toast), and the empty-day menu
+// listing only the plans that cover that day; an approver sees no Draft, no
+// New plan and no menu; Load more at the end of the chip row while more than a
+// page (12) of plans overlaps the month; today's cell, header and pill; the
+// grid fits the window (no page scroll). Screenshots in light and dark for
+// each (the light ones run @theme). The fixture clock is the real one: the
+// plans sit on this week and next (UTC, the workspace zone).
 
 const NOW = Date.now();
 const TODAY = new Date(NOW).toISOString().slice(0, 10);
@@ -170,7 +172,7 @@ test('phone: Load more ends the list while older plans remain, then appends them
   expectClean(network);
 });
 
-test('laptop: 13 plans in the month show 12 and Load more under the calendar; a tap reads the 13th @desktop @theme', async ({
+test('laptop: 13 plans in the month show 12 and Load more at the end of the chip row; a tap reads the 13th @desktop @theme', async ({
   page,
 }) => {
   laptopOnly(page);
@@ -195,11 +197,24 @@ test('laptop: 13 plans in the month show 12 and Load more under the calendar; a 
   await expect(chips).toHaveCount(12);
   await expect(more).toHaveText('Load more');
   expectMinTouchTarget(await more.boundingBox());
-  // At the end of the laptop view: under the month grid.
+  // The chip row's last control, in the date toolbar, above the month grid.
+  await expect(
+    page.locator('[data-plan-tab-toolbar] [data-plan-tab-chips] [data-plan-tab-load-more]'),
+  ).toHaveCount(1);
+  expect(
+    await more.evaluate((el) => {
+      const row = el.closest('[data-plan-tab-load-more-row]');
+      return (
+        row?.parentElement?.hasAttribute('data-plan-tab-chips') === true &&
+        row.nextElementSibling === null
+      );
+    }),
+  ).toBe(true);
   const grid = await page.locator('[data-plan-tab-month]').boundingBox();
   const moreBox = await more.boundingBox();
   if (grid === null || moreBox === null) throw new Error('grid or Load more box');
-  expect(moreBox.y).toBeGreaterThanOrEqual(grid.y + grid.height - 1);
+  expect(moreBox.y + moreBox.height).toBeLessThanOrEqual(grid.y + 1);
+  await expect(page.locator('[data-plan-tab-month] [data-plan-tab-load-more]')).toHaveCount(0);
   // One request for one page: no loop of pages.
   const firstCalls = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
   expect(firstCalls).toHaveLength(1);
@@ -234,8 +249,27 @@ test('the Plan tab: every visible button is at least a 44x44 touch target @deskt
   const network = await installHarnessNetwork(page);
   seedPlanTab(network.world, { sender: ME });
   await openTab(page);
-  const checked = await expectAllVisibleControlsTouchSized(page);
+  // The laptop month's item lines and "+N more" are 22px (PressableRow dense,
+  // the CLAUDE.md exception for this mouse-only surface); every other button
+  // stays 44x44.
+  const laptop = (page.viewportSize()?.width ?? 0) >= 768;
+  const checked = await expectAllVisibleControlsTouchSized(
+    page,
+    laptop ? { exclude: '[data-plan-tab-entry], [data-plan-tab-more]' } : undefined,
+  );
   expect(checked, 'buttons measured on the Plan tab').toBeGreaterThan(0);
+  if (laptop) {
+    // The month lines are 22px tall; the Week cards keep the full 44.
+    const line = await page
+      .locator('[data-plan-tab-month] [data-plan-tab-entry]')
+      .first()
+      .boundingBox();
+    expect(Math.round(line?.height ?? 0)).toBe(22);
+    await page.locator('[data-plan-tab-view="week"]').click();
+    await expect(page.locator('[data-plan-tab-week]')).toBeVisible();
+    const week = await expectAllVisibleControlsTouchSized(page);
+    expect(week, 'buttons measured on the Week view').toBeGreaterThan(0);
+  }
   expectClean(network);
 });
 
@@ -271,8 +305,9 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
   await expect(today).toContainText(TAB_OK_ITEM_TITLE);
   await expect(today).toContainText(TAB_DRAFT_ITEM_TITLE);
   await expect(page.locator(`[data-plan-tab-chip="${TAB_DRAFT_PLAN_ID}"]`)).toContainText('Draft');
-  await expect(page.getByText("Plan item, in its plan's colour")).toBeVisible();
-  await expect(page.getByText('Post not in a plan')).toBeVisible();
+  const legend = page.locator('[data-plan-tab-legend]');
+  await expect(legend.getByText("Plan item, in its plan's colour")).toBeVisible();
+  await expect(legend.getByText('Post not in a plan')).toBeVisible();
   for (const sel of ['[data-plan-tab-prev]', '[data-plan-tab-next]', '[data-plan-tab-go-today]']) {
     expectMinTouchTarget(await page.locator(sel).first().boundingBox());
   }
@@ -395,5 +430,177 @@ test('laptop: an approver sees no Draft, no New plan, no drag and no day menu @d
   if (box === null) throw new Error('cell box');
   await cell.click({ position: { x: box.width / 2, y: box.height - 8 } });
   await expect(page.locator('[data-plan-tab-day-menu]')).toHaveCount(0);
+  expectClean(network);
+});
+
+test('laptop: today in Month and Week, the accent cell, header and "Today" pill @desktop', async ({
+  page,
+}) => {
+  laptopOnly(page);
+  const network = await installHarnessNetwork(page);
+  seedPlanTab(network.world, { sender: ME });
+  await openTab(page);
+
+  // Month: today's cell on accent-soft in the accent ring, the number circle and the pill.
+  await expect(page.locator('[data-plan-tab-month]')).toBeVisible();
+  const cell = day(page, TODAY);
+  await expect(cell).toHaveAttribute('data-plan-tab-today-cell', '');
+  await expect(cell).toHaveClass(/\bbg-accent-soft\b/);
+  await expect(page.locator('[data-plan-tab-today-cell]')).toHaveCount(1);
+  await expect(cell.locator('[data-plan-tab-today]')).toBeVisible();
+  const pill = cell.locator('[data-plan-tab-today-pill]');
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveText('Today');
+  await expect(page.locator('[data-plan-tab-today-pill]')).toHaveCount(1);
+  // Item lines are 22px; the cell clips what does not fit ("+N more" instead).
+  const line = await cell.locator('[data-plan-tab-entry]').first().boundingBox();
+  expect(Math.round(line?.height ?? 0)).toBe(22);
+  const cellBox = await cell.boundingBox();
+  if (cellBox === null) throw new Error('today cell box');
+  for (const el of await cell.locator('[data-plan-tab-entry], [data-plan-tab-more]').all()) {
+    const box = await el.boundingBox();
+    if (box === null) throw new Error('line box');
+    expect(box.y + box.height).toBeLessThanOrEqual(cellBox.y + cellBox.height + 1);
+  }
+
+  // Week: today's header cell in the accent with the number and the pill;
+  // today's column marked.
+  await page.locator('[data-plan-tab-view="week"]').click();
+  await expect(page.locator('[data-plan-tab-week]')).toBeVisible();
+  const head = page.locator('[data-plan-tab-today-head]');
+  await expect(head).toHaveCount(1);
+  await expect(head).toHaveClass(/\bbg-accent\b/);
+  await expect(head).toHaveClass(/\btext-accent-fg\b/);
+  await expect(head.locator('[data-plan-tab-today]')).toBeVisible();
+  await expect(head.locator('[data-plan-tab-today-pill]')).toHaveText('Today');
+  await expect(page.locator('[data-plan-tab-today-pill]')).toHaveCount(1);
+  const column = day(page, TODAY);
+  await expect(column).toHaveAttribute('data-plan-tab-today-cell', '');
+  await expect(column).toHaveClass(/\bbg-accent-soft\b/);
+  await expect(page.locator('[data-plan-tab-today-cell]')).toHaveCount(1);
+  await expect(column).toContainText(TAB_OK_ITEM_TITLE);
+  // The header's today cell sits over today's column.
+  const headBox = await head.boundingBox();
+  const colBox = await column.boundingBox();
+  if (headBox === null || colBox === null) throw new Error('head or column box');
+  expect(Math.abs(headBox.x - colBox.x)).toBeLessThanOrEqual(1);
+  expectClean(network);
+});
+
+test('laptop: the chips sit in the date toolbar after Today, the legend in the top bar @desktop', async ({
+  page,
+}) => {
+  laptopOnly(page);
+  const network = await installHarnessNetwork(page);
+  seedPlanTab(network.world, { sender: ME });
+  await openTab(page);
+
+  const toolbar = page.locator('[data-plan-tab-toolbar]');
+  const chips = toolbar.locator('[data-plan-tab-chips]');
+  await expect(chips).toHaveCount(1);
+  await expect(chips.locator('[data-plan-tab-chip="all"]')).toBeVisible();
+  await expect(chips.locator(`[data-plan-tab-chip="${TAB_SHARED_PLAN_ID}"]`)).toBeVisible();
+  await expect(page.locator('[data-plan-tab-chip]')).toHaveCount(
+    await chips.locator('[data-plan-tab-chip]').count(),
+  );
+  // One row: the chips right of Today, level with it.
+  const goToday = await toolbar.locator('[data-plan-tab-go-today]').boundingBox();
+  const all = await chips.locator('[data-plan-tab-chip="all"]').boundingBox();
+  if (goToday === null || all === null) throw new Error('Today or All box');
+  expect(all.x).toBeGreaterThanOrEqual(goToday.x + goToday.width);
+  expect(Math.abs(all.y + all.height / 2 - (goToday.y + goToday.height / 2))).toBeLessThanOrEqual(
+    2,
+  );
+  // The toolbar sits above the grid.
+  const bar = await toolbar.boundingBox();
+  const grid = await page.locator('[data-plan-tab-month]').boundingBox();
+  if (bar === null || grid === null) throw new Error('toolbar or grid box');
+  expect(bar.y + bar.height).toBeLessThanOrEqual(grid.y + 1);
+
+  // The legend: in the page's top bar (left, level with Month | Week and New
+  // plan), not inside the calendar.
+  const legend = page.locator('[data-plan-tab-legend]');
+  await expect(legend).toHaveCount(1);
+  await expect(legend).toBeVisible();
+  await expect(page.locator('[data-plan-tab="desktop"] [data-plan-tab-legend]')).toHaveCount(0);
+  const legendBox = await legend.boundingBox();
+  const viewBox = await page.locator('[data-plan-tab-view="month"]').boundingBox();
+  const newBox = await page.locator('[data-plan-tab-new]').boundingBox();
+  if (legendBox === null || viewBox === null || newBox === null) {
+    throw new Error('legend, view switch or New plan box');
+  }
+  const mid = (b: { y: number; height: number }): number => b.y + b.height / 2;
+  expect(Math.abs(mid(legendBox) - mid(viewBox))).toBeLessThanOrEqual(4);
+  expect(Math.abs(mid(legendBox) - mid(newBox))).toBeLessThanOrEqual(4);
+  expect(legendBox.x + legendBox.width).toBeLessThanOrEqual(viewBox.x);
+  expect(legendBox.y + legendBox.height).toBeLessThanOrEqual(bar.y + 1);
+  expectClean(network);
+});
+
+/** The fitted grid's height, top and the window height. */
+async function fitBox(page: Page): Promise<{ height: number; top: number; vh: number }> {
+  return page.locator('[data-plan-tab-fit]').evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { height: r.height, top: r.top, vh: window.innerHeight };
+  });
+}
+
+/** The shell scroller (<main>) and the document: neither scrolls. */
+async function expectNoPageScroll(page: Page, what: string): Promise<void> {
+  const sizes = await page.evaluate(() => {
+    const main = document.querySelector('main');
+    const doc = document.scrollingElement ?? document.documentElement;
+    return {
+      main: main === null ? null : { scroll: main.scrollHeight, client: main.clientHeight },
+      doc: { scroll: doc.scrollHeight, client: doc.clientHeight },
+    };
+  });
+  expect(sizes.main, `${what}: shell <main>`).not.toBeNull();
+  expect(sizes.main?.scroll ?? 0, `${what}: <main> scrollHeight`).toBeLessThanOrEqual(
+    (sizes.main?.client ?? 0) + 1,
+  );
+  expect(sizes.doc.scroll, `${what}: document scrollHeight`).toBeLessThanOrEqual(
+    sizes.doc.client + 1,
+  );
+}
+
+test('laptop: Month and Week fit the window with no page scroll at 720 and 900 tall @desktop', async ({
+  page,
+}) => {
+  laptopOnly(page);
+  const network = await installHarnessNetwork(page);
+  seedPlanTab(network.world, { sender: ME });
+  await openTab(page);
+  await expect(page.locator('[data-plan-tab-month]')).toBeVisible();
+
+  const heights: Record<string, number> = {};
+  for (const view of ['month', 'week'] as const) {
+    await page.locator(`[data-plan-tab-view="${view}"]`).click();
+    await expect(page.locator(`[data-plan-tab-${view}]`)).toBeVisible();
+    for (const vh of [720, 900]) {
+      await page.setViewportSize({ width: 1280, height: vh });
+      // The fitted height follows the window: its top to the bottom, less 24px
+      // (never under 360).
+      await expect
+        .poll(async () => {
+          const box = await fitBox(page);
+          return Math.abs(box.height - Math.max(360, Math.floor(box.vh - box.top - 24)));
+        })
+        .toBeLessThanOrEqual(1);
+      const box = await fitBox(page);
+      expect(box.vh).toBe(vh);
+      heights[`${view}-${vh}`] = box.height;
+      // The grid fills the fitted box and ends inside the window.
+      const grid = await page.locator(`[data-plan-tab-${view}]`).boundingBox();
+      if (grid === null) throw new Error(`${view} grid box`);
+      expect(grid.y + grid.height).toBeLessThanOrEqual(vh);
+      await expect(day(page, TODAY)).toContainText(TAB_OK_ITEM_TITLE);
+      await expectNoPageScroll(page, `${view} at 1280x${vh}`);
+    }
+    // 180px more window, 180px more grid.
+    const grew = (heights[`${view}-900`] ?? 0) - (heights[`${view}-720`] ?? 0);
+    expect(Math.abs(grew - 180)).toBeLessThanOrEqual(1);
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
   expectClean(network);
 });

@@ -312,6 +312,26 @@ export function capEntries<T>(
   return { shown: entries.slice(0, cap), more: Math.max(0, entries.length - cap) };
 }
 
+// A laptop month cell's measured lines: 22px item lines 2px apart under a 28px
+// number row in 12px of padding; "+N more" takes one line (and its gap) when
+// not all fit.
+const MONTH_LINE_PX = 22;
+const MONTH_LINE_GAP_PX = 2;
+const MONTH_CELL_PAD_PX = 12;
+const MONTH_NUMBER_ROW_PX = 28;
+const MONTH_MORE_PX = MONTH_LINE_PX + MONTH_LINE_GAP_PX;
+
+/**
+ * How many entries a month cell of `rowHeight` px shows: all `count` when they
+ * fit, else as many as fit above the "+N more" line (never below 0). Pure.
+ */
+export function monthCellCap(input: { rowHeight: number; count: number }): number {
+  const step = MONTH_LINE_PX + MONTH_LINE_GAP_PX;
+  const avail = input.rowHeight - MONTH_CELL_PAD_PX - MONTH_NUMBER_ROW_PX;
+  if (input.count * step <= avail) return input.count;
+  return Math.max(0, Math.floor((avail - MONTH_MORE_PX) / step));
+}
+
 /** "+2 more". Pure. */
 export function moreLabel(count: number): string {
   return `+${count} more`;

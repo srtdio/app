@@ -277,6 +277,7 @@ import { DUR_SLOW_MS } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
+import { TODAY_LABEL } from '@/lib/plan-tab';
 import {
   civilDayOf,
   civilDaysBetween,
@@ -3175,7 +3176,12 @@ export function PlanBody(props: {
                   {...(day.day !== null && !day.inRange ? { 'data-plan-day-out': '' } : {})}
                   {...(droppable ? { 'data-plan-drop': '' } : {})}
                   {...(hovered ? { 'data-plan-drop-over': '' } : {})}
-                  className="flex flex-col gap-4 border-t border-border px-4 py-4"
+                  {...(day.day === today ? { 'data-plan-day-today': '' } : {})}
+                  className={cn(
+                    'flex flex-col gap-4 border-t border-border py-4 pr-4',
+                    // Today's band: 4px accent rule + 12px keeps the text column on 16px.
+                    day.day === today ? 'border-l-4 border-l-accent bg-accent-soft pl-3' : 'pl-4',
+                  )}
                 >
                   {items.map((item, index) => {
                     const lifted = drag !== null && item.id === drag.itemId;
@@ -3276,7 +3282,8 @@ function AddRow(props: {
  * border-strong, bg-panel. An 18px strip on top holds the weekday (10px/12px,
  * 600, uppercase, 0.06em, bg-panel-2, text-fg-2); the day number sits centred
  * below it (JetBrains Mono 20px/24px, 500). Today (the workspace zone): the
- * strip in the accent with accent-fg text and an accent border. "No date":
+ * whole tile solid accent (accent-fg strip and number), with a solid "Today"
+ * pill centred under it in the tile's 56px column, 6px below. "No date":
  * the strip stays empty (bg-panel-2) and the body reads "No date" centred on
  * one line (Inter 11px/14px, 600, text-fg-2, not uppercase); it is never
  * today, so no accent.
@@ -3287,13 +3294,13 @@ export function DayColumn(props: {
   empty?: boolean;
 }): ReactElement {
   const isToday = props.day !== null && props.day === props.today;
-  return (
+  const tile = (
     <div
       data-plan-day-col=""
       {...(isToday ? { 'data-plan-today': '' } : {})}
       className={cn(
-        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border bg-panel',
-        isToday ? 'border-accent' : 'border-border-strong',
+        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border',
+        isToday ? 'border-accent bg-accent' : 'border-border-strong bg-panel',
       )}
     >
       <span
@@ -3311,10 +3318,25 @@ export function DayColumn(props: {
           'flex flex-1 items-center justify-center',
           props.day === null
             ? 'whitespace-nowrap text-xs font-semibold text-fg-2'
-            : 'font-mono text-2xl font-medium leading-6 tabular-nums text-fg',
+            : cn(
+                'font-mono text-2xl font-medium leading-6 tabular-nums',
+                isToday ? 'text-accent-fg' : 'text-fg',
+              ),
         )}
       >
         {props.day === null ? NO_DATE_LABEL : dayOfMonth(props.day)}
+      </span>
+    </div>
+  );
+  if (!isToday) return tile;
+  return (
+    <div className="flex w-14 shrink-0 flex-col items-center gap-1.5">
+      {tile}
+      <span
+        data-plan-today-pill=""
+        className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-fg"
+      >
+        {TODAY_LABEL}
       </span>
     </div>
   );

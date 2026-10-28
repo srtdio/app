@@ -889,6 +889,13 @@ test('a plan holding today opens with today at the top, no jump; earlier days ab
   // Directly at the top (scrollTop is whole pixels; WebKit rounds layout to 1px).
   expect(Math.abs(gap)).toBeLessThanOrEqual(1);
   await expect(dayBlock(plan, today).locator('[data-plan-today]')).toHaveCount(1);
+  // Today: the solid accent tile, the "Today" pill under it, the marked band.
+  await expect(dayBlock(plan, today).locator('[data-plan-today]')).toHaveClass(/\bbg-accent\b/);
+  const pill = dayBlock(plan, today).locator('[data-plan-today-pill]');
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveText('Today');
+  await expect(dayBlock(plan, today)).toHaveAttribute('data-plan-day-today', '');
+  await expect(plan.locator('[data-plan-day-today]')).toHaveCount(1);
   // Earlier days are still there, above.
   const first = dayBlock(plan, shiftDay(today, -3));
   await expect(first).not.toBeInViewport();

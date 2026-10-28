@@ -187,6 +187,34 @@ describe('open at today', () => {
     expect(needsOpenScroll('plan', 'plan')).toBe(false);
     expect(needsOpenScroll('plan', 'other')).toBe(true);
   });
+  it("today's day group is the accent band: solid tile, Today pill, text column kept", () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T12:00:00Z'));
+    try {
+      const html = paint('agency', 'client');
+      const groupTag = (day: string): string =>
+        html.match(new RegExp(`<div data-plan-day="${day}"[^>]*>`))?.[0] ?? '';
+      const today = groupTag('2026-10-13');
+      expect(today).toContain('data-plan-day-today=""');
+      // 4px rule + pl-3 = the other days' 16px, so titles stay aligned.
+      expect(today).toContain('border-l-4 border-l-accent bg-accent-soft pl-3');
+      expect(today).toContain('pr-4');
+      const other = groupTag('2026-10-15');
+      expect(other).not.toContain('data-plan-day-today');
+      expect(other).toContain('pl-4');
+      expect(other).not.toContain('bg-accent-soft');
+      expect(html.match(/data-plan-day-today=""/g)).toHaveLength(1);
+      expect(html.match(/data-plan-today=""/g)).toHaveLength(1);
+      expect(html).toMatch(/data-plan-today=""[^>]*border-accent bg-accent"/);
+      expect(html.match(/data-plan-today-pill=""[^>]*>Today</g)).toHaveLength(1);
+      // The pill sits in today's group.
+      const band = html.slice(html.indexOf(today), html.indexOf('data-plan-day="2026-10-14"'));
+      expect(band).toContain('data-plan-today-pill');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('set before paint, never animated', () => {
     const src = read('PlanScreen.tsx');
     expect(src).toMatch(
