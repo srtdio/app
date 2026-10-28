@@ -46,10 +46,10 @@ import { generateTraceId } from '@/lib/trace';
 import { clearChannelRecord } from '@/lib/chat/record';
 import { runClearChannels, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { safeTimeZone } from '@/lib/time';
-import { PREWARM_LIMIT, prewarmChats, useChatThread } from '@/lib/chat/use-chat-thread';
+import { prewarmChats, useChatThread } from '@/lib/chat/use-chat-thread';
 import { readChatOpenBundle } from '@/lib/chat/history';
 import { readPlanBundles } from '@/lib/chat/plans';
-import { notePlanShapes, planCardsSized } from '@/lib/chat/plan-shapes';
+import { notePlanShapes } from '@/lib/chat/plan-shapes';
 import { whenIdle } from '@/lib/chunk-reload';
 import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
@@ -1313,23 +1313,16 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             ),
           saveData: saveDataOn,
           current: () => live,
-        }).then(() => {
-          if (!live || saveDataOn()) return;
-          // The plan cards on the top chats' kept pages: their shapes (never
-          // their data) from one batched read, so a kept open's cards are
-          // sized in its first frame (plan-shapes.ts).
-          const top = keys.slice(0, PREWARM_LIMIT);
-          const kept = top.flatMap((key) => openCache.recall(key, 'thread')?.rows ?? []);
-          const planIds = [...new Set(kept.flatMap((m) => m.sharedPlanIds ?? []))].filter(
-            (id) => !planCardsSized(currentUserId, workspaceId, [id]),
-          );
-          if (planIds.length === 0) return;
-          void withReadTimeout((signal) =>
-            readPlanBundles(supabase, planIds, signal, undefined, workspaceId),
-          ).then((result) => {
-            mark('chat:prewarm:shapes');
-            if (live && result.ok) notePlanShapes(currentUserId, workspaceId, planIds, result.data);
-          });
+          // The plans the kept chats' opens ask first, in one batched read that
+          // an open takes as its own (one plan read per open in all); its
+          // answer also teaches the plan card shapes (plan-shapes.ts).
+          readPlans: (ids) =>
+            withReadTimeout((signal) =>
+              readPlanBundles(supabase, ids, signal, undefined, workspaceId),
+            ),
+          onPlans: (ids, result) => {
+            if (result.ok) notePlanShapes(currentUserId, workspaceId, ids, result.data);
+          },
         });
         // The members the first tap's names answer from (the same one shared
         // load the tap would start), so a pre-warmed chat's first frame has

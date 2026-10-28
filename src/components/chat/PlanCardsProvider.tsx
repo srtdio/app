@@ -147,9 +147,16 @@ export function PlanCardsProvider(props: {
   const raw = useMemo(
     () =>
       workspaceId !== null && channelId !== null
-        ? createPlanCardCache((ids, signal) =>
-            readPlanBundles(supabase, ids, signal, undefined, workspaceId),
-          )
+        ? createPlanCardCache((ids, signal) => {
+            const read = (): ReturnType<typeof readPlanBundles> =>
+              readPlanBundles(supabase, ids, signal, undefined, workspaceId);
+            // An open that took the pre-warmed chat bundle takes the pre-warm's
+            // plan read as its first (joined while in flight): one plan read
+            // per open in all. A failed one reads; every later read reads.
+            const primed = memo !== null ? openCache.takeOpenPlans(memo, ids) : undefined;
+            if (primed === undefined) return read();
+            return primed.then((result) => (result.ok ? result : read()));
+          })
         : null,
     // A new open (another viewer, workspace or chat) is a new cache.
     // eslint-disable-next-line react-hooks/exhaustive-deps
