@@ -264,6 +264,23 @@ export interface AuthorizeDeps {
   signer: PresignedUrlSigner;
 }
 
+/** The stored mime of the old voice notes iPhone Safari cannot play (30 Sep - 21 Oct). */
+export const WEBM_AUDIO_MIME = 'audio/webm';
+/** The mime of their playable copy (scripts/voice-convert.ts). */
+export const AUDIO_COPY_MIME = 'audio/mp4';
+
+/** True for a version that may have a playable MP4 copy: audio/webm only. Pure. */
+export function mayHaveAudioCopy(version: AssetVersionLocator, r2Key: string): boolean {
+  return (version.mimeType ?? '').toLowerCase() === WEBM_AUDIO_MIME && !isSampleKey(r2Key);
+}
+
+/** The download name for the MP4 copy: the original's name with .m4a. Pure. */
+export function audioCopyFilename(version: AssetVersionLocator): string {
+  const name = buildDownloadFilename(version);
+  const dot = name.lastIndexOf('.');
+  return `${dot > 0 ? name.slice(0, dot) : name}.m4a`;
+}
+
 export interface SignedUrlResult {
   url: string;
   expires_at: string;
@@ -327,7 +344,7 @@ export async function authorizeVersion(
  * {@link authorizeVersion} for the gate's order).
  */
 export async function authorizeAndSign(
-  deps: AuthorizeDeps,
+  deps: AuthorizeDeps & { renditions?: RenditionReader },
   input: { userId: string; assetVersionId: string; disposition?: Disposition },
 ): Promise<Result<SignedUrlResult, ReadError>> {
   const readable = await authorizeVersion(deps.store, input);
@@ -335,24 +352,33 @@ export async function authorizeAndSign(
     return readable;
   }
   const { version, bucket, r2Key } = readable.value;
+  // An old WebM voice note signs its MP4 copy when one exists; nothing else
+  // does this read.
+  const copy =
+    deps.renditions !== undefined && mayHaveAudioCopy(version, r2Key)
+      ? await deps.renditions.findRendition(input.assetVersionId, 'compressed')
+      : null;
 
   const url = await deps.signer.presignGetUrl({
     bucket,
-    key: r2Key,
+    key: copy?.r2Key ?? r2Key,
     expiresInSeconds: URL_TTL_SECONDS,
     // Inline (default) leaves the signing path byte-identical; attachment adds
     // the response-content-disposition override so the browser saves the file.
     ...(input.disposition === 'attachment'
-      ? { downloadFilename: buildDownloadFilename(version) }
+      ? { downloadFilename: copy ? audioCopyFilename(version) : buildDownloadFilename(version) }
       : {}),
   });
   const expires_at = new Date(Date.now() + URL_TTL_SECONDS * 1000).toISOString();
   return ok({ url, expires_at });
 }
 
+/** The roles asset-read looks up: the thumbnail, and an old voice note's MP4 copy. */
+export type ReadRenditionRole = RenditionRole | 'compressed';
+
 /** Reads a version's rendition (service role; asset_renditions has no client SELECT). */
 export interface RenditionReader {
-  findRendition(assetVersionId: string, role: RenditionRole): Promise<RenditionRef | null>;
+  findRendition(assetVersionId: string, role: ReadRenditionRole): Promise<RenditionRef | null>;
 }
 
 /**
@@ -792,8 +818,15 @@ async function handlePost(
     return response;
   }
 
+  // Built lazily: only an old WebM voice note ever reads its rendition here.
+  const renditions: RenditionReader = {
+    findRendition: (id, role) => {
+      const store: RenditionReader = createSupabaseRenditionStore(env, traceId);
+      return store.findRendition(id, role);
+    },
+  };
   const result = await authorizeAndSign(
-    { store, signer },
+    { store, signer, renditions },
     {
       userId: caller.value,
       assetVersionId: parsed.value.assetVersionId,
@@ -839,12 +872,17 @@ export function parseFilePath(pathname: string): { assetVersionId: string; kind:
   return { assetVersionId: id.toLowerCase(), kind };
 }
 
+/** A cached body: a FileKind, or 'full:compressed' for an old voice note's MP4 copy. */
+export type FileCacheKind = FileKind | 'full:compressed';
+
 /**
  * The internal edge-cache key for a version's bytes. It names the version and
  * kind only, never the user or the link key, so one cached copy serves every
- * member; the cache is read only after that member's own gate has passed.
+ * member; the cache is read only after that member's own gate has passed. The
+ * MP4 copy has its own key, so a WebM cached before conversion is never served
+ * in its place.
  */
-export function fileCacheKey(origin: string, assetVersionId: string, kind: FileKind): string {
+export function fileCacheKey(origin: string, assetVersionId: string, kind: FileCacheKind): string {
   return `${origin}/f/__c/${assetVersionId}/${kind}`;
 }
 
@@ -1009,21 +1047,37 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
   }
 
   let objectKey = r2Key;
+  let audioCopy = false;
   if (req.kind === 'thumb') {
     if (rendition === null) {
       return fileError(404, 'No small copy.');
     }
     objectKey = rendition.r2Key;
+  } else if (mayHaveAudioCopy(version, r2Key)) {
+    // Old WebM voice notes only, after the gate: serve the MP4 copy when
+    // scripts/voice-convert.ts has made one. Every other file skips this read.
+    const copy = await deps.renditions.findRendition(req.assetVersionId, 'compressed');
+    if (copy !== null) {
+      objectKey = copy.r2Key;
+      audioCopy = true;
+    }
   }
 
   const disposition =
     req.download && req.kind === 'full'
-      ? attachmentDisposition(buildDownloadFilename(version))
+      ? attachmentDisposition(
+          audioCopy ? audioCopyFilename(version) : buildDownloadFilename(version),
+        )
       : inlineDisposition();
   // The small copy's type comes from R2 (stored at upload); the original's from
-  // the version row.
-  const contentType = req.kind === 'full' ? (version.mimeType ?? null) : null;
-  const cacheKey = fileCacheKey(req.origin, req.assetVersionId, req.kind);
+  // the version row; the voice note copy is always audio/mp4.
+  const contentType =
+    req.kind === 'full' ? (audioCopy ? AUDIO_COPY_MIME : (version.mimeType ?? null)) : null;
+  const cacheKey = fileCacheKey(
+    req.origin,
+    req.assetVersionId,
+    audioCopy ? 'full:compressed' : req.kind,
+  );
 
   // A Range request (video seek) goes straight to R2 and is never cached.
   if (req.range === null) {
