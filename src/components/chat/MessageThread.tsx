@@ -6032,8 +6032,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // The hold's cap, and its release latched once the first page is out.
   useEffect(() => {
     if (openHoldDone) return;
-    if (!pageLoading && keptOpen) {
-      paintLog(`open hold skipped, kept rows, ${Date.now() - openAt}ms after the tap`);
+    if (!pageLoading && !openHeld && keptOpen) {
+      paintLog(`open hold skipped, kept rows sized, ${Date.now() - openAt}ms after the tap`);
       mark('chat:hold:kept');
       setOpenHoldDone(true);
       return;
