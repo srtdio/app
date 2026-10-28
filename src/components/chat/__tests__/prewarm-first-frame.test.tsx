@@ -326,9 +326,12 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
     await prewarm(memory, bundle([scheduledAt('2026-10-25T12:00:20.000Z')]));
     vi.setSystemTime(new Date('2026-10-25T12:00:30.000Z'));
     const d = tapDeps(memory);
-    void joinChatBundle(KEY, { deps: d });
-    expect(d.asked()).toBe(1);
+    // Not taken: the tap starts its own read (withReadTimeout runs it one
+    // microtask later), and none of the pre-warm's parts is remembered.
+    const read = joinChatBundle(KEY, { deps: d });
     expect(memory.recallFresh(KEY, 'scheduled')).toBeUndefined();
+    await read;
+    expect(d.asked()).toBe(1);
   });
 
   it('names the held members cannot answer: none seeded, the names read runs as before', async () => {

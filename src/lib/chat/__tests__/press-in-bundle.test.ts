@@ -117,25 +117,29 @@ describe('press-in starts the open bundle; the tap joins it', () => {
   it('a cold chat: one bundle read, started at the press, shared by the tap and the thread', async () => {
     const store = createOpenCache();
     const d = deps(store);
+    // The press stashes the open's bundle at once; its read (withReadTimeout)
+    // runs one microtask later, so the counts are checked once it settled.
     const pressed = pressChatBundle(KEY, { deps: d });
     expect(pressed).not.toBeNull();
-    expect(d.asked).toHaveLength(1);
-    expect(d.asked[0]?.since).toBeNull();
+    expect(joinableChatBundle(KEY, store)).toBe(pressed);
     tap(store, d);
     // The thread's switch joins the same read too.
     expect(joinChatBundle(KEY, { deps: d })).toBe(pressed);
     expect(joinableChatBundle(KEY, store)).toBe(pressed);
     await pressed;
     expect(d.asked).toHaveLength(1);
+    expect(d.asked[0]?.since).toBeNull();
   });
 
-  it('a second press (pointerdown then a repeat) never starts a second read', () => {
+  it('a second press (pointerdown then a repeat) never starts a second read', async () => {
     const store = createOpenCache();
     const d = deps(store);
     const first = pressChatBundle(KEY, { deps: d });
     const second = pressChatBundle(KEY, { deps: d });
     expect(second).toBe(first);
     tap(store, d);
+    expect(joinableChatBundle(KEY, store)).toBe(first);
+    await first;
     expect(d.asked).toHaveLength(1);
   });
 
@@ -151,12 +155,12 @@ describe('press-in starts the open bundle; the tap joins it', () => {
     });
     const d = deps(store);
     const pressed = pressChatBundle(KEY, { deps: d });
-    expect(d.asked[0]?.since).toBe(through.createdAt);
     tap(store, d);
     // The reopen's revalidation asks the bundle from the page end: the press's.
     expect(joinChatBundle(KEY, { since: through.createdAt, deps: d })).toBe(pressed);
     await pressed;
     expect(d.asked).toHaveLength(1);
+    expect(d.asked[0]?.since).toBe(through.createdAt);
   });
 
   it('a held pre-warm: the press reads nothing and leaves it for the tap', async () => {
@@ -196,6 +200,8 @@ describe('press-in starts the open bundle; the tap joins it', () => {
     const pressed = pressChatBundle(KEY, { deps: d });
     expect(pressed).not.toBeNull();
     tap(store, d);
+    expect(joinableChatBundle(KEY, store)).toBe(pressed);
+    await pressed;
     expect(d.asked).toHaveLength(1);
   });
 });
