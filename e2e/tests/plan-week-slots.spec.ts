@@ -384,10 +384,9 @@ test('client: a long plan shows week headers, 44px empty days, and a draft with 
     const pill = plan.locator('[data-plan-today-pill]');
     await expect(pill).toBeVisible();
     await expect(pill).toHaveText('Today');
-    await expect(plan.locator('[data-plan-day]').filter({ has: tile })).toHaveAttribute(
-      'data-plan-day-today',
-      '',
-    );
+    const band = plan.locator('[data-plan-day-today]');
+    await expect(band).toHaveCount(1);
+    await expect(band.locator('[data-plan-today]')).toHaveCount(1);
   }
   expectClean(network);
 });
