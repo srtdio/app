@@ -13,15 +13,16 @@ import { delaySupabaseReads, realisticDelay } from '../fixtures/read-delays';
 
 // B2: a chat in the list that the list pre-warmed opens with its rows in the
 // first frame. The DM holds a current shared plan (its card on the page and in
-// the ticker), whose bundle read is slow (1.5s): before the fix the open hold
-// waited on it, so the thread showed skeleton bubbles until the hold's cap.
-// Now the kept rows paint at once and only the plan card and the ticker fill
-// their same-size placeholders in place (the pre-warm learned the card's
-// shape, so its skeleton is its final height). Every frame (rAF) and DOM
-// change from the tap on is sampled: no skeleton bubble, no row moving on
-// screen when the plan lands, and the bottom anchor held. The press on the row
-// (pointerdown) and the tap read no second bundle: the pre-warm's is the
-// open's own. Runs in dark and light (@theme).
+// the ticker): before the fix the open hold waited on this open's plan read,
+// so the thread showed skeleton bubbles until it landed. Now the pre-warm's
+// one batched plan read is the open's own (no second plan read) and teaches
+// the card's shape, the kept rows paint at once, and the shared post card on
+// the page (its own read slowed to 1.5s here) waits in a placeholder of its
+// final height and fills in place. Every frame (rAF) and DOM change from the
+// tap on is sampled: no skeleton bubble, no row moving on screen when the
+// post card lands, and the bottom anchor held. The press on the row
+// (pointerdown) and the tap read no second chat bundle either. Runs in dark
+// and light (@theme).
 
 interface Frame {
   at: number;
@@ -162,42 +163,44 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
   test.setTimeout(90_000);
   const network = await installHarnessNetwork(page);
   seedPlanDm(network);
-  // The plan bundle read is slow: the old hold showed the skeleton until its cap.
-  await delaySupabaseReads(page, (name) =>
-    name === 'rpc plan_bundle_read' ? 1_500 : realisticDelay(name),
-  );
+  // The open's own shared post card read is slow (its placeholder must hold
+  // the card's final height meanwhile).
+  await delaySupabaseReads(page, (name) => (name === 'posts' ? 1_500 : realisticDelay(name)));
   await record(page);
   await page.goto('/chat');
   const row = page.getByText(PEER_NAME, { exact: true }).first();
   await row.waitFor({ state: 'visible' });
-  // The list pre-warms at idle: its bundles, then the plan card shapes on the
-  // pages it kept (one plan read, slow here), then the members.
+  // The list pre-warms at idle: its bundles, then the one plan read the kept
+  // chats' opens will take, then the members.
   await page.waitForFunction(
-    () => performance.getEntriesByName('chat:prewarm:shapes').length > 0,
+    () => performance.getEntriesByName('chat:prewarm:plans').length > 0,
     undefined,
     { timeout: 20_000 },
   );
   await page.waitForTimeout(1_500);
   const bundlesBefore = network.rpcCalls.filter((c) => c.name === 'chat_open_bundle').length;
+  const plansBefore = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read').length;
+  expect(plansBefore, 'the pre-warm made one plan read').toBe(1);
 
   await row.click();
   await page.locator('[data-msg-id]').first().waitFor({ timeout: 10_000 });
-  // The rows are up while this open's plan read is still out: the card waits
-  // in its skeleton, at its final height.
-  await expect(page.locator('[data-plan-skeleton]').first()).toBeVisible();
+  // The rows are up while this open's post card read is still out: the card
+  // waits in its placeholder, at its final height.
+  const placeholder = page.locator('[data-card-skeleton]').first();
+  await expect(placeholder).toBeVisible();
   const before = await rowOffsets(page);
-  const skeletonHeight = await page
-    .locator('[data-plan-skeleton]')
-    .first()
-    .evaluate((el) => Math.round(el.getBoundingClientRect().height));
-  // The slow plan read lands (the card and ticker fill in place).
+  const skeletonHeight = await placeholder.evaluate((el) =>
+    Math.round(el.getBoundingClientRect().height),
+  );
+  // The slow post card read lands (the card fills in place); the plan card is in.
+  const postCard = page.locator('[data-card-footer]').first().locator('..');
+  await expect(postCard).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('[data-plan-card]').first()).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1_000);
   const after = await rowOffsets(page);
-  const cardHeight = await page
-    .locator('[data-plan-card]')
-    .first()
-    .evaluate((el) => Math.round(el.getBoundingClientRect().height));
+  const cardHeight = await postCard.evaluate((el) =>
+    Math.round(el.getBoundingClientRect().height),
+  );
 
   const log = await logOf(page);
   const tap = log.taps[log.taps.length - 1] ?? 0;
@@ -206,7 +209,7 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
     .map((f) => ({ ...f, at: Math.round(f.at - tap) }));
   const shown = frames.map((f) => `${f.at} msgs=${f.msgs} skel=${f.skeleton ? 'y' : 'n'}`);
   const timing = await marks(page);
-  // The window the plan read landed in: from the rows-up snapshot to the settled one.
+  // The window the card read landed in: from the rows-up snapshot to the settled one.
   const moves = log.rowMoves.filter((m) => m.at >= before.at && m.at <= after.at);
   const gaps = log.bottomGaps.filter((g) => g.at >= before.at && g.at <= after.at);
   test.info().annotations.push({
@@ -228,13 +231,15 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
   expect(timing['chat:hold:release']).toBeUndefined();
   expect(timing['chat:hold:cap']).toBeUndefined();
   expect(network.rpcCalls.filter((c) => c.name === 'chat_open_bundle')).toHaveLength(bundlesBefore);
+  // One plan read per open in all: the open took the pre-warm's.
+  expect(network.rpcCalls.filter((c) => c.name === 'plan_bundle_read')).toHaveLength(plansBefore);
   // No layout shift: the card filled its placeholder at the same height, no
   // row on screen moved when it landed, and the bottom anchor held throughout.
-  expect(cardHeight, 'the skeleton is the card height').toBe(skeletonHeight);
-  expect(after.tops, 'row offsets before and after the plan landed').toEqual(before.tops);
+  expect(cardHeight, 'the placeholder is the card height').toBe(skeletonHeight);
+  expect(after.tops, 'row offsets before and after the card landed').toEqual(before.tops);
   expect(moves, 'no row on screen moved while it landed').toEqual([]);
   expect(Math.abs(before.gap), 'pinned to the bottom with the rows up').toBeLessThanOrEqual(1);
-  expect(Math.abs(after.gap), 'still pinned after the plan landed').toBeLessThanOrEqual(1);
+  expect(Math.abs(after.gap), 'still pinned after the card landed').toBeLessThanOrEqual(1);
   for (const g of gaps) expect(Math.abs(g.gap), JSON.stringify(gaps)).toBeLessThanOrEqual(1);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
