@@ -11,6 +11,8 @@ export function isPaletteShortcut(
   event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
   cmdKey: boolean,
 ): boolean {
+  // Android Chrome autofill fires keydown with no key: never a shortcut.
+  if (typeof event.key !== 'string') return false;
   if (event.key.toLowerCase() !== 'k' || event.altKey || event.shiftKey) return false;
   return cmdKey ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 }

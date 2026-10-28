@@ -320,6 +320,11 @@ function AppLayoutBody() {
     const id = window.setTimeout(() => setGateExpired(true), SHELL_GATE_MS);
     return () => window.clearTimeout(id);
   }, [gateUp, gateAttempt]);
+  // Once per false -> true change, never per render (the error itself is logged
+  // in useCurrentProfile).
+  useEffect(() => {
+    if (profileError) logger.warn('onboarding gate: profile load failed, falling through to app');
+  }, [profileError]);
   const retryGate = useCallback(() => {
     setGateExpired(false);
     setGateAttempt((n) => n + 1);
@@ -368,11 +373,8 @@ function AppLayoutBody() {
     );
   }
   // Fail open on a profile load error: a transient fetch failure must never trap
-  // the user behind onboarding. We fall through to the app here and the gate runs
+  // the user behind onboarding. We fall through to the app below and the gate runs
   // again on the next mount; the failure was already logged in useCurrentProfile.
-  if (profileError) {
-    logger.error('onboarding gate: profile load failed, falling through to app');
-  }
 
   // A failed (or timed-out) initial workspace list is not "no workspace": say
   // so, with Try again re-running the list in place. A failed re-list after

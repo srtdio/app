@@ -374,7 +374,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   useEffect(() => {
     if (!props.open) return;
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+      if ((e.metaKey || e.ctrlKey) && typeof e.key === 'string' && e.key.toLowerCase() === 's') {
         e.preventDefault();
         if (dirty && !saving) save();
       }
